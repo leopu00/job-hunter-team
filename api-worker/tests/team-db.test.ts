@@ -180,9 +180,21 @@ describe("isolated team pipeline database", () => {
       expect(() => db.claimNext(runId, "analyst", "analyst-2", 0.001)).toThrow(
         "TEAM_BUDGET_EXCEEDED",
       );
+      expect(
+        db.recordClaimAttempt(claim, "OUTPUT_VALIDATION", accounting(0.002)),
+      ).toBe(0.008);
+      expect(db.summary(runId)).toMatchObject({
+        spentUsd: 0.002,
+        reservedUsd: 0.008,
+      });
       db.releaseClaim(claim, "PROVIDER_ERROR");
-      expect(db.summary(runId).reservedUsd).toBe(0);
-      expect(db.claimNext(runId, "analyst", "analyst-2", 0.01)).toBeDefined();
+      expect(db.summary(runId)).toMatchObject({
+        spentUsd: 0.002,
+        reservedUsd: 0,
+      });
+      expect(() => db.claimNext(runId, "analyst", "analyst-2", 0.01)).toThrow(
+        "TEAM_BUDGET_EXCEEDED",
+      );
     } finally {
       db.close();
     }

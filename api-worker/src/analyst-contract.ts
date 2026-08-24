@@ -253,6 +253,8 @@ export const AnalystWorkerErrorSchema = z.strictObject({
   code: WorkerErrorCodeSchema,
   message: z.string().trim().min(1).max(240),
   retryable: z.boolean(),
+  usage: UsageSchema.optional(),
+  cost: CostSchema.optional(),
   limit: z
     .enum([
       "input_tokens_per_step",

@@ -600,6 +600,56 @@ export class TeamPipelineDb {
     });
   }
 
+  recordClaimAttempt(
+    claim: TeamClaim,
+    errorCode: string,
+    accounting: AgentAccounting,
+  ): number {
+    if (!/^[A-Z][A-Z0-9_]{1,79}$/.test(errorCode))
+      throw new Error("errorCode must be a safe identifier");
+    assertAccounting(accounting);
+    return this.transaction(() => {
+      const task = this.assertClaim(claim, claim.role);
+      const reservation = Number(task.reservation_usd);
+      if (accounting.costUsd > reservation + 1e-9)
+        throw new Error("TASK_BUDGET_EXCEEDED");
+      const remaining = Math.max(0, reservation - accounting.costUsd);
+      const timestamp = this.now().toISOString();
+      this.db
+        .prepare(
+          "UPDATE team_tasks SET reservation_usd=?, cost_usd=cost_usd+?, input_tokens=input_tokens+?, output_tokens=output_tokens+?, last_error=?, updated_at=? WHERE id=?",
+        )
+        .run(
+          remaining,
+          accounting.costUsd,
+          accounting.inputTokens,
+          accounting.outputTokens,
+          errorCode,
+          timestamp,
+          claim.taskId,
+        );
+      this.db
+        .prepare(
+          "UPDATE team_runs SET spent_usd=spent_usd+?, updated_at=? WHERE run_id=?",
+        )
+        .run(accounting.costUsd, timestamp, claim.runId);
+      this.event(
+        claim.runId,
+        claim.sourceId,
+        claim.agentId,
+        "task_attempt_failed",
+        claim.role,
+        claim.role,
+        {
+          errorCode,
+          costUsd: accounting.costUsd,
+          remainingReservationUsd: remaining,
+        },
+      );
+      return remaining;
+    });
+  }
+
   position(runId: string, sourceId: string): TeamPositionSnapshot {
     const row = this.db
       .prepare("SELECT * FROM team_positions WHERE run_id=? AND source_id=?")
@@ -763,7 +813,7 @@ export class TeamPipelineDb {
       const timestamp = this.now().toISOString();
       this.db
         .prepare(
-          "UPDATE team_tasks SET status='completed', cost_usd=?, input_tokens=?, output_tokens=?, reservation_usd=0, updated_at=? WHERE id=?",
+          "UPDATE team_tasks SET status='completed', cost_usd=cost_usd+?, input_tokens=input_tokens+?, output_tokens=output_tokens+?, reservation_usd=0, updated_at=? WHERE id=?",
         )
         .run(
           accounting.costUsd,

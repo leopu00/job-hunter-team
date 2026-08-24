@@ -75,6 +75,23 @@ export type ApiTeamRunResult = {
   events: TeamEvent[];
 };
 
+type TaskWorkerResult = {
+  proposal: unknown;
+  cost: { amountUsd: number };
+  usage: { inputTokens: number; outputTokens: number };
+};
+
+type TaskWorkerOutcome<R extends TaskWorkerResult> =
+  | { ok: true; result: R }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        cost?: { amountUsd: number };
+        usage?: { inputTokens: number; outputTokens: number };
+      };
+    };
+
 export class ApiTeamRunner {
   private readonly profile: ModelProfile;
   private readonly now: () => Date;
@@ -298,14 +315,16 @@ export class ApiTeamRunner {
           liveEnabled: this.options.liveEnabled,
           env: this.options.env,
         });
-        const outcome = await worker.run(input);
-        if (!outcome.ok)
-          throw new TeamAgentError("analyst", outcome.error.code);
-        db.completeAnalyst(
+        const result = await this.runTaskWithValidationRetry(
+          db,
           claim,
-          outcome.result.proposal,
-          accounting(outcome.result),
+          (maxCostUsd) =>
+            worker.run({
+              ...input,
+              limits: { ...input.limits, maxCostUsd },
+            }),
         );
+        db.completeAnalyst(claim, result.proposal, accounting(result));
       },
     );
   }
@@ -346,13 +365,16 @@ export class ApiTeamRunner {
           liveEnabled: this.options.liveEnabled,
           env: this.options.env,
         });
-        const outcome = await worker.run(input);
-        if (!outcome.ok) throw new TeamAgentError("scorer", outcome.error.code);
-        db.completeScorer(
+        const result = await this.runTaskWithValidationRetry(
+          db,
           claim,
-          outcome.result.proposal,
-          accounting(outcome.result),
+          (maxCostUsd) =>
+            worker.run({
+              ...input,
+              limits: { ...input.limits, maxCostUsd },
+            }),
         );
+        db.completeScorer(claim, result.proposal, accounting(result));
       },
     );
   }
@@ -417,13 +439,16 @@ export class ApiTeamRunner {
           liveEnabled: this.options.liveEnabled,
           env: this.options.env,
         });
-        const outcome = await worker.run(input);
-        if (!outcome.ok) throw new TeamAgentError("writer", outcome.error.code);
-        db.completeWriter(
+        const result = await this.runTaskWithValidationRetry(
+          db,
           claim,
-          outcome.result.proposal,
-          accounting(outcome.result),
+          (maxCostUsd) =>
+            worker.run({
+              ...input,
+              limits: { ...input.limits, maxCostUsd },
+            }),
         );
+        db.completeWriter(claim, result.proposal, accounting(result));
       },
     );
   }
@@ -456,13 +481,16 @@ export class ApiTeamRunner {
           liveEnabled: this.options.liveEnabled,
           env: this.options.env,
         });
-        const outcome = await worker.run(input);
-        if (!outcome.ok) throw new TeamAgentError("critic", outcome.error.code);
-        db.completeCritic(
+        const result = await this.runTaskWithValidationRetry(
+          db,
           claim,
-          outcome.result.proposal,
-          accounting(outcome.result),
+          (maxCostUsd) =>
+            worker.run({
+              ...input,
+              limits: { ...input.limits, maxCostUsd },
+            }),
         );
+        db.completeCritic(claim, result.proposal, accounting(result));
       },
     );
   }
@@ -537,6 +565,38 @@ export class ApiTeamRunner {
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (failure) throw failure.reason;
+  }
+
+  private async runTaskWithValidationRetry<R extends TaskWorkerResult>(
+    db: TeamPipelineDb,
+    claim: TeamClaim,
+    execute: (maxCostUsd: number) => Promise<TaskWorkerOutcome<R>>,
+  ): Promise<R> {
+    let remainingBudget = claim.reservationUsd;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const outcome = await execute(remainingBudget);
+      if (outcome.ok) return outcome.result;
+      if (outcome.error.cost && outcome.error.usage) {
+        remainingBudget = db.recordClaimAttempt(
+          claim,
+          outcome.error.code,
+          accounting({
+            cost: outcome.error.cost,
+            usage: outcome.error.usage,
+          }),
+        );
+      } else if (outcome.error.code === "OUTPUT_VALIDATION") {
+        throw new TeamAgentError(claim.role, "MISSING_FAILURE_ACCOUNTING");
+      }
+      if (
+        outcome.error.code !== "OUTPUT_VALIDATION" ||
+        attempt === 2 ||
+        remainingBudget <= 0
+      ) {
+        throw new TeamAgentError(claim.role, outcome.error.code);
+      }
+    }
+    throw new TeamAgentError(claim.role, "RETRY_EXHAUSTED");
   }
 
   private async exportArtifacts(

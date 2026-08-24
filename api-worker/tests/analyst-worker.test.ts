@@ -160,7 +160,11 @@ describe("Analyst API worker", () => {
     }).run(input);
 
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error.code).toBe("OUTPUT_VALIDATION");
+    if (!outcome.ok) {
+      expect(outcome.error.code).toBe("OUTPUT_VALIDATION");
+      expect(outcome.error.usage?.totalTokens).toBe(20);
+      expect(outcome.error.cost?.amountUsd).toBe(0);
+    }
   });
 
   it("keeps live mode behind explicit pricing, flag and provider key", async () => {
