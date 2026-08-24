@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import {
+  CaptainProviderOutputSchema,
   CaptainRoleSpec,
   CaptainWorkerInputSchema,
   CriticWorkerInputSchema,
@@ -236,6 +237,14 @@ describe("remaining isolated API roles", () => {
       }),
     ).toThrow();
     expect(() => CaptainRoleSpec.validateOutput?.(input, base)).not.toThrow();
+    const transport = CaptainProviderOutputSchema.parse({
+      ...base,
+      decisions: base.decisions.map((decision) => ({
+        ...decision,
+        agentId: decision.agentId ?? null,
+      })),
+    });
+    expect(CaptainRoleSpec.parseProviderOutput?.(transport)).toEqual(base);
   });
 
   it("rejects unknown or duplicate Sentinel and Doctor references", async () => {

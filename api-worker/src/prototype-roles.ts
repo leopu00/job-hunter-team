@@ -185,6 +185,22 @@ export const CaptainProposalSchema = z.strictObject({
   ...ProposalTail,
 });
 export type CaptainProposal = z.infer<typeof CaptainProposalSchema>;
+export const CaptainProviderOutputSchema = z.strictObject({
+  decisions: z
+    .array(
+      z.strictObject({
+        action: z.enum(["assign", "start", "stop", "noop"]),
+        target: z.string(),
+        agentId: z.string().nullable(),
+        reason: z.string(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  priorities: z.array(z.string()),
+  disposition: z.literal("proposed"),
+  persistence: z.literal("none"),
+});
 
 const UsageAgentSchema = z.strictObject({
   id: Id,
@@ -516,6 +532,17 @@ export const CaptainRoleSpec: StructuredRoleSpec<
   outputDescription: "Bounded team coordination decisions",
   inputSchema: CaptainWorkerInputSchema,
   outputSchema: CaptainProposalSchema,
+  providerOutputSchema: CaptainProviderOutputSchema,
+  parseProviderOutput: (raw) => {
+    const transport = CaptainProviderOutputSchema.parse(raw);
+    return CaptainProposalSchema.parse({
+      ...transport,
+      decisions: transport.decisions.map(({ agentId, ...decision }) => ({
+        ...decision,
+        ...(agentId === null ? {} : { agentId }),
+      })),
+    });
+  },
   systemPrompt: `You are the isolated JHT Captain API. Coordinate from the supplied snapshot. User tickets precede autonomous work; workPhase OFF forbids starts. Never claim an action happened: propose decisions only. ${hostileBoundary}`,
   buildPrompt: (input) => JSON.stringify(input),
   buildMockOutput: (input) => ({

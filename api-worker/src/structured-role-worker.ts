@@ -54,6 +54,7 @@ export type StructuredRoleSpec<
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
   providerOutputSchema?: z.ZodType<unknown>;
+  parseProviderOutput?: (raw: unknown) => O;
   systemPrompt: string;
   buildPrompt(input: I): string;
   buildMockOutput(input: I): O;
@@ -452,7 +453,9 @@ class AiSdkStructuredRoleProvider<
         },
       });
       return {
-        output: this.spec.outputSchema.parse(result.output),
+        output: this.spec.parseProviderOutput
+          ? this.spec.parseProviderOutput(result.output)
+          : this.spec.outputSchema.parse(result.output),
         rawStopReason: result.finishReason,
       };
     } catch (error) {
