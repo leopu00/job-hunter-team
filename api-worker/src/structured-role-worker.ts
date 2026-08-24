@@ -28,6 +28,7 @@ import {
   createAiSdkModel,
   normalizeAiSdkUsage,
 } from "./providers/ai-sdk-runtime.js";
+import { providerDiagnostic } from "./providers/ai-sdk.js";
 import type { ProviderStepRecord } from "./providers/provider.js";
 import { ExclusiveRunLock } from "./run-lock.js";
 
@@ -52,6 +53,7 @@ export type StructuredRoleSpec<
   outputDescription: string;
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
+  providerOutputSchema?: z.ZodType<unknown>;
   systemPrompt: string;
   buildPrompt(input: I): string;
   buildMockOutput(input: I): O;
@@ -423,7 +425,7 @@ class AiSdkStructuredRoleProvider<
         output: Output.object({
           name: this.spec.outputName,
           description: this.spec.outputDescription,
-          schema: this.spec.outputSchema,
+          schema: this.spec.providerOutputSchema ?? this.spec.outputSchema,
         }),
         stopWhen: stepCountIs(context.input.limits.maxSteps),
         maxOutputTokens: context.input.limits.maxOutputTokensPerStep,
@@ -463,12 +465,23 @@ class AiSdkStructuredRoleProvider<
       );
       if (error instanceof WorkerFault) throw error;
       if (context.signal.aborted) throw timeoutFault(error);
+      writeStructuredRoleProviderDiagnostic(this.spec.role, error);
       throw new WorkerFault("PROVIDER_ERROR", {
         retryable: true,
         cause: error,
       });
     }
   }
+}
+
+export function writeStructuredRoleProviderDiagnostic(
+  role: AgentRole,
+  error: unknown,
+): void {
+  if (process.env.JHT_API_PROVIDER_DEBUG !== "1") return;
+  process.stderr.write(
+    `[api-provider-debug] ${JSON.stringify({ role, ...providerDiagnostic(error) })}\n`,
+  );
 }
 
 function makeResultSchema<O extends StructuredRoleProposal>(
