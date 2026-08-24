@@ -11,12 +11,16 @@ import {
   CaptainProviderOutputSchema,
   CaptainRoleSpec,
   CaptainWorkerInputSchema,
+  CriticProviderOutputSchema,
+  CriticRoleSpec,
   CriticWorkerInputSchema,
   DoctorRoleSpec,
   DoctorWorkerInputSchema,
   SentinelRoleSpec,
+  SentinelProviderOutputSchema,
   SentinelWorkerInputSchema,
   WriterApiWorker,
+  WriterProviderOutputSchema,
   WriterProposalSchema,
   WriterRoleSpec,
   WriterWorkerInputSchema,
@@ -181,6 +185,38 @@ describe("remaining isolated API roles", () => {
         document: { kind: "cover_letter", markdown: "Synthetic letter" },
       }),
     ).toThrow();
+  });
+
+  it("uses portable provider transports with full local role validation", async () => {
+    const envelope = (await loadFixture(
+      "prototype-inputs.synthetic.json",
+    )) as FixtureEnvelope;
+    const writerInput = WriterWorkerInputSchema.parse({
+      ...envelope.inputs.writer!,
+      limits: envelope.sharedLimits,
+    });
+    const writer = WriterProviderOutputSchema.parse(
+      WriterRoleSpec.buildMockOutput(writerInput),
+    );
+    expect(WriterRoleSpec.parseProviderOutput?.(writer)).toEqual(writer);
+
+    const criticInput = CriticWorkerInputSchema.parse({
+      ...envelope.inputs.critic!,
+      limits: envelope.sharedLimits,
+    });
+    const critic = CriticProviderOutputSchema.parse(
+      CriticRoleSpec.buildMockOutput(criticInput),
+    );
+    expect(CriticRoleSpec.parseProviderOutput?.(critic)).toEqual(critic);
+
+    const sentinelInput = SentinelWorkerInputSchema.parse({
+      ...envelope.inputs.sentinel!,
+      limits: envelope.sharedLimits,
+    });
+    const sentinel = SentinelProviderOutputSchema.parse(
+      SentinelRoleSpec.buildMockOutput(sentinelInput),
+    );
+    expect(SentinelRoleSpec.parseProviderOutput?.(sentinel)).toEqual(sentinel);
   });
 
   it("enforces Captain phase and referenced-ID invariants outside the prompt", async () => {
