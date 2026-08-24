@@ -262,7 +262,7 @@ describe("le dodici query cloud superano il tetto PostgREST", () => {
     ]);
   });
 
-  it("getApplicationSubmissionDates include la riga 1001 in ordine stabile", async () => {
+  it("getApplicationTimelineEvents include esiti e riga 1001 in ordine stabile", async () => {
     applicationRows = rows().map((row, index) => ({
       id: row.id,
       position_id: row.id,
@@ -272,13 +272,22 @@ describe("le dodici query cloud superano il tetto PostgREST", () => {
       deleted_at: null,
     }));
 
-    const result = await queries.getApplicationSubmissionDates();
+    applicationRows[1000].response = "rejected";
+    applicationRows[1000].response_at = "2026-08-24T10:00:00.000Z";
+
+    const result = await queries.getApplicationTimelineEvents();
 
     expect(result).toHaveLength(1001);
-    expect(result.at(-1)).toBe(applicationRows.at(-1)?.applied_at);
+    expect(result.at(-1)).toEqual({
+      appliedAt: applicationRows.at(-1)?.applied_at,
+      response: "rejected",
+      responseAt: "2026-08-24T10:00:00.000Z",
+    });
     expectTwoPages("applications");
-    const call = supa.calls.find((candidate) => candidate.table === "applications");
-    expect(call?.columns).toBe("id, applied_at");
+    const call = supa.calls.find(
+      (candidate) => candidate.table === "applications",
+    );
+    expect(call?.columns).toBe("id, applied_at, response, response_at");
     expect(orderArgs(call!)).toEqual([
       ["applied_at", { ascending: true }],
       ["id", { ascending: true }],

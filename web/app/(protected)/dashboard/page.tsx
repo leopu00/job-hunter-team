@@ -6,7 +6,7 @@ import { WELCOME_SEEN_COOKIE } from "@/lib/demo/mode";
 import {
   getDashboardStats,
   getDashboardPositions,
-  getApplicationSubmissionDates,
+  getApplicationTimelineEvents,
   getSeenPositionIds,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
@@ -98,22 +98,31 @@ export default async function DashboardPage() {
     : [];
   // Messaggi: niente più banner in dashboard — vivono nel drawer messenger
   // in navbar (MessagesDrawer) e nella panoramica /messages.
-  const [stats, dashPositionsRaw, rates, applicationDates] = demoData
+  const [stats, dashPositionsRaw, rates, applicationEvents] = demoData
     ? [
         demoData.stats,
         demoDashPositions,
         { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
         demoDashPositions
           .filter((p) => p.status === "applied" || p.status === "response")
-          .map((p) => p.last_action_at),
+          .map((p, index) => ({
+            appliedAt: p.last_action_at,
+            response:
+              p.status === "response"
+                ? index % 3 === 0
+                  ? "rejected"
+                  : "interview"
+                : null,
+            responseAt: p.status === "response" ? p.last_action_at : null,
+          })),
       ]
     : await Promise.all([
         getDashboardStats(),
         getDashboardPositions(),
         getExchangeRates(),
-        getApplicationSubmissionDates(),
+        getApplicationTimelineEvents(),
       ]);
-  const applicationTimeline = buildApplicationTimeline(applicationDates);
+  const applicationTimeline = buildApplicationTimeline(applicationEvents);
 
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
@@ -259,7 +268,7 @@ export default async function DashboardPage() {
                     applicationTimeline.rangeDays,
                   ),
                   total: t.application_timeline_total(
-                    applicationTimeline.visibleTotal,
+                    applicationTimeline.visibleSubmitted,
                   ),
                   description: t.application_timeline_description,
                 }}
