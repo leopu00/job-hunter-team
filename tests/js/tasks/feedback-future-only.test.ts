@@ -105,7 +105,7 @@ describe("exclusion and feedback boundary", () => {
     expect(explicit).toContain("/user-exclude");
   });
 
-  it("uses the same non-exclusion label in all seven locales", () => {
+  it("uses the same exclusion action in all seven locales", () => {
     const labels = (source: string) =>
       [...source.matchAll(/verdicts:\s*\{\s*no:\s*"([^"]+)"/g)].map(
         ([, value]) => value,
@@ -114,6 +114,15 @@ describe("exclusion and feedback boundary", () => {
     const swipe = labels(read("web/app/(protected)/swipe/SwipeDeck.i18n.ts"));
     expect(detail).toHaveLength(7);
     expect(detail).toEqual(swipe);
+    expect(detail).toEqual([
+      "Escludi",
+      "Exclude",
+      "Kizárás",
+      "Excluir",
+      "Ausschließen",
+      "Exclure",
+      "Excluir",
+    ]);
   });
 
   it("describes future-only learning in all seven public Scorer locales", () => {

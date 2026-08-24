@@ -329,13 +329,16 @@ async function handle(
 // [JHT-WEB-DEMO] Le posizioni demo non cambiano status (dataset statico):
 // il giudizio "non interessante" vive già nel cookie overlay del feedback.
 // Risposta 200 nella stessa shape, così SwipeDeck non mostra errori.
-async function demoNoop(legacyId: string): Promise<NextResponse | null> {
+async function demoNoop(
+  legacyId: string,
+  action: "exclude" | "unexclude",
+): Promise<NextResponse | null> {
   if (!isDemoLegacyId(legacyId) || !(await activeDemoPersona())) return null;
   return NextResponse.json({
     ok: true,
     outcome: {
       id: `demo-${legacyId}`,
-      status: null,
+      status: action === "exclude" ? "excluded" : null,
       user_excluded_reason: null,
       source: "cloud",
       cloud_synced: null,
@@ -348,7 +351,7 @@ export async function POST(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  const demo = await demoNoop(legacyId);
+  const demo = await demoNoop(legacyId, "exclude");
   if (demo) return demo;
   const denied = await requireAuth();
   if (denied) return denied;
@@ -360,7 +363,7 @@ export async function DELETE(
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const { legacyId } = await params;
-  const demo = await demoNoop(legacyId);
+  const demo = await demoNoop(legacyId, "unexclude");
   if (demo) return demo;
   const denied = await requireAuth();
   if (denied) return denied;

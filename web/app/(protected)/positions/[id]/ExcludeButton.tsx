@@ -10,7 +10,7 @@ import { REASON_LABELS, type ReasonKey } from "./exclusion-reasons";
 // Esclusione MANUALE dell'utente. Mette la posizione in 'excluded' con una causa
 // scelta da dropdown (sei motivi + 'Altro' testo libero) → gli agenti smettono di
 // ri-controllarne la liveness (esce da next-for-recheck). Reversibile.
-// Vocabolario e selettore sono condivisi con il giudizio «Non interessante»
+// Vocabolario e selettore sono condivisi con l'azione rapida «Escludi»
 // (O-43): le etichette e l'ordine vivono in `exclusion-reasons.ts`.
 
 const T: Record<

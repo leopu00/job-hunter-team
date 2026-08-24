@@ -96,17 +96,18 @@ const T: Record<
 > = {
   it: {
     verdicts: {
-      no: "Non interessante",
+      no: "Escludi",
       review_low: "Poco interessante",
       review_ok: "Interessante",
       top: "Molto interessante",
     },
-    whyNo: "Perché non ti interessa?",
+    whyNo: "Perché vuoi escluderla?",
     pickPlaceholder: "Scegli un motivo…",
-    hintTaste: "Il team lo userà per cercarti offerte più adatte.",
+    hintTaste:
+      "La posizione verrà esclusa e il team userà il motivo per cercarti offerte più adatte.",
     hintFactual:
       "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
-    confirmTaste: "Salva",
+    confirmTaste: "Escludi",
     confirmFactual: "Escludi",
     cancel: "Annulla",
     networkError: "Errore di rete",
@@ -129,17 +130,18 @@ const T: Record<
   },
   en: {
     verdicts: {
-      no: "Not interesting",
+      no: "Exclude",
       review_low: "Slightly interesting",
       review_ok: "Interesting",
       top: "Very interesting",
     },
-    whyNo: "Why is it not interesting?",
+    whyNo: "Why do you want to exclude it?",
     pickPlaceholder: "Pick a reason…",
-    hintTaste: "The team will use it to look for offers that fit you better.",
+    hintTaste:
+      "The position will be excluded and the team will use the reason to find better matches.",
     hintFactual:
       "The position simply leaves the pipeline: an expired one says nothing about your taste, so the team learns nothing from this.",
-    confirmTaste: "Save",
+    confirmTaste: "Exclude",
     confirmFactual: "Exclude",
     cancel: "Cancel",
     networkError: "Network error",
@@ -162,18 +164,18 @@ const T: Record<
   },
   hu: {
     verdicts: {
-      no: "Nem érdekes",
+      no: "Kizárás",
       review_low: "Kevéssé érdekes",
       review_ok: "Érdekes",
       top: "Nagyon érdekes",
     },
-    whyNo: "Miért nem érdekes?",
+    whyNo: "Miért szeretnéd kizárni?",
     pickPlaceholder: "Válassz okot…",
     hintTaste:
-      "A csapat ezt használja majd, hogy hozzád jobban illő ajánlatokat keressen.",
+      "A pozíció kizárásra kerül, és a csapat az indokot jobb ajánlatok keresésére használja.",
     hintFactual:
       "Az állás egyszerűen kikerül a körből: egy lejárt hirdetés nem árul el semmit az ízlésedről, így a csapat nem tanul belőle.",
-    confirmTaste: "Mentés",
+    confirmTaste: "Kizárás",
     confirmFactual: "Kizárás",
     cancel: "Mégse",
     networkError: "Hálózati hiba",
@@ -196,17 +198,18 @@ const T: Record<
   },
   es: {
     verdicts: {
-      no: "No interesante",
+      no: "Excluir",
       review_low: "Poco interesante",
       review_ok: "Interesante",
       top: "Muy interesante",
     },
-    whyNo: "¿Por qué no te interesa?",
+    whyNo: "¿Por qué quieres excluirla?",
     pickPlaceholder: "Elige un motivo…",
-    hintTaste: "El equipo lo usará para buscarte ofertas que encajen mejor.",
+    hintTaste:
+      "La posición se excluirá y el equipo usará el motivo para buscarte ofertas mejores.",
     hintFactual:
       "La posición sale del circuito y ya está: una caducada no dice qué te gusta, así que el equipo no aprende nada de aquí.",
-    confirmTaste: "Guardar",
+    confirmTaste: "Excluir",
     confirmFactual: "Excluir",
     cancel: "Cancelar",
     networkError: "Error de red",
@@ -229,17 +232,18 @@ const T: Record<
   },
   de: {
     verdicts: {
-      no: "Uninteressant",
+      no: "Ausschließen",
       review_low: "Wenig interessant",
       review_ok: "Interessant",
       top: "Sehr interessant",
     },
-    whyNo: "Warum ist sie nicht interessant?",
+    whyNo: "Warum möchtest du sie ausschließen?",
     pickPlaceholder: "Grund auswählen…",
-    hintTaste: "Das Team nutzt ihn, um passendere Stellen für dich zu suchen.",
+    hintTaste:
+      "Die Stelle wird ausgeschlossen und das Team nutzt den Grund, um passendere Stellen zu suchen.",
     hintFactual:
       "Die Stelle fällt einfach aus dem Umlauf: Eine abgelaufene sagt nichts über deinen Geschmack, das Team lernt hier also nichts.",
-    confirmTaste: "Speichern",
+    confirmTaste: "Ausschließen",
     confirmFactual: "Ausschließen",
     cancel: "Abbrechen",
     networkError: "Netzwerkfehler",
@@ -262,18 +266,18 @@ const T: Record<
   },
   fr: {
     verdicts: {
-      no: "Pas intéressant",
+      no: "Exclure",
       review_low: "Peu intéressant",
       review_ok: "Intéressant",
       top: "Très intéressant",
     },
-    whyNo: "Pourquoi ne vous intéresse-t-il pas ?",
+    whyNo: "Pourquoi voulez-vous l’exclure ?",
     pickPlaceholder: "Choisissez un motif…",
     hintTaste:
-      "L'équipe s'en servira pour chercher des offres qui vous vont mieux.",
+      "Le poste sera exclu et l'équipe utilisera le motif pour chercher des offres plus adaptées.",
     hintFactual:
       "Le poste sort simplement du circuit : une offre expirée ne dit rien de vos goûts, l'équipe n'apprend donc rien d'ici.",
-    confirmTaste: "Enregistrer",
+    confirmTaste: "Exclure",
     confirmFactual: "Exclure",
     cancel: "Annuler",
     networkError: "Erreur réseau",
@@ -296,18 +300,18 @@ const T: Record<
   },
   pt: {
     verdicts: {
-      no: "Não interessante",
+      no: "Excluir",
       review_low: "Pouco interessante",
       review_ok: "Interessante",
       top: "Muito interessante",
     },
-    whyNo: "Porque não te interessa?",
+    whyNo: "Porque queres excluí-la?",
     pickPlaceholder: "Escolhe um motivo…",
     hintTaste:
-      "A equipa vai usá-lo para procurar ofertas que te encaixem melhor.",
+      "A vaga será excluída e a equipa usará o motivo para procurar ofertas mais adequadas.",
     hintFactual:
       "A vaga sai do circuito e pronto: uma vaga expirada não diz o que gostas, por isso a equipa não aprende nada daqui.",
-    confirmTaste: "Guardar",
+    confirmTaste: "Excluir",
     confirmFactual: "Excluir",
     cancel: "Cancelar",
     networkError: "Erro de rede",
@@ -401,7 +405,7 @@ export function FeedbackButtons({
   const [verdict, setVerdict] = useState<Verdict | null>(initialVerdict);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // O-43 — «Non interessante» non scrive più niente al primo click: apre il
+  // «Escludi» non scrive niente al primo click: apre il
   // motivo. Finché questo pannello è aperto non è stato registrato nulla.
   const [askWhy, setAskWhy] = useState(false);
   const [reason, setReason] = useState("");
@@ -521,10 +525,11 @@ export function FeedbackButtons({
         return;
       }
       if (signal.feedback) {
-        const feedback = await postFeedback("no", signal.feedback).catch(
-          () => null,
-        );
-        if (feedback?.ok) setVerdict("no");
+        void postFeedback("no", signal.feedback)
+          .then((feedback) => {
+            if (feedback.ok) setVerdict("no");
+          })
+          .catch(() => undefined);
       }
       closeWhy();
       startTransition(() => router.refresh());
@@ -748,7 +753,7 @@ export function FeedbackButtons({
           );
         })}
       </div>
-      {/* Il perché del «Non interessante». Finché è aperto non è stato
+      {/* Il perché di «Escludi». Finché è aperto non è stato
           scritto niente: si conferma o si annulla. */}
       {askWhy && (
         <div

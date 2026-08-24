@@ -109,7 +109,11 @@ describe("user exclusion: demo no-op before every real-data auth gate", () => {
     const body = await response.json();
     expect(body).toMatchObject({
       ok: true,
-      outcome: { id: "demo-999999", source: "cloud" },
+      outcome: {
+        id: "demo-999999",
+        source: "cloud",
+        status: method === "POST" ? "excluded" : null,
+      },
     });
     expect(auth.requireAuth).not.toHaveBeenCalled();
     expect(filesystem.existsSync).not.toHaveBeenCalled();
