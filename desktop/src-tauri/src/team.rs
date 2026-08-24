@@ -1,4 +1,4 @@
-use crate::podman::{check_podman_sync, command, CommandFailure};
+use crate::podman::{check_podman_sync, command, command_with_stderr_lines, CommandFailure};
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::OsString,
@@ -14,6 +14,7 @@ const IMAGE_NAME: &str = "localhost/jht-api-team:desktop";
 const BUILD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MACHINE_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 const TEAM_TIMEOUT: Duration = Duration::from_secs(35 * 60);
+const TEAM_PROGRESS_PREFIX: &str = "JHT_TEAM_PROGRESS:";
 
 #[derive(Default)]
 pub(crate) struct TeamRuntimeState {
@@ -23,8 +24,25 @@ pub(crate) struct TeamRuntimeState {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TeamProgress {
-    stage: &'static str,
-    message: &'static str,
+    stage: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    position_title: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CliAgentProgress {
+    role: String,
+    agent_id: String,
+    status: String,
+    position_title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -154,7 +172,7 @@ fn run_team(
             "team",
             "Il team è partito e sta lavorando sui dati sintetici",
         );
-        run_container(&workspace_dir, &secret_name)
+        run_container(&workspace_dir, &secret_name, &progress)
     })();
 
     remove_secret(&secret_name);
@@ -254,6 +272,7 @@ fn build_image(runtime_dir: &Path) -> Result<(), TeamStartError> {
 fn run_container(
     workspace_dir: &Path,
     secret_name: &str,
+    progress: &Channel<TeamProgress>,
 ) -> Result<TeamStartResult, TeamStartError> {
     let container_name = unique_name("jht-api-team");
     let mount = format!("{}:/workspace", workspace_dir.display());
@@ -288,7 +307,12 @@ fn run_container(
         "0.02",
     ]);
 
-    let output = command(&args, TEAM_TIMEOUT, None, true);
+    let progress_channel = progress.clone();
+    let output = command_with_stderr_lines(&args, TEAM_TIMEOUT, move |line| {
+        if let Some(event) = parse_agent_progress(line) {
+            notify_agent(&progress_channel, event);
+        }
+    });
     let outcome = match output {
         Ok(output) if output.success => parse_result(&output.stdout, workspace_dir),
         Err(CommandFailure::TimedOut) => Err(failure("team_timeout")),
@@ -339,8 +363,57 @@ fn string_args(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
 }
 
-fn notify(channel: &Channel<TeamProgress>, stage: &'static str, message: &'static str) {
-    let _ = channel.send(TeamProgress { stage, message });
+fn notify(channel: &Channel<TeamProgress>, stage: &str, message: &str) {
+    let _ = channel.send(TeamProgress {
+        stage: stage.to_owned(),
+        message: message.to_owned(),
+        role: None,
+        agent_id: None,
+        status: None,
+        position_title: None,
+    });
+}
+
+fn parse_agent_progress(line: &str) -> Option<CliAgentProgress> {
+    let event: CliAgentProgress =
+        serde_json::from_str(line.strip_prefix(TEAM_PROGRESS_PREFIX)?).ok()?;
+    if !matches!(
+        event.role.as_str(),
+        "captain" | "scout" | "analyst" | "scorer" | "writer" | "critic" | "sentinel"
+    ) || !matches!(event.status.as_str(), "working" | "completed")
+        || event.agent_id.len() > 40
+        || event
+            .position_title
+            .as_ref()
+            .is_some_and(|title| title.len() > 240)
+    {
+        return None;
+    }
+    Some(event)
+}
+
+fn notify_agent(channel: &Channel<TeamProgress>, event: CliAgentProgress) {
+    let message = match (
+        &event.role[..],
+        &event.status[..],
+        event.position_title.as_deref(),
+    ) {
+        ("captain", "working", _) => "Il Capitano sta assegnando il lavoro".to_owned(),
+        ("scout", "working", _) => "Scout sta cercando le posizioni".to_owned(),
+        ("sentinel", "working", _) => "Sentinella sta verificando budget e sicurezza".to_owned(),
+        (role, "working", Some(title)) => format!("{role} lavora su {title}"),
+        (role, "working", None) => format!("{role} è al lavoro"),
+        (role, _, Some(title)) => format!("{role} ha completato {title}"),
+        (role, _, None) => format!("{role} ha completato il proprio incarico"),
+    };
+    let _ = channel.send(TeamProgress {
+        stage: "team".to_owned(),
+        message,
+        role: Some(event.role),
+        agent_id: Some(event.agent_id),
+        status: Some(event.status),
+        position_title: event.position_title,
+    });
 }
 
 fn failure(code: &'static str) -> TeamStartError {
@@ -349,7 +422,7 @@ fn failure(code: &'static str) -> TeamStartError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_result, valid_api_key};
+    use super::{parse_agent_progress, parse_result, valid_api_key};
     use std::path::Path;
 
     #[test]
@@ -379,5 +452,20 @@ mod tests {
             Path::new("workspace"),
         );
         assert_eq!(result.expect_err("must reject").code, "team_run_failed");
+    }
+
+    #[test]
+    fn accepts_only_allowlisted_live_agent_progress() {
+        let event = parse_agent_progress(
+            r#"JHT_TEAM_PROGRESS:{"role":"analyst","agentId":"analyst-1","status":"working","positionTitle":"Agentic AI Engineer"}"#,
+        )
+        .expect("valid agent progress");
+        assert_eq!(event.agent_id, "analyst-1");
+        assert_eq!(event.position_title.as_deref(), Some("Agentic AI Engineer"));
+        assert!(parse_agent_progress("npm warning: ignored").is_none());
+        assert!(parse_agent_progress(
+            r#"JHT_TEAM_PROGRESS:{"role":"attacker","agentId":"x","status":"working"}"#
+        )
+        .is_none());
     }
 }

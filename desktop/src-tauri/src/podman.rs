@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::{
     ffi::OsString,
-    io::{self, Read, Write},
+    io::{self, BufRead, BufReader, Read, Write},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -38,8 +38,35 @@ pub(crate) fn command(
     stdin: Option<&[u8]>,
     capture_stdout: bool,
 ) -> Result<CommandOutcome, CommandFailure> {
+    command_inner(args, timeout, stdin, capture_stdout, None)
+}
+
+pub(crate) fn command_with_stderr_lines<F>(
+    args: &[OsString],
+    timeout: Duration,
+    on_stderr_line: F,
+) -> Result<CommandOutcome, CommandFailure>
+where
+    F: Fn(&str) + Send + 'static,
+{
+    command_inner(args, timeout, None, true, Some(Box::new(on_stderr_line)))
+}
+
+type StderrLineCallback = Box<dyn Fn(&str) + Send + 'static>;
+
+fn command_inner(
+    args: &[OsString],
+    timeout: Duration,
+    stdin: Option<&[u8]>,
+    capture_stdout: bool,
+    on_stderr_line: Option<StderrLineCallback>,
+) -> Result<CommandOutcome, CommandFailure> {
     let mut command = Command::new("podman");
-    command.args(args).stderr(Stdio::null());
+    command.args(args).stderr(if on_stderr_line.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
     command.stdout(if capture_stdout {
         Stdio::piped()
     } else {
@@ -67,6 +94,11 @@ pub(crate) fn command(
         .stdout
         .take()
         .map(|output| thread::spawn(move || read_bounded_output(output)));
+    let stderr_reader = child
+        .stderr
+        .take()
+        .zip(on_stderr_line)
+        .map(|(output, callback)| thread::spawn(move || read_stderr_lines(output, callback)));
 
     if let Some(input) = stdin {
         let written = child
@@ -94,6 +126,9 @@ pub(crate) fn command(
                 if let Some(reader) = stdout_reader {
                     let _ = reader.join();
                 }
+                if let Some(reader) = stderr_reader {
+                    let _ = reader.join();
+                }
                 return Err(CommandFailure::TimedOut);
             }
             Err(_) => return Err(CommandFailure::Failed),
@@ -103,7 +138,16 @@ pub(crate) fn command(
     let stdout = stdout_reader
         .map(|reader| reader.join().unwrap_or_default())
         .unwrap_or_default();
+    if let Some(reader) = stderr_reader {
+        let _ = reader.join();
+    }
     Ok(CommandOutcome { success, stdout })
+}
+
+fn read_stderr_lines(output: impl Read, callback: StderrLineCallback) {
+    for line in BufReader::new(output).lines().map_while(Result::ok) {
+        callback(&line);
+    }
 }
 
 fn read_bounded_output(mut output: impl Read) -> Vec<u8> {

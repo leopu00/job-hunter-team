@@ -18,6 +18,12 @@ describe("API team runner", () => {
       "candidate-profile-2026.synthetic.json",
     );
     const jobs = await loadFixture("jobs.synthetic.json");
+    const progress: Array<{
+      role: string;
+      agentId: string;
+      status: string;
+      positionTitle?: string;
+    }> = [];
     const result = await new ApiTeamRunner({
       workspaceDir,
       candidate: importCandidateProfile2026(rawCandidate),
@@ -28,6 +34,7 @@ describe("API team runner", () => {
       ),
       now: () => new Date("2026-08-24T12:00:00Z"),
       budgetUsd: 0,
+      onProgress: (event) => progress.push(event),
     }).run();
 
     expect(result.summary).toMatchObject({
@@ -77,5 +84,22 @@ describe("API team runner", () => {
       agentId: "scout-1",
     });
     expect(result.sentinel.budgetState).toBe("healthy");
+    expect(progress[0]).toMatchObject({
+      role: "captain",
+      agentId: "captain-1",
+      status: "working",
+    });
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        role: "analyst",
+        status: "working",
+        positionTitle: expect.any(String),
+      }),
+    );
+    expect(progress.at(-1)).toMatchObject({
+      role: "sentinel",
+      agentId: "sentinel-1",
+      status: "completed",
+    });
   }, 60_000);
 });
