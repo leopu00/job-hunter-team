@@ -201,9 +201,45 @@
 
 > `[CLOUDSYNC-PUSH-ONLY-WHEN-WATCHED]` (data reached the cloud only when a browser asked for it) è stato **chiuso per implementazione** il 2026-07-28. Il push on-demand (`[PUSH ON-DEMAND 2026-06-25]`) resta la regola e non è stato toccato: la lacuna era solo il **primo periodo di vita** di un account, dove il DB nasce vuoto e il push di `jht cloud login` porta zero righe (misurato 2026-07-27: 25 posizioni e un profilo completo sul box, 0 righe su Supabase ~50 minuti dopo il pairing). Delle due strade indicate è stata scelta la **seconda** — push a bassa frequenza finché `phase != steady` — perché il colpo-singolo non ha ritenta, e l'unico momento in cui deve funzionare è quello in cui un box appena creato può ancora non avere una rotta verso internet. `cli/src/lib/bootstrap-push.js` decide, `handlePush` spinge (invariato: stesso chunking anti-413, stesso `safeCursor`): un push ogni 15 min, il primo immediato, e solo se il DB locale è cambiato. Tre garanzie di terminazione indipendenti — fase `steady` · budget di 24 push persistito · finestra di 6h — più uscita immediata su 401/403 e l'interruttore `JHT_CLOUD_BOOTSTRAP_PUSH=0`. Costo massimo per-account, una tantum: **24 tentativi ≈ 48 POST**, poi 0/h per sempre. Ispezionabile con `jht cloud bootstrap-status`; racconto in [`cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md).
 
-## 🖥️ Applicazione nativa Godot
+## 🖥️ Applicazione desktop e ufficio nativo
 
-- ⬜ **[JHT-TEAM-API-BOUNDARY]** — **il container espone una API sola su loopback, e ogni client diventa sottile.** Direzione approvata dal direttore il 2026-08-17; la forma tecnica va decisa misurando. Nasce da una richiesta di piattaforma unica (web + desktop 3 OS + telefono) e dalla paura di una matrice di casistiche — **che è già stata collassata una volta**: `web/lib/deploy-mode.ts` stabilisce che *«la STESSA immagine Docker vale per PC e VPS: entrambi sono co-locati → entrambi `local`»*, cioè una API, due modalità dati, tre trasporti, e i trasporti l'applicazione non deve poterli distinguere. Il confine che teneva insieme tutto questo è caduto il 2026-07-23 (`303a6ec604`) **come effetto collaterale**: quel commit ritirava — giustamente, e resta ritirata — una *dashboard aperta nel browser* su `:3000`, ma con essa sono andati `EXPOSE 3000` e ogni contratto sul container. ⤷ **Measured 2026-08-17** (worktree `master` a `dbd6369d6f`): senza confine, ogni client si è scritto il proprio trasporto — `game/scripts/backend/` **3.929 LOC** di GDScript con **62** riferimenti ssh/tunnel in `vps_backend.gd`; `web/` **142.437 LOC** con 97 route e `local-queries.ts` (1.840) scritte *per* il caso co-locato e deployate **solo** in `cloud`; `cli/` **21.020 LOC** con percorsi propri; `tui/` sul disco con **0 file tracciati**. E il buco che pesa più di tutti: **nel caso co-locato non esiste alcun canale live** — `useChatLaneLive.ts` dichiara che in local mode il client è un mock senza `channel`, quindi il piano *Interazione* (l'unico bidirezionale, l'unico che ha bisogno del box) è quello implementato tre volte. Tre pezzi su quattro esistono già, e uno **aspetta esattamente questo consumatore**: `local-token.ts` tiene il ramo cookie inerte *«perché il giorno che un setter lato Node servirà (browser del desktop nativo) è lì pronto»*, con `local-token-cookie-claim.test.ts` a guardia. Da decidere con un numero, non con una preferenza: **delta sull'immagine** (Next standalone contro server minimale che riusa `web/lib/` — l'argomento del peso del `Dockerfile` riga 122 **non** è ribaltato), **canale live** (SSE attraverso il tunnel contro websocket), **versionamento del contratto** (l'app desktop e l'immagine si aggiornano separate: su HTTP lo scarto è protocollo, ed è la classe di `[CHAT-LANE-SILENT-DROP-ON-OLD-CLIENT]`), **primo client** (il CLI è la prova più economica, il guscio desktop è l'obiettivo). Assorbe `[JHT-DESKTOP-06]` (computer sulla LAN), che già chiede di unificarsi col tunnel VPS, e riapre da un altro lato il territorio di `[JHT-DESKTOP-07]`. **Non** decide quale framework renda la UI: è il senso del confine. ☠️ **Blocco**: la prova sta su Windows — tunnel, bind su loopback e rete WSL2 — e non c'è banco di prova Windows dall'11/08. Stesso blocco di `[JHT-RUNTIME-PODMAN]`. ADR [`0009`](docs/adr/0009-team-exposes-one-loopback-api.md) · analisi, fasi e misure aperte in [`2026-08-17-ticket-team-api-boundary.md`](docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md).
+- ⬜ **[JHT-DESKTOP-TAURI]** — **decisione accettata il 2026-08-24: il nuovo
+  guscio desktop sarà Tauri 2 + React.** La UI professionale condivide
+  componenti, modelli e client TypeScript col web dove il confine lo consente,
+  ma resta una SPA statica: non riporta Next.js nel container. Rust possiede
+  solo finestre, tray/notifiche, selezione file, storage sicuro, lifecycle dei
+  processi/tunnel e updater firmato; dati, policy e agenti passano da API
+  versionate. Il Godot oggi distribuito resta supportato finché ogni fetta non
+  supera parità e release gate, poi può restare come ufficio 2.5D opzionale.
+  Electron non viene ripristinato in blocco: la storia Git è materiale da cui
+  recuperare singoli flussi verificati, ed Electron è il fallback solo se lo
+  spike Tauri fallisce un requisito obbligatorio misurato. Prima fetta:
+  Windows-first spike con WebView2, sidecar Node, `GET /version` autenticato su
+  loopback e tunnel SSH, PTY/terminale, tray, secure storage, pacchetto e update
+  firmato; registrare cold start, memoria idle, dimensione installer e attrito
+  di packaging. ADR [`0011`](docs/adr/0011-tauri-desktop-shell.md) · piano,
+  fasi e criteri di uscita in
+  [`2026-08-24-desktop-tauri-migration.md`](docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md).
+
+> La scelta del framework lasciata aperta da `[JHT-TEAM-API-BOUNDARY]` è quindi
+> chiusa. Il ticket API conserva la propria responsabilità: un solo contratto
+> prodotto/controllo, indipendente dal guscio. Gli agenti API Node/TypeScript
+> della branch `api-agents` sono un secondo confine, non il server UI e non il
+> runtime Python corrente rinominato.
+
+- ⬜ **[JHT-TEAM-API-BOUNDARY]** — **il container espone una sola API su
+  loopback e ogni client diventa sottile.** Il server `node:http` di prima fetta
+  esiste; restano client con handshake, supervisione, migrazione dei consumatori,
+  canale live e rimozione dei trasporti privati. Locale, computer dedicato e VPS
+  devono usare lo stesso contratto, cambiando solo connessione (loopback o tunnel
+  SSH). Le misure ancora obbligatorie sono delta immagine, tenuta SSE/WebSocket
+  nel tunnel, compatibilità di versione e prova Windows/WSL2. La scelta UI è ora
+  separatamente chiusa da [ADR-0011](docs/adr/0011-tauri-desktop-shell.md); non
+  cambia responsabilità o criteri di questo ticket. ADR
+  [`0009`](docs/adr/0009-team-exposes-one-loopback-api.md) · stato fetta 1
+  [`2026-08-17-fetta1-stato-e-ripresa.md`](docs/internal/roadmap/2026-08-17-fetta1-stato-e-ripresa.md)
+  · analisi e fasi
+  [`2026-08-17-ticket-team-api-boundary.md`](docs/internal/roadmap/2026-08-17-ticket-team-api-boundary.md).
 
 > `[GAME-VPS-SSH-USER]` è stato **chiuso** il 2026-07-28. Campo **utente SSH** accanto all'IP, default `root`, propagato in tutte e sette le call site via `_ssh_target()`. Con esso è caduto anche il controllo `id -u = 0`, che avrebbe respinto una box OVH correttamente collegata: ora accetta root **oppure** `sudo -n` **oppure** un `docker info` funzionante.
 > `[GAME-VPS-FINGERPRINT-STALE]` è stato **chiuso** il 2026-07-28. Il fingerprint si rilegge a ogni cambio di chiave — digitazione, sfoglia, genera — e quando non è calcolabile lo **dichiara** invece di mostrare il valore precedente. Niente cache sul percorso: generare una chiave ne cambia il fingerprint senza cambiare il path.

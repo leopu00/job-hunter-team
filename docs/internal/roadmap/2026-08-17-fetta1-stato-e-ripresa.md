@@ -3,6 +3,12 @@
 **Base:** branch `dev` · **ADR:** [`0009`](../../adr/0009-team-exposes-one-loopback-api.md) (ancora `Proposed`: lo passa ad `Accepted` il gruppo G9, che non è ancora girato)
 **Analisi del ticket:** [`2026-08-17-ticket-team-api-boundary.md`](2026-08-17-ticket-team-api-boundary.md)
 
+> **Aggiornamento 2026-08-24:** il consumatore desktop target è ora Tauri 2 +
+> React ([ADR-0011](../../adr/0011-tauri-desktop-shell.md)). Questa fetta non
+> cambia forma: deve consegnare un contratto versionato che non dipende dal
+> framework del client. Il piano desktop è in
+> [`2026-08-24-desktop-tauri-migration.md`](2026-08-24-desktop-tauri-migration.md).
+
 > 📌 **Perché questo file esiste.** Il lavoro si è fermato a metà per una scadenza,
 > non per un problema tecnico. Questo documento è il punto di ripresa: cosa è
 > committato, cosa è ancora sul disco senza commit, e cosa resta da scrivere con

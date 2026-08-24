@@ -40,6 +40,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`2026-08-24-desktop-setup-modes.md`](architecture/2026-08-24-desktop-setup-modes.md) | 🖥️ Matrice setup desktop: host gestito/VPS/PC × credenziali gestite/subscription/API; slice attivo PC + Podman + OpenAI API + agenti headless |
 | [`2026-08-12-execution-host-vocabulary-contract.md`](architecture/2026-08-12-execution-host-vocabulary-contract.md) | 🖥️ Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere |
 | [`2026-08-12-dialogue-i18n-contract.md`](architecture/2026-08-12-dialogue-i18n-contract.md) | 🌍 Contratto eseguibile dei dialoghi authored EN+6: parità degli ID, resolver runtime, contesto LLM canonico e gate contro residui inglesi |
 | [`2026-08-03-local-vault-design.md`](architecture/2026-08-03-local-vault-design.md) | 🔐 Design del vault locale: envelope encryption, broker runtime e migrazione fail-closed; richiede ADR e dependency review prima dell'implementazione |
@@ -151,6 +152,7 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 |---|---|
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
 | [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
+| [`2026-08-24-desktop-tauri-migration.md`](roadmap/2026-08-24-desktop-tauri-migration.md) | `[JHT-DESKTOP-TAURI]`: Tauri 2 + React come nuovo guscio desktop, Godot mantenuto durante la migrazione e poi ufficio 2.5D opzionale, Electron isolato sotto `archive/` come sorgente storica selettiva |
 | [`2026-08-17-ticket-team-api-boundary.md`](roadmap/2026-08-17-ticket-team-api-boundary.md) | `[JHT-TEAM-API-BOUNDARY]`: una API sola sul container e client sottili — la casistica era già collassata in `deploy-mode.ts`, il confine è caduto per sbaglio il 2026-07-23 |
 | [`2026-08-17-fetta1-stato-e-ripresa.md`](roadmap/2026-08-17-fetta1-stato-e-ripresa.md) | `[JHT-TEAM-API-BOUNDARY]` fetta 1, punto di ripresa: server `node:http` in ESM puro nel container (zero dipendenze, zero build step), i due scostamenti dichiarati dall'ADR-0009 col loro piano di ritiro, e cosa è committato contro cosa resta |
 | [`2026-08-17-ticket-container-runtime-podman.md`](roadmap/2026-08-17-ticket-container-runtime-podman.md) | `[JHT-RUNTIME-PODMAN]`: Podman al posto di Docker — l'attrito sta su Windows, 348 call site e zero indirezione, e il verdetto di ADR-0001 è orfano |

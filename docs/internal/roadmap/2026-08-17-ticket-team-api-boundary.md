@@ -113,7 +113,8 @@ esattamente questo consumatore**.
 
 | Strato | Linguaggio | Cosa cambia |
 |---|---|---|
-| 🐍 Team | Python (9.901 LOC) | **nulla** |
+| 🐍 Team di produzione attuale | Python (9.901 LOC alla misura) | resta operativo durante la migrazione |
+| 🤖 Agenti API target | Node.js/TypeScript (`api-agents`, branch separato) | migrazione ruolo per ruolo; non ancora runtime di produzione |
 | 🔌 API sul container | TypeScript | **è questo il lavoro**: 90% già scritto, va spacchettato dal peso di Next |
 | ⚛️ UI | React, un albero, tre gusci — browser (Next) · desktop 3 OS · telefono | i gusci consumano solo la API |
 | 🏢 Ufficio 2.5D | GDScript (12.296 LOC salvati) | pannello opzionale, non più il contenitore di tutto |
@@ -123,10 +124,12 @@ il dispositivo può ospitare un team.** Telefono: mai → client cloud puro, zer
 nativo. Browser: mai → zero nativo. Desktop: sì → è l'unico posto con codice
 nativo. Le casistiche non si moltiplicano per client.
 
-**Conto dei linguaggi.** Dopo: TS (UI + API) · Python (agenti) · Rust (solo guscio
-desktop) · GDScript (solo ufficio). Oggi: TS · Python · **GDScript che fa UI +
-trasporto + SSH + setup, 69.254 LOC** · JS (CLI 21.020). Non se ne aggiungono: si
-sposta GDScript-che-fa-tutto in GDScript-che-fa-l'ufficio.
+**Conto dei linguaggi, aggiornato 2026-08-24.** La misura originale descriveva
+correttamente la produzione di allora: TS · Python · **GDScript che fa UI +
+trasporto + SSH + setup, 69.254 LOC** · JS (CLI 21.020). La destinazione ora è
+TS/Node (UI, API e agenti API) · Rust (solo guscio desktop) · GDScript (solo
+ufficio opzionale), con Python ritirato ruolo per ruolo anziché incorporato nel
+nuovo desktop.
 
 ## 7. Le quattro cose da decidere con una misura, non con una preferenza
 
@@ -177,12 +180,15 @@ scritta da nessuna parte. Questo documento e l'ADR-0009 non la ricostruiscono �
 la registrano come lacuna, perché senza di essa non si distingue una correzione da
 un'oscillazione.
 
-## 10. Cosa questo documento NON decide
+## 10. Decisioni collegate
 
-- **Quale framework rende la UI.** Tauri, Electron, Flutter: resta aperto di
-  proposito. Il senso del confine è che quella risposta smette di essere portante,
-  e che una scelta sbagliata costa un guscio invece di una piattaforma.
+- **Framework UI — deciso il 2026-08-24.** [ADR-0011](../../adr/0011-tauri-desktop-shell.md)
+  sceglie Tauri 2 + React. La scelta resta separata da questo ticket: il confine
+  API deve funzionare anche se un giorno il guscio cambia.
 - **Il destino dell'ufficio 2.5D.** Resta, in un pannello; se via WASM o come
   binario separato si decide quando esiste un guscio.
 - **Se il container debba anche *servire* la UI.** No, per ora: serve dati. Chi
   disegna sta fuori.
+
+Piano esecutivo del nuovo guscio:
+[`2026-08-24-desktop-tauri-migration.md`](2026-08-24-desktop-tauri-migration.md).

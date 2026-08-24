@@ -138,7 +138,11 @@ Full walkthrough, expert mode and contributor setup: [`docs/guides/QUICKSTART.md
 
 ## Interfaces
 
-**Native desktop app** (the Godot office in [`game/`](game/)) · **CLI** (`jht team start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard** (Next.js) · **Telegram**
+**Native desktop app** (supported Godot office in [`game/`](game/); migration
+started in [`desktop/`](desktop/) with
+[Tauri 2 + React](docs/adr/0011-tauri-desktop-shell.md)) · **CLI** (`jht team
+start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
+(Next.js) · **Telegram**
 
 ## AI agents can drive JHT
 
@@ -146,11 +150,23 @@ The `jht` CLI is designed to be driven by AI assistants, not just humans. Alread
 
 ## Stack & status
 
-**Stack** — Godot 4.7 (native desktop app and office) · Node.js/TypeScript + Python (agents, monitoring, skills) · Next.js 16 + Supabase (cloud dashboard) · Docker · SQLite · GitHub Actions + Vercel.
+**Stack** — current desktop: Godot 4.7; target desktop: Tauri 2/Rust shell +
+React, with Godot retained as an optional office · Node.js/TypeScript + Python
+(the API-worker direction is Node/TypeScript; the shipped team is still
+Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Docker
+· SQLite · GitHub Actions + Vercel.
 
-**Status** — team, CLI, web dashboard and native Godot application are tested across all three providers; onboarding, operations and settings now live in the office. Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
+**Status** — team, CLI, web dashboard and native Godot application are tested
+across all three providers; onboarding, operations and settings currently live
+in the office. The staged desktop migration is documented in
+[`2026-08-24-desktop-tauri-migration.md`](docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md).
+Its first path is intentionally narrow: the user's own PC, Podman containers
+and Node.js headless agents using the user's own OpenAI API key. The complete
+future setup matrix is documented in
+[`2026-08-24-desktop-setup-modes.md`](docs/internal/architecture/2026-08-24-desktop-setup-modes.md).
+Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated Scout API prototype)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(headless API agents)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 

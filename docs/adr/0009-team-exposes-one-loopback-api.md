@@ -78,8 +78,10 @@ two-way traffic with the box, and the only one implemented three times.
    already on the box), the desktop shell is the target. Whichever goes first, its
    old path is **deleted**, not parked beside the new one.
 
-6. **This ADR does not choose a UI framework.** What renders the clients stays
-   open. The point of the boundary is that the answer stops being load-bearing.
+6. **This ADR does not choose a UI framework.** That separate choice is now
+   recorded by [ADR-0011](./0011-tauri-desktop-shell.md): Tauri 2 with a static
+   React UI. The point of this boundary remains that the shell is not
+   load-bearing and can be replaced without replacing product services.
 
 ## Consequences
 

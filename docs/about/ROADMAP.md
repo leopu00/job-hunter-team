@@ -1,7 +1,7 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-08-04 *(public release preparation; native distribution,
-> setup and first-run docs reconciled with the shipped code)*
+> Last updated: 2026-08-24 *(Tauri 2 + React selected for the next desktop
+> shell; the shipped Godot application remains supported during migration)*
 >
 > This is the **strategic, forward-looking** view. It is **not** a status
 > ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical
@@ -16,7 +16,13 @@
 
 > 🧭 Product vision & design philosophy → [`VISION.md`](VISION.md) — agents-as-characters, the Mentor, the anti-goals. This section covers *deployment & stack* only.
 
-Job Hunter Team runs **locally** in a Docker container, with multiple interfaces (native office/web/CLI/TUI/Telegram). Non-technical users use the Godot office; technical users can also use the CLI. Either way, the agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service. **AI on the side of workers, not against them.**
+Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
+(desktop/web/CLI/TUI/Telegram). Today non-technical users use the shipped Godot
+office. The next desktop shell is Tauri 2 + React, with Godot retained as an
+optional 2.5D office after migration; technical users can also use the CLI.
+Either way, the agent team works on the user's own machine, on their own data,
+with their own LLM subscription — not a managed cloud service. **AI on the side
+of workers, not against them.**
 
 ```
                               👤 User
@@ -33,7 +39,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
          🖥️ Local PC      🏠 Dedicated PC    ☁️ Self-hosted VPS
 ```
 
-**Two interaction planes** (decision 2026-06-15): the **data plane** mirrors container data through Supabase to the authenticated web dashboard (positions, scores, map and case studies; usable from a phone or a work PC). It is read-heavy, with narrow authenticated write-back lanes including web chat (`pending-messages`), persistent team directives, per-position CV write requests and other bounded position feedback/actions. Mobile also exposes an authenticated, rate-limited, stop-only emergency action. These routes mutate only their own user-scoped records or requests: they do not expose a shell, arbitrary commands, team start/restart or general configuration. The broader **interaction plane** — files, lifecycle and configuration — lives in the native Godot office, connected directly to a local team or over SSH to a VPS. Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
+**Two interaction planes** (decision 2026-06-15): the **data plane** mirrors container data through Supabase to the authenticated web dashboard (positions, scores, map and case studies; usable from a phone or a work PC). It is read-heavy, with narrow authenticated write-back lanes including web chat (`pending-messages`), persistent team directives, per-position CV write requests and other bounded position feedback/actions. Mobile also exposes an authenticated, rate-limited, stop-only emergency action. These routes mutate only their own user-scoped records or requests: they do not expose a shell, arbitrary commands, team start/restart or general configuration. The broader **interaction plane** — files, lifecycle and configuration — currently lives in the Godot office and moves slice by slice to the Tauri shell, consuming one versioned product API locally or through an SSH tunnel. Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md); desktop decision: [ADR-0011](../adr/0011-tauri-desktop-shell.md).
 
 **Guiding principles** — the constraints every roadmap item respects:
 
@@ -46,9 +52,10 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Native desktop app | **Godot 4.7** | Game-like office, onboarding, lifecycle and interaction cockpit; the web dashboard keeps only bounded authenticated write-back actions |
+| Native desktop app | **Tauri 2 + static React** target; **Godot 4.7** current | Shared professional UI and a thin native shell; Godot remains supported during migration and becomes an optional 2.5D office ([ADR-0011](../adr/0011-tauri-desktop-shell.md)) |
+| Agent runtime | **Python/tmux current; Node.js/TypeScript API workers target** | Production keeps running while roles migrate behind contracts, guardrails and authorized adapters |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
-| Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
+| Container runtime | **Podman target; Docker retained for the shipped path during migration** | The new own-PC desktop setup provisions local Podman containers; legacy call sites move behind the runtime boundary incrementally |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
 | User files (cloud, opt-in) | **Google Drive** | CV, cover letters, generated PDFs |
 | Cloud provisioning | **Any VPS via SSH** | A VPS is a VPS — the manual SSH + IP flow already runs on any provider. Hetzner is simply the one we test on (cheapest, EU GDPR). A per-cloud one-click abstraction is *not* a target — see the scope note below. |
@@ -61,7 +68,7 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 | Theme | State | What's open |
 |---|---|---|
 | 🔨 **Web platform** (read-mostly cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) on real data and event-driven through Supabase Realtime. Authenticated users can send and reply to chat messages, maintain team directives, request a CV for a scored position and issue the stop-only emergency action; shell access, team start/restart and general configuration are not exposed. A new user without a team gets the `/welcome` wizard and an interactive simulation. Open work is tracked in GitHub Issues, not in the testing guide. |
-| 🖥️ **Native office** (Godot, all-in-one) | **Published build, release hardening** | Office, onboarding, embedded provider console, local/VPS lifecycle, profile, email, Telegram, cloud sync, job data, map, agents and observability are native. Electron and the local web dashboard are gone: the browser is cloud-only. macOS releases are signed and notarized; Windows and Linux artifacts are unsigned. Open: Windows signing, installer and auto-update polish. |
+| 🖥️ **Desktop application** | **Godot published; Tauri implementation started** | The all-in-one Godot office remains supported and untouched during migration. The Tauri 2 + React shell now lives in [`desktop/`](../../desktop/) with welcome and the own-PC + Podman + OpenAI API-key setup. Electron is isolated in [`archive/electron-desktop/`](../../archive/electron-desktop/) as reference material; Godot's target role remains an optional 2.5D office. |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |
 | 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, native UI and web. The current web locale contract is [`web/i18n/config.ts`](../../web/i18n/config.ts), which includes all seven. Remaining work is translator guidance, coverage cleanup and native-speaker review. |
@@ -79,9 +86,9 @@ Current sequencing:
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(August 2026)* | **Official public release**: clean install → office → container → provider login → profile → team-up paths on macOS/Windows/Linux, plus native horizontal/vertical trailers and concise game/web tutorials. |
-| **Next** *(1–2 months)* | **Native app polish** — Windows signing, installer/upgrade UX and notifications · **local models (M5) groundwork** — paired quality and hardware validation · **Kimi €40 out of beta** only if month-scale evidence holds. |
-| **Later** *(a quarter and beyond)* | Broader mobile control beyond the shipped emergency stop · pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · interview practice (M9) · opt-in auto-submit (M10) · fine-grained team observability (M7). |
+| **Now** *(August 2026)* | Keep the shipped Godot path reliable while building the Tauri first-run flow for own PC + Podman + customer OpenAI API key + Node.js headless agents. The Electron tree is available only under `archive/` for selective reuse. |
+| **Next** *(1–2 months)* | Add native credential storage, Podman detection/provisioning and headless-worker lifecycle through the versioned loopback API; retain Windows signing, installer/upgrade UX and notifications as release gates. |
+| **Later** *(a quarter and beyond)* | Add own-VPS SSH setup, provider-subscription TUI/`tmux` paths and managed plug-and-play with Stripe credits · Mentor as a first-class surface (M6) · interview practice (M9) · opt-in auto-submit (M10) · fine-grained team observability (M7). |
 
 ---
 
@@ -94,10 +101,10 @@ prerequisites or promises of a delivery date.
   NOW                          NEXT                         LATER
   (release work)               (near term)                  (later)
   ────────────────────────     ────────────────────────     ────────────────────────
-  • desktop setup e2e          • M4 cheaper tiers +          • M7 fine-grained observability
-    (all three OSes)              more providers             • M9 interview practice
-  • case studies               • M3 harden security          • M10 opt-in auto-submit
-                               • M5 fully-local models ⭐
+  • Godot release safety       • first React/Tauri slice      • M7 fine-grained observability
+  • product API + Tauri spike  • M4 cheaper tiers +          • M9 interview practice
+  • case studies                 more providers              • M10 opt-in auto-submit
+                               • M3 security · M5 local ⭐
 ```
 
 M1 quick-feedback cards and M2 mobile team safety are already shipped, so
@@ -109,9 +116,9 @@ they live in [`CHANGELOG.md`](../../CHANGELOG.md) rather than this future list.
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible [Kimi variance and cost tooling](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) now exists, but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — a one-role Scorer spike exists with a machine-checked provider inventory and deterministic comparison harness. Whole-team support remains unavailable: paired quality, live URL/feedback parity, real hardware evidence and additional roles are still required. | LLM / infra | 🔴 large |
 
-> 🖥️ **Native app** — the highest-priority engineering area remains
-> onboarding recovery, accessibility, packaging/signing and cross-platform QA
-> in [`game/`](../../game/).
+> 🖥️ **Desktop app** — current Godot release safety and the staged Tauri migration
+> proceed together. The capability gates, parity rule and removal criteria are
+> in the [desktop migration plan](../internal/roadmap/2026-08-24-desktop-tauri-migration.md).
 
 **On the horizon** — bigger directions we've scoped but not opened yet:
 
