@@ -157,12 +157,12 @@ Due path implementativi equivalenti propagano i delta:
 
 | Lane | Tabella cloud | Reader container | Trigger UI |
 |---|---|---|---|
-| **Start/stop/restart team** | `team_state` (mig 019) | `cli/src/lib/team-state-reconciler.js:251` long-poll 5s su `/api/team-state` | bottoni Start/Stop dashboard |
+| **Start/stop/restart team** | `team_state` (mig 019) | `cloud daemon`: evento Realtime sui pairing moderni; fallback bounded 5→60s + paracadute. Il reconciler standalone resta solo diagnostico | bottoni Start/Stop dashboard |
 | **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/realtime-subscriber.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
 | **Writer-on-demand** | `positions.write_requested` (mig 024) | Capitano via `shared/skills/db_query.py:344` query `next-for-scrittore` → SQLite **locale** | bottone "Scrivi CV" dashboard + Telegram `/cv` |
-| **Chat utente→agente** (legacy) | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send`. ⚠️ **Congelato dal 2026-06-25** dietro `JHT_CLOUD_CONTROL_POLLERS=1` (default OFF, `pid1.js:991`) — **superato dalla corsia chat** di mig 060, che usa `pending_user_messages` | POST `/api/messages` |
+| **Chat utente→agente** (legacy) | `user_to_agent_messages` (mig 019) | `user-messages-poller.js` resta invocabile a mano per diagnosi, ma pid1 non lo spawna più. `JHT_CLOUD_CONTROL_POLLERS=1` è deprecato e ignorato per evitare consumer doppi | POST `/api/messages` (legacy) |
 | **Like/dislike position** | `position_feedback` (mig 019) | `shared/skills/feedback_query.py themes --exclude-legacy-id <legacy_id>` (Scorer: preferenze contestuali solo per posizioni future; Scout: segnale opzionale) | POST `/api/positions/{id}/feedback` |
-| **Chat utente↔agente** (`[JHT-CHAT-UNIFY]`) | `pending_user_messages` (mig 010, 057, 060) + campanello `team_state.chat_requested_at` | `handleChatSync` nel giro veloce (~5s) del `cloud daemon`: legge i turni `author='user'` non consegnati via **supabase-direct** (0 Vercel) quando `JHT_SUPABASE_DIRECT=1`, altrimenti — cioè su tutto il fleet — via **GET `/api/cloud-sync/chat`** col token del box; li importa in SQLite + `chat.jsonl`, li consegna al **pane tmux** con `jht-tmux-send`, poi ack + `chat_delivered_at` (POST sulla stessa route) | POST `/api/pending-messages` (comporre) · POST `…/[id]/reply` · `…/[id]/ack` |
+| **Chat utente↔agente** (`[JHT-CHAT-UNIFY]`) | `pending_user_messages` (mig 010, 057, 060) + campanello `team_state.chat_requested_at` | `handleChatSync`: Realtime `team_state` è il wake normale; fallback bounded sui pairing legacy/socket down. Importa una volta ogni rendezvous, accoda in SQLite se il team è fermo e consegna al pane con retry durevole/backoff+jitter. Ack + `chat_delivered_at` soltanto dopo la consegna | POST `/api/pending-messages` (comporre) · POST `…/[id]/reply` · `…/[id]/ack` |
 | **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto dal browser via Realtime (`usePendingMessagesLive`) | notifiche utente (`jht-notify-user`) |
 
 **Nota architetturale sulla nomenclatura**: `realtime-subscriber.js` è **fuorviante** — il file dichiara esplicitamente (riga 10-18) di NON usare WebSocket Realtime. Fa long-poll HTTP perché `cloud.json` non conserva il refresh-token Supabase. Il nome è ereditato dall'intent originale, da rinominare in `team-commands-poller.js` quando si chiude il cutover #13.
@@ -219,33 +219,34 @@ chat.jsonl  ──ingest──►  SQLite  ──push──►  cloud  ──Rea
 ```
 
 **Il giro** (`handleChatSync`, `cli/src/commands/cloud.js`; logica in
-`cli/src/lib/chat-sync.js`) gira nel **tick veloce del daemon, ~5s**
-(`JHT_SYNC_CHECK_SEC`) — non nel giro pesante da 60s: una chat con minuti di latenza
-non è una chat. Cinque passi, **ognuno preceduto da una guardia locale**, quindi a
-conversazione ferma non si tocca né Supabase né Vercel:
+`cli/src/lib/chat-sync.js`) è svegliato da Supabase Realtime per il verso web→box e
+da `fs.watch` su `chat.jsonl` per il verso box→web. I timer sono paracadute: 5→60s
+con backoff+jitter se il socket è giù e 60s per un evento filesystem perso. Cinque
+passi, **ognuno preceduto da una guardia locale**:
 
 | # | Passo | Guardia locale | Cosa fa |
 |---|---|---|---|
-| 1 | `import` | `chat_requested_at > chat_delivered_at` sulla riga `team_state` **già letta** dal rendezvous "Sync now" | legge i turni `author='user'` non consegnati — supabase-direct se il flag opt-in è acceso (0 Vercel), altrimenti `/api/cloud-sync/chat` col token del box — poi INSERT in SQLite **e append immediato in `chat.jsonl`** (altrimenti il turno arriverebbe all'agente ma resterebbe invisibile nel gioco). La chiamata parte **solo** con la guardia soddisfatta: a chat ferma resta 0 richieste |
+| 1 | `import` | richiesta nuova, oppure retry locale arrivato a scadenza | legge i turni `author='user'` non consegnati, poi INSERT idempotente in SQLite e append in `chat.jsonl`. Lo stesso rendezvous già importato non viene riletto a ogni tick |
 | 2 | `ingest` | `stat` del file (size + mtime vs `.chat-mirror-cursor.json`) | legge la coda (96 KB) di `chat.jsonl` → INSERT in SQLite dei turni nuovi: il turno scritto **dal gioco** e **ogni risposta `jht-send`** |
 | 3 | `mirror` | `SELECT … WHERE chat_ts IS NULL` | porta nel file i turni nati in SQLite (`jht-notify-user`, web), poi timbra `chat_ts` |
-| 4 | `deliver` | `author='user' AND delivered_at IS NULL` | consegna al **pane tmux** con `jht-tmux-send`, max 5/tick |
+| 4 | `deliver` | team attivo, `author='user'`, `delivered_at IS NULL`, retry dovuto | consegna al **pane tmux** con `jht-tmux-send`, max 5/tick; fallimenti pianificati in SQLite con backoff bounded+jitter |
 | 5 | `push` | `cloud_synced_at IS NULL` | POST `/api/cloud-sync/push` → RPC merge → il browser riceve via Realtime |
 
 **Latenze attese**
 
 | Tratta | Latenza | Prima del 29/07 |
 |---|---|---|
-| Web → pane dell'agente | **~5s** (tick veloce), + busy-wait di `jht-tmux-send` se la TUI è occupata (fino a 90s, cap 120s) | **mai**: restava in SQLite finché l'agente non chiamava `jht-check-user-replies` di sua iniziativa |
+| Web → pane dell'agente | **event-driven** (tipicamente sub-second/pochi secondi), + busy-wait di `jht-tmux-send`; team fermo = coda durevole fino allo start | **mai**: restava in SQLite finché l'agente non chiamava `jht-check-user-replies` di sua iniziativa |
 | Gioco → web | **~5s** (ingest) + roundtrip del push | **mai**: `chat.jsonl` non usciva dal box |
-| Agente (`jht-send`) → web | **~5s** + roundtrip del push | **mai**: `jht-send` non tocca SQLite, e dal 2026-06-25 non esiste push periodico |
+| Agente (`jht-send`) → web | **evento filesystem** + roundtrip del push; paracadute 60s | **mai**: `jht-send` non tocca SQLite, e dal 2026-06-25 non esiste push periodico |
 | Agente (`jht-notify-user`) → web | **~5s** + roundtrip del push | solo alla pressione di **"Sync now"** |
 | Web → gioco | **~5s** (append in `chat.jsonl` dentro il passo `import`) | **mai** |
 
-Con `JHT_REALTIME_SYNC=1` (default OFF) il passo 1 si aggancia direttamente
-all'evento websocket su `team_state` — la stessa riga che porta `sync_requested_at` —
-e un battito locale corto (`JHT_CHAT_LOCAL_SEC`, 5s) copre le sorgenti **del box**
-(`jht-send`, gioco), che non producono alcun evento remoto.
+Realtime è automatico quando il pairing contiene `supabase_url` e refresh token.
+`JHT_REALTIME_SYNC=0` resta l'opt-out di rollout; `=1` forza il tentativo sui pairing
+legacy. Auth o socket non disponibili degradano in modo esplicito al fallback
+bounded, non a polling 5s indefinito. `JHT_CHAT_LOCAL_SEC` regola il paracadute
+filesystem (minimo 30s, default 60s).
 
 **`chat_ts` = chiave di dedup nei due versi.** È il `ts` unix della riga JSONL:
 presente ⇒ il turno è già nel file che legge il gioco. L'`ingest` salta le righe il
@@ -264,7 +265,8 @@ più stretta possibile: righe proprie, `author='user'`, `legacy_id < 0`.
 
 **Garanzie di consegna.** `delivered_at` si timbra **solo** a consegna riuscita:
 `jht-tmux-send` che torna **exit 4** (TUI occupata oltre il budget) significa agente
-**vivo** su un turno lungo → si ritenta al giro dopo. Un pane morto blocca solo la
+**vivo** su un turno lungo → il turno resta in coda e il retry cresce da 5s fino a
+5 minuti con jitter, persistendo anche attraverso un restart. Un pane morto blocca solo la
 **sua** coda, gli altri agenti proseguono. Il rendezvous si chiude
 (`chat_delivered_at`) solo se `failed === 0`.
 

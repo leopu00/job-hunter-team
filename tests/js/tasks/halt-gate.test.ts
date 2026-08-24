@@ -19,6 +19,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  coalescingGuardedLane,
   createHaltGate,
   guardedLane,
 } from "../../../cli/src/lib/halt-gate.js";
@@ -210,5 +211,37 @@ describe("guardedLane — il freno che si eredita", () => {
     expect(await run("realtime")).toBe(true);
     expect(body).toHaveBeenCalledTimes(1);
     expect(h.resumes).toHaveLength(1);
+  });
+});
+
+describe("coalescingGuardedLane — eventi arrivati durante il lavoro", () => {
+  it("non sovrappone i giri e conserva l'ultima sveglia", async () => {
+    const h = harness();
+    const seen: string[] = [];
+    let release!: () => void;
+    const firstMayFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const run = coalescingGuardedLane(h.gate, "chat", async (tag: string) => {
+      seen.push(tag);
+      if (tag === "first") await firstMayFinish;
+    });
+
+    const first = run("first");
+    expect(await run("stale-event")).toBe(false);
+    expect(await run("latest-event")).toBe(false);
+    release();
+    expect(await first).toBe(true);
+    expect(seen).toEqual(["first", "latest-event"]);
+  });
+
+  it("non conserva lavoro quando il freno e' inserito", async () => {
+    const h = harness({ halted: true });
+    const body = vi.fn(async () => {});
+    const run = coalescingGuardedLane(h.gate, "chat", body);
+    expect(await run("file")).toBe(false);
+    h.state.halted = false;
+    expect(await run("file")).toBe(true);
+    expect(body).toHaveBeenCalledTimes(1);
   });
 });

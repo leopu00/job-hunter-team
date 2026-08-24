@@ -228,14 +228,14 @@ All 19 subcommands, grouped by what you'd reach for them.
 | `jht cloud pull-profile`         | Node  | Downloads the profile into `candidate_profile.yml`, **only if absent**. `--force` overwrites a local profile. |
 | `jht cloud restore`              | Node  | Rebuilds local SQLite from the cloud snapshot (positions/scores/applications). Destructive — `--confirm-restore` skips the prompt for CI/scripts. |
 
-**Long-running (spawned by pid1, not by you)**
+**Long-running**
 
 | Command                          | Layer | What it does                                                       |
 |----------------------------------|-------|--------------------------------------------------------------------|
-| `jht cloud daemon [flags]`       | Node  | Continuous push loop. `--interval <sec>` (env `JHT_CLOUD_PUSH_INTERVAL_SEC`). |
-| `jht cloud realtime-listen`      | Node  | HTTP long-poll subscriber for `team_commands` (legacy, in cutover to team_state). Backing file: `cli/src/lib/team-commands-poller.js`. |
-| `jht cloud team-state-listen`    | Node  | Desired-state reconciler: polls `team_state`, applies `should_run`/`restart_token` via `jht team start\|stop\|restart`. Co-spawned by pid1 alongside `realtime-listen` during cutover. |
-| `jht cloud messages-listen`      | Node  | Poller for `user_to_agent_messages`: forwards web → tmux pane.      |
+| `jht cloud daemon [flags]`       | Node  | Single pid1-owned sync runtime: Realtime team/chat wakeups, bounded fallback, periodic push. `--interval <sec>` controls heavy work. |
+| `jht cloud realtime-listen`      | Node  | Legacy diagnostic command for `team_commands`; not co-spawned by pid1. |
+| `jht cloud team-state-listen`    | Node  | Legacy diagnostic reconciler; not co-spawned by pid1. |
+| `jht cloud messages-listen`      | Node  | Legacy diagnostic consumer for `user_to_agent_messages`; not co-spawned by pid1. |
 | `jht cloud file-bridge-listen`   | Node  | File-bridge poller: index + on-demand upload of CVs/attachments to the web. |
 
 **Key flags:**

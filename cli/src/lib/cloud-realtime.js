@@ -29,9 +29,18 @@ const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const DEFAULT_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtaXR0d3ZvaHNud3d3aXNxZHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMDIzMDgsImV4cCI6MjA4OTY3ODMwOH0.g7twGaXdmmqBtukaioaJ1OV2mXVJqpEhkyzXaEIH44I';
 
-/** Il daemon deve girare in modalità event-driven (Realtime) invece che poll? */
-export function realtimeSyncEnabled() {
-  return process.env.JHT_REALTIME_SYNC === '1';
+/**
+ * Il daemon deve girare in modalità event-driven invece che poll?
+ *
+ * I pairing moderni portano già le credenziali utente necessarie: Realtime è
+ * quindi il default sicuro. `JHT_REALTIME_SYNC=0` resta l'opt-out di rollout;
+ * `=1` forza il tentativo e degrada poi al fallback bounded se le credenziali
+ * non sono disponibili.
+ */
+export function realtimeSyncEnabled(config = null) {
+  if (process.env.JHT_REALTIME_SYNC === '0') return false;
+  if (process.env.JHT_REALTIME_SYNC === '1') return true;
+  return !!getRealtimeCreds(config);
 }
 
 /** Estrae le credenziali Realtime da cloud.json (o null se mancanti). */
@@ -106,7 +115,7 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
 
   const channels = [];
 
-  function subscribe(name, { table, event = '*', filter } = {}, handler) {
+  function subscribe(name, { table, event = '*', filter } = {}, handler, onStatus = () => {}) {
     const opts = { event, schema: 'public', table };
     if (filter) opts.filter = filter;
     const ch = client
@@ -116,6 +125,7 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
       })
       .subscribe((status, err) => {
         log('info', `channel ${name}: ${status}${err ? ' — ' + err.message : ''}`);
+        try { onStatus(status, err); } catch { /* stato osservativo */ }
       });
     channels.push(ch);
     return ch;
