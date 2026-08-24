@@ -1,0 +1,41 @@
+{
+  "name": "Synthetic Candidate",
+  "email": "candidate@example.invalid",
+  "location": "Remote (EU-wide)",
+  "target_role": "Agentic AI Engineer / Forward Deployed Engineer",
+  "experience_years": 4,
+  "skills": {
+    "primary": ["Python", "PostgreSQL", "AI agent orchestration"],
+    "secondary": ["pytest", "Docker", "REST API"]
+  },
+  "languages": [
+    { "language": "Italian", "level": "C2" },
+    { "language": "English", "level": "C1" }
+  ],
+  "job_titles": ["AI Solutions Engineer", "Python Developer"],
+  "location_preferences": [
+    { "type": "Remote EU" },
+    { "type": "Remote Worldwide" },
+    { "type": "Open to relocation" }
+  ],
+  "work_authorization": [{ "region": "EU", "status": "authorized" }],
+  "positioning": {
+    "seniority_target": "mid",
+    "projects": [
+      {
+        "name": "Synthetic agent team",
+        "description": "Designed a test-only multi-agent workflow with quality gates."
+      }
+    ],
+    "education": [],
+    "experience": [
+      {
+        "role": "Python Developer",
+        "period": "Synthetic period",
+        "company": "Example Labs",
+        "summary": "Built test-only REST services backed by PostgreSQL."
+      }
+    ]
+  },
+  "schema_version": 1
+}
