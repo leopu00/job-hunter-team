@@ -271,6 +271,9 @@ export default async function DashboardPage() {
                     applicationTimeline.visibleSubmitted,
                   ),
                   description: t.application_timeline_description,
+                  submitted: t.application_timeline_submitted,
+                  accepted: t.application_timeline_accepted,
+                  rejected: t.application_timeline_rejected,
                 }}
               />
             </div>
