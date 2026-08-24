@@ -411,14 +411,21 @@ fn read_cv_markdown(workspace_dir: &Path, run_id: &str, source_id: &str) -> Opti
     if !safe_path_component(run_id) || !safe_path_component(source_id) {
         return None;
     }
-    let contents = fs::read(
-        workspace_dir
-            .join("runs")
-            .join(run_id)
-            .join("artifacts")
-            .join(format!("{source_id}.cv.md")),
-    )
-    .ok()?;
+    let artifact = workspace_dir
+        .join("runs")
+        .join(run_id)
+        .join("artifacts")
+        .join(format!("{source_id}.cv.md"));
+    let metadata = fs::symlink_metadata(&artifact).ok()?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return None;
+    }
+    let workspace = workspace_dir.canonicalize().ok()?;
+    let artifact = artifact.canonicalize().ok()?;
+    if !artifact.starts_with(&workspace) {
+        return None;
+    }
+    let contents = fs::read(artifact).ok()?;
     if contents.len() > 300_000 {
         return None;
     }
@@ -511,8 +518,14 @@ fn failure(code: &'static str) -> TeamStartError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_agent_progress, parse_result, safe_path_component, valid_api_key};
-    use std::path::Path;
+    use super::{
+        parse_agent_progress, parse_result, read_cv_markdown, safe_path_component, valid_api_key,
+    };
+    use std::{
+        fs,
+        path::Path,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn accepts_provider_keys_without_persisting_a_prefix_contract() {
@@ -553,6 +566,52 @@ mod tests {
         assert!(!safe_path_component("../secret"));
         assert!(!safe_path_component(".."));
         assert!(!safe_path_component("nested/path"));
+    }
+
+    #[test]
+    fn reads_only_regular_cv_artifacts_inside_the_workspace() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "jht-desktop-artifact-{}-{nonce}",
+            std::process::id()
+        ));
+        let artifacts = root.join("runs/run-1/artifacts");
+        fs::create_dir_all(&artifacts).expect("artifact directory");
+        fs::write(artifacts.join("job-1.cv.md"), "# Safe CV").expect("artifact write");
+
+        assert_eq!(
+            read_cv_markdown(&root, "run-1", "job-1").as_deref(),
+            Some("# Safe CV")
+        );
+        assert!(read_cv_markdown(&root, "../outside", "job-1").is_none());
+        fs::remove_dir_all(root).expect("artifact cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_cv_artifact_symlinks_that_escape_the_workspace() {
+        use std::os::unix::fs::symlink;
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "jht-desktop-symlink-{}-{nonce}",
+            std::process::id()
+        ));
+        let workspace = root.join("workspace");
+        let artifacts = workspace.join("runs/run-1/artifacts");
+        fs::create_dir_all(&artifacts).expect("artifact directory");
+        let outside = root.join("outside.md");
+        fs::write(&outside, "private host data").expect("outside write");
+        symlink(&outside, artifacts.join("job-1.cv.md")).expect("artifact symlink");
+
+        assert!(read_cv_markdown(&workspace, "run-1", "job-1").is_none());
+        fs::remove_dir_all(root).expect("artifact cleanup");
     }
 
     #[test]
