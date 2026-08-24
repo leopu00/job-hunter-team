@@ -18,6 +18,7 @@ export * from "./tools.js";
 export * from "./usage-report.js";
 export * from "./standalone-db.js";
 export * from "./standalone.js";
+export * from "./team-db.js";
 export * from "./structured-role-worker.js";
 export * from "./prototype-roles.js";
 export * from "./web-job-reader.js";
