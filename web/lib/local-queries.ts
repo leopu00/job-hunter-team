@@ -908,6 +908,24 @@ export function getDashboardPositionsLocal(ws: string) {
   });
 }
 
+// ── Date candidature inviate ───────────────────────────────────────
+// Il workspace SQLite è già isolato per utente. `applied_at` è la fonte
+// canonica anche quando lo status avanza a response/interview/rejected.
+export function getApplicationSubmissionDatesLocal(ws: string): string[] {
+  const db = getDb(ws);
+  const rows = db
+    .prepare(
+      `
+    SELECT applied_at
+    FROM applications
+    WHERE applied_at IS NOT NULL
+    ORDER BY applied_at ASC, id ASC
+  `,
+    )
+    .all() as Array<{ applied_at: string }>;
+  return rows.map((row) => row.applied_at);
+}
+
 // ── Position type distribution ──────────────────────────────────────
 // Legge la colonna positions.role_family (popolata dal team analyst).
 // score → scores.total_score, critic → applications.critic_score (0-10).
