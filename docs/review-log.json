@@ -1619,6 +1619,31 @@
       "path": "docs/adr/0010-version-api-scorer-scale.md",
       "description": "Versionamento della scala API Scorer jht-100-v2 senza reinterpretare i punteggi legacy",
       "last_review": "2026-08-24"
+    },
+    {
+      "path": "desktop/README.md",
+      "description": "Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo",
+      "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/adr/0011-tauri-desktop-shell.md",
+      "description": "ADR per la migrazione desktop a Tauri 2 e React, mantenendo Godot supportato durante il passaggio",
+      "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/adr/0012-desktop-setup-matrix.md",
+      "description": "ADR che separa host di esecuzione e autenticazione AI e definisce il ciclo di vita sicuro delle credenziali desktop",
+      "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/internal/architecture/2026-08-24-desktop-setup-modes.md",
+      "description": "Matrice dei setup desktop e perimetro attivo own PC, Podman e chiave API effimera",
+      "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md",
+      "description": "Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione",
+      "last_review": "2026-08-24"
     }
   ]
 }
