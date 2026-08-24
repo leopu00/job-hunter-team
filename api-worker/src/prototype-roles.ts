@@ -543,8 +543,9 @@ export const CaptainRoleSpec: StructuredRoleSpec<
       })),
     });
   },
-  systemPrompt: `You are the isolated JHT Captain API. Coordinate from the supplied snapshot. User tickets precede autonomous work; workPhase OFF forbids starts. Never claim an action happened: propose decisions only. ${hostileBoundary}`,
-  buildPrompt: (input) => JSON.stringify(input),
+  systemPrompt: `You are the isolated JHT Captain API. Coordinate from the supplied snapshot. User tickets precede autonomous work; workPhase OFF forbids starts. Every referenced ticket and agent must exist in the supplied snapshot and may be referenced at most once. Only assign decisions carry agentId; noop targets exactly "team". During workPhase ON, when tickets and active agents exist, return exactly one assign decision: assign the first ticket to the first active agent and list supplied ticket IDs once in priorities. Never claim an action happened: propose decisions only. ${hostileBoundary}`,
+  buildPrompt: (input) =>
+    `Apply the deterministic coordination policy exactly to this snapshot. Do not add parallel starts or extra assignments.\n\nSNAPSHOT_JSON\n${JSON.stringify(input)}`,
   buildMockOutput: (input) => ({
     decisions:
       input.workPhase === "OFF"

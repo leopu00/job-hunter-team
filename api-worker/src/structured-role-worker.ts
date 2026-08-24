@@ -320,6 +320,7 @@ export class StructuredRoleApiWorker<
       );
       return { ok: true, result };
     } catch (error) {
+      writeStructuredRoleProviderDiagnostic(this.spec.role, error);
       const fault = knownFault(error);
       const partial = guard?.metrics;
       await this.writeFailureAudit(
