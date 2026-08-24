@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { Output, generateText, stepCountIs } from "ai";
+import { NoObjectGeneratedError, Output, generateText, stepCountIs } from "ai";
 import { z } from "zod";
 
 import type { AgentRole } from "./agent-role.js";
@@ -471,15 +471,31 @@ class AiSdkStructuredRoleProvider<
             context.recordRequestFailed(reservation, "provider_error"),
           ),
       );
-      if (error instanceof WorkerFault) throw error;
-      if (context.signal.aborted) throw timeoutFault(error);
       writeStructuredRoleProviderDiagnostic(this.spec.role, error);
-      throw new WorkerFault("PROVIDER_ERROR", {
-        retryable: true,
-        cause: error,
-      });
+      throw classifyStructuredProviderError(error, context.signal.aborted);
     }
   }
+}
+
+export function classifyStructuredProviderError(
+  error: unknown,
+  aborted: boolean,
+): WorkerFault {
+  if (error instanceof WorkerFault) return error;
+  if (aborted) return timeoutFault(error);
+  if (
+    NoObjectGeneratedError.isInstance(error) ||
+    (error instanceof Error && error.name === "ZodError")
+  ) {
+    return new WorkerFault("OUTPUT_VALIDATION", {
+      retryable: true,
+      cause: error,
+    });
+  }
+  return new WorkerFault("PROVIDER_ERROR", {
+    retryable: true,
+    cause: error,
+  });
 }
 
 export function writeStructuredRoleProviderDiagnostic(
