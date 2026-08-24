@@ -187,6 +187,39 @@ describe("isolated team pipeline database", () => {
       db.close();
     }
   });
+
+  it("accounts coordinating agents against the same team budget", async () => {
+    const db = await makeDb();
+    const runId = "32345678-1234-4234-8234-123456789abc";
+    try {
+      db.createRun({
+        runId,
+        targetScores: 1,
+        targetReviews: 0,
+        budgetUsd: 0.02,
+      });
+      const scout = db.reserveAgentRun(runId, "scout", "scout-1", 0.015);
+      expect(() =>
+        db.reserveAgentRun(runId, "captain", "captain-1", 0.006),
+      ).toThrow("TEAM_BUDGET_EXCEEDED");
+      db.completeAgentRun(scout, accounting(0.004));
+      expect(db.summary(runId)).toMatchObject({
+        spentUsd: 0.004,
+        reservedUsd: 0,
+      });
+      expect(db.agentUsage(runId)).toEqual([
+        {
+          agentId: "scout-1",
+          role: "scout",
+          costUsd: 0.004,
+          inputTokens: 100,
+          outputTokens: 50,
+        },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function makeDb(): Promise<TeamPipelineDb> {

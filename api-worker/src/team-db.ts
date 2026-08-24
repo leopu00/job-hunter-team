@@ -23,6 +23,16 @@ import {
 } from "./scorer-contract.js";
 
 export type PipelineRole = "analyst" | "scorer" | "writer" | "critic";
+export type CoordinatingRole = "captain" | "scout" | "sentinel";
+
+export type TeamAgentReservation = {
+  reservationId: string;
+  runId: string;
+  role: CoordinatingRole;
+  agentId: string;
+  token: string;
+  reservationUsd: number;
+};
 
 export type TeamPositionState =
   | "new"
@@ -85,6 +95,14 @@ export type TeamEvent = {
   toRole: string | null;
   detail: Record<string, unknown>;
   createdAt: string;
+};
+
+export type TeamAgentUsage = {
+  agentId: string;
+  role: string;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
 };
 
 const ROLE_STATES: Record<
@@ -196,6 +214,119 @@ export class TeamPipelineDb {
           {},
         );
       }
+    });
+  }
+
+  reserveAgentRun(
+    runId: string,
+    role: CoordinatingRole,
+    agentId: string,
+    reservationUsd: number,
+  ): TeamAgentReservation {
+    assertAgentId(agentId);
+    if (!Number.isFinite(reservationUsd) || reservationUsd < 0)
+      throw new Error("reservationUsd must be non-negative");
+    return this.transaction(() => {
+      const run = this.assertRunningRun(runId);
+      if (
+        Number(run.spent_usd) + this.reservedUsd(runId) + reservationUsd >
+        Number(run.budget_usd) + Number.EPSILON
+      ) {
+        throw new Error("TEAM_BUDGET_EXCEEDED");
+      }
+      const reservationId = randomUUID();
+      const token = randomUUID();
+      const timestamp = this.now().toISOString();
+      this.db
+        .prepare(
+          "INSERT INTO team_agent_runs(id, run_id, role, agent_id, status, claim_token, reservation_usd, cost_usd, input_tokens, output_tokens, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, 'active', ?, ?, 0, 0, 0, ?, ?)",
+        )
+        .run(
+          reservationId,
+          runId,
+          role,
+          agentId,
+          token,
+          reservationUsd,
+          timestamp,
+          timestamp,
+        );
+      this.event(runId, null, agentId, "agent_run_reserved", null, role, {
+        reservationUsd,
+      });
+      return {
+        reservationId,
+        runId,
+        role,
+        agentId,
+        token,
+        reservationUsd,
+      };
+    });
+  }
+
+  completeAgentRun(
+    reservation: TeamAgentReservation,
+    accounting: AgentAccounting,
+  ): void {
+    assertAccounting(accounting);
+    this.transaction(() => {
+      const row = this.assertAgentReservation(reservation);
+      if (accounting.costUsd > Number(row.reservation_usd) + 1e-9)
+        throw new Error("TASK_BUDGET_EXCEEDED");
+      const timestamp = this.now().toISOString();
+      this.db
+        .prepare(
+          "UPDATE team_agent_runs SET status='completed', reservation_usd=0, cost_usd=?, input_tokens=?, output_tokens=?, updated_at=? WHERE id=?",
+        )
+        .run(
+          accounting.costUsd,
+          accounting.inputTokens,
+          accounting.outputTokens,
+          timestamp,
+          reservation.reservationId,
+        );
+      this.db
+        .prepare(
+          "UPDATE team_runs SET spent_usd=spent_usd+?, updated_at=? WHERE run_id=?",
+        )
+        .run(accounting.costUsd, timestamp, reservation.runId);
+      this.event(
+        reservation.runId,
+        null,
+        reservation.agentId,
+        "agent_run_completed",
+        reservation.role,
+        "captain",
+        {
+          costUsd: accounting.costUsd,
+          inputTokens: accounting.inputTokens,
+          outputTokens: accounting.outputTokens,
+        },
+      );
+    });
+  }
+
+  releaseAgentRun(reservation: TeamAgentReservation, errorCode: string): void {
+    if (!/^[A-Z][A-Z0-9_]{1,79}$/.test(errorCode))
+      throw new Error("errorCode must be a safe identifier");
+    this.transaction(() => {
+      this.assertAgentReservation(reservation);
+      this.db
+        .prepare(
+          "UPDATE team_agent_runs SET status='failed', reservation_usd=0, last_error=?, updated_at=? WHERE id=?",
+        )
+        .run(errorCode, this.now().toISOString(), reservation.reservationId);
+      this.event(
+        reservation.runId,
+        null,
+        reservation.agentId,
+        "agent_run_failed",
+        reservation.role,
+        "captain",
+        { errorCode },
+      );
     });
   }
 
@@ -544,6 +675,26 @@ export class TeamPipelineDb {
     });
   }
 
+  failRun(runId: string, errorCode: string): void {
+    if (!/^[A-Z][A-Z0-9_]{1,79}$/.test(errorCode))
+      throw new Error("errorCode must be a safe identifier");
+    this.transaction(() => {
+      const run = this.db
+        .prepare("SELECT status FROM team_runs WHERE run_id=?")
+        .get(runId);
+      if (!run) throw new Error("RUN_NOT_FOUND");
+      if (run.status !== "running") return;
+      this.db
+        .prepare(
+          "UPDATE team_runs SET status='failed', updated_at=? WHERE run_id=?",
+        )
+        .run(this.now().toISOString(), runId);
+      this.event(runId, null, "captain", "run_failed", null, null, {
+        errorCode,
+      });
+    });
+  }
+
   listEvents(runId: string): TeamEvent[] {
     return this.db
       .prepare("SELECT * FROM team_events WHERE run_id=? ORDER BY sequence")
@@ -559,6 +710,41 @@ export class TeamPipelineDb {
         detail: JSON.parse(String(row.detail_json)) as Record<string, unknown>,
         createdAt: String(row.created_at),
       }));
+  }
+
+  agentUsage(runId: string): TeamAgentUsage[] {
+    const coordinating = this.db
+      .prepare(
+        "SELECT agent_id, role, cost_usd, input_tokens, output_tokens FROM team_agent_runs WHERE run_id=? AND status='completed'",
+      )
+      .all(runId);
+    const pipeline = this.db
+      .prepare(
+        "SELECT agent_id, role, cost_usd, input_tokens, output_tokens FROM team_tasks WHERE run_id=? AND status='completed'",
+      )
+      .all(runId);
+    const totals = new Map<string, TeamAgentUsage>();
+    for (const row of [...coordinating, ...pipeline]) {
+      const agentId = String(row.agent_id);
+      const role = String(row.role);
+      const key = `${role}:${agentId}`;
+      const current = totals.get(key) ?? {
+        agentId,
+        role,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      current.costUsd += Number(row.cost_usd);
+      current.inputTokens += Number(row.input_tokens);
+      current.outputTokens += Number(row.output_tokens);
+      totals.set(key, current);
+    }
+    return [...totals.values()].sort((left, right) =>
+      `${left.role}:${left.agentId}`.localeCompare(
+        `${right.role}:${right.agentId}`,
+      ),
+    );
   }
 
   private completeClaim(
@@ -626,6 +812,23 @@ export class TeamPipelineDb {
     return task;
   }
 
+  private assertAgentReservation(reservation: TeamAgentReservation) {
+    const row = this.db
+      .prepare("SELECT * FROM team_agent_runs WHERE id=?")
+      .get(reservation.reservationId);
+    if (
+      !row ||
+      row.status !== "active" ||
+      row.run_id !== reservation.runId ||
+      row.role !== reservation.role ||
+      row.agent_id !== reservation.agentId ||
+      row.claim_token !== reservation.token
+    ) {
+      throw new Error("INVALID_AGENT_RESERVATION");
+    }
+    return row;
+  }
+
   private assertRunningRun(runId: string) {
     const run = this.db
       .prepare("SELECT * FROM team_runs WHERE run_id=?")
@@ -650,12 +853,17 @@ export class TeamPipelineDb {
   }
 
   private reservedUsd(runId: string): number {
-    const row = this.db
+    const tasks = this.db
       .prepare(
         "SELECT coalesce(sum(reservation_usd), 0) AS total FROM team_tasks WHERE run_id=? AND status='claimed'",
       )
       .get(runId);
-    return Number(row?.total ?? 0);
+    const agents = this.db
+      .prepare(
+        "SELECT coalesce(sum(reservation_usd), 0) AS total FROM team_agent_runs WHERE run_id=? AND status='active'",
+      )
+      .get(runId);
+    return Number(tasks?.total ?? 0) + Number(agents?.total ?? 0);
   }
 
   private event(
@@ -743,6 +951,21 @@ export class TeamPipelineDb {
         FOREIGN KEY(run_id, source_id) REFERENCES team_positions(run_id, source_id)
       );
       CREATE INDEX IF NOT EXISTS team_tasks_queue_idx ON team_tasks(run_id, role, status, created_at);
+      CREATE TABLE IF NOT EXISTS team_agent_runs (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES team_runs(run_id),
+        role TEXT NOT NULL CHECK(role IN ('captain','scout','sentinel')),
+        agent_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('active','completed','failed')),
+        claim_token TEXT NOT NULL,
+        reservation_usd REAL NOT NULL,
+        cost_usd REAL NOT NULL,
+        input_tokens INTEGER NOT NULL,
+        output_tokens INTEGER NOT NULL,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS team_events (
         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
         run_id TEXT NOT NULL REFERENCES team_runs(run_id),
