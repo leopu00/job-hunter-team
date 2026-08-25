@@ -11,6 +11,7 @@ import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { bestViewport } from "@/lib/globe-viewport";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
+import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 import { makeT } from "@/lib/i18n-dict";
@@ -904,6 +905,10 @@ export default function JobsGlobe({
     const isShowcase = showcaseRef.current != null;
     const bootTheme = paintedTheme(themeRef.current);
     themeRef.current = bootTheme;
+    // Prima di qualunque Map: fissa l'URL same-origin del worker MapLibre.
+    // In produzione la risoluzione di default punta alla home e il worker
+    // muore in silenzio → mappa senza tile né pin (vedi lib/maplibre-worker).
+    ensureMaplibreWorkerUrl();
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({

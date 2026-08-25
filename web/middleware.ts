@@ -401,7 +401,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // `mjs` è nell'elenco per il worker MapLibre servito da public/maplibre/:
+  // un worker caricato da URL usa la CSP della PROPRIA risposta, e la CSP
+  // delle pagine (script-src con 'strict-dynamic') renderebbe l'import
+  // interno di maplibre-gl-shared.mjs dipendente dal browser. Fuori dal
+  // middleware la risposta resta senza CSP: per un asset statico JS
+  // l'header non protegge nulla, conta solo dentro al worker.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mjs)$).*)",
   ],
 };

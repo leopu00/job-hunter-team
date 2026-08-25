@@ -5,6 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
+import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import type { Locale } from "@/i18n/config";
 
 // Mini-mappa della card Località: stessa base Carto del globo /map
@@ -76,6 +77,9 @@ export default function PositionMapCard({
     const el = ref.current;
     if (!el) return;
     const hints = GESTURE_HINTS[locale] ?? GESTURE_HINTS.en;
+    // Worker MapLibre dall'URL same-origin: la risoluzione di default muore
+    // nel bundle di produzione (vedi lib/maplibre-worker.ts).
+    ensureMaplibreWorkerUrl();
     const map = new maplibregl.Map({
       container: el,
       style: resolvedTheme === "light" ? STYLE_LIGHT : STYLE_DARK,

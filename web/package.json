@@ -11,6 +11,7 @@
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "recording-profile": "tsx scripts/recording-profile.ts"
   },
   "dependencies": {
