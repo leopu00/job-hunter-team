@@ -52,14 +52,14 @@ const FOURTH = "Head of Platform Engineering"; // h=138, GreenGrid
 // Le etichette dei giudizi cambiano con la lingua (7 cataloghi in
 // SwipeDeck.i18n.ts): il FATTO che sia il bottone di scarto/like no.
 // Stessa tecnica della 89 per il bottone di modifica del profilo.
-const DISCARD_RE =
-  /non interessante|not interesting|nem érdekes|no interesante|uninteressant|pas intéressant|não interessante/i;
+const DISCARD_RE = /^(escludi|exclude|kizárás|excluir|ausschließen|exclure)$/i;
 const LIKE_RE =
   /molto interessante|very interesting|nagyon érdekes|muy interesante|sehr interessant|très intéressant|muito interessante/i;
-// Conferma del pannello del motivo, per un motivo di GUSTO (`whyConfirmTaste`
-// nei sette cataloghi). Con un motivo FATTUALE il bottone direbbe «escludi»
-// e la scrittura andrebbe su un'altra route: qui si resta sul giudizio.
-const CONFIRM_TASTE_RE = /^(salva|save|mentés|guardar|speichern|enregistrer)$/i;
+// Conferma del pannello del motivo (`whyConfirmTaste`/`whyConfirmFactual` nei
+// sette cataloghi). Dal contratto corrente il bottone dice «escludi» per
+// QUALSIASI motivo: gusto e fattuale si distinguono non dall'etichetta ma
+// dalle scritture — l'esclusione parte sempre, il feedback solo per il gusto.
+const CONFIRM_RE = /^(escludi|exclude|kizárás|excluir|ausschließen|exclure)$/i;
 
 /** Il contatore del mazzo: l'unico testo della pagina nella forma `1/25`
  * (ancorato ^…$ perché date e stipendi contengono slash e cifre). */
@@ -124,14 +124,22 @@ test.describe("area riservata — swipe interattivo", () => {
     // Il cuore di #172: finché il motivo non c'è, non è partito NIENTE.
     expect(writes, "una scrittura è partita prima del motivo").toEqual([]);
 
-    // Motivo di gusto → resta un giudizio, col motivo attaccato, e persiste
-    // (in demo: cookie overlay). Se la POST fallisse, il toast d'errore
-    // citerebbe il titolo e le asserzioni sotto fallirebbero.
+    // Contratto corrente del controllo rosso: l'esclusione canonica è
+    // l'effetto primario (user-exclude, awaited dall'UI), e un motivo di
+    // GUSTO emette in coda anche il giudizio `less_like_this` col motivo
+    // attaccato. Si aspettano ENTRAMBE le risposte: perdere la seconda
+    // significherebbe che lo Scout non impara più dai motivi di gusto.
     await why.locator("select").selectOption("not_interested");
-    const [feedback] = await Promise.all([
+    const [exclusion, feedback] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/user-exclude")),
       page.waitForResponse((r) => r.url().includes("/feedback")),
-      why.getByRole("button", { name: CONFIRM_TASTE_RE }).click(),
+      why.getByRole("button", { name: CONFIRM_RE }).click(),
     ]);
+    expect(exclusion.ok(), "l'esclusione non è stata accettata").toBe(true);
+    expect(
+      exclusion.request().postDataJSON(),
+      "l'esclusione è arrivata senza il motivo che l'utente ha scelto",
+    ).toMatchObject({ reason: "not_interested" });
     expect(feedback.ok(), "il giudizio non è stato accettato").toBe(true);
     expect(
       feedback.request().postDataJSON(),
