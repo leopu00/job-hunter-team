@@ -20,6 +20,10 @@
 # production
 /build
 
+# worker MapLibre copiato da postinstall (scripts/copy-maplibre-worker.mjs):
+# generato dalla versione installata, mai committato per evitare drift
+/public/maplibre/
+
 # misc
 .DS_Store
 *.pem
