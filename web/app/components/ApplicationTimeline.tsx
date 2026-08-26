@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { ApplicationTimeline as Timeline } from "@/lib/application-timeline";
 import {
+  applicationTimelineBarLayout,
   applicationTimelineScale,
   projectTimelineY,
 } from "@/lib/application-timeline-chart";
@@ -47,24 +48,17 @@ export default function ApplicationTimeline({
   const chartW = W - PAD_LEFT - PAD_RIGHT;
   const chartH = H - PAD_TOP - PAD_BOTTOM;
   const scale = applicationTimelineScale(timeline.points);
-  const x = (index: number) =>
-    timeline.points.length === 1
-      ? PAD_LEFT + chartW / 2
-      : PAD_LEFT + (index / (timeline.points.length - 1)) * chartW;
+  const barLayout = applicationTimelineBarLayout(
+    timeline.points.length,
+    chartW,
+  );
+  const x = (index: number) => PAD_LEFT + barLayout.slotWidth * (index + 0.5);
   const y = (value: number) => projectTimelineY(value, scale, PAD_TOP, chartH);
   const zeroY = y(0);
-  const pathFor = (value: (point: Timeline["points"][number]) => number) =>
-    timeline.points
-      .map(
-        (point, index) =>
-          `${index === 0 ? "M" : "L"} ${x(index)} ${y(value(point))}`,
-      )
-      .join(" ");
-  const submittedLine = pathFor((point) => point.submitted);
-  const acceptedLine = pathFor((point) => point.accepted);
-  const rejectedLine = pathFor((point) => -point.rejected);
-  const submittedArea = `${submittedLine} L ${x(timeline.points.length - 1)} ${zeroY} L ${x(0)} ${zeroY} Z`;
-  const rejectedArea = `${rejectedLine} L ${x(timeline.points.length - 1)} ${zeroY} L ${x(0)} ${zeroY} Z`;
+  const barX = (index: number, seriesIndex: number) =>
+    x(index) -
+    barLayout.groupWidth / 2 +
+    seriesIndex * (barLayout.barWidth + barLayout.gap);
   const xTicks = tickIndexes(timeline.points.length);
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     day: "2-digit",
@@ -124,25 +118,22 @@ export default function ApplicationTimeline({
             label: labels.submitted,
             total: timeline.visibleSubmitted,
             color: "var(--color-green)",
-            shape: "rounded-full",
           },
           {
             label: labels.accepted,
             total: timeline.visibleAccepted,
             color: "var(--color-blue)",
-            shape: "rotate-45 rounded-[1px]",
           },
           {
             label: labels.rejected,
             total: -timeline.visibleRejected,
             color: "var(--color-red)",
-            shape: "rounded-full",
           },
         ].map((series) => (
           <li key={series.label} className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className={`inline-block h-2 w-2 ${series.shape}`}
+              className="inline-block h-2.5 w-1.5 rounded-[1px]"
               style={{ background: series.color }}
             />
             <span>{series.label}</span>
@@ -215,93 +206,45 @@ export default function ApplicationTimeline({
             );
           })}
 
-          {timeline.points.length > 1 && (
-            <path d={submittedArea} fill="var(--color-green)" opacity={0.08} />
-          )}
-          {timeline.points.length > 1 && (
-            <path
-              d={submittedLine}
-              fill="none"
-              stroke="var(--color-green)"
-              strokeWidth={2.25}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {timeline.points.length > 1 && timeline.visibleRejected > 0 && (
-            <path d={rejectedArea} fill="var(--color-red)" opacity={0.07} />
-          )}
-          {timeline.points.length > 1 && timeline.visibleAccepted > 0 && (
-            <path
-              d={acceptedLine}
-              fill="none"
-              stroke="var(--color-blue)"
-              strokeWidth={1.75}
-              strokeDasharray="5 4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-          {timeline.points.length > 1 && timeline.visibleRejected > 0 && (
-            <path
-              d={rejectedLine}
-              fill="none"
-              stroke="var(--color-red)"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {timeline.points.map((point, index) => (
-            <circle
-              key={point.date}
-              cx={x(index)}
-              cy={y(point.submitted)}
-              r={point.submitted > 0 ? 4 : 2.25}
-              fill={
-                point.submitted > 0 ? "var(--color-green)" : "var(--color-card)"
-              }
-              stroke="var(--color-green)"
-              strokeWidth={point.submitted > 0 ? 1.5 : 1}
-            />
-          ))}
-
           {timeline.points.map((point, index) => {
-            if (point.accepted === 0) return null;
-            const centerX = x(index);
-            const centerY = y(point.accepted);
-            const radius = 4.5;
             return (
-              <rect
-                key={`accepted-${point.date}`}
-                x={centerX - radius}
-                y={centerY - radius}
-                width={radius * 2}
-                height={radius * 2}
-                rx={1}
-                fill="var(--color-blue)"
-                stroke="var(--color-blue)"
-                strokeWidth={1.5}
-                transform={`rotate(45 ${centerX} ${centerY})`}
-              />
+              <g key={`bars-${point.date}`}>
+                {point.submitted > 0 && (
+                  <rect
+                    x={barX(index, 0)}
+                    y={y(point.submitted)}
+                    width={barLayout.barWidth}
+                    height={zeroY - y(point.submitted)}
+                    rx={Math.min(2, barLayout.barWidth / 3)}
+                    fill="var(--color-green)"
+                    opacity={0.92}
+                  />
+                )}
+                {point.accepted > 0 && (
+                  <rect
+                    x={barX(index, 1)}
+                    y={y(point.accepted)}
+                    width={barLayout.barWidth}
+                    height={zeroY - y(point.accepted)}
+                    rx={Math.min(2, barLayout.barWidth / 3)}
+                    fill="var(--color-blue)"
+                    opacity={0.92}
+                  />
+                )}
+                {point.rejected > 0 && (
+                  <rect
+                    x={barX(index, 2)}
+                    y={zeroY}
+                    width={barLayout.barWidth}
+                    height={y(-point.rejected) - zeroY}
+                    rx={Math.min(2, barLayout.barWidth / 3)}
+                    fill="var(--color-red)"
+                    opacity={0.92}
+                  />
+                )}
+              </g>
             );
           })}
-
-          {timeline.points.map((point, index) =>
-            point.rejected > 0 ? (
-              <circle
-                key={`rejected-${point.date}`}
-                cx={x(index)}
-                cy={y(-point.rejected)}
-                r={4}
-                fill="var(--color-red)"
-                stroke="var(--color-red)"
-                strokeWidth={1.5}
-              />
-            ) : null,
-          )}
 
           {activeIndex != null && activeX != null && (
             <line
@@ -318,12 +261,7 @@ export default function ApplicationTimeline({
           )}
 
           {timeline.points.map((point, index) => {
-            const halfStep =
-              timeline.points.length === 1
-                ? chartW / 2
-                : chartW / (timeline.points.length - 1) / 2;
-            const hitLeft = Math.max(PAD_LEFT, x(index) - halfStep);
-            const hitRight = Math.min(PAD_LEFT + chartW, x(index) + halfStep);
+            const hitLeft = PAD_LEFT + index * barLayout.slotWidth;
             return (
               <g
                 key={`hit-${point.date}`}
@@ -357,7 +295,7 @@ export default function ApplicationTimeline({
                 <rect
                   x={hitLeft}
                   y={PAD_TOP}
-                  width={Math.max(12, hitRight - hitLeft)}
+                  width={barLayout.slotWidth}
                   height={chartH}
                   fill="transparent"
                   stroke={

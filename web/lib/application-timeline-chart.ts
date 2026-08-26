@@ -5,6 +5,13 @@ export type DivergingTimelineScale = {
   ticks: number[];
 };
 
+export type TimelineBarLayout = {
+  slotWidth: number;
+  groupWidth: number;
+  barWidth: number;
+  gap: number;
+};
+
 function niceCeiling(value: number): number {
   if (value <= 1) return 1;
   const power = 10 ** Math.floor(Math.log10(value));
@@ -43,4 +50,20 @@ export function projectTimelineY(
   return (
     top + ((scale.maxMagnitude - value) / (2 * scale.maxMagnitude)) * height
   );
+}
+
+/** Mantiene tre barre leggibili e contenute nello slot di ogni giorno. */
+export function applicationTimelineBarLayout(
+  pointCount: number,
+  chartWidth: number,
+): TimelineBarLayout {
+  const slotWidth = chartWidth / Math.max(1, pointCount);
+  const groupWidth = Math.min(34, slotWidth * 0.72);
+  const gap = Math.min(2, slotWidth * 0.06);
+  return {
+    slotWidth,
+    groupWidth,
+    gap,
+    barWidth: Math.max(1.5, (groupWidth - gap * 2) / 3),
+  };
 }
