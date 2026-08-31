@@ -1104,7 +1104,26 @@ else
   # troncato a 80 colonne — leggibilità terribile nella webUI. 220x50 dà
   # margine per dashboard / task lists del CLI senza esagerare con i byte
   # da leggere a ogni tick.
-  tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"
+  #
+  # `timeout` qui e' voluto: osservato in produzione (Docker Desktop /
+  # bind mount Windows) un `tmux new-session` che non ritorna mai — ne'
+  # crea la sessione ne' esce ne' fallisce, semplicemente resta appeso.
+  # Senza un limite, il processo tiene aperto per sempre il fd 9 del
+  # flock preso piu' sopra: ogni respawn successivo dello STESSO agente
+  # (watchdog, utente, capitano) va in timeout dopo i 30s di `flock -w`
+  # e fallisce con "concurrent spawn", indefinitamente — osservati 756
+  # respawn falliti in 37h su una singola installazione prima che la
+  # causa fosse isolata a un `tmux new-session` orfano di 15h+. `timeout`
+  # garantisce che questo branch ritorni sempre, cosi' il lock si libera
+  # e il prossimo tentativo puo' ripartire pulito invece di ripetere
+  # all'infinito lo stesso fallimento silenzioso.
+  if ! timeout 20 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"; then
+    echo "Error: 'tmux new-session' for '$SESSION' did not return within 20s (hung spawn)." >&2
+    # Pulizia best-effort: se tmux ha comunque registrato una sessione a
+    # meta', non lasciarla a meta' per il prossimo tentativo.
+    tmux kill-session -t "$SESSION" 2>/dev/null
+    exit 1
+  fi
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
