@@ -11,7 +11,7 @@
   "devDependencies": {
     "@grammyjs/auto-retry": "^2.0.2",
     "@grammyjs/runner": "^2.0.3",
-    "grammy": "^1.45.1",
+    "grammy": "^1.46.0",
     "jsdom": "^30.0.1",
     "vitest": "^4.1.8",
     "zod": "^4.3.6"
