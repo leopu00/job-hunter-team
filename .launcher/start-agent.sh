@@ -1078,7 +1078,9 @@ send_env_vars() {
 # Claude è un binario Windows e va lanciata via PowerShell.
 if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
-  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe
+  # `9>&-` come nel ramo container qui sotto: anche questa new-session può
+  # forkare il server tmux, che sopravvive a start-agent.sh col fd 9 aperto.
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 9>&-
   sleep 2
   tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
@@ -1117,7 +1119,18 @@ else
   # garantisce che questo branch ritorni sempre, cosi' il lock si libera
   # e il prossimo tentativo puo' ripartire pulito invece di ripetere
   # all'infinito lo stesso fallimento silenzioso.
-  if ! timeout 20 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"; then
+  #
+  # `9>&-`: stessa classe di difetto del ramo tg-bridge (vedi il commento
+  # esteso più sopra), ma qui è peggio. Quando il server tmux non è ancora
+  # vivo, è questa PRIMA `new-session` a forkarlo: il server eredita il fd 9
+  # del flock, si stacca (PPid 1) e resta su quanto il container. Il lock di
+  # questa sessione non viene quindi rilasciato MAI — nemmeno dopo che
+  # start-agent.sh è uscito pulito — e ogni respawn dell'agente muore in
+  # "concurrent spawn" dopo i 30s di `flock -w` finché il container non
+  # riparte. Osservato in produzione: server tmux vivo da 11 giorni con
+  # `fd 9 -> locks/start-<AGENTE>.lock`, 2.677 start falliti a valle. Chiuso
+  # sull'intero comando cosi' il fd sparisce sia per `timeout` sia per tmux.
+  if ! timeout 20 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 9>&-; then
     echo "Error: 'tmux new-session' for '$SESSION' did not return within 20s (hung spawn)." >&2
     # Pulizia best-effort: se tmux ha comunque registrato una sessione a
     # meta', non lasciarla a meta' per il prossimo tentativo.
@@ -1175,7 +1188,7 @@ else
       _i=$((_i + 1))
     done
     tmux send-keys -t "$_sess" Enter
-    ' >/dev/null 2>&1 < /dev/null &
+    ' >/dev/null 2>&1 < /dev/null 9>&- &
   fi
 fi
 
@@ -1274,7 +1287,7 @@ _kickoff() {
     else
       echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
     fi
-  ' </dev/null &
+  ' </dev/null 9>&- &
 }
 
 # ── Welcome kickoff helper ──────────────────────────────────────────────
@@ -1331,7 +1344,7 @@ _welcome_kickoff() {
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
       echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
     fi
-  ' </dev/null &
+  ' </dev/null 9>&- &
 }
 
 if [ "$ROLE" = "assistente" ]; then
