@@ -513,11 +513,25 @@ def test_doctor_watchdog_waits_for_provider_credentials_before_spawning():
     Doctor/Mantenitore devono restare sospesi come gli agenti user-facing."""
     src = _src(LAUNCHER_DIR / "doctor-watchdog.sh")
     loop = src.index("while true; do")
-    gate = src.index("if ! config_ready; then", loop)
-    maint_spawn = src.index('mout=$(bash "$MAINT_SPAWNER"', loop)
-    doctor_spawn = src.index('out=$(bash "$SPAWNER"', loop)
+    # Il gate non e' piu' un `if ! config_ready`, e gli spawner non sono piu'
+    # invocati nudi: l'esito di entrambi passa per un rc catturato, perche' un
+    # tetto di tempo scaduto (storage stallato, rc 124) deve restare
+    # distinguibile da "provider non autenticato" — altrimenti il loop resta
+    # sospeso per sempre e la causa non e' da nessuna parte. Riancorato alle
+    # forme nuove: il contratto che questo test difende e' l'ORDINE, non la
+    # sintassi della chiamata.
+    gate = src.index("config_ready && config_rc=", loop)
+    maint_spawn = src.index('bash "$MAINT_SPAWNER"', loop)
+    doctor_spawn = src.index('bash "$SPAWNER"', loop)
     assert gate < maint_spawn
     assert gate < doctor_spawn
+    # L'ordine da solo non basterebbe: il ramo "non pronto" deve USCIRE dal
+    # tick. Senza il `continue` il gate potrebbe limitarsi a loggare e lo
+    # spawn partirebbe comunque, che e' esattamente il guasto che il test
+    # esiste per impedire.
+    not_ready = src.index('if [ "$config_rc" -ne 0 ]; then', loop)
+    assert gate < not_ready
+    assert not_ready < src.index("continue", not_ready) < maint_spawn
     for provider, marker in (
         ("kimi", ".kimi/credentials/kimi-code.json"),
         ("claude", ".claude/.credentials.json"),
