@@ -15,6 +15,26 @@
 # `jht_spawn_user_locale`. Il source va tenuto privo di effetti collaterali
 # fatali: start-agent.sh gira sotto `set -euo pipefail`.
 
+# ── daemon-lib.sh: il tetto di tempo portabile ───────────────────────────────
+# `timeout` è GNU coreutils e su un host macOS non esiste, quindi ogni bound
+# passa da `jht_timeout <secondi> <comando...>` (cascata timeout → gtimeout →
+# comando nudo, rc propagato, 124 = scaduto) che vive in daemon-lib.sh.
+# daemon-lib.sh è inerte per costruzione (solo definizioni) e start-agent.sh lo
+# sorgea già PRIMA di questo file: il secondo source è un no-op.
+JHT_SPAWN_LIB_DIR="${JHT_SPAWN_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)}"
+if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$JHT_SPAWN_LIB_DIR/daemon-lib.sh"
+fi
+# Compatibilità con un daemon-lib.sh che non espone (ancora) jht_timeout:
+# morire con rc=127 qui significherebbe «nessun Dottore e nessun Mantenitore,
+# mai», cioè peggio del guasto che il bound chiude. Si degrada allo stesso
+# ultimo ramo della cascata di jht_timeout — comando NON limitato. Da togliere
+# quando jht_timeout è in daemon-lib.sh su tutti i rami.
+if ! command -v jht_timeout >/dev/null 2>&1; then
+  jht_timeout() { shift; "$@"; }
+fi
+
 # PATH del pane tmux: `tmux new-session -d` apre una shell NON interattiva che
 # non legge .bashrc, quindi i CLI (codex/claude/kimi) e gli extra installati
 # dagli agenti (/opt/jht-deps/bin, vedi JHT_DEPS_PREFIX nel Dockerfile) non
@@ -349,6 +369,45 @@ PYEOF
     return 2
   }
   printf '%s\n' "$provider"
+}
+
+# jht_spawn_new_session <sessione> <workdir> <label>
+#   `tmux new-session -d` con un tetto di tempo. Prima era una riga nuda in
+#   spawn-doctor.sh e spawn-maintainer.sh, senza alcun limite.
+#
+#   Perché serve: `-c <workdir>` fa chdir() nella workdir, che sta sotto
+#   $JHT_HOME — su Docker Desktop un bind mount servito da gRPC-FUSE/9p. Una
+#   chdir()/stat() che non ritorna mette il client tmux in stato D
+#   (uninterruptible) e il comando «né crea la sessione, né esce, né
+#   fallisce»: in produzione un new-session così è rimasto appeso 15+ ore.
+#   start-agent.sh ha già il suo tetto sulla stessa riga; qui mancava.
+#
+#   Il valore viene dal censimento dei timeout del sistema
+#   (docs/internal/reviews/2026-09-01-lee-launcher-prs/214-3-timeout-value.md):
+#   45 s è ~25× il caso sano (< 2 s), scavalca la fascia «host saturo»
+#   (10-25 s) e resta sopra i 30 s del warmup, che è il passo bloccante
+#   paragonabile già accettato in start-agent.sh.
+#
+#   rc 0 = sessione creata · 124 = scaduto (hang) · altro = fallimento vero di
+#   tmux, che va detto con il SUO rc invece di essere travestito da timeout.
+#
+#   Non killiamo la sessione qui: il passo 1 di ogni spawner è già un
+#   kill-then-create (jht_spawn_kill_sessions), quindi una sessione nata a metà
+#   viene rimossa dal tentativo successivo. Un kill immediato, invece,
+#   distruggerebbe una sessione appena creata quando il tetto scatta per
+#   lentezza e non per hang.
+jht_spawn_new_session() {
+  local session="$1" workdir="$2" label="$3" secs rc=0
+  secs="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
+  jht_timeout "$secs" \
+    tmux new-session -d -x 220 -y 50 -s "$session" -c "$workdir" || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  if [ "$rc" -eq 124 ]; then
+    echo "[$label] ERROR: tmux new-session for '$session' did not return within ${secs}s (hung on workdir '$workdir') — spawn aborted" >&2
+  else
+    echo "[$label] ERROR: tmux new-session failed (rc=$rc)" >&2
+  fi
+  return 1
 }
 
 # jht_spawn_wait_repl <sessione> <cmd> <label> <ruolo> <logs_dir> <src>
