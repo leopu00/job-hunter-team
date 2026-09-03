@@ -87,10 +87,24 @@ def test_a_real_tmux_failure_is_not_disguised_as_a_timeout():
 def test_the_bounded_helper_declares_where_the_portable_timeout_lives():
     source = _read(SPAWN_LIB)
     assert '. "$JHT_SPAWN_LIB_DIR/daemon-lib.sh"' in source
-    # Se daemon-lib.sh non espone (ancora) jht_timeout, il fallback deve essere
-    # il comando NON limitato: un rc=127 qui vorrebbe dire "mai piu' un
-    # Dottore ne' un Mantenitore".
     assert "command -v jht_timeout" in source
+
+
+def test_there_is_no_local_unbounded_fallback_for_the_time_bound():
+    # Un ripiego che crea la sessione SENZA tetto e' la riga rimasta appesa
+    # 15+ ore in produzione: una protezione che si spegne da sola.
+    assert "jht_timeout() {" not in _read(SPAWN_LIB)
+
+
+def test_without_the_time_bound_the_session_is_refused_not_created_unbounded():
+    body = _helper_body()
+    precondition = body[: body.index("secs=")]
+    assert "command -v jht_timeout" in precondition, (
+        "la verifica deve stare PRIMA di toccare tmux"
+    )
+    assert "refusing to create" in precondition
+    assert "jht_timeout unavailable" in precondition, "nomina l'helper mancante"
+    assert "return 1" in precondition
 
 
 def test_the_expired_bound_does_not_kill_a_session_that_may_have_just_started():

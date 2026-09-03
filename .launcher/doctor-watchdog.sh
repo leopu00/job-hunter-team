@@ -29,20 +29,18 @@ if [ -f "$JHT_LAUNCHER_DIR/daemon-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "$JHT_LAUNCHER_DIR/daemon-lib.sh"
 fi
-# Compatibilità con un daemon-lib.sh che non espone (ancora) jht_timeout:
-# uscire con rc=127 qui significherebbe «né Dottore né Mantenitore, mai», cioè
-# peggio del guasto che i tetti chiudono. Si degrada all'ultimo ramo della
-# stessa cascata — comando NON limitato — e lo si dice a voce alta nel diario
-# (vedi il log di avvio): una degradazione silenziosa è esattamente il difetto
-# che questo file sta correggendo. Da togliere quando jht_timeout è in
-# daemon-lib.sh su tutti i rami.
-TIME_BOUNDS_OK=1
-if ! command -v jht_timeout >/dev/null 2>&1; then
-  TIME_BOUNDS_OK=0
-  jht_timeout() { shift; "$@"; }
-fi
-# jht_daemon_log (path del diario sotto $JHT_HOME/logs + rotazione a 5 MB) sta
-# nello stesso file: senza di essa il diario resta dov'è, solo senza rotazione.
+# Nessun ripiego a jht_timeout. Ne esisteva uno — comando NON limitato — per
+# sopravvivere a un daemon-lib.sh più vecchio della funzione; ora che la
+# funzione è in casa, tenerlo significherebbe spegnere in silenzio l'unica
+# protezione che impedisce a questo loop di fermarsi per sempre: esattamente il
+# guasto che il file chiude. Il tetto assente è invece un guasto DICHIARATO e
+# gestito nel loop (gate `jht_timeout unavailable` più sotto): niente spawn
+# illimitati, il loop resta vivo, lo dice a ogni giro e riparte da solo appena
+# /app è a posto.
+#
+# Asimmetria voluta con jht_daemon_log: quel ripiego costa solo la ROTAZIONE
+# del diario (il path è lo stesso), non una protezione — e senza di esso il
+# loop non avrebbe nemmeno un posto dove scrivere che il tetto manca.
 if ! command -v jht_daemon_log >/dev/null 2>&1; then
   jht_daemon_log() { printf '%s\n' "$LOGS_DIR/$1"; }
 fi
@@ -287,13 +285,32 @@ finish_tick() {
 halt_log_tick=0
 offhours_log_tick=0
 config_log_tick=0
+bounds_log_tick=0
 
 log "watchdog starting · Dottore twice/window (+30 min, halfway) + Mantenitore once/day · poll=${POLL_SEC}s · sched=$SCHED · spawn bound=${SPAWN_TIMEOUT_SEC}s · helper bound=${HELPER_TIMEOUT_SEC}s"
-if [ "$TIME_BOUNDS_OK" -eq 0 ]; then
-  log "WARNING: daemon-lib.sh does not expose jht_timeout — spawner and helper TIME BOUNDS ARE DISABLED (historical unbounded behaviour); a hung spawn will stall this loop until daemon-lib.sh is updated"
-fi
 
 while true; do
+  # Gate del TETTO, primo di tutti: ogni altra chiamata del tick passa da
+  # jht_doctor_bounded, quindi senza jht_timeout il primo a fallire sarebbe il
+  # gate del provider e il diario direbbe «provider non autenticato» — una
+  # diagnosi falsa. Qui invece si nomina la causa vera. Non si spawna nulla:
+  # un turno LLM senza tetto è il guasto che questo file chiude, e il fail-safe
+  # TTL di agent-watchdog copre comunque il lavoro del Dottore. Il loop resta
+  # VIVO e riprende da solo appena /app è a posto (throttling %8 come gli altri
+  # gate: ~40 min di ritmo a poll 300 s).
+  if ! command -v jht_timeout >/dev/null 2>&1; then
+    if [ $((bounds_log_tick % 8)) -eq 0 ]; then
+      log "BROKEN INSTALL: jht_timeout unavailable (daemon-lib.sh not loaded from $JHT_LAUNCHER_DIR) — refusing to spawn Dottore/Mantenitore without a time bound; loop alive, resumes by itself once /app is fixed"
+    fi
+    bounds_log_tick=$((bounds_log_tick + 1))
+    finish_tick "$POLL_SEC"
+    continue
+  fi
+  if [ "$bounds_log_tick" -gt 0 ]; then
+    log "jht_timeout available again — time bounds restored, resuming Dottore/Mantenitore scheduling"
+    bounds_log_tick=0
+  fi
+
   # Il wizard salva il provider prima che il browser completi OAuth. Fino alla
   # comparsa del marker credenziali non consumare turni LLM e non tentare il
   # fallback storico a Claude. Il loop resta vivo e ricontrolla normalmente.
