@@ -40,9 +40,9 @@
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
 # Failure mode: retry al prossimo tick, non fail-fast — MA il fallimento viene
-# anche MISURATO (agent-spawn-failures.tsv), vedi il blocco "Fallimenti di
-# spawn" sotto. Fino al 2026-09-03 era solo una riga di log, e un agente che
-# non partiva restava invisibile per giorni.
+# anche MISURATO (agent-spawn-failures.tsv) ed escalato in due gradini, vedi il
+# blocco "Fallimenti di spawn" sotto. Fino al 2026-09-03 era solo una riga di
+# log, e un agente che non partiva restava invisibile per giorni.
 #
 # Trigger gate: parte se active_provider è settato in jht.config.json E
 # le credenziali del provider sono presenti. Telegram NON è più richiesto:
@@ -117,8 +117,9 @@ SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
 # trascorso dal primo fallimento della serie, sul modello di
 # CONFIG_NOT_READY_GRACE_TICKS. Il solo conteggio suonerebbe su un cold start
 # lento (`jht team start` concede da solo 90s per tentativo); il solo tempo
-# suonerebbe su un flap benigno. Al tick di default (30s) lega il TEMPO: il
-# conteggio protegge un INTERVAL_SEC molto largo.
+# suonerebbe su un flap benigno. Al tick di default (30s) e col backoff sotto,
+# l'aritmetica e': gradino 1 dopo ~5 min, gradino 2 dopo ~20 min — e il vincolo
+# che lega e' il TEMPO, i conteggi proteggono un INTERVAL_SEC molto largo.
 SPAWN_FAIL_ESCALATE_AFTER="${JHT_SPAWN_FAIL_ESCALATE_AFTER:-5}"
 SPAWN_FAIL_ESCALATE_MIN_SEC="${JHT_SPAWN_FAIL_ESCALATE_MIN_SEC:-300}"
 # Allarme all'UTENTE: stessa doppia condizione, seconda soglia. ~20 min
@@ -128,6 +129,9 @@ SPAWN_FAIL_ALERT_MIN_SEC="${JHT_SPAWN_FAIL_ALERT_MIN_SEC:-1200}"
 # Anti-spam PER SESSIONE (non globale): un allarme non deve zittirne un altro.
 SPAWN_FAIL_COOLDOWN_SEC="${JHT_SPAWN_FAIL_COOLDOWN_SEC:-3600}"
 SPAWN_FAIL_ALERT_COOLDOWN_SEC="${JHT_SPAWN_FAIL_ALERT_COOLDOWN_SEC:-21600}"
+# Oltre il gradino 1 si tenta UNA volta ogni N tick invece di una per tick.
+# NON e' un cap: vedi spawn_backoff_active — il respawn non si ferma mai.
+SPAWN_FAIL_BACKOFF_TICKS="${JHT_SPAWN_FAIL_BACKOFF_TICKS:-10}"
 # Una serie e' CONSECUTIVA: se dall'ultimo fallimento e' passato piu' di questo,
 # la sessione e' tornata su per una strada che questo watchdog non vede (Dottore,
 # Capitano, riavvio del container) e il conteggio riparte da 1. Senza questa
@@ -393,7 +397,7 @@ spawn_failure_escalate() {
   # i suoi strumenti lavorano su capture-pane di sessioni ESISTENTI, e qui la
   # sessione non nasce. Resta raggiungibile su decisione del Capitano (C-08).
   local session="$1" detail="$2" streak="$3" now count first last elapsed rc \
-        key breadth message
+        key breadth pace message
   read -r count first last <<EOF
 $(spawn_streak_state "$session")
 EOF
@@ -401,13 +405,14 @@ EOF
   elapsed=$((now - first))
   [ "$first" -le 0 ] && elapsed=0
   key="$(escalate_key "$session")"
+  pace="$((SPAWN_FAIL_BACKOFF_TICKS * INTERVAL_SEC))"
 
   if [ "$streak" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] && [ "$elapsed" -ge "$SPAWN_FAIL_ESCALATE_MIN_SEC" ] \
      && escalate_once "$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts" "$SPAWN_FAIL_COOLDOWN_SEC"; then
     breadth="$(spawn_failure_breadth)"
     # Disciplina dei messaggi: il watchdog ha osservato dei TENTATIVI DI AVVIO
     # FALLITI. Non ha osservato perche' falliscono, e non lo dichiara.
-    message="[WATCHDOG] $session cannot be started: $streak consecutive start attempts failed over the last $((elapsed / 60)) min. The watchdog KEEPS RETRYING and never gives up, so do NOT relaunch it by hand before reading the evidence. Last line the spawner wrote: ${detail:-none captured}. Sessions in a failed-start streak right now: $breadth. Durable register: $SPAWN_FAILURE_LOG · full output: $LOG. The watchdog observed failed start attempts, not the reason they fail."
+    message="[WATCHDOG] $session cannot be started: $streak consecutive start attempts failed over the last $((elapsed / 60)) min. The watchdog KEEPS RETRYING and never gives up — from now roughly once every $((pace / 60)) min instead of every ${INTERVAL_SEC}s, so do NOT relaunch it by hand before reading the evidence. Last line the spawner wrote: ${detail:-none captured}. Sessions in a failed-start streak right now: $breadth. Durable register: $SPAWN_FAILURE_LOG · full output: $LOG. The watchdog observed failed start attempts, not the reason they fail."
     if "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1; then
       log "spawn-failure: $session at streak $streak (${elapsed}s) — escalated to CAPITANO"
     else
@@ -440,6 +445,27 @@ observe_spawn_failure() {
   spawn_failure_escalate "$session" "$detail" "$streak"
 }
 
+spawn_backoff_active() {
+  # 0 = salta il tentativo in QUESTO tick. NON e' un cap alla bridge_flap_cap:
+  # un agente che non parte e per cui smettiamo di provare e' peggio del
+  # rumore, quindi il respawn non si ferma MAI — cambia solo il passo. Oltre il
+  # gradino 1 un tentativo ogni SPAWN_FAIL_BACKOFF_TICKS tick: meno pressione
+  # su lock, CPU e log, e nessuna reattivita' reale persa (se non parte al
+  # quinto tentativo non parte al sesto).
+  # Deliberatamente MUTO: una riga di log per ogni tick saltato ricreerebbe
+  # esattamente il rumore-senza-segnale che questa misura esiste per sostituire
+  # (2.677 righe identiche e zero allarmi). La misura sta nel registro.
+  local session="$1" count first last now
+  [ "$SPAWN_FAIL_BACKOFF_TICKS" -gt 1 ] || return 1
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  [ "$count" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] || return 1
+  now="$(date -u +%s)"
+  [ $((now - first)) -ge "$SPAWN_FAIL_ESCALATE_MIN_SEC" ] || return 1
+  [ $((now - last)) -lt $((SPAWN_FAIL_BACKOFF_TICKS * INTERVAL_SEC)) ]
+}
+
 clear_spawn_failures() {
   # L'allarme si spegne da solo al primo successo, e chi era stato avvisato
   # viene informato del rientro: un allarme che non si chiude e' un allarme che
@@ -461,7 +487,7 @@ EOF
   log "spawn-failure: $session started successfully — consecutive-failure streak reset (was $count)"
   if [ -f "$marker_captain" ]; then
     rm -f "$marker_captain" 2>/dev/null || true
-    "$TMUX_SENDER" CAPITANO "[WATCHDOG] Resolved: $session started successfully after $count consecutive failed start attempts spanning ${minutes} min. The failed-start alarm for $session is cleared. History: $SPAWN_FAILURE_LOG" >/dev/null 2>&1 \
+    "$TMUX_SENDER" CAPITANO "[WATCHDOG] Resolved: $session started successfully after $count consecutive failed start attempts spanning ${minutes} min. The failed-start alarm for $session is cleared and the watchdog is back to its normal ${INTERVAL_SEC}s interval. History: $SPAWN_FAILURE_LOG" >/dev/null 2>&1 \
       || log "spawn-failure: $session recovered, but the CAPITANO resolution notice failed"
   fi
   if [ -f "$marker_user" ]; then
@@ -487,6 +513,10 @@ ensure_agent() {
     # strada che non e' questa (Dottore, Capitano, riavvio), il conteggio va
     # chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
     clear_spawn_failures "$session"
+    return 0
+  fi
+  # Backoff, non cap: dopo il gradino 1 si tenta piu' RADI, mai zero volte.
+  if spawn_backoff_active "$session"; then
     return 0
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
@@ -702,6 +732,12 @@ maybe_respawn_workers() {
 $plan
 EOF
   [ -z "${session:-}" ] && return 0
+  # Backoff, non cap: come per i core, dopo il gradino 1 si tenta piu' RADI.
+  # Il gate sta QUI e non in respawn_worker perche' il percorso TTL deve poter
+  # ricreare subito una sessione che ha appena ucciso di proposito.
+  if spawn_backoff_active "$session"; then
+    return 0
+  fi
   log "roster: expected session $session is missing (recently active) — respawning via start-agent.sh $role $inst"
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" mark-respawn "$session" >/dev/null 2>&1 || true
   respawn_worker "$role" "$inst" "$session"
@@ -823,7 +859,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min, user after ${SPAWN_FAIL_ALERT_AFTER} and $((SPAWN_FAIL_ALERT_MIN_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min, user after ${SPAWN_FAIL_ALERT_AFTER} and $((SPAWN_FAIL_ALERT_MIN_SEC/60))min, respawn never stops: backoff to 1 per ${SPAWN_FAIL_BACKOFF_TICKS} ticks)"
 
 # Queste funzioni stanno deliberatamente dopo il marker di bootstrap qui
 # sopra: i test unitari storici estraggono il prelude fino a quel marker.
