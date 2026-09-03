@@ -57,6 +57,28 @@ version: 2
 # che mostra per ogni voce l'ultimo controllo e gli errori di configurazione.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Raggruppamento (2026-09-03). Prima ogni pacchetto faceva PR a se: 8-10 PR
+# ogni lunedi, ~30-40 al mese, che nessuno riesce a leggere davvero.
+#
+# Ogni voce npm raggruppa patch+minor in UNA sola PR. Le major restano FUORI
+# da ogni gruppo, e quindi prendono una PR a testa: e' voluto. Un gruppo
+# `update-types: ["major"]` avrebbe fatto l'opposto di quel che serve --
+# tutte le major in un unico commit da mergiare o rifiutare in blocco, dove
+# una sola incompatibilita' blocca anche le altre. Le major sono quelle che
+# vanno lette a mano, una per una, e ognuna deve poter essere chiusa da sola.
+#
+# I gruppi valgono solo per i version update (`applies-to` sta al suo default,
+# `version-updates`): un fix di sicurezza deve restare una PR isolata e
+# mergiabile subito, non finire in un gruppo che aspetta il resto.
+#
+# Nota sul comportamento di `open-pull-requests-limit`: chiudere PR a mano non
+# riduce la coda, la scorre. Liberato uno slot, Dependabot ripesca subito
+# dalla lista in attesa -- l'8 chiuse / 3 riaperte in pochi secondi del
+# 2026-09-01/02. Si riduce il volume alla fonte (gruppi + cadenza), non
+# chiudendo PR.
+# ---------------------------------------------------------------------------
+
 updates:
   # Dipendenze web (Next.js, React, TypeScript)
   - package-ecosystem: "npm"
@@ -67,9 +89,15 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 5
+    groups:
+      web-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     # Il runtime e i workflow sono su Node 24: i tipi Node avanzano solo
     # insieme al runtime. ESLint 10 resta bloccato finché eslint-plugin-react
     # (caricato da eslint-config-next) non ne supporta la nuova RuleContext API.
@@ -101,9 +129,15 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
+    groups:
+      tests-js-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
 
@@ -123,9 +157,15 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
+    groups:
+      api-worker-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "agents"
@@ -141,10 +181,24 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
+    groups:
+      root-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
 
-  # GitHub Actions
+  # GitHub Actions — resta SETTIMANALE, al contrario degli npm.
+  # Le action sono pinnate per SHA: quello che arriva qui non e' una feature
+  # nuova, e' lo spostamento di un pin su un digest diverso, spesso perche'
+  # a monte hanno corretto qualcosa. Su questa superficie il ritardo E'
+  # esposizione, e il diff e' una riga di digest per action -- costa poco
+  # leggerlo, al contrario di un albero npm. Raggruppato, il caso peggiore e'
+  # 1 PR a settimana; le major (es. actions/checkout 4 -> 7, che cambia input
+  # e output) restano fuori dal gruppo e arrivano una per volta.
   # La label `ci` non esiste nel repo.
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -157,11 +211,23 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
 
   # Docker base image (pinned by SHA in Dockerfile).
   # Dependabot bumps the digest when upstream pushes a new tag.
+  #
+  # Settimanale per lo stesso motivo delle action: un digest nuovo dell'immagine
+  # base e' il veicolo delle CVE di sistema corrette a monte, e ritardarlo di
+  # un mese significa restare un mese sull'immagine bucata.
+  # Nessun `groups`: c'e' una sola immagine base, quindi la PR e' comunque una.
   # La label `docker` non esiste nel repo, sostituita da `container`.
   - package-ecosystem: "docker"
     directory: "/"
