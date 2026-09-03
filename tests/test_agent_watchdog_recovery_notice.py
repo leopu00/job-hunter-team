@@ -23,8 +23,17 @@ def _prelude():
     return source[:source.index(marker)]
 
 
+def _bash_path(path: Path) -> str:
+    """C:/x → /mnt/c/x per il bash WSL; no-op su POSIX."""
+    posix = Path(path).resolve().as_posix()
+    if len(posix) >= 3 and posix[1:3] == ":/":
+        return f"/mnt/{posix[0].lower()}/{posix[3:]}"
+    return posix
+
+
 def _fake(path: Path, body: str):
-    path.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8")
+    path.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8",
+                    newline="\n")
     path.chmod(0o755)
     return path
 
@@ -35,23 +44,40 @@ def _run(tmp_path, body: str, *, start_rc=0):
     node_calls = tmp_path / "node-calls.txt"
     sender_calls = tmp_path / "sender-calls.txt"
     start_calls = tmp_path / "start-calls.txt"
-    node = _fake(tmp_path / "node", f'printf "%s\\n" "$*" >> "{node_calls}"\nexit {start_rc}\n')
-    sender = _fake(tmp_path / "sender", f'printf "%s\\n" "$*" >> "{sender_calls}"\n')
-    start = _fake(tmp_path / "start-agent", f'printf "%s\\n" "$*" >> "{start_calls}"\n')
+    node = _fake(tmp_path / "node",
+                 f'printf "%s\\n" "$*" >> "{_bash_path(node_calls)}"\nexit {start_rc}\n')
+    sender = _fake(tmp_path / "sender",
+                   f'printf "%s\\n" "$*" >> "{_bash_path(sender_calls)}"\n')
+    start = _fake(tmp_path / "start-agent",
+                  f'printf "%s\\n" "$*" >> "{_bash_path(start_calls)}"\n')
     journal = logs / "agent-recoveries.tsv"
-    script = _prelude() + "\n" + body + "\n"
+    # I confini si iniettano NELLO script, non nell'ambiente, e lo script gira
+    # da file invece che da `bash -c`. Due motivi, entrambi appresi qui:
+    #  • il prelude ha passato i 32 KB e su Windows la riga di comando non lo
+    #    regge piu' (WinError 206);
+    #  • dove il `bash` e' un ponte verso WSL l'ambiente Windows non attraversa
+    #    il confine (passa solo cio' che e' in `WSLENV`), quindi una env passata
+    #    a subprocess veniva ignorata in silenzio e il watchdog usava i default
+    #    del container. Su POSIX il comportamento e' identico a prima.
+    header = "".join(
+        f"export {key}='{value}'\n"
+        for key, value in (
+            ("JHT_HOME", _bash_path(tmp_path)),
+            ("JHT_NODE_BIN", _bash_path(node)),
+            ("JHT_TMUX_SENDER", _bash_path(sender)),
+            ("JHT_START_AGENT", _bash_path(start)),
+            ("JHT_AGENT_RECOVERY_LOG", _bash_path(journal)),
+        )
+    )
+    script_path = tmp_path / "case.sh"
+    script_path.write_text(header + _prelude() + "\n" + body + "\n",
+                           encoding="utf-8", newline="\n")
     result = subprocess.run(
-        ["bash", "-c", script],
-        text=True,
+        ["bash", _bash_path(script_path)],
         capture_output=True,
-        env={
-            **os.environ,
-            "JHT_HOME": str(tmp_path),
-            "JHT_NODE_BIN": str(node),
-            "JHT_TMUX_SENDER": str(sender),
-            "JHT_START_AGENT": str(start),
-            "JHT_AGENT_RECOVERY_LOG": str(journal),
-        },
+        encoding="utf-8",
+        errors="replace",
+        env={**os.environ},
     )
     return result, journal, node_calls, sender_calls, start_calls
 
