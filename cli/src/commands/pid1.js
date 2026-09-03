@@ -43,7 +43,6 @@ const TEAM_HALTED_FLAG = `${JHT_HOME}/.team-halted.flag`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
-const PAGER_UNSTICK_WATCHDOG_SCRIPT = '/app/.launcher/pager-unstick-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
 const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
 const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
@@ -792,40 +791,6 @@ async function dispatch() {
   };
   startAgentWatchdog();
 
-  // ── Pager-unstick watchdog: tick ogni 20s, dismette il pager
-  // fullscreen del Codex TUI quando resta aperto in una sessione tmux
-  // headless (nessun umano davanti per premere `q`). Osservato ripetuto
-  // in produzione: un singolo `cat`/`sed -n` di uno skill file lungo o
-  // di una JD scaricata fa scattare il viewer paginato interno del TUI
-  // ("↑/↓ to scroll ... q to quit") — senza terminale attaccato resta
-  // aperto per sempre e l'agente non fa più nessun progresso. Nessuna
-  // config Codex (`codex features list`, `~/.codex/config.toml`) espone
-  // un modo per disattivarlo. Stesso pattern respawn-on-crash di
-  // startAgentWatchdog, spawnato subito dopo per lo stesso motivo:
-  // sub-second, deterministico, nessun LLM coinvolto.
-  let pagerUnstickChild = null;
-  let pagerUnstickRespawnTimer = null;
-  const startPagerUnstickWatchdog = () => {
-    if (pagerUnstickChild && !pagerUnstickChild.killed) return;
-    pid1Log('starting pager-unstick-watchdog (tmux session-level, tick 20s)');
-    pagerUnstickChild = spawnLabeled('pager-unstick', '/bin/bash', [PAGER_UNSTICK_WATCHDOG_SCRIPT]);
-    pagerUnstickChild.on('exit', (code, signal) => {
-      const exited = pagerUnstickChild;
-      pagerUnstickChild = null;
-      if (shuttingDown) return;
-      pid1Log(`pager-unstick-watchdog exited (code=${code} signal=${signal})`);
-      if (pagerUnstickRespawnTimer) clearTimeout(pagerUnstickRespawnTimer);
-      pagerUnstickRespawnTimer = setTimeout(() => {
-        if (!shuttingDown) {
-          pid1Log('pager-unstick-watchdog respawn after crashing');
-          startPagerUnstickWatchdog();
-        }
-      }, 5000);
-      void exited;
-    });
-  };
-  startPagerUnstickWatchdog();
-
   // ── Auto-report loop: panoramica grafica + PNG via Telegram ogni 2h
   // (decisione utente 2026-05-17 — bug #16 / task #52 / F-1.D). Loop
   // bash che ogni 5 min chiama auto_report.py; lo script throttle
@@ -1218,8 +1183,6 @@ async function dispatch() {
     if (fileBridgeChild && !fileBridgeChild.killed) fileBridgeChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
-    if (pagerUnstickChild && !pagerUnstickChild.killed) pagerUnstickChild.kill(sig);
-    if (pagerUnstickRespawnTimer) clearTimeout(pagerUnstickRespawnTimer);
     if (doctorWatchdogChild && !doctorWatchdogChild.killed) doctorWatchdogChild.kill(sig);
     if (doctorWatchdogRespawnTimer) clearTimeout(doctorWatchdogRespawnTimer);
     if (stepcapChild && !stepcapChild.killed) stepcapChild.kill(sig);
