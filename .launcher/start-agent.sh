@@ -1323,6 +1323,33 @@ else
     tmux send-keys -t "$_sess" Enter
     ' >/dev/null 2>&1 < /dev/null 9>&- &
   fi
+  # Il REPL e' partito DAVVERO? Questo ramo — l'unico che spawna gli agenti
+  # del team — era il solo dei tre percorsi di spawn a non farsi la domanda:
+  # SENTINELLA-WORKER la fa inline piu' sopra, spawn-doctor.sh e
+  # spawn-maintainer.sh la fanno con questa stessa funzione. Senza, un pane
+  # rimasto bash (CLI crashato al boot, PATH rotto, credenziali assenti,
+  # sessione materializzata dopo il tetto della guardia qui sopra) diventa
+  # DEFINITIVO: il guard di idempotenza dichiara "already active" e nessun
+  # respawn lo ricreera' mai, mentre `✓ started` e il roster qui sotto
+  # certificano un guscio vuoto. Per i ruoli core il watchdog se ne accorge
+  # entro un tick, ma i worker numerati e i CRITICO effimeri non sono coperti
+  # da nessuna sonda di liveness (il roster guarda solo `list-sessions`):
+  # per loro il guscio dura fino al TTL di 12h, cioe' per sempre su una
+  # review che vive minuti. Un guscio va segnalato e rimosso, non ereditato.
+  #
+  # Costo: la funzione esce al primo poll in cui il pane non e' piu' una
+  # shell, cioe' ~1s nel percorso felice (il CLI viene exec-ato dalla bash del
+  # pane subito dopo il send-keys); il tempo pieno lo paga solo lo spawn che
+  # sarebbe comunque da buttare. Va DOPO il watcher auto-Enter qui sopra, che
+  # e' in background: se il boot si fermasse su un dialog, l'attesa e la
+  # risposta al dialog devono poter correre insieme.
+  #
+  # `python3` escluso come per il watcher: non e' una TUI e il suo pane non
+  # segue le stesse regole.
+  if [ "$CLI_BIN" != "python3" ]; then
+    jht_spawn_wait_repl "$SESSION" "$FULL_CMD" "start-agent" "$ROLE" \
+      "$JHT_LOGS_DIR" "start-agent.sh" || exit 1
+  fi
 fi
 
 # ── Sfasamento iniziale del worker ──────────────────────────────────────────
