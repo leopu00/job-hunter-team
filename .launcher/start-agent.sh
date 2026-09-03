@@ -1033,6 +1033,13 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
   _claude_json="$JHT_HOME/.claude.json"
   if [ ! -s "$_claude_json" ] && [ -s "$JHT_HOME/.claude/.credentials.json" ]; then
     echo "  → warming up ~/.claude.json (missing; populating via claude -p)"
+    # `timeout` nudo e NON `jht_timeout`, deliberatamente: qui il tetto non e'
+    # un guard-rail, e' la condizione per eseguire. Se `timeout` manca (host
+    # macOS senza coreutils GNU) l'rc 127 + `|| true` fa SALTARE il warmup, e
+    # saltarlo e' recuperabile — l'agente cade su "Select login method" e il
+    # watcher auto-Enter piu' sotto lo gestisce. Degradare al comando nudo
+    # significherebbe invece lanciare senza tetto una chiamata di rete
+    # interattiva in mezzo alla sezione critica del lock: peggio del difetto.
     HOME="$JHT_HOME" timeout 30 claude --dangerously-skip-permissions -p "ok" \
       >/dev/null 2>&1 || true
     if [ -s "$_claude_json" ]; then
@@ -1158,7 +1165,7 @@ else
   # margine per dashboard / task lists del CLI senza esagerare con i byte
   # da leggere a ogni tick.
   #
-  # `timeout` qui e' voluto: osservato in produzione (Docker Desktop /
+  # Il tetto di tempo qui e' voluto: osservato in produzione (Docker Desktop /
   # bind mount Windows) un `tmux new-session` che non ritorna mai — ne'
   # crea la sessione ne' esce ne' fallisce, semplicemente resta appeso.
   # Senza un limite, il processo tiene aperto per sempre il fd 9 del
@@ -1166,10 +1173,16 @@ else
   # (watchdog, utente, capitano) va in timeout allo scadere di `flock -w`
   # e fallisce con "concurrent spawn", indefinitamente — osservati 756
   # respawn falliti in 37h su una singola installazione prima che la
-  # causa fosse isolata a un `tmux new-session` orfano di 15h+. `timeout`
+  # causa fosse isolata a un `tmux new-session` orfano di 15h+. Il tetto
   # garantisce che questo branch ritorni sempre, cosi' il lock si libera
   # e il prossimo tentativo puo' ripartire pulito invece di ripetere
   # all'infinito lo stesso fallimento silenzioso.
+  #
+  # `jht_timeout` (daemon-lib.sh) e non `timeout` nudo: `timeout` e' GNU
+  # coreutils e su un host macOS non esiste. Nudo esce 127, e un 127 letto
+  # come "spawn fallito" farebbe morire OGNI spawn per l'assenza della
+  # protezione, non per un guasto. L'helper degrada al comando senza tetto,
+  # come fa `.launcher/` con ogni altro binario opzionale.
   #
   # `9>&-`: stessa classe di difetto del ramo tg-bridge (vedi il commento
   # esteso più sopra), ma qui è peggio. Quando il server tmux non è ancora
@@ -1180,19 +1193,81 @@ else
   # "concurrent spawn" allo scadere di `flock -w` finché il container non
   # riparte. Osservato in produzione: server tmux vivo da 11 giorni con
   # `fd 9 -> locks/start-<AGENTE>.lock`, 2.677 start falliti a valle. Chiuso
-  # sull'intero comando cosi' il fd sparisce sia per `timeout` sia per tmux.
-  if ! timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 9>&-; then
-    echo "Error: 'tmux new-session' for '$SESSION' did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s (hung spawn)." >&2
-    # Pulizia best-effort: se tmux ha comunque registrato una sessione a
-    # meta', non lasciarla a meta' per il prossimo tentativo.
-    #
-    # `=` obbligatorio: qui la sessione tipicamente NON esiste, quindi tmux
-    # passerebbe al prefix matching e il kill atterrerebbe su una sessione
-    # SORELLA (`-t SCOUT-1` uccide SCOUT-10, `-t CRITICO` uccide il CRITICO-S3
-    # di uno Scrittore in mezzo a una review). `|| true` come il gemello nel
-    # ramo worker: sotto `set -e` un kill fallito — il caso NORMALE qui —
-    # uscirebbe prima dell'`exit 1` qui sotto, rendendolo irraggiungibile.
-    tmux kill-session -t "=$SESSION" 2>/dev/null || true
+  # sull'intero comando cosi' il fd sparisce sia per il wrapper sia per tmux.
+  #
+  # L'rc va DISCRIMINATO: 124 e' il tetto scattato, 125/126/127 sono problemi
+  # del wrapper (binario assente o non eseguibile), tutto il resto e' l'rc che
+  # tmux ha propagato. Un `if !` nudo li collassa in uno e il messaggio
+  # afferma un hang che il codice non ha verificato: `duplicate session`,
+  # socket dir non scrivibile e nome sessione invalido finivano tutti sotto
+  # "did not return within 20s". La diagnosi mentiva in ogni caso tranne uno,
+  # e manda chi legge a cercare nel posto sbagliato — cioe' esattamente il
+  # depistaggio che questo blocco esiste per chiudere.
+  #
+  # `|| _ns_rc=$?` e non `if ! cmd; then ... $?`: dentro il `then` di un
+  # `if !`, `$?` vale la NEGAZIONE logica (0/1), non l'rc del comando, quindi
+  # il 124 non sarebbe distinguibile. Ed e' anche l'unica forma che non fa
+  # uscire lo script per il `set -e` di testa.
+  #
+  # Lo stderr di tmux va catturato e RIMESSO nella nostra riga: il chiamante
+  # principale (cli/src/commands/team/start.js) conserva solo l'ULTIMA riga di
+  # stderr, quindi la diagnosi nativa di tmux, se resta una riga a se', non
+  # arriva mai ne' all'utente ne' alla dashboard.
+  _ns_err="${TMPDIR:-/tmp}/jht-new-session-$$.err"
+  _ns_rc=0
+  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 2>"$_ns_err" 9>&- || _ns_rc=$?
+  _ns_msg=""
+  if [ -s "$_ns_err" ]; then
+    _ns_msg="$(tr '\n' ' ' <"$_ns_err" | sed 's/  */ /g; s/ *$//')" || _ns_msg=""
+  fi
+  rm -f "$_ns_err" 2>/dev/null || true
+  if [ "$_ns_rc" -ne 0 ]; then
+    case "$_ns_rc" in
+      124|137)
+        echo "Error: 'tmux new-session' for '$SESSION' did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s (hung spawn; tmux said: ${_ns_msg:-nothing})." >&2
+        # Pulizia SOLO qui. `timeout` uccide il CLIENT tmux, non il server:
+        # se il server era lento ma vivo — che e' precisamente il caso in cui
+        # il tetto riesce a scattare — la sessione nasce QUALCHE SECONDO DOPO
+        # il SIGTERM, con un pane bash nudo, senza env e senza CLI. Un kill
+        # immediato sarebbe un no-op e lascerebbe quel guscio, che il guard di
+        # idempotenza piu' sopra rende PERMANENTE ("already active" per
+        # sempre). Diamo al server il tempo di decidersi prima di dichiarare
+        # che non c'e' niente da pulire; il costo e' solo sul percorso che ha
+        # gia' fallito.
+        #
+        # Su ogni ALTRO rc non si tocca niente: sul rc=1 `duplicate session`
+        # la sessione esiste ma NON l'ha creata questo tentativo, e ucciderla
+        # significherebbe ammazzare l'agente di qualcun altro (team-rules T01).
+        # Il cleanup incondizionato faceva esattamente questo.
+        #
+        # `9>&-` anche qui: sono altri due client tmux nati mentre il lock e'
+        # nostro. Se uno resta appeso oltre il proprio tetto, il tetto lo
+        # abbandona ma il figlio sopravvive col fd 9 aperto, e il lock non si
+        # rilascia piu'.
+        _i=0
+        while [ "$_i" -lt 5 ]; do
+          jht_timeout 5 tmux has-session -t "=$SESSION" 2>/dev/null 9>&- && break
+          sleep 1
+          _i=$((_i + 1))
+        done
+        # `=` obbligatorio: nel ramo d'errore la sessione tipicamente NON
+        # esiste, quindi tmux passerebbe al prefix matching e il kill
+        # atterrerebbe su una sessione SORELLA (`-t SCOUT-1` uccide SCOUT-10,
+        # `-t CRITICO` uccide il CRITICO-S3 di uno Scrittore in mezzo a una
+        # review). Stessa convenzione di agent-watchdog.sh. E il tetto qui non
+        # e' decorativo: questo e' un altro client verso lo stesso server
+        # sospetto di essere appeso, ed e' l'ultimo punto del ramo che potrebbe
+        # ancora bloccarsi per sempre col fd 9 in mano — cioe' ricreare da
+        # solo il lockout che tutta questa guardia esiste per impedire.
+        jht_timeout 5 tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+        ;;
+      125|126|127)
+        echo "Error: could not run the time-bounded 'tmux new-session' for '$SESSION' (rc=$_ns_rc: command missing or not executable). No session was created." >&2
+        ;;
+      *)
+        echo "Error: 'tmux new-session' for '$SESSION' failed immediately (rc=$_ns_rc, not a timeout): ${_ns_msg:-no message from tmux}. No session was created by this attempt." >&2
+        ;;
+    esac
     exit 1
   fi
   send_env_vars

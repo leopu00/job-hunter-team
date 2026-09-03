@@ -14,15 +14,15 @@ sessione non viene quindi rilasciato MAI — nemmeno dopo un'uscita pulita di
 "timed out after Ns waiting for the concurrent spawn" alla scadenza di `flock -w`, finché il
 container non riparte. Osservato in produzione: un `tmux: server` con PPid 1
 vivo da 11 giorni con `fd 9 -> locks/start-<AGENTE>.lock`, e 2.677 start falliti
-a valle. Il `timeout 20` sulla new-session (PR #214) copre la new-session
+a valle. Il tetto di tempo sulla new-session (PR #214) copre la new-session
 APPESA, non questa: qui la new-session ritorna 0, è il server forkato che porta
 via il fd.
 
 Cosa questa suite tiene fermo, dopo la presa del flock per-sessione:
 
-  1. ogni `tmux new-session` chiude il fd 9 — anche se avvolta in `timeout`, con
-     la redirezione sull'intero comando cosi' il fd sparisce sia per il wrapper
-     sia per tmux;
+  1. ogni `tmux new-session` chiude il fd 9 — anche se avvolta in un wrapper
+     con tetto di tempo, con la redirezione sull'intero comando cosi' il fd
+     sparisce sia per il wrapper sia per tmux;
   2. ogni processo lanciato in background (`... &`) chiude il fd 9 — la regola è
      sulla FORMA, non sulle righe di oggi: un figlio nuovo aggiunto domani senza
      `9>&-` fa fallire il test;
@@ -30,7 +30,7 @@ Cosa questa suite tiene fermo, dopo la presa del flock per-sessione:
   4. il ramo `ROLE=worker` resta prima del flock (per questo non ha bisogno di
      `9>&-`): se qualcuno lo spostasse dopo, il punto 1 lo coprirebbe comunque;
   5. lo script resta sintatticamente valido (le redirezioni aggiunte non rompono
-     `set -euo pipefail` né la logica `if ! timeout ...` della PR #214).
+     `set -euo pipefail` né la cattura dell'rc (`|| _ns_rc=$?`) del ramo di spawn).
 
 Eseguire:
     pytest tests/test_start_agent_spawn_lock_fd.py -v
@@ -118,19 +118,24 @@ def test_every_tmux_new_session_after_the_lock_closes_the_fd():
 
 
 def test_the_container_branch_closes_the_fd_for_the_timeout_wrapper_too():
-    """Con `timeout` la redirezione va sull'INTERO comando: `timeout 20 tmux ...
-    9>&-`. Messa fra `timeout` e `tmux` chiuderebbe il fd solo per tmux, e
-    `timeout` resterebbe a tenere il lock."""
+    """La redirezione va sull'INTERO comando: `jht_timeout <sec> tmux ... 9>&-`.
+    Messa fra il wrapper e `tmux` chiuderebbe il fd solo per tmux, e il wrapper
+    (o il `timeout` che esso esegue) resterebbe a tenere il lock."""
     line = next(
         line
         for _, line in _numbered(SESSION_LOCK_LINE)
         if "tmux new-session" in _unquoted(line) and "timeout" in line
     )
-    assert line.rstrip().rstrip(";").endswith(f"{CLOSE_FD}; then") or line.rstrip().endswith(
-        CLOSE_FD
-    ), f"la chiusura del fd non e' in coda al comando completo: {line.strip()!r}"
-    # `9>&-` deve stare DOPO `tmux`, non infilata prima come argomento di timeout.
+    # In coda al COMANDO: dopo `9>&-` puo' restare solo il modo in cui l'rc
+    # viene raccolto (`|| _ns_rc=$?`, `; then`), non un altro argomento.
+    tail = line.rstrip().split(CLOSE_FD, 1)[1].strip()
+    assert tail in ("", "; then", "|| _ns_rc=$?"), (
+        f"la chiusura del fd non e' in coda al comando completo: {line.strip()!r}"
+    )
+    # `9>&-` deve stare DOPO `tmux`, non infilata prima come argomento del
+    # wrapper — e dopo TUTTI gli argomenti di tmux, redirezioni incluse.
     assert line.index("tmux") < line.index(CLOSE_FD)
+    assert line.index("$AGENT_DIR") < line.index(CLOSE_FD)
 
 
 def test_every_background_child_after_the_lock_closes_the_fd():
@@ -175,7 +180,7 @@ def test_the_worker_branch_runs_before_the_lock_is_taken():
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash non disponibile")
 def test_the_launcher_still_parses():
     """Le redirezioni aggiunte non devono rompere `set -euo pipefail` ne' la
-    logica `if ! timeout ...` introdotta dalla PR #214."""
+    cattura dell'rc (`|| _ns_rc=$?`) del ramo di spawn."""
     # Path relativo + cwd: su Windows bash non digerisce `C:\...`.
     result = subprocess.run(
         ["bash", "-n", ".launcher/start-agent.sh"],
