@@ -41,6 +41,11 @@ if ! command -v jht_timeout >/dev/null 2>&1; then
   TIME_BOUNDS_OK=0
   jht_timeout() { shift; "$@"; }
 fi
+# jht_daemon_log (path del diario sotto $JHT_HOME/logs + rotazione a 5 MB) sta
+# nello stesso file: senza di essa il diario resta dov'è, solo senza rotazione.
+if ! command -v jht_daemon_log >/dev/null 2>&1; then
+  jht_daemon_log() { printf '%s\n' "$LOGS_DIR/$1"; }
+fi
 
 # Ridisegno 2026-06-13: scheduling 2× per FINESTRA di lavoro (a +30min
 # dall'inizio finestra ON e a META' finestra, es. +6h su una notte 20:00-08:00)
@@ -170,10 +175,33 @@ jht_doctor_bounded() {
 # On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
 # skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
 
+# ── Diario: UN path per scrittore ───────────────────────────────────────────
+# Il diario di questo script NON è più logs/doctor-watchdog.log: quel path è
+# di pid1, che cattura la nostra stdout (spawnLabeled('doctor-watchdog') in
+# cli/src/commands/pid1.js) e la scrive lì con un fd persistente, ruotando il
+# file con renameSync a ogni spawn. Con `tee -a` sullo stesso path c'erano DUE
+# scrittori: ogni riga finiva due volte nello stesso file — byte doppi su un
+# bind mount — e appena qualcuno ruota il file mentre il daemon gira, l'fd
+# persistente di pid1 continua a scrivere sull'inode scollegato, quindi metà
+# del diario diventa invisibile.
+#
+# Il pattern vigente nel repo è un path per scrittore, con il `tee` che resta
+# perché è così che la rotazione arriva gratis anche da pid1:
+#   agent-watchdog.sh         → agent-watchdog.log         · pid1 → watchdog.log
+#   pager-unstick-watchdog.sh → pager-unstick-watchdog.log · pid1 → pager-unstick.log
+#   questo file               → doctor-watchdog-loop.log   · pid1 → doctor-watchdog.log
+# Nessuna continuità storica si perde: doctor-watchdog.log continua a ricevere
+# le stesse righe via stdout, con la rotazione di pid1.
+#
+# jht_daemon_log ruota solo QUANDO VIENE CHIAMATA (daemon-lib.sh), perché
+# nasce per daemon che risolvono il path allo spawn: un loop che vive mesi non
+# ruoterebbe mai, quindi la richiamiamo a ogni tick (uno stat ogni 5 minuti).
+LOG_FILE="$(jht_daemon_log doctor-watchdog-loop.log)"
+
 log() {
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "[$ts] $*" | tee -a "$LOGS_DIR/doctor-watchdog.log"
+  echo "[$ts] $*" | tee -a "$LOG_FILE"
 }
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
@@ -246,6 +274,9 @@ PYEOF
 finish_tick() {
   local delay="$1"
   tick_count=$((tick_count + 1))
+  # Ricontrollo della soglia di rotazione del diario: jht_daemon_log ruota
+  # solo quando la si chiama (vedi il blocco «Diario» sopra).
+  LOG_FILE="$(jht_daemon_log doctor-watchdog-loop.log)"
   if [ "$MAX_TICKS" -gt 0 ] && [ "$tick_count" -ge "$MAX_TICKS" ]; then
     log "watchdog max ticks reached (${MAX_TICKS}) — exiting"
     exit 0
