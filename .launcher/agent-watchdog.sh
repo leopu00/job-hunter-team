@@ -104,9 +104,19 @@ INTENTIONAL_RECREATE_SESSION=""
 # le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
 # nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
 SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
-# Stato per-sessione della serie corrente. Directory iniettabile per poter
-# esercitare la misura nei test.
+# Stato per-sessione: serie corrente + marcatori di escalation (che fanno anche
+# da cooldown). Directory iniettabile per poter esercitare l'anti-spam nei test.
 SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
+# Presa in carico dal CAPITANO: DUE condizioni necessarie — conteggio E tempo
+# trascorso dal primo fallimento della serie, sul modello di
+# CONFIG_NOT_READY_GRACE_TICKS. Il solo conteggio suonerebbe su un cold start
+# lento (`jht team start` concede da solo 90s per tentativo); il solo tempo
+# suonerebbe su un flap benigno. Al tick di default (30s) lega il TEMPO: il
+# conteggio protegge un INTERVAL_SEC molto largo.
+SPAWN_FAIL_ESCALATE_AFTER="${JHT_SPAWN_FAIL_ESCALATE_AFTER:-5}"
+SPAWN_FAIL_ESCALATE_MIN_SEC="${JHT_SPAWN_FAIL_ESCALATE_MIN_SEC:-300}"
+# Anti-spam PER SESSIONE (non globale): un allarme non deve zittirne un altro.
+SPAWN_FAIL_COOLDOWN_SEC="${JHT_SPAWN_FAIL_COOLDOWN_SEC:-3600}"
 # Una serie e' CONSECUTIVA: se dall'ultimo fallimento e' passato piu' di questo,
 # la sessione e' tornata su per una strada che questo watchdog non vede (Dottore,
 # Capitano, riavvio del container) e il conteggio riparte da 1. Senza questa
@@ -344,28 +354,90 @@ EOF
   echo "$count"
 }
 
-observe_spawn_failure() {
-  # Gemella di notify_captain_recovery sul ramo di fallimento: unico punto di
-  # ingresso per i rami che oggi erano muti. Per ora misura e tace; i due
-  # gradini di escalation si agganciano qui.
-  local session="$1" detail="$2" streak
-  streak="$(record_spawn_failure "$session" "$detail")" || return 1
-  return 0
+spawn_failure_breadth() {
+  # Quante sessioni sono in serie di fallimenti ADESSO. Distingue "un agente
+  # non parte" da "il team non parte" (provider giu', disco pieno) DENTRO un
+  # messaggio, senza sopprimerne nessuno: sopprimere perderebbe il nome della
+  # sessione, che e' l'unica informazione azionabile che il messaggio porta.
+  # Solo le serie ANCORA aperte: una sessione tornata su per una strada che
+  # questo watchdog non vede lascia il suo file indietro, e contarla gonfierebbe
+  # il numero. Stessa scadenza usata da record_spawn_failure.
+  local f n=0 count last now
+  now="$(date -u +%s)"
+  for f in "$SPAWN_STATE_DIR"/spawn-streak-*; do
+    [ -f "$f" ] || continue
+    count="$(cut -d' ' -f1 < "$f" 2>/dev/null)"
+    last="$(cut -d' ' -f3 < "$f" 2>/dev/null)"
+    case "$count" in ''|*[!0-9]*) continue ;; esac
+    case "$last" in ''|*[!0-9]*) continue ;; esac
+    [ "$count" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] \
+      && [ $((now - last)) -le "$SPAWN_FAIL_STREAK_TTL_SEC" ] && n=$((n + 1))
+  done
+  echo "$n"
 }
 
-clear_spawn_failures() {
-  # L'allarme si spegne da solo al primo successo: la serie e' CONSECUTIVA, e
-  # un conteggio che non si azzera finirebbe per suonare su fallimenti di
-  # incidenti diversi sommati fra loro.
-  # Steady state: uno stat e nessun altro lavoro, nessuna riga di log.
-  local session="$1" streak count first last
-  streak="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
-  [ -f "$streak" ] || return 0
+spawn_failure_escalate() {
+  # Presa in carico, non un freno: il respawn continua. Il Dottore resta
+  # deliberatamente fuori dal percorso automatico — costa un turno LLM ricco e
+  # i suoi strumenti lavorano su capture-pane di sessioni ESISTENTI, e qui la
+  # sessione non nasce. Resta raggiungibile su decisione del Capitano (C-08).
+  local session="$1" detail="$2" streak="$3" now count first last elapsed rc \
+        key breadth message
   read -r count first last <<EOF
 $(spawn_streak_state "$session")
 EOF
+  now="$(date -u +%s)"
+  elapsed=$((now - first))
+  [ "$first" -le 0 ] && elapsed=0
+  key="$(escalate_key "$session")"
+
+  if [ "$streak" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] && [ "$elapsed" -ge "$SPAWN_FAIL_ESCALATE_MIN_SEC" ] \
+     && escalate_once "$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts" "$SPAWN_FAIL_COOLDOWN_SEC"; then
+    breadth="$(spawn_failure_breadth)"
+    # Disciplina dei messaggi: il watchdog ha osservato dei TENTATIVI DI AVVIO
+    # FALLITI. Non ha osservato perche' falliscono, e non lo dichiara.
+    message="[WATCHDOG] $session cannot be started: $streak consecutive start attempts failed over the last $((elapsed / 60)) min. The watchdog KEEPS RETRYING and never gives up, so do NOT relaunch it by hand before reading the evidence. Last line the spawner wrote: ${detail:-none captured}. Sessions in a failed-start streak right now: $breadth. Durable register: $SPAWN_FAILURE_LOG · full output: $LOG. The watchdog observed failed start attempts, not the reason they fail."
+    if "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1; then
+      log "spawn-failure: $session at streak $streak (${elapsed}s) — escalated to CAPITANO"
+    else
+      rc=$?
+      log "spawn-failure: $session at streak $streak (${elapsed}s), but the CAPITANO escalation failed (rc=$rc); durable register remains in $SPAWN_FAILURE_LOG"
+    fi
+  fi
+  return 0
+}
+
+observe_spawn_failure() {
+  # Gemella di notify_captain_recovery sul ramo di fallimento: misura prima,
+  # parla dopo. Unico punto di ingresso per i rami che erano muti.
+  local session="$1" detail="$2" streak
+  streak="$(record_spawn_failure "$session" "$detail")" || return 1
+  spawn_failure_escalate "$session" "$detail" "$streak"
+}
+
+clear_spawn_failures() {
+  # L'allarme si spegne da solo al primo successo, e chi era stato avvisato
+  # viene informato del rientro: un allarme che non si chiude e' un allarme che
+  # si impara a ignorare, e il prossimo vero non verra' letto. Il messaggio di
+  # rientro non e' un extra, e' parte del contratto.
+  # Steady state: due stat e nessun altro lavoro, nessuna riga di log.
+  local session="$1" key streak marker_captain count first last minutes
+  key="$(escalate_key "$session")"
+  streak="$SPAWN_STATE_DIR/spawn-streak-$key"
+  marker_captain="$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts"
+  [ -f "$streak" ] || [ -f "$marker_captain" ] || return 0
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  minutes=$(( (last - first) / 60 ))
+  [ "$first" -le 0 ] && minutes=0
   rm -f "$streak" 2>/dev/null || true
   log "spawn-failure: $session started successfully — consecutive-failure streak reset (was $count)"
+  if [ -f "$marker_captain" ]; then
+    rm -f "$marker_captain" 2>/dev/null || true
+    "$TMUX_SENDER" CAPITANO "[WATCHDOG] Resolved: $session started successfully after $count consecutive failed start attempts spanning ${minutes} min. The failed-start alarm for $session is cleared. History: $SPAWN_FAILURE_LOG" >/dev/null 2>&1 \
+      || log "spawn-failure: $session recovered, but the CAPITANO resolution notice failed"
+  fi
 }
 
 ensure_agent() {
@@ -720,7 +792,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min)"
 
 # Queste funzioni stanno deliberatamente dopo il marker di bootstrap qui
 # sopra: i test unitari storici estraggono il prelude fino a quel marker.
