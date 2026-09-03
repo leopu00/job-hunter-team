@@ -158,7 +158,12 @@ PY
 # niente bridge. Singleton: se gia' viva, exit 0 senza errori.
 if [ "$ROLE" = "worker" ]; then
   WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
-  if tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
+  # `=`: exact match, come il guard di idempotenza piu' sotto. Qui nessuna
+  # sessione nota inizia per SENTINELLA-WORKER, quindi oggi non cambia esito;
+  # e' la stessa domanda ("questa sessione esatta esiste?") e va posta nello
+  # stesso modo, perche' un nome nuovo che ne estende il prefisso la
+  # trasformerebbe di nuovo in un falso "e' gia' attivo".
+  if tmux has-session -t "=$WORKER_SESSION" 2>/dev/null; then
     echo "✓ $WORKER_SESSION is already active"
     exit 0
   fi
@@ -219,7 +224,11 @@ if [ "$ROLE" = "worker" ]; then
   done
   if [ "$_w_up" -ne 1 ]; then
     echo "✗ $WORKER_SESSION: REPL did not start (pane remains a shell) — session removed" >&2
-    tmux kill-session -t "$WORKER_SESSION" 2>/dev/null || true
+    # `=`: un kill e' distruttivo e non deve mai poter atterrare su una
+    # sessione sorella per prefisso. Qui la nostra esiste (l'abbiamo appena
+    # creata) e l'exact match vincerebbe comunque, ma la regola vale sulla
+    # forma: nessun kill senza target ancorato.
+    tmux kill-session -t "=$WORKER_SESSION" 2>/dev/null || true
     exit 1
   fi
   echo "✓ $WORKER_SESSION started (TUI /usage fallback for the bridge)"
@@ -584,7 +593,15 @@ if command -v flock >/dev/null 2>&1; then
     exit 1
   fi
 fi
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+# `=` forza l'EXACT match. Senza, la risoluzione dei target tmux prosegue col
+# prefisso: `-t SENTINELLA` trova SENTINELLA-WORKER, `-t SCOUT-1` trova
+# SCOUT-10, `-t CRITICO` trova CRITICO-S3. Su questa riga il prezzo e' il
+# peggiore possibile: la sessione chiesta NON esiste, il guard la dichiara
+# "already active" ed esce 0, quindi l'agente non nasce mai e nessun respawn
+# lo ricreera' — il fallimento e' silenzioso e permanente. Non e' teorico:
+# registrato in produzione come prefix-match SENTINELLA vs SENTINELLA-WORKER
+# che ha bloccato un relaunch. Stessa convenzione di agent-watchdog.sh.
+if tmux has-session -t "=$SESSION" 2>/dev/null; then
   echo "Session '$SESSION' is already active."
   echo "Connect with: tmux attach -t \"$SESSION\""
   exit 0
@@ -1168,7 +1185,14 @@ else
     echo "Error: 'tmux new-session' for '$SESSION' did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s (hung spawn)." >&2
     # Pulizia best-effort: se tmux ha comunque registrato una sessione a
     # meta', non lasciarla a meta' per il prossimo tentativo.
-    tmux kill-session -t "$SESSION" 2>/dev/null
+    #
+    # `=` obbligatorio: qui la sessione tipicamente NON esiste, quindi tmux
+    # passerebbe al prefix matching e il kill atterrerebbe su una sessione
+    # SORELLA (`-t SCOUT-1` uccide SCOUT-10, `-t CRITICO` uccide il CRITICO-S3
+    # di uno Scrittore in mezzo a una review). `|| true` come il gemello nel
+    # ramo worker: sotto `set -e` un kill fallito — il caso NORMALE qui —
+    # uscirebbe prima dell'`exit 1` qui sotto, rendendolo irraggiungibile.
+    tmux kill-session -t "=$SESSION" 2>/dev/null || true
     exit 1
   fi
   send_env_vars
