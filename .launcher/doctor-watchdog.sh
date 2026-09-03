@@ -89,11 +89,32 @@ HELPER_TIMEOUT_SEC="${JHT_DOCTOR_HELPER_TIMEOUT_SEC:-30}"
 # bind mount che nell'incidente si è stallato, e la redirezione viene aperta
 # PRIMA che il tetto possa fare qualcosa.
 RUN_PREFIX="${TMPDIR:-/tmp}/jht-doctor-watchdog.$$"
+CONFIG_READY_PY="$RUN_PREFIX.config-ready.py"
+
+# Passo del poll di attesa. `sleep 0.2` non è POSIX ma GNU coreutils, busybox
+# e la sleep di macOS lo accettano; dove non è accettato si ricade su 1 s, che
+# costa solo latenza (≈1 s per chiamata), non correttezza.
+if sleep 0.2 2>/dev/null; then
+  BOUND_POLL_STEP=0.2
+  BOUND_POLL_PER_SEC=5
+else
+  BOUND_POLL_STEP=1
+  BOUND_POLL_PER_SEC=1
+fi
+# Margine oltre il tetto prima di dichiarare il figlio non chiudibile: il
+# tempo che jht_timeout ha per mandare il segnale, vedere morire il figlio e
+# ritornare 124.
+BOUND_GRACE_SEC="${JHT_DOCTOR_BOUND_GRACE_SEC:-15}"
+# Esito dell'ultimo tetto scattato: "expired" (figlio chiuso dal tetto) o
+# "abandoned pid=N" (figlio non chiudibile, lasciato orfano). Le due cose
+# vanno distinte nel diario: la seconda dice che sulla macchina è rimasto un
+# processo in I/O ininterrompibile, ed è l'unica traccia che ne resta.
+BOUND_STATE=""
 
 # jht_doctor_bounded <secondi> <file-output> <comando...>
 #   Esegue il comando con un tetto di tempo; stdout+stderr finiscono nel file,
 #   che il chiamante legge con `cat`. Ritorna l'rc del comando, o 124 se il
-#   tetto è scaduto.
+#   tetto è scattato (BOUND_STATE dice come).
 #
 #   Su FILE e non in command substitution per un motivo preciso: `out=$(cmd)`
 #   non ritorna finché TUTTI i writer della pipe l'hanno chiusa, nipoti
@@ -101,14 +122,49 @@ RUN_PREFIX="${TMPDIR:-/tmp}/jht-doctor-watchdog.$$"
 #   (eredita lo stdout dello spawner). Con la pipe, il tetto chiuderebbe il
 #   figlio diretto e il loop resterebbe comunque bloccato a leggere.
 #
+#   In BACKGROUND e con un'attesa a scadenza invece di un `jht_timeout` in
+#   primo piano, perché `timeout` manda il segnale e poi ASPETTA che il figlio
+#   sia raccolto: un processo in stato D (uninterruptible sleep) su un mount
+#   stallato — cioè proprio lo scenario dell'incidente — non muore né con
+#   SIGTERM né con SIGKILL finché la syscall non ritorna, quindi `timeout`
+#   resterebbe appeso quanto lui e il loop con lui. Alla scadenza il figlio
+#   viene ABBANDONATO: resta orfano e visibile a `ps` (il pid finisce nel
+#   diario), ma il loop riprende. Il tetto interno resta perché nei casi
+#   chiudibili è lui a fare il lavoro, subito e in modo pulito.
+#
+#   L'attesa guarda il file di rc, non `kill -0`: un figlio già finito ma non
+#   ancora raccolto è uno zombie, e `kill -0` su uno zombie riesce — l'attesa
+#   non finirebbe mai prima della scadenza.
+#
 #   `rm -f` prima di ogni uso: se un tentativo precedente è stato abbandonato,
 #   il suo processo continua a scrivere sull'inode scollegato e non contamina
 #   la lettura di questo.
 jht_doctor_bounded() {
-  local secs="$1" outfile="$2" rc=0
+  local secs="$1" outfile="$2" rcfile="$2.rc" rc=0 steps=0 max_steps child
   shift 2
-  rm -f "$outfile" 2>/dev/null || true
-  jht_timeout "$secs" "$@" >"$outfile" 2>&1 || rc=$?
+  BOUND_STATE=""
+  rm -f "$outfile" "$rcfile" 2>/dev/null || true
+  # `>/dev/null 2>&1` sul BLOCCO (l'output del comando va comunque in
+  # $outfile, la redirezione interna vince): un figlio che può restare orfano
+  # non deve tenere aperta la stdout di questo script, che sotto pid1 è una
+  # pipe. È la stessa lezione del `9>&-` in start-agent.sh — un fd ereditato
+  # da un processo detached resta aperto quanto lui.
+  { jht_timeout "$secs" "$@" >"$outfile" 2>&1; printf '%s' "$?" >"$rcfile"; } \
+    >/dev/null 2>&1 &
+  child=$!
+  max_steps=$(( (secs + BOUND_GRACE_SEC) * BOUND_POLL_PER_SEC ))
+  while [ ! -s "$rcfile" ]; do
+    if [ "$steps" -ge "$max_steps" ]; then
+      BOUND_STATE="abandoned pid=$child"
+      return 124
+    fi
+    sleep "$BOUND_POLL_STEP" 2>/dev/null || sleep 1
+    steps=$((steps + 1))
+  done
+  wait "$child" 2>/dev/null || true
+  rc="$(cat "$rcfile" 2>/dev/null || echo 124)"
+  case "$rc" in ''|*[!0-9]*) rc=124 ;; esac
+  [ "$rc" -eq 124 ] && BOUND_STATE="expired"
   return "$rc"
 }
 # On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
@@ -157,8 +213,14 @@ standby_active() {
 # spawner ricade sul default Claude e produce sessioni fallite e log fuorvianti
 # durante una prima installazione pulita.
 config_ready() {
-  jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.config" \
-    python3 - "$JHT_HOME/jht.config.json" "$JHT_HOME" <<'PYEOF'
+  # Lo snippet gira come FILE, non come heredoc su stdin: una chiamata
+  # limitata parte in BACKGROUND e bash redirige lo stdin di un comando
+  # asincrono da /dev/null, quindi `python3 -` leggerebbe EOF, non
+  # eseguirebbe nulla e uscirebbe 0 — cioè «provider autenticato» sempre,
+  # esattamente il contrario del gate. Materializzato sotto /tmp e riscritto
+  # se sparisce.
+  if [ ! -s "$CONFIG_READY_PY" ]; then
+    cat >"$CONFIG_READY_PY" <<'PYEOF'
 import json, os, sys
 cfg_path, jht_home = sys.argv[1], sys.argv[2]
 try:
@@ -176,6 +238,9 @@ markers = {
 marker = markers.get(provider, '')
 sys.exit(0 if provider and marker and os.path.exists(marker) else 1)
 PYEOF
+  fi
+  jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.config" \
+    python3 "$CONFIG_READY_PY" "$JHT_HOME/jht.config.json" "$JHT_HOME"
 }
 
 finish_tick() {
@@ -207,7 +272,7 @@ while true; do
       # Senza questa riga un mount stallato è indistinguibile da un provider
       # non autenticato: il loop resterebbe «sospeso» per sempre e la causa
       # non sarebbe da nessuna parte.
-      log "config check hit the ${HELPER_TIMEOUT_SEC}s bound (stalled storage?) — treated as not ready, loop alive"
+      log "config check hit the ${HELPER_TIMEOUT_SEC}s bound [${BOUND_STATE}] (stalled storage?) — treated as not ready, loop alive"
     elif [ $((config_log_tick % 8)) -eq 0 ]; then
       log "provider not authenticated yet — Dottore/Mantenitore scheduling suspended"
     fi
@@ -249,7 +314,7 @@ while true; do
     mslot="$(cat "$RUN_PREFIX.sched" 2>/dev/null || true)"
   else
     mslot=WAIT
-    [ "$mslot_rc" -eq 124 ] && log "schedule check-maintainer hit the ${HELPER_TIMEOUT_SEC}s bound — treated as WAIT, loop alive"
+    [ "$mslot_rc" -eq 124 ] && log "schedule check-maintainer hit the ${HELPER_TIMEOUT_SEC}s bound [${BOUND_STATE}] — treated as WAIT, loop alive"
   fi
   if [ "$mslot" = "MAINT" ]; then
     if [ ! -f "$MAINT_SPAWNER" ]; then
@@ -269,7 +334,7 @@ while true; do
         # un esito incerto NON si ritenta: un secondo spawn ucciderebbe e
         # ricreerebbe un Mantenitore magari vivo, bruciando due turni LLM.
         # Marchiamo la giornata; il gate working-hours riproverà domani.
-        log "spawn mantenitore hit the ${SPAWN_TIMEOUT_SEC}s bound — day marked to avoid a duplicate LLM spawn (outcome uncertain), loop alive: $mout"
+        log "spawn mantenitore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] — day marked to avoid a duplicate LLM spawn (outcome uncertain), loop alive: $mout"
         jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
           python3 "$SCHED" mark-maintainer || true
       else
@@ -289,7 +354,7 @@ while true; do
     && slot_rc=0 || slot_rc=$?
   slot_out="$(cat "$RUN_PREFIX.claim" 2>/dev/null || true)"
   if [ "$slot_rc" -eq 124 ]; then
-    log "schedule claim hit the ${HELPER_TIMEOUT_SEC}s bound — rich refresh not spawned (TTL fail-safe remains active), loop alive: $slot_out"
+    log "schedule claim hit the ${HELPER_TIMEOUT_SEC}s bound [${BOUND_STATE}] — rich refresh not spawned (TTL fail-safe remains active), loop alive: $slot_out"
     slot=WAIT
   elif [ "$slot_rc" -ne 0 ]; then
     log "schedule claim FAILED rc=$slot_rc — rich refresh not spawned (TTL fail-safe remains active): $slot_out"
@@ -323,7 +388,7 @@ while true; do
           # nata e l'hang stare a valle). Il claim NON si rilascia — è la
           # regola dichiarata qui sopra: meglio saltare un rich round che
           # duplicare uno spawn LLM. Il loop riprende dal prossimo poll.
-          log "spawn dottore hit the ${SPAWN_TIMEOUT_SEC}s bound (slot=$slot) — claim RETAINED (outcome uncertain, no duplicate LLM spawn), loop alive: $out"
+          log "spawn dottore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] (slot=$slot) — claim RETAINED (outcome uncertain, no duplicate LLM spawn), loop alive: $out"
         else
           log "spawn FAILED (slot=$slot) rc=$rc: $out"
           jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \

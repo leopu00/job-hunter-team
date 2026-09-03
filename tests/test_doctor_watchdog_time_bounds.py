@@ -178,6 +178,79 @@ def test_every_expired_bound_leaves_its_own_diagnostic_line(expected: str):
     assert expected in _read(WATCHDOG)
 
 
+def test_every_expired_bound_says_whether_the_child_could_be_closed():
+    # "expired" = il tetto ha chiuso il figlio. "abandoned pid=N" = il figlio
+    # non e' chiudibile ed e' rimasto orfano sulla macchina: e' l'unica
+    # traccia che ne resta, e va distinta.
+    source = _read(WATCHDOG)
+    for line in source.splitlines():
+        if "hit the" in line and "log " in line:
+            assert "${BOUND_STATE}" in line, line
+
+
+# ── il tetto deve bastare anche quando il figlio non e' chiudibile ──────────
+
+
+def _helper() -> str:
+    source = _read(WATCHDOG)
+    body = source[source.index("jht_doctor_bounded() {") :]
+    return body[: body.index("\n}\n") + 3]
+
+
+def test_the_helper_does_not_wait_on_the_child_in_the_foreground():
+    # `timeout` manda il segnale e poi ASPETTA che il figlio sia raccolto: un
+    # processo in stato D non muore ne' con SIGTERM ne' con SIGKILL finche' la
+    # syscall non ritorna, quindi il tetto da solo resterebbe appeso quanto lui
+    # e il loop con lui. Serve un'attesa a scadenza su un figlio in background.
+    helper = _helper()
+    assert re.search(r"\}\s*\\?\s*\n?\s*>/dev/null 2>&1 &", helper), (
+        "il comando limitato deve girare in background"
+    )
+    assert 'steps" -ge "$max_steps' in helper
+    assert "BOUND_GRACE_SEC" in helper
+
+
+def test_an_unclosable_child_is_abandoned_with_its_pid_in_the_log():
+    helper = _helper()
+    assert 'BOUND_STATE="abandoned pid=$child"' in helper
+    assert "return 124" in helper
+
+
+def test_the_wait_keys_off_the_return_code_file_not_kill_zero():
+    # Un figlio finito ma non ancora raccolto e' uno zombie, e `kill -0` su uno
+    # zombie riesce: l'attesa non finirebbe mai prima della scadenza.
+    helper = _helper()
+    assert '[ ! -s "$rcfile" ]' in helper
+    assert "kill -0" not in helper
+
+
+def test_the_background_child_cannot_hold_the_stdout_of_the_loop():
+    # Sotto pid1 la stdout di questo script e' una pipe: un figlio abbandonato
+    # che la eredita la tiene aperta quanto vive (stessa lezione del `9>&-` in
+    # start-agent.sh).
+    assert ">/dev/null 2>&1 &" in _helper()
+
+
+def test_the_config_gate_does_not_feed_python_from_stdin():
+    # Regressione precisa: una chiamata limitata parte in background e bash
+    # redirige lo stdin di un comando asincrono da /dev/null. Con l'heredoc,
+    # `python3 -` leggerebbe EOF, non eseguirebbe nulla e uscirebbe 0 — cioe'
+    # "provider autenticato" SEMPRE, l'esatto contrario del gate.
+    code = "\n".join(_code_lines())
+    assert "python3 -" not in code, "nessun helper deve leggere da stdin"
+    assert 'python3 "$CONFIG_READY_PY"' in code
+    assert re.search(r'CONFIG_READY_PY="\$RUN_PREFIX[^"]*"', code)
+
+
+def test_the_sub_second_wait_step_stays_consistent_with_its_counter():
+    source = _read(WATCHDOG)
+    steps = re.findall(r"BOUND_POLL_STEP=([\d.]+)", source)
+    per_sec = re.findall(r"BOUND_POLL_PER_SEC=(\d+)", source)
+    assert len(steps) == len(per_sec) == 2, "un ramo sub-secondo e un fallback"
+    for step, count in zip(steps, per_sec):
+        assert abs(float(step) * int(count) - 1.0) < 1e-9, (step, count)
+
+
 def test_a_known_failure_keeps_its_historical_message_and_release():
     # Regressione: il ramo "fallimento certo" non deve essere assorbito dal
     # nuovo ramo del tetto. Restano il messaggio storico e il release.
