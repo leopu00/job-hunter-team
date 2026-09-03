@@ -41,7 +41,6 @@ Eseguire:
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -221,7 +220,6 @@ exit 99
 """
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash non disponibile")
 @pytest.mark.parametrize(
     ("behaviour", "expect_exit_zero", "expect_warning"),
     [
@@ -230,7 +228,9 @@ exit 99
         ("wedged", False, True),  # nessuna risposta -> si spawna, avvisando
     ],
 )
-def test_the_guard_behaves_on_all_three_answers(behaviour, expect_exit_zero, expect_warning):
+def test_the_guard_behaves_on_all_three_answers(
+    capable_bash, behaviour, expect_exit_zero, expect_warning
+):
     """Sotto `set -euo pipefail`, e con il fd 9 NON aperto (il caso host, dove
     `flock` non c'e'): la redirezione `9>&-` su un fd chiuso deve restare un
     no-op invece di far uscire lo script.
@@ -238,6 +238,11 @@ def test_the_guard_behaves_on_all_three_answers(behaviour, expect_exit_zero, exp
     Lo stub nasce DENTRO la shell (`mktemp -d` + heredoc quotato): un path
     creato da Python finirebbe nel PATH in forma Windows, che bash non
     risolve, e ogni caso collasserebbe su rc 127.
+
+    L'interprete arriva da `capable_bash` (tests/conftest.py) e non dal PATH:
+    il caso `wedged` misura il tempo trascorso, e un bash che non esegue i
+    binari esterni riporterebbe 0 secondi facendo concludere che il tetto non
+    scatta — un rosso che parla dell'ambiente, non del codice.
     """
     script = (
         "set -euo pipefail\n"
@@ -252,7 +257,7 @@ def test_the_guard_behaves_on_all_three_answers(behaviour, expect_exit_zero, exp
         "start=$SECONDS\n" + _guard_fragment() + 'echo "FELL-THROUGH after $((SECONDS - start))s"\n'
     )
     result = subprocess.run(
-        [shutil.which("bash"), "-c", script],
+        [capable_bash, "-c", script],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
