@@ -210,6 +210,30 @@ record_recovery() {
   echo "$count"
 }
 
+escalate_key() {
+  # Chiave usabile come nome di file. bridge_escalate riceve testo libero
+  # (nomi di processi morti, ruoli), quindi la sanificazione non e' teorica.
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-64
+}
+
+escalate_once() {
+  # 0 (e aggiorna il timestamp) se il cooldown di QUESTA chiave e' scaduto.
+  # Il cooldown vive in un file PER CHIAVE: prima bridge_escalate ne usava uno
+  # solo per qualunque allarme, quindi un'escalation sui bridge zittiva per
+  # un'ora quella sui process pid1-managed e viceversa. Un allarme che ne
+  # sopprime un altro e' peggio di nessun cooldown.
+  local f="$1" cooldown="$2" now last
+  now="$(date -u +%s)"
+  if [ -f "$f" ]; then
+    last="$(cat "$f" 2>/dev/null || echo 0)"
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    [ $((now - last)) -lt "$cooldown" ] && return 1
+  fi
+  mkdir -p "$(dirname "$f")" 2>/dev/null || true
+  echo "$now" > "$f" 2>/dev/null || true
+  return 0
+}
+
 notify_captain_recovery() {
   # "morto" sarebbe una causa inventata: tmux ci dice solo che la sessione
   # era inattiva. Diciamo il fatto osservato, registriamo il recupero riuscito
@@ -451,14 +475,13 @@ bridge_flap_record() {
 
 bridge_escalate() {
   # avvisa il Capitano UNA volta per finestra di cooldown (no spam), poi tace.
-  local what="$1" now ef last
-  now=$(date -u +%s)
-  ef="$BRIDGE_STATE_DIR/bridge-escalate.ts"
-  if [ -f "$ef" ]; then
-    last=$(cat "$ef" 2>/dev/null || echo 0)
-    [ $((now - last)) -lt "$BRIDGE_ESCALATE_COOLDOWN_SEC" ] && return 0
-  fi
-  echo "$now" > "$ef" 2>/dev/null || true
+  # Il cooldown e' PER CHIAVE: fino al 2026-09-03 c'era un solo
+  # `bridge-escalate.ts` per qualunque `what`, quindi un'escalation sulla suite
+  # bridge zittiva per un'ora quella sui process pid1-managed e viceversa —
+  # cioe' l'allarme piu' grave dei due poteva non arrivare mai.
+  local key="$1" what="$2"
+  escalate_once "$BRIDGE_STATE_DIR/bridge-escalate-$(escalate_key "$key").ts" \
+    "$BRIDGE_ESCALATE_COOLDOWN_SEC" || return 0
   log "bridge-watchdog: FLAP CAP exceeded ($what) — STOPPING respawn and escalating to Capitano"
   jht-tmux-send CAPITANO "[WATCHDOG] $what keeps dying (>${BRIDGE_FLAP_CAP} respawns in $((BRIDGE_FLAP_WINDOW_SEC/60)) min). Automatic respawn has been STOPPED to prevent a crash loop. Manual diagnosis is required: check \$JHT_HOME/logs/*-bridge.log. The Mantenitore will still run a complete canary on the next sweep." >/dev/null 2>&1 || true
 }
@@ -510,7 +533,7 @@ maybe_respawn_bridges() {
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
-      bridge_escalate "suite bridge (morti: $PROC_DEAD_BRIDGE_SUITE)"
+      bridge_escalate bridge "suite bridge (morti: $PROC_DEAD_BRIDGE_SUITE)"
     fi
   fi
 
@@ -535,7 +558,7 @@ maybe_respawn_bridges() {
           || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
         bridge_flap_record "tg-bridge-$_tg_role"
       else
-        bridge_escalate "tg-bridge[$_tg_role]"
+        bridge_escalate "tg-bridge-$_tg_role" "tg-bridge[$_tg_role]"
       fi
     done
   fi
@@ -545,7 +568,7 @@ maybe_respawn_bridges() {
   #     ESCALA (NON tentare il respawn da qui: li orfaneremmo). agent-watchdog
   #     non comparirà mai qui (è il processo che gira questo check).
   if [ -n "$PROC_DEAD_DEEP" ]; then
-    bridge_escalate "process pid1-managed morti: $PROC_DEAD_DEEP"
+    bridge_escalate pid1-child "process pid1-managed morti: $PROC_DEAD_DEEP"
   fi
 }
 
