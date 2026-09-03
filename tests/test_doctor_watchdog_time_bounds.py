@@ -269,13 +269,40 @@ def test_the_loop_declares_where_the_portable_timeout_comes_from():
     assert "command -v jht_timeout" in source
 
 
-def test_a_missing_portable_timeout_is_announced_not_hidden():
-    # Il fallback è il comando NON limitato (come l'ultimo ramo della cascata
-    # di jht_timeout): un rc=127 qui vorrebbe dire "mai più un Dottore né un
-    # Mantenitore". Ma una degradazione silenziosa è il difetto che questo
-    # file corregge, quindi va detta nel diario all'avvio.
+def test_the_loop_has_no_unbounded_fallback_for_the_time_bound():
+    # Un ripiego che gira SENZA tetto ricrea esattamente il guasto che questo
+    # file chiude: una protezione che si spegne da sola. L'unico ripiego
+    # ammesso e' jht_daemon_log, che costa la sola rotazione del diario e senza
+    # il quale il loop non avrebbe dove scrivere che il tetto manca.
+    code = "\n".join(_code_lines())
+    assert "jht_timeout() {" not in code, "nessuna definizione locale di jht_timeout"
+    assert "jht_daemon_log() {" in code
+
+
+def test_a_missing_time_bound_stops_the_spawns_and_keeps_the_loop_alive():
     source = _read(WATCHDOG)
-    assert "TIME_BOUNDS_OK=0" in source
-    warning = _branch(source, 'if [ "$TIME_BOUNDS_OK" -eq 0 ]; then', "\nfi")
-    assert "log " in warning
-    assert "TIME BOUNDS ARE DISABLED" in warning
+    gate = _branch(
+        source,
+        'if ! command -v jht_timeout >/dev/null 2>&1; then',
+        '\n  if [ "$bounds_log_tick" -gt 0 ]',
+    )
+    # Nessuno spawn senza tetto...
+    assert "refusing to spawn" in gate
+    assert "BROKEN INSTALL" in gate, "la causa va nominata, non dedotta"
+    # ...ma il loop non muore: chiude il tick e ricontrolla, cosi' si ripara da
+    # solo appena /app e' a posto.
+    assert 'finish_tick "$POLL_SEC"' in gate
+    assert "continue" in gate
+    assert "bounds_log_tick % 8" in gate, "riga throttlata come gli altri gate"
+    assert "time bounds restored" in source, "il ritorno alla normalita' va detto"
+
+
+def test_the_time_bound_gate_runs_before_every_other_bounded_call():
+    # Ogni altra chiamata del tick passa da jht_doctor_bounded: se il gate non
+    # fosse il primo, il primo a fallire sarebbe il gate del provider e il
+    # diario direbbe "provider non autenticato" — una diagnosi falsa.
+    source = _read(WATCHDOG)
+    loop = source[source.index("\nwhile true; do") :]
+    gate = loop.index("command -v jht_timeout")
+    first_bounded = loop.index("config_ready")
+    assert gate < first_bounded

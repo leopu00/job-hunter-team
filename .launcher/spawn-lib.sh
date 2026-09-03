@@ -26,14 +26,21 @@ if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "$JHT_SPAWN_LIB_DIR/daemon-lib.sh"
 fi
-# Compatibilità con un daemon-lib.sh che non espone (ancora) jht_timeout:
-# morire con rc=127 qui significherebbe «nessun Dottore e nessun Mantenitore,
-# mai», cioè peggio del guasto che il bound chiude. Si degrada allo stesso
-# ultimo ramo della cascata di jht_timeout — comando NON limitato. Da togliere
-# quando jht_timeout è in daemon-lib.sh su tutti i rami.
-if ! command -v jht_timeout >/dev/null 2>&1; then
-  jht_timeout() { shift; "$@"; }
-fi
+# Nessun ripiego locale a jht_timeout. Ne esisteva uno — comando NON limitato
+# — per sopravvivere a un daemon-lib.sh più vecchio della funzione; ora che la
+# funzione è in casa quel ripiego sarebbe solo un modo silenzioso di spegnere
+# la protezione, cioè la stessa classe di guasto che il tetto chiude (un
+# `tmux new-session -c` illimitato è la riga rimasta appesa 15+ ore in
+# produzione). La verifica sta al PUNTO D'USO, in jht_spawn_new_session, dove
+# può nominare l'helper mancante e rifiutare lo spawn invece di lasciar
+# passare un `tmux: command not found`-equivalente travestito da errore di
+# tmux.
+#
+# Il source resta condizionale di proposito: questo file è una libreria che
+# start-agent.sh sorgea per `jht_spawn_user_locale`, e un `exit` al momento del
+# source ammazzerebbe anche quel percorso — che a quel punto sarebbe già morto
+# da solo, perché start-agent.sh sorgea daemon-lib.sh incondizionatamente sotto
+# `set -euo pipefail`. Chi ha bisogno del tetto lo pretende dove serve.
 
 # PATH del pane tmux: `tmux new-session -d` apre una shell NON interattiva che
 # non legge .bashrc, quindi i CLI (codex/claude/kimi) e gli extra installati
@@ -398,6 +405,15 @@ PYEOF
 #   lentezza e non per hang.
 jht_spawn_new_session() {
   local session="$1" workdir="$2" label="$3" secs rc=0
+  # PRECONDIZIONE, non ripiego: senza jht_timeout (daemon-lib.sh non caricato)
+  # la sessione NON si crea. Girare senza tetto sarebbe una protezione che si
+  # spegne da sola e in silenzio; qui invece lo spawn fallisce dicendo perché,
+  # il chiamante lo logga (doctor-watchdog cattura stdout+stderr) e ritenta al
+  # prossimo poll, così il guasto si ripara da sé appena /app è a posto.
+  if ! command -v jht_timeout >/dev/null 2>&1; then
+    echo "[$label] ERROR: jht_timeout unavailable (daemon-lib.sh not loaded next to spawn-lib.sh) — refusing to create '$session' without a time bound" >&2
+    return 1
+  fi
   secs="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
   jht_timeout "$secs" \
     tmux new-session -d -x 220 -y 50 -s "$session" -c "$workdir" || rc=$?
