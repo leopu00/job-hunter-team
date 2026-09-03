@@ -1,7 +1,7 @@
 """Il fd del lock di spawn non deve sopravvivere in nessun figlio.
 
 Origine. `start-agent.sh` serializza lo spawn per sessione con
-`exec 9>.../locks/start-$SESSION.lock` + `flock -w 30 9`. Il lock però non vive
+`exec 9>.../locks/start-$SESSION.lock` + `flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9`. Il lock però non vive
 nel processo: vive nella *open file description* del fd 9, che ogni figlio
 EREDITA. Il ramo tg-bridge lo sapeva già e chiude il fd (`9>&-`) sui suoi
 daemon; il ramo agente no.
@@ -11,7 +11,7 @@ ancora vivo, è la PRIMA `tmux new-session` a forkarlo: il server nasce con il
 fd 9 aperto, si stacca (PPid 1) e resta su quanto il container. Il lock di quella
 sessione non viene quindi rilasciato MAI — nemmeno dopo un'uscita pulita di
 `start-agent.sh` — e ogni respawn successivo di quell'agente muore in
-"timed out waiting for the concurrent spawn" dopo i 30s di `flock -w`, finché il
+"timed out after Ns waiting for the concurrent spawn" alla scadenza di `flock -w`, finché il
 container non riparte. Osservato in produzione: un `tmux: server` con PPid 1
 vivo da 11 giorni con `fd 9 -> locks/start-<AGENTE>.lock`, e 2.677 start falliti
 a valle. Il `timeout 20` sulla new-session (PR #214) copre la new-session
@@ -87,8 +87,15 @@ SESSION_LOCK_LINE = _line_of(SESSION_LOCK)
 
 
 def test_the_session_lock_is_still_taken_on_fd_9():
-    """Se il lock cambiasse fd o sparisse, il resto della suite sarebbe vuoto."""
-    assert _line_of("flock -w 30 9", after=SESSION_LOCK_LINE) == SESSION_LOCK_LINE + 1
+    """Se il lock cambiasse fd o sparisse, il resto della suite sarebbe vuoto.
+
+    L'attesa e' un'env var con default (`JHT_SPAWN_LOCK_WAIT_SEC`): qui conta
+    che il lock sia sul fd 9 e subito dopo l'`exec`, non quanti secondi
+    vale."""
+    assert (
+        _line_of('flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9', after=SESSION_LOCK_LINE)
+        == SESSION_LOCK_LINE + 1
+    )
 
 
 def test_every_tmux_new_session_after_the_lock_closes_the_fd():

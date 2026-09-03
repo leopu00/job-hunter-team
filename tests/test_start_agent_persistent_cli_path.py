@@ -2,7 +2,9 @@ from pathlib import Path
 
 
 def test_start_agent_can_spawn_workers_from_an_agent_tui():
-    source = (Path(__file__).parents[1] / ".launcher" / "start-agent.sh").read_text()
+    source = (Path(__file__).parents[1] / ".launcher" / "start-agent.sh").read_text(
+        encoding="utf-8"
+    )
     first_export = next(
         line for line in source.splitlines() if line.startswith('export PATH="')
     )
@@ -17,9 +19,12 @@ def test_start_agent_can_spawn_workers_from_an_agent_tui():
 
 def test_start_agent_serializes_before_rewriting_agent_skills():
     launcher = Path(__file__).parents[1] / ".launcher"
-    source = (launcher / "start-agent.sh").read_text()
-    spawn_lib = (launcher / "spawn-lib.sh").read_text()
-    lock = source.index('flock -w 30 9')
+    source = (launcher / "start-agent.sh").read_text(encoding="utf-8")
+    spawn_lib = (launcher / "spawn-lib.sh").read_text(encoding="utf-8")
+    # L'attesa del lock e' una env var con default (JHT_SPAWN_LOCK_WAIT_SEC):
+    # qui conta l'ORDINE lock -> idempotenza -> riscrittura delle skill, non
+    # il valore.
+    lock = source.index('flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9')
     early_idempotence = source.index('if tmux has-session -t "$SESSION"', lock)
     skill_sync = source.index("jht_spawn_copy_skills \\", early_idempotence)
 

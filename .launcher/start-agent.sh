@@ -55,6 +55,40 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
+# ── Budget di tempo dello spawn ─────────────────────────────────────────────
+# Due numeri, un solo vincolo che li lega. Dall'esterno all'interno:
+#
+#   docker exec (CLI)          90s  ← cli/src/commands/team/start.js, fissato
+#     └─ flock -w               75s  ← attesa di chi trova il lock occupato
+#          ├─ warmup claude     30s  ← `timeout 30 claude -p ok`, piu' sotto
+#          └─ tmux new-session  45s  ← la guardia sullo spawn, piu' sotto
+#
+# `flock -w` deve superare il tempo che il detentore puo' bruciare, altrimenti
+# un ritardo legittimo del detentore arriva agli altri come "concurrent spawn"
+# — un errore che incolpa la concorrenza mentre la causa e' la lentezza. 75 =
+# 30 + 45, cioe' i due soli passi della sezione critica che hanno un tetto
+# esplicito; e resta sotto i 90s del chiamante, cosi' la CLI non tronca il
+# `docker exec` prima che l'errore vero sia stampato (un troncamento a monte
+# si vede come "unknown error" vuoto: regressione gia' osservata, vedi il
+# commento accanto a `timeoutMs` in start.js).
+#
+# 45s per la new-session e non 20: il caso sano e' sotto i 2s (crea una
+# sessione detached, non avvia l'agente — l'avvio ha budget suoi, 120s per il
+# loop TUI e 270s per il welcome watchdog), ma su un bind mount Windows saturo
+# la stessa manciata di syscall e' stata misurata a ~56ms l'una
+# (docker-compose.yml), e la fascia 10-25s e' raggiungibile. 20s cadeva dentro
+# quella fascia; 45s la scavalca con margine, supera i 30s del warmup che nella
+# stessa sezione critica e' gia' accettato, e resta metà del budget del
+# chiamante. Oltre non serve: il guasto qui e' bimodale — o ritorna in pochi
+# secondi, o non ritorna mai — e alzare ancora ritarderebbe solo il recupero.
+JHT_SPAWN_TMUX_TIMEOUT_SEC="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
+JHT_SPAWN_LOCK_WAIT_SEC="${JHT_SPAWN_LOCK_WAIT_SEC:-75}"
+# Un override non numerico non deve trasformarsi in un `flock -w abc` (che
+# fallisce subito) o in un tetto assente: si torna al default, come per lo
+# stagger piu' sotto.
+case "$JHT_SPAWN_TMUX_TIMEOUT_SEC" in ''|*[!0-9]*) JHT_SPAWN_TMUX_TIMEOUT_SEC=45 ;; esac
+case "$JHT_SPAWN_LOCK_WAIT_SEC" in ''|*[!0-9]*) JHT_SPAWN_LOCK_WAIT_SEC=75 ;; esac
+
 # ── Provider claude: pre-seed onboarding (BUG-CLAUDE-TRUST-PROMPT) ─────
 # Su una install fresca la CLI claude (TUI) blocca gli agenti sul wizard
 # first-run: theme-picker → browser-login → "Bypass Permissions mode".
@@ -380,8 +414,8 @@ if [ "$ROLE" = "tg-bridge" ]; then
   if command -v flock >/dev/null 2>&1; then
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
-    if ! flock -w 30 9; then
-      echo "Error: timed out waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+    if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
+      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
       exit 1
     fi
   fi
@@ -545,8 +579,8 @@ esac
 if command -v flock >/dev/null 2>&1; then
   mkdir -p "${JHT_HOME:-/jht_home}/locks"
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
-  if ! flock -w 30 9; then
-    echo "Error: timed out waiting for the concurrent spawn of '$SESSION'." >&2
+  if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
+    echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION'." >&2
     exit 1
   fi
 fi
@@ -1112,7 +1146,7 @@ else
   # crea la sessione ne' esce ne' fallisce, semplicemente resta appeso.
   # Senza un limite, il processo tiene aperto per sempre il fd 9 del
   # flock preso piu' sopra: ogni respawn successivo dello STESSO agente
-  # (watchdog, utente, capitano) va in timeout dopo i 30s di `flock -w`
+  # (watchdog, utente, capitano) va in timeout allo scadere di `flock -w`
   # e fallisce con "concurrent spawn", indefinitamente — osservati 756
   # respawn falliti in 37h su una singola installazione prima che la
   # causa fosse isolata a un `tmux new-session` orfano di 15h+. `timeout`
@@ -1126,12 +1160,12 @@ else
   # del flock, si stacca (PPid 1) e resta su quanto il container. Il lock di
   # questa sessione non viene quindi rilasciato MAI — nemmeno dopo che
   # start-agent.sh è uscito pulito — e ogni respawn dell'agente muore in
-  # "concurrent spawn" dopo i 30s di `flock -w` finché il container non
+  # "concurrent spawn" allo scadere di `flock -w` finché il container non
   # riparte. Osservato in produzione: server tmux vivo da 11 giorni con
   # `fd 9 -> locks/start-<AGENTE>.lock`, 2.677 start falliti a valle. Chiuso
   # sull'intero comando cosi' il fd sparisce sia per `timeout` sia per tmux.
-  if ! timeout 20 tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 9>&-; then
-    echo "Error: 'tmux new-session' for '$SESSION' did not return within 20s (hung spawn)." >&2
+  if ! timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 9>&-; then
+    echo "Error: 'tmux new-session' for '$SESSION' did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s (hung spawn)." >&2
     # Pulizia best-effort: se tmux ha comunque registrato una sessione a
     # meta', non lasciarla a meta' per il prossimo tentativo.
     tmux kill-session -t "$SESSION" 2>/dev/null
