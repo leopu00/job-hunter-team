@@ -19,6 +19,15 @@ vicenda:
    Su un `kill-session` colpisce una sessione sorella (`-t SCOUT-1` uccide
    SCOUT-10, `-t CRITICO` uccide un CRITICO-S<N> in mezzo a una review).
 
+2b. **Il primo client tmux dopo il lock.** Lo stesso guard e' anche il PRIMO
+   client che parla al server dopo la presa del lock: se il server e'
+   incantato si appende li', col fd 9 in mano, e tutta la guardia sullo spawn
+   — che sta 600 righe a valle — non viene mai raggiunta. Serve un tetto, e
+   serve una risposta alla domanda che il tetto crea: un probe scaduto non e'
+   ne' "esiste" ne' "non esiste". Si prosegue, perche' l'autorita' su un nome
+   occupato e' tmux stesso (`duplicate session`, atomico e ora non
+   distruttivo), mentre uscire 0 e' infalsificabile e permanente.
+
 3. **REPL verificato.** Il ramo principale era l'unico dei tre percorsi di
    spawn a non verificare che il CLI fosse partito: un pane rimasto bash
    diventa definitivo, perche' il guard di idempotenza lo dichiara "already
@@ -30,8 +39,13 @@ Eseguire:
     pytest tests/test_start_agent_spawn_budgets_and_liveness.py -v
 """
 
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = REPO_ROOT / ".launcher" / "start-agent.sh"
@@ -42,6 +56,7 @@ LINES = SOURCE.splitlines()
 
 TMUX_BOUND = "JHT_SPAWN_TMUX_TIMEOUT_SEC"
 LOCK_WAIT = "JHT_SPAWN_LOCK_WAIT_SEC"
+PROBE = "JHT_SPAWN_TMUX_PROBE_SEC"
 
 
 def _default_of(name: str) -> int:
@@ -54,28 +69,53 @@ def _code_lines():
     return [ln for ln in LINES if not ln.lstrip().startswith("#")]
 
 
+def _unquoted(line: str) -> str:
+    """La riga senza le porzioni fra apici: `echo "... tmux attach ..."` e'
+    testo, non un client tmux."""
+    return re.sub(r"'[^']*'|\"[^\"]*\"", " ", line)
+
+
+def _session_lock_line() -> int:
+    for number, line in enumerate(LINES, start=1):
+        if 'exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"' in line:
+            return number
+    raise AssertionError("il lock per-sessione non e' piu' riconoscibile")
+
+
 # ── 1. Budget ───────────────────────────────────────────────────────────────
 
 
 def test_both_bounds_are_env_overridable_with_the_documented_defaults():
     assert _default_of(TMUX_BOUND) == 45
     assert _default_of(LOCK_WAIT) == 75
+    assert _default_of(PROBE) == 5
 
 
 def test_a_non_numeric_override_falls_back_to_the_default():
     """Un `flock -w abc` fallirebbe subito e un tetto vuoto non e' un tetto:
     stessa sanificazione dello stagger piu' sotto nello script."""
-    for name in (TMUX_BOUND, LOCK_WAIT):
+    for name in (TMUX_BOUND, LOCK_WAIT, PROBE):
         guard = f"case \"${name}\" in ''|*[!0-9]*) {name}="
         assert guard in SOURCE, f"{name} accetta un override non numerico"
 
 
-def test_the_lock_wait_covers_the_bounded_steps_of_the_critical_section():
-    """`flock -w` >= i due soli passi della sezione critica che hanno un tetto
-    esplicito: il warmup di claude e la new-session."""
+def test_the_lock_wait_covers_the_two_long_bounded_steps():
+    """`flock -w` >= i due passi LUNGHI con tetto esplicito: il warmup di
+    claude e la new-session. Non e' una garanzia esaustiva — i tratti senza
+    tetto (preflight, copia delle skill) possono superarla da soli — ed e'
+    dichiarato tale nel commento: qui si pinna la relazione, non la promessa."""
     warmup = re.search(r"timeout (\d+) claude", SOURCE)
     assert warmup, "il warmup claude non ha piu' un tetto esplicito"
     assert _default_of(LOCK_WAIT) >= _default_of(TMUX_BOUND) + int(warmup.group(1))
+
+
+def test_a_probe_is_an_order_of_magnitude_smaller_than_the_spawn_bound():
+    """Un probe e' una domanda secca a cui il server risponde in millisecondi:
+    o risponde subito, o e' incantato e nessuna attesa piu' lunga cambia
+    l'esito. Se il probe crescesse fino a pesare come lo spawn, ogni spawn
+    pagherebbe due volte il caso patologico."""
+    assert _default_of(PROBE) * 5 <= _default_of(TMUX_BOUND)
+    assert _default_of(PROBE) >= 1
 
 
 def test_the_lock_wait_stays_under_the_caller_budget():
@@ -112,7 +152,127 @@ def test_the_lock_timeout_message_names_the_bound():
 
 
 def test_the_idempotence_guard_matches_the_exact_session():
-    assert 'if tmux has-session -t "=$SESSION" 2>/dev/null; then' in SOURCE
+    assert f'tmux has-session -t "=$SESSION" 2>/dev/null 9>&-' in SOURCE
+
+
+def test_the_first_tmux_client_after_the_lock_is_time_bounded():
+    """La proprieta' che conta, indipendentemente da QUALE comando sia oggi:
+    il primo client che parla al server dopo la presa del lock si appende se il
+    server e' incantato, e lo fa col fd 9 in mano. Tutta la guardia sullo spawn
+    sta a valle di quel punto, quindi senza tetto qui il lockout permanente
+    torna spostato di un client."""
+    lock = _session_lock_line()
+    first = next(
+        (number, line)
+        for number, line in enumerate(LINES, start=1)
+        if number > lock
+        and not line.lstrip().startswith("#")
+        and re.search(r"\btmux\s+\S", _unquoted(line))
+    )
+    number, line = first
+    assert line.strip().startswith("jht_timeout "), (
+        f"il primo client tmux dopo il lock (riga {number}) non ha un tetto: {line.strip()!r}"
+    )
+    assert "9>&-" in line, (
+        f"il primo client tmux dopo il lock (riga {number}) non chiude il fd del lock"
+    )
+
+
+def test_an_unanswered_idempotence_probe_falls_through_instead_of_claiming_success():
+    """Un probe scaduto non e' ne' "esiste" ne' "non esiste". Uscire 0 come se
+    esistesse ripristina il guasto peggiore di tutti — "already active" e'
+    infalsificabile a valle, quindi l'agente non nasce e nessuno lo cerca. Si
+    prosegue: l'autorita' su un nome occupato e' tmux, che rifiuta la
+    new-session in modo atomico, diagnosticabile e non distruttivo."""
+    guard = SOURCE.index('tmux has-session -t "=$SESSION"')
+    spawn = SOURCE.index("jht_timeout \"$JHT_SPAWN_TMUX_TIMEOUT_SEC\" tmux new-session")
+    block = SOURCE[guard:spawn]
+    # L'`exit 0` esiste ma SOLO sul rc 0, cioe' su una risposta affermativa.
+    assert '|| _hs_rc=$?' in block
+    assert 'if [ "$_hs_rc" -eq 0 ]; then' in block
+    exit_zero = block.index("exit 0")
+    assert block.index('if [ "$_hs_rc" -eq 0 ]; then') < exit_zero
+    # Nessun `exit` sul ramo "non ha risposto": si avvisa e si prosegue.
+    unanswered = block[block.index('if [ "$_hs_rc" -ne 1 ]; then') :]
+    unanswered = unanswered[: unanswered.index("\nfi\n")]
+    assert "exit" not in unanswered, f"il probe scaduto interrompe lo spawn: {unanswered!r}"
+    assert "continuing as if the session did not exist" in unanswered
+
+
+def _guard_fragment() -> str:
+    """Il blocco del guard di idempotenza, estratto dal sorgente VERO: un test
+    che riscrivesse la logica a mano proverebbe la copia, non lo script."""
+    start = SOURCE.index("_hs_rc=0\n")
+    unanswered = SOURCE.index('if [ "$_hs_rc" -ne 1 ]; then', start)
+    end = SOURCE.index("\nfi\n", unanswered) + len("\nfi\n")
+    return SOURCE[start:end]
+
+
+# Stub di tmux pilotato da env: il guard non deve dipendere da un tmux vero,
+# e le tre risposte che contano (si', no, silenzio) non sono riproducibili con
+# un server reale senza incantarlo davvero.
+FAKE_TMUX = """#!/bin/sh
+case "$JHT_FAKE_TMUX" in
+  alive)   exit 0 ;;
+  absent)  exit 1 ;;
+  wedged)  sleep 30 ;;
+esac
+exit 99
+"""
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash non disponibile")
+@pytest.mark.parametrize(
+    ("behaviour", "expect_exit_zero", "expect_warning"),
+    [
+        ("alive", True, False),  # risposta affermativa -> idempotenza, exit 0
+        ("absent", False, False),  # risposta negativa -> si spawna, in silenzio
+        ("wedged", False, True),  # nessuna risposta -> si spawna, avvisando
+    ],
+)
+def test_the_guard_behaves_on_all_three_answers(behaviour, expect_exit_zero, expect_warning):
+    """Sotto `set -euo pipefail`, e con il fd 9 NON aperto (il caso host, dove
+    `flock` non c'e'): la redirezione `9>&-` su un fd chiuso deve restare un
+    no-op invece di far uscire lo script.
+
+    Lo stub nasce DENTRO la shell (`mktemp -d` + heredoc quotato): un path
+    creato da Python finirebbe nel PATH in forma Windows, che bash non
+    risolve, e ogni caso collasserebbe su rc 127.
+    """
+    script = (
+        "set -euo pipefail\n"
+        "source .launcher/daemon-lib.sh\n"
+        'stub="$(mktemp -d)"\n'
+        'cat >"$stub/tmux" <<\'STUB\'\n' + FAKE_TMUX + "STUB\n"
+        'chmod +x "$stub/tmux"\n'
+        'PATH="$stub:$PATH"\n'
+        'command -v tmux >/dev/null 2>&1 || { echo "STUB-NOT-ON-PATH"; exit 1; }\n'
+        'SESSION="SCOUT-1"\n'
+        "JHT_SPAWN_TMUX_PROBE_SEC=1\n"
+        "start=$SECONDS\n" + _guard_fragment() + 'echo "FELL-THROUGH after $((SECONDS - start))s"\n'
+    )
+    result = subprocess.run(
+        [shutil.which("bash"), "-c", script],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        env={**os.environ, "JHT_FAKE_TMUX": behaviour},
+    )
+    assert "STUB-NOT-ON-PATH" not in result.stdout, result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
+    fell_through = "FELL-THROUGH" in result.stdout
+    assert fell_through is not expect_exit_zero, result.stdout
+    assert ("already active" in result.stdout) is expect_exit_zero, result.stdout
+    assert ("did not answer" in result.stdout) is expect_warning, result.stdout
+    if behaviour == "wedged":
+        # La prova che il tetto ha morso: lo stub dorme 30s, il probe ne
+        # concede 1. Senza tetto qui il processo resterebbe appeso col fd del
+        # lock in mano — il lockout permanente, spostato di un client.
+        elapsed = int(re.search(r"FELL-THROUGH after (\d+)s", result.stdout).group(1))
+        assert elapsed < 10, result.stdout
 
 
 def test_no_has_session_or_kill_session_resolves_by_prefix():

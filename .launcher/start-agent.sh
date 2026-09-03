@@ -60,17 +60,26 @@ MODE="${3:-default}"
 #
 #   docker exec (CLI)          90s  ← cli/src/commands/team/start.js, fissato
 #     └─ flock -w               75s  ← attesa di chi trova il lock occupato
+#          ├─ probe tmux         5s  ← ogni domanda secca al server (esiste?)
 #          ├─ warmup claude     30s  ← `timeout 30 claude -p ok`, piu' sotto
 #          └─ tmux new-session  45s  ← la guardia sullo spawn, piu' sotto
 #
 # `flock -w` deve superare il tempo che il detentore puo' bruciare, altrimenti
 # un ritardo legittimo del detentore arriva agli altri come "concurrent spawn"
 # — un errore che incolpa la concorrenza mentre la causa e' la lentezza. 75 =
-# 30 + 45, cioe' i due soli passi della sezione critica che hanno un tetto
-# esplicito; e resta sotto i 90s del chiamante, cosi' la CLI non tronca il
-# `docker exec` prima che l'errore vero sia stampato (un troncamento a monte
-# si vede come "unknown error" vuoto: regressione gia' osservata, vedi il
-# commento accanto a `timeoutMs` in start.js).
+# 30 + 45, i due passi LUNGHI con un tetto esplicito; e resta sotto i 90s del
+# chiamante, cosi' la CLI non tronca il `docker exec` prima che l'errore vero
+# sia stampato (un troncamento a monte si vede come "unknown error" vuoto:
+# regressione gia' osservata, vedi il commento accanto a `timeoutMs` in
+# start.js). La coerenza qui RIDUCE i falsi "concurrent spawn", non li rende
+# impossibili: i probe aggiungono qualche secondo e i tratti senza tetto
+# (preflight provider/config, copia delle skill) possono da soli avvicinarsi
+# ai 30s. Senza telemetria dello spawn non si puo' fare meglio di cosi'.
+#
+# I probe hanno un tetto piccolo e a parte perche' sono domande secche a cui
+# il server risponde in millisecondi: o rispondono subito, o il server e'
+# incantato e nessuna attesa piu' lunga cambia l'esito. Valgono per il guard
+# di idempotenza e per la pulizia del ramo d'errore.
 #
 # 45s per la new-session e non 20: il caso sano e' sotto i 2s (crea una
 # sessione detached, non avvia l'agente — l'avvio ha budget suoi, 120s per il
@@ -83,11 +92,13 @@ MODE="${3:-default}"
 # secondi, o non ritorna mai — e alzare ancora ritarderebbe solo il recupero.
 JHT_SPAWN_TMUX_TIMEOUT_SEC="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
 JHT_SPAWN_LOCK_WAIT_SEC="${JHT_SPAWN_LOCK_WAIT_SEC:-75}"
+JHT_SPAWN_TMUX_PROBE_SEC="${JHT_SPAWN_TMUX_PROBE_SEC:-5}"
 # Un override non numerico non deve trasformarsi in un `flock -w abc` (che
 # fallisce subito) o in un tetto assente: si torna al default, come per lo
 # stagger piu' sotto.
 case "$JHT_SPAWN_TMUX_TIMEOUT_SEC" in ''|*[!0-9]*) JHT_SPAWN_TMUX_TIMEOUT_SEC=45 ;; esac
 case "$JHT_SPAWN_LOCK_WAIT_SEC" in ''|*[!0-9]*) JHT_SPAWN_LOCK_WAIT_SEC=75 ;; esac
+case "$JHT_SPAWN_TMUX_PROBE_SEC" in ''|*[!0-9]*) JHT_SPAWN_TMUX_PROBE_SEC=5 ;; esac
 
 # ── Provider claude: pre-seed onboarding (BUG-CLAUDE-TRUST-PROMPT) ─────
 # Su una install fresca la CLI claude (TUI) blocca gli agenti sul wizard
@@ -601,10 +612,55 @@ fi
 # lo ricreera' — il fallimento e' silenzioso e permanente. Non e' teorico:
 # registrato in produzione come prefix-match SENTINELLA vs SENTINELLA-WORKER
 # che ha bloccato un relaunch. Stessa convenzione di agent-watchdog.sh.
-if tmux has-session -t "=$SESSION" 2>/dev/null; then
+#
+# E il tetto di tempo qui NON e' ridondante con quello della new-session piu'
+# sotto: il PRIMO client tmux dopo la presa del lock e' questo. Se il server
+# e' incantato — l'ipotesi di root cause dell'incidente da 756 respawn falliti
+# — si appende QUI, col fd 9 in mano, e la guardia irrobustita 600 righe sotto
+# non viene mai raggiunta. Sarebbe lo stesso lockout permanente, spostato di
+# un client. `9>&-` per la stessa ragione degli altri: se il client sopravvive
+# al proprio tetto, non deve portarsi via il lock.
+_hs_rc=0
+jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- || _hs_rc=$?
+if [ "$_hs_rc" -eq 0 ]; then
   echo "Session '$SESSION' is already active."
   echo "Connect with: tmux attach -t \"$SESSION\""
   exit 0
+fi
+# Un rc diverso da 0 e 1 significa che la domanda "esiste?" non ha avuto
+# risposta: ne' si', ne' no. Le due strade non sono simmetriche.
+#
+# Uscire 0 come se esistesse e' la scelta peggiore possibile: e' la stessa
+# frase ("already active") che il difetto del prefix matching qui sopra
+# produceva, ed e' INFALSIFICABILE a valle — nessun consumatore distingue una
+# sessione viva da una dichiarata viva, quindi l'agente non nasce e nessuno
+# lo cerchera' piu'. Un guasto silenzioso e permanente al posto di uno
+# rumoroso e temporaneo.
+#
+# Si prosegue quindi come se NON esistesse, per quattro ragioni:
+#  1. questo guard e' un'ottimizzazione (evita lavoro inutile e da' un
+#     messaggio gentile), non il meccanismo di sicurezza. L'autorita' su "quel
+#     nome e' occupato" e' tmux stesso, che rifiuta atomicamente la
+#     new-session con `duplicate session`: quando l'ottimizzazione non sa
+#     rispondere, si ricade sull'autorita';
+#  2. quel rifiuto e' ora diagnosticabile e NON distruttivo — l'rc viene
+#     discriminato e la pulizia vive solo nel ramo del tetto scaduto, quindi
+#     ricadere sul `duplicate session` costa una riga d'errore veritiera e non
+#     la sessione di un altro agente (prima di quel fix questa strada era
+#     impraticabile);
+#  3. ogni passo a valle ha un tetto (new-session, pulizia, attesa del REPL),
+#     quindi proseguire non puo' ricreare l'attesa illimitata che stiamo
+#     chiudendo: nel caso davvero incantato questo ramo degrada da solo a un
+#     errore in meno di un minuto;
+#  4. se il server era soltanto LENTO — probe scaduto ma tmux vivo — questa e'
+#     la strada che riesce, invece di lasciare a terra proprio i ruoli
+#     effimeri (CRITICO di uno Scrittore) i cui chiamanti non guardano l'rc e
+#     resterebbero in attesa di un verdetto che non arriva.
+# Il prezzo, se la sessione esisteva davvero: una ricopiatura delle skill
+# sotto i piedi di un agente vivo (transitoria, e serializzata dal flock) e un
+# fallimento rumoroso ma onesto. Accettabile in cambio del punto 1.
+if [ "$_hs_rc" -ne 1 ]; then
+  echo "  ⚠ 'tmux has-session' for '$SESSION' did not answer (rc=$_hs_rc) — continuing as if the session did not exist; tmux itself will reject a duplicate."
 fi
 
 # Determina effort in base al mode
@@ -1246,7 +1302,7 @@ else
         # rilascia piu'.
         _i=0
         while [ "$_i" -lt 5 ]; do
-          jht_timeout 5 tmux has-session -t "=$SESSION" 2>/dev/null 9>&- && break
+          jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- && break
           sleep 1
           _i=$((_i + 1))
         done
@@ -1259,7 +1315,7 @@ else
         # sospetto di essere appeso, ed e' l'ultimo punto del ramo che potrebbe
         # ancora bloccarsi per sempre col fd 9 in mano — cioe' ricreare da
         # solo il lockout che tutta questa guardia esiste per impedire.
-        jht_timeout 5 tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+        jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
         ;;
       125|126|127)
         echo "Error: could not run the time-bounded 'tmux new-session' for '$SESSION' (rc=$_ns_rc: command missing or not executable). No session was created." >&2

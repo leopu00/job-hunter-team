@@ -94,8 +94,9 @@ def test_the_cleanup_clients_are_bounded_through_the_helper_too():
     """`has-session`/`kill-session` del ramo d'errore parlano con lo STESSO
     server sospetto di essere appeso: senza tetto sono l'ultimo punto in cui il
     processo puo' bloccarsi per sempre tenendo il fd 9 del lock."""
-    assert 'jht_timeout 5 tmux has-session -t "=$SESSION"' in SOURCE
-    assert 'jht_timeout 5 tmux kill-session -t "=$SESSION"' in SOURCE
+    probe = 'jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux '
+    assert f'{probe}has-session -t "=$SESSION"' in SOURCE
+    assert f'{probe}kill-session -t "=$SESSION"' in SOURCE
 
 
 def test_the_helper_is_sourced_before_the_spawn_guard():
