@@ -85,6 +85,12 @@ PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_healt
 RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
 NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
 TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
+# Canale verso l'UTENTE: CLI Python deterministico (scrive in
+# pending_user_messages, poi tenta Telegram e ricade sulla dashboard). Zero
+# token: il gradino 2 dell'escalation non deve costare un turno LLM, perche'
+# il caso peggiore e' proprio quello in cui gli agenti non partono.
+# Iniettabile come le altre tre dipendenze: i test non chiamano il binario vero.
+NOTIFY_USER_BIN="${JHT_NOTIFY_USER_BIN:-jht-notify-user}"
 # TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
 # misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
 INTENTIONAL_RECREATE_SESSION=""
@@ -115,8 +121,13 @@ SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
 # conteggio protegge un INTERVAL_SEC molto largo.
 SPAWN_FAIL_ESCALATE_AFTER="${JHT_SPAWN_FAIL_ESCALATE_AFTER:-5}"
 SPAWN_FAIL_ESCALATE_MIN_SEC="${JHT_SPAWN_FAIL_ESCALATE_MIN_SEC:-300}"
+# Allarme all'UTENTE: stessa doppia condizione, seconda soglia. ~20 min
+# ininterrotti al tick di default.
+SPAWN_FAIL_ALERT_AFTER="${JHT_SPAWN_FAIL_ALERT_AFTER:-8}"
+SPAWN_FAIL_ALERT_MIN_SEC="${JHT_SPAWN_FAIL_ALERT_MIN_SEC:-1200}"
 # Anti-spam PER SESSIONE (non globale): un allarme non deve zittirne un altro.
 SPAWN_FAIL_COOLDOWN_SEC="${JHT_SPAWN_FAIL_COOLDOWN_SEC:-3600}"
+SPAWN_FAIL_ALERT_COOLDOWN_SEC="${JHT_SPAWN_FAIL_ALERT_COOLDOWN_SEC:-21600}"
 # Una serie e' CONSECUTIVA: se dall'ultimo fallimento e' passato piu' di questo,
 # la sessione e' tornata su per una strada che questo watchdog non vede (Dottore,
 # Capitano, riavvio del container) e il conteggio riparte da 1. Senza questa
@@ -404,6 +415,20 @@ EOF
       log "spawn-failure: $session at streak $streak (${elapsed}s), but the CAPITANO escalation failed (rc=$rc); durable register remains in $SPAWN_FAILURE_LOG"
     fi
   fi
+
+  # Gradino 2 — allarme all'UTENTE. Costa ZERO token: nessuno script di
+  # .launcher/ aveva mai usato questo canale, ed e' il motivo per cui un agente
+  # non avviabile poteva restare invisibile per giorni.
+  if [ "$streak" -ge "$SPAWN_FAIL_ALERT_AFTER" ] && [ "$elapsed" -ge "$SPAWN_FAIL_ALERT_MIN_SEC" ] \
+     && escalate_once "$SPAWN_STATE_DIR/spawn-escalate-$key-user.ts" "$SPAWN_FAIL_ALERT_COOLDOWN_SEC"; then
+    message="[TEAM] The agent session $session is not starting. The watchdog has tried $streak times in a row over the last $((elapsed / 60)) min and keeps retrying on its own — you do not have to do anything to keep it trying, and the rest of the team goes on without that agent. Observed: every start attempt fails, and the last line the spawner wrote was: ${detail:-none captured}. NOT observed: why it fails. Full history: $SPAWN_FAILURE_LOG and $LOG."
+    if "$NOTIFY_USER_BIN" --agent capitano --kind alert "$message" >/dev/null 2>&1; then
+      log "spawn-failure: $session at streak $streak (${elapsed}s) — USER alerted via $NOTIFY_USER_BIN"
+    else
+      rc=$?
+      log "spawn-failure: $session at streak $streak (${elapsed}s), but the USER alert failed (rc=$rc) via $NOTIFY_USER_BIN; durable register remains in $SPAWN_FAILURE_LOG"
+    fi
+  fi
   return 0
 }
 
@@ -420,12 +445,13 @@ clear_spawn_failures() {
   # viene informato del rientro: un allarme che non si chiude e' un allarme che
   # si impara a ignorare, e il prossimo vero non verra' letto. Il messaggio di
   # rientro non e' un extra, e' parte del contratto.
-  # Steady state: due stat e nessun altro lavoro, nessuna riga di log.
-  local session="$1" key streak marker_captain count first last minutes
+  # Steady state: tre stat e nessun altro lavoro, nessuna riga di log.
+  local session="$1" key streak marker_captain marker_user count first last minutes
   key="$(escalate_key "$session")"
   streak="$SPAWN_STATE_DIR/spawn-streak-$key"
   marker_captain="$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts"
-  [ -f "$streak" ] || [ -f "$marker_captain" ] || return 0
+  marker_user="$SPAWN_STATE_DIR/spawn-escalate-$key-user.ts"
+  [ -f "$streak" ] || [ -f "$marker_captain" ] || [ -f "$marker_user" ] || return 0
   read -r count first last <<EOF
 $(spawn_streak_state "$session")
 EOF
@@ -437,6 +463,11 @@ EOF
     rm -f "$marker_captain" 2>/dev/null || true
     "$TMUX_SENDER" CAPITANO "[WATCHDOG] Resolved: $session started successfully after $count consecutive failed start attempts spanning ${minutes} min. The failed-start alarm for $session is cleared. History: $SPAWN_FAILURE_LOG" >/dev/null 2>&1 \
       || log "spawn-failure: $session recovered, but the CAPITANO resolution notice failed"
+  fi
+  if [ -f "$marker_user" ]; then
+    rm -f "$marker_user" 2>/dev/null || true
+    "$NOTIFY_USER_BIN" --agent capitano --kind notification "[TEAM] $session is running again: it started successfully after $count failed attempts over ${minutes} min. Nothing is pending on your side; the earlier alert about $session is closed." >/dev/null 2>&1 \
+      || log "spawn-failure: $session recovered, but the USER resolution notice failed via $NOTIFY_USER_BIN"
   fi
 }
 
@@ -792,7 +823,7 @@ maybe_respawn_bridges() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min, user after ${SPAWN_FAIL_ALERT_AFTER} and $((SPAWN_FAIL_ALERT_MIN_SEC/60))min)"
 
 # Queste funzioni stanno deliberatamente dopo il marker di bootstrap qui
 # sopra: i test unitari storici estraggono il prelude fino a quel marker.
