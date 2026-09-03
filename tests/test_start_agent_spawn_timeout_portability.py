@@ -28,7 +28,6 @@ Eseguire:
 """
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -43,24 +42,18 @@ DAEMON_SOURCE = DAEMON_LIB.read_text(encoding="utf-8")
 
 SPAWN_GUARD = 'jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session'
 
-# `bash` serve per i casi comportamentali; su host Windows la baseline delle
-# suite e' gia' rumorosa e non vale aggiungere fallimenti ambientali.
-BASH = shutil.which("bash")
-needs_bash = pytest.mark.skipif(BASH is None, reason="bash non disponibile")
 
-
-def _bash(script: str, timeout: int = 60) -> subprocess.CompletedProcess:
+def _bash(bash: str, script: str, timeout: int = 60) -> subprocess.CompletedProcess:
     """Esegue uno snippet con cwd=repo: su Windows bash non digerisce `C:\\...`,
     quindi daemon-lib.sh va sorgeato per path relativo.
 
-    L'eseguibile arriva da `shutil.which`, non dalla risoluzione di `argv[0]`:
-    su un host Windows con WSL installato `bash` in PATH e' il launcher di WSL,
-    che avviato da un processo Windows non riesce a forkare (la command
-    substitution torna vuota e le redirezioni su file non creano niente), e i
-    casi comportamentali fallirebbero per l'ambiente invece che per il codice.
+    L'interprete arriva dalla fixture `capable_bash` (tests/conftest.py), non
+    dalla risoluzione di `argv[0]` ne' da un `shutil.which` nudo: il primo bash
+    del PATH puo' essere il launcher WSL, che parte e stampa ma non forka, e
+    questi casi fallirebbero per l'ambiente invece che per il codice.
     """
     return subprocess.run(
-        [BASH, "-c", script],
+        [bash, "-c", script],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -123,10 +116,10 @@ def test_the_helper_is_documented_in_the_daemon_lib_header():
     assert "jht_timeout <secondi> <comando...>" in header
 
 
-@needs_bash
-def test_jht_timeout_runs_the_command_when_no_timeout_binary_exists():
+def test_jht_timeout_runs_the_command_when_no_timeout_binary_exists(capable_bash):
     """E' IL caso macOS, e nessun source-assert lo cattura."""
     result = _bash(
+        capable_bash,
         PRELUDE
         + 'printf "#!/bin/sh\\necho ran\\n" >"$work/probe"\n'
         + 'chmod +x "$work/probe"\n'
@@ -144,10 +137,10 @@ def test_jht_timeout_runs_the_command_when_no_timeout_binary_exists():
     assert "rc=0" in result.stdout, result.stdout + result.stderr
 
 
-@needs_bash
-def test_jht_timeout_propagates_the_command_exit_code():
+def test_jht_timeout_propagates_the_command_exit_code(capable_bash):
     """Il degrado non deve mascherare errori veri: 3 resta 3, non 0 e non 1."""
     result = _bash(
+        capable_bash,
         PRELUDE
         + 'printf "#!/bin/sh\\nexit 3\\n" >"$work/probe"\n'
         + 'chmod +x "$work/probe"\n'
@@ -158,12 +151,12 @@ def test_jht_timeout_propagates_the_command_exit_code():
     assert "rc=3" in result.stdout, result.stdout + result.stderr
 
 
-@needs_bash
-def test_jht_timeout_still_caps_when_the_binary_exists():
+def test_jht_timeout_still_caps_when_the_binary_exists(capable_bash):
     """La protezione di #214 resta la protezione di #214."""
-    if _bash("command -v timeout").returncode != 0:
+    if _bash(capable_bash, "command -v timeout").returncode != 0:
         pytest.skip("`timeout` non disponibile su questo host")
     result = _bash(
+        capable_bash,
         "source .launcher/daemon-lib.sh\n"
         "start=$SECONDS\n"
         "jht_timeout 1 sleep 5\n"
@@ -175,14 +168,14 @@ def test_jht_timeout_still_caps_when_the_binary_exists():
     assert int(match.group(2)) < 3, result.stdout
 
 
-@needs_bash
-def test_jht_timeout_prefers_gtimeout_when_timeout_is_absent():
+def test_jht_timeout_prefers_gtimeout_when_timeout_is_absent(capable_bash):
     """Copre il ramo BSD, che nessuna CI Linux esercita."""
     # Heredoc quotato: lo shim non deve subire NESSUNA espansione alla
     # scrittura, altrimenti il suo `"$@"` verrebbe risolto dalla shell del test
     # (vuoto) invece che dallo shim a runtime. Il path del marker arriva da una
     # env var, che e' l'unica cosa che lo shim risolve da se'.
     result = _bash(
+        capable_bash,
         PRELUDE
         + 'export JHT_TEST_MARKER="$work/marker"\n'
         + 'cat >"$empty/gtimeout" <<\'SHIM\'\n'
@@ -206,8 +199,19 @@ def test_jht_timeout_prefers_gtimeout_when_timeout_is_absent():
     assert "rc=7" in result.stdout, result.stdout + result.stderr
 
 
-@needs_bash
-def test_the_launcher_and_the_helper_still_parse():
+def test_the_launcher_and_the_helper_still_parse(any_bash):
+    """`bash -n` legge e non esegue, quindi qui basta un bash QUALSIASI — e va
+    invocato direttamente, non annidato dentro un altro bash: sotto il launcher
+    WSL un `bash -n` interno non verrebbe eseguito affatto e il test passerebbe
+    a vuoto, cioe' sarebbe verde proprio dove non ha verificato niente."""
     for script in (".launcher/daemon-lib.sh", ".launcher/start-agent.sh"):
-        result = _bash(f"bash -n {script}")
+        result = subprocess.run(
+            [any_bash, "-n", script],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
         assert result.returncode == 0, f"{script}: {result.stderr}"
