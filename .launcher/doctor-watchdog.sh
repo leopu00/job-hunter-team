@@ -64,6 +64,8 @@ SCHED="${JHT_DOCTOR_SCHED:-/app/shared/skills/doctor_schedule.py}"
 # o processi LLM e senza usare timeout che nascondono loop inattesi.
 MAX_TICKS="${JHT_DOCTOR_WATCHDOG_MAX_TICKS:-0}"
 tick_count=0
+# On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
+# skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
 
 # ── Tetti di tempo sulle chiamate bloccanti del loop ────────────────────────
 # Prima non ce n'era nessuno: `out=$(bash "$SPAWNER" 2>&1)` e le chiamate agli
@@ -172,8 +174,6 @@ jht_doctor_bounded() {
   [ "$rc" -eq 124 ] && BOUND_STATE="expired"
   return "$rc"
 }
-# On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
-# skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
 
 # ── Diario: UN path per scrittore ───────────────────────────────────────────
 # Il diario di questo script NON è più logs/doctor-watchdog.log: quel path è
