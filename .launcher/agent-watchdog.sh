@@ -39,7 +39,10 @@
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
-# Failure mode: log + retry al prossimo tick, non fail-fast.
+# Failure mode: retry al prossimo tick, non fail-fast — MA il fallimento viene
+# anche MISURATO (agent-spawn-failures.tsv), vedi il blocco "Fallimenti di
+# spawn" sotto. Fino al 2026-09-03 era solo una riga di log, e un agente che
+# non partiva restava invisibile per giorni.
 #
 # Trigger gate: parte se active_provider è settato in jht.config.json E
 # le credenziali del provider sono presenti. Telegram NON è più richiesto:
@@ -85,6 +88,30 @@ TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
 # TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
 # misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
 INTENTIONAL_RECREATE_SESSION=""
+
+# ── Fallimenti di spawn: la misura che mancava ──────────────────────────
+# Il watchdog misurava i propri SUCCESSI (RECOVERY_LOG) e restava cieco sui
+# propri FALLIMENTI: il ramo `start FAILED` era una riga di log e nient'altro,
+# che nessun consumatore legge. Su una VPS di produzione un agente core non e'
+# riuscito a partire per 2.677 tentativi consecutivi senza che scattasse alcun
+# allarme — non perche' la soglia fosse alta, ma perche' non esisteva nessun
+# contatore da superare. Nessuno degli altri anelli lo vedeva: process_health.py
+# non ha sessioni agente in EXPECTED, il Dottore inventaria le sessioni che
+# ESISTONO, il Mantenitore ha il divieto esplicito di toccare le sessioni
+# agente, e nessuno script del launcher aveva mai parlato all'utente.
+#
+# Registro SEPARATO da RECOVERY_LOG di proposito: recovery_today_count() conta
+# le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
+# nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
+SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
+# Stato per-sessione della serie corrente. Directory iniettabile per poter
+# esercitare la misura nei test.
+SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
+# Una serie e' CONSECUTIVA: se dall'ultimo fallimento e' passato piu' di questo,
+# la sessione e' tornata su per una strada che questo watchdog non vede (Dottore,
+# Capitano, riavvio del container) e il conteggio riparte da 1. Senza questa
+# scadenza fallimenti separati da giorni si sommerebbero fino a suonare a vuoto.
+SPAWN_FAIL_STREAK_TTL_SEC="${JHT_SPAWN_FAIL_STREAK_TTL_SEC:-1800}"
 
 # ── Bridge suite supervision (2026-06-27) ──────────────────────────────
 # I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
@@ -250,6 +277,95 @@ notify_captain_recovery() {
   rc=$?
   log "recovery: $session recorded as #$count today, but CAPITANO notification failed (rc=$rc); durable event remains in $RECOVERY_LOG"
   return "$rc"
+}
+
+spawn_streak_state() {
+  # "count first_ts last_ts" della serie corrente, "0 0 0" se non c'e'.
+  local f line
+  f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$1")"
+  [ -f "$f" ] || { echo "0 0 0"; return 0; }
+  line="$(tr -d '\r' < "$f" 2>/dev/null | head -1)"
+  case "$line" in
+    [0-9]*' '[0-9]*' '[0-9]*) echo "$line" ;;
+    *) echo "0 0 0" ;;
+  esac
+}
+
+spawn_log_offset() {
+  # Byte del LOG PRIMA del tentativo: il "detail" di un fallimento e' l'ultima
+  # riga che lo spawner scrive dopo questo punto. Si legge dal log invece di
+  # catturare l'output in una variabile perche' la cattura serializza: su uno
+  # spawner APPESO — il guasto di produzione — perderemmo anche l'output
+  # parziale, che in quel caso e' l'unica traccia che resta.
+  [ -f "$LOG" ] || { echo 0; return 0; }
+  wc -c < "$LOG" 2>/dev/null | tr -d ' \t' || echo 0
+}
+
+spawn_detail_since() {
+  # Ultima riga non vuota aggiunta al LOG dopo l'offset, normalizzata: il
+  # registro e' un TSV e il testo finisce anche in un messaggio.
+  local offset="$1"
+  case "$offset" in ''|*[!0-9]*) offset=0 ;; esac
+  [ -f "$LOG" ] || return 0
+  tail -c "+$((offset + 1))" "$LOG" 2>/dev/null \
+    | grep -v '^[[:space:]]*$' | tail -1 | tr '\t\r' '  ' | cut -c1-200
+}
+
+record_spawn_failure() {
+  # Gemella di record_recovery, sul ramo che finora era muto. Stampa la serie
+  # di fallimenti CONSECUTIVI solo DOPO aver scritto: se la scrittura fallisce
+  # non mandiamo a nessuno un numero inventato — log loud, nessuna misura
+  # dichiarata completa.
+  local session="$1" detail="$2" now ts count first last f
+  now="$(date -u +%s)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
+  mkdir -p "$SPAWN_STATE_DIR" "$(dirname "$SPAWN_FAILURE_LOG")" 2>/dev/null || {
+    log "spawn-failure: $session did not start, but cannot create the durable register $SPAWN_FAILURE_LOG"
+    return 1
+  }
+  printf '%s\t%s\t%s\n' "$ts" "$session" "$detail" >> "$SPAWN_FAILURE_LOG" || {
+    log "spawn-failure: $session did not start, but cannot record the durable event in $SPAWN_FAILURE_LOG"
+    return 1
+  }
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  if [ "$count" -gt 0 ] && [ $((now - last)) -gt "$SPAWN_FAIL_STREAK_TTL_SEC" ]; then
+    count=0; first=0
+  fi
+  count=$((count + 1))
+  [ "$first" -le 0 ] && first="$now"
+  { printf '%s %s %s\n' "$count" "$first" "$now" > "$f.tmp" 2>/dev/null \
+      && mv "$f.tmp" "$f" 2>/dev/null; } || {
+    log "spawn-failure: $session recorded in $SPAWN_FAILURE_LOG, but the consecutive-streak state is not writable in $SPAWN_STATE_DIR"
+    return 1
+  }
+  echo "$count"
+}
+
+observe_spawn_failure() {
+  # Gemella di notify_captain_recovery sul ramo di fallimento: unico punto di
+  # ingresso per i rami che oggi erano muti. Per ora misura e tace; i due
+  # gradini di escalation si agganciano qui.
+  local session="$1" detail="$2" streak
+  streak="$(record_spawn_failure "$session" "$detail")" || return 1
+  return 0
+}
+
+clear_spawn_failures() {
+  # L'allarme si spegne da solo al primo successo: la serie e' CONSECUTIVA, e
+  # un conteggio che non si azzera finirebbe per suonare su fallimenti di
+  # incidenti diversi sommati fra loro.
+  # Steady state: uno stat e nessun altro lavoro, nessuna riga di log.
+  local session="$1" streak count first last
+  streak="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
+  [ -f "$streak" ] || return 0
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  rm -f "$streak" 2>/dev/null || true
+  log "spawn-failure: $session started successfully — consecutive-failure streak reset (was $count)"
 }
 
 ensure_agent() {
