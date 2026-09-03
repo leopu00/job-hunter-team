@@ -370,27 +370,41 @@ EOF
 
 ensure_agent() {
   local role="$1"
-  local session
+  local session mark rc detail
   session="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   # Un containment e' sticky e vale anche per i core: il normale `record`
   # di start-agent non puo' revocarlo, soltanto `release` puo' farlo.
+  # Deliberatamente PRIMA di qualsiasi misura: una sessione tenuta giu' non e'
+  # un fallimento di spawn e non deve alimentare nessuna serie.
   if agent_is_contained "$session"; then
     return 0
   fi
   if is_session_alive "$session"; then
+    # La serie deve essere CONSECUTIVA: se la sessione e' tornata su per una
+    # strada che non e' questa (Dottore, Capitano, riavvio), il conteggio va
+    # chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
+    clear_spawn_failures "$session"
     return 0
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
+  mark="$(spawn_log_offset)"
   if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+    # PRIMA della sonda: is_session_alive puo' scrivere la sua riga ZOMBIE nel
+    # LOG, e attribuirla allo spawner sarebbe dichiarare una causa non
+    # osservata su un messaggio che va al Capitano e all'utente.
+    detail="$(spawn_detail_since "$mark")"
     # Il comando accetta anche il no-op "gia' attivo" e uno spawner può uscire
     # 0 prima che la TUI sia davvero pronta. Non dichiarare una resurrezione
     # solo perché l'abbiamo chiesta: la stessa sonda deve vedere la sessione
     # viva DOPO lo start.
     if ! is_session_alive "$session"; then
       log "agent $role: start reported OK but session $session is still inactive — recovery not recorded"
+      observe_spawn_failure "$session" \
+        "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "agent $role: start OK and session verified alive"
+    clear_spawn_failures "$session"
     if [ "$INTENTIONAL_RECREATE_SESSION" = "$session" ]; then
       log "agent $role: intentional refresh recreated — not counted as an inactive-session recovery"
       INTENTIONAL_RECREATE_SESSION=""
@@ -398,7 +412,10 @@ ensure_agent() {
       notify_captain_recovery "$session" "inactive at the watchdog check" || true
     fi
   else
-    log "agent $role: start FAILED (rc=$?) — retrying at the next tick"
+    rc=$?
+    detail="$(spawn_detail_since "$mark")"
+    log "agent $role: start FAILED (rc=$rc) — retrying at the next tick"
+    observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
   fi
 }
 
@@ -486,13 +503,20 @@ worker_kickoff() {
 respawn_worker() {
   # start-agent.sh con lo STESSO numero d'istanza (il dado di
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
-  local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}"
+  local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}" mark rc detail
+  mark="$(spawn_log_offset)"
   if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+    # PRIMA della sonda, come in ensure_agent: la riga ZOMBIE di
+    # is_session_alive non e' output dello spawner e non va attribuita a lui.
+    detail="$(spawn_detail_since "$mark")"
     if ! is_session_alive "$session"; then
       log "worker $session: start reported OK but session is still inactive — recovery not recorded"
+      observe_spawn_failure "$session" \
+        "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "worker $session: start OK and session verified alive"
+    clear_spawn_failures "$session"
     worker_kickoff "$session" "$role"
     if [ "$recovery_kind" = "unexpected" ]; then
       notify_captain_recovery "$session" "missing after recent worker activity" || true
@@ -500,9 +524,17 @@ respawn_worker() {
       log "worker $session: intentional refresh recreated — not counted as an inactive-session recovery"
     fi
     return 0
+  else
+    # `recovery_kind` distingue solo i RECUPERI: una ricreazione voluta (TTL)
+    # che NON riesce e' un fallimento di spawn a pieno titolo — la sessione e'
+    # gia' stata uccisa e ora non risale. Escluderla riaprirebbe esattamente il
+    # buco che questa misura chiude.
+    rc=$?
+    detail="$(spawn_detail_since "$mark")"
+    log "worker $session: start FAILED (rc=$rc) — retrying at the next tick"
+    observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
+    return 1
   fi
-  log "worker $session: start FAILED — retrying at the next tick"
-  return 1
 }
 
 maybe_ttl_refresh() {
