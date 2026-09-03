@@ -485,6 +485,29 @@ def test_the_escalation_cooldown_is_per_session(wd):
     assert wd.marker("MENTOR", "captain").exists()
 
 
+def test_the_breadth_count_ignores_a_leftover_atomic_write(wd):
+    """Il `.tmp` della scrittura atomica condivide il prefisso dei file di serie.
+
+    Contarlo raddoppierebbe la sessione a cui appartiene, e un numero gonfiato
+    dentro un messaggio e' un'affermazione non osservata come le altre.
+    """
+    # Di un'ALTRA sessione: il `.tmp` della sessione in corso lo consuma il
+    # `mv` della scrittura successiva, quello di una terza resta lì.
+    stale = wd.logs / "spawn-streak-SCOUT-9.tmp"
+    result = wd.run(
+        f'printf "%s %s %s\\n" 99 "$(date -u +%s)" "$(date -u +%s)" > "{_bash_path(stale)}"\n'
+        "ensure_agent assistente\nensure_agent assistente",
+        JHT_SPAWN_FAIL_ESCALATE_AFTER=2,
+        JHT_SPAWN_FAIL_ESCALATE_MIN_SEC=0,
+        **NO_BACKOFF,
+    )
+
+    assert result.returncode == 0, result.stderr
+    notices = [n for n in wd.lines(wd.sender_calls) if "cannot be started" in n]
+    assert len(notices) == 1, notices
+    assert "streak right now: 1" in notices[0], notices[0]
+
+
 def test_the_bridge_escalation_cooldown_is_per_key(wd):
     """Regressione sul difetto PREESISTENTE del cooldown globale.
 

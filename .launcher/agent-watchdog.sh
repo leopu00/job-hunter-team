@@ -381,6 +381,10 @@ spawn_failure_breadth() {
   now="$(date -u +%s)"
   for f in "$SPAWN_STATE_DIR"/spawn-streak-*; do
     [ -f "$f" ] || continue
+    # Il `.tmp` della scrittura atomica ha lo stesso prefisso: contarlo
+    # raddoppierebbe la sessione a cui appartiene, e un numero gonfiato in un
+    # messaggio e' un'affermazione non osservata come le altre.
+    case "$f" in *.tmp) continue ;; esac
     count="$(cut -d' ' -f1 < "$f" 2>/dev/null)"
     last="$(cut -d' ' -f3 < "$f" 2>/dev/null)"
     case "$count" in ''|*[!0-9]*) continue ;; esac
