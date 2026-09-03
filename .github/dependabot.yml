@@ -15,6 +15,48 @@ version: 2
 # Segnalato da zizmor (`dependabot-cooldown`), che dal 2026-07-30 gira nel
 # workflow di lint.
 
+# ---------------------------------------------------------------------------
+# 2026-09-03 -- l'avvertimento qui sopra si e' avverato: per settimane GitHub
+# ha applicato una versione VECCHIA di questo file. Tutto cio' che e' stato
+# aggiunto dal 2026-07-31 in poi non ha avuto alcun effetto, mentre le chiavi
+# preesistenti (schedule, open-pull-requests-limit, labels) erano rispettate
+# alla lettera. Tre prove indipendenti, dalla run del 2026-08-31:
+#
+#   1. `ignore` (aggiunto il 2026-08-19) -- Dependabot ha comunque aperto
+#      @types/node 24 -> 26 (#215) e eslint 9 -> 10 (#218), cioe' esattamente
+#      le due major dichiarate qui sotto come da ignorare.
+#   2. `cooldown` (aggiunto il 2026-07-31) -- mai applicato una volta: zod
+#      4.5.1 proposta a 3 giorni dalla pubblicazione (minimo 7), zod 4.5.4 a
+#      3 giorni, grammy 1.46.0 a 5 giorni, @types/node 26.4.0 a 4 giorni
+#      (minimo 14 per una major), eslint 10.9.1 a 7 giorni (minimo 14).
+#   3. La voce `/api-worker` (aggiunta il 2026-08-20) non ha mai prodotto una
+#      sola PR, pur avendo `zod ^4.4.3` e `tsx ^4.23.1` identici a quelli che
+#      nelle stesse run hanno generato PR per /web, /tests/js e la root.
+#
+# L'unico errore di configurazione che GitHub ci ha effettivamente riportato
+# -- commentato da Dependabot su ogni PR, incluse #215 e #218 -- e' questo:
+#
+#     The following labels could not be found: `frontend`. Please create it
+#     before Dependabot can add it to a pull request.
+#     Please fix the above issues or remove invalid values from `dependabot.yml`.
+#
+# Le label `frontend`, `tests`, `ci` e `docker` non esistono in questo repo:
+# sono state sostituite con label esistenti (`web`, `agents`, `container`,
+# `security`). E' l'unico difetto confermato dalla piattaforma, e va via prima
+# di poter dare la colpa a qualsiasi altra chiave.
+#
+# Se DOPO questa correzione le chiavi nuove continuano a non avere effetto, il
+# sospetto successivo e' `cooldown`: e' la prima cosa che ha smesso di fare
+# effetto (2026-07-31) e coincide esattamente con l'inizio della finestra.
+# `cooldown` e' documentato e valido, percio' qui resta invariato -- e' una
+# misura di supply chain deliberata, non si smonta per un sospetto. Per
+# bisecarlo, rimuoverlo da UNA sola voce e vedere se quella voce riprende.
+#
+# Da verificare a mano nella UI (nessuna API pubblica espone lo stato di
+# validazione di `dependabot.yml`): Insights > Dependency graph > Dependabot,
+# che mostra per ogni voce l'ultimo controllo e gli errori di configurazione.
+# ---------------------------------------------------------------------------
+
 updates:
   # Dipendenze web (Next.js, React, TypeScript)
   - package-ecosystem: "npm"
@@ -31,6 +73,12 @@ updates:
     # Il runtime e i workflow sono su Node 24: i tipi Node avanzano solo
     # insieme al runtime. ESLint 10 resta bloccato finché eslint-plugin-react
     # (caricato da eslint-config-next) non ne supporta la nuova RuleContext API.
+    #
+    # Attenzione: la condizione salvata lato GitHub per @types/node (visibile
+    # nel corpo delle PR come `[>= 25.a, < 26]`) copre solo la major 25 --
+    # viene da un vecchio `@dependabot ignore this major version` e per questo
+    # la 26 le e' passata sotto. La regola qui sotto copre invece TUTTE le
+    # major, quindi non serve ripeterla a mano su ogni release.
     ignore:
       - dependency-name: "@types/node"
         update-types:
@@ -40,9 +88,11 @@ updates:
           - "version-update:semver-major"
     labels:
       - "dependencies"
-      - "frontend"
+      - "web"
 
   # Dipendenze test (vitest)
+  # La label `tests` non esiste nel repo: qui resta solo `dependencies`,
+  # la directory nel titolo della PR dice gia' che si tratta di /tests/js.
   - package-ecosystem: "npm"
     directory: "/tests/js"
     cooldown:
@@ -56,11 +106,15 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
-      - "tests"
 
   # Worker API Scout — prototipo fuori dal runtime di produzione, ma con
   # package-lock proprio: senza questa voce le sue dipendenze (e i loro
   # avvisi di sicurezza) non verrebbero aggiornate da nessuno.
+  #
+  # Questa voce non ha mai prodotto una PR da quando e' stata aggiunta
+  # (2026-08-20): e' la prova 3 dell'analisi in testa al file. Se dopo la
+  # correzione delle label continua a non produrne, la configurazione non e'
+  # ancora stata riletta.
   - package-ecosystem: "npm"
     directory: "/api-worker"
     cooldown:
@@ -74,6 +128,7 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
+      - "agents"
 
   # Dipendenze root
   - package-ecosystem: "npm"
@@ -90,6 +145,7 @@ updates:
       - "dependencies"
 
   # GitHub Actions
+  # La label `ci` non esiste nel repo.
   - package-ecosystem: "github-actions"
     directory: "/"
     cooldown:
@@ -103,10 +159,10 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "ci"
 
   # Docker base image (pinned by SHA in Dockerfile).
   # Dependabot bumps the digest when upstream pushes a new tag.
+  # La label `docker` non esiste nel repo, sostituita da `container`.
   - package-ecosystem: "docker"
     directory: "/"
     cooldown:
@@ -120,5 +176,5 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
-      - "docker"
+      - "container"
       - "security"
