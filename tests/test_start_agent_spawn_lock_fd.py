@@ -90,8 +90,9 @@ def test_the_session_lock_is_still_taken_on_fd_9():
     """Se il lock cambiasse fd o sparisse, il resto della suite sarebbe vuoto.
 
     L'attesa e' un'env var con default (`JHT_SPAWN_LOCK_WAIT_SEC`): qui conta
-    che il lock sia sul fd 9 e subito dopo l'`exec`, non quanti secondi
-    vale."""
+    che il lock sia sul fd 9 e subito dopo l'`exec`, non quanti secondi vale
+    (per il valore e la sua coerenza col budget del chiamante vedi
+    tests/test_start_agent_spawn_budgets_and_liveness.py)."""
     assert (
         _line_of('flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9', after=SESSION_LOCK_LINE)
         == SESSION_LOCK_LINE + 1
