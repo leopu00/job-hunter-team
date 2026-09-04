@@ -25,14 +25,40 @@ ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / ".launcher"
 PID1 = ROOT / "cli" / "src" / "commands" / "pid1.js"
 
-# (script bash, label di spawnLabeled in pid1.js). Sono TUTTI i daemon bash
-# figli di pid1: l'invariante vale per la famiglia, non per un caso singolo.
-PID1_BASH_DAEMONS = (
-    ("agent-watchdog.sh", "watchdog"),
-    ("pager-unstick-watchdog.sh", "pager-unstick"),
-    ("doctor-watchdog.sh", "doctor-watchdog"),
-    ("auto-report-loop.sh", "auto-report"),
-)
+def _pid1_bash_daemons() -> tuple[tuple[str, str], ...]:
+    """(script bash, label) di TUTTI i daemon bash figli di pid1, letti da pid1.js.
+
+    Derivata invece che scritta a mano di proposito. Una tupla letterale ha due
+    modi di mentire: un daemon aggiunto domani non viene coperto e nessuno se ne
+    accorge, e un daemon rimosso rende rossa la suite per un file che non esiste
+    piu' (accaduto: il revert del pager-unstick-watchdog). Leggendo la fonte di
+    verita' l'invariante segue la famiglia da sola, che e' cio' che il docstring
+    di questo file promette.
+    """
+    source = PID1.read_text(encoding="utf-8")
+    consts = dict(
+        re.findall(r"const\s+(\w+)\s*=\s*'/app/\.launcher/([A-Za-z0-9_.-]+\.sh)'", source)
+    )
+    found = []
+    for label, ident in re.findall(
+        r"spawnLabeled\(\s*'([^']+)'\s*,\s*'/bin/bash'\s*,\s*\[\s*(\w+)\s*\]", source
+    ):
+        script = consts.get(ident)
+        if script and (LAUNCHER / script).is_file():
+            found.append((script, label))
+    return tuple(found)
+
+
+PID1_BASH_DAEMONS = _pid1_bash_daemons()
+
+
+def test_the_daemon_list_is_not_empty():
+    """Anti-vacuita': se la regex smette di matchare, le suite parametrizzate
+    qui sotto passerebbero a zero casi — verdi senza aver verificato niente."""
+    assert len(PID1_BASH_DAEMONS) >= 3, PID1_BASH_DAEMONS
+    scripts = {s for s, _ in PID1_BASH_DAEMONS}
+    for expected in ("agent-watchdog.sh", "doctor-watchdog.sh", "auto-report-loop.sh"):
+        assert expected in scripts, (expected, PID1_BASH_DAEMONS)
 
 
 def _read(path: Path) -> str:
@@ -71,8 +97,8 @@ def test_pid1_still_owns_the_historical_log_path(script: str, label: str):
 
 
 # (script, nome del proprio diario) — i due loop portati sul pattern in questo
-# batch. agent-watchdog.sh e pager-unstick-watchdog.sh non passano da
-# jht_daemon_log e non sono in perimetro qui.
+# batch. agent-watchdog.sh non passa da jht_daemon_log e non e' in perimetro
+# qui.
 OWN_DIARIES = (
     ("doctor-watchdog.sh", "doctor-watchdog-loop.log"),
     ("auto-report-loop.sh", "auto-report-loop.log"),
