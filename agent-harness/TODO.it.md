@@ -8,7 +8,7 @@ Gira su OpenRouter con l'SDK `openai`, quindi è già l'adapter OpenAI-compatibl
 **Aggiornato il 4 set 2026** con il lavoro fatto a mano sul PC di lavoro (là il file si chiama
 `FincoBot/app/fincobot.py`, qui `main.py`: stesso codice, stessa base). Il file è passato da 165 a
 206 righe e **i buchi 5 e 6 sono chiusi**. Il ragionamento riga per riga sta in
-`docs/internal/private/lezioni/fincobot.md`, che non entra nel repo.
+`lezioni/fincobot.md`, che non entra nel repo.
 
 Sotto ci sono solo sintomi e criteri di verifica. Nessuna soluzione: l'implementazione è l'esercizio.
 I numeri di riga si riferiscono a `main.py` **come sta ora**, dopo l'aggiornamento del 4 set.
@@ -65,7 +65,7 @@ costo marginale di quel turno. Il contatore `round` numera i giri.
 
 Scoperta emersa misurando, non leggendo: **il costo di un turno si vede con un giro di ritardo**,
 perché i token di ciò che appendi ora si pagano alla chiamata successiva. Dettagli in
-`docs/internal/private/lezioni/fincobot.md`, sezione *«Il principio del ritardo di un giro»*.
+`lezioni/fincobot.md`, sezione *«Il principio del ritardo di un giro»*.
 
 Resta aperto sopra questo: nessun **budget** che fermi il run quando la spesa supera una soglia
 (si lega al buco 1), e i numeri vanno su `stderr` a mano invece che in una struttura interrogabile.
@@ -103,7 +103,7 @@ lista si rompeva e nessun lettore poteva trattarla in modo uniforme.
 Ora si appende `msg.model_dump(exclude_none=True)`: **la conversione avviene al confine**, appena il
 dato entra in casa, e da lì in poi la history è omogenea. Un solo lettore la stampa tutta.
 
-Vedi `docs/internal/private/lezioni/fincobot.md`, sezioni *«La history è una lista mista»* e
+Vedi `lezioni/fincobot.md`, sezioni *«La history è una lista mista»* e
 *«Stampa: non scrivere un lettore per ogni forma»*.
 
 ---
@@ -119,7 +119,7 @@ In ordine, come li ha lasciati la sessione con l'istruttore:
 3. **Buco 2 — registry.** Da fare dopo il 3, altrimenti riscrivi due volte la gestione errori.
 
 Regola della sessione, da mantenere: **il codice lo scrive Leone a mano.** Gli appunti in
-`docs/internal/private/` contengono il ragionamento, non le soluzioni.
+`lezioni/` contengono il ragionamento, non le soluzioni.
 
 ---
 

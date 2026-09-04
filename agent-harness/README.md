@@ -46,7 +46,7 @@ Next up is the step cap.
 ## The notes
 
 The line-by-line reasoning, the field measurements and the dead ends live in
-`docs/internal/private/lezioni/fincobot.md`, outside the repo (`docs/internal/private/` is ignored).
+`lezioni/fincobot.md`, outside the repo (`lezioni/` is listed in `.git/info/exclude`).
 That file holds the *why*; this folder holds the *what*.
 
 ## Scope

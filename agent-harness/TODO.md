@@ -9,7 +9,7 @@ of the multi-provider adapter.
 **Updated 4 Sep 2026** with the work done by hand on the work machine (there the file is called
 `FincoBot/app/fincobot.py`, here `app/main.py`: same code, same base). The file went from 165 to 206
 lines and **gaps 5, 6 and 9 are closed**. The line-by-line reasoning lives in
-`docs/internal/private/lezioni/fincobot.md`, which stays out of the repo.
+`lezioni/fincobot.md`, which stays out of the repo.
 
 What follows is symptoms and verification criteria only. No solutions: writing them is the exercise.
 Line numbers refer to `app/main.py` **as it stands now**, after the 4 Sep update.
@@ -66,7 +66,7 @@ which is that turn's marginal cost. A `round` counter numbers the iterations.
 
 Found by measuring rather than reading: **a turn's cost shows up one round late**, because the tokens
 of what you append now are paid on the following call. Details in
-`docs/internal/private/lezioni/fincobot.md`, section *«Il principio del ritardo di un giro»*.
+`lezioni/fincobot.md`, section *«Il principio del ritardo di un giro»*.
 
 Still open on top of this: no **budget** that stops the run when spend crosses a threshold (ties into
 gap 1), and the numbers go to `stderr` by hand instead of into a queryable structure.
@@ -104,7 +104,7 @@ It now appends `msg.model_dump(exclude_none=True)`: **the conversion happens at 
 moment the data enters the house, and from there on the history is homogeneous. One reader prints
 all of it.
 
-See `docs/internal/private/lezioni/fincobot.md`, sections *«La history è una lista mista»* and
+See `lezioni/fincobot.md`, sections *«La history è una lista mista»* and
 *«Stampa: non scrivere un lettore per ogni forma»*.
 
 ---
@@ -120,7 +120,7 @@ In order, as the tutoring session left them:
 3. **Gap 2 — registry.** After 3, otherwise you write the error handling twice.
 
 Session rule, to be kept: **Leone writes the code by hand.** The notes under
-`docs/internal/private/` hold the reasoning, not the solutions.
+`lezioni/` hold the reasoning, not the solutions.
 
 ---
 

@@ -46,8 +46,7 @@ lo step cap.
 ## Gli appunti
 
 Il ragionamento riga per riga, le misure sul campo e i vicoli ciechi stanno in
-`docs/internal/private/lezioni/fincobot.md`, che è fuori dal repo (`docs/internal/private/` è
-ignorata). Lì c'è il *perché*; qui c'è il *cosa*.
+`lezioni/fincobot.md`, che è fuori dal repo (`lezioni/` sta in `.git/info/exclude`). Lì c'è il *perché*; qui c'è il *cosa*.
 
 ## Perimetro
 
