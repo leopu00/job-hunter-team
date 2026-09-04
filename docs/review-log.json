@@ -1644,6 +1644,71 @@
       "path": "docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md",
       "description": "Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione",
       "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/internal/ops/2026-09-01-spawn-fixes-container-test-plan.md",
+      "description": "Verifica su team vivo del batch di fix allo spawn: 10 test con procedura, criterio di passaggio ed esito da compilare; distingue i bloccanti, quelli a guasto indotto e quelli che solo la VPS o solo Windows possono riprodurre",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-1-wsl-twin-branch.md",
+      "description": "Il gemello WSL della new-session e' dentro la regione del flock ma irraggiungibile su ogni percorso supportato: rischio teorico. Censisce le 13 chiamate tmux illimitate dopo la presa del lock",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-2-timeout-portability.md",
+      "description": "timeout e' GNU coreutils e manca su host macOS, dove la sua assenza era fatale invece che degradante; censimento degli 11 precedenti in .launcher/ che degradano, e il percorso host vivo che lo raggiunge",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-3-timeout-value.md",
+      "description": "Perche' 20s cadeva nella fascia raggiungibile di un host saturo e 45s no, il vincolo di coerenza col flock -w, e il fd 9 ereditato dai tre figli detached del ramo agente",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-4-error-message.md",
+      "description": "La diagnostica che mente: tabella dei return code, perche' dentro un if ! il $? e' la negazione logica, e perche' il cleanup incondizionato uccideva la sessione di un agente vivo",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-5-orphan-session-race.md",
+      "description": "Sessione guscio dopo il timeout: copertura del watchdog ruolo per ruolo, e i worker numerati e i CRITICO effimeri che nessuna sonda di liveness guarda",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-6-escalation-agente-non-avviabile.md",
+      "description": "Non esiste in nessun file un contatore dei FALLIMENTI di spawn: perche' 2.677 fallimenti non hanno prodotto alcun allarme, e il progetto dei due gradini di escalation",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/214-7-osservabilita-spawn.md",
+      "description": "Inventario dei log dello spawn e ipotesi ordinate sulla causa profonda (H1: il server tmux eredita il fd 9 del flock), con i comandi diagnostici in sola lettura per la produzione",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-1-finestra-rilevazione.md",
+      "description": "capture-pane -S -3 senza -E non restringe la finestra ma la allarga a ~53 righe: capture-pane -p nudo sarebbe piu' stretto, e i due grep indipendenti rendono la firma piu' larga di quanto dichiarato",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-2-nessun-freno-e-costo.md",
+      "description": "Nessun cooldown e cecita' ai tre flag di halt/standby: stima del burn e il precedente [HEALER-BLIND-TO-GATES-AND-ROLES] gia' pagato in codex-auth-healer.sh",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md",
+      "description": "Un daemon gestito da pid1 fuori dal registro di process_health.py muore invisibile a ogni canary: la checklist del precedente throttle-engine, file per file",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md",
+      "description": "Diario scritto con >> invece di tee -a: l'unico del container che nessuno ruota e che docker logs non vede; il mkdir mancante invece non e' un difetto sul percorso reale",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md",
+      "description": "Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione",
+      "last_review": null
     }
   ]
 }
