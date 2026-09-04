@@ -10,7 +10,7 @@ Job Hunter Team's real orchestration stays the tmux/CLI one — this grows next 
 
 The starting file is `app/main.py`, born as my solution to the CodeCrafters challenge
 *Build your own Claude Code* and grown from there. The same file also lives on my work machine
-inside another project, where it is called `FincoBot/app/fincobot.py`: **same code base, two
+inside another project, under a different name: **same code base, two
 destinations**, so the exercise continues from either machine.
 
 It drives the `openai` SDK against an OpenAI-compatible endpoint, which is already the shape of the
@@ -46,7 +46,7 @@ Next up is the step cap.
 ## The notes
 
 The line-by-line reasoning, the field measurements and the dead ends live in
-`lezioni/fincobot.md`, outside the repo (`lezioni/` is listed in `.git/info/exclude`).
+`lezioni/agent-harness.md`, outside the repo (`lezioni/` is listed in `.git/info/exclude`).
 That file holds the *why*; this folder holds the *what*.
 
 ## Scope

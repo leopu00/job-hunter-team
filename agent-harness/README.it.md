@@ -10,7 +10,7 @@ l'orchestrazione vera di Job Hunter Team resta quella tmux/CLI, questo nasce acc
 
 Il file di partenza è `app/main.py`, nato come soluzione del corso CodeCrafters
 *Build your own Claude Code* e da lì cresciuto. Lo stesso file vive anche sul PC di lavoro dentro un
-altro progetto, dove si chiama `FincoBot/app/fincobot.py`: **stessa base di codice, due
+altro progetto, con un altro nome: **stessa base di codice, due
 destinazioni**, così l'esercizio prosegue da qualunque macchina.
 
 Usa l'SDK `openai` contro un endpoint OpenAI-compatible, che è già la forma dell'adapter
@@ -46,7 +46,7 @@ lo step cap.
 ## Gli appunti
 
 Il ragionamento riga per riga, le misure sul campo e i vicoli ciechi stanno in
-`lezioni/fincobot.md`, che è fuori dal repo (`lezioni/` sta in `.git/info/exclude`). Lì c'è il *perché*; qui c'è il *cosa*.
+`lezioni/agent-harness.md`, che è fuori dal repo (`lezioni/` sta in `.git/info/exclude`). Lì c'è il *perché*; qui c'è il *cosa*.
 
 ## Perimetro
 
