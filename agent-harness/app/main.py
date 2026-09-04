@@ -168,7 +168,7 @@ def main():
 
                     with open(file_path, "w", encoding="utf-8") as f:
                         f.write(content)
-                        result = f"File scritto con successo: {file_path}"
+                        result = f"Successfully wrote to {file_path}"
                                            
 
                     messages.append({"role": "tool", "content": result, "tool_call_id": tool_call_id })

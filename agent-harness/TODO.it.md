@@ -1,5 +1,7 @@
 # Agent loop — cosa manca
 
+*English version: [`TODO.md`](TODO.md).*
+
 Baseline di partenza: `main.py`, copiato da `codecrafters-claude-code-python/app/main.py`.
 Gira su OpenRouter con l'SDK `openai`, quindi è già l'adapter OpenAI-compatible del design.
 
