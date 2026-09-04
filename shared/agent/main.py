@@ -80,25 +80,62 @@ def main():
 
     finished = False
 
+    round = 0
+    total_input_tokens = 0
+    total_output_tokens = 0
+    read_messages = 0
+    previous_prompt_tokens = 0
 
     while not finished:
+        
+        round += 1
+        print(f"Round n. {round}", file=sys.stderr)
+        
 
         response = client.chat.completions.create(
             model=MODEL,
             messages=messages,
             tools= TOOLS
-        )
+            )
 
         if not response.choices or len(response.choices) == 0:
             raise RuntimeError("no choices in response")
-
-
+     
+        
         msg = response.choices[0].message
+        
+        print(f"Previous token sum: {previous_prompt_tokens}", file=sys.stderr)
+        
+        input_tokens = response.usage.prompt_tokens
+        
+        for m in messages[read_messages:]:
+            print(json.dumps(m, indent=2, ensure_ascii=False), file=sys.stderr)
+        
+        print(f"Input token cost: {input_tokens - previous_prompt_tokens}", file=sys.stderr)
+        
+        previous_prompt_tokens = input_tokens 
+        
+        read_messages = len(messages)
+                        
+        total_input_tokens += input_tokens
+        
+        output_tokens = response.usage.completion_tokens
+        total_output_tokens += output_tokens
+        
+        print(f"Appended {len(messages) - 1} previous messages.", file=sys.stderr)
+        print(f"Round n.{round} Input Tokens: {input_tokens} | Total input tokens: {total_input_tokens}", file=sys.stderr)
 
-        # print(msg, file=sys.stderr)
 
-        messages.append(msg)
+        messages.append(msg.model_dump(exclude_none=True))
+        
+        for m in messages[read_messages:]:
+            print(json.dumps(m, indent=2, ensure_ascii=False), file=sys.stderr)
 
+        print(f"Round n.{round} Output Tokens: {output_tokens} | Total output tokens: {total_output_tokens}", file=sys.stderr)
+        print("___________________________________", file=sys.stderr)
+                    
+        read_messages = len(messages)
+        
         tool_calls = msg.tool_calls
 
         if tool_calls:
@@ -127,10 +164,12 @@ def main():
 
                     file_path = parameters["file_path"]
 
-                    result = parameters["content"]
+                    content = parameters["content"]
 
                     with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(result)
+                        f.write(content)
+                        result = f"File scritto con successo: {file_path}"
+                                           
 
                     messages.append({"role": "tool", "content": result, "tool_call_id": tool_call_id })
 
@@ -159,6 +198,8 @@ def main():
         else:
             print(msg.content)
             finished = True
+        
+        
 
 
 if __name__ == "__main__":
