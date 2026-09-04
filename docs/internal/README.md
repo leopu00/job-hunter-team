@@ -14,6 +14,7 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 |---|---|
 | [`architecture/`](architecture/) | Spec & design di sistema (living docs + design lock) |
 | [`postmortems/`](postmortems/) | Incidenti, diagnosi, investigazioni e osservazioni datate |
+| [`reviews/`](reviews/) | Analisi a supporto di una review: una nota per rischio, con l'evidenza che l'ha confermato o smentito |
 | [`experiments/`](experiments/) | Simulazioni, studi, playbook, case study |
 | [`roadmap/`](roadmap/) | Piani tecnici, backlog, tracker, idee parcheggiate |
 | [`ops/`](ops/) | Infra, VPS, release, triage, credenziali |
@@ -123,6 +124,31 @@ Note datate su incidenti specifici, diagnosi, investigazioni e osservazioni.
 | 2026-05-21 | [`2026-05-21-vps1-run-postmortem.md`](postmortems/2026-05-21-vps1-run-postmortem.md) | Postmortem consolidato VPS1 run 35h |
 | 2026-05-21 | [`2026-05-21-vps-bootstrap-fixes-validated.md`](postmortems/2026-05-21-vps-bootstrap-fixes-validated.md) | Validazione fix bootstrap VPS |
 
+## 🔍 reviews/
+
+Analisi prodotte per decidere su una review, una nota per rischio. Si leggono
+insieme al `git log` del batch che ne è uscito: ogni nota dice se il rischio era
+reale, con quale evidenza, e cosa è stato fatto.
+
+### 2026-09-01 — PR #214 / #223 (spawn degli agenti, contributor esterno)
+
+Batch di fix allo spawn su `.launcher/`. Verifica su team vivo: [`ops/2026-09-01-spawn-fixes-container-test-plan.md`](ops/2026-09-01-spawn-fixes-container-test-plan.md).
+
+| File | Topic |
+|---|---|
+| [`214-1-wsl-twin-branch.md`](reviews/2026-09-01-lee-launcher-prs/214-1-wsl-twin-branch.md) | Il gemello WSL della `new-session` è dentro la regione del flock ma irraggiungibile: rischio teorico. Trova le 13 chiamate tmux illimitate post-lock |
+| [`214-2-timeout-portability.md`](reviews/2026-09-01-lee-launcher-prs/214-2-timeout-portability.md) | `timeout` è GNU coreutils: assente su host macOS, e in quella forma la sua assenza era fatale. Censimento degli 11 precedenti che degradano |
+| [`214-3-timeout-value.md`](reviews/2026-09-01-lee-launcher-prs/214-3-timeout-value.md) | Perché 20s cadeva nella fascia grigia e 45s no; il vincolo di coerenza col `flock -w`, e il fd 9 ereditato dai figli detached |
+| [`214-4-error-message.md`](reviews/2026-09-01-lee-launcher-prs/214-4-error-message.md) | La diagnostica che mente: tabella degli rc, e perché il cleanup incondizionato uccideva la sessione di un altro agente |
+| [`214-5-orphan-session-race.md`](reviews/2026-09-01-lee-launcher-prs/214-5-orphan-session-race.md) | Sessione guscio dopo il timeout: copertura del watchdog per ruolo, e i worker numerati / CRITICO effimeri che nessuna sonda guarda |
+| [`214-6-escalation-agente-non-avviabile.md`](reviews/2026-09-01-lee-launcher-prs/214-6-escalation-agente-non-avviabile.md) | Non esiste un contatore dei FALLIMENTI di spawn: perché 2.677 fallimenti non hanno prodotto nessun allarme, e il progetto dei due gradini |
+| [`214-7-osservabilita-spawn.md`](reviews/2026-09-01-lee-launcher-prs/214-7-osservabilita-spawn.md) | Inventario dei log dello spawn e ipotesi sulla causa profonda (H1: il server tmux eredita il fd 9), con i comandi diagnostici in sola lettura |
+| [`223-1-finestra-rilevazione.md`](reviews/2026-09-01-lee-launcher-prs/223-1-finestra-rilevazione.md) | `capture-pane -S -3` non restringe la finestra, la allarga a ~53 righe: `capture-pane -p` nudo sarebbe più stretto |
+| [`223-2-nessun-freno-e-costo.md`](reviews/2026-09-01-lee-launcher-prs/223-2-nessun-freno-e-costo.md) | Nessun cooldown e cecità ai tre flag di halt/standby: stima del burn e il precedente `[HEALER-BLIND-TO-GATES-AND-ROLES]` già pagato |
+| [`223-3-registrazione-process-health.md`](reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md) | Un daemon di pid1 fuori dal registro di `process_health.py` muore invisibile: la checklist del precedente `throttle-engine` |
+| [`223-4-igiene-log.md`](reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md) | `>>` invece di `tee -a`: l'unico diario del container che nessuno ruota e che `docker logs` non vede |
+| [`223-5-targeting-e-robustezza.md`](reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare `q` a quelle di servizio; il prefix-match come difetto reale, non stilistico |
+
 ## 🔬 experiments/
 
 Simulazioni, studi comparativi, playbook e case study.
@@ -188,6 +214,7 @@ Infra, deploy, lifecycle, accessi.
 | [`download-funnel.md`](ops/download-funnel.md) | Report aggregato dei click download: query 72 ore, accesso service-role e limiti anonimi fail-closed |
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
+| [`2026-09-01-spawn-fixes-container-test-plan.md`](ops/2026-09-01-spawn-fixes-container-test-plan.md) | Verifica su team vivo del batch di fix allo spawn: 10 test con procedura ed esito, cosa provocare a mano, cosa solo sulla VPS |
 
 ## 🧪 prototypes/
 

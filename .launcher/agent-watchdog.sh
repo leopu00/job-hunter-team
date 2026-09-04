@@ -39,7 +39,10 @@
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
-# Failure mode: log + retry al prossimo tick, non fail-fast.
+# Failure mode: retry al prossimo tick, non fail-fast — MA il fallimento viene
+# anche MISURATO (agent-spawn-failures.tsv) ed escalato in due gradini, vedi il
+# blocco "Fallimenti di spawn" sotto. Fino al 2026-09-03 era solo una riga di
+# log, e un agente che non partiva restava invisibile per giorni.
 #
 # Trigger gate: parte se active_provider è settato in jht.config.json E
 # le credenziali del provider sono presenti. Telegram NON è più richiesto:
@@ -82,9 +85,58 @@ PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_healt
 RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
 NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
 TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
+# Canale verso l'UTENTE: CLI Python deterministico (scrive in
+# pending_user_messages, poi tenta Telegram e ricade sulla dashboard). Zero
+# token: il gradino 2 dell'escalation non deve costare un turno LLM, perche'
+# il caso peggiore e' proprio quello in cui gli agenti non partono.
+# Iniettabile come le altre tre dipendenze: i test non chiamano il binario vero.
+NOTIFY_USER_BIN="${JHT_NOTIFY_USER_BIN:-jht-notify-user}"
 # TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
 # misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
 INTENTIONAL_RECREATE_SESSION=""
+
+# ── Fallimenti di spawn: la misura che mancava ──────────────────────────
+# Il watchdog misurava i propri SUCCESSI (RECOVERY_LOG) e restava cieco sui
+# propri FALLIMENTI: il ramo `start FAILED` era una riga di log e nient'altro,
+# che nessun consumatore legge. Su una VPS di produzione un agente core non e'
+# riuscito a partire per 2.677 tentativi consecutivi senza che scattasse alcun
+# allarme — non perche' la soglia fosse alta, ma perche' non esisteva nessun
+# contatore da superare. Nessuno degli altri anelli lo vedeva: process_health.py
+# non ha sessioni agente in EXPECTED, il Dottore inventaria le sessioni che
+# ESISTONO, il Mantenitore ha il divieto esplicito di toccare le sessioni
+# agente, e nessuno script del launcher aveva mai parlato all'utente.
+#
+# Registro SEPARATO da RECOVERY_LOG di proposito: recovery_today_count() conta
+# le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
+# nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
+SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
+# Stato per-sessione: serie corrente + marcatori di escalation (che fanno anche
+# da cooldown). Directory iniettabile per poter esercitare l'anti-spam nei test.
+SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
+# Presa in carico dal CAPITANO: DUE condizioni necessarie — conteggio E tempo
+# trascorso dal primo fallimento della serie, sul modello di
+# CONFIG_NOT_READY_GRACE_TICKS. Il solo conteggio suonerebbe su un cold start
+# lento (`jht team start` concede da solo 90s per tentativo); il solo tempo
+# suonerebbe su un flap benigno. Al tick di default (30s) e col backoff sotto,
+# l'aritmetica e': gradino 1 dopo ~5 min, gradino 2 dopo ~20 min — e il vincolo
+# che lega e' il TEMPO, i conteggi proteggono un INTERVAL_SEC molto largo.
+SPAWN_FAIL_ESCALATE_AFTER="${JHT_SPAWN_FAIL_ESCALATE_AFTER:-5}"
+SPAWN_FAIL_ESCALATE_MIN_SEC="${JHT_SPAWN_FAIL_ESCALATE_MIN_SEC:-300}"
+# Allarme all'UTENTE: stessa doppia condizione, seconda soglia. ~20 min
+# ininterrotti al tick di default.
+SPAWN_FAIL_ALERT_AFTER="${JHT_SPAWN_FAIL_ALERT_AFTER:-8}"
+SPAWN_FAIL_ALERT_MIN_SEC="${JHT_SPAWN_FAIL_ALERT_MIN_SEC:-1200}"
+# Anti-spam PER SESSIONE (non globale): un allarme non deve zittirne un altro.
+SPAWN_FAIL_COOLDOWN_SEC="${JHT_SPAWN_FAIL_COOLDOWN_SEC:-3600}"
+SPAWN_FAIL_ALERT_COOLDOWN_SEC="${JHT_SPAWN_FAIL_ALERT_COOLDOWN_SEC:-21600}"
+# Oltre il gradino 1 si tenta UNA volta ogni N tick invece di una per tick.
+# NON e' un cap: vedi spawn_backoff_active — il respawn non si ferma mai.
+SPAWN_FAIL_BACKOFF_TICKS="${JHT_SPAWN_FAIL_BACKOFF_TICKS:-10}"
+# Una serie e' CONSECUTIVA: se dall'ultimo fallimento e' passato piu' di questo,
+# la sessione e' tornata su per una strada che questo watchdog non vede (Dottore,
+# Capitano, riavvio del container) e il conteggio riparte da 1. Senza questa
+# scadenza fallimenti separati da giorni si sommerebbero fino a suonare a vuoto.
+SPAWN_FAIL_STREAK_TTL_SEC="${JHT_SPAWN_FAIL_STREAK_TTL_SEC:-1800}"
 
 # ── Bridge suite supervision (2026-06-27) ──────────────────────────────
 # I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
@@ -210,6 +262,30 @@ record_recovery() {
   echo "$count"
 }
 
+escalate_key() {
+  # Chiave usabile come nome di file. bridge_escalate riceve testo libero
+  # (nomi di processi morti, ruoli), quindi la sanificazione non e' teorica.
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-64
+}
+
+escalate_once() {
+  # 0 (e aggiorna il timestamp) se il cooldown di QUESTA chiave e' scaduto.
+  # Il cooldown vive in un file PER CHIAVE: prima bridge_escalate ne usava uno
+  # solo per qualunque allarme, quindi un'escalation sui bridge zittiva per
+  # un'ora quella sui process pid1-managed e viceversa. Un allarme che ne
+  # sopprime un altro e' peggio di nessun cooldown.
+  local f="$1" cooldown="$2" now last
+  now="$(date -u +%s)"
+  if [ -f "$f" ]; then
+    last="$(cat "$f" 2>/dev/null || echo 0)"
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    [ $((now - last)) -lt "$cooldown" ] && return 1
+  fi
+  mkdir -p "$(dirname "$f")" 2>/dev/null || true
+  echo "$now" > "$f" 2>/dev/null || true
+  return 0
+}
+
 notify_captain_recovery() {
   # "morto" sarebbe una causa inventata: tmux ci dice solo che la sessione
   # era inattiva. Diciamo il fatto osservato, registriamo il recupero riuscito
@@ -228,29 +304,244 @@ notify_captain_recovery() {
   return "$rc"
 }
 
+spawn_streak_state() {
+  # "count first_ts last_ts" della serie corrente, "0 0 0" se non c'e'.
+  local f line
+  f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$1")"
+  [ -f "$f" ] || { echo "0 0 0"; return 0; }
+  line="$(tr -d '\r' < "$f" 2>/dev/null | head -1)"
+  case "$line" in
+    [0-9]*' '[0-9]*' '[0-9]*) echo "$line" ;;
+    *) echo "0 0 0" ;;
+  esac
+}
+
+spawn_log_offset() {
+  # Byte del LOG PRIMA del tentativo: il "detail" di un fallimento e' l'ultima
+  # riga che lo spawner scrive dopo questo punto. Si legge dal log invece di
+  # catturare l'output in una variabile perche' la cattura serializza: su uno
+  # spawner APPESO — il guasto di produzione — perderemmo anche l'output
+  # parziale, che in quel caso e' l'unica traccia che resta.
+  [ -f "$LOG" ] || { echo 0; return 0; }
+  wc -c < "$LOG" 2>/dev/null | tr -d ' \t' || echo 0
+}
+
+spawn_detail_since() {
+  # Ultima riga non vuota aggiunta al LOG dopo l'offset, normalizzata: il
+  # registro e' un TSV e il testo finisce anche in un messaggio.
+  local offset="$1"
+  case "$offset" in ''|*[!0-9]*) offset=0 ;; esac
+  [ -f "$LOG" ] || return 0
+  tail -c "+$((offset + 1))" "$LOG" 2>/dev/null \
+    | grep -v '^[[:space:]]*$' | tail -1 | tr '\t\r' '  ' | cut -c1-200
+}
+
+record_spawn_failure() {
+  # Gemella di record_recovery, sul ramo che finora era muto. Stampa la serie
+  # di fallimenti CONSECUTIVI solo DOPO aver scritto: se la scrittura fallisce
+  # non mandiamo a nessuno un numero inventato — log loud, nessuna misura
+  # dichiarata completa.
+  local session="$1" detail="$2" now ts count first last f
+  now="$(date -u +%s)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
+  mkdir -p "$SPAWN_STATE_DIR" "$(dirname "$SPAWN_FAILURE_LOG")" 2>/dev/null || {
+    log "spawn-failure: $session did not start, but cannot create the durable register $SPAWN_FAILURE_LOG"
+    return 1
+  }
+  printf '%s\t%s\t%s\n' "$ts" "$session" "$detail" >> "$SPAWN_FAILURE_LOG" || {
+    log "spawn-failure: $session did not start, but cannot record the durable event in $SPAWN_FAILURE_LOG"
+    return 1
+  }
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  if [ "$count" -gt 0 ] && [ $((now - last)) -gt "$SPAWN_FAIL_STREAK_TTL_SEC" ]; then
+    count=0; first=0
+  fi
+  count=$((count + 1))
+  [ "$first" -le 0 ] && first="$now"
+  { printf '%s %s %s\n' "$count" "$first" "$now" > "$f.tmp" 2>/dev/null \
+      && mv "$f.tmp" "$f" 2>/dev/null; } || {
+    log "spawn-failure: $session recorded in $SPAWN_FAILURE_LOG, but the consecutive-streak state is not writable in $SPAWN_STATE_DIR"
+    return 1
+  }
+  echo "$count"
+}
+
+spawn_failure_breadth() {
+  # Quante sessioni sono in serie di fallimenti ADESSO. Distingue "un agente
+  # non parte" da "il team non parte" (provider giu', disco pieno) DENTRO un
+  # messaggio, senza sopprimerne nessuno: sopprimere perderebbe il nome della
+  # sessione, che e' l'unica informazione azionabile che il messaggio porta.
+  # Solo le serie ANCORA aperte: una sessione tornata su per una strada che
+  # questo watchdog non vede lascia il suo file indietro, e contarla gonfierebbe
+  # il numero. Stessa scadenza usata da record_spawn_failure.
+  local f n=0 count last now
+  now="$(date -u +%s)"
+  for f in "$SPAWN_STATE_DIR"/spawn-streak-*; do
+    [ -f "$f" ] || continue
+    # Il `.tmp` della scrittura atomica ha lo stesso prefisso: contarlo
+    # raddoppierebbe la sessione a cui appartiene, e un numero gonfiato in un
+    # messaggio e' un'affermazione non osservata come le altre.
+    case "$f" in *.tmp) continue ;; esac
+    count="$(cut -d' ' -f1 < "$f" 2>/dev/null)"
+    last="$(cut -d' ' -f3 < "$f" 2>/dev/null)"
+    case "$count" in ''|*[!0-9]*) continue ;; esac
+    case "$last" in ''|*[!0-9]*) continue ;; esac
+    [ "$count" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] \
+      && [ $((now - last)) -le "$SPAWN_FAIL_STREAK_TTL_SEC" ] && n=$((n + 1))
+  done
+  echo "$n"
+}
+
+spawn_failure_escalate() {
+  # Presa in carico, non un freno: il respawn continua. Il Dottore resta
+  # deliberatamente fuori dal percorso automatico — costa un turno LLM ricco e
+  # i suoi strumenti lavorano su capture-pane di sessioni ESISTENTI, e qui la
+  # sessione non nasce. Resta raggiungibile su decisione del Capitano (C-08).
+  local session="$1" detail="$2" streak="$3" now count first last elapsed rc \
+        key breadth pace message
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  now="$(date -u +%s)"
+  elapsed=$((now - first))
+  [ "$first" -le 0 ] && elapsed=0
+  key="$(escalate_key "$session")"
+  pace="$((SPAWN_FAIL_BACKOFF_TICKS * INTERVAL_SEC))"
+
+  if [ "$streak" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] && [ "$elapsed" -ge "$SPAWN_FAIL_ESCALATE_MIN_SEC" ] \
+     && escalate_once "$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts" "$SPAWN_FAIL_COOLDOWN_SEC"; then
+    breadth="$(spawn_failure_breadth)"
+    # Disciplina dei messaggi: il watchdog ha osservato dei TENTATIVI DI AVVIO
+    # FALLITI. Non ha osservato perche' falliscono, e non lo dichiara.
+    message="[WATCHDOG] $session cannot be started: $streak consecutive start attempts failed over the last $((elapsed / 60)) min. The watchdog KEEPS RETRYING and never gives up — from now roughly once every $((pace / 60)) min instead of every ${INTERVAL_SEC}s, so do NOT relaunch it by hand before reading the evidence. Last line the spawner wrote: ${detail:-none captured}. Sessions in a failed-start streak right now: $breadth. Durable register: $SPAWN_FAILURE_LOG · full output: $LOG. The watchdog observed failed start attempts, not the reason they fail."
+    if "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1; then
+      log "spawn-failure: $session at streak $streak (${elapsed}s) — escalated to CAPITANO"
+    else
+      rc=$?
+      log "spawn-failure: $session at streak $streak (${elapsed}s), but the CAPITANO escalation failed (rc=$rc); durable register remains in $SPAWN_FAILURE_LOG"
+    fi
+  fi
+
+  # Gradino 2 — allarme all'UTENTE. Costa ZERO token: nessuno script di
+  # .launcher/ aveva mai usato questo canale, ed e' il motivo per cui un agente
+  # non avviabile poteva restare invisibile per giorni.
+  if [ "$streak" -ge "$SPAWN_FAIL_ALERT_AFTER" ] && [ "$elapsed" -ge "$SPAWN_FAIL_ALERT_MIN_SEC" ] \
+     && escalate_once "$SPAWN_STATE_DIR/spawn-escalate-$key-user.ts" "$SPAWN_FAIL_ALERT_COOLDOWN_SEC"; then
+    message="[TEAM] The agent session $session is not starting. The watchdog has tried $streak times in a row over the last $((elapsed / 60)) min and keeps retrying on its own — you do not have to do anything to keep it trying, and the rest of the team goes on without that agent. Observed: every start attempt fails, and the last line the spawner wrote was: ${detail:-none captured}. NOT observed: why it fails. Full history: $SPAWN_FAILURE_LOG and $LOG."
+    if "$NOTIFY_USER_BIN" --agent capitano --kind alert "$message" >/dev/null 2>&1; then
+      log "spawn-failure: $session at streak $streak (${elapsed}s) — USER alerted via $NOTIFY_USER_BIN"
+    else
+      rc=$?
+      log "spawn-failure: $session at streak $streak (${elapsed}s), but the USER alert failed (rc=$rc) via $NOTIFY_USER_BIN; durable register remains in $SPAWN_FAILURE_LOG"
+    fi
+  fi
+  return 0
+}
+
+observe_spawn_failure() {
+  # Gemella di notify_captain_recovery sul ramo di fallimento: misura prima,
+  # parla dopo. Unico punto di ingresso per i rami che erano muti.
+  local session="$1" detail="$2" streak
+  streak="$(record_spawn_failure "$session" "$detail")" || return 1
+  spawn_failure_escalate "$session" "$detail" "$streak"
+}
+
+spawn_backoff_active() {
+  # 0 = salta il tentativo in QUESTO tick. NON e' un cap alla bridge_flap_cap:
+  # un agente che non parte e per cui smettiamo di provare e' peggio del
+  # rumore, quindi il respawn non si ferma MAI — cambia solo il passo. Oltre il
+  # gradino 1 un tentativo ogni SPAWN_FAIL_BACKOFF_TICKS tick: meno pressione
+  # su lock, CPU e log, e nessuna reattivita' reale persa (se non parte al
+  # quinto tentativo non parte al sesto).
+  # Deliberatamente MUTO: una riga di log per ogni tick saltato ricreerebbe
+  # esattamente il rumore-senza-segnale che questa misura esiste per sostituire
+  # (2.677 righe identiche e zero allarmi). La misura sta nel registro.
+  local session="$1" count first last now
+  [ "$SPAWN_FAIL_BACKOFF_TICKS" -gt 1 ] || return 1
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  [ "$count" -ge "$SPAWN_FAIL_ESCALATE_AFTER" ] || return 1
+  now="$(date -u +%s)"
+  [ $((now - first)) -ge "$SPAWN_FAIL_ESCALATE_MIN_SEC" ] || return 1
+  [ $((now - last)) -lt $((SPAWN_FAIL_BACKOFF_TICKS * INTERVAL_SEC)) ]
+}
+
+clear_spawn_failures() {
+  # L'allarme si spegne da solo al primo successo, e chi era stato avvisato
+  # viene informato del rientro: un allarme che non si chiude e' un allarme che
+  # si impara a ignorare, e il prossimo vero non verra' letto. Il messaggio di
+  # rientro non e' un extra, e' parte del contratto.
+  # Steady state: tre stat e nessun altro lavoro, nessuna riga di log.
+  local session="$1" key streak marker_captain marker_user count first last minutes
+  key="$(escalate_key "$session")"
+  streak="$SPAWN_STATE_DIR/spawn-streak-$key"
+  marker_captain="$SPAWN_STATE_DIR/spawn-escalate-$key-captain.ts"
+  marker_user="$SPAWN_STATE_DIR/spawn-escalate-$key-user.ts"
+  [ -f "$streak" ] || [ -f "$marker_captain" ] || [ -f "$marker_user" ] || return 0
+  read -r count first last <<EOF
+$(spawn_streak_state "$session")
+EOF
+  minutes=$(( (last - first) / 60 ))
+  [ "$first" -le 0 ] && minutes=0
+  rm -f "$streak" 2>/dev/null || true
+  log "spawn-failure: $session started successfully — consecutive-failure streak reset (was $count)"
+  if [ -f "$marker_captain" ]; then
+    rm -f "$marker_captain" 2>/dev/null || true
+    "$TMUX_SENDER" CAPITANO "[WATCHDOG] Resolved: $session started successfully after $count consecutive failed start attempts spanning ${minutes} min. The failed-start alarm for $session is cleared and the watchdog is back to its normal ${INTERVAL_SEC}s interval. History: $SPAWN_FAILURE_LOG" >/dev/null 2>&1 \
+      || log "spawn-failure: $session recovered, but the CAPITANO resolution notice failed"
+  fi
+  if [ -f "$marker_user" ]; then
+    rm -f "$marker_user" 2>/dev/null || true
+    "$NOTIFY_USER_BIN" --agent capitano --kind notification "[TEAM] $session is running again: it started successfully after $count failed attempts over ${minutes} min. Nothing is pending on your side; the earlier alert about $session is closed." >/dev/null 2>&1 \
+      || log "spawn-failure: $session recovered, but the USER resolution notice failed via $NOTIFY_USER_BIN"
+  fi
+}
+
 ensure_agent() {
   local role="$1"
-  local session
+  local session mark rc detail
   session="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   # Un containment e' sticky e vale anche per i core: il normale `record`
   # di start-agent non puo' revocarlo, soltanto `release` puo' farlo.
+  # Deliberatamente PRIMA di qualsiasi misura: una sessione tenuta giu' non e'
+  # un fallimento di spawn e non deve alimentare nessuna serie.
   if agent_is_contained "$session"; then
     return 0
   fi
   if is_session_alive "$session"; then
+    # La serie deve essere CONSECUTIVA: se la sessione e' tornata su per una
+    # strada che non e' questa (Dottore, Capitano, riavvio), il conteggio va
+    # chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
+    clear_spawn_failures "$session"
+    return 0
+  fi
+  # Backoff, non cap: dopo il gradino 1 si tenta piu' RADI, mai zero volte.
+  if spawn_backoff_active "$session"; then
     return 0
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
+  mark="$(spawn_log_offset)"
   if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+    # PRIMA della sonda: is_session_alive puo' scrivere la sua riga ZOMBIE nel
+    # LOG, e attribuirla allo spawner sarebbe dichiarare una causa non
+    # osservata su un messaggio che va al Capitano e all'utente.
+    detail="$(spawn_detail_since "$mark")"
     # Il comando accetta anche il no-op "gia' attivo" e uno spawner può uscire
     # 0 prima che la TUI sia davvero pronta. Non dichiarare una resurrezione
     # solo perché l'abbiamo chiesta: la stessa sonda deve vedere la sessione
     # viva DOPO lo start.
     if ! is_session_alive "$session"; then
       log "agent $role: start reported OK but session $session is still inactive — recovery not recorded"
+      observe_spawn_failure "$session" \
+        "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "agent $role: start OK and session verified alive"
+    clear_spawn_failures "$session"
     if [ "$INTENTIONAL_RECREATE_SESSION" = "$session" ]; then
       log "agent $role: intentional refresh recreated — not counted as an inactive-session recovery"
       INTENTIONAL_RECREATE_SESSION=""
@@ -258,7 +549,10 @@ ensure_agent() {
       notify_captain_recovery "$session" "inactive at the watchdog check" || true
     fi
   else
-    log "agent $role: start FAILED (rc=$?) — retrying at the next tick"
+    rc=$?
+    detail="$(spawn_detail_since "$mark")"
+    log "agent $role: start FAILED (rc=$rc) — retrying at the next tick"
+    observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
   fi
 }
 
@@ -346,13 +640,20 @@ worker_kickoff() {
 respawn_worker() {
   # start-agent.sh con lo STESSO numero d'istanza (il dado di
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
-  local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}"
+  local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}" mark rc detail
+  mark="$(spawn_log_offset)"
   if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+    # PRIMA della sonda, come in ensure_agent: la riga ZOMBIE di
+    # is_session_alive non e' output dello spawner e non va attribuita a lui.
+    detail="$(spawn_detail_since "$mark")"
     if ! is_session_alive "$session"; then
       log "worker $session: start reported OK but session is still inactive — recovery not recorded"
+      observe_spawn_failure "$session" \
+        "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "worker $session: start OK and session verified alive"
+    clear_spawn_failures "$session"
     worker_kickoff "$session" "$role"
     if [ "$recovery_kind" = "unexpected" ]; then
       notify_captain_recovery "$session" "missing after recent worker activity" || true
@@ -360,9 +661,17 @@ respawn_worker() {
       log "worker $session: intentional refresh recreated — not counted as an inactive-session recovery"
     fi
     return 0
+  else
+    # `recovery_kind` distingue solo i RECUPERI: una ricreazione voluta (TTL)
+    # che NON riesce e' un fallimento di spawn a pieno titolo — la sessione e'
+    # gia' stata uccisa e ora non risale. Escluderla riaprirebbe esattamente il
+    # buco che questa misura chiude.
+    rc=$?
+    detail="$(spawn_detail_since "$mark")"
+    log "worker $session: start FAILED (rc=$rc) — retrying at the next tick"
+    observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
+    return 1
   fi
-  log "worker $session: start FAILED — retrying at the next tick"
-  return 1
 }
 
 maybe_ttl_refresh() {
@@ -427,6 +736,12 @@ maybe_respawn_workers() {
 $plan
 EOF
   [ -z "${session:-}" ] && return 0
+  # Backoff, non cap: come per i core, dopo il gradino 1 si tenta piu' RADI.
+  # Il gate sta QUI e non in respawn_worker perche' il percorso TTL deve poter
+  # ricreare subito una sessione che ha appena ucciso di proposito.
+  if spawn_backoff_active "$session"; then
+    return 0
+  fi
   log "roster: expected session $session is missing (recently active) — respawning via start-agent.sh $role $inst"
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" mark-respawn "$session" >/dev/null 2>&1 || true
   respawn_worker "$role" "$inst" "$session"
@@ -451,14 +766,13 @@ bridge_flap_record() {
 
 bridge_escalate() {
   # avvisa il Capitano UNA volta per finestra di cooldown (no spam), poi tace.
-  local what="$1" now ef last
-  now=$(date -u +%s)
-  ef="$BRIDGE_STATE_DIR/bridge-escalate.ts"
-  if [ -f "$ef" ]; then
-    last=$(cat "$ef" 2>/dev/null || echo 0)
-    [ $((now - last)) -lt "$BRIDGE_ESCALATE_COOLDOWN_SEC" ] && return 0
-  fi
-  echo "$now" > "$ef" 2>/dev/null || true
+  # Il cooldown e' PER CHIAVE: fino al 2026-09-03 c'era un solo
+  # `bridge-escalate.ts` per qualunque `what`, quindi un'escalation sulla suite
+  # bridge zittiva per un'ora quella sui process pid1-managed e viceversa —
+  # cioe' l'allarme piu' grave dei due poteva non arrivare mai.
+  local key="$1" what="$2"
+  escalate_once "$BRIDGE_STATE_DIR/bridge-escalate-$(escalate_key "$key").ts" \
+    "$BRIDGE_ESCALATE_COOLDOWN_SEC" || return 0
   log "bridge-watchdog: FLAP CAP exceeded ($what) — STOPPING respawn and escalating to Capitano"
   jht-tmux-send CAPITANO "[WATCHDOG] $what keeps dying (>${BRIDGE_FLAP_CAP} respawns in $((BRIDGE_FLAP_WINDOW_SEC/60)) min). Automatic respawn has been STOPPED to prevent a crash loop. Manual diagnosis is required: check \$JHT_HOME/logs/*-bridge.log. The Mantenitore will still run a complete canary on the next sweep." >/dev/null 2>&1 || true
 }
@@ -510,7 +824,7 @@ maybe_respawn_bridges() {
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
-      bridge_escalate "suite bridge (morti: $PROC_DEAD_BRIDGE_SUITE)"
+      bridge_escalate bridge "suite bridge (morti: $PROC_DEAD_BRIDGE_SUITE)"
     fi
   fi
 
@@ -535,7 +849,7 @@ maybe_respawn_bridges() {
           || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
         bridge_flap_record "tg-bridge-$_tg_role"
       else
-        bridge_escalate "tg-bridge[$_tg_role]"
+        bridge_escalate "tg-bridge-$_tg_role" "tg-bridge[$_tg_role]"
       fi
     done
   fi
@@ -545,11 +859,11 @@ maybe_respawn_bridges() {
   #     ESCALA (NON tentare il respawn da qui: li orfaneremmo). agent-watchdog
   #     non comparirà mai qui (è il processo che gira questo check).
   if [ -n "$PROC_DEAD_DEEP" ]; then
-    bridge_escalate "process pid1-managed morti: $PROC_DEAD_DEEP"
+    bridge_escalate pid1-child "process pid1-managed morti: $PROC_DEAD_DEEP"
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · agent_ttl=${AGENT_MAX_SESSION_AGE_H}h (no schedule gate, one per tick) · worker_supervision=roster · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min) · spawn_failures=measured (capitano after ${SPAWN_FAIL_ESCALATE_AFTER} consecutive and $((SPAWN_FAIL_ESCALATE_MIN_SEC/60))min, user after ${SPAWN_FAIL_ALERT_AFTER} and $((SPAWN_FAIL_ALERT_MIN_SEC/60))min, respawn never stops: backoff to 1 per ${SPAWN_FAIL_BACKOFF_TICKS} ticks)"
 
 # Queste funzioni stanno deliberatamente dopo il marker di bootstrap qui
 # sopra: i test unitari storici estraggono il prelude fino a quel marker.
@@ -561,10 +875,36 @@ capture_for_containment() {
   evidence="$evidence_dir/${stamp}-${session}-reenforced.txt"
   # La scena viene salvata PRIMA del kill. Se la cattura fallisce non
   # distruggiamo la sola evidenza rimasta: ritentiamo al tick successivo.
-  tmux capture-pane -t "=$session" -p -S - > "$evidence" 2>/dev/null || {
+  #
+  # `capture-pane` vuole un target PANE, e il prefisso `=` esiste solo per i
+  # target SESSIONE/FINESTRA: `capture-pane -t "=NOME"` esce SEMPRE con
+  # "can't find pane". Con lo stderr scartato e il `|| return 1` qui sotto, il
+  # guasto era invisibile e il chiamante concludeva "cattura fallita, NON
+  # uccido" a ogni tick — cioe' il ri-contenimento non e' mai avvenuto.
+  # Osservato in produzione: 24.340 righe "capture failed — NOT killing" e una
+  # sessione viva per 15 giorni contro una decisione esplicita di keep-down.
+  #
+  # L'esattezza voluta da chi ha scritto `=` resta, spostata dove e' valida:
+  # `list-panes` prende un target sessione (quindi `=` funziona) e ci da' il
+  # `pane_id`, che e' univoco per l'intero server tmux e non ammette
+  # risoluzione per prefisso. Se la sessione non esiste, list-panes fallisce e
+  # il percorso di errore e' quello di prima.
+  local pane_id
+  pane_id="$(tmux list-panes -t "=$session" -F '#{pane_id}' 2>/dev/null | head -1)"
+  if [ -z "$pane_id" ]; then
+    rm -f "$evidence" 2>/dev/null || true
+    return 1
+  fi
+  tmux capture-pane -t "$pane_id" -p -S - > "$evidence" 2>/dev/null || {
     rm -f "$evidence" 2>/dev/null || true
     return 1
   }
+  # Una cattura vuota non e' evidenza: meglio ritentare che archiviare un file
+  # da zero byte e dichiarare la scena salvata.
+  if [ ! -s "$evidence" ]; then
+    rm -f "$evidence" 2>/dev/null || true
+    return 1
+  fi
   chmod 600 "$evidence" 2>/dev/null || true
   printf '%s' "$evidence"
 }

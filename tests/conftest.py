@@ -1,5 +1,7 @@
 """Configurazione pytest per la suite Job Hunter Team QA."""
 import os
+import shutil
+import subprocess
 import tempfile
 
 import pytest
@@ -10,6 +12,139 @@ def pytest_configure(config):
         "markers",
         "slow: test che creano risorse reali (venv, processi pesanti) — "
         "skippabili con pytest -m 'not slow'",
+    )
+
+
+# ── Un bash che ESEGUE davvero, non solo che esiste ─────────────────────
+#
+# Perché serve: su un host Windows con WSL installato, il primo `bash` del PATH
+# è `C:\WINDOWS\system32\bash.EXE`, cioè il launcher di WSL. Avviato da un
+# processo Windows quel bash parte, stampa, e supera qualunque controllo di
+# presenza — ma non riesce a forkare: la command substitution torna vuota, le
+# redirezioni su file non creano niente, e i binari esterni non vengono
+# eseguiti restituendo comunque rc 0. Un test comportamentale che ci gira
+# sopra non fallisce perché il codice è rotto: fallisce perché l'interprete
+# non ha eseguito niente. Osservato dal vivo: `jht_timeout 1 sleep 5` che
+# risponde `rc=0` dopo 0 secondi e fa concludere che il tetto non scatta,
+# mentre con git-bash gli stessi test sono verdi.
+#
+# È la stessa lezione già pagata da questo repo due volte — la fixture
+# `isolated_jht_home` qui sotto, e la nota nel `.gitattributes` sui `.tsx`:
+# «un gate che sembra rosso qui e verde in CI è il modo migliore per imparare
+# a non fidarsi del gate». Un rosso fantasma vale meno di zero.
+#
+# La sonda quindi non chiede "esiste un bash?" ma "questo bash esegue?", e lo
+# chiede in un modo che il launcher WSL non può superare per sbaglio: un
+# marker su stdout non basterebbe (`echo` è un builtin e funziona anche là).
+# Servono tre cose insieme, tutte rotte nel caso WSL: una command
+# substitution che sopravvive al fork, un file scritto e riletto, e un binario
+# esterno il cui exit code arriva indietro.
+_BASH_PROBE = r"""
+d="$(mktemp -d)" || exit 1
+[ -n "$d" ] || exit 1
+printf ok >"$d/probe" || exit 1
+[ "$(cat "$d/probe")" = ok ] || exit 1
+/bin/sh -c 'exit 7'
+[ "$?" -eq 7 ] || exit 1
+rm -rf "$d" 2>/dev/null || true
+echo JHT-BASH-CAPABLE
+"""
+
+_BASH_CACHE = {}
+
+
+def _bash_candidates():
+    """I bash da provare, in ordine di preferenza e senza duplicati.
+
+    `JHT_TEST_BASH` è la via di fuga: chi sa quale interprete vuole lo impone
+    senza dipendere dall'ordine del PATH.
+    """
+    seen = set()
+    for candidate in _raw_bash_candidates():
+        if not candidate:
+            continue
+        key = os.path.normcase(os.path.abspath(candidate))
+        if key in seen or not os.path.isfile(candidate):
+            continue
+        seen.add(key)
+        yield candidate
+
+
+def _raw_bash_candidates():
+    yield os.environ.get("JHT_TEST_BASH")
+    yield shutil.which("bash")
+    # Ogni altro bash del PATH: il primo può essere il launcher WSL e il
+    # secondo quello buono.
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry:
+            continue
+        for name in ("bash.exe", "bash"):
+            yield os.path.join(entry, name)
+    # Git for Windows porta il suo bash ma non sempre lo mette in PATH.
+    # Derivato dall'installazione di git invece che scritto a mano: un path
+    # assoluto hardcoded sarebbe specifico di una macchina.
+    git = shutil.which("git")
+    if git:
+        git_root = os.path.dirname(os.path.dirname(git))
+        for relative in (("bin", "bash.exe"), ("usr", "bin", "bash.exe")):
+            yield os.path.join(git_root, *relative)
+
+
+def _is_capable(bash: str) -> bool:
+    if bash in _BASH_CACHE:
+        return _BASH_CACHE[bash]
+    try:
+        result = subprocess.run(
+            [bash, "-c", _BASH_PROBE],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        capable = "JHT-BASH-CAPABLE" in (result.stdout or "")
+    except (OSError, subprocess.SubprocessError):
+        capable = False
+    _BASH_CACHE[bash] = capable
+    return capable
+
+
+@pytest.fixture(scope="session")
+def any_bash():
+    """Un bash qualsiasi, per ciò che NON richiede il fork (`bash -n`).
+
+    La verifica sintattica legge un file e non esegue niente, quindi funziona
+    anche col launcher WSL: gatarla sulla capacità di eseguire farebbe perdere
+    copertura reale dove copertura ce n'è.
+    """
+    for candidate in _bash_candidates():
+        return candidate
+    pytest.skip("nessun bash trovato su questo host")
+
+
+@pytest.fixture(scope="session")
+def capable_bash():
+    """Un bash che esegue davvero, per i test comportamentali.
+
+    Skip esplicito — non fallimento — se nessun candidato passa la sonda: un
+    host senza un interprete utilizzabile non è una regressione del codice
+    sotto test.
+    """
+    # Un override che punta a un path inesistente non deve essere ignorato in
+    # silenzio: chi lo ha impostato crederebbe di stare testando con quello.
+    override = os.environ.get("JHT_TEST_BASH")
+    if override and not os.path.isfile(override):
+        pytest.skip(f"JHT_TEST_BASH punta a un path inesistente: {override}")
+    tried = []
+    for candidate in _bash_candidates():
+        if _is_capable(candidate):
+            return candidate
+        tried.append(candidate)
+    pytest.skip(
+        "nessun bash in grado di eseguire comandi esterni "
+        f"(provati: {tried or 'nessuno'}); su Windows il `bash` del PATH puo' "
+        "essere il launcher WSL, che non forka se avviato da un processo "
+        "Windows. Imponi un interprete con JHT_TEST_BASH=<path>."
     )
 
 

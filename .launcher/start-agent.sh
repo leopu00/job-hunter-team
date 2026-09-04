@@ -55,6 +55,51 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
+# ── Budget di tempo dello spawn ─────────────────────────────────────────────
+# Due numeri, un solo vincolo che li lega. Dall'esterno all'interno:
+#
+#   docker exec (CLI)          90s  ← cli/src/commands/team/start.js, fissato
+#     └─ flock -w               75s  ← attesa di chi trova il lock occupato
+#          ├─ probe tmux         5s  ← ogni domanda secca al server (esiste?)
+#          ├─ warmup claude     30s  ← `timeout 30 claude -p ok`, piu' sotto
+#          └─ tmux new-session  45s  ← la guardia sullo spawn, piu' sotto
+#
+# `flock -w` deve superare il tempo che il detentore puo' bruciare, altrimenti
+# un ritardo legittimo del detentore arriva agli altri come "concurrent spawn"
+# — un errore che incolpa la concorrenza mentre la causa e' la lentezza. 75 =
+# 30 + 45, i due passi LUNGHI con un tetto esplicito; e resta sotto i 90s del
+# chiamante, cosi' la CLI non tronca il `docker exec` prima che l'errore vero
+# sia stampato (un troncamento a monte si vede come "unknown error" vuoto:
+# regressione gia' osservata, vedi il commento accanto a `timeoutMs` in
+# start.js). La coerenza qui RIDUCE i falsi "concurrent spawn", non li rende
+# impossibili: i probe aggiungono qualche secondo e i tratti senza tetto
+# (preflight provider/config, copia delle skill) possono da soli avvicinarsi
+# ai 30s. Senza telemetria dello spawn non si puo' fare meglio di cosi'.
+#
+# I probe hanno un tetto piccolo e a parte perche' sono domande secche a cui
+# il server risponde in millisecondi: o rispondono subito, o il server e'
+# incantato e nessuna attesa piu' lunga cambia l'esito. Valgono per il guard
+# di idempotenza e per la pulizia del ramo d'errore.
+#
+# 45s per la new-session e non 20: il caso sano e' sotto i 2s (crea una
+# sessione detached, non avvia l'agente — l'avvio ha budget suoi, 120s per il
+# loop TUI e 270s per il welcome watchdog), ma su un bind mount Windows saturo
+# la stessa manciata di syscall e' stata misurata a ~56ms l'una
+# (docker-compose.yml), e la fascia 10-25s e' raggiungibile. 20s cadeva dentro
+# quella fascia; 45s la scavalca con margine, supera i 30s del warmup che nella
+# stessa sezione critica e' gia' accettato, e resta metà del budget del
+# chiamante. Oltre non serve: il guasto qui e' bimodale — o ritorna in pochi
+# secondi, o non ritorna mai — e alzare ancora ritarderebbe solo il recupero.
+JHT_SPAWN_TMUX_TIMEOUT_SEC="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
+JHT_SPAWN_LOCK_WAIT_SEC="${JHT_SPAWN_LOCK_WAIT_SEC:-75}"
+JHT_SPAWN_TMUX_PROBE_SEC="${JHT_SPAWN_TMUX_PROBE_SEC:-5}"
+# Un override non numerico non deve trasformarsi in un `flock -w abc` (che
+# fallisce subito) o in un tetto assente: si torna al default, come per lo
+# stagger piu' sotto.
+case "$JHT_SPAWN_TMUX_TIMEOUT_SEC" in ''|*[!0-9]*) JHT_SPAWN_TMUX_TIMEOUT_SEC=45 ;; esac
+case "$JHT_SPAWN_LOCK_WAIT_SEC" in ''|*[!0-9]*) JHT_SPAWN_LOCK_WAIT_SEC=75 ;; esac
+case "$JHT_SPAWN_TMUX_PROBE_SEC" in ''|*[!0-9]*) JHT_SPAWN_TMUX_PROBE_SEC=5 ;; esac
+
 # ── Provider claude: pre-seed onboarding (BUG-CLAUDE-TRUST-PROMPT) ─────
 # Su una install fresca la CLI claude (TUI) blocca gli agenti sul wizard
 # first-run: theme-picker → browser-login → "Bypass Permissions mode".
@@ -124,7 +169,12 @@ PY
 # niente bridge. Singleton: se gia' viva, exit 0 senza errori.
 if [ "$ROLE" = "worker" ]; then
   WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
-  if tmux has-session -t "$WORKER_SESSION" 2>/dev/null; then
+  # `=`: exact match, come il guard di idempotenza piu' sotto. Qui nessuna
+  # sessione nota inizia per SENTINELLA-WORKER, quindi oggi non cambia esito;
+  # e' la stessa domanda ("questa sessione esatta esiste?") e va posta nello
+  # stesso modo, perche' un nome nuovo che ne estende il prefisso la
+  # trasformerebbe di nuovo in un falso "e' gia' attivo".
+  if tmux has-session -t "=$WORKER_SESSION" 2>/dev/null; then
     echo "✓ $WORKER_SESSION is already active"
     exit 0
   fi
@@ -185,7 +235,11 @@ if [ "$ROLE" = "worker" ]; then
   done
   if [ "$_w_up" -ne 1 ]; then
     echo "✗ $WORKER_SESSION: REPL did not start (pane remains a shell) — session removed" >&2
-    tmux kill-session -t "$WORKER_SESSION" 2>/dev/null || true
+    # `=`: un kill e' distruttivo e non deve mai poter atterrare su una
+    # sessione sorella per prefisso. Qui la nostra esiste (l'abbiamo appena
+    # creata) e l'exact match vincerebbe comunque, ma la regola vale sulla
+    # forma: nessun kill senza target ancorato.
+    tmux kill-session -t "=$WORKER_SESSION" 2>/dev/null || true
     exit 1
   fi
   echo "✓ $WORKER_SESSION started (TUI /usage fallback for the bridge)"
@@ -380,8 +434,8 @@ if [ "$ROLE" = "tg-bridge" ]; then
   if command -v flock >/dev/null 2>&1; then
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
-    if ! flock -w 30 9; then
-      echo "Error: timed out waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+    if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
+      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
       exit 1
     fi
   fi
@@ -545,15 +599,68 @@ esac
 if command -v flock >/dev/null 2>&1; then
   mkdir -p "${JHT_HOME:-/jht_home}/locks"
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
-  if ! flock -w 30 9; then
-    echo "Error: timed out waiting for the concurrent spawn of '$SESSION'." >&2
+  if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
+    echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION'." >&2
     exit 1
   fi
 fi
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+# `=` forza l'EXACT match. Senza, la risoluzione dei target tmux prosegue col
+# prefisso: `-t SENTINELLA` trova SENTINELLA-WORKER, `-t SCOUT-1` trova
+# SCOUT-10, `-t CRITICO` trova CRITICO-S3. Su questa riga il prezzo e' il
+# peggiore possibile: la sessione chiesta NON esiste, il guard la dichiara
+# "already active" ed esce 0, quindi l'agente non nasce mai e nessun respawn
+# lo ricreera' — il fallimento e' silenzioso e permanente. Non e' teorico:
+# registrato in produzione come prefix-match SENTINELLA vs SENTINELLA-WORKER
+# che ha bloccato un relaunch. Stessa convenzione di agent-watchdog.sh.
+#
+# E il tetto di tempo qui NON e' ridondante con quello della new-session piu'
+# sotto: il PRIMO client tmux dopo la presa del lock e' questo. Se il server
+# e' incantato — l'ipotesi di root cause dell'incidente da 756 respawn falliti
+# — si appende QUI, col fd 9 in mano, e la guardia irrobustita 600 righe sotto
+# non viene mai raggiunta. Sarebbe lo stesso lockout permanente, spostato di
+# un client. `9>&-` per la stessa ragione degli altri: se il client sopravvive
+# al proprio tetto, non deve portarsi via il lock.
+_hs_rc=0
+jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- || _hs_rc=$?
+if [ "$_hs_rc" -eq 0 ]; then
   echo "Session '$SESSION' is already active."
   echo "Connect with: tmux attach -t \"$SESSION\""
   exit 0
+fi
+# Un rc diverso da 0 e 1 significa che la domanda "esiste?" non ha avuto
+# risposta: ne' si', ne' no. Le due strade non sono simmetriche.
+#
+# Uscire 0 come se esistesse e' la scelta peggiore possibile: e' la stessa
+# frase ("already active") che il difetto del prefix matching qui sopra
+# produceva, ed e' INFALSIFICABILE a valle — nessun consumatore distingue una
+# sessione viva da una dichiarata viva, quindi l'agente non nasce e nessuno
+# lo cerchera' piu'. Un guasto silenzioso e permanente al posto di uno
+# rumoroso e temporaneo.
+#
+# Si prosegue quindi come se NON esistesse, per quattro ragioni:
+#  1. questo guard e' un'ottimizzazione (evita lavoro inutile e da' un
+#     messaggio gentile), non il meccanismo di sicurezza. L'autorita' su "quel
+#     nome e' occupato" e' tmux stesso, che rifiuta atomicamente la
+#     new-session con `duplicate session`: quando l'ottimizzazione non sa
+#     rispondere, si ricade sull'autorita';
+#  2. quel rifiuto e' ora diagnosticabile e NON distruttivo — l'rc viene
+#     discriminato e la pulizia vive solo nel ramo del tetto scaduto, quindi
+#     ricadere sul `duplicate session` costa una riga d'errore veritiera e non
+#     la sessione di un altro agente (prima di quel fix questa strada era
+#     impraticabile);
+#  3. ogni passo a valle ha un tetto (new-session, pulizia, attesa del REPL),
+#     quindi proseguire non puo' ricreare l'attesa illimitata che stiamo
+#     chiudendo: nel caso davvero incantato questo ramo degrada da solo a un
+#     errore in meno di un minuto;
+#  4. se il server era soltanto LENTO — probe scaduto ma tmux vivo — questa e'
+#     la strada che riesce, invece di lasciare a terra proprio i ruoli
+#     effimeri (CRITICO di uno Scrittore) i cui chiamanti non guardano l'rc e
+#     resterebbero in attesa di un verdetto che non arriva.
+# Il prezzo, se la sessione esisteva davvero: una ricopiatura delle skill
+# sotto i piedi di un agente vivo (transitoria, e serializzata dal flock) e un
+# fallimento rumoroso ma onesto. Accettabile in cambio del punto 1.
+if [ "$_hs_rc" -ne 1 ]; then
+  echo "  ⚠ 'tmux has-session' for '$SESSION' did not answer (rc=$_hs_rc) — continuing as if the session did not exist; tmux itself will reject a duplicate."
 fi
 
 # Determina effort in base al mode
@@ -982,6 +1089,13 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
   _claude_json="$JHT_HOME/.claude.json"
   if [ ! -s "$_claude_json" ] && [ -s "$JHT_HOME/.claude/.credentials.json" ]; then
     echo "  → warming up ~/.claude.json (missing; populating via claude -p)"
+    # `timeout` nudo e NON `jht_timeout`, deliberatamente: qui il tetto non e'
+    # un guard-rail, e' la condizione per eseguire. Se `timeout` manca (host
+    # macOS senza coreutils GNU) l'rc 127 + `|| true` fa SALTARE il warmup, e
+    # saltarlo e' recuperabile — l'agente cade su "Select login method" e il
+    # watcher auto-Enter piu' sotto lo gestisce. Degradare al comando nudo
+    # significherebbe invece lanciare senza tetto una chiamata di rete
+    # interattiva in mezzo alla sezione critica del lock: peggio del difetto.
     HOME="$JHT_HOME" timeout 30 claude --dangerously-skip-permissions -p "ok" \
       >/dev/null 2>&1 || true
     if [ -s "$_claude_json" ]; then
@@ -1078,7 +1192,9 @@ send_env_vars() {
 # Claude è un binario Windows e va lanciata via PowerShell.
 if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
-  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe
+  # `9>&-` come nel ramo container qui sotto: anche questa new-session può
+  # forkare il server tmux, che sopravvive a start-agent.sh col fd 9 aperto.
+  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 9>&-
   sleep 2
   tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
@@ -1104,7 +1220,112 @@ else
   # troncato a 80 colonne — leggibilità terribile nella webUI. 220x50 dà
   # margine per dashboard / task lists del CLI senza esagerare con i byte
   # da leggere a ogni tick.
-  tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"
+  #
+  # Il tetto di tempo qui e' voluto: osservato in produzione (Docker Desktop /
+  # bind mount Windows) un `tmux new-session` che non ritorna mai — ne'
+  # crea la sessione ne' esce ne' fallisce, semplicemente resta appeso.
+  # Senza un limite, il processo tiene aperto per sempre il fd 9 del
+  # flock preso piu' sopra: ogni respawn successivo dello STESSO agente
+  # (watchdog, utente, capitano) va in timeout allo scadere di `flock -w`
+  # e fallisce con "concurrent spawn", indefinitamente — osservati 756
+  # respawn falliti in 37h su una singola installazione prima che la
+  # causa fosse isolata a un `tmux new-session` orfano di 15h+. Il tetto
+  # garantisce che questo branch ritorni sempre, cosi' il lock si libera
+  # e il prossimo tentativo puo' ripartire pulito invece di ripetere
+  # all'infinito lo stesso fallimento silenzioso.
+  #
+  # `jht_timeout` (daemon-lib.sh) e non `timeout` nudo: `timeout` e' GNU
+  # coreutils e su un host macOS non esiste. Nudo esce 127, e un 127 letto
+  # come "spawn fallito" farebbe morire OGNI spawn per l'assenza della
+  # protezione, non per un guasto. L'helper degrada al comando senza tetto,
+  # come fa `.launcher/` con ogni altro binario opzionale.
+  #
+  # `9>&-`: stessa classe di difetto del ramo tg-bridge (vedi il commento
+  # esteso più sopra), ma qui è peggio. Quando il server tmux non è ancora
+  # vivo, è questa PRIMA `new-session` a forkarlo: il server eredita il fd 9
+  # del flock, si stacca (PPid 1) e resta su quanto il container. Il lock di
+  # questa sessione non viene quindi rilasciato MAI — nemmeno dopo che
+  # start-agent.sh è uscito pulito — e ogni respawn dell'agente muore in
+  # "concurrent spawn" allo scadere di `flock -w` finché il container non
+  # riparte. Osservato in produzione: server tmux vivo da 11 giorni con
+  # `fd 9 -> locks/start-<AGENTE>.lock`, 2.677 start falliti a valle. Chiuso
+  # sull'intero comando cosi' il fd sparisce sia per il wrapper sia per tmux.
+  #
+  # L'rc va DISCRIMINATO: 124 e' il tetto scattato, 125/126/127 sono problemi
+  # del wrapper (binario assente o non eseguibile), tutto il resto e' l'rc che
+  # tmux ha propagato. Un `if !` nudo li collassa in uno e il messaggio
+  # afferma un hang che il codice non ha verificato: `duplicate session`,
+  # socket dir non scrivibile e nome sessione invalido finivano tutti sotto
+  # "did not return within 20s". La diagnosi mentiva in ogni caso tranne uno,
+  # e manda chi legge a cercare nel posto sbagliato — cioe' esattamente il
+  # depistaggio che questo blocco esiste per chiudere.
+  #
+  # `|| _ns_rc=$?` e non `if ! cmd; then ... $?`: dentro il `then` di un
+  # `if !`, `$?` vale la NEGAZIONE logica (0/1), non l'rc del comando, quindi
+  # il 124 non sarebbe distinguibile. Ed e' anche l'unica forma che non fa
+  # uscire lo script per il `set -e` di testa.
+  #
+  # Lo stderr di tmux va catturato e RIMESSO nella nostra riga: il chiamante
+  # principale (cli/src/commands/team/start.js) conserva solo l'ULTIMA riga di
+  # stderr, quindi la diagnosi nativa di tmux, se resta una riga a se', non
+  # arriva mai ne' all'utente ne' alla dashboard.
+  _ns_err="${TMPDIR:-/tmp}/jht-new-session-$$.err"
+  _ns_rc=0
+  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 2>"$_ns_err" 9>&- || _ns_rc=$?
+  _ns_msg=""
+  if [ -s "$_ns_err" ]; then
+    _ns_msg="$(tr '\n' ' ' <"$_ns_err" | sed 's/  */ /g; s/ *$//')" || _ns_msg=""
+  fi
+  rm -f "$_ns_err" 2>/dev/null || true
+  if [ "$_ns_rc" -ne 0 ]; then
+    case "$_ns_rc" in
+      124|137)
+        echo "Error: 'tmux new-session' for '$SESSION' did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s (hung spawn; tmux said: ${_ns_msg:-nothing})." >&2
+        # Pulizia SOLO qui. `timeout` uccide il CLIENT tmux, non il server:
+        # se il server era lento ma vivo — che e' precisamente il caso in cui
+        # il tetto riesce a scattare — la sessione nasce QUALCHE SECONDO DOPO
+        # il SIGTERM, con un pane bash nudo, senza env e senza CLI. Un kill
+        # immediato sarebbe un no-op e lascerebbe quel guscio, che il guard di
+        # idempotenza piu' sopra rende PERMANENTE ("already active" per
+        # sempre). Diamo al server il tempo di decidersi prima di dichiarare
+        # che non c'e' niente da pulire; il costo e' solo sul percorso che ha
+        # gia' fallito.
+        #
+        # Su ogni ALTRO rc non si tocca niente: sul rc=1 `duplicate session`
+        # la sessione esiste ma NON l'ha creata questo tentativo, e ucciderla
+        # significherebbe ammazzare l'agente di qualcun altro (team-rules T01).
+        # Il cleanup incondizionato faceva esattamente questo.
+        #
+        # `9>&-` anche qui: sono altri due client tmux nati mentre il lock e'
+        # nostro. Se uno resta appeso oltre il proprio tetto, il tetto lo
+        # abbandona ma il figlio sopravvive col fd 9 aperto, e il lock non si
+        # rilascia piu'.
+        _i=0
+        while [ "$_i" -lt 5 ]; do
+          jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- && break
+          sleep 1
+          _i=$((_i + 1))
+        done
+        # `=` obbligatorio: nel ramo d'errore la sessione tipicamente NON
+        # esiste, quindi tmux passerebbe al prefix matching e il kill
+        # atterrerebbe su una sessione SORELLA (`-t SCOUT-1` uccide SCOUT-10,
+        # `-t CRITICO` uccide il CRITICO-S3 di uno Scrittore in mezzo a una
+        # review). Stessa convenzione di agent-watchdog.sh. E il tetto qui non
+        # e' decorativo: questo e' un altro client verso lo stesso server
+        # sospetto di essere appeso, ed e' l'ultimo punto del ramo che potrebbe
+        # ancora bloccarsi per sempre col fd 9 in mano — cioe' ricreare da
+        # solo il lockout che tutta questa guardia esiste per impedire.
+        jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+        ;;
+      125|126|127)
+        echo "Error: could not run the time-bounded 'tmux new-session' for '$SESSION' (rc=$_ns_rc: command missing or not executable). No session was created." >&2
+        ;;
+      *)
+        echo "Error: 'tmux new-session' for '$SESSION' failed immediately (rc=$_ns_rc, not a timeout): ${_ns_msg:-no message from tmux}. No session was created by this attempt." >&2
+        ;;
+    esac
+    exit 1
+  fi
   send_env_vars
   tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
@@ -1156,7 +1377,34 @@ else
       _i=$((_i + 1))
     done
     tmux send-keys -t "$_sess" Enter
-    ' >/dev/null 2>&1 < /dev/null &
+    ' >/dev/null 2>&1 < /dev/null 9>&- &
+  fi
+  # Il REPL e' partito DAVVERO? Questo ramo — l'unico che spawna gli agenti
+  # del team — era il solo dei tre percorsi di spawn a non farsi la domanda:
+  # SENTINELLA-WORKER la fa inline piu' sopra, spawn-doctor.sh e
+  # spawn-maintainer.sh la fanno con questa stessa funzione. Senza, un pane
+  # rimasto bash (CLI crashato al boot, PATH rotto, credenziali assenti,
+  # sessione materializzata dopo il tetto della guardia qui sopra) diventa
+  # DEFINITIVO: il guard di idempotenza dichiara "already active" e nessun
+  # respawn lo ricreera' mai, mentre `✓ started` e il roster qui sotto
+  # certificano un guscio vuoto. Per i ruoli core il watchdog se ne accorge
+  # entro un tick, ma i worker numerati e i CRITICO effimeri non sono coperti
+  # da nessuna sonda di liveness (il roster guarda solo `list-sessions`):
+  # per loro il guscio dura fino al TTL di 12h, cioe' per sempre su una
+  # review che vive minuti. Un guscio va segnalato e rimosso, non ereditato.
+  #
+  # Costo: la funzione esce al primo poll in cui il pane non e' piu' una
+  # shell, cioe' ~1s nel percorso felice (il CLI viene exec-ato dalla bash del
+  # pane subito dopo il send-keys); il tempo pieno lo paga solo lo spawn che
+  # sarebbe comunque da buttare. Va DOPO il watcher auto-Enter qui sopra, che
+  # e' in background: se il boot si fermasse su un dialog, l'attesa e la
+  # risposta al dialog devono poter correre insieme.
+  #
+  # `python3` escluso come per il watcher: non e' una TUI e il suo pane non
+  # segue le stesse regole.
+  if [ "$CLI_BIN" != "python3" ]; then
+    jht_spawn_wait_repl "$SESSION" "$FULL_CMD" "start-agent" "$ROLE" \
+      "$JHT_LOGS_DIR" "start-agent.sh" || exit 1
   fi
 fi
 
@@ -1255,7 +1503,7 @@ _kickoff() {
     else
       echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
     fi
-  ' </dev/null &
+  ' </dev/null 9>&- &
 }
 
 # ── Welcome kickoff helper ──────────────────────────────────────────────
@@ -1312,7 +1560,7 @@ _welcome_kickoff() {
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
       echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
     fi
-  ' </dev/null &
+  ' </dev/null 9>&- &
 }
 
 if [ "$ROLE" = "assistente" ]; then
