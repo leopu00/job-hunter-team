@@ -875,10 +875,36 @@ capture_for_containment() {
   evidence="$evidence_dir/${stamp}-${session}-reenforced.txt"
   # La scena viene salvata PRIMA del kill. Se la cattura fallisce non
   # distruggiamo la sola evidenza rimasta: ritentiamo al tick successivo.
-  tmux capture-pane -t "=$session" -p -S - > "$evidence" 2>/dev/null || {
+  #
+  # `capture-pane` vuole un target PANE, e il prefisso `=` esiste solo per i
+  # target SESSIONE/FINESTRA: `capture-pane -t "=NOME"` esce SEMPRE con
+  # "can't find pane". Con lo stderr scartato e il `|| return 1` qui sotto, il
+  # guasto era invisibile e il chiamante concludeva "cattura fallita, NON
+  # uccido" a ogni tick — cioe' il ri-contenimento non e' mai avvenuto.
+  # Osservato in produzione: 24.340 righe "capture failed — NOT killing" e una
+  # sessione viva per 15 giorni contro una decisione esplicita di keep-down.
+  #
+  # L'esattezza voluta da chi ha scritto `=` resta, spostata dove e' valida:
+  # `list-panes` prende un target sessione (quindi `=` funziona) e ci da' il
+  # `pane_id`, che e' univoco per l'intero server tmux e non ammette
+  # risoluzione per prefisso. Se la sessione non esiste, list-panes fallisce e
+  # il percorso di errore e' quello di prima.
+  local pane_id
+  pane_id="$(tmux list-panes -t "=$session" -F '#{pane_id}' 2>/dev/null | head -1)"
+  if [ -z "$pane_id" ]; then
+    rm -f "$evidence" 2>/dev/null || true
+    return 1
+  fi
+  tmux capture-pane -t "$pane_id" -p -S - > "$evidence" 2>/dev/null || {
     rm -f "$evidence" 2>/dev/null || true
     return 1
   }
+  # Una cattura vuota non e' evidenza: meglio ritentare che archiviare un file
+  # da zero byte e dichiarare la scena salvata.
+  if [ ! -s "$evidence" ]; then
+    rm -f "$evidence" 2>/dev/null || true
+    return 1
+  fi
   chmod 600 "$evidence" 2>/dev/null || true
   printf '%s' "$evidence"
 }
