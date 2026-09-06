@@ -1,0 +1,18 @@
+# Job Hunter Team
+
+**Overview:** The Job Hunter Team (JHT) is a collection of AI agents designed to assist in the job searching process, from finding job positions to generating tailored CVs and cover letters. By leveraging AI, JHT aims to reduce the manual effort involved in job hunting.
+
+## Main Features:
+- **AI-driven Agents:** The team consists of various AI agents: Scout (finding positions), Analyst (verifying), Scorer (ranking against profiles), Writer (CVs & cover letters), and Critic (reviewing).
+- **Local Operations:** JHT runs locally within a container, ensuring that user data remains private and securely managed.
+- **Performance:** Users have reported significant success with JHT, including multiple interview invites within weeks.
+
+## Installation:
+- Supports Windows, Linux, and macOS with necessary prerequisites including a Docker-compatible runtime.
+- Requires a dedicated LLM subscription for effective operation.
+
+## User Interaction:
+- Users can interact with the system through a native desktop app, CLI, or cloud dashboard, making it adaptable for different user preferences.
+
+## Conclusion:
+The Job Hunter Team provides a comprehensive AI-powered solution for job seekers, automating the tedious aspects of job hunting while maintaining user control over data and interactions.
