@@ -84,8 +84,11 @@ function census(): Site[] {
   return found;
 }
 
-/** I quattro rami local-token: legittimi senza guard, e dichiarati nel codice. */
+/** I cinque rami local-token: legittimi senza guard, e dichiarati nel codice. */
 const DECLARED_LOCAL_ONLY = [
+  // [JHT-CLOSER] L'autorizzazione alla candidatura ha lo stesso doppio path
+  // degli altri flag desired-state, quindi la stessa porta local-token.
+  "web/app/api/positions/[legacyId]/apply-request/route.ts",
   "web/app/api/positions/[legacyId]/geocode-request/route.ts",
   "web/app/api/positions/[legacyId]/recheck-request/route.ts",
   "web/app/api/positions/[legacyId]/write-request/route.ts",

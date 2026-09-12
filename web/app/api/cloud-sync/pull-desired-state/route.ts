@@ -15,7 +15,11 @@ export const dynamic = "force-dynamic";
 // il container riavvia e qui legge i flag `write_requested` aggiornati.
 //
 // Scope: `positions.write_requested[_at]` (V6, mig 024) +
-// `positions.geocode_requested[_at]` (V8, mig 027). Pattern desired-state
+// `positions.geocode_requested[_at]` (V8, mig 027) +
+// `positions.apply_requested[_at][_by]` (mig 088, [JHT-CLOSER]: e' il click con
+// cui l'utente AUTORIZZA la candidatura, e senza questa corsia resterebbe sul
+// cloud — l'operatore flagga dal browser mentre il team gira sulla VPS).
+// Pattern desired-state
 // per-row, estendibile a futuri flag user-driven mantenendo la stessa
 // shape della response (campi opzionali, client UPDATE solo le presenti).
 // Dal 2026-08-17 anche le CANDIDATURE decise sul web (#186): stesso pattern,
@@ -83,7 +87,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("positions")
     .select(
-      "legacy_id, write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, status, user_excluded_reason, user_excluded_note, user_excluded_at, user_excluded_prev_status, updated_at",
+      "legacy_id, write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, apply_requested, apply_requested_at, apply_requested_by, status, user_excluded_reason, user_excluded_note, user_excluded_at, user_excluded_prev_status, updated_at",
     )
     .eq("user_id", userId)
     .gt("updated_at", since.toISOString())

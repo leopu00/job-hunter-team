@@ -1803,6 +1803,9 @@ function mapPositionFull(r: any): Position {
     recheck_requested:
       r.recheck_requested === 1 || r.recheck_requested === true,
     recheck_requested_at: r.recheck_requested_at ?? null,
+    apply_requested: r.apply_requested === 1 || r.apply_requested === true,
+    apply_requested_at: r.apply_requested_at ?? null,
+    apply_requested_by: r.apply_requested_by ?? null,
     last_open_check: r.last_open_check ?? null,
   };
 }

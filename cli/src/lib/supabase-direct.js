@@ -162,7 +162,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
 
   /**
    * Posizioni con un flag desired-state cambiato dopo `since` (write/geocode/
-   * recheck/salary_precise + esclusione utente). Rimpiazza
+   * recheck/salary_precise/apply + esclusione utente). Rimpiazza
    * GET /api/cloud-sync/pull-desired-state. NB: `positions` NON ha `updated_at`
    * (vedi schema), quindi il cursore è sui timestamp dei flag stessi
    * (`*_requested_at`/`user_excluded_at`) via filtro OR.
@@ -171,26 +171,27 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   async function readDesiredStateChanges({ since, limit = 500 } = {}) {
     const cols = 'legacy_id,write_requested,write_requested_at,write_request_kind,geocode_requested,' +
       'geocode_requested_at,recheck_requested,recheck_requested_at,salary_precise_requested,' +
-      'salary_precise_requested_at,status,user_excluded_reason,user_excluded_note,' +
+      'salary_precise_requested_at,apply_requested,apply_requested_at,apply_requested_by,' +
+      'status,user_excluded_reason,user_excluded_note,' +
       'user_excluded_at,user_excluded_prev_status';
     const params = new URLSearchParams();
     params.set('select', cols);
     if (since) {
       params.set('or', `(write_requested_at.gt.${since},geocode_requested_at.gt.${since},` +
         `recheck_requested_at.gt.${since},salary_precise_requested_at.gt.${since},` +
-        `user_excluded_at.gt.${since})`);
+        `apply_requested_at.gt.${since},user_excluded_at.gt.${since})`);
     }
-    // ORDER deterministico. Il filtro è un OR su 5 colonne timestamp diverse:
-    // PostgREST non sa ordinare per il GREATEST() delle 5 (non è una colonna),
+    // ORDER deterministico. Il filtro è un OR su 6 colonne timestamp diverse:
+    // PostgREST non sa ordinare per il GREATEST() delle 6 (non è una colonna),
     // quindi non esiste una singola chiave che coincida col cursore lato client
-    // (che traccia il max dei 5 ts). Ordiniamo per la PK `legacy_id` (indicizzata):
+    // (che traccia il max dei 6 ts). Ordiniamo per la PK `legacy_id` (indicizzata):
     // NON allinea l'ordine al cursore, ma rende il sottoinsieme sotto `limit`
     // STABILE e ripetibile tick-su-tick (prima era arbitrario → il cursore non
     // convergeva mai). Ogni riga restituita ha comunque almeno un ts > since,
     // quindi il max lato client avanza e la convergenza è garantita finché il
     // numero di cambi nella finestra sta sotto `limit` (caso normale). Fix
     // completo sotto truncation = colonna materializzata `desired_state_changed_at`
-    // (max dei 5, mantenuta da trigger) da ordinare .asc → out of scope qui.
+    // (max dei 6, mantenuta da trigger) da ordinare .asc → out of scope qui.
     params.set('order', 'legacy_id.asc');
     params.set('limit', String(limit));
     const rows = await rest(`positions?${params.toString()}`);
