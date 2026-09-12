@@ -885,6 +885,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_role_family_proposed(conn)
     _migrate_positions_user_excluded(conn)
     _migrate_positions_recheck_requested(conn)
+    _migrate_positions_apply_requested(conn)
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
@@ -1942,6 +1943,38 @@ def _migrate_positions_recheck_requested(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_recheck_requested "
         "ON positions(recheck_requested) WHERE recheck_requested = 1"
+    )
+
+
+def _migrate_positions_apply_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge le colonne dell'AUTORIZZAZIONE per-posizione (mirror Supabase mig 088).
+
+    [JHT-CLOSER] Il salto `ready -> applied` lo può fare il CLOSER, ma solo su
+    posizioni che l'utente ha flaggato UNA PER UNA. Queste tre colonne sono
+    metà del vincolo (l'altra metà è il consenso generale nel config): manca il
+    flag, nessun invio, qualunque sia lo score.
+
+    `apply_requested_by` dice CHI ha autorizzato, e serve perché un booleano da
+    solo non distingue una persona da un processo — regola #186, dal cloud si
+    prende l'AZIONE dell'utente e mai lo stato generico. Il vocabolario
+    (`user_web` / `user_local`) lo fa rispettare `apply_gate.py`, non un CHECK.
+
+    Idempotente: guard PRAGMA table_info, come gli altri quattro flag
+    desired-state.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('apply_requested',    'INTEGER DEFAULT 0'),
+        ('apply_requested_at', 'TIMESTAMP'),
+        ('apply_requested_by', 'TEXT'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_apply_requested "
+        "ON positions(apply_requested) WHERE apply_requested = 1"
     )
 
 
