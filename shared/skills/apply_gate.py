@@ -95,6 +95,16 @@ DEFAULT_MAX_PER_DAY = 3
 # rifiutarlo, `agent_closer` compreso.
 USER_REQUEST_ORIGINS = ("user_web", "user_local")
 
+# Gli stati in cui la candidatura È GIÀ PARTITA.
+#
+# Gemella di `POST_SUBMISSION_STATES` in `shared/cloud/applied-action.js`, e
+# tenuta allineata a mano perché le due vivono in linguaggi diversi: là serve
+# al backflow per non riportare indietro un esito, qui a non spedire una
+# seconda volta. `response` sta accanto ad `applied` per la stessa ragione di
+# sempre — è la progressione dell'invio, non il suo contrario. Chi domani
+# aggiunge uno stato post-invio deve aggiungerlo in ENTRAMBI i posti.
+POST_SUBMISSION_STATES = ("applied", "response")
+
 
 @dataclass(frozen=True)
 class Verdict:
@@ -325,6 +335,14 @@ def position_verdict(
                 "FROM positions WHERE id = ?",
                 (pid,),
             ).fetchone()
+            # La candidatura si legge SEPARATAMENTE dallo stato della
+            # posizione, e non è una cintura in più sulle bretelle: i due lati
+            # divergono davvero (è la classe di difetto di #186), e qui basta
+            # che diverga uno perché la lettera parta due volte.
+            already = conn.execute(
+                "SELECT applied, applied_via FROM applications WHERE position_id = ?",
+                (pid,),
+            ).fetchone()
         except sqlite3.Error as err:
             # Colonna assente (immagine vecchia, `ensure_schema` mai girata) o
             # tabella mancante. Non è un caso da ricostruire: è un no.
@@ -347,6 +365,34 @@ def position_verdict(
         )
 
     status, flag, at, by = row[0], row[1], row[2], row[3]
+
+    # ⚠️ Questo rifiuto viene PRIMA di quello sul flag, e l'ordine è il punto.
+    #
+    # Il flag NON si spegne quando la candidatura parte: resta acceso, e lo
+    # stato passa ad `applied`. Finché a fermare il secondo invio è soltanto il
+    # checkpoint su disco di `apply_flow` — che vive in `.cache/`, cioè in una
+    # cartella che un wipe, un'immagine nuova o una pulizia si portano via —
+    # una posizione già inviata col flag ancora acceso è una seconda lettera
+    # allo stesso recruiter. Il guard che `apply_flow` ha nel recorder gira
+    # DOPO il click: a quel punto la candidatura è partita.
+    #
+    # Trovato rivedendo la fase C di @fullstack-1 il 2026-09-12; sta qui e non
+    # là perché questo è il posto che entrambi i chiamanti attraversano.
+    if status in POST_SUBMISSION_STATES:
+        return Verdict(
+            False,
+            "already_submitted",
+            "this application has already gone out: the flag stays on after a "
+            "submission, so it is not evidence that another one was asked for",
+            {"position_id": pid, "status": status},
+        )
+    if already and (already[0] == 1 or already[0] is True):
+        return Verdict(
+            False,
+            "already_submitted",
+            "an application row for this position is already marked applied",
+            {"position_id": pid, "status": status, "applied_via": already[1]},
+        )
 
     if not (flag == 1 or flag is True):
         return Verdict(

@@ -59,12 +59,16 @@ def write_config(tmp_path: Path, payload) -> Path:
     return p
 
 
-def make_db(tmp_path: Path, rows=()) -> str:
-    """Una `positions` minima con le sole colonne che il gate legge.
+def make_db(tmp_path: Path, rows=(), applications=()) -> str:
+    """Le due tabelle che il gate legge, ridotte alle colonne che gli servono.
 
     Deliberatamente NON passa da `ensure_schema`: il gate deve poter essere
     letto senza tirarsi dietro l'intero schema, e un test che ricostruisse il
     DB vero misurerebbe `_db.py` invece del cancello.
+
+    `applications` c'è perché il gate la interroga davvero: una candidatura già
+    partita si riconosce da due lati, e i due lati divergono (#186). Un'ombra
+    più stretta del lettore farebbe fallire i test per il motivo sbagliato.
     """
     path = tmp_path / "jobs.db"
     conn = sqlite3.connect(path)
@@ -73,10 +77,18 @@ def make_db(tmp_path: Path, rows=()) -> str:
         "apply_requested INTEGER DEFAULT 0, apply_requested_at TIMESTAMP, "
         "apply_requested_by TEXT)"
     )
+    conn.execute(
+        "CREATE TABLE applications (id INTEGER PRIMARY KEY, "
+        "position_id INTEGER UNIQUE, applied INTEGER DEFAULT 0, applied_via TEXT)"
+    )
     conn.executemany(
         "INSERT INTO positions (id, status, apply_requested, apply_requested_at, "
         "apply_requested_by) VALUES (?, ?, ?, ?, ?)",
         rows,
+    )
+    conn.executemany(
+        "INSERT INTO applications (position_id, applied, applied_via) VALUES (?, ?, ?)",
+        applications,
     )
     conn.commit()
     conn.close()
@@ -221,12 +233,67 @@ def test_b_flag_acceso_da_non_utente_rifiutato(tmp_path, who):
     assert v.reason == "authorisation_not_from_user"
 
 
+@pytest.mark.parametrize("status", ["applied", "response"])
+def test_b_una_candidatura_gia_partita_non_si_rispedisce(tmp_path, status):
+    """Il difetto trovato rivedendo la fase C il 2026-09-12.
+
+    Il flag NON si spegne quando la candidatura parte: resta acceso e lo stato
+    passa ad `applied`. Se a fermare il secondo invio fosse solo il checkpoint
+    di `apply_flow` — che vive in `.cache/`, cioè dove un wipe passa — una
+    posizione già inviata col flag ancora acceso sarebbe una seconda lettera
+    allo stesso recruiter. Il guard che `apply_flow` ha nel recorder gira DOPO
+    il click, quando la candidatura è già partita.
+
+    `response` è nella lista accanto ad `applied` perché è la progressione
+    dell'invio, non il suo contrario: hanno gia' risposto, quindi era partita.
+    """
+    db = make_db(tmp_path, [(9, status, 1, "2026-09-12 10:00:00", "user_web")])
+    v = apply_verdict(9, config=CONSENT_ON, db_path=db)
+    assert not v.allowed, v.log_line()
+    assert v.reason == "already_submitted"
+
+
+def test_b_una_candidatura_gia_registrata_non_si_rispedisce(tmp_path):
+    """Il secondo lato, e non è una ridondanza.
+
+    `positions.status` e `applications.applied` divergono davvero — è la classe
+    di difetto di #186 — e qui basta che diverga uno perché la lettera parta
+    due volte. Questa riga ha lo status ancora a `ready` e la candidatura già
+    registrata: guardando solo lo stato, passerebbe.
+    """
+    db = make_db(
+        tmp_path,
+        [(10, "ready", 1, "2026-09-12 10:00:00", "user_web")],
+        applications=[(10, 1, "agent_closer")],
+    )
+    v = apply_verdict(10, config=CONSENT_ON, db_path=db)
+    assert not v.allowed, v.log_line()
+    assert v.reason == "already_submitted"
+
+
+def test_b_una_candidatura_non_ancora_inviata_non_blocca(tmp_path):
+    """Il contrario del test sopra: una riga `applications` esiste quasi
+    sempre (la crea lo SCRITTORE col CV) e con `applied = 0` non deve
+    impedire niente. Senza questo, il rifiuto sarebbe un muro."""
+    db = make_db(
+        tmp_path,
+        [(11, "ready", 1, "2026-09-12 10:00:00", "user_web")],
+        applications=[(11, 0, None)],
+    )
+    v = apply_verdict(11, config=CONSENT_ON, db_path=db)
+    assert v.allowed, v.log_line()
+
+
 def test_b_colonne_assenti_rifiutano(tmp_path):
     """Un jobs.db di un'immagine vecchia non ha le colonne. Non è un caso da
     ricostruire con un default: è un no."""
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT)")
+    conn.execute(
+        "CREATE TABLE applications (id INTEGER PRIMARY KEY, position_id INTEGER, "
+        "applied INTEGER, applied_via TEXT)"
+    )
     conn.execute("INSERT INTO positions (id, status) VALUES (1, 'ready')")
     conn.commit()
     conn.close()
