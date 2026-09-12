@@ -171,13 +171,23 @@ ready → [autorizzazione utente] → sending → applied | blocked_human
 `applied_via` distingue `user_manual` da `agent_closer`, e il backflow #186
 porta già a casa dal cloud l'azione dell'utente.
 
-Tre livelli di autorizzazione, si **parte dal primo**:
+**Decisione dell'operatore, 2026-09-12: il flag È l'autorizzazione a inviare.**
+*«Se ho fatto la richiesta, deve inviare in automatico. Non si deve fermare al
+bottone.»* Quindi il comportamento di consegna è 🅱️, non 🅰️: posizione flaggata
+= candidatura inviata, senza un secondo click.
 
-| Livello | Cosa autorizza l'utente | Quando |
+| Livello | Cosa autorizza l'utente | Ruolo |
 | --- | --- | --- |
-| 🅰️ **dry-run** | il CLOSER compila **tutto** e si ferma sul bottone; l'utente vede il form pieno e clicca | **partenza decisa** — misura la percentuale di form compilati bene *prima* di concedere il potere di inviare |
-| 🅱️ per-posizione | autorizza in blocco le `ready` che vuole, il CLOSER invia | quando 🅰️ è affidabile |
-| 🅲 standing order | «tutto ciò che è `ready` con score ≥ 80, max 5 al giorno» | solo su richiesta esplicita |
+| 🅱️ **per-posizione** | flagga le `ready` che vuole; il CLOSER **compila e invia**, senza fermarsi | **comportamento di consegna** |
+| 🅰️ dry-run | compila tutto e si ferma sul bottone | **solo diagnostica**: `mode: dry_run` esplicito, per collaudare una ricetta ATS nuova senza spedire. Non è il percorso dell'utente |
+| 🅲 standing order | «tutto ciò che è `ready` con score ≥ 80, max 5 al giorno» | solo su richiesta esplicita, non in questo giro |
+
+⚠️ **Conseguenza diretta, e vincola l'ordine di consegna**: se il flag invia da
+solo, fra l'utente e il recruiter non c'è più un occhio umano. Quindi le tre
+difese non sono rifiniture successive, **entrano in produzione nello stesso
+commit della capacità di inviare**: la ricevuta obbligatoria (§5.4), il
+`blocked_human` su qualunque incertezza (§5.5) e l'invariante «non inventa un
+dato» (§6). Una capacità di invio che arriva prima di loro non va mergiata.
 
 ## 8. Ordine di consegna
 
@@ -185,8 +195,8 @@ Tre livelli di autorizzazione, si **parte dal primo**:
 | --- | --- | --- |
 | 1 | `site_login` nel vault + PORTINAIO + `jht login <dominio>` headful locale | senza sessione non esiste niente |
 | 2 | `ats_detect` + **una** ricetta: **Greenhouse o Lever** | form più regolari: si collauda la macchina senza combattere Workday né i ToS di LinkedIn |
-| 3 | CLOSER + `apply_receipt` + `blocked_human`, in 🅰️ dry-run | si misura prima di dare potere |
-| 4 | gate 🅱️ + rate policy → primo invio vero | |
+| 3 | CLOSER + `apply_receipt` + `blocked_human` + rate policy, **un solo blocco con la capacità di inviare** | il flag invia da solo: le difese non possono arrivare dopo. Si collauda con `mode: dry_run` su una ricetta nuova, ma si consegna capace di inviare |
+| 4 | primo invio vero su una posizione flaggata dall'operatore | |
 | 5 | LinkedIn Easy Apply + Workday | i due più ostici, con la macchina già collaudata |
 | 6 | layer MCP di accessibilità (albero a11y invece di HTML/screenshot) + noVNC per il login su VPS | miglioramenti, non prerequisiti |
 
