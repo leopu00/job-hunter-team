@@ -18,6 +18,9 @@ export type {
   WorkingHoursWindow,
   WorkingHoursConfig,
   TeamSettings,
+  AutoApplyMode,
+  AutoApplyConfig,
+  ApplicationsConfig,
   JHTConfig,
 } from "./types";
 
@@ -33,6 +36,8 @@ export {
   windowDurationHours,
   MIN_WINDOW_HOURS,
   TeamSettingsSchema,
+  AutoApplySchema,
+  ApplicationsSchema,
   SubscriptionSchema,
   validateConfig,
 } from "./schema";
