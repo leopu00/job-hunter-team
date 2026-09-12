@@ -1644,6 +1644,11 @@
       "path": "docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md",
       "description": "Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione",
       "last_review": "2026-08-24"
+    },
+    {
+      "path": "docs/internal/architecture/closer-application-assistant-design.md",
+      "description": "📮 [JHT-CLOSER] design: assistente alle candidature — sessione loggata + broker credenziali, ricette ATS, ricevuta obbligatoria, gate di autorizzazione",
+      "last_review": null
     }
   ]
 }

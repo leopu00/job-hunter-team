@@ -73,6 +73,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | [`2026-06-13-fix-batch-recheck-pacing-design.md`](architecture/2026-06-13-fix-batch-recheck-pacing-design.md) | Fix-batch: recheck quality, scout-resume, pacing, totalQuota |
 | [`analista-expansion-design.md`](architecture/analista-expansion-design.md) | Espansione ruolo Analista |
 | [`dottore-redesign-design.md`](architecture/dottore-redesign-design.md) | Ridisegno ruolo Dottore (context-refresh) |
+| [`closer-application-assistant-design.md`](architecture/closer-application-assistant-design.md) | 📮 CLOSER — assistente alle candidature: sessione loggata + broker credenziali, ricette ATS, gate di autorizzazione |
 | [`usage-monitoring-redesign-design.md`](architecture/usage-monitoring-redesign-design.md) | Ridisegno monitoraggio usage (Sentinella ↔ Capitano) |
 | [`kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md) | 💰 Economia provider (living): coordinatori ~20% uguali · budget Kimi ~2× (non 17×) · €/token ≈ pari · vero limite = precisione |
 

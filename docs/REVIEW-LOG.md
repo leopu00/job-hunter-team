@@ -373,6 +373,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap e milestone full-team dei worker API isolati: contratti proposal-only, coordinamento, canary sintetici/live e percorso di promozione | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/architecture/2026-08-24-desktop-setup-modes.md](./internal/architecture/2026-08-24-desktop-setup-modes.md) | Matrice dei setup desktop e perimetro attivo own PC, Podman e chiave API effimera | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md](./internal/roadmap/2026-08-24-desktop-tauri-migration.md) | Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione | 2026-08-24 | 2026-08-24 | 🟢 |
+| [docs/internal/architecture/closer-application-assistant-design.md](./internal/architecture/closer-application-assistant-design.md) | 📮 [JHT-CLOSER] design: assistente alle candidature — sessione loggata + broker credenziali, ricette ATS, ricevuta obbligatoria, gate di autorizzazione | — | — | ✅ |
 
 
 ## 🔒 docs/security
