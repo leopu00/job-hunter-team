@@ -82,6 +82,43 @@ _spawn_json_escape() {
   printf '%s' "$value"
 }
 
+# `flock` sa dire solo che il tempo e' scaduto. Per rispondere alla domanda
+# operativa (chi lo tiene?) leggiamo procfs senza lsof/fuser, assenti
+# dall'immagine slim. Solo comm, PID ed eta': niente cmdline, che potrebbe
+# contenere dati dell'utente. Tutto best-effort: una procfs non leggibile non
+# deve trasformare un timeout gia' diagnosticato in un secondo errore.
+_spawn_lock_holder() {
+  local lock="$1" proc_root="${JHT_SPAWN_PROC_ROOT:-/proc}"
+  local p pid fd target process started now age
+  now="$(date -u +%s 2>/dev/null)" || now=0
+  for p in "$proc_root"/[0-9]*; do
+    [ -d "$p" ] || continue
+    pid="${p##*/}"
+    [ "$pid" = "$$" ] && continue
+    for fd in "$p"/fd/*; do
+      target="$(readlink "$fd" 2>/dev/null)" || continue
+      [ "$target" = "$lock" ] || continue
+      process="$(head -n 1 "$p/comm" 2>/dev/null | cut -c1-64)"
+      process="${process//$'\t'/ }"
+      process="${process//\"/}"
+      [ -n "$process" ] || process="unknown"
+      started="$(stat -c %Y "$p" 2>/dev/null \
+        || stat -f %m "$p" 2>/dev/null \
+        || true)"
+      case "$started" in
+        ''|*[!0-9]*) printf 'pid=%s process=%s age=unknown' "$pid" "$process" ;;
+        *)
+          age=$((now - started))
+          [ "$age" -ge 0 ] 2>/dev/null || age=0
+          printf 'pid=%s process=%s age=%ss' "$pid" "$process" "$age"
+          ;;
+      esac
+      return 0
+    done
+  done
+  return 0
+}
+
 _spawn_on_exit() {
   local rc=$? now duration timestamp
   # Evita ricorsione se una futura modifica introducesse un `exit` qui.
@@ -491,11 +528,13 @@ if [ "$ROLE" = "tg-bridge" ]; then
   # intera.
   _spawn_stage="lock_wait"
   _spawn_flock_started_s="$(date -u +%s)"
+  _spawn_lock="${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
   if command -v flock >/dev/null 2>&1; then
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
     if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
-      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+      _holder="$(_spawn_lock_holder "$_spawn_lock")"
+      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES] (lock holder: ${_holder:-unknown})." >&2
       exit 1
     fi
   fi
@@ -706,12 +745,14 @@ esac
 # fallback conserva il comportamento storico.
 _spawn_stage="lock_wait"
 _spawn_flock_started_s="$(date -u +%s)"
+_spawn_lock="${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
 if command -v flock >/dev/null 2>&1; then
   mkdir -p "${JHT_HOME:-/jht_home}/locks"
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
   if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
     _spawn_stage="lock_timeout"
-    echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION'." >&2
+    _holder="$(_spawn_lock_holder "$_spawn_lock")"
+    echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION' (lock holder: ${_holder:-unknown})." >&2
     exit 1
   fi
 fi
