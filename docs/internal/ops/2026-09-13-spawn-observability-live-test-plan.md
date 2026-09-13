@@ -281,7 +281,7 @@ cli_rc=$?
 set -e
 test "$cli_rc" -ne 0
 printf '%s\n' "$cli_output" | grep -q 'Refusing to start closer:'
-printf '%s\n' "$cli_output" | grep -q 'application gate that cannot answer answers no'
+printf '%s\n' "$cli_output" | grep -q 'Set applications.auto_apply.enabled = true'
 ```
 
 **Passa se:** entrambe le righe significative compaiono nell'output CLI e il comando
