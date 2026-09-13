@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   blokkol.
 - A kapu induláskor **és** közvetlenül a kattintás előtt is ellenőrződik. Egy flag,
   amelyet az űrlap kitöltése közben vontak vissza, leállítja a beküldést.
-- Ma az egyetlen teljes recept az **Ashby**. Minden más platform emberre vár.
+- Ma két teljes recept van: **Ashby** és **Greenhouse** (csak a három nyilvános hostja, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, HTTPS-en; az oldalt minden lépés után újra ellenőrzi). Minden más platform emberre vár.
 
 ## A nyugta
 
@@ -68,9 +68,13 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `captcha` / `two_factor` | az oldal ellenőrizni akarja, hogy ember van-e ott |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | egy mező, amelyet a recept nem tud mentett válasszal kitölteni |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | ehhez az oldalhoz még nincs recept |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |
+| `greenhouse_redirect_untrusted` | a folyamat közben a Greenhouse oldal kilépett a három megbízható hostjából |
+| `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
+| `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |
 | `page_unavailable` / `browser_uncertainty` | az oldal vagy a böngésző a folyamat közepén hibázott |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | a beküldésre rákattintott, de a megerősítés nem biztos |
+| `receipt_screenshot_failed` | a megerősítés látható volt, de a képernyőképét nem sikerült menteni |
 | `submit_outcome_unknown` | egy korábbi futás elindította a beküldést és nem hagyott nyugtát |
 | `applied_record_failed` | a nyugta létezik, de az állapotot nem sikerült rögzíteni — a jelentkezés szinte biztosan kiment |
 

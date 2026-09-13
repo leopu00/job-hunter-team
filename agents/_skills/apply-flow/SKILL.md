@@ -32,7 +32,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - The gate is checked at start **and** immediately before the click. A flag
   revoked while the form was being filled stops the submission.
-- Today the only complete recipe is **Ashby**. Any other platform blocks for a human.
+- Two complete recipes today: **Ashby** and **Greenhouse** (only its three public hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, over HTTPS; the page is re-checked after every step). Any other platform blocks for a human.
 
 ## The receipt
 
@@ -67,9 +67,13 @@ The flow stops on anything it cannot do with certainty:
 | `captcha` / `two_factor` | the site wants to verify a human |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | a field the recipe cannot fill with a saved answer |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | the CV cannot be attached |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | no recipe for this page yet |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | no recipe for this page yet, or the form is not the one the recipe knows |
+| `greenhouse_redirect_untrusted` | the Greenhouse page left its three trusted hosts during the flow |
+| `form_error` / `field_invalid` / `submit_unavailable` | the form reports an error, a field format is rejected, or the submit button is missing or disabled |
+| `url_refused` / `checkpoint_invalid` | the application URL failed the public-address guard, or the saved checkpoint is unreadable |
 | `page_unavailable` / `browser_uncertainty` | the page or the browser failed mid-flow |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | submit was clicked but the confirmation is not certain |
+| `receipt_screenshot_failed` | the confirmation was visible but its screenshot could not be saved |
 | `submit_outcome_unknown` | a previous run started submit and left no receipt |
 | `applied_record_failed` | the receipt exists but the state could not be recorded — the application most likely went out |
 

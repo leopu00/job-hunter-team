@@ -32,7 +32,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   cerca una conferma sulla pagina e, senza, si blocca con `submit_outcome_unknown`.
 - Il cancello si controlla all'avvio **e** subito prima del click. Un flag revocato
   mentre il form si compilava ferma l'invio.
-- Oggi l'unica ricetta completa è **Ashby**. Ogni altra piattaforma si blocca per una persona.
+- Oggi due ricette complete: **Ashby** e **Greenhouse** (solo i suoi tre host pubblici, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, in HTTPS; la pagina si ricontrolla dopo ogni step). Ogni altra piattaforma si blocca per una persona.
 
 ## La ricevuta
 
@@ -67,9 +67,13 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 | `captcha` / `two_factor` | il sito vuole verificare che ci sia una persona |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo che la ricetta non sa compilare con una risposta salvata |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | il CV non si riesce ad allegare |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | ancora nessuna ricetta per questa pagina |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | ancora nessuna ricetta per questa pagina, o il form non è quello che la ricetta conosce |
+| `greenhouse_redirect_untrusted` | durante il flusso la pagina Greenhouse è uscita dai suoi tre host fidati |
+| `form_error` / `field_invalid` / `submit_unavailable` | il form segnala un errore, il formato di un campo è rifiutato, o il bottone di invio manca o è disabilitato |
+| `url_refused` / `checkpoint_invalid` | l'URL della candidatura non ha passato il controllo sugli indirizzi pubblici, o il checkpoint salvato non si legge |
 | `page_unavailable` / `browser_uncertainty` | la pagina o il browser hanno ceduto a metà flusso |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | l'invio è stato cliccato ma la conferma non è certa |
+| `receipt_screenshot_failed` | la conferma era visibile ma il suo screenshot non si è potuto salvare |
 | `submit_outcome_unknown` | un giro precedente ha avviato l'invio e non ha lasciato ricevuta |
 | `applied_record_failed` | la ricevuta c'è ma lo stato non si è potuto registrare — la candidatura quasi certamente è partita |
 

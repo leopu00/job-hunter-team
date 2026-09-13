@@ -255,3 +255,32 @@ def test_la_coda_che_il_capitano_legge_resta_chiusa_senza_niente_da_inviare(tmp_
         env={**os.environ, "JHT_HOME": str(tmp_path)},
     )
     assert r.returncode != 0
+
+
+# ── La skill apply-flow dice al CLOSER TUTTI i motivi per cui il flusso si ferma ─
+
+
+def _flow_block_reasons() -> set[str]:
+    """Ogni `reason` che `apply_flow.py` può restituire con `blocked_human`.
+
+    Letto dal sorgente, non da una lista: la ricetta Greenhouse ha aggiunto
+    otto motivi in un colpo, e una skill che non li nomina lascia il CLOSER a
+    interpretare un token che non ha mai visto — cioè a improvvisare proprio
+    dove la spec vuole che si fermi.
+    """
+    src = (SKILLS_DIR / "apply_flow.py").read_text()
+    reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src))
+    flow = _load("apply_flow_for_reasons", "apply_flow.py")
+    if "{detection.platform}_dom_unrecognised" in src:
+        reasons |= {f"{p}_dom_unrecognised" for p in flow.SUPPORTED_PLATFORMS}
+    # I due motivi di sfida arrivano come variabile (`challenge`), non letterali.
+    reasons |= {"captcha", "two_factor", "ats_conflict"}
+    return reasons
+
+
+@pytest.mark.parametrize("lang", ("en",) + LOCALES)
+def test_la_skill_apply_flow_nomina_ogni_motivo_di_blocco(lang):
+    path = AGENTS_DIR / "_skills" / "apply-flow" / ("SKILL.md" if lang == "en" else f"SKILL.{lang}.md")
+    text = path.read_text()
+    missing = sorted(r for r in _flow_block_reasons() if f"`{r}`" not in text)
+    assert not missing, f"{path.name}: motivi di blocco del flusso non spiegati al CLOSER: {missing}"

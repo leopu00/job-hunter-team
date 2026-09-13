@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - Das Tor wird beim Start **und** direkt vor dem Klick geprüft. Ein Flag, das
   während des Ausfüllens widerrufen wurde, stoppt das Absenden.
-- Heute ist das einzige vollständige Rezept **Ashby**. Jede andere Plattform blockiert für einen Menschen.
+- Heute zwei vollständige Rezepte: **Ashby** und **Greenhouse** (nur seine drei öffentlichen Hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, über HTTPS; die Seite wird nach jedem Schritt erneut geprüft). Jede andere Plattform blockiert für einen Menschen.
 
 ## Der Beleg
 
@@ -68,9 +68,13 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 | `captcha` / `two_factor` | die Seite will einen Menschen verifizieren |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | ein Feld, das das Rezept nicht mit einer gespeicherten Antwort füllen kann |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | der CV lässt sich nicht anhängen |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | noch kein Rezept für diese Seite |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | noch kein Rezept für diese Seite, oder das Formular ist nicht das, das das Rezept kennt |
+| `greenhouse_redirect_untrusted` | die Greenhouse-Seite hat während des Flows ihre drei vertrauenswürdigen Hosts verlassen |
+| `form_error` / `field_invalid` / `submit_unavailable` | das Formular meldet einen Fehler, ein Feldformat wird abgelehnt, oder der Absende-Button fehlt oder ist deaktiviert |
+| `url_refused` / `checkpoint_invalid` | die Bewerbungs-URL hat die Prüfung auf öffentliche Adressen nicht bestanden, oder der gespeicherte Checkpoint ist unlesbar |
 | `page_unavailable` / `browser_uncertainty` | die Seite oder der Browser ist mitten im Flow ausgefallen |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | Absenden wurde geklickt, aber die Bestätigung ist nicht sicher |
+| `receipt_screenshot_failed` | die Bestätigung war sichtbar, aber ihr Screenshot konnte nicht gespeichert werden |
 | `submit_outcome_unknown` | ein früherer Lauf hat das Absenden begonnen und keinen Beleg hinterlassen |
 | `applied_record_failed` | der Beleg existiert, aber der Zustand konnte nicht aufgezeichnet werden — die Bewerbung ist höchstwahrscheinlich raus |
 

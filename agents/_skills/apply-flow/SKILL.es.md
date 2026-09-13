@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - La puerta se comprueba al arrancar **y** justo antes del clic. Un flag revocado
   mientras se rellenaba el formulario detiene el envío.
-- Hoy la única receta completa es **Ashby**. Cualquier otra plataforma se bloquea para una persona.
+- Hoy dos recetas completas: **Ashby** y **Greenhouse** (solo sus tres hosts públicos, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, por HTTPS; la página se vuelve a comprobar tras cada paso). Cualquier otra plataforma se bloquea para una persona.
 
 ## El recibo
 
@@ -68,9 +68,13 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 | `captcha` / `two_factor` | el sitio quiere verificar que hay una persona |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo que la receta no sabe rellenar con una respuesta guardada |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | el CV no se puede adjuntar |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | todavía no hay receta para esta página |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | todavía no hay receta para esta página, o el formulario no es el que la receta conoce |
+| `greenhouse_redirect_untrusted` | durante el flujo la página de Greenhouse salió de sus tres hosts de confianza |
+| `form_error` / `field_invalid` / `submit_unavailable` | el formulario señala un error, se rechaza el formato de un campo, o el botón de envío falta o está deshabilitado |
+| `url_refused` / `checkpoint_invalid` | la URL de la candidatura no pasó el control de direcciones públicas, o el checkpoint guardado es ilegible |
 | `page_unavailable` / `browser_uncertainty` | la página o el navegador fallaron a mitad del flujo |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | se hizo clic en enviar pero la confirmación no es segura |
+| `receipt_screenshot_failed` | la confirmación era visible pero no se pudo guardar su captura |
 | `submit_outcome_unknown` | una pasada anterior inició el envío y no dejó recibo |
 | `applied_record_failed` | el recibo existe pero el estado no se pudo registrar — la candidatura casi seguro salió |
 
