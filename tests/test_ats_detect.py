@@ -62,6 +62,26 @@ def test_dom_markers_detect_the_recipe_without_a_known_host(dom: str, platform: 
     assert result.dom_match is True
 
 
+def test_current_greenhouse_react_form_marker_is_detected():
+    result = detect_ats(
+        "https://careers.example.invalid/role",
+        '<form id="application-form" class="application--form"></form>',
+    )
+
+    assert result.platform == "greenhouse"
+    assert result.dom_match is True
+
+
+def test_generic_application_form_does_not_claim_greenhouse():
+    result = detect_ats(
+        "https://careers.example.invalid/role",
+        '<form id="application-form" class="application-form"></form>',
+    )
+
+    assert result.platform == "unknown"
+    assert result.dom_match is False
+
+
 def test_conflicting_url_and_dom_fail_closed():
     result = detect_ats(
         "https://jobs.ashbyhq.com/example/role",
