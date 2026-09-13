@@ -499,10 +499,35 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         print(f"[bridge V6] WARN write state: {e}", file=sys.stderr)
 
 
+# Tetto della domanda "esiste?": un server tmux che non risponde appendeva il
+# loop del bridge per sempre — niente tick, niente pacing, niente daily-cap —
+# senza una riga di log. Stesso ordine di grandezza delle altre chiamate tmux
+# di questo file (10s); variabile per i test.
+SESSION_EXISTS_TIMEOUT_S = 10
+
+
 def session_exists(s):
     # `=` = exact match: senza, tmux risolve per prefisso e SENTINELLA morta
     # risulterebbe viva finche' vive SENTINELLA-WORKER.
-    return subprocess.run(["tmux", "has-session", "-t", f"={s}"], capture_output=True).returncode == 0
+    #
+    # Nessuna risposta = "non esiste": ogni chiamante la usa per decidere se
+    # mandare un messaggio, e mandarlo a un server che non risponde non
+    # arriverebbe comunque. Lo si dice su stderr (sentinel-bridge.log), perche'
+    # un "no" per timeout e un "no" vero non sono la stessa osservazione.
+    try:
+        return subprocess.run(
+            ["tmux", "has-session", "-t", f"={s}"],
+            capture_output=True, timeout=SESSION_EXISTS_TIMEOUT_S,
+        ).returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"[bridge V6] tmux has-session {s}: no answer within "
+              f"{SESSION_EXISTS_TIMEOUT_S}s — treating the session as absent",
+              file=sys.stderr)
+        return False
+    except OSError as e:
+        print(f"[bridge V6] tmux has-session {s}: {type(e).__name__} — "
+              "treating the session as absent", file=sys.stderr)
+        return False
 
 
 # ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────
