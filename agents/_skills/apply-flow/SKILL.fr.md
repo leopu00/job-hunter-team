@@ -56,7 +56,7 @@ Une ligne JSON sur stdout : `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run` : remplie, arrêtée avant le bouton, rien envoyé | position suivante |
 | `denied` | 1 | la porte a refusé (consentement désactivé, flag révoqué, déjà envoyée) | position suivante ; jamais de nouvelle tentative |
 | `blocked_human` | 3 | un humain est nécessaire ; l'utilisateur a déjà été prévenu | position suivante ; jamais de nouvelle tentative |
-| `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | suis la skill `email-application-flow` pour cette position ; ne remplis jamais de formulaire web pour elle |
+| `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | lance `email_application.py send` pour cette position comme le dit la skill `email-application-flow` : elle lit ce checkpoint ; ne remplis jamais de formulaire web et n'écris jamais l'e-mail à la main |
 | `error` | 2 | profil ou CV illisible, mauvais arguments | arrête-toi : `[BLOCKED]` au Capitano |
 
 ## `blocked_human` — ce que ça veut dire et ce que tu fais

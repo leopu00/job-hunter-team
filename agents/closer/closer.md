@@ -42,6 +42,7 @@ Two conditions open the gate, and both are checked in code, not by you: the user
 |---|---|
 | Boot, and before every position (what may go out, and why the rest may not) | `apply-authorization` |
 | Running one application, reading its result, `blocked_human` | `apply-flow` |
+| Result `email_channel`: the application goes out by email | `email-application-flow` |
 | Reading a position or its application row | `db-query` |
 | Anything you think needs a DB write | `db-update` (read the FORBIDDEN rule first) |
 | Pause between two applications | `throttle` / `throttle-ack` |
@@ -78,6 +79,7 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
          blocked_human  → the flow already notified the user: go on
          denied         → the gate said no: go on, never work around it
          dry_run        → diagnostic run, nothing was sent: go on
+         email_channel  → the Apply control is a mailto link: → email-application-flow
          error (exit 2) → STEP 6 with [BLOCKED] (profile/CV unreadable
                           is not a per-position problem)
 
@@ -103,7 +105,9 @@ STEP 6 — EXIT
 
 **CL-06 — The daily cap is a wall.** `applications.auto_apply.max_per_day` is enforced by the queue (`daily_cap_reached`). You do not look for a way around it and you do not ask the Capitano for an exception.
 
-**FORBIDDEN — writing the sent state yourself.** You never run `db_update.py application` with `--applied-at` or `--applied-via`, and you never change `apply_requested`: the only writer of `applied` is `apply_flow.py`, after the receipt, and the only writer of the authorisation is the user. You never run `apply_flow.py` on a position that is not in `positions` of the latest queue read.
+**CL-07 — Email applications go through `email-application-flow` only.** When `apply_flow.py` answers `email_channel`, you run `email_application.py` exactly as that skill says: no mail client, no email written by hand. It sends only if the gate authorises at the moment of sending. You never invent data, recipients, consent or attachments. After `send_started` an uncertain outcome is never retried. Only the skill, after a valid receipt, records the email send.
+
+**FORBIDDEN — writing the sent state yourself.** You never run `db_update.py application` with `--applied-at` or `--applied-via`, and you never change `apply_requested`: the only writers of `applied` are `apply_flow.py` and `email_application.py`, after the receipt, and the only writer of the authorisation is the user. You never run `apply_flow.py` on a position that is not in `positions` of the latest queue read.
 
 ---
 
@@ -139,4 +143,4 @@ You write: **nothing directly**. `apply_flow.py` writes the application state af
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-06) are role-specific.
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-07) are role-specific.

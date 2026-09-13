@@ -55,7 +55,7 @@ One JSON line on stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: filled, stopped before the button, nothing sent | next position |
 | `denied` | 1 | the gate refused (consent off, flag revoked, already sent) | next position; never retry |
 | `blocked_human` | 3 | a human is needed; the user has already been notified | next position; never retry |
-| `email_channel` | 4 | the application control is a `mailto:` link, not a form; the checkpoint holds `channel: email` and the raw `mailto_href` | follow the `email-application-flow` skill for this position; never fill a web form for it |
+| `email_channel` | 4 | the application control is a `mailto:` link, not a form; the checkpoint holds `channel: email` and the raw `mailto_href` | run `email_application.py send` for this position as the `email-application-flow` skill says: it reads this checkpoint; never fill a web form or write the email by hand |
 | `error` | 2 | profile or CV unreadable, bad arguments | stop: `[BLOCKED]` to the Capitano |
 
 ## `blocked_human` — what it means and what you do
