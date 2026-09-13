@@ -30,17 +30,18 @@ si verifica il comportamento.
 | # | Fix | Commit | Suite statica |
 |---|---|---|---|
 | F1 | fd 9 del lock chiuso nei figli tmux e nel server | `5ca0adfc2e` | `test_start_agent_spawn_lock_fd.py` |
-| F2 | `jht_timeout` portabile (degrada, non muore) | `9dd5ee7db5` | `test_start_agent_spawn_timeout_portability.py` |
+| F2 | `jht_timeout` portabile (degrada, non muore) | `9dd5ee7db5` (helper), `e21fca08ab` (call site) | `test_start_agent_spawn_timeout_portability.py` |
 | F3 | budget 45s / `flock -w` 75s, con override | `788eb498a6` | `test_start_agent_spawn_budgets_and_liveness.py` |
 | F4 | target tmux ancorati con `=` | `7f77893ac7` | idem |
 | F5 | rc discriminato, cleanup non distruttivo | `e21fca08ab` | `test_start_agent_spawn_error_diagnostics.py` |
 | F6 | verifica che il REPL sia partito | `b1ba13a083` | `test_start_agent_spawn_budgets_and_liveness.py` |
 | F7 | misura dei fallimenti di spawn + escalation | `396898bc6e`…`d32ed2b44d` | `test_agent_watchdog_spawn_failure_escalation.py` |
 | F8 | cooldown di `bridge_escalate` per chiave | `04ede359d1` | idem |
-| F9 | tetto sul `has-session` del guard di idempotenza | *in corso* | — |
-| F10 | tetto sullo spawn Dottore/Mantenitore + log a due scrittori | *in corso* | — |
+| F9 | tetto sul `has-session` del guard di idempotenza | `8486133c9d` | `test_start_agent_spawn_budgets_and_liveness.py` |
+| F10 | tetto sullo spawn Dottore/Mantenitore + log a un solo scrittore | `45cd80911e`, `65d7fa74df`, `fbddac1368`, `f08be10ab2`, `1fa5c27708`, `57edd16145` | `test_spawn_tmux_time_bound.py`, `test_doctor_watchdog_time_bounds.py`, `test_doctor_watchdog_log_single_writer.py` |
+| F11 | capture di containment per pane id, non per `=sessione` | `6572c49f0f` | `test_agent_containment.py` |
 | — | PR #214 (contributor) — `timeout` sulla `new-session` | `0673592ca4` | coperta da F2/F3/F5 |
-| — | PR #223 (contributor) — watchdog del pager | `9d4c23969c` | **⚠️ vedi §4: non testare, va rilavorata** |
+| — | PR #223 (contributor) — watchdog del pager | `9d4c23969c`, **revertito** in `ecda54e01b` | non in `master`: vedi §4 |
 
 ### 0.2 Precauzioni prima di partire
 
@@ -334,8 +335,7 @@ produzione prima del prossimo restart, non dopo.
 
 ## 4. Cosa NON testare in questo batch
 
-**La PR #223 (watchdog del pager) è mergiata nella branch ma non è pronta.** Non
-includerla nei test e non deployarla:
+**La PR #223 (watchdog del pager) è stata revertita (`ecda54e01b`) prima del merge su `master`: in `master` non c'è.** GitHub la mostra come «merged» perché il suo commit resta raggiungibile dalla storia; una revisione arriverà come PR nuova. I motivi del revert:
 
 - non legge `.team-halted.flag`, `.weekly-halt.flag` né `.team-standby.flag`: è l'unico
   processo che continuerebbe a spendere dopo lo Stop e durante lo standby a spesa zero;
@@ -385,7 +385,6 @@ La SENTINELLA mancava per un containment preesistente, non per lo spawn.
 
 ### Se qualcosa va storto
 
-I fix sono su `lee-launcher-fixes` e `master` non è stato toccato: il ripristino è
-tornare all'immagine costruita da `master`. Nessuno dei fix scrive dati persistenti
+I fix sono su `master` dal 2026-09-13 (merge `a7b5a2e18`): il ripristino è tornare a un'immagine costruita da un commit precedente al merge (il primo genitore del merge è `db1cb975`). Nessuno dei fix scrive dati persistenti
 nuovi salvo `agent-spawn-failures.tsv` e i file di stato sotto `logs/`, che sono
 append-only e ignorabili da una versione precedente del codice.
