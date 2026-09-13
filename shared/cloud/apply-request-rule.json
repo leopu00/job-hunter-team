@@ -1,5 +1,15 @@
 {
   "authorisable_status": "ready",
-  "post_submission_states": ["applied", "response"],
-  "user_request_origins": ["user_web", "user_local"]
+  "post_submission_states": [
+    "applied",
+    "response"
+  ],
+  "user_request_origins": [
+    "user_web",
+    "user_local"
+  ],
+  "automated_applied_via": [
+    "agent_closer",
+    "agent_closer_email"
+  ]
 }
