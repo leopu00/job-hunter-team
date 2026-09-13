@@ -276,6 +276,7 @@ def test_an_aborted_spawn_removes_only_its_own_half_made_session(
         f"export T_CALLS='{calls}'\n"
         f"source '{ROOT / '.launcher' / 'daemon-lib.sh'}'\n"
         "SESSION=SCOUT-1\nJHT_SPAWN_TMUX_PROBE_SEC=1\n"
+        + "_spawn_rc() { return \"$1\"; }\n"
         + _cleanup_function()
         + f"_SPAWN_SESSION_CREATED={created}\n"
         "trap _spawn_abort_cleanup EXIT\n"
@@ -286,3 +287,36 @@ def test_an_aborted_spawn_removes_only_its_own_half_made_session(
     text = calls.read_text(encoding="utf-8") if calls.exists() else ""
     assert ("kill-session -t =SCOUT-1" in text) is expect_kill, text
     assert ("half-made session" in result.stderr) is expect_kill, result.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="il launcher gira nel container Linux")
+@pytest.mark.parametrize("exit_rc", [0, 1, 3])
+def test_the_cleanup_trap_hands_over_to_an_existing_exit_handler(tmp_path, capable_bash, exit_rc):
+    """Un solo trap EXIT per processo: installare il nostro sostituirebbe in
+    silenzio quello della traccia per tentativo (`_spawn_on_exit`), e il merge
+    dei due rami e' testualmente pulito. Il nostro gestore lo richiama, con
+    `set -e` attivo e con l'rc dello script visibile come `$?`."""
+    bin_dir = _harness(tmp_path, capable_bash)
+    out = tmp_path / "hook.txt"
+    script = (
+        "set -euo pipefail\n"
+        f"export PATH='{bin_dir}':\"$PATH\" T_CALLS='{tmp_path / 'calls.txt'}'\n"
+        f"source '{ROOT / '.launcher' / 'daemon-lib.sh'}'\n"
+        "SESSION=SCOUT-1\nJHT_SPAWN_TMUX_PROBE_SEC=1\n"
+        f"_spawn_on_exit() {{ local rc=$?; echo \"hook rc=$rc\" >> '{out}'; }}\n"
+        "trap _spawn_on_exit EXIT\n"
+        "_spawn_rc() { return \"$1\"; }\n"
+        + _cleanup_function()
+        + "_SPAWN_SESSION_CREATED=1\n"
+        "trap _spawn_abort_cleanup EXIT\n"
+        f"exit {exit_rc}\n"
+    )
+    result = subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=60)
+    assert result.returncode == exit_rc, result.stderr
+    assert out.read_text(encoding="utf-8").splitlines() == [f"hook rc={exit_rc}"]
+
+
+def test_the_rc_helper_exists_next_to_the_cleanup():
+    source = START_AGENT.read_text(encoding="utf-8")
+    assert '_spawn_rc() { return "$1"; }' in source
+    assert source.index('_spawn_rc() {') < source.index("_spawn_abort_cleanup() {")
