@@ -1729,6 +1729,11 @@
       "path": "agents/closer/closer.md",
       "description": "📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/email-application-flow/SKILL.md",
+      "description": "📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta",
+      "last_review": null
     }
   ]
 }
