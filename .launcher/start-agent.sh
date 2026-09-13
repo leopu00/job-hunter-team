@@ -56,6 +56,55 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
+# ── Una riga strutturata per ogni tentativo di spawn ────────────────────────
+# Il chiamante puo' perdere o troncare stdout/stderr; questa traccia vive nel
+# bind mount di $JHT_HOME e viene scritta dalla trap anche quando `set -e`
+# interrompe lo script in un punto che non ha un proprio ramo d'errore. Una
+# sola riga conclusiva per invocazione evita di dover ricostruire coppie
+# attempt/result fra processi concorrenti.
+JHT_SPAWN_TRACE="$(jht_daemon_log spawn-attempts.jsonl)"
+JHT_SPAWN_SOURCE="${JHT_SPAWN_SRC:-unknown}"
+_spawn_started_s="$(date -u +%s)"
+_spawn_flock_wait_s=0
+_spawn_stage="role_validation"
+# Prima che il ruolo sia validato non esiste ancora il nome tmux canonico.
+# Questo valore viene sostituito da SESSION appena jht_spawn_session_name ha
+# risposto; resta comunque azionabile sui rifiuti precoci.
+SESSION="$ROLE${INSTANCE:+-$INSTANCE}"
+
+_spawn_json_escape() {
+  local value="${1:-}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
+_spawn_on_exit() {
+  local rc=$? now duration timestamp
+  # Evita ricorsione se una futura modifica introducesse un `exit` qui.
+  trap - EXIT
+  now="$(date -u +%s 2>/dev/null)" || now="$_spawn_started_s"
+  if [ "$_spawn_stage" = "lock_wait" ]; then
+    _spawn_flock_wait_s=$((now - _spawn_flock_started_s))
+    [ "$rc" -eq 0 ] || _spawn_stage="lock_timeout"
+  fi
+  timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || timestamp="1970-01-01T00:00:00Z"
+  duration=$((now - _spawn_started_s))
+  [ "$duration" -ge 0 ] 2>/dev/null || duration=0
+  printf '{"timestamp":"%s","session":"%s","role":"%s","source":"%s","flock_wait_s":%s,"stage":"%s","rc":%s,"duration_s":%s}\n' \
+    "$(_spawn_json_escape "$timestamp")" \
+    "$(_spawn_json_escape "$SESSION")" \
+    "$(_spawn_json_escape "$ROLE")" \
+    "$(_spawn_json_escape "$JHT_SPAWN_SOURCE")" \
+    "$_spawn_flock_wait_s" \
+    "$(_spawn_json_escape "$_spawn_stage")" \
+    "$rc" "$duration" >>"$JHT_SPAWN_TRACE" 2>/dev/null || true
+}
+trap _spawn_on_exit EXIT
+
 # ── Budget di tempo dello spawn ─────────────────────────────────────────────
 # Due numeri, un solo vincolo che li lega. Dall'esterno all'interno:
 #
@@ -170,17 +219,21 @@ PY
 # niente bridge. Singleton: se gia' viva, exit 0 senza errori.
 if [ "$ROLE" = "worker" ]; then
   WORKER_SESSION="${JHT_SENTINEL_WORKER:-SENTINELLA-WORKER}"
+  SESSION="$WORKER_SESSION"
+  _spawn_stage="worker_probe"
   # `=`: exact match, come il guard di idempotenza piu' sotto. Qui nessuna
   # sessione nota inizia per SENTINELLA-WORKER, quindi oggi non cambia esito;
   # e' la stessa domanda ("questa sessione esatta esiste?") e va posta nello
   # stesso modo, perche' un nome nuovo che ne estende il prefisso la
   # trasformerebbe di nuovo in un falso "e' gia' attivo".
   if tmux has-session -t "=$WORKER_SESSION" 2>/dev/null; then
+    _spawn_stage="already_active"
     echo "✓ $WORKER_SESSION is already active"
     exit 0
   fi
   : "${JHT_HOME:=/jht_home}"
   _ensure_claude_onboarding "$JHT_HOME"
+  _spawn_stage="worker_tmux_new_session"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
   # ⚠️ Le doppie esterne sono obbligatorie: con "export PATH='...:\$PATH'" il
@@ -227,6 +280,7 @@ if [ "$ROLE" = "worker" ]; then
   # solo sulla carta, e mancava proprio quando serve, cioè quando l'HTTP di
   # Anthropic risponde 429. Un guscio va segnalato e rimosso, non ereditato.
   _w_up=0
+  _spawn_stage="worker_repl_wait"
   for _i in $(seq 1 12); do
     sleep 1
     case "$(tmux display-message -p -t "$WORKER_SESSION" '#{pane_current_command}' 2>/dev/null || echo "")" in
@@ -243,6 +297,7 @@ if [ "$ROLE" = "worker" ]; then
     tmux kill-session -t "=$WORKER_SESSION" 2>/dev/null || true
     exit 1
   fi
+  _spawn_stage="complete"
   echo "✓ $WORKER_SESSION started (TUI /usage fallback for the bridge)"
   exit 0
 fi
@@ -256,6 +311,7 @@ fi
 # Lanciato dopo che CAPITANO e SENTINELLA sono già partiti e stabili, così
 # il primo [BRIDGE TICK] arriva alla SENTINELLA che è già pronta a riceverlo.
 if [ "$ROLE" = "bridge" ]; then
+  _spawn_stage="bridge_restart"
   BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
   if [ ! -f "$BRIDGE_SCRIPT" ]; then
     echo "✗ $BRIDGE_SCRIPT not found — bridge did NOT start"
@@ -395,6 +451,7 @@ fi
 # singleton via /proc cmdline). Lanciato dopo che le 3 sessioni tmux sono
 # partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
+  _spawn_stage="tg_bridge_preflight"
   # Accanto a questo script, non un path assoluto al container: in /app è la
   # stessa cosa, e fuori (test, host) lo script diventa eseguibile davvero
   # invece di fallire su una directory che non esiste.
@@ -432,6 +489,8 @@ if [ "$ROLE" = "tg-bridge" ]; then
   # sequenze si intreccerebbero di nuovo. Serializzare costa l'attesa di uno
   # spawn (il python parte staccato, sono millisecondi) e toglie la classe
   # intera.
+  _spawn_stage="lock_wait"
+  _spawn_flock_started_s="$(date -u +%s)"
   if command -v flock >/dev/null 2>&1; then
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
@@ -440,6 +499,8 @@ if [ "$ROLE" = "tg-bridge" ]; then
       exit 1
     fi
   fi
+  _spawn_flock_wait_s=$(( $(date -u +%s) - _spawn_flock_started_s ))
+  _spawn_stage="tg_bridge_restart"
 
   # Kill MIRATO: il marker include il ruolo, che compare nel cmdline grazie a
   # `--role` (vedi tg-bridge.py). Prima si uccideva per marker `tg-bridge.py`,
@@ -643,14 +704,19 @@ esac
 # Serializziamo per sessione e riconosciamo l'idempotenza prima di toccare la
 # workdir. `flock` è disponibile nel container Linux; fuori dal container il
 # fallback conserva il comportamento storico.
+_spawn_stage="lock_wait"
+_spawn_flock_started_s="$(date -u +%s)"
 if command -v flock >/dev/null 2>&1; then
   mkdir -p "${JHT_HOME:-/jht_home}/locks"
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
   if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
+    _spawn_stage="lock_timeout"
     echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION'." >&2
     exit 1
   fi
 fi
+_spawn_flock_wait_s=$(( $(date -u +%s) - _spawn_flock_started_s ))
+_spawn_stage="idempotence_probe"
 # `=` forza l'EXACT match. Senza, la risoluzione dei target tmux prosegue col
 # prefisso: `-t SENTINELLA` trova SENTINELLA-WORKER, `-t SCOUT-1` trova
 # SCOUT-10, `-t CRITICO` trova CRITICO-S3. Su questa riga il prezzo e' il
@@ -670,6 +736,7 @@ fi
 _hs_rc=0
 jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- || _hs_rc=$?
 if [ "$_hs_rc" -eq 0 ]; then
+  _spawn_stage="already_active"
   echo "Session '$SESSION' is already active."
   echo "Connect with: tmux attach -t \"$SESSION\""
   exit 0
@@ -709,6 +776,7 @@ fi
 if [ "$_hs_rc" -ne 1 ]; then
   echo "  ⚠ 'tmux has-session' for '$SESSION' did not answer (rc=$_hs_rc) — continuing as if the session did not exist; tmux itself will reject a duplicate."
 fi
+_spawn_stage="preflight"
 
 # Determina effort in base al mode
 if [ "$MODE" = "fast" ]; then
@@ -1316,6 +1384,7 @@ else
   # principale (cli/src/commands/team/start.js) conserva solo l'ULTIMA riga di
   # stderr, quindi la diagnosi nativa di tmux, se resta una riga a se', non
   # arriva mai ne' all'utente ne' alla dashboard.
+  _spawn_stage="tmux_new_session"
   _ns_err="${TMPDIR:-/tmp}/jht-new-session-$$.err"
   _ns_rc=0
   jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 2>"$_ns_err" 9>&- || _ns_rc=$?
@@ -1450,10 +1519,13 @@ else
   # `python3` escluso come per il watcher: non e' una TUI e il suo pane non
   # segue le stesse regole.
   if [ "$CLI_BIN" != "python3" ]; then
+    _spawn_stage="repl_wait"
     jht_spawn_wait_repl "$SESSION" "$FULL_CMD" "start-agent" "$ROLE" \
       "$JHT_LOGS_DIR" "start-agent.sh" || exit 1
   fi
 fi
+
+_spawn_stage="kickoff"
 
 # ── Sfasamento iniziale del worker ──────────────────────────────────────────
 # Due worker sullo STESSO gradino di throttle che partono insieme restano
@@ -1645,3 +1717,5 @@ if [ "$ROLE" = "sentinella" ]; then
   _msg="[@utente -> @sentinella] [MSG] Startup. Wait for the first [BRIDGE TICK]."
   _kickoff "$SESSION" "$_msg"
 fi
+
+_spawn_stage="complete"
