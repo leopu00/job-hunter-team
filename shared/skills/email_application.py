@@ -57,7 +57,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
-import html
 import json
 import os
 import re
@@ -140,9 +139,9 @@ _ADDRESS = re.compile(
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 )
+EMAIL_CHANNEL_STATE = "email_channel"
 _BAD_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
 _HEADER_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
-_MAILTO_HREF = re.compile(r"""href\s*=\s*(["'])\s*(mailto:[^"']*)\1""", re.I)
 
 _COVER_LETTER_REQUEST = re.compile(
     r"cover\s*letter|motivation(?:al)?\s*letter|letter\s+of\s+motivation|"
@@ -514,12 +513,6 @@ def shutil_which(name: str) -> str | None:
     return shutil.which(name)
 
 
-def _default_fetcher(url: str) -> bytes:
-    import safe_fetch
-
-    return safe_fetch.fetch(url)
-
-
 class EmailApplication:
     def __init__(
         self,
@@ -530,7 +523,6 @@ class EmailApplication:
         config_path: str | Path | None = None,
         transports: Mapping[str, Callable[[TransportSettings, str], Transport]] | None = None,
         notifier: Callable[..., str] | None = None,
-        fetcher: Callable[[str], bytes] | None = None,
         recorder: Callable[[int], None] | None = None,
         clock: Callable[[], str] = _utc_now,
     ):
@@ -540,7 +532,6 @@ class EmailApplication:
         self.config_path = Path(config_path) if config_path else self.jht_home / "jht.config.json"
         self.transports = dict(transports or TRANSPORTS)
         self.notifier = notifier or _default_notifier
-        self.fetcher = fetcher or _default_fetcher
         self.recorder = recorder or self._record_applied
         self.clock = clock
 
@@ -637,6 +628,9 @@ class EmailApplication:
     # ── inspect ──────────────────────────────────────────────────────────────
 
     def _mailto_href(self, position: sqlite3.Row) -> tuple[str, str]:
+        # The link comes only from the browser flow, which tells an "Apply"
+        # control from a contact address. Reading the public page here would
+        # take any mailto (a privacy@ footer) as the recipient: an invented one.
         checkpoint = apply_gate.checkpoint_path(self.position_id, self.jht_home)
         try:
             data = json.loads(checkpoint.read_text(encoding="utf-8"))
@@ -644,35 +638,21 @@ class EmailApplication:
             data = None
         except (OSError, ValueError) as exc:
             raise _error("checkpoint_unreadable", "the browser checkpoint cannot be read") from exc
-        if isinstance(data, dict) and data.get("channel") == "email":
-            if data.get("url") not in (None, position["url"]):
-                raise _error("checkpoint_mismatch", "the browser checkpoint belongs to another vacancy URL")
-            href = data.get("mailto_href")
-            if not isinstance(href, str) or not href.strip():
-                raise _blocked("mailto_invalid", "the browser checkpoint names the email channel without a link")
-            return href, "checkpoint"
-
-        url = str(position["url"] or "").strip()
-        if not url:
-            raise _blocked("mailto_missing", "the vacancy has no URL to read an application link from")
-        try:
-            page = self.fetcher(url)
-        except Exception as exc:
-            raise _error("page_unreadable", f"the vacancy page cannot be read ({type(exc).__name__})") from exc
-        text = page.decode("utf-8", errors="replace") if isinstance(page, bytes) else str(page)
-        hrefs = []
-        for match in _MAILTO_HREF.finditer(text):
-            href = html.unescape(match.group(2)).strip()
-            if href not in hrefs:
-                hrefs.append(href)
-        if not hrefs:
-            raise _blocked("mailto_missing", "the vacancy page has no mailto application link")
-        if len(hrefs) > 1:
+        if not (
+            isinstance(data, dict)
+            and data.get("channel") == "email"
+            and data.get("state") == EMAIL_CHANNEL_STATE
+        ):
             raise _blocked(
-                "recipient_ambiguous",
-                f"the vacancy page has {len(hrefs)} different mailto links",
+                "mailto_missing",
+                "no browser checkpoint names the email channel: run apply_flow.py for this position first",
             )
-        return hrefs[0], "page"
+        if data.get("position_id") != self.position_id or data.get("url") != position["url"]:
+            raise _error("checkpoint_mismatch", "the browser checkpoint belongs to another position or vacancy URL")
+        href = data.get("mailto_href")
+        if not isinstance(href, str) or not href.strip():
+            raise _blocked("mailto_invalid", "the browser checkpoint names the email channel without a link")
+        return href, "checkpoint"
 
     def _inspect(self) -> tuple[sqlite3.Row, Mailto, dict[str, Any]]:
         position = self._position()
@@ -1203,7 +1183,9 @@ class EmailApplication:
 
             # The second decision, as late as possible: between the draft and
             # this line the user may have withdrawn or the cap may be spent.
-            self._gate()
+            gate = self._gate()
+            if gate.get("mode") != "authorised":
+                raise _denied("gate_mode_changed", "the apply mode is no longer authorised; nothing was sent")
             self._mark_send_started(draft["idempotency_key"])
             try:
                 refused = transport.send(message, settings.from_address, draft["recipients"])
@@ -1254,7 +1236,13 @@ class EmailApplication:
             return Outcome(
                 "receipt_incomplete",
                 "receipt_incomplete",
-                "the server's acceptance is not complete or not recorded; a human must check",
+                (
+                    "the server accepted the letter for some recipients and refused "
+                    + ", ".join(receipt["refused"])
+                    + ": it has probably reached the recruiter; a human must check, nothing is sent again"
+                )
+                if refused
+                else "the server's acceptance is not complete or not recorded; a human must check",
                 {"message_id": draft["message_id"], "refused": receipt["refused"]},
             )
         with contextlib.closing(self._connect()) as conn:

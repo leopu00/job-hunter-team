@@ -8,7 +8,7 @@ link is parsed without letting a header in, the user's flag is checked twice,
 nothing personal is invented, and one authorisation produces at most one
 letter — even when the server never answers.
 
-Synthetic only: stub transport, stub notifier, stub page fetcher, a temporary
+Synthetic only: stub transport, stub notifier, a temporary
 JHT_HOME. No real mail server, no real address, no real person.
 
 Run with: pytest tests/test_email_application.py -v
@@ -137,7 +137,9 @@ def box(tmp_path, monkeypatch):
 def write_checkpoint(home, href, url="https://example.com/jobs/1"):
     path = apply_gate.checkpoint_path(1, home)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"channel": "email", "mailto_href": href, "url": url, "state": "email_channel"}))
+    path.write_text(json.dumps(
+        {"position_id": 1, "channel": "email", "mailto_href": href, "url": url, "state": "email_channel"}
+    ))
 
 
 def flow(home, **kwargs):
@@ -148,7 +150,6 @@ def flow(home, **kwargs):
         db_path=home / "jobs.db",
         transports={"smtp": FakeTransport},
         notifier=lambda **kw: notes.append(kw) or "1",
-        fetcher=kwargs.pop("fetcher", lambda url: (_ for _ in ()).throw(AssertionError("no fetch expected"))),
         **kwargs,
     )
 
@@ -219,14 +220,27 @@ def test_inspect_reads_the_raw_link_from_the_browser_checkpoint(box):
     assert (out.state, out.data["source"], out.data["to"]) == ("inspected", "checkpoint", "jobs@example.com")
 
 
-def test_inspect_falls_back_to_the_public_page_read_only(box):
+def test_without_the_browser_checkpoint_no_recipient_is_taken_from_anywhere(box):
+    # Found in cross-review: a public page with an application form and a
+    # "Privacy questions?" mailto in the footer sent the application to privacy@.
     apply_gate.checkpoint_path(1, box).unlink()
-    page = b'<a href="mailto:jobs@example.com?subject=Apply&amp;cc=hr@example.com">Apply</a>'
-    out = flow(box, fetcher=lambda url: page).inspect()
-    assert out.state == "inspected" and out.data["cc"] == ["hr@example.com"]
-    two = page + b'<a href="mailto:other@example.com">x</a>'
-    out = flow(box, fetcher=lambda url: two).inspect()
-    assert (out.state, out.reason) == ("blocked_human", "recipient_ambiguous")
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("blocked_human", "mailto_missing")
+    assert "apply_flow.py" in out.detail
+    assert FakeTransport.sends == [] and FakeTransport.instances == []
+
+
+def test_a_checkpoint_that_is_not_in_the_email_channel_state_is_not_a_link(box):
+    path = apply_gate.checkpoint_path(1, box)
+    data = json.loads(path.read_text())
+    for state in ("blocked_human", "denied", "complete", None):
+        data["state"] = state
+        path.write_text(json.dumps(data))
+        assert flow(box).send().reason == "mailto_missing"
+    data["state"], data["position_id"] = "email_channel", 2
+    path.write_text(json.dumps(data))
+    assert flow(box).inspect().reason == "checkpoint_mismatch"
+    assert FakeTransport.sends == []
 
 
 def test_inspect_refuses_a_checkpoint_from_another_vacancy(box):
@@ -357,6 +371,22 @@ def test_flag_revoked_between_draft_and_send_sends_nothing(box):
     assert sql(box, "SELECT state FROM email_application_attempts") == [("draft_ready",)]
 
 
+def test_switching_to_dry_run_between_draft_and_send_sends_nothing(box):
+    # Found in cross-review: the gate still allows in dry_run mode, so the late
+    # decision must look at the mode as well, as apply_flow.py does.
+    def to_dry_run():
+        cfg = json.loads((box / "jht.config.json").read_text())
+        cfg["applications"]["auto_apply"]["mode"] = "dry_run"
+        (box / "jht.config.json").write_text(json.dumps(cfg))
+
+    FakeTransport.hook = to_dry_run
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("denied", "gate_mode_changed")
+    assert FakeTransport.sends == []
+    assert sql(box, "SELECT state FROM email_application_attempts") == [("draft_ready",)]
+    assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
+
+
 def test_cap_reached_between_draft_and_send_sends_nothing(box):
     _edit_cap(box, 1)
     FakeTransport.hook = lambda: sql(
@@ -417,8 +447,11 @@ def test_recorder_failure_is_receipt_incomplete_then_reconciled_without_sending(
 
 def test_partial_refusal_is_receipt_incomplete(box):
     FakeTransport.refused = {"Team@example.com": (550, b"no")}
-    out = flow(box).send()
+    notes = []
+    out = flow(box, notes=notes).send()
     assert out.state == "receipt_incomplete" and out.data["refused"] == ["Team@example.com"]
+    # The To was accepted: the user must not read this as "nothing went out".
+    assert len(notes) == 1 and "probably reached the recruiter" in notes[0]["message"]
     assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
 
 
