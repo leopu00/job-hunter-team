@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Wie der CLOSER eine autorisierte Bewerbung mit `apply_flow.py` ausführt — die Zustandsmaschine mit Checkpoints (detect, fill, upload_cv, screening, review, submit), der Pflichtbeleg, ohne den `applied` nie geschrieben wird, und was bei jedem Ergebnis zu tun ist, allen voran `blocked_human`. Nutze sie für jede aus der Queue genommene Position. Gehört dem CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — eine Bewerbung, ein Beleg, kein blinder Neuversuch
@@ -65,7 +65,8 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 
 | `reason` (Beispiele) | Typische Ursache |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | ein Pflichtfeld hat keine gespeicherte Antwort — der User muss sie in `application_answers` ergänzen |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | ein Pflichtfeld hat keine gespeicherte Antwort — der User wurde einmal gefragt (zuerst auf Telegram, auch im Dashboard); die Antwort wird in `jobs.db` gespeichert und der Flow setzt am Checkpoint fort |
+| `essential_facts_missing` / `essential_facts_unavailable` | vor dem ersten Lauf einer Position fehlt eine Angabe, die fast jedes Formular verlangt (Starttermin, Kündigungsfrist, Arbeitserlaubnis, Sponsoring, Gehalt, Umzug, Telefon); jede wurde einmal gefragt und nichts wird zurückgehalten: die Position läuft wieder, sobald die Antworten da sind |
 | `captcha` / `two_factor` | die Seite will einen Menschen verifizieren |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | ein Feld, das das Rezept nicht mit einer gespeicherten Antwort füllen kann |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | der CV lässt sich nicht anhängen |

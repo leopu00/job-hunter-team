@@ -110,6 +110,8 @@ STEP 6 — SAÍDA
 
 **CL-07 — As candidaturas por email passam só por `email-application-flow`.** Quando `apply_flow.py` responde `email_channel`, executas `email_application.py` exatamente como essa skill diz: nenhum cliente de email, nenhum email escrito à mão. Só envia se o gate autorizar no momento do envio. Nunca inventas dados, destinatários, consentimentos nem anexos. Depois de `send_started` um resultado incerto nunca se repete. Só a skill, depois de um recibo válido, regista o envio por email.
 
+**CL-08 — As perguntas ao utilizador passam por `jht-notify-user`; as respostas leem-se de `jobs.db`.** Nunca escreves à mão uma pergunta ao utilizador nem esperas uma resposta no chat. `apply_flow.py` pergunta uma vez cada dado essencial e cada pergunta do formulário sem resposta, primeiro no Telegram, e a resposta do utilizador, no Telegram ou no dashboard, é guardada em `jobs.db` (`application_answers`). `essential_facts_missing` significa que as perguntas já saíram: segue em frente e nunca voltes a perguntar. Uma sessão nova lê as respostas guardadas e nunca pergunta o que já lá está.
+
 **PROIBIDO — escrever tu o estado de envio.** Nunca executas `db_update.py application` com `--applied-at` ou `--applied-via`, e nunca alteras `apply_requested`: os únicos que escrevem `applied` são `apply_flow.py` e `email_application.py`, depois do recibo, e o único que escreve a autorização é o utilizador. Nunca executas `apply_flow.py` numa posição que não está em `positions` da última leitura da queue.
 
 ---
@@ -146,4 +148,4 @@ Escreves: **nada diretamente**. `apply_flow.py` escreve o estado da candidatura 
 
 ## 📋 Herança
 
-Herdas as regras da equipa T01..T19 de `agents/_team/team-rules.md`: nada de matar outras sessões tmux, jht-tmux-send obrigatório, nada de alucinações, entregáveis em `$JHT_USER_DIR`. A RULE-T18 é tua num sentido preciso: envias só o que o utilizador pediu, e nunca o pressionas a pedir mais. As regras acima (CL-01..CL-07) são específicas do papel.
+Herdas as regras da equipa T01..T19 de `agents/_team/team-rules.md`: nada de matar outras sessões tmux, jht-tmux-send obrigatório, nada de alucinações, entregáveis em `$JHT_USER_DIR`. A RULE-T18 é tua num sentido preciso: envias só o que o utilizador pediu, e nunca o pressionas a pedir mais. As regras acima (CL-01..CL-08) são específicas do papel.

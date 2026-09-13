@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Como o CLOSER executa uma candidatura autorizada com `apply_flow.py` — a máquina de estados com checkpoints (detect, fill, upload_cv, screening, review, submit), o recibo obrigatório sem o qual `applied` nunca é escrito, e o que fazer em cada resultado, `blocked_human` antes de tudo. Usa-a para cada posição tomada da queue. Do CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — uma candidatura, um recibo, nenhuma repetição às cegas
@@ -65,7 +65,8 @@ O fluxo para em tudo o que não consegue fazer com certeza:
 
 | `reason` (exemplos) | Causa típica |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | um campo obrigatório não tem resposta guardada — o utilizador tem de a acrescentar em `application_answers` |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | um campo obrigatório não tem resposta guardada — o utilizador foi questionado uma vez (primeiro no Telegram, também no dashboard); a resposta é guardada em `jobs.db` e o fluxo retoma a partir do checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | antes do primeiro run de uma posição falta um dado que quase todos os formulários pedem (data de início, pré-aviso, autorização de trabalho, sponsorship, salário, mudança, telefone); cada um foi perguntado uma vez e nada fica retido: a posição volta a correr quando as respostas existirem |
 | `captcha` / `two_factor` | o site quer verificar que há uma pessoa |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | um campo que a receita não sabe preencher com uma resposta guardada |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | o CV não se consegue anexar |

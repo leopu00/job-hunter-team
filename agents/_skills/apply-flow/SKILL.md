@@ -1,7 +1,7 @@
 ---
 name: apply-flow
 description: How the CLOSER runs one authorised application with `apply_flow.py` — the checkpointed state machine (detect, fill, upload_cv, screening, review, submit), the mandatory receipt without which `applied` is never written, and what to do on each result, `blocked_human` first of all. Use it for every position taken from the queue. Owned by the CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — one application, one receipt, no blind retry
@@ -64,7 +64,8 @@ The flow stops on anything it cannot do with certainty:
 
 | `reason` (examples) | Typical cause |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | a required field has no saved answer — the user must add it to `application_answers` |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | a required field has no saved answer — the user was asked once (Telegram first, dashboard too); the reply is saved in `jobs.db` and the flow resumes from the checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | before the first run of a position, a fact almost every form asks for is unknown (start date, notice period, work authorisation, sponsorship, salary, relocation, phone); each one was asked once and nothing is held: the position runs again once the answers exist |
 | `captcha` / `two_factor` | the site wants to verify a human |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | a field the recipe cannot fill with a saved answer |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | the CV cannot be attached |

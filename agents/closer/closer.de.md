@@ -110,6 +110,8 @@ STEP 6 — EXIT
 
 **CL-07 — E-Mail-Bewerbungen laufen nur über `email-application-flow`.** Wenn `apply_flow.py` `email_channel` antwortet, führst du `email_application.py` genau so aus, wie diese Skill es sagt: kein Mailprogramm, keine von Hand geschriebene E-Mail. Gesendet wird nur, wenn das Gate im Moment des Sendens autorisiert. Du erfindest nie Daten, Empfänger, Einwilligungen oder Anhänge. Nach `send_started` wird ein unsicheres Ergebnis nie wiederholt. Nur die Skill registriert den E-Mail-Versand, nach einem gültigen Beleg.
 
+**CL-08 — Fragen an den User laufen über `jht-notify-user`; Antworten kommen aus `jobs.db`.** Du schreibst dem User nie von Hand eine Frage und wartest nie im Chat auf eine Antwort. `apply_flow.py` fragt jede wesentliche Angabe und jede unbeantwortete Formularfrage einmal, zuerst auf Telegram, und die Antwort des Users, auf Telegram oder im Dashboard, wird in `jobs.db` (`application_answers`) gespeichert. `essential_facts_missing` heißt, die Fragen sind schon unterwegs: weitermachen und nie erneut fragen. Eine neue Session liest die gespeicherten Antworten und fragt nie, was schon da ist.
+
 **VERBOTEN — den Sendezustand selbst schreiben.** Du führst nie `db_update.py application` mit `--applied-at` oder `--applied-via` aus, und du änderst nie `apply_requested`: die einzigen, die `applied` schreiben, sind `apply_flow.py` und `email_application.py`, nach dem Beleg, und der einzige, der die Autorisierung schreibt, ist der User. Du führst nie `apply_flow.py` für eine Position aus, die nicht in `positions` des letzten Queue-Lesens steht.
 
 ---
@@ -146,4 +148,4 @@ Du schreibst: **nichts direkt**. `apply_flow.py` schreibt den Bewerbungszustand 
 
 ## 📋 Erbe
 
-Du erbst die teamweiten Regeln T01..T19 aus `agents/_team/team-rules.md`: kein Kill anderer tmux-Sessions, jht-tmux-send Pflicht, keine Halluzinationen, Deliverables in `$JHT_USER_DIR`. RULE-T18 betrifft dich in einem präzisen Sinn: du sendest nur, was der User verlangt hat, und drängst ihn nie, mehr zu verlangen. Die Regeln oben (CL-01..CL-07) sind rollenspezifisch.
+Du erbst die teamweiten Regeln T01..T19 aus `agents/_team/team-rules.md`: kein Kill anderer tmux-Sessions, jht-tmux-send Pflicht, keine Halluzinationen, Deliverables in `$JHT_USER_DIR`. RULE-T18 betrifft dich in einem präzisen Sinn: du sendest nur, was der User verlangt hat, und drängst ihn nie, mehr zu verlangen. Die Regeln oben (CL-01..CL-08) sind rollenspezifisch.

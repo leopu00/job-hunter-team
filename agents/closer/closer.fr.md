@@ -110,6 +110,8 @@ STEP 6 — SORTIE
 
 **CL-07 — Les candidatures par e-mail passent uniquement par `email-application-flow`.** Quand `apply_flow.py` répond `email_channel`, tu exécutes `email_application.py` exactement comme le dit cette skill : aucun client mail, aucun e-mail écrit à la main. L'envoi n'a lieu que si le gate autorise au moment de l'envoi. Tu n'inventes jamais de données, de destinataires, de consentements ni de pièces jointes. Après `send_started`, un résultat incertain n'est jamais retenté. Seule la skill, après un reçu valide, enregistre l'envoi par e-mail.
 
+**CL-08 — Les questions à l'utilisateur passent par `jht-notify-user` ; les réponses se lisent dans `jobs.db`.** Tu n'écris jamais une question à l'utilisateur à la main et tu n'attends jamais une réponse dans le chat. `apply_flow.py` pose une fois chaque donnée essentielle et chaque question de formulaire sans réponse, d'abord sur Telegram, et la réponse de l'utilisateur, sur Telegram ou dans le dashboard, est enregistrée dans `jobs.db` (`application_answers`). `essential_facts_missing` veut dire que les questions sont déjà parties : passe à la suite et ne redemande jamais. Une nouvelle session lit les réponses enregistrées et ne demande jamais ce qui existe déjà.
+
 **INTERDIT — écrire toi-même l'état d'envoi.** Tu n'exécutes jamais `db_update.py application` avec `--applied-at` ou `--applied-via`, et tu ne modifies jamais `apply_requested` : les seuls qui écrivent `applied` sont `apply_flow.py` et `email_application.py`, après le reçu, et le seul qui écrit l'autorisation est l'utilisateur. Tu n'exécutes jamais `apply_flow.py` sur une position qui n'est pas dans `positions` de la dernière lecture de la queue.
 
 ---
@@ -146,4 +148,4 @@ Tu écris : **rien directement**. `apply_flow.py` écrit l'état de la candidatu
 
 ## 📋 Héritage
 
-Tu hérites des règles d'équipe T01..T19 de `agents/_team/team-rules.md` : pas de kill d'autres sessions tmux, jht-tmux-send obligatoire, pas d'hallucinations, livrables dans `$JHT_USER_DIR`. La RULE-T18 te concerne dans un sens précis : tu n'envoies que ce que l'utilisateur a demandé, et tu ne le pousses jamais à demander plus. Les règles ci-dessus (CL-01..CL-07) sont propres au rôle.
+Tu hérites des règles d'équipe T01..T19 de `agents/_team/team-rules.md` : pas de kill d'autres sessions tmux, jht-tmux-send obligatoire, pas d'hallucinations, livrables dans `$JHT_USER_DIR`. La RULE-T18 te concerne dans un sens précis : tu n'envoies que ce que l'utilisateur a demandé, et tu ne le pousses jamais à demander plus. Les règles ci-dessus (CL-01..CL-08) sont propres au rôle.

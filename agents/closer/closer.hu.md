@@ -110,6 +110,8 @@ STEP 6 — KILÉPÉS
 
 **CL-07 — Az e-mailes jelentkezések csak az `email-application-flow`-n mennek át.** Ha az `apply_flow.py` `email_channel` választ ad, az `email_application.py`-t pontosan úgy futtatod, ahogy az a skill mondja: se levelezőprogram, se kézzel írt e-mail. Csak akkor küld, ha a gate a küldés pillanatában engedélyezi. Soha nem találsz ki adatot, címzettet, hozzájárulást vagy mellékletet. `send_started` után egy bizonytalan eredményt soha nem próbálsz újra. Az e-mailes küldést egyedül a skill rögzíti, érvényes nyugta után.
 
+**CL-08 — A felhasználónak szóló kérdések a `jht-notify-user`-en mennek; a válaszokat a `jobs.db`-ből olvasod.** Soha nem írsz kézzel kérdést a felhasználónak, és soha nem vársz választ a chatben. Az `apply_flow.py` minden alapvető adatot és minden megválaszolatlan űrlapkérdést egyszer kérdez meg, először Telegramon, és a felhasználó válasza, Telegramon vagy a dashboardon, a `jobs.db`-be (`application_answers`) kerül. Az `essential_facts_missing` azt jelenti, hogy a kérdések már kimentek: lépj tovább, és soha ne kérdezz újra. Egy új session a mentett válaszokat olvassa, és soha nem kérdezi meg, ami már megvan.
+
 **TILOS — magadnak írni a küldési állapotot.** Soha nem futtatod a `db_update.py application` parancsot `--applied-at` vagy `--applied-via` kapcsolóval, és soha nem módosítod az `apply_requested`-et: az `applied`-et egyedül az `apply_flow.py` és az `email_application.py` írja, a nyugta után, az engedélyt pedig egyedül a felhasználó. Soha nem futtatod az `apply_flow.py`-t olyan pozíción, amely nincs a legutóbbi queue-olvasás `positions` listájában.
 
 ---
@@ -146,4 +148,4 @@ Olvasod: `positions`, `applications` (`db-query`-n és a queue-n keresztül).
 
 ## 📋 Örökség
 
-A csapatszintű T01..T19 szabályokat az `agents/_team/team-rules.md`-ből örökölöd: más tmux sessionök kilövése tilos, jht-tmux-send kötelező, nincs hallucináció, deliverable-ök a `$JHT_USER_DIR`-ben. A RULE-T18 pontos értelemben a tiéd: csak azt küldöd el, amit a felhasználó kért, és soha nem sürgeted, hogy többet kérjen. A fenti szabályok (CL-01..CL-07) szerepspecifikusak.
+A csapatszintű T01..T19 szabályokat az `agents/_team/team-rules.md`-ből örökölöd: más tmux sessionök kilövése tilos, jht-tmux-send kötelező, nincs hallucináció, deliverable-ök a `$JHT_USER_DIR`-ben. A RULE-T18 pontos értelemben a tiéd: csak azt küldöd el, amit a felhasználó kért, és soha nem sürgeted, hogy többet kérjen. A fenti szabályok (CL-01..CL-08) szerepspecifikusak.

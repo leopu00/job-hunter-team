@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Hogyan futtatja a CLOSER egy engedélyezett jelentkezést az `apply_flow.py`-jal — a checkpointos állapotgép (detect, fill, upload_cv, screening, review, submit), a kötelező nyugta, amely nélkül az `applied` soha nem íródik be, és mit kell tenni az egyes eredményeknél, mindenekelőtt `blocked_human` esetén. Használd minden, a queue-ból felvett pozícióhoz. A CLOSER-é.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — egy jelentkezés, egy nyugta, nincs vak újrapróbálás
@@ -65,7 +65,8 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 
 | `reason` (példák) | Tipikus ok |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználónak hozzá kell adnia az `application_answers`-hez |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználót egyszer megkérdezték (először Telegramon, a dashboardon is); a válasz a `jobs.db`-be kerül, és a folyamat a checkpointtól folytatódik |
+| `essential_facts_missing` / `essential_facts_unavailable` | egy pozíció első futása előtt hiányzik egy adat, amit szinte minden űrlap kér (kezdési dátum, felmondási idő, munkavállalási engedély, sponsorship, bér, költözés, telefon); mindegyiket egyszer megkérdezték, és semmi sincs visszatartva: a pozíció újra fut, amint a válaszok megvannak |
 | `captcha` / `two_factor` | az oldal ellenőrizni akarja, hogy ember van-e ott |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | egy mező, amelyet a recept nem tud mentett válasszal kitölteni |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |

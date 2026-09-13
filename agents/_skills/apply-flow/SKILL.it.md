@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Come il CLOSER esegue una candidatura autorizzata con `apply_flow.py` — la macchina a stati con checkpoint (detect, fill, upload_cv, screening, review, submit), la ricevuta obbligatoria senza la quale `applied` non si scrive mai, e cosa fare per ogni esito, `blocked_human` prima di tutto. Usala per ogni posizione presa dalla coda. Del CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — una candidatura, una ricevuta, nessun tentativo cieco
@@ -64,7 +64,8 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 
 | `reason` (esempi) | Causa tipica |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obbligatorio non ha risposta salvata — l'utente deve aggiungerla in `application_answers` |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obbligatorio non ha risposta salvata — all'utente è stato chiesto una volta (prima su Telegram, anche in dashboard); la risposta si salva in `jobs.db` e il flusso riparte dal checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | prima del primo run di una posizione manca un dato che quasi ogni form chiede (data di inizio, preavviso, autorizzazione al lavoro, sponsorship, RAL, trasferimento, telefono); ognuno è stato chiesto una volta e nulla resta trattenuto: la posizione riparte quando le risposte esistono |
 | `captcha` / `two_factor` | il sito vuole verificare che ci sia una persona |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo che la ricetta non sa compilare con una risposta salvata |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | il CV non si riesce ad allegare |

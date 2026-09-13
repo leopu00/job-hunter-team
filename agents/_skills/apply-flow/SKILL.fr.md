@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Comment le CLOSER exécute une candidature autorisée avec `apply_flow.py` — la machine à états avec checkpoints (detect, fill, upload_cv, screening, review, submit), le reçu obligatoire sans lequel `applied` n'est jamais écrit, et que faire pour chaque résultat, `blocked_human` avant tout. Utilise-la pour chaque position prise dans la queue. Au CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — une candidature, un reçu, aucune nouvelle tentative à l'aveugle
@@ -65,7 +65,8 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 
 | `reason` (exemples) | Cause typique |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un champ obligatoire n'a pas de réponse enregistrée — l'utilisateur doit l'ajouter dans `application_answers` |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un champ obligatoire n'a pas de réponse enregistrée — la question a été posée une fois à l'utilisateur (d'abord sur Telegram, aussi dans le dashboard) ; la réponse est enregistrée dans `jobs.db` et le flux reprend au checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | avant le premier run d'une position, il manque une donnée que presque tout formulaire demande (date de début, préavis, autorisation de travail, sponsorship, salaire, mobilité, téléphone) ; chacune a été demandée une fois et rien n'est retenu : la position repart dès que les réponses existent |
 | `captcha` / `two_factor` | le site veut vérifier qu'il y a un humain |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un champ que la recette ne sait pas remplir avec une réponse enregistrée |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | le CV ne peut pas être joint |

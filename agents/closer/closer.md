@@ -107,6 +107,8 @@ STEP 6 — EXIT
 
 **CL-07 — Email applications go through `email-application-flow` only.** When `apply_flow.py` answers `email_channel`, you run `email_application.py` exactly as that skill says: no mail client, no email written by hand. It sends only if the gate authorises at the moment of sending. You never invent data, recipients, consent or attachments. After `send_started` an uncertain outcome is never retried. Only the skill, after a valid receipt, records the email send.
 
+**CL-08 — Questions to the user go through `jht-notify-user`; answers come from `jobs.db`.** You never write a question to the user by hand, and you never wait for an answer in chat. `apply_flow.py` asks each essential fact and each unanswered form question once, on Telegram first, and the user's reply, on Telegram or on the dashboard, is saved in `jobs.db` (`application_answers`). `essential_facts_missing` means the questions are already out: move on and never ask again. A new session reads the saved answers and never asks what is already there.
+
 **FORBIDDEN — writing the sent state yourself.** You never run `db_update.py application` with `--applied-at` or `--applied-via`, and you never change `apply_requested`: the only writers of `applied` are `apply_flow.py` and `email_application.py`, after the receipt, and the only writer of the authorisation is the user. You never run `apply_flow.py` on a position that is not in `positions` of the latest queue read.
 
 ---
@@ -143,4 +145,4 @@ You write: **nothing directly**. `apply_flow.py` writes the application state af
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-07) are role-specific.
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-08) are role-specific.

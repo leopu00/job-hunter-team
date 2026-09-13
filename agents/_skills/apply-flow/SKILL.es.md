@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Cómo el CLOSER ejecuta una candidatura autorizada con `apply_flow.py` — la máquina de estados con checkpoints (detect, fill, upload_cv, screening, review, submit), el recibo obligatorio sin el cual `applied` nunca se escribe, y qué hacer con cada resultado, `blocked_human` antes que nada. Úsala para cada posición tomada de la cola. Del CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — una candidatura, un recibo, ningún reintento a ciegas
@@ -65,7 +65,8 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 
 | `reason` (ejemplos) | Causa típica |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obligatorio no tiene respuesta guardada — el usuario debe añadirla en `application_answers` |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obligatorio no tiene respuesta guardada — se le preguntó una vez al usuario (primero por Telegram, también en el dashboard); la respuesta se guarda en `jobs.db` y el flujo se reanuda desde el checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | antes del primer run de una posición falta un dato que casi todo formulario pide (fecha de inicio, preaviso, permiso de trabajo, sponsorship, salario, traslado, teléfono); cada uno se preguntó una vez y nada queda retenido: la posición vuelve a ejecutarse cuando existan las respuestas |
 | `captcha` / `two_factor` | el sitio quiere verificar que hay una persona |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo que la receta no sabe rellenar con una respuesta guardada |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | el CV no se puede adjuntar |
