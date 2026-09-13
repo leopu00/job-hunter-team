@@ -8,9 +8,9 @@ partire un `kill-session` che su quell'rc ammazza la sessione di un ALTRO
 agente (team-rules T01: mai killare la sessione di un altro agente).
 
 Il messaggio deve anche stare in UNA riga e bastare a se': il chiamante
-principale (`cli/src/commands/team/start.js`) conserva solo l'ultima riga non
-vuota di stderr, quindi la diagnosi nativa di tmux, se resta una riga a se',
-non arriva mai ne' all'utente ne' al campo `error` in dashboard.
+principale (`cli/src/commands/team/start.js`) conserva una coda limitata di
+stderr, quindi la diagnosi nativa di tmux deve restare legata al proprio errore
+e non dipendere dalla presenza di righe precedenti.
 
 Cosa questa suite tiene fermo:
   1. l'rc viene catturato e discriminato, non collassato da un `if !`;
