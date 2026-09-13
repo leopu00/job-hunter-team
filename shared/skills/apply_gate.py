@@ -72,6 +72,7 @@ __all__ = [
     "Verdict",
     "application_queue",
     "apply_verdict",
+    "toggle_verdict",
     "consent_verdict",
     "position_verdict",
 ]
@@ -91,22 +92,56 @@ AUTO_APPLY_MODES = ("authorised", "dry_run")
 # numero indefinito di invii.
 DEFAULT_MAX_PER_DAY = 3
 
-# Chi può accendere il flag per-posizione. Il vocabolario vive QUI e non in un
-# CHECK di Postgres, per la stessa ragione di `rejection_reason` (mig 087): un
-# canale nuovo deve costare una riga, non una migrazione. Il prezzo è che
-# questo è l'unico posto che rifiuta un valore sconosciuto — ed è scritto per
-# rifiutarlo, `agent_closer` compreso.
-USER_REQUEST_ORIGINS = ("user_web", "user_local")
-
-# Gli stati in cui la candidatura È GIÀ PARTITA.
+# ── La regola di chi può chiedere cosa: UN file, letto da due linguaggi ──────
 #
-# Gemella di `POST_SUBMISSION_STATES` in `shared/cloud/applied-action.js`, e
-# tenuta allineata a mano perché le due vivono in linguaggi diversi: là serve
-# al backflow per non riportare indietro un esito, qui a non spedire una
-# seconda volta. `response` sta accanto ad `applied` per la stessa ragione di
-# sempre — è la progressione dell'invio, non il suo contrario. Chi domani
-# aggiunge uno stato post-invio deve aggiungerlo in ENTRAMBI i posti.
-POST_SUBMISSION_STATES = ("applied", "response")
+# `shared/cloud/apply-request-rule.json` porta i tre vocabolari che decidono
+# un'autorizzazione: lo stato in cui la si può dare, gli stati in cui la
+# candidatura è già partita, i canali che nominano una persona. Li legge
+# questo gate (Python, dentro il box) e li legge la route del sito (TS), che
+# prima ne teneva una copia sua: una regola copiata in due linguaggi diverge
+# al primo cambio, e qui divergere vuol dire che il bottone accende un flag che
+# il gate poi rifiuta — o, peggio, il contrario.
+#
+# ⚠️ Fail-closed anche qui: un file assente o rotto lascia i tre vocabolari
+# VUOTI. Nessuno stato autorizzabile, nessun canale utente → ogni
+# `position_verdict` rifiuta e ogni richiesta dell'utente viene respinta, e il
+# motivo (`rule_unavailable`) lo dice invece di sembrare un flag spento.
+RULE_PATH = Path(__file__).resolve().parents[1] / "cloud" / "apply-request-rule.json"
+
+
+def _load_rule(path: Path = RULE_PATH) -> tuple[str | None, tuple[str, ...], tuple[str, ...], str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        status = data["authorisable_status"]
+        states = tuple(data["post_submission_states"])
+        origins = tuple(data["user_request_origins"])
+        if not (
+            isinstance(status, str)
+            and status
+            and states
+            and origins
+            and all(isinstance(v, str) and v for v in states + origins)
+        ):
+            raise ValueError("empty or non-string vocabulary")
+    except (OSError, ValueError, KeyError, TypeError) as err:
+        return None, (), (), f"{type(err).__name__}: {err}"
+    return status, states, origins, ""
+
+
+# Chi può accendere il flag per-posizione (`user_web`, `user_local`). Il
+# vocabolario non sta in un CHECK di Postgres, per la stessa ragione di
+# `rejection_reason` (mig 087): un canale nuovo deve costare una riga, non una
+# migrazione. Il prezzo è che il gate è l'unico posto che rifiuta un valore
+# sconosciuto — ed è scritto per rifiutarlo, `agent_closer` compreso.
+#
+# Gli stati in cui la candidatura È GIÀ PARTITA (`applied`, `response`):
+# `response` è la progressione dell'invio, non il suo contrario. Gemelli di
+# `POST_SUBMISSION_STATES` in `shared/cloud/applied-action.js`, che serve al
+# backflow per non riportare indietro un esito.
+#
+# Lo stato in cui l'utente può autorizzare (`ready`): il CV esiste ed è passato
+# dal Critico. Prima non c'è niente di approvato da spedire.
+AUTHORISABLE_STATUS, POST_SUBMISSION_STATES, USER_REQUEST_ORIGINS, RULE_ERROR = _load_rule()
 
 
 @dataclass(frozen=True)
@@ -320,6 +355,14 @@ def position_verdict(
             {"position_id": pid},
         )
 
+    if RULE_ERROR:
+        return Verdict(
+            False,
+            "rule_unavailable",
+            f"the authorisation rule cannot be read: {RULE_ERROR}",
+            {"position_id": pid, "path": str(RULE_PATH)},
+        )
+
     own_conn = conn is None
     if own_conn:
         try:
@@ -470,6 +513,80 @@ def apply_verdict(
     )
 
 
+# ── La richiesta dell'utente: può accendere (o spegnere) il flag? ────────────
+#
+# È l'altra metà della stessa regola. `position_verdict` risponde al CLOSER
+# («posso inviare?»); questa risponde a chi SCRIVE il flag per conto
+# dell'utente — `jht apply` sul box e la route del sito — con gli stessi
+# vocabolari, così il flag che l'utente riesce ad accendere è esattamente
+# quello che il gate poi accetta.
+
+
+def toggle_verdict(position_id: int, requested: bool, conn: sqlite3.Connection) -> Verdict:
+    """L'utente può autorizzare (`requested=True`) o ritirare questa posizione?
+
+    Autorizzare: la posizione esiste, non è già partita, è in
+    `AUTHORISABLE_STATUS`. Ritirare: la posizione esiste e non è già partita —
+    dopo l'invio il ritiro non ferma niente, e un flag spento accanto a una
+    candidatura spedita racconterebbe all'utente una cosa falsa.
+
+    Il chiamante tiene la transazione: il verdetto e la UPDATE devono vedere
+    la stessa riga.
+    """
+    try:
+        pid = int(position_id)
+    except (TypeError, ValueError):
+        return Verdict(False, "position_id_invalid", "position id is not an integer")
+    if pid <= 0:
+        return Verdict(False, "position_id_invalid", "position id is not a positive integer")
+    if RULE_ERROR:
+        return Verdict(
+            False,
+            "rule_unavailable",
+            f"the authorisation rule cannot be read: {RULE_ERROR}",
+            {"position_id": pid},
+        )
+    try:
+        row = conn.execute(
+            "SELECT status, apply_requested FROM positions WHERE id = ?", (pid,)
+        ).fetchone()
+        sent = conn.execute(
+            "SELECT applied FROM applications WHERE position_id = ?", (pid,)
+        ).fetchone()
+    except sqlite3.Error as err:
+        return Verdict(
+            False,
+            "authorisation_unreadable",
+            f"cannot read the authorisation columns: {err}",
+            {"position_id": pid},
+        )
+    if row is None:
+        return Verdict(False, "position_not_found", "no such position", {"position_id": pid})
+    status = row[0]
+    if status in POST_SUBMISSION_STATES or (sent and sent[0] in (1, True)):
+        return Verdict(
+            False,
+            "already_submitted",
+            "this application has already gone out: there is nothing left to "
+            + ("authorise" if requested else "withdraw"),
+            {"position_id": pid, "status": status},
+        )
+    if requested and status != AUTHORISABLE_STATUS:
+        return Verdict(
+            False,
+            "position_not_ready",
+            f"only a '{AUTHORISABLE_STATUS}' position can be authorised: the CV must "
+            "exist and have passed the Critic first",
+            {"position_id": pid, "status": status},
+        )
+    return Verdict(
+        True,
+        "toggle_allowed",
+        "the user may " + ("authorise" if requested else "withdraw") + " this position",
+        {"position_id": pid, "status": status, "flag": row[1]},
+    )
+
+
 # ── La coda: cosa c'è da inviare ADESSO ──────────────────────────────────────
 #
 # La domanda che si fanno in due, con lo stesso bisogno di una risposta sola:
@@ -608,8 +725,9 @@ def application_queue(
             rows = conn.execute(
                 "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path "
                 "FROM positions p LEFT JOIN applications a ON a.position_id = p.id "
-                "WHERE p.apply_requested = 1 AND p.status = 'ready' "
-                "ORDER BY p.apply_requested_at, p.id"
+                "WHERE p.apply_requested = 1 AND p.status = ? "
+                "ORDER BY p.apply_requested_at, p.id",
+                (AUTHORISABLE_STATUS,),
             ).fetchall()
             # Il tetto conta SOLO ciò che il CLOSER ha davvero spedito oggi. Un
             # invio dell'utente a mano non consuma la sua quota: il tetto

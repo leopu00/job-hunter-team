@@ -1,0 +1,5 @@
+{
+  "authorisable_status": "ready",
+  "post_submission_states": ["applied", "response"],
+  "user_request_origins": ["user_web", "user_local"]
+}
