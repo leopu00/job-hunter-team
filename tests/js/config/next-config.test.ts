@@ -13,9 +13,21 @@ describe("Next output file tracing root", () => {
   });
 
   it("is preserved for production standalone builds", () => {
-    const config = createNextConfig(PHASE_PRODUCTION_BUILD);
+    const config = createNextConfig(PHASE_PRODUCTION_BUILD, {});
 
     expect(config.output).toBe("standalone");
+    expect(config.outputFileTracingRoot).toBeTruthy();
+    expect(config.outputFileTracingExcludes).toBeTruthy();
+  });
+
+  // Next >= 16.3 on Vercel: the adapter's onBuildComplete opens
+  // .next/next-server.js.nft.json, which a standalone build never writes, so the
+  // deploy fails with ENOENT after a full compile. Held production on 16.2.x —
+  // inside a critical advisory — from 2026-08-20 to 2026-09-13.
+  it("drops standalone output when Vercel builds", () => {
+    const config = createNextConfig(PHASE_PRODUCTION_BUILD, { VERCEL: "1" });
+
+    expect(config.output).toBeUndefined();
     expect(config.outputFileTracingRoot).toBeTruthy();
     expect(config.outputFileTracingExcludes).toBeTruthy();
   });

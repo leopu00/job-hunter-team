@@ -239,6 +239,16 @@ jobs:
           pip install pytest
           pip install -r requirements.txt
 
+      # `tests/test_apply_flow.py` ([JHT-CLOSER]) lancia un Chromium vero: sono
+      # i test degli invarianti della candidatura — ricevuta obbligatoria,
+      # captcha → blocked_human, nessun dato inventato. Senza browser falliscono
+      # al setup; farli saltare quando manca li renderebbe vuoti proprio qui,
+      # l'unico posto dove girano per ogni push. Stesso comando del Dockerfile:
+      # il browser è legato alla versione del driver pinnata in requirements.txt,
+      # quindi la CI prova lo stesso binario che il CLOSER trova nel container.
+      - name: Install Playwright browser (Python driver)
+        run: python -m playwright install --with-deps --only-shell chromium
+
       # `-m "not production"`: 38 dei 806 test (tests/test_vercel_pages.py e
       # tests/test_missing_pages.py) fanno HTTP su https://jobhunterteam.ai e
       # asseriscono per lo più `status != 404`. Non testano il codice della PR:

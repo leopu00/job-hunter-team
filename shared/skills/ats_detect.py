@@ -90,6 +90,14 @@ _DOM_MARKERS: dict[str, tuple[re.Pattern[str], ...]] = {
     "greenhouse": (
         re.compile(r"(?:id=[\"']grnhse_app[\"']|greenhouse-job-board)", re.I),
         re.compile(r"boards-api\.greenhouse\.io", re.I),
+        # Greenhouse's current public React board no longer renders the
+        # historical grnhse_app container.  Require its paired id/class
+        # signature so a generic application form does not name the recipe.
+        re.compile(
+            r"(?:id=[\"']application-form[\"'][^>]*class=[\"'][^\"']*application--form|"
+            r"class=[\"'][^\"']*application--form[^\"']*[\"'][^>]*id=[\"']application-form)",
+            re.I,
+        ),
     ),
     "lever": (
         re.compile(r"class=[\"'][^\"']*application-form[^\"']*lever", re.I),

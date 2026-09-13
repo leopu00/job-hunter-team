@@ -143,13 +143,27 @@ const baseNextConfig: NextConfig = {
   },
 };
 
-export function createNextConfig(phase: string): NextConfig {
+export function createNextConfig(
+  phase: string,
+  env: NodeJS.ProcessEnv = process.env,
+): NextConfig {
   // `outputFileTracingRoot` serve a `next build --output=standalone`. In dev,
   // Turbopack lo riusa come root del resolver e su Windows risale al
   // node_modules del monorepo, saturando CPU/IO al primo GET.
-  return phase === PHASE_PRODUCTION_BUILD
-    ? { ...baseNextConfig, outputFileTracingRoot: MONOREPO_ROOT }
-    : baseNextConfig;
+  const config =
+    phase === PHASE_PRODUCTION_BUILD
+      ? { ...baseNextConfig, outputFileTracingRoot: MONOREPO_ROOT }
+      : baseNextConfig;
+  // Su Vercel niente `standalone`. Da Next 16.3 il passo `onBuildComplete`
+  // dell'adapter Vercel apre `.next/next-server.js.nft.json`, che la build
+  // standalone non scrive: la build fallisce con ENOENT dopo aver compilato
+  // tutto. È il motivo del ritorno a 16.2.x del 20/08 (`7e69096c1`), e ha
+  // tenuto la produzione dentro l'avviso critico sull'Image Optimization
+  // (< 16.3.3). Verificato su una preview Vercel il 2026-09-13: 16.3.4 con
+  // standalone → ENOENT; senza → build ok, API e `/_next/image` a 200.
+  // Vercel non usa comunque l'output standalone: lo fa solo chi builda la web
+  // per girarla da sé, e lì resta invariato.
+  return env.VERCEL ? { ...config, output: undefined } : config;
 }
 
 function configureNext(phase: string): NextConfig {
