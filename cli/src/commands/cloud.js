@@ -2268,6 +2268,36 @@ function laterInstant(a, b) {
   return mb > ma ? b : a;
 }
 
+/**
+ * [JHT-CLOSER] Quale autorizzazione vale fra quella del box e quella del cloud.
+ *
+ * Dal cloud si prende l'AZIONE dell'utente, non lo stato della riga (#186): una
+ * posizione rientra nel pull anche per altri motivi (un'esclusione, un altro
+ * flag), e la sua riga cloud puo' non conoscere un flag acceso sul box che il
+ * push non ha ancora portato su. Il 13/09 una riga trascinata da
+ * un'esclusione ha spento cosi' due autorizzazioni date con `jht apply request`.
+ *
+ * Vince il cloud solo con un `apply_requested_at` strettamente piu' recente di
+ * quello locale: e' un click (o un ritiro, che ha il suo istante) successivo.
+ * Altrimenti la terna locale resta intera, istante e autore compresi.
+ */
+export function resolveApplyRequest(local, cloud) {
+  const localValue = {
+    flag: (local?.apply_requested ?? 0) === 1 ? 1 : 0,
+    at: local?.apply_requested_at ?? null,
+    by: local?.apply_requested_by ?? null,
+  };
+  const cloudMs = Date.parse(cloud?.apply_requested_at ?? '');
+  if (Number.isNaN(cloudMs)) return localValue;
+  const localMs = Date.parse(localValue.at ?? '');
+  if (!Number.isNaN(localMs) && cloudMs <= localMs) return localValue;
+  return {
+    flag: cloud.apply_requested === true || cloud.apply_requested === 1 ? 1 : 0,
+    at: cloud.apply_requested_at,
+    by: cloud.apply_requested_by || null,
+  };
+}
+
 async function handlePullDesiredState(options = {}) {
   const silent = options.silent === true;
   const log = (msg) => { if (!silent) console.log(msg); };
@@ -2643,9 +2673,7 @@ async function handlePullDesiredState(options = {}) {
       // cui `apply_requested_by` non nomina un canale utente, quindi una
       // corsia che portasse a casa il booleano e lasciasse indietro l'autore
       // produrrebbe autorizzazioni che il box scarta senza dire perche'.
-      const apFlag = p.apply_requested === true || p.apply_requested === 1 ? 1 : 0;
-      const apAt = p.apply_requested_at || null;
-      const apBy = p.apply_requested_by || null;
+      const { flag: apFlag, at: apAt, by: apBy } = resolveApplyRequest(local, p);
       // Skip delle scritture no-op: l'UPDATE non tocca updated_at, quindi il
       // trigger `positions_touch_updated_at` (AFTER UPDATE ... WHEN NEW.updated_at
       // IS OLD.updated_at) rilancerebbe una UPDATE annidata su updated_at PER OGNI
