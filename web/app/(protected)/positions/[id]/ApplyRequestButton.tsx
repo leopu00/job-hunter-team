@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
 import type { ApplyRequestState } from "@/lib/apply-request-rule";
@@ -48,7 +49,9 @@ export function ApplyRequestView({
   onConfirm,
   onDismiss,
   onWithdraw,
+  portal,
 }: {
+  portal?: (dialog: ReactNode) => ReactNode;
   state: ApplyRequestState;
   t: Translate;
   busy?: boolean;
@@ -161,44 +164,45 @@ export function ApplyRequestView({
           {error}
         </p>
       )}
-      {confirming && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.6)" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onDismiss?.();
-          }}
-        >
+      {confirming &&
+        (portal ?? ((dialog: ReactNode) => dialog))(
           <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="apply-request-confirm-title"
-            aria-describedby="apply-request-confirm-body"
-            className="w-full max-w-md rounded-lg border p-5"
-            style={{
-              background: "var(--color-panel)",
-              borderColor: "var(--color-border)",
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) onDismiss?.();
             }}
           >
-            <h2
-              id="apply-request-confirm-title"
-              className="text-sm font-semibold text-[var(--color-bright)]"
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="apply-request-confirm-title"
+              aria-describedby="apply-request-confirm-body"
+              className="w-full max-w-md rounded-lg border p-5"
+              style={{
+                background: "var(--color-panel)",
+                borderColor: "var(--color-border)",
+              }}
             >
-              {t("confirm_title")}
-            </h2>
-            <p
-              id="apply-request-confirm-body"
-              className="mt-2 text-[12px] leading-relaxed text-[var(--color-muted)]"
-            >
-              {t("confirm_body")}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              {button(t("confirm_no"), onDismiss, "quiet", "dismiss")}
-              {button(t("confirm_yes"), onConfirm, "primary", "confirm")}
+              <h2
+                id="apply-request-confirm-title"
+                className="text-sm font-semibold text-[var(--color-bright)]"
+              >
+                {t("confirm_title")}
+              </h2>
+              <p
+                id="apply-request-confirm-body"
+                className="mt-2 text-[12px] leading-relaxed text-[var(--color-muted)]"
+              >
+                {t("confirm_body")}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                {button(t("confirm_no"), onDismiss, "quiet", "dismiss")}
+                {button(t("confirm_yes"), onConfirm, "primary", "confirm")}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+        )}
     </section>
   );
 }
@@ -255,6 +259,9 @@ export function ApplyRequestButton({
       onConfirm={() => void send(true)}
       onDismiss={() => setConfirming(false)}
       onWithdraw={() => void send(false)}
+      // Il dialogo esce dall'albero della pagina: un antenato con `transform`
+      // (l'animazione d'ingresso) farebbe di `fixed` un riquadro, non lo schermo.
+      portal={(dialog) => createPortal(dialog, document.body)}
     />
   );
 }

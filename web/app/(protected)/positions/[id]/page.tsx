@@ -299,6 +299,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : null,
     ...(await getApplyRequestSignals(data.position.id)),
   });
+  // Sul cloud l'id del box è `legacy_id`; nel jobs.db la colonna non esiste e
+  // l'id della riga È l'id del box, quello che la route si aspetta.
+  const applyLegacyId =
+    data.position.legacy_id ??
+    (/^\d+$/.test(data.position.id) ? Number(data.position.id) : null);
 
   // NB: data.highlights esiste ancora nel DB ma è segnale interno per gli
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
@@ -1238,11 +1243,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
       {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
           annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
       <div className="mt-6 space-y-4">
-        {position.legacy_id != null && applyState.kind !== "hidden" && (
-          <ApplyRequestButton
-            legacyId={position.legacy_id}
-            state={applyState}
-          />
+        {applyLegacyId != null && applyState.kind !== "hidden" && (
+          <ApplyRequestButton legacyId={applyLegacyId} state={applyState} />
         )}
         {position.legacy_id != null && (
           <div className="mt-4 flex items-center gap-3">
