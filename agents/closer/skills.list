@@ -1,0 +1,25 @@
+# Skills the CLOSER consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# The launcher (start-agent.sh) reads this file at boot and copies the
+# listed skills into the agent's runtime workspace.
+
+# The two CLOSER skills: what may go out (the two gates, the refusal
+# explained) and how one application runs (state machine, receipt,
+# blocked_human).
+apply-authorization
+apply-flow
+
+# DB reads (position, application row). Writes are FORBIDDEN in the prompt:
+# `applied` is written only by apply_flow.py after the receipt.
+db-query
+db-update
+
+# Pause between two applications, and the wake-up ack after it.
+throttle
+throttle-ack
+
+# Inter-agent (Capitano)
+tmux-send
+
+# User chat (game / desktop app): one short reply, then back to the queue.
+chat-worker

@@ -46,7 +46,7 @@ PAGE_SIZE = os.sysconf("SC_PAGE_SIZE")
 VALID_ROLES = (
     "capitano", "sentinella", "assistente", "mentor", "dottore",
     "mantenitore", "scout", "analista", "scorer", "scrittore",
-    "critico", "tesoriere",
+    "critico", "tesoriere", "closer",
 )
 _NAME_RE = re.compile(
     r"^(%s)(-[a-z0-9]+)?$" % "|".join(VALID_ROLES))

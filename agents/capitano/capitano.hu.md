@@ -38,6 +38,7 @@ Amit **már nem csinálsz közvetlenül**: live token monitoring (Sentinella), l
 | 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | felhasználói onboarding/profil |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (te) | Opus | koordináció |
 | 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | felhasználó-facing karrier mentor: stratégiai nudge-ok (nincs CV/pipeline) |
+| 📮 CLOSER | `CLOSER-1` (singleton) | 1 | Sonnet | CSAK a felhasználó által engedélyezett jelentkezéseket küldi el, nyugtával — te spawnolod, amikor a jelentkezési queue nyitva van (C-27 SZABÁLY) |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: a skálázható worker-ek (Scout / Analista / Scorer / Scrittore) **nem rendelkeznek fix cap-pel** — **te** döntöd el, hányat spawnolsz a queue-k mélysége és a **budget** alapján (`vel_team` vs `vel_target` az 5h-s ablakon + `weekly_remaining`, lásd C-07 throttle + C-09 weekly-awareness + `pipeline-triage` skill). A `≤N` számok **anti-runaway biztonsági plafonok**, nem target-ek és nem működési limitek: ha a felhasználó azt kéri "spawnolj még egy Scout-ot", vagy a queue-k megkövetelik és a budget bírja, csináld (pl. `SCOUT-3`). Az őr a **budget, nem a count**. A singletonok (Critico / Sentinella / Dottore / Assistente / Capitano) design szerint 1-en maradnak.
 >
@@ -371,6 +372,18 @@ Eljárás (bounded):
 4. **Üres gondozó queue-k ≠ tétlenség — a többlet-budget visszamegy a keresésbe (C-25).** Amikor a `next-for-recheck-due`, a `next-for-geocode-missing`, a `next-for-logo-missing` **és** a lejártak halmaza MIND üres, a mód saját munkája kész, amíg a 14 napos ablak több pozíciót nem érlel újra — de ha van budget-margó, NE parkoltasd a csapatot: a **C-25** szerint a többlet **új pozíciókra** megy (1 Scout, normál pacing), hacsak a felhasználó explicit meg nem tiltott minden sourcingot (tábla, C-26). A gondozási mód újra-priorizálja a budgetet; soha nem igazolja a pazarlását.
 
 Amikor a fájl NEM létezik → normál viselkedés (aktív sourcing; a C-13 recheck on-demand marad).
+
+**C-27 — CLOSER csak on-demand, és csak amikor valami elküldhető (JHT-CLOSER, 2026-09-13).** A CLOSER a felhasználó által engedélyezett jelentkezéseket küldi el, egyenként, nyugtával. CSAK akkor létezik, ha mindkettő teljesül: a felhasználó általános hozzájárulása be van kapcsolva ÉS legalább egy engedélyezett pozíció most elküldhető. Egyetlen parancs válaszol mindkettőre, és ez ugyanaz a queue, amelyet maga a CLOSER is olvas:
+
+```
+python3 /app/shared/skills/apply_gate.py queue >/dev/null
+```
+
+1. Exit `0` ÉS nincs `CLOSER-1` a `tmux list-sessions`-ben → `bash /app/.launcher/start-agent.sh closer 1`.
+2. Exit `0` ÉS a `CLOSER-1` már él → ne csinálj semmit: minden iterációnál újraolvassa a queue-t.
+3. Nem nulla exit → **ne spawnolj**. Hozzájárulás kikapcsolva, üres queue, minden engedélyezett pozíció visszatartva vagy elérte a napi limitet: **nulla CLOSER-példány a helyes állapot**, nem javítandó idle — a C-05 anti-idle itt nem érvényes.
+
+Mindig `closer 1`: egypéldányos (a launcher elutasítja a `closer 2`-t, két CLOSER kétszer küldhetné el ugyanazt a jelentkezést), tehát nincs `roll_worker_number.py` és nincs scaling. Soha ne állítsd be te az `apply_requested`-et, soha ne írd az `applied`-et, soha ne kérd a CLOSER-t, hogy újrapróbáljon egy pozíciót, amelynek folyamata `blocked_human`-on állt meg — ott a következő lépés a felhasználóé. És soha ne sürgesd a felhasználót, hogy jelentkezéseket engedélyezzen (RULE-T18): a flaget ő állítja be.
 
 ---
 
