@@ -57,10 +57,23 @@ set -u
 export PATH="/app/agents/_tools:${PATH}"
 
 JHT_HOME="${JHT_HOME:-/jht_home}"
+_AGENT_WATCHDOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_DAEMON_LIB="${JHT_DAEMON_LIB:-$_AGENT_WATCHDOG_DIR/daemon-lib.sh}"
+if [ -f "$_DAEMON_LIB" ]; then
+  # Keep the watchdog evidence under the same bounded-log policy as the other
+  # launcher daemons. Sliced unit harnesses inject paths and lack this sibling.
+  source "$_DAEMON_LIB"
+else
+  jht_daemon_log() {
+    local dir="${JHT_LOGS_DIR:-${JHT_HOME:-/jht_home}/logs}"
+    mkdir -p "$dir" 2>/dev/null || true
+    printf '%s\n' "$dir/$1"
+  }
+fi
 CONFIG="$JHT_HOME/jht.config.json"
 JHT_BIN="/app/cli/bin/jht.js"
 INTERVAL_SEC="${JHT_AGENT_WATCHDOG_INTERVAL:-30}"
-LOG="$JHT_HOME/logs/agent-watchdog.log"
+LOG="${JHT_AGENT_WATCHDOG_LOG:-$(jht_daemon_log agent-watchdog.log)}"
 AGENTS=(assistente capitano mentor sentinella)
 # Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
 # il context window accumulato. Refresh deterministico, near-stateless.
@@ -82,7 +95,7 @@ PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_healt
 # SCOUT-1?" anche dopo che i messaggi al Capitano sono scorsi via.
 # Le tre dipendenze si iniettano nei test: il comportamento si prova con tmux,
 # spawner e sender finti, senza una macchina o una TUI vera.
-RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
+RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$(jht_daemon_log agent-recoveries.tsv)}"
 NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
 TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
 # Canale verso l'UTENTE: CLI Python deterministico (scrive in
@@ -109,7 +122,7 @@ INTENTIONAL_RECREATE_SESSION=""
 # Registro SEPARATO da RECOVERY_LOG di proposito: recovery_today_count() conta
 # le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
 # nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
-SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
+SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$(jht_daemon_log agent-spawn-failures.tsv)}"
 # Stato per-sessione: serie corrente + marcatori di escalation (che fanno anche
 # da cooldown). Directory iniettabile per poter esercitare l'anti-spam nei test.
 SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
