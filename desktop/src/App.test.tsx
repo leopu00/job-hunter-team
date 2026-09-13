@@ -2,8 +2,13 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import App from "./App";
+import { openLiveScreen } from "./lib/live-screen";
 import { checkPodman } from "./lib/podman";
 import { startApiTeam } from "./lib/team";
+
+vi.mock("./lib/live-screen", () => ({
+  openLiveScreen: vi.fn(),
+}));
 
 vi.mock("./lib/podman", () => ({
   checkPodman: vi.fn(),
@@ -228,5 +233,29 @@ describe("desktop first-run flow", () => {
       "Il provider ha rifiutato la richiesta",
     );
     expect(screen.getByLabelText("API key")).toHaveValue("");
+  });
+});
+
+describe("CLOSER live screen", () => {
+  it("opens the detached live-screen window from the topbar", async () => {
+    vi.mocked(openLiveScreen).mockResolvedValue(true);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /schermo closer/i }));
+
+    expect(openLiveScreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("says so when the window cannot be opened", async () => {
+    vi.mocked(openLiveScreen).mockRejectedValue({ code: "window_failed" });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /schermo closer/i }));
+
+    expect(
+      await screen.findByRole("button", { name: /schermo non disponibile/i }),
+    ).toBeInTheDocument();
   });
 });

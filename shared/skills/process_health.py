@@ -59,6 +59,10 @@ EXPECTED = [
     # la freschezza di logs/throttle-engine.jsonl → `throttle_engine.py --health`.
     ("throttle-engine",    "throttle_engine.py",    "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),
+    # Lo schermo live del CLOSER (Xvfb + stream VNC): se muore, il browser
+    # headed del CLOSER non ha dove aprirsi e l'utente guarda una finestra
+    # vuota. pid1 lo rispawna; morto a lungo = problema di pid1 o dell'immagine.
+    ("live-screen",        "live-screen.sh",        "pid1-child"),
     ("cloud-daemon",       "cloud daemon",          "daemon"),
     # 2026-07-23: 'dashboard' RIMOSSA dalla lista — la web UI locale è stata
     # ritirata (pid1 non la avvia più). Lasciarla attesa faceva scattare il
@@ -199,6 +203,10 @@ def scan():
         # auto-report-loop: pid1 lo avvia solo con Telegram configurato (come
         # tg-bridge). Senza Telegram è opzionale → niente falso 'morto'.
         elif name == "auto-report-loop" and not tg_configured:
+            row["optional"] = True
+        # live-screen: spento di proposito con JHT_LIVE_SCREEN=0 (pid1 lo
+        # salta). Stessa variabile, stesso ambiente del container.
+        elif name == "live-screen" and os.environ.get("JHT_LIVE_SCREEN", "").strip() == "0":
             row["optional"] = True
         rows.append(row)
     # Conteggio PER RUOLO (O-58): il ruolo è nel cmdline grazie a `--role`
