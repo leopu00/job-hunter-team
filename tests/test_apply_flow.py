@@ -214,6 +214,7 @@ def build_flow(
         return gate_results.pop(0) if len(gate_results) > 1 else gate_results[0]
 
     return ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
         position_id=41,
         url=ASHBY_URL,
         profile=candidate or profile(),
@@ -593,6 +594,7 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
 
     def new_flow() -> ApplicationFlow:
         return ApplicationFlow(
+            essentials_checker=lambda **_kwargs: [],
             position_id=41,
             url=ASHBY_URL,
             profile=_load_profile(profile_path),
@@ -684,10 +686,13 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
     assert resumed.status == "applied"
     assert page.evaluate("window.submitCount") == 1
     assert len(recorded) == 1
-    saved = _load_profile(profile_path)
-    assert saved["application_answers"] == {
-        "which work model can you accept": "Remote"
-    }
+    # The answer lives in jobs.db now, where the email channel and a new
+    # session read it; the YAML profile is left as the user wrote it.
+    with sqlite3.connect(db_path) as observed:
+        assert observed.execute(
+            "SELECT key, answer_json, channel, source_message_id FROM application_answers"
+        ).fetchall() == [("which work model can you accept", '"Remote"', "reply", request[0])]
+    assert "application_answers" not in _load_profile(profile_path)
     with sqlite3.connect(db_path) as observed:
         seen = observed.execute(
             "SELECT agent_seen_reply_at FROM pending_user_messages WHERE id = ?",
@@ -738,6 +743,7 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
         raise RuntimeError("fixture notifier unavailable")
 
     flow = ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
         position_id=41,
         url=ASHBY_URL,
         profile=profile(),

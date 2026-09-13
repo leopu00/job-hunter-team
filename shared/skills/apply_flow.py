@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import hashlib
 import json
 import logging
@@ -48,6 +47,10 @@ try:
     from ats_detect import detect_ats
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills.ats_detect import detect_ats
+try:
+    import application_answers
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import application_answers
 
 
 LOG = logging.getLogger("jht.apply_flow")
@@ -173,9 +176,7 @@ def _resolve_headless(
 
 
 def _normalise_label(value: str) -> str:
-    value = value.replace("\u00a0", " ").strip().casefold()
-    value = re.sub(r"[\s\W_]+", " ", value, flags=re.UNICODE)
-    return value.strip()
+    return application_answers.normalise_label(value)
 
 
 def _safe_label(value: str) -> str:
@@ -470,6 +471,16 @@ def _default_notifier(
     if not notification_id.isdigit():
         raise FlowError("jht-notify-user returned no durable message id")
     return notification_id
+
+
+def _default_essentials_checker(
+    *, profile: Mapping[str, Any], position_id: int, db_path: str | Path | None
+) -> list[str]:
+    """Ask each missing essential fact once (Telegram first); return what is missing."""
+    db = _resolve_db_path(db_path)
+    with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+        result = application_answers.ensure_essentials(conn, profile, position_id)
+    return list(result["missing"])
 
 
 def _resolve_db_path(db_path: str | Path | None) -> Path:
@@ -1775,6 +1786,7 @@ class ApplicationFlow:
         gate_checker: Callable[..., Any] | None = None,
         notifier: Callable[..., str] | None = None,
         applied_recorder: Callable[..., None] | None = None,
+        essentials_checker: Callable[..., list[str]] | None = None,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
     ):
@@ -1796,6 +1808,7 @@ class ApplicationFlow:
         self.gate_checker = gate_checker or _default_gate_checker
         self.notifier = notifier or _default_notifier
         self.applied_recorder = applied_recorder or _default_applied_recorder
+        self.essentials_checker = essentials_checker or _default_essentials_checker
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
 
@@ -1846,7 +1859,9 @@ class ApplicationFlow:
             raise BlockedHuman("page_unavailable", "Application page did not return a successful response", "detect")
         page.wait_for_timeout(500)
 
-    def _notification_message(self, blocked: BlockedHuman) -> str:
+    def _notification_message(
+        self, blocked: BlockedHuman, source_id: str = "", *, telegram_hint: bool = True
+    ) -> str:
         if blocked.answer_request:
             request = blocked.answer_request
             options = request.get("options") or []
@@ -1859,6 +1874,11 @@ class ApplicationFlow:
                 f"{options_text}\n\n"
                 "Reply to this request in the dashboard. The answer is saved under the "
                 "question's exact normalized key and reused only for an identical key."
+                + (
+                    "\n" + application_answers.telegram_hint(source_id)
+                    if telegram_hint and source_id
+                    else ""
+                )
             )
         if blocked.reason in {"required_answer_missing", "required_profile_field_missing"}:
             return (
@@ -1890,7 +1910,9 @@ class ApplicationFlow:
             "payload": payload,
         }
 
-    def _persist_answer_request(self, checkpoint: FlowCheckpoint, message: str) -> None:
+    def _persist_answer_request(
+        self, checkpoint: FlowCheckpoint, message: str, legacy_message: str = ""
+    ) -> None:
         request = checkpoint.answer_request
         if not request:
             raise FlowError("answer request checkpoint is missing")
@@ -1919,7 +1941,9 @@ class ApplicationFlow:
             "closer_application_answer",
             payload_text,
         )
-        if not row or row[1:] != expected:
+        # A request persisted before the Telegram hint existed keeps its body.
+        legacy = expected[:1] + (legacy_message,) + expected[2:] if legacy_message else None
+        if not row or (row[1:] != expected and row[1:] != legacy):
             raise FlowError("durable answer request could not be verified")
         request["message_id"] = str(row[0])
         checkpoint.save(self.checkpoint_path)
@@ -1945,19 +1969,24 @@ class ApplicationFlow:
         checkpoint.resume_state = blocked.step
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
-        message = self._notification_message(blocked)
+        legacy_message = ""
         if blocked.answer_request:
             candidate = self._answer_request_record(blocked)
             current = checkpoint.answer_request
             if not current or current.get("source_id") != candidate["source_id"]:
                 checkpoint.answer_request = candidate
+            source_id = str(checkpoint.answer_request["source_id"])
+            message = self._notification_message(blocked, source_id)
+            legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
+        else:
+            message = self._notification_message(blocked)
         checkpoint.save(self.checkpoint_path)
         if blocked.answer_request:
             persisted = False
             try:
                 # The request itself does not depend on Telegram or on the
                 # notifier executable: it is committed and reread first.
-                self._persist_answer_request(checkpoint, message)
+                self._persist_answer_request(checkpoint, message, legacy_message)
                 persisted = True
             except Exception as exc:
                 LOG.error("durable answer request failed: %s", type(exc).__name__)
@@ -2014,7 +2043,26 @@ class ApplicationFlow:
                 "Application platform is unknown, conflicting, or has no safe recipe",
                 "detect",
             )
-        return recipe(self.profile, self.cv_path)
+        return recipe(self._profile_with_saved_answers(), self.cv_path)
+
+    def _profile_with_saved_answers(self) -> dict[str, Any]:
+        """The profile with every remembered answer; the database wins over the YAML."""
+        merged = dict(self.profile)
+        answers = AshbyRecipe._answer_index(self.profile.get("application_answers"))
+        try:
+            db = _resolve_db_path(self.db_path)
+        except FlowError:
+            db = None
+        if db is not None and db.is_file():
+            with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+                # Only the profile FILE is imported: a mapping handed in by a
+                # caller is not the user's profile and must not become memory.
+                if self.profile_path is not None:
+                    application_answers.import_profile_answers(conn, self.profile)
+                    conn.commit()
+                answers.update(application_answers.load_answers(conn))
+        merged["application_answers"] = answers
+        return merged
 
     @staticmethod
     def _greenhouse_page_url_trusted(url: str) -> bool:
@@ -2262,63 +2310,30 @@ class ApplicationFlow:
             return exact
         raise FlowError("answer request field type is unsupported")
 
-    def _save_application_answer(self, key: str, answer: Any) -> None:
-        if self.profile_path is None or not self.profile_path.is_file():
-            raise FlowError("candidate profile path is unavailable")
-        try:
-            import yaml
-        except ImportError as exc:
-            raise FlowError("pyyaml is not installed") from exc
-        lock_path = self.profile_path.with_name(f".{self.profile_path.name}.lock")
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a+", encoding="utf-8") as lock:
-            with contextlib.suppress(OSError):
-                os.chmod(lock_path, 0o600)
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            current = _load_profile(self.profile_path)
-            saved = current.get("application_answers")
-            answers: dict[str, Any] = {}
-            if isinstance(saved, Mapping):
-                answers.update(saved)
-            elif isinstance(saved, list):
-                for item in saved:
-                    if isinstance(item, Mapping) and item.get("question"):
-                        answers[_normalise_label(str(item["question"]))] = item.get("answer")
-            for existing in list(answers):
-                if _normalise_label(str(existing)) == key:
-                    del answers[existing]
-            answers[key] = answer
-            updated = dict(current)
-            updated["application_answers"] = answers
-            temporary = ""
-            handle = None
-            try:
-                handle = tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=self.profile_path.parent,
-                    prefix=f".{self.profile_path.name}.",
-                    delete=False,
-                )
-                temporary = handle.name
-                yaml.safe_dump(updated, handle, allow_unicode=True, sort_keys=False)
-                handle.flush()
-                os.fsync(handle.fileno())
-                handle.close()
-                os.chmod(temporary, 0o600)
-                os.replace(temporary, self.profile_path)
-            except Exception:
-                if handle and not handle.closed:
-                    handle.close()
-                if temporary:
-                    with contextlib.suppress(OSError):
-                        os.unlink(temporary)
-                raise
-        observed = _load_profile(self.profile_path)
-        indexed = AshbyRecipe._answer_index(observed.get("application_answers"))
-        if key not in indexed or indexed[key] != answer:
-            raise FlowError("candidate profile write could not be verified")
-        self.profile = dict(observed)
+    def _save_application_answer(self, key: str, request: Mapping[str, Any], answer: Any) -> None:
+        """Remember the answer in jobs.db, where every later run reads it first.
+
+        The YAML profile is not rewritten any more: an answer kept only there
+        was invisible to the email channel and lost whenever the profile was
+        regenerated, so a new session asked the same question again.
+        """
+        payload = request.get("payload") if isinstance(request.get("payload"), Mapping) else {}
+        db = _resolve_db_path(self.db_path)
+        with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+            application_answers.save_answer(
+                conn,
+                key=key,
+                label=str(payload.get("label") or key),
+                answer=answer,
+                field_type=str(payload.get("field_type") or "text"),
+                options=list(payload.get("options") or []),
+                channel="reply",
+                message_id=int(str(request.get("message_id") or 0)) or None,
+            )
+            conn.commit()
+            stored = application_answers.load_answers(conn)
+        if key not in stored or stored[key] != answer:
+            raise FlowError("saved application answer could not be verified")
 
     def _resume_dashboard_answer(
         self, checkpoint: FlowCheckpoint
@@ -2327,15 +2342,16 @@ class ApplicationFlow:
         if not request:
             return None
         try:
-            message = self._notification_message(
-                BlockedHuman(
-                    "required_answer_missing",
-                    checkpoint.blocked_detail,
-                    checkpoint.resume_state or "screening",
-                    answer_request=request.get("payload"),
-                )
+            blocked = BlockedHuman(
+                "required_answer_missing",
+                checkpoint.blocked_detail,
+                checkpoint.resume_state or "screening",
+                answer_request=request.get("payload"),
             )
-            self._persist_answer_request(checkpoint, message)
+            source_id = str(request.get("source_id", ""))
+            message = self._notification_message(blocked, source_id)
+            legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
+            self._persist_answer_request(checkpoint, message, legacy_message)
             message_id = int(str(request.get("message_id", "")))
             db = _resolve_db_path(self.db_path)
             with sqlite3.connect(db) as conn:
@@ -2352,7 +2368,7 @@ class ApplicationFlow:
             key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
             if not key or key != _normalise_label(key):
                 raise FlowError("answer request key is not canonical")
-            self._save_application_answer(key, answer)
+            self._save_application_answer(key, request, answer)
             with sqlite3.connect(db) as conn:
                 changed = conn.execute(
                     "UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP "
@@ -2414,6 +2430,27 @@ class ApplicationFlow:
             # Detection already handed this position to the email channel; a
             # rerun must not reopen the page and "find" a form again.
             return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
+
+        fresh = (
+            checkpoint.state == "detect"
+            and not checkpoint.completed_steps
+            and not checkpoint.submit_started
+            and not checkpoint.answer_request
+        )
+        if fresh:
+            # Before the first run of a position: the facts almost every form
+            # asks for. Each missing one is asked once, on Telegram first, and
+            # nothing is saved in the checkpoint — the position is not held,
+            # it simply waits until the answers exist.
+            try:
+                missing = self.essentials_checker(
+                    profile=self.profile, position_id=self.position_id, db_path=self.db_path
+                )
+            except Exception as exc:
+                LOG.error("essential facts check failed: %s", type(exc).__name__)
+                return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
+            if missing:
+                return FlowResult("blocked_human", checkpoint.state, "essential_facts_missing")
 
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:

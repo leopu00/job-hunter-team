@@ -900,6 +900,38 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_applications_critic_round(conn)
     _migrate_applications_rejection_reason(conn)
     _migrate_email_application_attempts(conn)
+    _migrate_application_answers(conn)
+
+
+def _migrate_application_answers(conn: sqlite3.Connection) -> None:
+    """The user's answers to application questions. [JHT-CLOSER-ANSWERS]
+
+    One row per question the user has answered, keyed by the label normalised
+    the way the recipes normalise it (`application_answers.normalise_label`).
+    The CLOSER reads here first, so an answer given once — on Telegram or on
+    the dashboard — survives restarts and new agent contexts, and the same
+    question is never asked twice. `answer_json` keeps the typed value a form
+    control receives (text, boolean, list of options).
+
+    Local only: the dashboard answers through `pending_user_messages`, which
+    already travels; nothing on the web reads this table, so there is no
+    Supabase twin. Additive and idempotent (CREATE ... IF NOT EXISTS).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS application_answers (
+            key TEXT PRIMARY KEY CHECK (key <> ''),
+            label TEXT NOT NULL,
+            answer_json TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            options_json TEXT NOT NULL DEFAULT '[]',
+            channel TEXT NOT NULL,
+            source_message_id INTEGER,
+            answered_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )
+        """
+    )
 
 
 def _migrate_email_application_attempts(conn: sqlite3.Connection) -> None:

@@ -41,6 +41,7 @@ direttamente. Questo bridge gestisce solo l'inbound.
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -83,6 +84,15 @@ for _skills_candidate in (
 # una sanificazione che si spegne da sola no. Meglio un bridge che non parte.
 from external_content import flatten_to_one_line  # noqa: E402  (dopo sys.path)
 
+# [JHT-CLOSER-ANSWERS] Una risposta a una domanda del CLOSER va risolta qui,
+# nella stessa transazione che la scrive in cronologia. Senza il modulo il
+# bridge continua a consegnare la chat: la domanda resta aperta e la dashboard
+# puo' ancora risponderle, quindi niente si perde.
+try:
+    import application_answers  # noqa: E402
+except Exception as _answers_import_error:  # pragma: no cover - degraded image
+    application_answers = None
+
 VALID_ROLES = ("assistente", "capitano", "mentor")
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -123,6 +133,10 @@ DEADLETTER_PATH = JHT_HOME / f"tg-bridge-deadletter-{BOT_ROLE}.jsonl"
 INBOUND_QUEUE_DIR = JHT_HOME / f"tg-inbound-queue-{BOT_ROLE}"
 JOBS_DB_PATH = JHT_HOME / "jobs.db"
 TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
+# Il bot da cui escono le domande del CLOSER (jht-notify-user: chi non ha un bot
+# suo parla da quello dell'Assistente). Solo su questo bot un messaggio senza
+# reply e senza codice puo' valere come risposta all'unica domanda aperta.
+CLOSER_QUESTION_BOT = "assistente"
 POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 DOWNLOAD_CHUNK_BYTES = 64 * 1024
@@ -352,6 +366,14 @@ def _telegram_created_at(msg: dict) -> str:
     return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _reply_to_text(msg: dict) -> str | None:
+    replied = msg.get("reply_to_message")
+    if not isinstance(replied, dict):
+        return None
+    text = replied.get("text") or replied.get("caption")
+    return str(text) if text else None
+
+
 def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
                          *, edited: bool = False) -> bool:
     """Journal atomico PRIMA dell'offset; update_id e' la chiave di dedup.
@@ -375,6 +397,9 @@ def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
         "delivered_via": "telegram",
         "created_at": _telegram_created_at(msg),
         "edited": bool(edited),
+        # Il testo del messaggio a cui l'utente ha risposto: e' cosi' che una
+        # risposta trova la SUA domanda quando ce n'e' piu' d'una aperta.
+        "reply_to_text": _reply_to_text(msg),
     }
     try:
         _atomic_json(path, record)
@@ -402,6 +427,72 @@ def _ensure_inbound_schema(db: sqlite3.Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
         "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
     )
+
+
+def _resolve_closer_answer(db: sqlite3.Connection, rec: dict):
+    """La risposta dell'utente a una domanda del CLOSER, se lo e'.
+
+    Dentro un SAVEPOINT: un errore della risoluzione non deve far perdere il
+    turno di chat appena scritto, ne' lasciare mezza risposta salvata.
+    """
+    if application_answers is None:
+        return None
+    db.execute("SAVEPOINT closer_answer")
+    try:
+        outcome = application_answers.resolve_telegram_reply(
+            db,
+            text=str(rec.get("body") or ""),
+            reply_to_text=rec.get("reply_to_text"),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+        )
+    except Exception as e:
+        db.execute("ROLLBACK TO closer_answer")
+        db.execute("RELEASE closer_answer")
+        log(f"closer answer resolution failed: {type(e).__name__} — chat turn kept")
+        return None
+    db.execute("RELEASE closer_answer")
+    if outcome.status == "resolved":
+        log(f"closer answer resolved message={outcome.message_id} position={outcome.position_id}")
+        return outcome
+    if outcome.status == "rejected":
+        log(f"closer answer rejected message={outcome.message_id} reason={outcome.reason}")
+        return outcome
+    if outcome.status == "ambiguous" and (
+        rec.get("reply_to_text") or re.search(r"(?i)\bQ[0-9A-F]{4}\b", str(rec.get("body") or ""))
+    ):
+        return outcome
+    return None
+
+
+_REJECTION_TEXT = {
+    "closer_answer_not_exact_option": "it must be one of the listed choices, written exactly as shown",
+    "closer_answer_empty": "the answer is empty",
+    "closer_answer_already_submitted": "this application has already been sent",
+    "closer_answer_position_not_ready": "this position is no longer ready to apply",
+}
+
+
+def _answer_feedback_text(outcome) -> str:
+    if outcome.status == "resolved":
+        return "Answer saved. CLOSER will use it for this application and will not ask it again."
+    if outcome.status == "rejected":
+        why = _REJECTION_TEXT.get(outcome.reason, "it does not fit this question")
+        return f"That answer was not saved: {why}. Here is the question again:\n\n{outcome.question}"
+    return (
+        "More than one CLOSER question is open and this message does not say which one it answers. "
+        "Reply to the question message, or start your answer with its code."
+    )
+
+
+def _answer_feedback(outcome) -> None:
+    """Best-effort: la risposta e' gia' salvata (o rifiutata) nel DB."""
+    try:
+        subprocess.run(
+            ["jht-telegram-send", "--from", BOT_ROLE, _answer_feedback_text(outcome)],
+            capture_output=True, text=True, timeout=25, check=False,
+        )
+    except Exception as e:
+        log(f"closer answer feedback not sent: {type(e).__name__}")
 
 
 def flush_inbound_queue(db_path: Path | None = None) -> int:
@@ -442,16 +533,26 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
                 "VALUES (?, ?, 'notification', 'user', NULL, 'telegram', "
                 "        NULL, ?, ?)"
             )
+            resolutions = []
             for _path, rec in records:
-                db.execute(insert, (
+                inserted = db.execute(insert, (
                     rec["agent"], rec["body"], rec["created_at"], rec["source_id"],
-                ))
+                )).rowcount
+                # Solo la prima volta: un replay del journal trova la riga gia'
+                # scritta e non deve risolvere (o rifiutare) una seconda volta.
+                if inserted == 1 and not rec.get("edited"):
+                    outcome = _resolve_closer_answer(db, rec)
+                    if outcome is not None:
+                        resolutions.append(outcome)
             db.commit()
         finally:
             db.close()
     except (OSError, ValueError, KeyError, sqlite3.Error, DurableQueueError) as e:
         log(f"inbound queue flush failed: {e} — durable journal retained")
         return 0
+
+    for outcome in resolutions:
+        _answer_feedback(outcome)
 
     for path, _rec in records:
         try:
