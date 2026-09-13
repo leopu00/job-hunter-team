@@ -23,3 +23,7 @@ tmux-send
 
 # User chat (game / desktop app): one short reply, then back to the queue.
 chat-worker
+
+# Applications whose Apply control is a mailto: link (apply_flow.py answers
+# `email_channel`): parsing, gate, draft, SMTP send, receipt.
+email-application-flow

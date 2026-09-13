@@ -213,6 +213,89 @@ describe("il permesso deciso sul web arriva al box", () => {
   });
 });
 
+/** Accende il flag sul box come fa `jht apply request`, senza passare dal cloud. */
+function flagLocale(dbPath: string, at: string, by = "user_local") {
+  const db = new DatabaseSync(dbPath);
+  db.prepare(
+    "UPDATE positions SET apply_requested = 1, apply_requested_at = ?, " +
+      "apply_requested_by = ? WHERE id = 7",
+  ).run(at, by);
+  db.close();
+}
+
+describe("dal cloud scende l'azione piu' recente, non la riga", () => {
+  // Visto il 13/09 sulla VPS dell'operatore: due flag accesi con
+  // `jht apply request`, mai arrivati al cloud perche' il push era fermo,
+  // azzerati dal primo pull in cui la riga e' rientrata per un'esclusione.
+
+  it("una riga trascinata da un'esclusione, senza istante, non spegne il flag locale", async () => {
+    const { dbPath } = box();
+    flagLocale(dbPath, "2026-09-12T10:00:00.000Z");
+    const row = await pull(dbPath, [
+      {
+        legacy_id: 7,
+        apply_requested: false,
+        apply_requested_at: null,
+        apply_requested_by: null,
+        user_excluded_at: "2026-09-12T10:05:00+00:00",
+        user_excluded_reason: "location",
+      },
+    ]);
+    expect(row).toEqual({
+      apply_requested: 1,
+      apply_requested_at: "2026-09-12T10:00:00.000Z",
+      apply_requested_by: "user_local",
+    });
+  });
+
+  it("un flag acceso sul web dopo quello locale vince", async () => {
+    const { dbPath } = box();
+    flagLocale(dbPath, "2026-09-12T09:00:00.000Z");
+    expect(await pull(dbPath, [AUTORIZZATA])).toEqual({
+      apply_requested: 1,
+      apply_requested_at: "2026-09-12T09:30:00+00:00",
+      apply_requested_by: "user_web",
+    });
+  });
+
+  it("un ritiro dal web piu' recente spegne il flag", async () => {
+    const { dbPath } = box();
+    flagLocale(dbPath, "2026-09-12T09:00:00.000Z");
+    expect(
+      await pull(dbPath, [
+        {
+          legacy_id: 7,
+          apply_requested: false,
+          apply_requested_at: "2026-09-12T09:45:00.123456+00:00",
+          apply_requested_by: null,
+        },
+      ]),
+    ).toEqual({
+      apply_requested: 0,
+      apply_requested_at: "2026-09-12T09:45:00.123456+00:00",
+      apply_requested_by: null,
+    });
+  });
+
+  it("un flag locale piu' recente di un vecchio ritiro cloud resta acceso", async () => {
+    const { dbPath } = box();
+    flagLocale(dbPath, "2026-09-12T10:00:00.000Z");
+    const row = await pull(dbPath, [
+      {
+        legacy_id: 7,
+        apply_requested: false,
+        apply_requested_at: "2026-09-12T11:59:00+02:00",
+        apply_requested_by: null,
+      },
+    ]);
+    expect(row).toEqual({
+      apply_requested: 1,
+      apply_requested_at: "2026-09-12T10:00:00.000Z",
+      apply_requested_by: "user_local",
+    });
+  });
+});
+
 describe("il cursore avanza sul solo permesso", () => {
   // ⚠️ Questo blocco DEVE passare dal lettore diretto, non dalla route Vercel.
   // Il massimo fra i timestamp lo calcola il client solo su quel ramo; sul

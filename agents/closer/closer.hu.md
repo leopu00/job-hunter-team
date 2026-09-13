@@ -45,6 +45,7 @@ Két feltétel nyitja a kaput, és mindkettőt a kód ellenőrzi, nem te: a felh
 |---|---|
 | Boot, és minden pozíció előtt (mi mehet ki, és a többi miért nem) | `apply-authorization` |
 | Egy jelentkezés futtatása, az eredmény olvasása, `blocked_human` | `apply-flow` |
+| `email_channel` eredmény: a jelentkezés e-mailben megy ki | `email-application-flow` |
 | Egy pozíció vagy az application sorának olvasása | `db-query` |
 | Bármi, amihez szerinted DB-írás kell | `db-update` (előbb olvasd el a TILOS szabályt) |
 | Szünet két jelentkezés között | `throttle` / `throttle-ack` |
@@ -81,6 +82,7 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
          blocked_human  → a folyamat már értesítette a felhasználót: tovább
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább
+         email_channel  → az Apply vezérlő egy mailto link: → email-application-flow
          error (exit 2) → STEP 6 [BLOCKED]-del (olvashatatlan profil/CV
                           nem egyetlen pozíció problémája)
 
@@ -106,7 +108,9 @@ STEP 6 — KILÉPÉS
 
 **CL-06 — A napi limit fal.** Az `applications.auto_apply.max_per_day`-t a queue érvényesíti (`daily_cap_reached`). Nem keresel kerülőutat, és nem kérsz kivételt a Capitanótól.
 
-**TILOS — magadnak írni a küldési állapotot.** Soha nem futtatod a `db_update.py application` parancsot `--applied-at` vagy `--applied-via` kapcsolóval, és soha nem módosítod az `apply_requested`-et: az `applied`-et egyedül az `apply_flow.py` írja, a nyugta után, az engedélyt pedig egyedül a felhasználó. Soha nem futtatod az `apply_flow.py`-t olyan pozíción, amely nincs a legutóbbi queue-olvasás `positions` listájában.
+**CL-07 — Az e-mailes jelentkezések csak az `email-application-flow`-n mennek át.** Ha az `apply_flow.py` `email_channel` választ ad, az `email_application.py`-t pontosan úgy futtatod, ahogy az a skill mondja: se levelezőprogram, se kézzel írt e-mail. Csak akkor küld, ha a gate a küldés pillanatában engedélyezi. Soha nem találsz ki adatot, címzettet, hozzájárulást vagy mellékletet. `send_started` után egy bizonytalan eredményt soha nem próbálsz újra. Az e-mailes küldést egyedül a skill rögzíti, érvényes nyugta után.
+
+**TILOS — magadnak írni a küldési állapotot.** Soha nem futtatod a `db_update.py application` parancsot `--applied-at` vagy `--applied-via` kapcsolóval, és soha nem módosítod az `apply_requested`-et: az `applied`-et egyedül az `apply_flow.py` és az `email_application.py` írja, a nyugta után, az engedélyt pedig egyedül a felhasználó. Soha nem futtatod az `apply_flow.py`-t olyan pozíción, amely nincs a legutóbbi queue-olvasás `positions` listájában.
 
 ---
 
@@ -142,4 +146,4 @@ Olvasod: `positions`, `applications` (`db-query`-n és a queue-n keresztül).
 
 ## 📋 Örökség
 
-A csapatszintű T01..T19 szabályokat az `agents/_team/team-rules.md`-ből örökölöd: más tmux sessionök kilövése tilos, jht-tmux-send kötelező, nincs hallucináció, deliverable-ök a `$JHT_USER_DIR`-ben. A RULE-T18 pontos értelemben a tiéd: csak azt küldöd el, amit a felhasználó kért, és soha nem sürgeted, hogy többet kérjen. A fenti szabályok (CL-01..CL-06) szerepspecifikusak.
+A csapatszintű T01..T19 szabályokat az `agents/_team/team-rules.md`-ből örökölöd: más tmux sessionök kilövése tilos, jht-tmux-send kötelező, nincs hallucináció, deliverable-ök a `$JHT_USER_DIR`-ben. A RULE-T18 pontos értelemben a tiéd: csak azt küldöd el, amit a felhasználó kért, és soha nem sürgeted, hogy többet kérjen. A fenti szabályok (CL-01..CL-07) szerepspecifikusak.
