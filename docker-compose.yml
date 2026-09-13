@@ -125,8 +125,14 @@ services:
     # runner accetta esclusivamente host locali.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Nessuna porta esposta: la dashboard web locale e' stata ritirata
-    # (2026-07-23) — l'interazione passa dall'app desktop (docker exec).
+    # Una sola porta, e solo sul loopback dell'host: lo stream in sola visione
+    # dello schermo del CLOSER (.launcher/live-screen.sh), che l'app desktop
+    # mostra in una finestra staccata. Lo schermo contiene CV e form di
+    # candidatura: il prefisso 127.0.0.1 NON si toglie — senza, Docker pubblica
+    # su 0.0.0.0 e lo stream diventa raggiungibile dalla rete locale. La
+    # dashboard web locale resta ritirata (2026-07-23).
+    ports:
+      - "127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"
     stdin_open: true
     tty: true
     restart: unless-stopped

@@ -71,6 +71,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # usano per scrivere in chat.jsonl. Va nel PATH del container (non solo
     # nel tmux pane) così anche i sub-shell spawnati da Codex/Kimi --yolo
     # lo trovano senza dipendere dall'export re-inviato via send-keys.
+    # Display X dello schermo live (.launcher/live-screen.sh). Esportato per
+    # tutta l'immagine, non solo per pid1: un browser headed del CLOSER può
+    # partire dal pane tmux di un agente o da un `docker exec`, e in entrambi i
+    # casi deve aprirsi sullo schermo che l'utente guarda. Ai browser headless
+    # (linkedin_check.py & co.) DISPLAY è indifferente.
+    DISPLAY=:99 \
     PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -112,6 +118,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libnss3 libnspr4 libcups2 libdrm2 libgbm1 libasound2 \
       libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
       libpango-1.0-0 libcairo2 libdbus-1-3 \
+      # Schermo live del CLOSER (.launcher/live-screen.sh): display X virtuale
+      # su cui il browser gira headed, x11vnc che lo legge in sola visione e
+      # websockify che lo porta all'app desktop. NON il pacchetto `novnc`: in
+      # bookworm dipende da `nodejs` e `libnode` di Debian, un secondo Node
+      # accanto a quello dell'immagine; il client VNC vive nell'app desktop.
+      xvfb x11vnc python3-websockify \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -134,9 +146,9 @@ RUN npm ci --prefix cli \
 
 COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt \
-    # Pre-install only the headless shell (used by linkedin_check.py
-    # with headless=True). The full Chromium build is intentionally NOT
-    # installed — it was 602M of dead weight on top of the 323M shell.
+    # Pre-install the headless shell (used by linkedin_check.py with
+    # headless=True). The full Chromium build was removed as 602M of dead
+    # weight and is installed again right below for the headed CLOSER browser.
     # --with-deps is MANDATORY: the shell binary links libatk-1.0.so.0,
     # libnss3, libcups, etc. Without the OS deps the binary exists but
     # exits 127 on launch → linkedin_check.py dies → LinkedIn open-checks
@@ -144,6 +156,11 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # install-deps runs its own apt-get update, so the apt lists cleaned
     # above are repopulated here; we clean them again to keep the layer slim.
     && playwright install --with-deps --only-shell chromium \
+    # The full Chromium build is back, for ONE caller: apply_flow.py --headful,
+    # the CLOSER browser the user watches on the live screen. The headless
+    # shell cannot draw to a display, and Playwright launches the full build
+    # whenever headless=False. linkedin_check.py keeps using the shell.
+    && playwright install chromium \
     # Drop the C toolchain: it only existed to compile the wheels installed
     # above (nothing in the runtime image compiles anything), and it is ~250MB.
     # The purge MUST live in this same RUN: in a separate one the files would
@@ -176,6 +193,17 @@ RUN find /app/agents/_tools -type f -exec sed -i 's/\r$//' {} + \
 RUN python3 shared/skills/tool_health.py --only playwright_browser \
     || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
 
+# Same gate for the live screen: the headed build (apply_flow.py --headful)
+# must open a window on a real X display. A missing full Chromium or a broken
+# Xvfb fails the BUILD, not the first application the user wanted to watch.
+# Xvfb is started directly: xvfb-run waits for a signal that never reaches it
+# when the shell is PID 1 of a build step, and hangs.
+RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
+    for _ in $(seq 1 100); do [ -S /tmp/.X11-unix/X98 ] && break; sleep 0.1; done; \
+    DISPLAY=:98 python3 -c "from playwright.sync_api import sync_playwright as s; p = s().start(); b = p.chromium.launch(headless=False, args=['--no-sandbox', '--disable-dev-shm-usage']); b.new_page().set_content('<p>live screen</p>'); b.close(); p.stop(); print('HEADED_LAUNCH_OK')"; \
+    rc=$?; kill "$xvfb_pid"; rm -f /tmp/.X98-lock /tmp/.X11-unix/X98; \
+    [ "$rc" -eq 0 ] || { echo "BUILD GATE FAILED: headed chromium cannot open on Xvfb — see .launcher/live-screen.sh" >&2; exit 1; }
+
 RUN for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \
          dir=$(dirname "$pkg"); \
@@ -207,7 +235,16 @@ RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib /opt/jht-deps/npm-global \
          /opt/jht-deps/npm-cache /opt/jht-deps/uv-tools /opt/jht-deps/uv-cache \
          /opt/jht-deps/python \
-    && chown -R jht:jht /jht_home /jht_user /opt/playwright /opt/jht-deps \
+    && chown -R jht:jht /jht_home /jht_user /opt/jht-deps \
+    # /opt/playwright: ricorsivo su tutto TRANNE il Chromium completo del
+    # CLOSER (chromium-<rev>). Un chown -R copia ogni file toccato in questo
+    # layer (copy-on-write, lo stesso motivo per cui /app è escluso sopra):
+    # sui 624M del Chromium completo erano +656M di immagine per un solo
+    # cambio di proprietario. Il browser si lancia da jht anche se resta di
+    # root, perché serve leggerlo ed eseguirlo, non scriverlo.
+    && chown jht:jht /opt/playwright \
+    && find /opt/playwright -mindepth 1 -maxdepth 1 ! -name 'chromium-[0-9]*' \
+         -exec chown -R jht:jht {} + \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
