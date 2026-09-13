@@ -37,10 +37,15 @@
 # Ritorna 0 se il comando foreground nel pane e' una shell (bash/sh/zsh),
 # 1 se c'e' un processo TUI attivo (claude/codex/kimi/python/qualsiasi cosa).
 # Usa tmux list-panes per interrogare il pty direttamente, cross-provider.
+# Target tmux: sempre `=NOME:`. Un nome nudo risolve per PREFISSO: con CRITICO
+# assente e il CRITICO-S1 di uno Scrittore vivo, il kick-off del Critico
+# verrebbe digitato nella review in corso dell'altro. `=` da solo non basta sui
+# target pane/finestra (tmux 3.6: `list-panes -t =NOME` con NOME assente
+# risponde coi pane della sorella), servono i due punti.
 _tui_is_shell_pane() {
   local sess="$1"
   local cmd
-  cmd=$(tmux list-panes -t "$sess" -F "#{pane_current_command}" 2>/dev/null | head -1)
+  cmd=$(tmux list-panes -t "=$sess:" -F "#{pane_current_command}" 2>/dev/null | head -1)
   case "$cmd" in
     bash|sh|zsh|dash|ash|fish) return 0 ;;
     *) return 1 ;;
@@ -60,7 +65,7 @@ _tui_is_shell_pane() {
 _tui_has_box_drawing() {
   local sess="$1"
   local pane
-  pane=$(tmux capture-pane -t "$sess" -p 2>/dev/null || true)
+  pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
   case "$pane" in
     *'│'*|*'─'*|*'╭'*|*'╰'*|*'┌'*|*'└'*|*'▐'*|*'║'*|*'═'*) return 0 ;;
     *) return 1 ;;
@@ -78,7 +83,7 @@ tui_wait_ready() {
   local elapsed="$min_boot"
   local stable_count=0
   local snap_prev
-  snap_prev=$(tmux capture-pane -t "$sess" -p 2>/dev/null || true)
+  snap_prev=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
 
   while [ "$elapsed" -lt "$max_wait" ]; do
     sleep "$window"
@@ -90,12 +95,12 @@ tui_wait_ready() {
     # allo stdin del loader e andrebbe perso al passaggio a alt-screen.
     if _tui_is_shell_pane "$sess" || ! _tui_has_box_drawing "$sess"; then
       stable_count=0
-      snap_prev=$(tmux capture-pane -t "$sess" -p 2>/dev/null || true)
+      snap_prev=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
       continue
     fi
 
     local snap_now
-    snap_now=$(tmux capture-pane -t "$sess" -p 2>/dev/null || true)
+    snap_now=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
     if [ "$snap_prev" = "$snap_now" ]; then
       stable_count=$((stable_count + 1))
       if [ "$stable_count" -ge "$needed_stable" ]; then
@@ -133,14 +138,14 @@ tui_send_verified() {
 
   local try
   for try in $(seq 1 "$max_retries"); do
-    tmux send-keys -t "$sess" -l "$msg"
+    tmux send-keys -t "=$sess:" -l "$msg"
     sleep 1.5
     local pane
-    pane=$(tmux capture-pane -t "$sess" -p 2>/dev/null || true)
+    pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
     case "$pane" in
       *"$sig"*)
         sleep 0.4
-        tmux send-keys -t "$sess" Enter
+        tmux send-keys -t "=$sess:" Enter
         return 0
         ;;
     esac

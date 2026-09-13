@@ -37,7 +37,7 @@ LAUNCHER = ROOT / ".launcher"
 WATCHDOG = LAUNCHER / "agent-watchdog.sh"
 
 # Daemon che parlano a tmux: TUTTI i loro target devono essere ancorati.
-SHELL_DAEMONS = ["agent-watchdog.sh", "codex-auth-healer.sh"]
+SHELL_DAEMONS = ["agent-watchdog.sh", "codex-auth-healer.sh", "tui-helpers.sh"]
 PYTHON_DAEMONS = ["sentinel-bridge.py", "stepcap-watchdog.py"]
 # In spawn-lib.sh le due funzioni che DECIDONO (il REPL e' su?) o DISTRUGGONO
 # (kill) una sessione per nome. Le altre funzioni della libreria mandano tasti
@@ -218,7 +218,8 @@ case "$sub" in
     grep -vF -- "$s|" "$state" > "$state.tmp"; mv "$state.tmp" "$state" ;;
   list-panes) s="$(resolve window)"; [ -n "$s" ] || exit 1; render "$s" "$fmt" ;;
   display-message) s="$(resolve window)"; [ -n "$s" ] || exit 0; render "$s" "$positional" ;;
-  capture-pane) s="$(resolve pane)"; [ -n "$s" ] || exit 1; echo "pane of $s" ;;
+  capture-pane) s="$(resolve pane)"; [ -n "$s" ] || exit 1; echo "pane of $s"; cat "$state.typed-$s" 2>/dev/null ;;
+  send-keys) s="$(resolve pane)"; [ -n "$s" ] || exit 1; printf '%s\n' "$positional" >> "$state.typed-$s"; echo "TYPED-INTO $s" >> "$T_CALLS" ;;
   *) exit 0 ;;
 esac
 """
@@ -404,3 +405,52 @@ def test_the_containment_capture_never_lands_on_a_sibling(capable_bash, tmux):
     )
     assert "CAP=no" in result.stdout, result.stdout + result.stderr
     assert not list((tmux.tmp / "home" / "logs" / "containment").glob("*SCRITTORE-1*"))
+
+
+# ── tui-helpers.sh: il kick-off non deve finire nel pane di una sorella ──────
+
+
+def _tui_run(capable_bash, tmux: _Tmux, body: str) -> subprocess.CompletedProcess:
+    script = (
+        f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}'\n"
+        f"export PATH='{tmux.bin}':\"$PATH\"\n"
+        f"source '{LAUNCHER / 'tui-helpers.sh'}'\n"
+        + body
+        + "\n"
+    )
+    return subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=60)
+
+
+def test_a_kickoff_is_never_typed_into_a_sibling_session(capable_bash, tmux):
+    """CRITICO assente, CRITICO-S1 (review di uno Scrittore) viva."""
+    tmux.add("CRITICO-S1", "claude")
+    result = _tui_run(
+        capable_bash, tmux,
+        'if tui_send_verified CRITICO "[KICKOFF] start the review" "" 1; then echo SENT; else echo NOT-SENT; fi\n'
+        'if _tui_is_shell_pane CRITICO; then echo SHELL; else echo NOT-SHELL; fi',
+    )
+    assert "NOT-SENT" in result.stdout, result.stdout + result.stderr
+    calls = tmux.calls.read_text(encoding="utf-8") if tmux.calls.exists() else ""
+    assert "TYPED-INTO CRITICO-S1" not in calls, calls
+    if tmux.kind == "real":
+        pane = subprocess.run(
+            [str(tmux.bin / "tmux"), "capture-pane", "-p", "-t", "=CRITICO-S1:"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        assert "KICKOFF" not in pane, pane
+
+
+def test_a_kickoff_still_reaches_its_own_session(capable_bash, tmux):
+    """Contro-prova: l'ancoraggio non deve accecare il caso sano (solo stub:
+    la sessione vera non ha una TUI che faccia eco del testo)."""
+    if tmux.kind == "real":
+        pytest.skip("serve un pane che faccia eco del testo digitato")
+    tmux.add("CRITICO", "claude")
+    tmux.add("CRITICO-S1", "claude")
+    result = _tui_run(
+        capable_bash, tmux,
+        'tui_send_verified CRITICO "[KICKOFF] start the review" "" 1 && echo SENT',
+    )
+    assert "SENT" in result.stdout, result.stdout + result.stderr
+    calls = tmux.calls.read_text(encoding="utf-8")
+    assert "TYPED-INTO CRITICO" in calls and "TYPED-INTO CRITICO-S1" not in calls, calls
