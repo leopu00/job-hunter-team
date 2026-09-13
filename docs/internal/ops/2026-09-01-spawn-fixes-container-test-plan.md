@@ -1,6 +1,6 @@
 # Piano di test su team vivo — batch di fix allo spawn degli agenti
 
-> **Stato del batch:** in verifica · **Branch:** `lee-launcher-fixes` · **Apertura:** 2026-09-01
+> **Stato del batch:** T1-T4 verdi, mergiato su `master` (2026-09-13) · **Branch:** `lee-launcher-fixes` · **Apertura:** 2026-09-01
 >
 > Questo file è un **tracciamento vivo**: si compila mentre si esegue. Un test senza
 > esito scritto qui conta come non eseguito. Se un test fallisce si scrive *cosa* si è
@@ -103,7 +103,7 @@ done
 **Fallisce se:** compare un processo — e in particolare uno con `Name: tmux: server`,
 che è il difetto originale non chiuso.
 
-**Esito:** _(da compilare)_
+**Esito:** ✅ **PASS** (2026-09-13, 14:15 e di nuovo 14:24). Output: `PASS: nessun processo tiene un fd su locks/start-*`. Controllo positivo: con un `sh` che tiene fd 9 su un lock sonda, la sonda stampa pid, nome e fd, quindi non è vacua. Il server tmux ha fd 9 su `/dev/pts/ptmx`; i 5 welcome watchdog (~270s) non hanno fd 9.
 
 ---
 
@@ -128,7 +128,7 @@ for d in 10 60 150 300; do sleep "$d"; printf "+%ss -> " "$d"; probe; done
 **Passa se:** `FREE` a ogni rilevazione, compresa quella a +10s.
 **Fallisce se:** `HELD` a +150s o oltre → un figlio detached tiene ancora il fd.
 
-**Esito:** _(da compilare)_
+**Esito:** ✅ **PASS** (2026-09-13). `FREE` a +10s, +60s, +150s e +300s; offset reali ~18/78/228/528s, quindi oltre la finestra dei 270s. Controllo positivo: lock tenuto con `flock -x` → `HELD`, dopo il rilascio → `FREE`.
 
 ---
 
@@ -150,7 +150,7 @@ docker exec jht tmux has-session -t '=ASSISTENTE' && echo "sessione presente"
 **Fallisce se:** compare `concurrent spawn`, oppure `rc=0` ma il pane resta `bash`
 (quello sarebbe un fallimento di F6, non di F1 — annotare quale dei due).
 
-**Esito:** _(da compilare)_
+**Esito:** ✅ **PASS** (2026-09-13). `kill-session =ASSISTENTE` a team appena su, poi `start-agent.sh assistente` in 1,67s: `rc=0`, sessione presente, `pane_current_command=claude`. Nessun `concurrent spawn` nei log.
 
 ---
 
@@ -162,7 +162,7 @@ docker exec jht tmux has-session -t '=ASSISTENTE' && echo "sessione presente"
 **Come:** avvio pulito del team completo, misurando.
 
 ```sh
-docker exec jht sh -c 'time bash /app/.launcher/start-agent.sh scout 1'
+docker exec jht bash -c 'time bash /app/.launcher/start-agent.sh scout 1'   # bash: dash non ha `time`
 docker exec jht tmux list-sessions -F '#{session_name}'
 docker exec jht sh -c 'for s in $(tmux list-sessions -F "#{session_name}"); do \
   printf "%-16s %s\n" "$s" "$(tmux list-panes -t "=$s" -F "#{pane_current_command}" | head -1)"; done'
@@ -173,7 +173,7 @@ tempo di un singolo spawn è nell'ordine dei secondi (F6 aggiunge ~1s, non minut
 **Fallisce se:** uno spawn sano ora impiega decine di secondi → F6 sta pollando troppo,
 oppure `jht_spawn_wait_repl` non riconosce il comando del pane.
 
-**Esito:** _(da compilare)_
+**Esito:** ✅ **PASS** (2026-09-13). `jht team start` completo in 56s (7 avviati, 0 già attivi). `start-agent.sh scout 1`: real 0m1.588s, `rc=0`. Sessioni ASSISTENTE, CAPITANO, MENTOR, SCOUT-1, SENTINELLA, SENTINELLA-WORKER: tutti i pane su `claude` anche 2 minuti dopo i kickoff. `start FAILED` 0, `agent-spawn-failures.tsv` vuoto. Nota: il comando è stato corretto da `sh -c 'time …'` a `bash -c`, perché `dash` non ha `time` e con `sh` lo spawn non parte.
 
 ---
 
@@ -355,10 +355,10 @@ almeno cinque agenti diversi), ma va rilavorata prima di essere provata su un te
 
 | Test | Cosa verifica | Esito | Note |
 |---|---|---|---|
-| T1 | server tmux senza fd sul lock | | |
-| T2 | lock libero dopo lo spawn | | |
-| T3 | respawn immediato possibile | | |
-| T4 | nessuna regressione sul percorso felice | | |
+| T1 | server tmux senza fd sul lock | ✅ PASS | primo server tmux della vita del container (caso peggiore F1) |
+| T2 | lock libero dopo lo spawn | ✅ PASS | FREE fino a ~528s |
+| T3 | respawn immediato possibile | ✅ PASS | 1,67s, rc=0, pane claude |
+| T4 | nessuna regressione sul percorso felice | ✅ PASS | spawn 1,6s, team 56s, 0 fallimenti |
 | T5 | `duplicate session` non distruttivo | | |
 | T6 | prefix match non fa sparire agenti | | |
 | T7 | CLI morto segnalato | | |
@@ -366,7 +366,9 @@ almeno cinque agenti diversi), ma va rilavorata prima di essere provata su un te
 | T9 | silenzio a team fermo | | |
 | T10 | escalation indipendenti | | |
 
-**Decisione su `master`:** _(da compilare — richiede T1-T4 verdi come minimo)_
+**Decisione su `master`:** ✅ **mergiato il 2026-09-13**, con T1-T4 verdi. T5-T10 non eseguiti.
+
+**Ambiente T1-T4:** Mac locale con Colima. Immagine costruita dal sorgente del branch (`6572c49f`), `JHT_HOME` di test vuota, nessun profilo reale, CLI installato dal pin e non autenticato (spesa zero). Il primo avvio ha lasciato 4 pane su `bash` per il trust dialog della home sintetica, non accettato (difetto dell'ambiente di test, non del fix). Il trust è stato preaccettato come per un utente reale e il team è stato riavviato da zero con un server tmux nuovo: tutti gli esiti sopra vengono da questo secondo avvio.
 
 ### Se qualcosa va storto
 
