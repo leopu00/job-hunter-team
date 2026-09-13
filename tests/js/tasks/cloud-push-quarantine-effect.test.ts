@@ -107,7 +107,11 @@ afterEach(() => {
 });
 
 describe("cloud push record isolation — real writer path", () => {
-  it("aborts before network when two rows have no stable source identity", async () => {
+  it("keeps rows without a stable source identity off the wire without stopping the others", async () => {
+    // Fino al 2026-09-13 queste due righe abortivano il push INTERO prima
+    // della rete. Fail-closed resta, ma sulla riga: niente ricevuta, niente
+    // quarantena (si indicizza con l'identita' che manca), niente cursore
+    // oltre di lei — e le altre tabelle viaggiano.
     const { home, dbPath } = fixture();
     const db = new DatabaseSync(dbPath);
     db.exec(`
@@ -121,8 +125,16 @@ describe("cloud push record isolation — real writer path", () => {
         (NULL, 'Synthetic two', '2026-08-13 10:01:00');
     `);
     db.close();
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
+    const tables: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const table = Object.keys(body)[0];
+        tables.push(table);
+        return jsonResponse(acknowledged(table, body[table]));
+      }),
+    );
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.resetModules();
@@ -130,17 +142,21 @@ describe("cloud push record isolation — real writer path", () => {
 
     await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject(
       {
-        ok: false,
+        ok: true,
         skipped: 0,
+        invalidIdentity: 2,
       },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(tables).not.toContain("companies");
+    expect(tables).toEqual(expect.arrayContaining(["positions", "applications"]));
     expect(() =>
       readFileSync(join(home, ".cloud-push-quarantine.json"), "utf8"),
     ).toThrow();
-    expect(() =>
+    const cursor = JSON.parse(
       readFileSync(join(home, ".cloud-sync-cursor.json"), "utf8"),
-    ).toThrow();
+    );
+    expect(cursor.companies).toBeUndefined();
+    expect(cursor.positions).toBe("2026-08-13 10:02:00");
   });
 
   it("quarantines one rejected application and delivers valid rows before/after", async () => {

@@ -37,6 +37,7 @@ import {
   retryTables,
   sanitizedQuarantineReason,
 } from '../lib/cloud-push-quarantine.js';
+import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -1438,7 +1439,19 @@ async function performPush(options) {
       // corsia veloce, che salta le righe già sincronizzate — a creare i
       // gemelli (O-16). Su un DB più vecchio del codice la colonna non c'è:
       // si comporta come prima, nessuna riga cambia identità.
+      //
+      // Un `cloud_legacy_id` NEGATIVO e' un turno nato sul web: la riga vera e'
+      // gia' sul cloud (mig 060) e il full-push per contratto non la manda. La
+      // merge RPC scarta comunque `legacy_id <= 0` per non sovrascrivere cio'
+      // che l'utente ha scritto dal browser, e sul cloud quelle righe non hanno
+      // `chat_ts` (lo scrive solo il mirror del box): rimandarle non poteva
+      // produrre ne' una scrittura ne' una ricevuta coerente. Mapparle sull'id
+      // negativo le trasformava invece in righe senza identita' valida, e
+      // bastavano due di loro per fermare l'intero push a ogni giro.
       if (hasCloudLegacyId) {
+        pendingMessages = pendingMessages.filter(
+          (m) => !(Number.isFinite(m.cloud_legacy_id) && m.cloud_legacy_id < 0),
+        );
         pendingMessages = pendingMessages.map((m) => {
           if (!Number.isFinite(m.cloud_legacy_id)) return m;
           const { cloud_legacy_id: cloudId, ...rest } = m;
@@ -1511,8 +1524,34 @@ async function performPush(options) {
     tombstones,
   };
   const held = {};
+  // Una riga senza identita' di ricevuta resta FUORI dal convoglio, contata
+  // per `tabella.campo`, e il resto viaggia. Prima un solo ReceiptKeyInvalid
+  // abortiva tutte le tabelle a ogni giro, per sempre (32856 fallimenti di
+  // fila su un box con due righe cattive su 1182).
+  //
+  // Esclusa per riga e non per tabella: la tabella intera ferma perderebbe
+  // proprio le righe che una ricevuta la possono avere. Ma esclusa NON vuol
+  // dire in quarantena ne' "settled": la quarantena si indicizza con
+  // quell'identita' che manca, e `checkpointTable` conta come settled solo
+  // righe confermate o in quarantena. Il cursore della tabella si ferma
+  // quindi prima della riga esclusa, che viene riletta a ogni giro e parte da
+  // sola appena la si corregge in locale. Nessuna ricevuta su una riga
+  // sbagliata, nessuna riga persa dietro un cursore.
+  const invalidIdentity = new Map();
+  const withValidIdentity = (table, rows) => rows.filter((row) => {
+    try {
+      quarantineIdentity(table, row);
+      return true;
+    } catch (err) {
+      if (!(err instanceof ReceiptKeyInvalid)) throw err;
+      invalidIdentity.set(err.label, (invalidIdentity.get(err.label) || 0) + 1);
+      return false;
+    }
+  });
   const partition = (table, rows) => {
-    const result = partitionQuarantinedRows(table, rows, quarantineState);
+    const result = partitionQuarantinedRows(
+      table, withValidIdentity(table, rows), quarantineState,
+    );
     held[table] = result.held;
     return result.send;
   };
@@ -1538,12 +1577,24 @@ async function performPush(options) {
         force: options.full === true,
       }], quarantineState)
       : { send: [], held: [] };
-  } catch {
-    console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
+  } catch (err) {
+    // Non e' piu' un problema d'identita' (quelle righe sono gia' escluse
+    // sopra): e' un guasto vero, e il messaggio vero e' l'unica diagnosi.
+    console.error(pc.red(`Cloud push could not prepare the rows (${err?.message || err}); no rows were sent.`));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
   held.profile = profilePartition.held;
+  const invalidIdentityCount = [...invalidIdentity.values()].reduce((a, b) => a + b, 0);
+  if (invalidIdentityCount > 0) {
+    const fields = [...invalidIdentity.entries()]
+      .map(([label, count]) => `${label} x${count}`)
+      .join(', ');
+    console.error(pc.yellow(
+      `⚠ Cloud push excluded ${invalidIdentityCount} row(s) without a valid source identity (${fields}); `
+      + 'the other rows are sent, and each excluded row holds its table cursor until it is fixed locally.'
+    ));
+  }
   const sendProfile = profilePartition.send[0] || null;
 
   const profileChunks = sendProfile
@@ -1594,6 +1645,7 @@ async function performPush(options) {
       authFailed: false,
       skipped: unresolved,
       quarantined: unresolved,
+      invalidIdentity: invalidIdentityCount,
       nothingToSync: true,
     };
   }
@@ -1727,9 +1779,9 @@ async function performPush(options) {
         let receiptIds;
         try {
           receiptIds = rows.map((row) => quarantineIdentity(table, row));
-        } catch {
+        } catch (err) {
           outcome.aborted = true;
-          console.error(pc.red('Cloud push source identity is invalid; cursor unchanged.'));
+          console.error(pc.red(`Cloud push receipt identity failed for ${table} (${err?.message || err}); cursor unchanged.`));
           return { confirmed, quarantined };
         }
         const wireRows = rows.map((row, index) => ({
@@ -1749,9 +1801,9 @@ async function performPush(options) {
         if (res.ok) {
           try {
             resolveConfirmedRetries(table, rows, { path: quarantinePath });
-          } catch {
+          } catch (err) {
             outcome.aborted = true;
-            console.error(pc.red('Push quarantine acknowledgement could not be persisted; cursor unchanged.'));
+            console.error(pc.red(`Push quarantine acknowledgement could not be persisted (${err?.message || err}); cursor unchanged.`));
             return { confirmed, quarantined };
           }
           addUp(res.body);
@@ -1795,9 +1847,9 @@ async function performPush(options) {
               }
             }
             continue;
-          } catch {
+          } catch (err) {
             outcome.aborted = true;
-            console.error(pc.red('Cloud push quarantine could not be persisted; cursor unchanged.'));
+            console.error(pc.red(`Cloud push quarantine could not be persisted (${err?.message || err}); cursor unchanged.`));
             return { confirmed, quarantined };
           }
         }
@@ -1898,6 +1950,7 @@ async function performPush(options) {
       ok: false,
       authFailed: outcome.authFailed,
       skipped: activeQuarantineEntries(readCloudPushQuarantine(quarantinePath)).length,
+      invalidIdentity: invalidIdentityCount,
       timedOut: outcome.timedOut === true,
     };
   }
@@ -1921,6 +1974,7 @@ async function performPush(options) {
     skipped: unresolved,
     quarantined: unresolved,
     quarantinedNew: outcome.quarantinedNew,
+    invalidIdentity: invalidIdentityCount,
   };
 }
 
