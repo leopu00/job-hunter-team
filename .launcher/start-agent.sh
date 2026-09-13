@@ -97,7 +97,12 @@ _spawn_lock_holder() {
   for p in "$proc_root"/[0-9]*; do
     [ -d "$p" ] || continue
     pid="${p##*/}"
-    [ "$pid" = "$$" ] && continue
+    # La funzione gira in una command substitution: $$ resta il PID del
+    # parent, mentre BASHPID identifica la subshell che esegue la scansione.
+    # Entrambe possono avere aperto fd 9, ma nessuna possiede il lock fallito.
+    if [ "$pid" = "$$" ] || [ "$pid" = "${BASHPID:-$$}" ]; then
+      continue
+    fi
     for fd in "$p"/fd/*; do
       target="$(readlink "$fd" 2>/dev/null)" || continue
       [ "$target" = "$lock" ] || continue
@@ -536,7 +541,7 @@ if [ "$ROLE" = "tg-bridge" ]; then
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
     if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
-      _holder="$(_spawn_lock_holder "$_spawn_lock")"
+      _holder="$(_spawn_lock_holder "$_spawn_lock" 9>&-)"
       echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES] (lock holder: ${_holder:-unknown})." >&2
       exit 1
     fi
@@ -754,7 +759,7 @@ if command -v flock >/dev/null 2>&1; then
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
   if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
     _spawn_stage="lock_timeout"
-    _holder="$(_spawn_lock_holder "$_spawn_lock")"
+    _holder="$(_spawn_lock_holder "$_spawn_lock" 9>&-)"
     echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION' (lock holder: ${_holder:-unknown})." >&2
     exit 1
   fi

@@ -50,3 +50,17 @@ def test_lock_timeout_names_holder_pid_process_and_age(tmp_path):
     )
     assert match, result.stderr
     assert 30 <= int(match.group(1)) <= 90
+
+
+def test_holder_probe_cannot_report_its_own_command_substitution():
+    source = LAUNCHER.read_text(encoding="utf-8")
+    start = source.index("_spawn_lock_holder() {")
+    holder_function = source[
+        start : source.index("\n}\n", start)
+    ]
+    assert "BASHPID" in holder_function
+    holder_calls = [
+        line for line in source.splitlines() if '_spawn_lock_holder "$_spawn_lock"' in line
+    ]
+    assert len(holder_calls) == 2
+    assert all("9>&-" in line for line in holder_calls)
