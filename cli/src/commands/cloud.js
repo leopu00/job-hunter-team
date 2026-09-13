@@ -3967,6 +3967,13 @@ async function handleDaemon(options) {
   const chatCycleState = { lastPulledRequestedAt: null };
   let stoppedPollAttempt = 0;
   while (running) {
+    // Dichiarata QUI, non nel ramo che la legge dal cloud: il calcolo dello
+    // sleep in fondo al giro la usa anche quando HALT-WEEKLY salta la lettura.
+    // Dentro l'else era fuori portata e ogni giro finiva in ReferenceError
+    // (crash-loop del daemon sui pairing senza Realtime). Con il flag resta
+    // null: nessuna osservazione di team fermo, quindi cadenza syncCheckSec e
+    // backoff azzerato, come per una lettura fallita.
+    let rendezvousState = null;
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
         console.log(pc.dim(`  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.`));
@@ -4008,7 +4015,6 @@ async function handleDaemon(options) {
       // push dati parte solo se c'è una richiesta dell'utente → il pulsante
       // risponde in pochi secondi; la chat, che non può permettersi minuti
       // di latenza, gira qui e non nel giro pesante.
-      let rendezvousState = null;
       try {
         rendezvousState = await readRendezvousState(config, { silent: true });
       } catch (err) {

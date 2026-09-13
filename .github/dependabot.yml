@@ -14,6 +14,53 @@ version: 2
 #
 # Segnalato da zizmor (`dependabot-cooldown`), che dal 2026-07-30 gira nel
 # workflow di lint.
+#
+# ATTENZIONE: `semver-major-days`, `semver-minor-days` e `semver-patch-days`
+# esistono SOLO per gli ecosistemi con versioni semver. Su `github-actions` e
+# `docker` GitHub li rifiuta, e con loro rifiuta l'INTERO file: vedi la
+# sezione del 2026-09-13 qui sotto. Li' resta solo `default-days`.
+
+# ---------------------------------------------------------------------------
+# 2026-09-13 -- la causa vera. Il file NON era vecchio: era INVALIDO, e GitHub
+# ha continuato ad applicare l'ultima versione che riusciva a leggere.
+#
+# Ad ogni push su master che tocca questo file, GitHub pubblica sul commit un
+# check chiamato `.github/dependabot.yml`. Dal 2026-08-19 e' sempre
+# `failure` (372230371, 887ca66e8, bb1ade21d, d0bf57669, 9a2f719c5), e il
+# messaggio e' sempre lo stesso:
+#
+#     The property '#/updates/4/cooldown/semver-major-days' is not supported
+#     for the package ecosystem 'github-actions'.
+#     (idem semver-minor-days e semver-patch-days, e le stesse tre per
+#     '#/updates/5' con 'docker')
+#
+# Un file che non passa la validazione viene scartato in blocco, voci npm
+# comprese, e non fallisce da nessuna parte dove lo si guardi: le PR arrivano
+# lo stesso, con la config precedente. Lo mostra la job definition che
+# l'updater stampa nel log di ogni run "Dependabot Updates" (`gh run view
+# <id> --log`, riga `Job definition:`). Nella run /web del 2026-09-07, che ha
+# aperto #230 (@types/node 26) e #234 (eslint 10), e in quelle di oggi:
+#
+#   - `ignore-conditions` contiene solo `>= 25.a, < 26` con source
+#     "@dependabot ignore command". Nessuna condizione arriva da questo file;
+#   - `dependency-groups` e' `[]`, percio' ogni minor apre ancora una PR a se;
+#   - le label sono quelle vecchie: su ogni PR torna l'errore `frontend`, che
+#     da questo file e' sparita il 2026-09-03.
+#
+# La diagnosi del 2026-09-03 qui sotto aveva visto bene l'effetto, ma la causa
+# era un'altra. Le label mancanti producono un semplice commento sulla PR,
+# senza invalidare il file. E per tutta la finestra master sul server e'
+# rimasto fermo ad a140847f3 (2026-08-26 -> 2026-09-12): la correzione delle
+# label non ci e' arrivata prima del 2026-09-12, e comunque sarebbe caduta
+# insieme al resto.
+#
+# Verifica, da rifare a ogni modifica di questo file: dopo il push su master,
+#   gh api repos/leopu00/job-hunter-team/commits/<sha>/check-runs \
+#     -q '.check_runs[]|select(.name==".github/dependabot.yml")|.conclusion'
+# deve dire `success`. Poi, alla run successiva, la job definition deve
+# contenere le `ignore-conditions` con source ".github/dependabot.yml" e i
+# `dependency-groups` dichiarati qui.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # 2026-09-03 -- l'avvertimento qui sopra si e' avverato: per settimane GitHub
@@ -200,13 +247,11 @@ updates:
   # 1 PR a settimana; le major (es. actions/checkout 4 -> 7, che cambia input
   # e output) restano fuori dal gruppo e arrivano una per volta.
   # La label `ci` non esiste nel repo.
+  # Solo `default-days`: le chiavi semver-* qui invalidano il file intero.
   - package-ecosystem: "github-actions"
     directory: "/"
     cooldown:
       default-days: 7
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 3
     schedule:
       interval: "weekly"
       day: "monday"
@@ -229,13 +274,11 @@ updates:
   # un mese significa restare un mese sull'immagine bucata.
   # Nessun `groups`: c'e' una sola immagine base, quindi la PR e' comunque una.
   # La label `docker` non esiste nel repo, sostituita da `container`.
+  # Solo `default-days`: le chiavi semver-* qui invalidano il file intero.
   - package-ecosystem: "docker"
     directory: "/"
     cooldown:
       default-days: 7
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 3
     schedule:
       interval: "weekly"
       day: "monday"
