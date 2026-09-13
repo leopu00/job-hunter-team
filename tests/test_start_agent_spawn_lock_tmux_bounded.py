@@ -230,3 +230,59 @@ def test_wait_repl_gives_up_at_the_first_unanswered_poll(tmp_path, capable_bash)
     assert "tmux did not answer" in result.stderr, result.stderr
     assert calls.count("display-message") == 1, calls
     assert "kill-session -t =SCOUT-1" in calls, calls
+
+
+# ── Il guscio di uno spawn interrotto ────────────────────────────────────────
+# Il tetto trasforma un client appeso in un'USCITA (set -e) — dopo che la
+# new-session ha gia' creato la sessione. Senza pulizia resterebbe un pane bash
+# che il guard di idempotenza dichiara "already active" per sempre.
+
+
+def _cleanup_function() -> str:
+    return _function_body(START_AGENT.read_text(encoding="utf-8"), "_spawn_abort_cleanup")
+
+
+def test_the_half_made_session_is_owned_by_the_cleanup_until_the_agent_is_up():
+    source = START_AGENT.read_text(encoding="utf-8")
+    trap = source.index("trap _spawn_abort_cleanup EXIT")
+    first_new_session = source.index("tmux new-session -d -x 220 -y 50 -s \"$SESSION\" powershell.exe")
+    assert source.index(LOCK) < trap < first_new_session
+    # Due rami (PowerShell e container): la sessione diventa "da pulire" subito
+    # dopo la sua new-session e smette di esserlo solo a spawn riuscito.
+    marks = [m.start() for m in re.finditer(r"^  _SPAWN_SESSION_CREATED=1$", source, re.M)]
+    clears = [m.start() for m in re.finditer(r"^  _SPAWN_SESSION_CREATED=0$", source, re.M)]
+    assert len(marks) == 2 and len(clears) == 2, (marks, clears)
+    container_mark = marks[1]
+    assert source.index('|| _ns_rc=$?', source.index('-c "$AGENT_DIR"')) < container_mark
+    assert container_mark < source.index("  send_env_vars\n") < clears[1]
+    assert source.index('jht_spawn_wait_repl "$SESSION"') < clears[1]
+    body = _cleanup_function()
+    assert 'jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION"' in body
+    assert "9>&-" in body
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="il launcher gira nel container Linux")
+@pytest.mark.parametrize(
+    ("created", "exit_rc", "expect_kill"),
+    [(1, 1, True), (1, 0, False), (0, 1, False)],
+)
+def test_an_aborted_spawn_removes_only_its_own_half_made_session(
+    tmp_path, capable_bash, created, exit_rc, expect_kill
+):
+    bin_dir = _harness(tmp_path, capable_bash)
+    calls = tmp_path / "calls.txt"
+    script = (
+        f"export PATH='{bin_dir}':\"$PATH\"\n"
+        f"export T_CALLS='{calls}'\n"
+        f"source '{ROOT / '.launcher' / 'daemon-lib.sh'}'\n"
+        "SESSION=SCOUT-1\nJHT_SPAWN_TMUX_PROBE_SEC=1\n"
+        + _cleanup_function()
+        + f"_SPAWN_SESSION_CREATED={created}\n"
+        "trap _spawn_abort_cleanup EXIT\n"
+        f"exit {exit_rc}\n"
+    )
+    result = subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=60)
+    assert result.returncode == exit_rc, result.stderr
+    text = calls.read_text(encoding="utf-8") if calls.exists() else ""
+    assert ("kill-session -t =SCOUT-1" in text) is expect_kill, text
+    assert ("half-made session" in result.stderr) is expect_kill, result.stderr

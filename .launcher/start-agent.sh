@@ -1186,6 +1186,24 @@ send_optional_env() {
   done
 }
 
+# Guscio di uno spawn interrotto. Col tetto sui client tmux qui sotto, un server
+# che non risponde non appende piu' lo script: lo fa USCIRE (set -e) dopo che
+# la sessione e' gia' stata creata, con un pane rimasto bash. Quel guscio e'
+# il difetto che la verifica del REPL piu' sotto esiste per rimuovere: il guard di
+# idempotenza lo dichiarerebbe "already active" per sempre, e per un worker il
+# roster lo vedrebbe vivo fino al TTL. Finche' la sessione non e' dell'agente
+# (_SPAWN_SESSION_CREATED=1) ogni uscita non-zero la rimuove, col tetto e senza
+# fd 9 come ogni altro client di questa regione.
+_SPAWN_SESSION_CREATED=0
+_spawn_abort_cleanup() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ "$_SPAWN_SESSION_CREATED" = 1 ]; then
+    echo "Error: spawn of '$SESSION' aborted after its tmux session was created (rc=$rc) — removing the half-made session so the next attempt does not find it already active." >&2
+    jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+  fi
+}
+trap _spawn_abort_cleanup EXIT
+
 # Ogni `tmux` da qui in giu' passa da `jht_spawn_tmux` (spawn-lib.sh): gira col
 # fd 9 del flock ereditato, e un client appeso — server tmux incantato, il caso
 # dei 756 respawn falliti — terrebbe il lock per sempre. Il tetto c'era solo
@@ -1256,6 +1274,7 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
     echo "Error: 'tmux new-session' for '$SESSION' (PowerShell) failed (rc=$_ns_rc; 124 = did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s)." >&2
     exit 1
   fi
+  _SPAWN_SESSION_CREATED=1
   sleep 2
   jht_spawn_tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
@@ -1275,6 +1294,7 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
     sleep 8
     jht_spawn_tmux send-keys -t "$SESSION" Enter
   fi
+  _SPAWN_SESSION_CREATED=0
 else
   # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
   # 80x24 quando la sessione è detached, e capture-pane restituisce output
@@ -1387,6 +1407,7 @@ else
     esac
     exit 1
   fi
+  _SPAWN_SESSION_CREATED=1
   send_env_vars
   jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
@@ -1467,6 +1488,7 @@ else
     jht_spawn_wait_repl "$SESSION" "$FULL_CMD" "start-agent" "$ROLE" \
       "$JHT_LOGS_DIR" "start-agent.sh" || exit 1
   fi
+  _SPAWN_SESSION_CREATED=0
 fi
 
 # ── Sfasamento iniziale del worker ──────────────────────────────────────────
