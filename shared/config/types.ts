@@ -97,6 +97,36 @@ export interface TeamSettings {
   local_scorer?: LocalScorerConfig;
 }
 
+// --- Candidature (CLOSER) ---
+
+/**
+ * Il consenso generale dell'utente a farsi candidare dal team [JHT-CLOSER].
+ *
+ * È la PRIMA di due condizioni, non l'unica: senza anche il flag su quella
+ * posizione (`positions.apply_requested`) non parte niente. Entrambe
+ * fail-closed — blocco assente = disattivato, e il gate che le applica
+ * (`shared/skills/apply_gate.py`) rifiuta invece di indovinare.
+ *
+ * ⚠️ `mode: "authorised"` è il comportamento di consegna, non un'opzione
+ * avanzata: il flag per-posizione È l'autorizzazione a inviare, e il CLOSER
+ * non si ferma su un secondo bottone (decisione dell'operatore, 2026-09-12).
+ * `dry_run` esiste per collaudare una ricetta ATS nuova senza spedire davvero:
+ * è diagnostica nostra, non il percorso dell'utente.
+ */
+export type AutoApplyMode = "authorised" | "dry_run";
+
+export interface AutoApplyConfig {
+  /** Default `false`. Nessun consenso = il CLOSER non viene nemmeno spawnato. */
+  enabled: boolean;
+  /** Tetto giornaliero di candidature inviate. Un tetto assente non è un tetto. */
+  max_per_day: number;
+  mode: AutoApplyMode;
+}
+
+export interface ApplicationsConfig {
+  auto_apply?: AutoApplyConfig;
+}
+
 // --- Config Root ---
 
 export interface JHTConfig {
@@ -110,6 +140,8 @@ export interface JHTConfig {
   channels: ChannelsConfig;
   /** Impostazioni team-wide (working hours, ecc.) */
   team?: TeamSettings;
+  /** Consenso alle candidature automatiche (CLOSER). Assente = disattivato. */
+  applications?: ApplicationsConfig;
   /** Path assoluto alla workspace JHT */
   workspace: string;
 }

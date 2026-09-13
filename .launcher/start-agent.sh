@@ -508,6 +508,38 @@ get_agent_info() {
   esac
 }
 
+# ── [JHT-CLOSER] Il consenso dell'utente, PRIMA di qualunque spawn ──────────
+#
+# Il CLOSER e' l'unico ruolo che manda qualcosa fuori a nome dell'utente. Non
+# deve esistere finche' l'utente non ha detto di si': il blocco
+# `applications.auto_apply` nel config e' la prima delle due condizioni (la
+# seconda e' il flag su quella posizione, e la applica la skill di invio).
+#
+# Il cancello sta QUI e non nel prompt dell'agente per la ragione di sempre: un
+# vincolo scritto in un prompt e' una preferenza, un vincolo scritto prima
+# dello spawn e' un fatto. E sta PRIMA di `get_agent_info`, cosi' il rifiuto
+# resta lo stesso quando il ruolo entrera' nel case (fase D) — altrimenti oggi
+# il no lo direbbe "unrecognized role" e domani nessuno.
+#
+# ⚠️ Fail-closed anche sull'infrastruttura: niente python3, niente modulo,
+# niente config → NON si spawna. Un gate che non sa rispondere risponde no, e
+# lo dice: `.launcher/agent-watchdog.sh` rispawna via questo stesso script, e
+# un rifiuto silenzioso qui sarebbe indistinguibile da un agente sano.
+if [ "$ROLE" = "closer" ]; then
+  APPLY_GATE="/app/shared/skills/apply_gate.py"
+  [ -f "$APPLY_GATE" ] || APPLY_GATE="$DEV_TEAM_DIR/../shared/skills/apply_gate.py"
+  if ! command -v python3 >/dev/null 2>&1 || [ ! -f "$APPLY_GATE" ]; then
+    echo "Refusing to start closer: the apply gate is not available, and an" >&2
+    echo "  application gate that cannot answer answers no." >&2
+    exit 1
+  fi
+  if ! python3 "$APPLY_GATE" consent; then
+    echo "Refusing to start closer: the user has not consented to auto-apply." >&2
+    echo "  Set applications.auto_apply.enabled = true in jht.config.json." >&2
+    exit 1
+  fi
+fi
+
 AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then

@@ -1339,6 +1339,14 @@ async function performPush(options) {
         // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
         // (cross-device: push qui + pull desired-state) + risultato testuale.
         'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
+        // [JHT-CLOSER] Autorizzazione alla candidatura (mig 088): stesso
+        // pattern cross-device, con l'AUTORE accanto al flag. Guardata da
+        // `sqliteHasColumn` come `write_request_kind`, e per la stessa ragione:
+        // un jobs.db di un'immagine precedente non ha ancora la colonna, e
+        // nominarla farebbe fallire la SELECT — cioe' l'INTERO push, non solo
+        // questo flag (regola B01: degradare, non cadere).
+        ...(sqliteHasColumn(db, 'positions', 'apply_requested')
+          ? ['apply_requested', 'apply_requested_at', 'apply_requested_by'] : []),
         // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
         // dall'analista, alimentano i grafici categoria/mappa della dashboard
         // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
@@ -2158,7 +2166,11 @@ async function handleDisable(options = {}) {
  * è offline → write_requested=TRUE su Supabase → senza pull al riavvio
  * il Capitano non vede mai il flag (push è write-only locale → cloud).
  *
- * Scope MVP: solo `positions.write_requested` + `write_requested_at`.
+ * Scope: i flag desired-state di `positions` — write/geocode/recheck/
+ * salary_precise e, da [JHT-CLOSER], `apply_requested[_at][_by]`, che e' il
+ * click con cui l'utente AUTORIZZA una candidatura. Quest'ultimo e' l'unico
+ * che, se non scende, ha come sintomo un CLOSER che non parte mai: l'operatore
+ * flagga dal browser sulla VPS e il box non lo saprebbe.
  * Endpoint server: GET /api/cloud-sync/pull-desired-state?since=<ISO>.
  *
  * Best-effort: non blocca il boot del team su errore di rete o cloud
@@ -2269,8 +2281,15 @@ async function handlePullDesiredState(options = {}) {
       let maxTs = cursor.since;
       let maxMs = maxTs ? Date.parse(maxTs) : NaN;
       for (const r of rows) {
+        // `apply_requested_at` sta in questa lista e non e' una ripetizione
+        // meccanica: e' l'unico timestamp che puo' cambiare DA SOLO in un tick
+        // (l'utente flagga una posizione e basta). Fuori di qui, un tick del
+        // genere non farebbe avanzare il cursore, la stessa finestra
+        // tornerebbe a ogni giro e il difetto si vedrebbe come «il pull gira
+        // ma non conclude mai», non come una colonna dimenticata.
         for (const ts of [r.write_requested_at, r.geocode_requested_at,
-          r.recheck_requested_at, r.salary_precise_requested_at, r.user_excluded_at]) {
+          r.recheck_requested_at, r.salary_precise_requested_at,
+          r.apply_requested_at, r.user_excluded_at]) {
           if (!ts) continue;
           const ms = Date.parse(ts);
           if (Number.isNaN(ms)) continue;
@@ -2377,7 +2396,8 @@ async function handlePullDesiredState(options = {}) {
         log(
           pc.dim(
             `  #${p.legacy_id} write=${p.write_requested}@${p.write_requested_at || '-'} ` +
-              `geo=${p.geocode_requested}@${p.geocode_requested_at || '-'}`
+              `geo=${p.geocode_requested}@${p.geocode_requested_at || '-'} ` +
+              `apply=${p.apply_requested}@${p.apply_requested_at || '-'} by=${p.apply_requested_by || '-'}`
           )
         );
       }
@@ -2512,7 +2532,10 @@ async function handlePullDesiredState(options = {}) {
              recheck_requested = ?,
              recheck_requested_at = ?,
              salary_precise_requested = ?,
-             salary_precise_requested_at = ?
+             salary_precise_requested_at = ?,
+             apply_requested = ?,
+             apply_requested_at = ?,
+             apply_requested_by = ?
        WHERE id = ?
     `);
     // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
@@ -2520,7 +2543,8 @@ async function handlePullDesiredState(options = {}) {
     const checkStmt = db.prepare(
       'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
         'write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, ' +
-        'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at ' +
+        'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, ' +
+        'apply_requested, apply_requested_at, apply_requested_by ' +
         'FROM positions WHERE id = ?'
     );
     // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
@@ -2559,6 +2583,15 @@ async function handlePullDesiredState(options = {}) {
       const rcAt = p.recheck_requested_at || null;
       const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
       const spAt = p.salary_precise_requested_at || null;
+      // [JHT-CLOSER] L'autorizzazione alla candidatura. Viaggia con gli altri
+      // flag perche' e' un desired-state come loro, ma l'AUTORE non e' un
+      // ornamento: il gate (`shared/skills/apply_gate.py`) rifiuta un flag il
+      // cui `apply_requested_by` non nomina un canale utente, quindi una
+      // corsia che portasse a casa il booleano e lasciasse indietro l'autore
+      // produrrebbe autorizzazioni che il box scarta senza dire perche'.
+      const apFlag = p.apply_requested === true || p.apply_requested === 1 ? 1 : 0;
+      const apAt = p.apply_requested_at || null;
+      const apBy = p.apply_requested_by || null;
       // Skip delle scritture no-op: l'UPDATE non tocca updated_at, quindi il
       // trigger `positions_touch_updated_at` (AFTER UPDATE ... WHEN NEW.updated_at
       // IS OLD.updated_at) rilancerebbe una UPDATE annidata su updated_at PER OGNI
@@ -2574,9 +2607,13 @@ async function handlePullDesiredState(options = {}) {
         (local.recheck_requested ?? 0) !== rcFlag ||
         (local.recheck_requested_at ?? null) !== rcAt ||
         (local.salary_precise_requested ?? 0) !== spFlag ||
-        (local.salary_precise_requested_at ?? null) !== spAt;
+        (local.salary_precise_requested_at ?? null) !== spAt ||
+        (local.apply_requested ?? 0) !== apFlag ||
+        (local.apply_requested_at ?? null) !== apAt ||
+        (local.apply_requested_by ?? null) !== apBy;
       if (flagsChanged) {
-        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
+        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt,
+          apFlag, apAt, apBy, legacyId);
         updated++;
       }
 

@@ -78,6 +78,13 @@ export interface Position {
   // l'utente lo richiede dalla pagina posizione, l'Analista serve la coda.
   recheck_requested?: boolean;
   recheck_requested_at?: string | null;
+  // Mig 088 ([JHT-CLOSER]) — l'autorizzazione per-posizione alla candidatura.
+  // `apply_requested_by` viaggia accanto al flag e non e' ridondante: il gate
+  // rifiuta un'autorizzazione che non nomina un canale utente, perche' un flag
+  // acceso da un processo e' il percorso in cui il team si candida da solo.
+  apply_requested?: boolean;
+  apply_requested_at?: string | null;
+  apply_requested_by?: string | null;
   // V9 (2026-06-13) — coordinate ufficio esposte al web (esistono in DB dalla
   // migration 017, prima non nel type). office_lat/lon alimentano JobsGlobe a
   // livello ufficio invece che città; office_address per la vignetta del pin.
