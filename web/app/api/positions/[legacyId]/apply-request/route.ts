@@ -11,6 +11,12 @@ import {
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  AUTHORISABLE_STATUS,
+  applyToggleVerdict,
+  nextApplyInstant,
+  type ApplyToggleRefusal,
+} from "@/lib/apply-request-rule";
 
 export const dynamic = "force-dynamic";
 
@@ -41,22 +47,30 @@ export const dynamic = "force-dynamic";
 // Autorizzare prima significherebbe autorizzare l'invio di qualcosa che non è
 // ancora stato scritto, e il rifiuto è un 409 esplicito perché l'utente possa
 // capire che deve aspettare, non che il bottone è rotto.
-
-const AUTHORISABLE_STATUS = "ready";
+//
+// La regola (stato autorizzabile, stati «già inviata») non vive in questo
+// file: sta in `shared/cloud/apply-request-rule.json`, la stessa che legge il
+// gate e il comando `jht apply`. Una candidatura già partita non si autorizza
+// né si ritira, da nessun canale.
 
 /** Il canale che ha acceso il flag. Il vocabolario è quello di apply_gate.py. */
 type ApplyRequestOrigin = "user_web" | "user_local";
 
-function notReady(legacyId: number, status: string | null): NextResponse {
+function refused(
+  legacyId: number,
+  status: string | null,
+  reason: ApplyToggleRefusal,
+): NextResponse {
+  const detail =
+    reason === "already_submitted"
+      ? "La candidatura è già stata inviata: non si autorizza né si ritira"
+      : reason === "position_not_ready"
+        ? `Posizione in stato '${status}': l'autorizzazione alla candidatura è ` +
+          `ammessa solo per '${AUTHORISABLE_STATUS}'`
+        : "Regola di autorizzazione non leggibile";
   return NextResponse.json(
-    {
-      error: "position_not_ready",
-      detail:
-        `Posizione in stato '${status}': l'autorizzazione alla candidatura è ` +
-        `ammessa solo per '${AUTHORISABLE_STATUS}'`,
-      position: { id: String(legacyId), status },
-    },
-    { status: 409 },
+    { error: reason, detail, position: { id: String(legacyId), status } },
+    { status: reason === "rule_unavailable" ? 503 : 409 },
   );
 }
 
@@ -148,7 +162,7 @@ async function handleToggle(
   // Cloud-mode: il container applica al boot via pull-desired-state.
   const { data: row, error } = await supabase
     .from("positions")
-    .select("id, status")
+    .select("id, status, apply_requested, apply_requested_at")
     .eq("user_id", userId)
     .eq("legacy_id", legacyId)
     .maybeSingle();
@@ -168,15 +182,31 @@ async function handleToggle(
   // Lo stato si controlla anche qui e non solo nel path locale: in cloud-mode
   // questa è l'unica source disponibile, e una guardia che vive su un solo
   // ramo è una guardia che il ramo dell'operatore non incontra mai.
-  if (requested && row.status !== AUTHORISABLE_STATUS) {
-    return notReady(legacyId, row.status);
+  const { data: app, error: appErr } = await supabase
+    .from("applications")
+    .select("applied")
+    .eq("position_id", row.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (appErr) {
+    return sanitizedError(appErr, {
+      status: 500,
+      scope: "positions/[legacyId]/apply-request",
+      publicMessage: "query_failed",
+    });
   }
+  const verdict = applyToggleVerdict({
+    status: row.status,
+    applied: app?.applied === true,
+    requested,
+  });
+  if (!verdict.ok) return refused(legacyId, row.status, verdict.reason);
 
   // Anche lo SPEGNIMENTO avanza il timestamp: il pull filtra le righe per
   // `updated_at > cursor`, e un annullamento che non muove niente sarebbe
   // invisibile al box — l'utente revocherebbe dal sito e il CLOSER partirebbe
   // lo stesso. È lo stesso motivo per cui write-request avanza il suo.
-  const at = new Date().toISOString();
+  const at = nextApplyInstant(row.apply_requested_at);
   const { error: upErr } = await supabase
     .from("positions")
     .update({
@@ -221,8 +251,20 @@ export function toggleViaLocal(
     const row = db
       .prepare<
         [number],
-        { id: number; status: string | null }
-      >("SELECT id, status FROM positions WHERE id = ?")
+        {
+          id: number;
+          status: string | null;
+          apply_requested: number | null;
+          apply_requested_at: string | null;
+          applied: number | null;
+        }
+      >(
+        `SELECT p.id, p.status, p.apply_requested, p.apply_requested_at,
+                a.applied
+           FROM positions p
+           LEFT JOIN applications a ON a.position_id = p.id
+          WHERE p.id = ?`,
+      )
       .get(legacyId);
     if (!row) {
       return {
@@ -233,21 +275,44 @@ export function toggleViaLocal(
         ),
       };
     }
-    if (requested && row.status !== AUTHORISABLE_STATUS) {
-      return { ok: false, res: notReady(legacyId, row.status) };
+    const verdict = applyToggleVerdict({
+      status: row.status,
+      applied: row.applied === 1,
+      requested,
+    });
+    if (!verdict.ok) {
+      return { ok: false, res: refused(legacyId, row.status, verdict.reason) };
     }
 
     // Lo spegnimento azzera l'autore insieme al flag. Lasciare
     // `apply_requested_by` valorizzato accanto a un flag spento darebbe una
     // riga che dice «l'utente ha autorizzato» a chi legge solo quella colonna,
     // e il gate di domani potrebbe essere scritto proprio così.
-    db.prepare(
-      `UPDATE positions
-          SET apply_requested = ?,
-              apply_requested_at = CURRENT_TIMESTAMP,
-              apply_requested_by = ?
-        WHERE id = ?`,
-    ).run(requested ? 1 : 0, requested ? by : null, legacyId);
+    //
+    // Ritirare ciò che non è autorizzato non scrive niente: un no-op che
+    // muovesse `updated_at` spingerebbe al cloud una riga che non è cambiata.
+    // Negli altri casi `updated_at` si muove, sempre in avanti: è il cursore
+    // del push delta, e un flag che non lo muove non arriva mai al sito.
+    if (requested || row.apply_requested === 1) {
+      db.prepare(
+        `UPDATE positions
+            SET apply_requested = ?,
+                apply_requested_at = ?,
+                apply_requested_by = ?,
+                updated_at = CASE
+                  WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                       > COALESCE(updated_at, '')
+                  THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                  ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at, '+0.001 seconds')
+                END
+          WHERE id = ?`,
+      ).run(
+        requested ? 1 : 0,
+        nextApplyInstant(row.apply_requested_at),
+        requested ? by : null,
+        legacyId,
+      );
+    }
 
     const after = db
       .prepare<

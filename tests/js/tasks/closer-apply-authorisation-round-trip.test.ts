@@ -50,9 +50,11 @@ const SCHEMA = `
     apply_requested INTEGER DEFAULT 0, apply_requested_at TEXT,
     apply_requested_by TEXT,
     user_excluded_reason TEXT, user_excluded_note TEXT, user_excluded_at TEXT,
-    user_excluded_prev_status TEXT
+    user_excluded_prev_status TEXT, updated_at TEXT
   );
-  CREATE TABLE applications (id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE);
+  CREATE TABLE applications (
+    id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE, applied INTEGER DEFAULT 0
+  );
   CREATE TABLE position_state_transitions (
     id INTEGER PRIMARY KEY, position_id INTEGER,
     from_state TEXT, to_state TEXT, by_agent TEXT, notes TEXT
@@ -113,9 +115,8 @@ async function pull(
   );
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.resetModules();
-  const { handlePullDesiredState } = await import(
-    "../../../cli/src/commands/cloud.js"
-  );
+  const { handlePullDesiredState } =
+    await import("../../../cli/src/commands/cloud.js");
   await handlePullDesiredState({ db: dbPath, silent: true });
   const db = new DatabaseSync(dbPath);
   const row = db
@@ -252,9 +253,8 @@ describe("il cursore avanza sul solo permesso", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
       vi.resetModules();
-      const { handlePullDesiredState } = await import(
-        "../../../cli/src/commands/cloud.js"
-      );
+      const { handlePullDesiredState } =
+        await import("../../../cli/src/commands/cloud.js");
       await handlePullDesiredState({ db: dbPath, silent: true });
       const cursore = JSON.parse(
         readFileSync(join(home, ".cloud-pull-cursor.json"), "utf-8"),
@@ -293,9 +293,8 @@ describe("la risposta al form vale come nuova autorizzazione", () => {
     `);
     db.close();
     vi.resetModules();
-    const { replyPendingMessageLocal } = await import(
-      "../../../web/lib/pending-message-reply-local"
-    );
+    const { replyPendingMessageLocal } =
+      await import("../../../web/lib/pending-message-reply-local");
 
     expect(replyPendingMessageLocal("3", "Remote")).toBe(true);
 
@@ -338,9 +337,8 @@ describe("la risposta al form vale come nuova autorizzazione", () => {
     `);
     db.close();
     vi.resetModules();
-    const { replyPendingMessageLocal } = await import(
-      "../../../web/lib/pending-message-reply-local"
-    );
+    const { replyPendingMessageLocal } =
+      await import("../../../web/lib/pending-message-reply-local");
 
     expect(() => replyPendingMessageLocal("5", "remote")).toThrow(
       "closer_answer_not_exact_option",
@@ -384,9 +382,8 @@ describe("la risposta al form vale come nuova autorizzazione", () => {
     `);
     db.close();
     vi.resetModules();
-    const { replyPendingMessageLocal } = await import(
-      "../../../web/lib/pending-message-reply-local"
-    );
+    const { replyPendingMessageLocal } =
+      await import("../../../web/lib/pending-message-reply-local");
 
     expect(replyPendingMessageLocal("4", "Va bene")).toBe(true);
 
@@ -444,7 +441,9 @@ describe("le tre colonne sono nominate ovunque servano", () => {
 
   it("il push le manda su", () => {
     const cli = leggi("cli/src/commands/cloud.js");
-    expect(cli).toContain("'apply_requested', 'apply_requested_at', 'apply_requested_by'");
+    expect(cli).toContain(
+      "'apply_requested', 'apply_requested_at', 'apply_requested_by'",
+    );
     const route = leggi("web/app/api/cloud-sync/push/route.ts");
     expect(route).toContain("apply_requested_by: p.apply_requested_by ?? null");
   });
@@ -474,9 +473,12 @@ describe("le tre colonne sono nominate ovunque servano", () => {
     const src = leggi(
       "web/app/api/positions/[legacyId]/apply-request/route.ts",
     );
-    expect(src).toContain('const AUTHORISABLE_STATUS = "ready"');
+    // La regola non ha piu' una copia nella route: arriva dal JSON condiviso
+    // con il gate del box, attraverso `web/lib/apply-request-rule.ts`.
+    expect(src).not.toContain('"ready"');
+    expect(src).toContain('from "@/lib/apply-request-rule"');
     // La guardia deve stare su ENTRAMBI i rami: quello locale e quello
     // cloud-only, che e' proprio quello dell'operatore su VPS.
-    expect(src.match(/AUTHORISABLE_STATUS/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(src.match(/applyToggleVerdict\(/g)?.length ?? 0).toBe(2);
   });
 });

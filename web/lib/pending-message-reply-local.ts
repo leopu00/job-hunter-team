@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { JHT_DB_PATH } from "./jht-paths";
 import { assertApplicationAnswerReply } from "./application-answer-request";
+import { AUTHORISABLE_STATUS, applyToggleVerdict } from "./apply-request-rule";
 
 /**
  * Persist a dashboard reply in local mode. A CLOSER form answer also renews
@@ -49,15 +50,43 @@ export function replyPendingMessageLocal(id: string, reply: string): boolean {
           reply,
           target.related_position_id!,
         );
+        // Same rule as the apply-request route and the box gate: an answer
+        // never re-authorises an application that has already been sent.
+        const current = db
+          .prepare(
+            `SELECT p.status, a.applied
+               FROM positions p
+               LEFT JOIN applications a ON a.position_id = p.id
+              WHERE p.id = ?`,
+          )
+          .get(target.related_position_id) as
+          | { status: string | null; applied: number | null }
+          | undefined;
+        const verdict = applyToggleVerdict({
+          status: current?.status ?? null,
+          applied: current?.applied === 1,
+          requested: true,
+        });
+        if (!verdict.ok) {
+          throw new Error(`closer_answer_${verdict.reason}`);
+        }
         const authorised = db
           .prepare(
             `UPDATE positions
                 SET apply_requested = 1,
                     apply_requested_at = ?,
-                    apply_requested_by = 'user_local'
-              WHERE id = ? AND status = 'ready'`,
+                    apply_requested_by = 'user_local',
+                    -- The box push reads updated_at as its cursor: a renewed
+                    -- authorisation that does not move it never leaves home.
+                    updated_at = CASE
+                      WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                           > COALESCE(updated_at, '')
+                      THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                      ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at, '+0.001 seconds')
+                    END
+              WHERE id = ? AND status = ?`,
           )
-          .run(at, target.related_position_id);
+          .run(at, target.related_position_id, AUTHORISABLE_STATUS);
         if (authorised.changes !== 1) {
           throw new Error("closer_answer_position_not_ready");
         }

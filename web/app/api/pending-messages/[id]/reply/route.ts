@@ -7,6 +7,10 @@ import { replyPendingMessageLocal } from "@/lib/pending-message-reply-local";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
 import {
+  AUTHORISABLE_STATUS,
+  applyToggleVerdict,
+} from "@/lib/apply-request-rule";
+import {
   assertCloudApplicationAnswerReply,
   isApplicationAnswerRequestBody,
 } from "@/lib/application-answer-request";
@@ -139,9 +143,36 @@ export async function POST(
         publicMessage: "position_query_failed",
       });
     }
-    if (!position || position.status !== "ready") {
+    if (!position) {
       return NextResponse.json(
         { error: "closer_answer_position_not_ready" },
+        { status: 409 },
+      );
+    }
+    const { data: application, error: applicationError } = await supabase
+      .from("applications")
+      .select("applied")
+      .eq("position_id", position.id)
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (applicationError) {
+      return sanitizedError(applicationError, {
+        status: 500,
+        scope: "pending-messages/[id]/reply",
+        publicMessage: "application_query_failed",
+      });
+    }
+    // Same rule as the apply-request route and the box gate: an answer never
+    // re-authorises an application that has already been sent.
+    const verdict = applyToggleVerdict({
+      status: position.status,
+      applied: application?.applied === true,
+      requested: true,
+    });
+    if (!verdict.ok) {
+      return NextResponse.json(
+        { error: `closer_answer_${verdict.reason}` },
         { status: 409 },
       );
     }
@@ -162,7 +193,7 @@ export async function POST(
       })
       .eq("id", target.related_position_id)
       .eq("user_id", user.id)
-      .eq("status", "ready");
+      .eq("status", AUTHORISABLE_STATUS);
     if (authoriseError) {
       return sanitizedError(authoriseError, {
         status: 500,
