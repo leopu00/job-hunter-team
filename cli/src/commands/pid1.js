@@ -48,6 +48,32 @@ const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
 const THROTTLE_ENGINE_SCRIPT = '/app/shared/skills/throttle_engine.py';
 const AUTO_REPORT_LOOP_SCRIPT = '/app/.launcher/auto-report-loop.sh';
 const WELCOME_SEND_SCRIPT = '/app/.launcher/welcome-send.sh';
+const LIVE_SCREEN_SCRIPT = '/app/.launcher/live-screen.sh';
+// Uscite di live-screen.sh che nessun respawn può riparare: display o porta
+// non validi (2) e binari assenti nell'immagine (3). Riprovare ogni 5 secondi
+// riempirebbe il log senza mai accendere lo schermo.
+const LIVE_SCREEN_FATAL_EXIT_CODES = new Set([2, 3]);
+
+/**
+ * Decide se pid1 accende lo schermo live del CLOSER (Xvfb + stream VNC).
+ * Acceso di default, perché è lo schermo su cui `apply_flow.py --headful`
+ * disegna: spento, il browser headed del CLOSER non avrebbe dove aprirsi.
+ * `JHT_LIVE_SCREEN=0` lo spegne (macchina senza app desktop, RAM contata).
+ */
+export function liveScreenDecision({ env = process.env, scriptExists = existsSync } = {}) {
+  if (String(env.JHT_LIVE_SCREEN ?? '').trim() === '0') {
+    return { start: false, reason: 'JHT_LIVE_SCREEN=0' };
+  }
+  if (!scriptExists(LIVE_SCREEN_SCRIPT)) {
+    return { start: false, reason: `${LIVE_SCREEN_SCRIPT} not found` };
+  }
+  return { start: true, reason: 'enabled' };
+}
+
+/** true se un'uscita di live-screen.sh merita un nuovo tentativo. */
+export function liveScreenShouldRespawn(code) {
+  return !LIVE_SCREEN_FATAL_EXIT_CODES.has(code);
+}
 
 /**
  * Serializza gli eventi ravvicinati di fs.watch e ne conserva l'ultimo.
@@ -921,6 +947,41 @@ async function dispatch() {
   };
   startThrottleEngine();
 
+  // ── Schermo live del CLOSER: display X virtuale + stream VNC in sola visione
+  // verso l'app desktop (.launcher/live-screen.sh). Lo script tiene in piedi
+  // la terna Xvfb/x11vnc/websockify ed esce appena uno dei tre muore: qui la
+  // si riavvia intera, come gli altri watchdog. Non dipende dal provider né
+  // dal team: lo schermo deve esserci prima che il CLOSER apra il browser.
+  let liveScreenChild = null;
+  let liveScreenRespawnTimer = null;
+  const startLiveScreen = () => {
+    if (liveScreenChild && !liveScreenChild.killed) return;
+    const decision = liveScreenDecision();
+    if (!decision.start) {
+      pid1Log(`live-screen skip: ${decision.reason}`);
+      return;
+    }
+    pid1Log('starting live-screen (Xvfb + view-only VNC stream for the CLOSER browser)');
+    liveScreenChild = spawnLabeled('live-screen', '/bin/bash', [LIVE_SCREEN_SCRIPT]);
+    liveScreenChild.on('exit', (code, signal) => {
+      liveScreenChild = null;
+      if (shuttingDown) return;
+      pid1Log(`live-screen exited (code=${code} signal=${signal})`);
+      if (!liveScreenShouldRespawn(code)) {
+        pid1Log('live-screen not respawned: configuration or image error, see logs/live-screen.log');
+        return;
+      }
+      if (liveScreenRespawnTimer) clearTimeout(liveScreenRespawnTimer);
+      liveScreenRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) {
+          pid1Log('live-screen respawn after exit');
+          startLiveScreen();
+        }
+      }, 5000);
+    });
+  };
+  startLiveScreen();
+
   // ── Daemon push + Realtime subscriber: entrambi opzionali, gated da
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
@@ -1189,6 +1250,8 @@ async function dispatch() {
     if (stepcapRespawnTimer) clearTimeout(stepcapRespawnTimer);
     if (throttleEngineChild && !throttleEngineChild.killed) throttleEngineChild.kill(sig);
     if (throttleEngineRespawnTimer) clearTimeout(throttleEngineRespawnTimer);
+    if (liveScreenChild && !liveScreenChild.killed) liveScreenChild.kill(sig);
+    if (liveScreenRespawnTimer) clearTimeout(liveScreenRespawnTimer);
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
     stopTgBridge();

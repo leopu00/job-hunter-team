@@ -1,3 +1,4 @@
+mod live_screen;
 mod podman;
 mod team;
 
@@ -8,6 +9,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TeamRuntimeState::default())
         .invoke_handler(tauri::generate_handler![
+            live_screen::live_screen_session,
+            live_screen::open_live_screen,
             podman::check_podman,
             team::start_api_team
         ])

@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ResultExplorer, TeamLiveDashboard } from "./components/team-dashboard";
+import { openLiveScreen } from "./lib/live-screen";
 import { checkPodman, type PodmanStatus } from "./lib/podman";
 import {
   isTeamAgentActivity,
@@ -21,6 +22,29 @@ function BrandMark() {
   );
 }
 
+/**
+ * Apre la finestra staccata con lo schermo del browser del CLOSER. Sta nella
+ * topbar di ogni schermata perché lo schermo non dipende dal setup: si guarda
+ * mentre il CLOSER lavora, qualunque cosa mostri la finestra principale.
+ */
+function LiveScreenButton() {
+  const [failed, setFailed] = useState(false);
+  const open = useCallback(() => {
+    setFailed(false);
+    openLiveScreen().catch(() => setFailed(true));
+  }, []);
+  return (
+    <button
+      className="live-screen-button"
+      type="button"
+      onClick={open}
+      title={failed ? "Non riesco ad aprire la finestra dello schermo live" : undefined}
+    >
+      <i aria-hidden="true" /> {failed ? "Schermo non disponibile" : "Schermo CLOSER"}
+    </button>
+  );
+}
+
 function ArrowIcon() {
   return <span aria-hidden="true">→</span>;
 }
@@ -30,9 +54,12 @@ function WelcomePage({ onStart }: { onStart: () => void }) {
     <main className="page page--welcome">
       <header className="topbar">
         <BrandMark />
-        <span className="status-pill">
-          <i /> Anteprima locale
-        </span>
+        <div className="topbar__actions">
+          <LiveScreenButton />
+          <span className="status-pill">
+            <i /> Anteprima locale
+          </span>
+        </div>
       </header>
 
       <section className="welcome-grid">
@@ -252,9 +279,12 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
       <main className="page page--live-team">
         <header className="topbar">
           <BrandMark />
-          <span className="status-pill">
-            <i /> Team in esecuzione
-          </span>
+          <div className="topbar__actions">
+            <LiveScreenButton />
+            <span className="status-pill">
+              <i /> Team in esecuzione
+            </span>
+          </div>
         </header>
         <TeamLiveDashboard
           progress={launchState.progress}
@@ -272,7 +302,10 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
     <main className="page page--setup">
       <header className="topbar">
         <BrandMark />
-        <span className="step-label">Setup iniziale · 02 / 02</span>
+        <div className="topbar__actions">
+          <LiveScreenButton />
+          <span className="step-label">Setup iniziale · 02 / 02</span>
+        </div>
       </header>
 
       <section className="setup-layout">
@@ -395,9 +428,12 @@ function TeamPage({
     <main className="page page--team">
       <header className="topbar">
         <BrandMark />
-        <span className="status-pill">
-          <i /> Team operativo
-        </span>
+        <div className="topbar__actions">
+          <LiveScreenButton />
+          <span className="status-pill">
+            <i /> Team operativo
+          </span>
+        </div>
       </header>
 
       <section className="team-result">

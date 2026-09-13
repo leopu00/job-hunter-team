@@ -1,0 +1,14 @@
+/* Finestra staccata dello schermo del CLOSER: tutta superficie utile, la
+   barra resta sottile perché la finestra si ridimensiona spesso piccola. */
+.live-screen { height: 100vh; display: flex; flex-direction: column; background: #050605; }
+.live-screen__bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel-soft); font-size: 12px; }
+.live-screen__bar strong { font-weight: 720; letter-spacing: -0.01em; }
+.live-screen__status { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.live-screen__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+.live-screen__dot--live { background: #ff4d4d; box-shadow: 0 0 10px rgba(255,77,77,.7); }
+.live-screen__dot--error { background: #ff9d3b; }
+.live-screen__retry { margin-left: auto; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: transparent; font-size: 11px; cursor: pointer; }
+.live-screen__retry:focus-visible, .live-screen-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.live-screen__stage { position: relative; flex: 1; min-height: 0; }
+.live-screen__canvas { position: absolute; inset: 0; overflow: hidden; }
+.live-screen__notice { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 24px; color: var(--muted); font-size: 13px; text-align: center; background: #050605; }
