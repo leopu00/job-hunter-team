@@ -213,6 +213,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # Le immagini dell'api-worker eseguono Node 22 e il relativo job CI usa
+    # Node 24. Tipi di una major successiva descriverebbero API che nessuno dei
+    # due runtime garantisce: avanzano solo insieme al runtime piu' recente.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "agents"
