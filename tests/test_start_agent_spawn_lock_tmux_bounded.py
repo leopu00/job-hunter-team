@@ -244,9 +244,17 @@ def _cleanup_function() -> str:
 
 def test_the_half_made_session_is_owned_by_the_cleanup_until_the_agent_is_up():
     source = START_AGENT.read_text(encoding="utf-8")
-    trap = source.index("trap _spawn_abort_cleanup EXIT")
     first_new_session = source.index("tmux new-session -d -x 220 -y 50 -s \"$SESSION\" powershell.exe")
-    assert source.index(LOCK) < trap < first_new_session
+    # Un solo installer del trap EXIT: questo blocco, oppure il gestore
+    # d'uscita dello script che chiama la pulizia con l'rc.
+    installers = re.findall(r"^\s*trap\s+(?!-)(\S+)\s+EXIT\s*$", source, re.M)
+    assert len(installers) == 1, installers
+    if installers == ["_spawn_abort_cleanup"]:
+        trap = source.index("trap _spawn_abort_cleanup EXIT")
+        assert source.index(LOCK) < trap < first_new_session
+    else:
+        handler = _function_body(source, installers[0])
+        assert '_spawn_abort_cleanup "$rc"' in handler, handler
     # Due rami (PowerShell e container): la sessione diventa "da pulire" subito
     # dopo la sua new-session e smette di esserlo solo a spawn riuscito.
     marks = [m.start() for m in re.finditer(r"^  _SPAWN_SESSION_CREATED=1$", source, re.M)]
@@ -276,7 +284,6 @@ def test_an_aborted_spawn_removes_only_its_own_half_made_session(
         f"export T_CALLS='{calls}'\n"
         f"source '{ROOT / '.launcher' / 'daemon-lib.sh'}'\n"
         "SESSION=SCOUT-1\nJHT_SPAWN_TMUX_PROBE_SEC=1\n"
-        + "_spawn_rc() { return \"$1\"; }\n"
         + _cleanup_function()
         + f"_SPAWN_SESSION_CREATED={created}\n"
         "trap _spawn_abort_cleanup EXIT\n"
@@ -290,33 +297,34 @@ def test_an_aborted_spawn_removes_only_its_own_half_made_session(
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="il launcher gira nel container Linux")
-@pytest.mark.parametrize("exit_rc", [0, 1, 3])
-def test_the_cleanup_trap_hands_over_to_an_existing_exit_handler(tmp_path, capable_bash, exit_rc):
-    """Un solo trap EXIT per processo: installare il nostro sostituirebbe in
-    silenzio quello della traccia per tentativo (`_spawn_on_exit`), e il merge
-    dei due rami e' testualmente pulito. Il nostro gestore lo richiama, con
-    `set -e` attivo e con l'rc dello script visibile come `$?`."""
+@pytest.mark.parametrize("exit_rc", [1, 3])
+def test_an_exit_handler_of_the_script_can_run_the_cleanup_with_its_rc(tmp_path, capable_bash, exit_rc):
+    """Il protocollo per il gestore d'uscita unico: chiamata con l'rc come
+    argomento, dentro un gestore installato con `set -e` attivo."""
     bin_dir = _harness(tmp_path, capable_bash)
-    out = tmp_path / "hook.txt"
+    calls = tmp_path / "calls.txt"
     script = (
         "set -euo pipefail\n"
-        f"export PATH='{bin_dir}':\"$PATH\" T_CALLS='{tmp_path / 'calls.txt'}'\n"
+        f"export PATH='{bin_dir}':\"$PATH\" T_CALLS='{calls}'\n"
         f"source '{ROOT / '.launcher' / 'daemon-lib.sh'}'\n"
         "SESSION=SCOUT-1\nJHT_SPAWN_TMUX_PROBE_SEC=1\n"
-        f"_spawn_on_exit() {{ local rc=$?; echo \"hook rc=$rc\" >> '{out}'; }}\n"
-        "trap _spawn_on_exit EXIT\n"
-        "_spawn_rc() { return \"$1\"; }\n"
         + _cleanup_function()
-        + "_SPAWN_SESSION_CREATED=1\n"
-        "trap _spawn_abort_cleanup EXIT\n"
+        + "_handler() { local rc=$?; trap - EXIT; _spawn_abort_cleanup \"$rc\"; echo \"after rc=$rc\"; }\n"
+        "_SPAWN_SESSION_CREATED=1\n"
+        "trap _handler EXIT\n"
+        "true\n"
         f"exit {exit_rc}\n"
     )
     result = subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=60)
     assert result.returncode == exit_rc, result.stderr
-    assert out.read_text(encoding="utf-8").splitlines() == [f"hook rc={exit_rc}"]
+    assert f"after rc={exit_rc}" in result.stdout, result.stdout + result.stderr
+    assert "kill-session -t =SCOUT-1" in calls.read_text(encoding="utf-8")
+    assert f"(rc={exit_rc})" in result.stderr, result.stderr
 
 
-def test_the_rc_helper_exists_next_to_the_cleanup():
-    source = START_AGENT.read_text(encoding="utf-8")
-    assert '_spawn_rc() { return "$1"; }' in source
-    assert source.index('_spawn_rc() {') < source.index("_spawn_abort_cleanup() {")
+def test_the_cleanup_never_calls_back_into_another_exit_handler():
+    """Se il gestore unico chiama la pulizia e la pulizia richiamasse il
+    gestore, sarebbe una ricorsione."""
+    body = _cleanup_function()
+    assert "_spawn_on_exit" not in body, body
+    assert "trap " not in body, body

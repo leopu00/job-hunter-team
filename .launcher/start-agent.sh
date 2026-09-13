@@ -1198,25 +1198,20 @@ send_optional_env() {
 # (_SPAWN_SESSION_CREATED=1) ogni uscita non-zero la rimuove, col tetto e senza
 # fd 9 come ogni altro client di questa regione.
 #
-# Bash tiene UN SOLO trap EXIT per processo: installarne un secondo sostituisce
-# il primo in silenzio, e un merge lo fa senza conflitti testuali. Se lo script
-# ha gia' un gestore di uscita (`_spawn_on_exit`, la traccia per tentativo
-# del ramo di osservabilita' degli spawn), questo lo richiama dopo la pulizia
-# con lo stesso rc — altrimenti ogni spawn arrivato fin qui perderebbe la sua
-# riga di traccia, cioe' proprio quelli che interessano.
+# Bash tiene UN SOLO trap EXIT per processo, e un secondo `trap ... EXIT`
+# sostituisce il primo in silenzio. Regola: un solo installer. Qui, dove non
+# esiste un gestore d'uscita dello script, lo installa questo blocco; se lo
+# script ne ha gia' uno (la traccia per tentativo, `_spawn_on_exit`), e' quel
+# gestore a chiamare `_spawn_abort_cleanup "$rc"` e questa riga va tolta —
+# mai due installer, mai una catena che si richiama.
 _SPAWN_SESSION_CREATED=0
-_spawn_rc() { return "$1"; }
 _spawn_abort_cleanup() {
-  local rc=$?
+  local rc="${1:-$?}"
   if [ "$rc" -ne 0 ] && [ "$_SPAWN_SESSION_CREATED" = 1 ]; then
     echo "Error: spawn of '$SESSION' aborted after its tmux session was created (rc=$rc) — removing the half-made session so the next attempt does not find it already active." >&2
     jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
   fi
-  if declare -F _spawn_on_exit >/dev/null 2>&1; then
-    # `$?` all'ingresso del gestore deve valere l'rc dello script: lo si
-    # ricrea con `_spawn_rc`, dentro un `||` perche' `set -e` non esca qui.
-    if [ "$rc" -eq 0 ]; then _spawn_on_exit; else _spawn_rc "$rc" || _spawn_on_exit; fi
-  fi
+  return 0
 }
 trap _spawn_abort_cleanup EXIT
 
