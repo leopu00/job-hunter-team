@@ -1642,15 +1642,17 @@ echo "  Connect with: tmux attach -t \"$SESSION\""
 _kickoff() {
   local sess="$1"
   local msg="$2"
+  local kickoff_log
   # Esportiamo via env var invece di interpolare nella stringa sh -c:
   # i messaggi contengono apostrofi e caratteri speciali che rompono
   # il quoting sh nested. Env var e' trasparente a qualsiasi charset.
   #
-  # Log su /tmp/kickoff-<session>.log per troubleshooting: vediamo se
-  # il child ha davvero eseguito, se wait_ready e' terminato, se send
-  # e' andato a buon fine. Log idempotente, viene sovrascritto ogni
-  # volta (conta solo l'ultimo kickoff).
-  JHT_KICKOFF_SESS="$sess" JHT_KICKOFF_MSG="$msg" JHT_KICKOFF_LOG="/tmp/kickoff-$sess.log" \
+  # Il troubleshooting deve sopravvivere al recreate del container: /tmp e'
+  # il layer effimero. jht_daemon_log risolve il bind mount logs/ e applica
+  # la stessa rotazione dei daemon; il file resta idempotente e viene poi
+  # sovrascritto dal child, perche' qui conta l'ultimo kickoff.
+  kickoff_log="$(jht_daemon_log "kickoff-${sess}.log")"
+  JHT_KICKOFF_SESS="$sess" JHT_KICKOFF_MSG="$msg" JHT_KICKOFF_LOG="$kickoff_log" \
   setsid sh -c '
     exec >"$JHT_KICKOFF_LOG" 2>&1
     echo "[$(date +%H:%M:%S)] kickoff start for $JHT_KICKOFF_SESS"
@@ -1682,8 +1684,9 @@ _welcome_kickoff() {
   local role="$1" flag_name="$2" body="$3"
   local welcome_flag="${JHT_HOME:-/jht_home}/profile/${flag_name}"
   local welcome_dir="${JHT_HOME:-/jht_home}/profile"
-  local welcome_log="/tmp/welcome-watchdog-${role}.log"
+  local welcome_log
   local msg
+  welcome_log="$(jht_daemon_log "welcome-watchdog-${role}.log")"
   msg=$(printf '%s\n' \
     "[@system -> @${role}] [WELCOME-USER]" \
     "" \
