@@ -10,9 +10,11 @@ const TEXT_FIELD_TYPES = new Set([
 
 const REQUEST_PREFIX =
   "CLOSER needs one required application answer before it can continue.\nQuestion: ";
-const REQUEST_SUFFIX =
-  "\nReply to this request in the dashboard. The answer is saved under the " +
-  "question's exact normalized key and reused only for an identical key.";
+// source_* remains local metadata today: the established VPS full-push lane
+// carries body/kind/reply but not those columns. The blank line terminates the
+// structured, exact form excerpt while leaving the following user guidance
+// free to change without breaking cloud replies.
+const REQUEST_DETAILS_END = "\n\n";
 
 type AnswerShape = { fieldType: string; options: string[] };
 
@@ -52,10 +54,11 @@ function assertAnswerShape(shape: AnswerShape, reply: string): void {
 }
 
 function answerShapeFromBody(body: string): AnswerShape | null {
-  if (!body.startsWith(REQUEST_PREFIX) || !body.endsWith(REQUEST_SUFFIX)) {
-    return null;
-  }
-  const middle = body.slice(REQUEST_PREFIX.length, -REQUEST_SUFFIX.length);
+  if (!body.startsWith(REQUEST_PREFIX)) return null;
+  const remainderAfterPrefix = body.slice(REQUEST_PREFIX.length);
+  const detailsEnd = remainderAfterPrefix.indexOf(REQUEST_DETAILS_END);
+  if (detailsEnd <= 0) return null;
+  const middle = remainderAfterPrefix.slice(0, detailsEnd);
   const fieldDelimiter = "\nField type: ";
   const fieldAt = middle.lastIndexOf(fieldDelimiter);
   if (fieldAt <= 0) return null;

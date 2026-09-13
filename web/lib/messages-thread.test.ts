@@ -177,7 +177,7 @@ describe("richiesta risposta CLOSER", () => {
       body:
         "CLOSER needs one required application answer before it can continue.\n" +
         "Question: Work mode?\nField type: radio\nOptions:\n- Remote\n- Hybrid\n" +
-        "Reply to this request in the dashboard. The answer is saved under the " +
+        "\nReply to this request in the dashboard. The answer is saved under the " +
         "question's exact normalized key and reused only for an identical key.",
     });
     expect(isApplicationAnswerRequest(request)).toBe(true);

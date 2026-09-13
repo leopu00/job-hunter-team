@@ -1715,7 +1715,7 @@ class ApplicationFlow:
                 "CLOSER needs one required application answer before it can continue.\n"
                 f"Question: {request['label']}\n"
                 f"Field type: {request['field_type']}"
-                f"{options_text}\n"
+                f"{options_text}\n\n"
                 "Reply to this request in the dashboard. The answer is saved under the "
                 "question's exact normalized key and reused only for an identical key."
             )
