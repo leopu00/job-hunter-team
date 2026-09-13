@@ -344,3 +344,50 @@ def test_senza_database_il_messaggio_parte_lo_stesso(tmp_path):
     )
 
     assert done.returncode == 0, done.stderr
+
+
+def test_source_id_rende_la_domanda_durevole_e_idempotente(tmp_path):
+    box = _casa_con_db(tmp_path)
+    payload = json.dumps(
+        {
+            "version": 1,
+            "position_id": 41,
+            "key": "fixture question",
+            "label": "Fixture question?",
+            "field_type": "radio",
+            "options": ["Yes", "No"],
+        },
+        sort_keys=True,
+    )
+    command = [
+        str(NOTIFY),
+        "--agent",
+        "closer",
+        "--kind",
+        "question",
+        "--no-telegram",
+        "--source-id",
+        "closer-answer:41:fixture",
+        "--source-action",
+        "closer_application_answer",
+        "--source-payload",
+        payload,
+        "Fixture question",
+    ]
+
+    first = subprocess.run(command, env=box["env"], capture_output=True, text=True)
+    second = subprocess.run(command, env=box["env"], capture_output=True, text=True)
+
+    assert first.returncode == second.returncode == 0
+    assert first.stdout.split()[0] == second.stdout.split()[0]
+    with sqlite3.connect(box["db"]) as db:
+        rows = db.execute(
+            "SELECT source_id, source_action, source_payload FROM pending_user_messages"
+        ).fetchall()
+    assert rows == [
+        (
+            "closer-answer:41:fixture",
+            "closer_application_answer",
+            payload,
+        )
+    ]

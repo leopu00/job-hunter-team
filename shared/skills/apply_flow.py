@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fcntl
 import hashlib
 import json
 import logging
@@ -63,6 +64,30 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _resolve_headless(
+    override: bool | None,
+    *,
+    env: Mapping[str, str] | None = None,
+    socket_root: str | Path = "/tmp/.X11-unix",
+) -> bool:
+    """Choose headed mode only for a live, local X display unless overridden."""
+    if override is not None:
+        return override
+    environment = os.environ if env is None else env
+    if environment.get("JHT_LIVE_SCREEN", "").strip().casefold() in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return True
+    display = environment.get("DISPLAY", "").strip()
+    match = re.fullmatch(r"(?:(?:unix)?):([0-9]+)(?:\.[0-9]+)?", display)
+    if not match:
+        return True
+    return not (Path(socket_root) / f"X{match.group(1)}").is_socket()
+
+
 def _normalise_label(value: str) -> str:
     value = value.replace("\u00a0", " ").strip().casefold()
     value = re.sub(r"[\s\W_]+", " ", value, flags=re.UNICODE)
@@ -75,16 +100,48 @@ def _safe_label(value: str) -> str:
     return clean[:240] or "unnamed required field"
 
 
+def _exact_form_text(value: Any, *, maximum: int = 1000) -> str:
+    """Return bounded visible form text without changing its words or case."""
+    if not isinstance(value, str):
+        return ""
+    clean = " ".join(value.replace("\x00", " ").replace("\u00a0", " ").split())
+    return clean if 0 < len(clean) <= maximum else ""
+
+
+def _control_option_labels(controls) -> list[str]:
+    """Read exact accessible labels; ambiguity is represented by an empty list."""
+    values: list[str] = []
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        labels = control.evaluate(
+            "element => Array.from(element.labels || []).map(label => label.innerText)"
+        )
+        exact = [_exact_form_text(value, maximum=500) for value in labels]
+        exact = [value for value in exact if value]
+        if len(exact) != 1 or exact[0] in values:
+            return []
+        values.append(exact[0])
+    return values
+
+
 class FlowError(RuntimeError):
     pass
 
 
 class BlockedHuman(FlowError):
-    def __init__(self, reason: str, detail: str, step: str):
+    def __init__(
+        self,
+        reason: str,
+        detail: str,
+        step: str,
+        *,
+        answer_request: Mapping[str, Any] | None = None,
+    ):
         super().__init__(detail)
         self.reason = reason
         self.detail = detail
         self.step = step
+        self.answer_request = dict(answer_request) if answer_request else None
 
 
 @dataclass(frozen=True)
@@ -134,6 +191,7 @@ class FlowCheckpoint:
     blocked_detail: str = ""
     resume_state: str = ""
     receipt: dict[str, Any] | None = None
+    answer_request: dict[str, Any] | None = None
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -163,6 +221,10 @@ class FlowCheckpoint:
             raise FlowError("checkpoint has an invalid submit marker")
         if raw.get("receipt") is not None and not isinstance(raw.get("receipt"), dict):
             raise FlowError("checkpoint has an invalid receipt")
+        if raw.get("answer_request") is not None and not isinstance(
+            raw.get("answer_request"), dict
+        ):
+            raise FlowError("checkpoint has an invalid answer request")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -259,7 +321,9 @@ def _default_gate_checker(**kwargs):
         )
 
 
-def _default_notifier(*, position_id: int, message: str) -> str:
+def _default_notifier(
+    *, position_id: int, message: str, answer_request: Mapping[str, Any] | None = None
+) -> str:
     candidates = [
         shutil.which("jht-notify-user"),
         "/app/agents/_tools/jht-notify-user",
@@ -268,17 +332,33 @@ def _default_notifier(*, position_id: int, message: str) -> str:
     executable = next((value for value in candidates if value and Path(value).is_file()), None)
     if not executable:
         raise FlowError("jht-notify-user is unavailable")
+    command = [
+        executable,
+        "--agent",
+        "closer",
+        "--kind",
+        "question",
+        "--position-id",
+        str(position_id),
+    ]
+    if os.environ.get("JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY") == "1":
+        command.append("--no-telegram")
+    if answer_request:
+        command.extend(
+            [
+                "--existing-id",
+                str(answer_request["message_id"]),
+                "--source-id",
+                str(answer_request["source_id"]),
+                "--source-action",
+                "closer_application_answer",
+                "--source-payload",
+                json.dumps(answer_request["payload"], ensure_ascii=False, sort_keys=True),
+            ]
+        )
+    command.append(message)
     result = subprocess.run(
-        [
-            executable,
-            "--agent",
-            "closer",
-            "--kind",
-            "question",
-            "--position-id",
-            str(position_id),
-            message,
-        ],
+        command,
         check=False,
         capture_output=True,
         text=True,
@@ -586,6 +666,67 @@ class AshbyRecipe:
                 return True, self.answers[key]
         return False, None
 
+    @staticmethod
+    def _answer_request(entry, label: str) -> dict[str, Any] | None:
+        exact_label = _exact_form_text(label)
+        key = _normalise_label(exact_label)
+        if not exact_label or not key:
+            return None
+        yes_no = entry.locator(".ashby-application-form-input-yesno-option")
+        if yes_no.count():
+            return {
+                "key": key,
+                "label": exact_label,
+                "field_type": "radio",
+                "options": ["Yes", "No"],
+            }
+        radios = entry.locator("input[type=radio]")
+        if radios.count():
+            options = _control_option_labels(radios)
+            if not options:
+                return None
+            return {
+                "key": key,
+                "label": exact_label,
+                "field_type": "radio",
+                "options": options,
+            }
+        select = entry.locator("select")
+        if select.count() == 1:
+            options = []
+            choices = select.first.locator("option")
+            for index in range(choices.count()):
+                choice = choices.nth(index)
+                text = _exact_form_text(choice.inner_text(), maximum=500)
+                value = choice.get_attribute("value")
+                if text and value not in {None, ""} and text not in options:
+                    options.append(text)
+            if not options:
+                return None
+            return {
+                "key": key,
+                "label": exact_label,
+                "field_type": "select",
+                "options": options,
+            }
+        checkboxes = entry.locator("input[type=checkbox]")
+        if checkboxes.count() == 1:
+            return {
+                "key": key,
+                "label": exact_label,
+                "field_type": "checkbox",
+                "options": ["Yes", "No"],
+            }
+        text = entry.locator("textarea")
+        if text.count() == 1:
+            return {"key": key, "label": exact_label, "field_type": "textarea", "options": []}
+        inputs = entry.locator("input:not([type=hidden]):not([type=file])")
+        if inputs.count() == 1:
+            input_type = (inputs.first.get_attribute("type") or "text").casefold()
+            if input_type in {"text", "email", "tel", "url", "number", "date"}:
+                return {"key": key, "label": exact_label, "field_type": input_type, "options": []}
+        return None
+
     def fill_screening(self, page) -> None:
         entries = page.locator(self.FIELD_ENTRY)
         for index in range(entries.count()):
@@ -600,10 +741,18 @@ class AshbyRecipe:
             present, answer = self._answer_for(label, field_path)
             if not present:
                 if self._required(entry):
+                    request = self._answer_request(entry, label)
+                    if request is None:
+                        raise BlockedHuman(
+                            "unknown_required_control",
+                            f"Ashby required question cannot be represented exactly: {_safe_label(label)}",
+                            "screening",
+                        )
                     raise BlockedHuman(
                         "required_answer_missing",
                         f"Required Ashby question needs an answer: {_safe_label(label)}",
                         "screening",
+                        answer_request=request,
                     )
                 continue
             self._fill_answer(entry, label, answer)
@@ -1150,6 +1299,69 @@ class GreenhouseRecipe:
         if upload_scope.count() and self._visible_error_text(upload_scope.first):
             raise BlockedHuman("upload_rejected", "Greenhouse reported a CV upload error", "upload_cv")
 
+    @staticmethod
+    def _answer_request(page, entry, label: str) -> dict[str, Any] | None:
+        exact_label = _exact_form_text(label)
+        key = _normalise_label(exact_label)
+        if not exact_label or not key:
+            return None
+        radios = entry.locator("input[type=radio]")
+        if radios.count():
+            options = _control_option_labels(radios)
+            if not options:
+                return None
+            return {"key": key, "label": exact_label, "field_type": "radio", "options": options}
+        checkboxes = entry.locator("input[type=checkbox]")
+        if checkboxes.count():
+            if checkboxes.count() == 1:
+                return {
+                    "key": key,
+                    "label": exact_label,
+                    "field_type": "checkbox",
+                    "options": ["Yes", "No"],
+                }
+            options = _control_option_labels(checkboxes)
+            if not options:
+                return None
+            return {"key": key, "label": exact_label, "field_type": "checkboxes", "options": options}
+        select = entry.locator("select")
+        if select.count() == 1:
+            options: list[str] = []
+            choices = select.first.locator("option")
+            for index in range(choices.count()):
+                choice = choices.nth(index)
+                text = _exact_form_text(choice.inner_text(), maximum=500)
+                value = choice.get_attribute("value")
+                if text and value not in {None, ""} and text not in options:
+                    options.append(text)
+            if not options:
+                return None
+            return {"key": key, "label": exact_label, "field_type": "select", "options": options}
+        combo = entry.locator("[role=combobox]")
+        if combo.count() == 1:
+            combo.first.click()
+            options = []
+            visible = page.locator("[role=option]")
+            for index in range(visible.count()):
+                option = visible.nth(index)
+                if option.is_visible():
+                    text = _exact_form_text(option.inner_text(), maximum=500)
+                    if text and text not in options:
+                        options.append(text)
+            if not options:
+                return None
+            return {"key": key, "label": exact_label, "field_type": "select", "options": options}
+        if entry.locator("textarea").count() == 1:
+            return {"key": key, "label": exact_label, "field_type": "textarea", "options": []}
+        inputs = entry.locator(
+            "input:not([type=hidden]):not([aria-hidden=true]):not([type=file])"
+        )
+        if inputs.count() == 1:
+            input_type = (inputs.first.get_attribute("type") or "text").casefold()
+            if input_type in {"text", "email", "tel", "url", "number", "date"}:
+                return {"key": key, "label": exact_label, "field_type": input_type, "options": []}
+        return None
+
     def fill_screening(self, page) -> None:
         challenge = self._challenge_reason(page)
         if challenge:
@@ -1171,10 +1383,18 @@ class GreenhouseRecipe:
             present, answer = self._answer_for(label, field_key)
             if not present:
                 if self._required(entry):
+                    request = self._answer_request(page, entry, label)
+                    if request is None:
+                        raise BlockedHuman(
+                            "unknown_required_control",
+                            f"Greenhouse required question cannot be represented exactly: {_safe_label(label)}",
+                            "screening",
+                        )
                     raise BlockedHuman(
                         "required_answer_missing",
                         f"Required Greenhouse question needs an answer: {_safe_label(label)}",
                         "screening",
+                        answer_request=request,
                     )
                 continue
             self._fill_answer(page, entry, label, answer)
@@ -1407,6 +1627,7 @@ class ApplicationFlow:
         url: str,
         profile: Mapping[str, Any],
         cv_path: str | Path,
+        profile_path: str | Path | None = None,
         checkpoint_path: str | Path | None = None,
         receipt_dir: str | Path | None = None,
         db_path: str | Path | None = None,
@@ -1420,7 +1641,8 @@ class ApplicationFlow:
             raise ValueError("position_id must be a positive integer")
         self.position_id = int(position_id)
         self.url = url.strip()
-        self.profile = profile
+        self.profile = dict(profile)
+        self.profile_path = Path(profile_path) if profile_path else None
         self.cv_path = Path(cv_path)
         jht_home = Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
         self.checkpoint_path = Path(checkpoint_path) if checkpoint_path else (
@@ -1484,6 +1706,19 @@ class ApplicationFlow:
         page.wait_for_timeout(500)
 
     def _notification_message(self, blocked: BlockedHuman) -> str:
+        if blocked.answer_request:
+            request = blocked.answer_request
+            options = request.get("options") or []
+            rendered_options = "\n".join(f"- {value}" for value in options)
+            options_text = f"\nOptions:\n{rendered_options}" if rendered_options else ""
+            return (
+                "CLOSER needs one required application answer before it can continue.\n"
+                f"Question: {request['label']}\n"
+                f"Field type: {request['field_type']}"
+                f"{options_text}\n\n"
+                "Reply to this request in the dashboard. The answer is saved under the "
+                "question's exact normalized key and reused only for an identical key."
+            )
         if blocked.reason in {"required_answer_missing", "required_profile_field_missing"}:
             return (
                 "CLOSER stopped before submission because a required application field "
@@ -1495,19 +1730,115 @@ class ApplicationFlow:
             f"Reason: {blocked.reason}. {blocked.detail} Human review is required."
         )
 
+    def _answer_request_record(self, blocked: BlockedHuman) -> dict[str, Any]:
+        payload = {
+            "version": 1,
+            "position_id": self.position_id,
+            "key": str(blocked.answer_request["key"]),
+            "label": str(blocked.answer_request["label"]),
+            "field_type": str(blocked.answer_request["field_type"]),
+            "options": list(blocked.answer_request.get("options") or []),
+        }
+        identity = hashlib.sha256(
+            f"{self.position_id}\0{self.url}\0{payload['key']}".encode("utf-8")
+        ).hexdigest()[:24]
+        return {
+            "source_id": f"closer-answer:{self.position_id}:{identity}",
+            "message_id": "",
+            "notification_attempted": False,
+            "payload": payload,
+        }
+
+    def _persist_answer_request(self, checkpoint: FlowCheckpoint, message: str) -> None:
+        request = checkpoint.answer_request
+        if not request:
+            raise FlowError("answer request checkpoint is missing")
+        payload_text = json.dumps(request["payload"], ensure_ascii=False, sort_keys=True)
+        db = _resolve_db_path(self.db_path)
+        with sqlite3.connect(db) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO pending_user_messages ("
+                "agent, body, kind, related_position_id, source_id, source_action, "
+                "source_payload, delivered_via, delivered_at) "
+                "VALUES ('closer', ?, 'question', ?, ?, 'closer_application_answer', "
+                "?, 'web', CURRENT_TIMESTAMP)",
+                (message, self.position_id, request["source_id"], payload_text),
+            )
+            row = conn.execute(
+                "SELECT id, agent, body, kind, related_position_id, source_action, source_payload "
+                "FROM pending_user_messages WHERE source_id = ?",
+                (request["source_id"],),
+            ).fetchone()
+            conn.commit()
+        expected = (
+            "closer",
+            message,
+            "question",
+            self.position_id,
+            "closer_application_answer",
+            payload_text,
+        )
+        if not row or row[1:] != expected:
+            raise FlowError("durable answer request could not be verified")
+        request["message_id"] = str(row[0])
+        checkpoint.save(self.checkpoint_path)
+
+    def _notify_answer_request_once(
+        self, checkpoint: FlowCheckpoint, message: str
+    ) -> None:
+        request = checkpoint.answer_request
+        if not request or request.get("notification_attempted"):
+            return
+        # At-most-once external notification: persist the marker before the
+        # optional channel call. The dashboard row above is the durable ask.
+        request["notification_attempted"] = True
+        checkpoint.save(self.checkpoint_path)
+        self.notifier(
+            position_id=self.position_id,
+            message=message,
+            answer_request=request,
+        )
+
     def _block(self, checkpoint: FlowCheckpoint, blocked: BlockedHuman) -> FlowResult:
         checkpoint.state = "blocked_human"
         checkpoint.resume_state = blocked.step
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
+        message = self._notification_message(blocked)
+        if blocked.answer_request:
+            candidate = self._answer_request_record(blocked)
+            current = checkpoint.answer_request
+            if not current or current.get("source_id") != candidate["source_id"]:
+                checkpoint.answer_request = candidate
         checkpoint.save(self.checkpoint_path)
-        try:
-            self.notifier(
-                position_id=self.position_id,
-                message=self._notification_message(blocked),
-            )
-        except Exception as exc:
-            LOG.error("blocked_human notification failed: %s", type(exc).__name__)
+        if blocked.answer_request:
+            persisted = False
+            try:
+                # The request itself does not depend on Telegram or on the
+                # notifier executable: it is committed and reread first.
+                self._persist_answer_request(checkpoint, message)
+                persisted = True
+            except Exception as exc:
+                LOG.error("durable answer request failed: %s", type(exc).__name__)
+            try:
+                if persisted:
+                    self._notify_answer_request_once(checkpoint, message)
+                else:
+                    # Compatibility for injected notifiers in callers without
+                    # a configured jobs.db. Production still fails closed and
+                    # cannot claim the dashboard request exists.
+                    self.notifier(
+                        position_id=self.position_id,
+                        message=message,
+                        answer_request=checkpoint.answer_request,
+                    )
+            except Exception as exc:
+                LOG.error("blocked_human notification failed: %s", type(exc).__name__)
+        else:
+            try:
+                self.notifier(position_id=self.position_id, message=message)
+            except Exception as exc:
+                LOG.error("blocked_human notification failed: %s", type(exc).__name__)
         return FlowResult("blocked_human", checkpoint.state, blocked.reason)
 
     def _deny(self, checkpoint: FlowCheckpoint, verdict: Any) -> FlowResult:
@@ -1738,6 +2069,166 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return FlowResult("applied", checkpoint.state, receipt=receipt)
 
+    @staticmethod
+    def _decode_answer_reply(request: Mapping[str, Any], reply: str) -> Any:
+        payload = request.get("payload")
+        if not isinstance(payload, Mapping):
+            raise FlowError("answer request payload is missing")
+        field_type = payload.get("field_type")
+        options = payload.get("options")
+        if not isinstance(options, list) or any(not isinstance(v, str) for v in options):
+            raise FlowError("answer request options are invalid")
+        exact = reply.strip()
+        if not exact:
+            raise FlowError("dashboard answer is empty")
+        if field_type in {"radio", "select"}:
+            if exact not in options:
+                raise FlowError("dashboard answer is not an exact offered option")
+            return exact
+        if field_type == "checkbox":
+            if exact == "Yes":
+                return True
+            if exact == "No":
+                return False
+            raise FlowError("dashboard answer is not an exact boolean option")
+        if field_type == "checkboxes":
+            try:
+                selected = json.loads(exact)
+            except (TypeError, ValueError) as exc:
+                raise FlowError("dashboard checkbox answer is not a JSON list") from exc
+            if (
+                not isinstance(selected, list)
+                or not selected
+                or any(not isinstance(value, str) or value not in options for value in selected)
+                or len(set(selected)) != len(selected)
+            ):
+                raise FlowError("dashboard checkbox answer has unknown or duplicate options")
+            return selected
+        if field_type in {"textarea", "text", "email", "tel", "url", "number", "date"}:
+            return exact
+        raise FlowError("answer request field type is unsupported")
+
+    def _save_application_answer(self, key: str, answer: Any) -> None:
+        if self.profile_path is None or not self.profile_path.is_file():
+            raise FlowError("candidate profile path is unavailable")
+        try:
+            import yaml
+        except ImportError as exc:
+            raise FlowError("pyyaml is not installed") from exc
+        lock_path = self.profile_path.with_name(f".{self.profile_path.name}.lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="utf-8") as lock:
+            with contextlib.suppress(OSError):
+                os.chmod(lock_path, 0o600)
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            current = _load_profile(self.profile_path)
+            saved = current.get("application_answers")
+            answers: dict[str, Any] = {}
+            if isinstance(saved, Mapping):
+                answers.update(saved)
+            elif isinstance(saved, list):
+                for item in saved:
+                    if isinstance(item, Mapping) and item.get("question"):
+                        answers[_normalise_label(str(item["question"]))] = item.get("answer")
+            for existing in list(answers):
+                if _normalise_label(str(existing)) == key:
+                    del answers[existing]
+            answers[key] = answer
+            updated = dict(current)
+            updated["application_answers"] = answers
+            temporary = ""
+            handle = None
+            try:
+                handle = tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=self.profile_path.parent,
+                    prefix=f".{self.profile_path.name}.",
+                    delete=False,
+                )
+                temporary = handle.name
+                yaml.safe_dump(updated, handle, allow_unicode=True, sort_keys=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+                handle.close()
+                os.chmod(temporary, 0o600)
+                os.replace(temporary, self.profile_path)
+            except Exception:
+                if handle and not handle.closed:
+                    handle.close()
+                if temporary:
+                    with contextlib.suppress(OSError):
+                        os.unlink(temporary)
+                raise
+        observed = _load_profile(self.profile_path)
+        indexed = AshbyRecipe._answer_index(observed.get("application_answers"))
+        if key not in indexed or indexed[key] != answer:
+            raise FlowError("candidate profile write could not be verified")
+        self.profile = dict(observed)
+
+    def _resume_dashboard_answer(
+        self, checkpoint: FlowCheckpoint
+    ) -> FlowResult | None:
+        request = checkpoint.answer_request
+        if not request:
+            return None
+        try:
+            message = self._notification_message(
+                BlockedHuman(
+                    "required_answer_missing",
+                    checkpoint.blocked_detail,
+                    checkpoint.resume_state or "screening",
+                    answer_request=request.get("payload"),
+                )
+            )
+            self._persist_answer_request(checkpoint, message)
+            message_id = int(str(request.get("message_id", "")))
+            db = _resolve_db_path(self.db_path)
+            with sqlite3.connect(db) as conn:
+                row = conn.execute(
+                    "SELECT user_reply, user_reply_at FROM pending_user_messages "
+                    "WHERE id = ? AND agent = 'closer' AND related_position_id = ? "
+                    "AND source_id = ? AND source_action = 'closer_application_answer'",
+                    (message_id, self.position_id, request.get("source_id")),
+                ).fetchone()
+            if not row or row[0] is None or row[1] is None:
+                return FlowResult("blocked_human", checkpoint.state, checkpoint.blocked_reason)
+            answer = self._decode_answer_reply(request, str(row[0]))
+            payload = request.get("payload")
+            key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
+            if not key or key != _normalise_label(key):
+                raise FlowError("answer request key is not canonical")
+            self._save_application_answer(key, answer)
+            with sqlite3.connect(db) as conn:
+                changed = conn.execute(
+                    "UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP "
+                    "WHERE id = ? AND user_reply_at IS NOT NULL AND agent_seen_reply_at IS NULL",
+                    (message_id,),
+                ).rowcount
+                conn.commit()
+                seen = conn.execute(
+                    "SELECT agent_seen_reply_at FROM pending_user_messages WHERE id = ?",
+                    (message_id,),
+                ).fetchone()
+            if changed not in {0, 1} or not seen or not seen[0]:
+                raise FlowError("dashboard answer acknowledgement could not be verified")
+        except Exception as exc:
+            return self._block(
+                checkpoint,
+                BlockedHuman(
+                    "required_answer_missing",
+                    f"The dashboard answer could not be persisted safely ({type(exc).__name__})",
+                    checkpoint.resume_state or "screening",
+                ),
+            )
+        checkpoint.answer_request = None
+        checkpoint.state = checkpoint.resume_state or "screening"
+        checkpoint.blocked_reason = ""
+        checkpoint.blocked_detail = ""
+        checkpoint.resume_state = ""
+        checkpoint.save(self.checkpoint_path)
+        return None
+
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
         try:
             checkpoint = FlowCheckpoint.load(
@@ -1764,6 +2255,10 @@ class ApplicationFlow:
                 checkpoint,
                 _DeniedVerdict("gate_mode_unknown", "gate returned no recognised application mode"),
             )
+
+        waiting = self._resume_dashboard_answer(checkpoint)
+        if waiting is not None:
+            return waiting
 
         if checkpoint.submit_started and checkpoint.receipt:
             receipt = Receipt.from_dict(checkpoint.receipt)
@@ -1975,7 +2470,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--receipt-dir", type=Path)
     parser.add_argument("--db", type=Path)
-    parser.add_argument("--headful", action="store_true")
+    browser_mode = parser.add_mutually_exclusive_group()
+    browser_mode.add_argument(
+        "--headful", dest="headless", action="store_false", help="Force a visible browser."
+    )
+    browser_mode.add_argument(
+        "--headless", dest="headless", action="store_true", help="Force a hidden browser."
+    )
+    parser.set_defaults(headless=None)
     args = parser.parse_args(argv)
 
     try:
@@ -1983,11 +2485,12 @@ def main(argv: list[str] | None = None) -> int:
             position_id=args.position_id,
             url=args.url,
             profile=_load_profile(args.profile),
+            profile_path=args.profile,
             cv_path=args.cv,
             checkpoint_path=args.checkpoint,
             receipt_dir=args.receipt_dir,
             db_path=args.db,
-            headless=not args.headful,
+            headless=_resolve_headless(args.headless),
         )
         result = flow.run()
     except (FlowError, ValueError) as exc:
