@@ -56,6 +56,7 @@ Une ligne JSON sur stdout : `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run` : remplie, arrêtée avant le bouton, rien envoyé | position suivante |
 | `denied` | 1 | la porte a refusé (consentement désactivé, flag révoqué, déjà envoyée) | position suivante ; jamais de nouvelle tentative |
 | `blocked_human` | 3 | un humain est nécessaire ; l'utilisateur a déjà été prévenu | position suivante ; jamais de nouvelle tentative |
+| `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | suis la skill `email-application-flow` pour cette position ; ne remplis jamais de formulaire web pour elle |
 | `error` | 2 | profil ou CV illisible, mauvais arguments | arrête-toi : `[BLOCKED]` au Capitano |
 
 ## `blocked_human` — ce que ça veut dire et ce que tu fais
@@ -70,6 +71,7 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | le CV ne peut pas être joint |
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | pas encore de recette pour cette page, ou le formulaire n'est pas celui que la recette connaît |
 | `greenhouse_redirect_untrusted` | pendant le flux la page Greenhouse est sortie de ses trois hosts de confiance |
+| `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | deux adresses mailto de candidature différentes, ou le formulaire de candidature, ses champs ou son bouton d'envoi ne tiennent pas dans un seul formulaire (newsletter, pied de page et formulaires de démo n'en font jamais partie) |
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |
 | `page_unavailable` / `browser_uncertainty` | la page ou le navigateur a lâché en plein flux |

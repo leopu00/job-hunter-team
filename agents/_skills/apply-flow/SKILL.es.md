@@ -56,6 +56,7 @@ Una línea JSON en stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: rellenada, detenida antes del botón, nada enviado | siguiente posición |
 | `denied` | 1 | la puerta rechazó (consentimiento apagado, flag revocado, ya enviada) | siguiente posición; nunca reintentar |
 | `blocked_human` | 3 | hace falta una persona; el usuario ya fue avisado | siguiente posición; nunca reintentar |
+| `email_channel` | 4 | el control de candidatura es un enlace `mailto:`, no un formulario; el checkpoint guarda `channel: email` y el `mailto_href` en bruto | sigue la skill `email-application-flow` para esta posición; nunca rellenes un formulario web para ella |
 | `error` | 2 | perfil o CV ilegible, argumentos erróneos | detente: `[BLOCKED]` al Capitano |
 
 ## `blocked_human` — qué significa y qué haces
@@ -70,6 +71,7 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | el CV no se puede adjuntar |
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | todavía no hay receta para esta página, o el formulario no es el que la receta conoce |
 | `greenhouse_redirect_untrusted` | durante el flujo la página de Greenhouse salió de sus tres hosts de confianza |
+| `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | dos direcciones mailto de candidatura distintas, o el formulario de candidatura, sus campos o su botón de envío no están en un único formulario (newsletter, pie de página y formularios de demo nunca forman parte) |
 | `form_error` / `field_invalid` / `submit_unavailable` | el formulario señala un error, se rechaza el formato de un campo, o el botón de envío falta o está deshabilitado |
 | `url_refused` / `checkpoint_invalid` | la URL de la candidatura no pasó el control de direcciones públicas, o el checkpoint guardado es ilegible |
 | `page_unavailable` / `browser_uncertainty` | la página o el navegador fallaron a mitad del flujo |
