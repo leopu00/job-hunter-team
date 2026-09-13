@@ -38,7 +38,9 @@ from pathlib import Path
 LAUNCHER = Path(__file__).resolve().parent.parent / ".launcher" / "start-agent.sh"
 SOURCE = LAUNCHER.read_text(encoding="utf-8")
 
-GUARD = 'jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session'
+# `-c "$AGENT_DIR"` identifica il ramo container: anche la new-session del ramo
+# PowerShell (WSL) ha ora il suo tetto, e non e' il blocco che questi test leggono.
+GUARD = 'jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"'
 TIMED_OUT_BRANCH = "124|137)"
 WRAPPER_BRANCH = "125|126|127)"
 

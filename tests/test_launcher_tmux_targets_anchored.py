@@ -68,7 +68,8 @@ def _function_body(text: str, name: str) -> str:
     return text[start : text.index("\n}\n", start) + 3]
 
 
-SHELL_CALL = re.compile(r"\btmux\s+([a-z-]+)\b([^|;&)]*)")
+# `jht_spawn_tmux` (spawn-lib.sh) e' tmux con un tetto: il target conta uguale.
+SHELL_CALL = re.compile(r"(?<![\w-])(?:jht_spawn_)?tmux\s+([a-z-]+)\b([^|;&)]*)")
 
 
 def _shell_targets(text: str):

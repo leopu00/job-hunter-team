@@ -1178,14 +1178,20 @@ send_optional_env() {
     _value="${!_name:-}"
     if [ -n "$_value" ]; then
       if [ "$1" = "powershell" ]; then
-        tmux send-keys -t "$SESSION" "\$env:$_name='$_value'" Enter
+        jht_spawn_tmux send-keys -t "$SESSION" "\$env:$_name='$_value'" Enter
       else
-        tmux send-keys -t "$SESSION" "export $_name='$_value'" C-m
+        jht_spawn_tmux send-keys -t "$SESSION" "export $_name='$_value'" C-m
       fi
     fi
   done
 }
 
+# Ogni `tmux` da qui in giu' passa da `jht_spawn_tmux` (spawn-lib.sh): gira col
+# fd 9 del flock ereditato, e un client appeso — server tmux incantato, il caso
+# dei 756 respawn falliti — terrebbe il lock per sempre. Il tetto c'era solo
+# sul guard di idempotenza e sulla new-session: il lockout che #228 ha chiuso
+# si era spostato di un client, sui send-keys qui sotto. Invariante sotto test
+# in tests/test_start_agent_spawn_lock_tmux_bounded.py.
 send_env_vars() {
   # Inside the JHT container a fresh tmux bash resets HOME to the OS
   # default (/home/jht, from /etc/passwd) — but the CLI credential
@@ -1202,7 +1208,7 @@ send_env_vars() {
   # kimi/claude del nuovo agente cercano le credenziali nel posto
   # sbagliato e chiedono di rifare il login device.
   if [ -d "${JHT_HOME:-}" ]; then
-    tmux send-keys -t "$SESSION" "export HOME='$JHT_HOME'" C-m
+    jht_spawn_tmux send-keys -t "$SESSION" "export HOME='$JHT_HOME'" C-m
   fi
   # Propagate our PATH into the tmux pane: a fresh interactive bash
   # re-reads /etc/profile and ~/.bashrc which can clobber the PATH
@@ -1213,24 +1219,24 @@ send_env_vars() {
   # gli agenti usano per interagire con l'UI web senza toccare JSON/shell
   # quoting a mano. Da lì scriviamo chat.jsonl in modo sicuro.
   AGENT_TOOLS_DIR="/app/agents/_tools"
-  tmux send-keys -t "$SESSION" "export PATH='${AGENT_TOOLS_DIR}:$PATH'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export PATH='${AGENT_TOOLS_DIR}:$PATH'" C-m
   # KIMI_CLI_NO_AUTO_UPDATE disabilita il blocking gate di kimi. Lo
   # esportiamo sempre (anche quando il provider non è kimi) perché è
   # innocuo se il binario non lo legge.
-  tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export KIMI_CLI_NO_AUTO_UPDATE=1" C-m
   # KIMI_SHARE_DIR esplicito: kimi-cli risolve di default a $HOME/.kimi,
   # ma quando lanciato in tmux/subprocess in una work_dir diversa da
   # quella del primo /login risulta "LLM not set" (issue osservato
   # 2026-05-16, vedi github.com/MoonshotAI/kimi-cli issue #1983 sui
   # subagents/sibling processes). Settare la env esplicita forza il
   # path della share dir e le credentials OAuth diventano visibili.
-  tmux send-keys -t "$SESSION" "export KIMI_SHARE_DIR='$JHT_HOME/.kimi'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
-  tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export KIMI_SHARE_DIR='$JHT_HOME/.kimi'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_HOME='$JHT_HOME'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_USER_DIR='$JHT_USER_DIR'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_DB='$JHT_DB'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_CONFIG='$JHT_CONFIG'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_AGENT_DIR='$AGENT_DIR'" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "export JHT_AGENT_NAME='$AGENT_NAME'" C-m
   send_optional_env bash
 }
 
@@ -1241,25 +1247,33 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
   # `9>&-` come nel ramo container qui sotto: anche questa new-session può
   # forkare il server tmux, che sopravvive a start-agent.sh col fd 9 aperto.
-  tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 9>&-
+  #
+  # Tetto di tempo come nel ramo container: questa new-session gira col lock
+  # in mano, e un client appeso qui lo terrebbe per sempre.
+  _ns_rc=0
+  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 9>&- || _ns_rc=$?
+  if [ "$_ns_rc" -ne 0 ]; then
+    echo "Error: 'tmux new-session' for '$SESSION' (PowerShell) failed (rc=$_ns_rc; 124 = did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s)." >&2
+    exit 1
+  fi
   sleep 2
-  tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "Set-Location '${WIN_AGENT_DIR}'" Enter
   sleep 1
-  tmux send-keys -t "$SESSION" "\$env:JHT_HOME='$JHT_HOME'" Enter
-  tmux send-keys -t "$SESSION" "\$env:JHT_USER_DIR='$JHT_USER_DIR'" Enter
-  tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
-  tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
-  tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
-  tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_HOME='$JHT_HOME'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_USER_DIR='$JHT_USER_DIR'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_DB='$JHT_DB'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_CONFIG='$JHT_CONFIG'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_DIR='$AGENT_DIR'" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "\$env:JHT_AGENT_NAME='$AGENT_NAME'" Enter
   # Le stesse deroghe del ramo bash: qui una env dell'ambiente bash non
   # attraversa PowerShell in nessun modo implicito, quindi se non la si
   # scrive a mano, per l'agente Windows non esiste (issue #132).
   send_optional_env powershell
-  tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
+  jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
   if [ "$CLI_BIN" != "python3" ]; then
     # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
     sleep 8
-    tmux send-keys -t "$SESSION" Enter
+    jht_spawn_tmux send-keys -t "$SESSION" Enter
   fi
 else
   # -x/-y: dimensioni pane senza client attaccato. Di default tmux usa
@@ -1374,7 +1388,7 @@ else
     exit 1
   fi
   send_env_vars
-  tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
+  jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
   # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
   # con default "1. No, exit" → blind Enter killa claude → CAPITANO/SENTINELLA
