@@ -55,6 +55,7 @@ Una riga JSON su stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: compilata, fermata prima del bottone, niente inviato | posizione successiva |
 | `denied` | 1 | il cancello ha rifiutato (consenso spento, flag revocato, già inviata) | posizione successiva; mai ritentare |
 | `blocked_human` | 3 | serve una persona; l'utente è già stato avvisato | posizione successiva; mai ritentare |
+| `email_channel` | 4 | il controllo di candidatura è un link `mailto:`, non un form; il checkpoint contiene `channel: email` e il `mailto_href` grezzo | segui la skill `email-application-flow` per questa posizione; non compilare mai un form web per lei |
 | `error` | 2 | profilo o CV illeggibile, argomenti sbagliati | fermati: `[BLOCKED]` al Capitano |
 
 ## `blocked_human` — cosa significa e cosa fai
@@ -69,6 +70,7 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | il CV non si riesce ad allegare |
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | ancora nessuna ricetta per questa pagina, o il form non è quello che la ricetta conosce |
 | `greenhouse_redirect_untrusted` | durante il flusso la pagina Greenhouse è uscita dai suoi tre host fidati |
+| `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | due indirizzi mailto di candidatura diversi, oppure il form di candidatura, i suoi campi o il suo bottone di invio non stanno in un unico form (newsletter, footer e form demo non ne fanno mai parte) |
 | `form_error` / `field_invalid` / `submit_unavailable` | il form segnala un errore, il formato di un campo è rifiutato, o il bottone di invio manca o è disabilitato |
 | `url_refused` / `checkpoint_invalid` | l'URL della candidatura non ha passato il controllo sugli indirizzi pubblici, o il checkpoint salvato non si legge |
 | `page_unavailable` / `browser_uncertainty` | la pagina o il browser hanno ceduto a metà flusso |

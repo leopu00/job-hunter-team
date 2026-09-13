@@ -7,8 +7,11 @@ checkpoint.  Filling steps are replayed idempotently after a browser restart;
 submission is different: ``submit_started`` is persisted *before* the click,
 and an uncertain outcome is never clicked again.
 
-The complete public-form recipes are Ashby and Greenhouse.  A real submit has
-four hard conditions:
+The complete public-form recipes are Ashby and Greenhouse.  A vacancy whose
+application control is a ``mailto:`` link is not a missing form: the flow stops
+in ``email_channel`` and records the raw ``mailto_href`` in the checkpoint for
+the email channel (``email_application.py``), which owns everything after
+that.  A real submit has four hard conditions:
 
 * the phase-A gate allows this position at start and immediately before click;
 * every required value comes from the candidate profile (nothing is guessed);
@@ -58,6 +61,87 @@ GREENHOUSE_HOSTS = frozenset(
     }
 )
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
+EMAIL_CHANNEL_STATE = "email_channel"
+
+# Collect every control that would hand the application to a mail client: an
+# anchor, a form action, or a button whose click handler/data attribute holds a
+# mailto: target.  Only the raw attribute text is returned — parsing To, CC,
+# subject and body belongs to the email channel, not to the browser flow.
+_MAILTO_CONTROLS_JS = r"""
+() => {
+  const out = [];
+  const rawMailto = (value) => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (/^mailto:/i.test(trimmed)) return trimmed;
+    const inScript = trimmed.match(/mailto:[^'"`]*/i);
+    return inScript ? inScript[0] : null;
+  };
+  const labelOf = (element) => [
+    element.innerText || "",
+    element.getAttribute("value") || "",
+    element.getAttribute("aria-label") || "",
+    element.getAttribute("title") || "",
+  ].join(" ").replace(/\s+/g, " ").trim().slice(0, 200);
+  const push = (element, href) => { if (href) out.push({ href, label: labelOf(element) }); };
+  document.querySelectorAll("a[href]").forEach((a) => {
+    const href = a.getAttribute("href") || "";
+    if (/^\s*mailto:/i.test(href)) push(a, href.trim());
+  });
+  document.querySelectorAll("button, input[type=button], input[type=submit], [role=button]").forEach((el) => {
+    const direct = ["onclick", "formaction", "data-href", "data-url", "data-mailto"]
+      .map((name) => rawMailto(el.getAttribute(name))).find(Boolean);
+    if (direct) push(el, direct);
+  });
+  document.querySelectorAll("form[action]").forEach((form) => {
+    const href = rawMailto(form.getAttribute("action"));
+    if (!href || !/^mailto:/i.test(href)) return;
+    const submit = form.querySelector("button[type=submit], input[type=submit], button:not([type])");
+    push(submit || form, href);
+  });
+  return out;
+}
+"""
+# An application control, not "email us with questions": the visible label must
+# say apply/application (a few languages the CLOSER meets).  A bare address in
+# the footer is a contact, and a contact is not a channel.
+_MAILTO_APPLY_LABEL = re.compile(
+    r"\b(apply|application|send\s+(?:us\s+)?(?:your\s+)?(?:cv|resume|application)|"
+    r"candidat\w*|bewerb\w*|postul\w*|solicit\w*|invia\w*\s+(?:il\s+)?cv)\b",
+    re.I,
+)
+
+
+def mailto_application_href(page) -> str | None:
+    """Return the raw href of the page's single mailto application control.
+
+    ``None`` when no apply-labelled control targets mailto:.  Several controls
+    are fine when they carry the same href (header and footer buttons); two
+    different targets are ambiguous and stop for a human.
+    """
+    try:
+        controls = page.evaluate(_MAILTO_CONTROLS_JS) or []
+    except Exception:
+        return None
+    hrefs = []
+    for control in controls:
+        href = str(control.get("href") or "").strip()
+        label = str(control.get("label") or "")
+        if not href or not _MAILTO_APPLY_LABEL.search(label):
+            continue
+        if href not in hrefs:
+            hrefs.append(href)
+    if not hrefs:
+        return None
+    if len(hrefs) > 1:
+        raise BlockedHuman(
+            "mailto_ambiguous",
+            "More than one different mailto application address was found",
+            "detect",
+        )
+    if len(hrefs[0]) > 4000:
+        raise BlockedHuman("mailto_invalid", "The mailto application link is implausibly long", "detect")
+    return hrefs[0]
 
 
 def _utc_now() -> str:
@@ -192,6 +276,10 @@ class FlowCheckpoint:
     resume_state: str = ""
     receipt: dict[str, Any] | None = None
     answer_request: dict[str, Any] | None = None
+    # Set only when the application control is a mailto: link.  The browser
+    # flow stops there; the email channel reads these two fields.
+    channel: str = ""
+    mailto_href: str = ""
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -211,7 +299,13 @@ class FlowCheckpoint:
             raise FlowError("checkpoint has an unknown format")
         if raw.get("position_id") != int(position_id) or raw.get("url") != url:
             raise FlowError("checkpoint belongs to a different application")
-        valid_states = set(STEP_ORDER) | {"blocked_human", "denied", "dry_run", "complete"}
+        valid_states = set(STEP_ORDER) | {
+            "blocked_human",
+            "denied",
+            "dry_run",
+            "complete",
+            EMAIL_CHANNEL_STATE,
+        }
         if raw.get("state") not in valid_states:
             raise FlowError("checkpoint has an unknown state")
         completed = raw.get("completed_steps")
@@ -225,6 +319,12 @@ class FlowCheckpoint:
             raw.get("answer_request"), dict
         ):
             raise FlowError("checkpoint has an invalid answer request")
+        if raw.get("channel", "") not in {"", "email"} or not isinstance(raw.get("mailto_href", ""), str):
+            raise FlowError("checkpoint has an invalid application channel")
+        if raw.get("state") == EMAIL_CHANNEL_STATE and not (
+            raw.get("channel") == "email" and str(raw.get("mailto_href", "")).lower().startswith("mailto:")
+        ):
+            raise FlowError("checkpoint email channel has no mailto target")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -573,8 +673,36 @@ class AshbyRecipe:
                 return True
         return False
 
+    def form_present(self, page) -> bool:
+        return page.locator(self.FIELD_ENTRY).count() > 0
+
+    def _container(self, page, step: str):
+        """The one application form every Ashby action is confined to.
+
+        Fields, the CV upload and the submit button are looked up inside it,
+        never on the whole page: a newsletter, search box or demo form next to
+        the application is not part of the application.  A field entry outside
+        that form means the page is not the layout the recipe knows.
+        """
+        forms = page.locator("form", has=page.locator(self.FIELD_ENTRY))
+        if forms.count() != 1:
+            raise BlockedHuman(
+                "application_form_ambiguous",
+                "The Ashby application form cannot be identified as exactly one form",
+                step,
+            )
+        container = forms.first
+        if container.locator(self.FIELD_ENTRY).count() != page.locator(self.FIELD_ENTRY).count():
+            raise BlockedHuman(
+                "application_field_outside_form",
+                "An Ashby application field sits outside the application form",
+                step,
+            )
+        return container
+
     def open_form(self, page) -> None:
         if page.locator(self.FIELD_ENTRY).count():
+            self._container(page, "detect")
             return
         apply_link = page.get_by_text("Apply for this Job", exact=False)
         if not apply_link.count():
@@ -598,9 +726,10 @@ class AshbyRecipe:
                 "Ashby Apply button did not open an application form",
                 "detect",
             ) from exc
+        self._container(page, "detect")
 
     def fill_core(self, page) -> None:
-        entries = page.locator(self.FIELD_ENTRY)
+        entries = self._container(page, "fill").locator(self.FIELD_ENTRY)
         for index in range(entries.count()):
             entry = entries.nth(index)
             label = self._label(entry)
@@ -641,7 +770,7 @@ class AshbyRecipe:
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
             raise BlockedHuman("cv_missing", "The selected CV file is missing or empty", "upload_cv")
-        resume = page.locator("#_systemfield_resume")
+        resume = self._container(page, "upload_cv").locator("#_systemfield_resume")
         if resume.count() != 1 or (resume.first.get_attribute("type") or "") != "file":
             raise BlockedHuman(
                 "resume_field_missing",
@@ -728,7 +857,7 @@ class AshbyRecipe:
         return None
 
     def fill_screening(self, page) -> None:
-        entries = page.locator(self.FIELD_ENTRY)
+        entries = self._container(page, "screening").locator(self.FIELD_ENTRY)
         for index in range(entries.count()):
             entry = entries.nth(index)
             field_path = self._field_path(entry)
@@ -904,7 +1033,8 @@ class AshbyRecipe:
         if error:
             raise BlockedHuman("form_error", "Ashby reports a form validation error", "review")
 
-        entries = page.locator(self.FIELD_ENTRY)
+        container = self._container(page, "review")
+        entries = container.locator(self.FIELD_ENTRY)
         for index in range(entries.count()):
             entry = entries.nth(index)
             if not self._required(entry):
@@ -929,7 +1059,15 @@ class AshbyRecipe:
                         "review",
                     )
 
-        submit = page.locator(self.SUBMIT)
+        # The pre-submit boundary exists only if the final button belongs to the
+        # application form: a submit-looking button elsewhere is not it.
+        if page.locator(self.SUBMIT).count() != container.locator(self.SUBMIT).count():
+            raise BlockedHuman(
+                "submit_outside_form",
+                "An Ashby submit button sits outside the application form",
+                "review",
+            )
+        submit = container.locator(self.SUBMIT)
         if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
             raise BlockedHuman(
                 "submit_unavailable",
@@ -940,7 +1078,7 @@ class AshbyRecipe:
     def submit(self, page) -> None:
         # Called once only.  The checkpoint that makes retries impossible is
         # persisted by ApplicationFlow before entering this method.
-        page.locator(self.SUBMIT).click(timeout=10_000)
+        self._container(page, "submit").locator(self.SUBMIT).click(timeout=10_000)
 
 
 class GreenhouseRecipe:
@@ -1151,6 +1289,9 @@ class GreenhouseRecipe:
                 f"Greenhouse did not retain the answer for: {_safe_label(label)}",
                 step,
             )
+
+    def form_present(self, page) -> bool:
+        return page.locator(self.FORM).count() > 0
 
     def open_form(self, page) -> None:
         forms = page.locator(self.FORM)
@@ -1841,6 +1982,19 @@ class ApplicationFlow:
                 LOG.error("blocked_human notification failed: %s", type(exc).__name__)
         return FlowResult("blocked_human", checkpoint.state, blocked.reason)
 
+    def _email_channel(self, checkpoint: FlowCheckpoint, page) -> FlowResult | None:
+        href = mailto_application_href(page)
+        if href is None:
+            return None
+        checkpoint.channel = "email"
+        checkpoint.mailto_href = href
+        checkpoint.state = EMAIL_CHANNEL_STATE
+        checkpoint.blocked_reason = ""
+        checkpoint.blocked_detail = ""
+        checkpoint.resume_state = ""
+        checkpoint.save(self.checkpoint_path)
+        return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
+
     def _deny(self, checkpoint: FlowCheckpoint, verdict: Any) -> FlowResult:
         checkpoint.state = "denied"
         checkpoint.blocked_reason = str(getattr(verdict, "reason", "gate_denied"))
@@ -2256,6 +2410,11 @@ class ApplicationFlow:
                 _DeniedVerdict("gate_mode_unknown", "gate returned no recognised application mode"),
             )
 
+        if checkpoint.state == EMAIL_CHANNEL_STATE:
+            # Detection already handed this position to the email channel; a
+            # rerun must not reopen the page and "find" a form again.
+            return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
+
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
             return waiting
@@ -2310,6 +2469,9 @@ class ApplicationFlow:
                     self._navigate(active_page)
                 detection = detect_ats(self.url, active_page.content())
                 if detection.platform not in SUPPORTED_PLATFORMS:
+                    email = self._email_channel(checkpoint, active_page)
+                    if email is not None:
+                        return email
                     reason = "ats_conflict" if detection.conflict else "ats_unsupported"
                     raise BlockedHuman(
                         reason,
@@ -2318,6 +2480,14 @@ class ApplicationFlow:
                     )
                 checkpoint.platform = detection.platform
                 recipe = self._recipe(detection.platform)
+                # Before any click: an Apply control that opens a mail client is
+                # the application channel.  Clicking it would open nothing in
+                # the browser and read as a missing form.  A recognised form on
+                # the page still wins over an "email us" link next to it.
+                if not recipe.form_present(active_page):
+                    email = self._email_channel(checkpoint, active_page)
+                    if email is not None:
+                        return email
                 injected_blank = not navigate and active_page.url == "about:blank"
                 self._assert_recipe_page(
                     active_page,
@@ -2501,6 +2671,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if result.status == "denied":
         return 1
+    if result.status == EMAIL_CHANNEL_STATE:
+        # Not a failure and not a human block: the email channel takes over
+        # from the checkpoint's channel/mailto_href.
+        return 4
     return 3
 
 
