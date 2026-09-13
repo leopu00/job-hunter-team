@@ -220,6 +220,30 @@ exit 99
 """
 
 
+def _skip_unless_the_ceiling_exists(bash: str) -> None:
+    """Skip esplicito se la shell che eseguira' il guard non trova ne'
+    `timeout` ne' `gtimeout` (macOS senza coreutils).
+
+    `jht_timeout` li cerca nel PATH di quella shell, quindi la sonda gira
+    con lo stesso interprete e lo stesso ambiente dello script, non con
+    `shutil.which` di Python. Senza tetto il caso `wedged` non ha niente da
+    misurare: andrebbe rosso per l'host, e un verde a vuoto sarebbe peggio.
+    """
+    probe = subprocess.run(
+        [bash, "-c", "command -v timeout || command -v gtimeout"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if probe.returncode != 0:
+        pytest.skip(
+            "ne' `timeout` ne' `gtimeout` nel PATH: jht_timeout esegue il "
+            "comando senza tetto per scelta (.launcher/daemon-lib.sh), "
+            "percio' il caso wedged non ha un limite da verificare su questo "
+            "host (su macOS: brew install coreutils)"
+        )
+
+
 @pytest.mark.parametrize(
     ("behaviour", "expect_exit_zero", "expect_warning"),
     [
@@ -243,7 +267,13 @@ def test_the_guard_behaves_on_all_three_answers(
     il caso `wedged` misura il tempo trascorso, e un bash che non esegue i
     binari esterni riporterebbe 0 secondi facendo concludere che il tetto non
     scatta — un rosso che parla dell'ambiente, non del codice.
+
+    Per la stessa ragione il caso `wedged` chiede prima se il tetto esiste:
+    `jht_timeout` senza `timeout`/`gtimeout` esegue il comando nudo per
+    scelta (daemon-lib.sh), e allora lo stub dorme i suoi 30s interi.
     """
+    if behaviour == "wedged":
+        _skip_unless_the_ceiling_exists(capable_bash)
     script = (
         "set -euo pipefail\n"
         "source .launcher/daemon-lib.sh\n"

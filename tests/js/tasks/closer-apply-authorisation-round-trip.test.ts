@@ -270,6 +270,142 @@ describe("il cursore avanza sul solo permesso", () => {
   });
 });
 
+describe("la risposta al form vale come nuova autorizzazione", () => {
+  it("aggiorna reply, autore e istante nella stessa transazione locale", async () => {
+    const { home, dbPath } = box();
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE pending_user_messages (
+        id INTEGER PRIMARY KEY, agent TEXT, body TEXT, kind TEXT,
+        related_position_id INTEGER, source_action TEXT, source_payload TEXT,
+        user_reply TEXT, user_reply_at TEXT, acknowledged_at TEXT
+      );
+      INSERT INTO pending_user_messages (
+        id, agent, body, kind, related_position_id, source_action, source_payload
+      ) VALUES (
+        3, 'closer', 'Fixture question', 'question', 7,
+        'closer_application_answer',
+        '{"version":1,"position_id":7,"key":"work_mode","label":"Work mode?","field_type":"radio","options":["Remote","Hybrid"]}'
+      );
+      UPDATE positions SET apply_requested = 1,
+        apply_requested_at = '2026-09-12T09:00:00.000Z',
+        apply_requested_by = 'user_web' WHERE id = 7;
+    `);
+    db.close();
+    vi.resetModules();
+    const { replyPendingMessageLocal } = await import(
+      "../../../web/lib/pending-message-reply-local"
+    );
+
+    expect(replyPendingMessageLocal("3", "Remote")).toBe(true);
+
+    const observed = new DatabaseSync(dbPath);
+    const row = observed
+      .prepare(
+        `SELECT m.user_reply, m.user_reply_at, p.apply_requested,
+                p.apply_requested_at, p.apply_requested_by
+           FROM pending_user_messages m
+           JOIN positions p ON p.id = m.related_position_id
+          WHERE m.id = 3`,
+      )
+      .get() as Record<string, unknown>;
+    observed.close();
+    expect(row.user_reply).toBe("Remote");
+    expect(row.user_reply_at).toBe(row.apply_requested_at);
+    expect(row.apply_requested).toBe(1);
+    expect(row.apply_requested_by).toBe("user_local");
+    expect(Date.parse(String(row.apply_requested_at))).toBeGreaterThan(
+      Date.parse("2026-09-12T09:00:00.000Z"),
+    );
+  });
+
+  it("rifiuta una scelta non esatta senza consumare risposta o permesso", async () => {
+    const { dbPath } = box();
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE pending_user_messages (
+        id INTEGER PRIMARY KEY, agent TEXT, body TEXT, kind TEXT,
+        related_position_id INTEGER, source_action TEXT, source_payload TEXT,
+        user_reply TEXT, user_reply_at TEXT, acknowledged_at TEXT
+      );
+      INSERT INTO pending_user_messages (
+        id, agent, body, kind, related_position_id, source_action, source_payload
+      ) VALUES (
+        5, 'closer', 'Fixture question', 'question', 7,
+        'closer_application_answer',
+        '{"version":1,"position_id":7,"key":"work_mode","label":"Work mode?","field_type":"radio","options":["Remote","Hybrid"]}'
+      );
+    `);
+    db.close();
+    vi.resetModules();
+    const { replyPendingMessageLocal } = await import(
+      "../../../web/lib/pending-message-reply-local"
+    );
+
+    expect(() => replyPendingMessageLocal("5", "remote")).toThrow(
+      "closer_answer_not_exact_option",
+    );
+
+    const observed = new DatabaseSync(dbPath);
+    const row = observed
+      .prepare(
+        `SELECT m.user_reply, p.apply_requested, p.apply_requested_at
+           FROM pending_user_messages m
+           JOIN positions p ON p.id = m.related_position_id
+          WHERE m.id = 5`,
+      )
+      .get() as Record<string, unknown>;
+    observed.close();
+    expect(row).toEqual({
+      user_reply: null,
+      apply_requested: 0,
+      apply_requested_at: null,
+    });
+  });
+
+  it("il path cloud registra lo stesso permesso come user_web", () => {
+    const src = leggi("web/app/api/pending-messages/[id]/reply/route.ts");
+    expect(src).toContain('apply_requested_by: "user_web"');
+    expect(src).toContain("application_reauthorisation_not_observed");
+  });
+
+  it("una normale risposta in chat non autorizza candidature", async () => {
+    const { home, dbPath } = box();
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE pending_user_messages (
+        id INTEGER PRIMARY KEY, agent TEXT, body TEXT, kind TEXT,
+        related_position_id INTEGER, source_action TEXT, source_payload TEXT,
+        user_reply TEXT, user_reply_at TEXT, acknowledged_at TEXT
+      );
+      INSERT INTO pending_user_messages (
+        id, agent, body, kind, related_position_id
+      ) VALUES (4, 'assistente', 'Fixture chat', 'question', 7);
+    `);
+    db.close();
+    vi.resetModules();
+    const { replyPendingMessageLocal } = await import(
+      "../../../web/lib/pending-message-reply-local"
+    );
+
+    expect(replyPendingMessageLocal("4", "Va bene")).toBe(true);
+
+    const observed = new DatabaseSync(dbPath);
+    const position = observed
+      .prepare(
+        "SELECT apply_requested, apply_requested_at, apply_requested_by " +
+          "FROM positions WHERE id = 7",
+      )
+      .get() as Record<string, unknown>;
+    observed.close();
+    expect(position).toEqual({
+      apply_requested: 0,
+      apply_requested_at: null,
+      apply_requested_by: null,
+    });
+  });
+});
+
 // ── I pin sulle sorgenti ─────────────────────────────────────────────────────
 //
 // Le due select desired-state sono GEMELLE (la route Vercel e il lettore

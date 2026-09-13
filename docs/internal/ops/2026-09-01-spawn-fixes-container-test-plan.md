@@ -370,6 +370,19 @@ almeno cinque agenti diversi), ma va rilavorata prima di essere provata su un te
 
 **Ambiente T1-T4:** Mac locale con Colima. Immagine costruita dal sorgente del branch (`6572c49f`), `JHT_HOME` di test vuota, nessun profilo reale, CLI installato dal pin e non autenticato (spesa zero). Il primo avvio ha lasciato 4 pane su `bash` per il trust dialog della home sintetica, non accettato (difetto dell'ambiente di test, non del fix). Il trust è stato preaccettato come per un utente reale e il team è stato riavviato da zero con un server tmux nuovo: tutti gli esiti sopra vengono da questo secondo avvio.
 
+**Seconda prova, dal vivo in produzione (2026-09-13, VPS dell'operatore, provider codex).** Immagine di `master` `0db71759`, che contiene il merge `a7b5a2e18`; team ripartito da zero alle 13:45Z.
+
+*Prima* del redeploy il difetto F1 era ancora attivo: un `tmux: server` (pid 464) teneva un fd su `start-ASSISTENTE.lock.stale-tmux-server-464-20260821T1100Z`, e nel watchdog c'erano **2680** `start FAILED`.
+
+| Test | Esito | Note |
+|---|---|---|
+| T1 | ✅ PASS | primo server tmux del nuovo container, nato dallo spawn dell'ASSISTENTE |
+| T2 | ✅ PASS | FREE a +10/+60/+150/+300s dopo lo spawn di T3 |
+| T3 | ✅ PASS | respawn in 2,25s, `rc=0`, `pane_current_command=node` (Codex gira su node, non è una bash nuda) |
+| T4 | ✅ PASS | `start-agent.sh scout 1` real 0m2.328s, `rc=0`; ASSISTENTE, CAPITANO, DOTTORE, MENTOR, SCOUT-1, SCOUT-2 e SCOUT-6 tutti su `node`; 0 `start FAILED` e 0 `concurrent spawn` dopo il redeploy, `agent-spawn-failures.tsv` assente |
+
+La SENTINELLA mancava per un containment preesistente, non per lo spawn.
+
 ### Se qualcosa va storto
 
 I fix sono su `lee-launcher-fixes` e `master` non è stato toccato: il ripristino è

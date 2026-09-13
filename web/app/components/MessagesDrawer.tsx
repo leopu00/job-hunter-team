@@ -38,13 +38,16 @@ import { chatTurnDelivery, hasStalledTurn } from "@/lib/chat-delivery";
 import { noteServerTime, serverNow } from "@/lib/server-clock";
 import { CHAT_DELIVERY_T } from "@/lib/chat-delivery.i18n";
 import {
+  isApplicationAnswerRequest,
   optimisticUserTurn,
   postAcks,
   postChat,
+  postReply,
   retryChatSignal,
   unreadIdsOf,
   withAgentAcked,
   withConfirmedTurn,
+  withReply,
   withoutTurn,
 } from "@/lib/messages-thread";
 import { MAX_CHAT_BODY, isChatAgent } from "@/lib/chat-agents";
@@ -121,6 +124,8 @@ export default function MessagesDrawer() {
   const [unread, setUnread] = useState(0);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [sendingAnswerId, setSendingAnswerId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryState, setRetryState] = useState<
@@ -327,6 +332,32 @@ export default function MessagesDrawer() {
       setError((e as Error).message);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleApplicationAnswer(message: PendingMessage) {
+    const answer = (answerDrafts[message.id] ?? "").trim();
+    if (!answer || sendingAnswerId) return;
+    setSendingAnswerId(message.id);
+    setError(null);
+    try {
+      await postReply(message.id, answer);
+      const now = new Date().toISOString();
+      setMessages((rows) => withReply(rows, message.id, answer, now));
+      setAnswerDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[message.id];
+        return next;
+      });
+    } catch (e) {
+      const errorMessage = (e as Error).message;
+      setError(
+        errorMessage === "closer_answer_not_exact_option"
+          ? tr("answer_invalid")
+          : errorMessage,
+      );
+    } finally {
+      setSendingAnswerId(null);
     }
   }
 
@@ -608,6 +639,55 @@ export default function MessagesDrawer() {
                               >
                                 {tr("see_position")}
                               </Link>
+                            )}
+                            {isApplicationAnswerRequest(m) && (
+                              <div
+                                className="mt-3 pt-3 border-t border-[var(--color-border)]"
+                                data-testid={`closer-answer-${m.id}`}
+                              >
+                                <label
+                                  htmlFor={`closer-answer-input-${m.id}`}
+                                  className="block text-[10px] leading-relaxed text-[var(--color-muted)] mb-1.5"
+                                >
+                                  {tr("answer_exact_hint")}
+                                </label>
+                                <textarea
+                                  id={`closer-answer-input-${m.id}`}
+                                  value={answerDrafts[m.id] ?? ""}
+                                  onChange={(event) =>
+                                    setAnswerDrafts((drafts) => ({
+                                      ...drafts,
+                                      [m.id]: event.target.value,
+                                    }))
+                                  }
+                                  rows={2}
+                                  maxLength={4000}
+                                  disabled={sendingAnswerId === m.id}
+                                  placeholder={tr(
+                                    "application_answer_placeholder",
+                                  )}
+                                  className="w-full px-2.5 py-2 text-[11px] bg-[var(--color-panel)] border border-[var(--color-border)] rounded resize-y text-[var(--color-base)] focus:outline-none focus:border-[var(--color-border-glow)] disabled:opacity-50"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleApplicationAnswer(m)
+                                  }
+                                  disabled={
+                                    !!sendingAnswerId ||
+                                    !(answerDrafts[m.id] ?? "").trim()
+                                  }
+                                  className="mt-2 px-3 py-1.5 rounded border text-[10px] font-semibold cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default"
+                                  style={{
+                                    color: "var(--color-green)",
+                                    borderColor: "var(--color-green)",
+                                  }}
+                                >
+                                  {sendingAnswerId === m.id
+                                    ? tr("saving_answer")
+                                    : tr("save_answer")}
+                                </button>
+                              </div>
                             )}
                           </div>
                           {/* Risposta appesa al messaggio dell'agente: è il
