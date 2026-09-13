@@ -36,6 +36,6 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   }
 }
