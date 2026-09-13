@@ -226,7 +226,7 @@ def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_pat
             # prima rispondeva a capture-pane qualunque fosse il target, cioe' era
             # piu' permissivo del tmux reale — ed e' il motivo per cui il bug del
             # prefisso `=` e' sopravvissuto a questo test ed e' finito in produzione.
-            '''    list-panes) case "$3" in "=SCRITTORE-1"|SCRITTORE-1) echo "%7" ;; *) return 1 ;; esac ;;''',
+            '''    list-panes) case "$3" in "=SCRITTORE-1:"|"=SCRITTORE-1"|SCRITTORE-1) echo "%7" ;; *) return 1 ;; esac ;;''',
             '''    capture-pane) case "$3" in %[0-9]*) echo "preserved pane before enforcement" ;; *) return 1 ;; esac ;;''',
             '    kill-session) return 0 ;;',
             '  esac',
@@ -280,12 +280,15 @@ def test_capture_pane_is_never_targeted_with_the_session_prefix():
 
 def test_the_containment_capture_resolves_an_exact_pane_id():
     """L'esattezza non va persa tornando al nome nudo: si risolve il pane_id
-    con list-panes (target sessione, dove `=` e' valido) e si cattura quello,
+    con list-panes (target `=NOME:`, dove `=` e' valido) e si cattura quello,
     che e' univoco su tutto il server tmux."""
     src = WATCHDOG_PATH.read_text(encoding="utf-8")
     body = src[src.index("capture_for_containment()") :]
     body = body[: body.index("\n}\n") + 3]
-    assert "list-panes -t \"=$session\"" in body, body
+    # `=NOME:` e non `=NOME`: il target di list-panes e' una finestra, e senza
+    # i due punti un NOME assente risolve sui pane di una sessione sorella
+    # (tests/test_launcher_tmux_targets_anchored.py).
+    assert "list-panes -t \"=$session:\"" in body, body
     assert "#{pane_id}" in body, body
     assert 'capture-pane -t "$pane_id"' in body, body
     # e una cattura vuota non deve passare per evidenza

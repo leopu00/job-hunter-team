@@ -209,10 +209,20 @@ is_session_alive() {
   # (kimi/Kimi/claude/codex/node/python/python3), la sessione è zombie
   # e va riavviata. La whitelist include 'node'/'python*' per
   # supportare CLI custom che usano runtime di base (rare ma possibili).
+  #
+  # Target ANCORATI (2026-09-13). tmux risolve un nome esatto, poi per
+  # PREFISSO: con SENTINELLA morta e SENTINELLA-WORKER viva, `has-session -t
+  # SENTINELLA` rispondeva "viva", il respawn non partiva mai, e il kill del
+  # ramo ZOMBIE poteva atterrare sulla sorella. Due forme, perche' `=` vale
+  # solo sulla parte SESSIONE del target:
+  #   - `=NOME`  per i comandi a target sessione (has-session, kill-session);
+  #   - `=NOME:` per quelli a target finestra/pane (list-panes, display-message,
+  #     capture-pane, send-keys). Misurato su tmux 3.6: `list-panes -t =NOME`
+  #     SENZA i due punti, con NOME assente, risponde con i pane della sorella.
   local session="$1"
-  tmux has-session -t "$session" 2>/dev/null || return 1
+  tmux has-session -t "=$session" 2>/dev/null || return 1
   local cmd
-  cmd=$(tmux list-panes -t "$session" -F '#{pane_current_command}' 2>/dev/null | head -1)
+  cmd=$(tmux list-panes -t "=$session:" -F '#{pane_current_command}' 2>/dev/null | head -1)
   case "$cmd" in
     [Kk]imi|claude|Claude|codex|Codex|node|python|python3) return 0 ;;
     *)
@@ -220,7 +230,7 @@ is_session_alive() {
       # qui per audit, il messaggio "session zombie — killing" è loud
       # apposta perché è un evento raro che vogliamo notare.
       log "agent $session: ZOMBIE detected (pane_current_command='$cmd') — killing session"
-      tmux kill-session -t "$session" 2>/dev/null || true
+      tmux kill-session -t "=$session" 2>/dev/null || true
       return 1
       ;;
   esac
@@ -559,7 +569,7 @@ ensure_agent() {
 session_age_h() {
   # Età della sessione tmux in ore intere (now - session_created).
   local session="$1" created now
-  created=$(tmux display-message -p -t "$session" '#{session_created}' 2>/dev/null) || return 1
+  created=$(tmux display-message -p -t "=$session:" '#{session_created}' 2>/dev/null) || return 1
   [ -z "$created" ] && return 1
   now=$(date -u +%s)
   echo $(( (now - created) / 3600 ))
@@ -580,7 +590,7 @@ maybe_refresh_sentinella() {
   age=$(session_age_h SENTINELLA) || return 0
   if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
     log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refreshing (kill+recreate) to clear the context"
-    if tmux kill-session -t SENTINELLA 2>/dev/null; then
+    if tmux kill-session -t =SENTINELLA 2>/dev/null; then
       INTENTIONAL_RECREATE_SESSION="SENTINELLA"
     fi
   fi
@@ -700,7 +710,7 @@ EOF
 $(session_role "$oldest")
 EOF
   log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (age only: context/PARKED/activity do NOT matter)"
-  if ! tmux kill-session -t "$oldest" 2>/dev/null; then
+  if ! tmux kill-session -t "=$oldest" 2>/dev/null; then
     return 0
   fi
   # I core li ricrea ensure_agent nello stesso tick (subito sotto nel loop);
@@ -886,12 +896,13 @@ capture_for_containment() {
   # sessione viva per 15 giorni contro una decisione esplicita di keep-down.
   #
   # L'esattezza voluta da chi ha scritto `=` resta, spostata dove e' valida:
-  # `list-panes` prende un target sessione (quindi `=` funziona) e ci da' il
-  # `pane_id`, che e' univoco per l'intero server tmux e non ammette
-  # risoluzione per prefisso. Se la sessione non esiste, list-panes fallisce e
-  # il percorso di errore e' quello di prima.
+  # `list-panes` ci da' il `pane_id`, che e' univoco per l'intero server tmux e
+  # non ammette risoluzione per prefisso. Il target di list-panes pero' e' una
+  # FINESTRA, non una sessione: `=NOME` senza i due punti, con NOME assente,
+  # restituisce i pane di una sorella (misurato su tmux 3.6) e la cattura
+  # finirebbe sulla sessione sbagliata. `=NOME:` fallisce, come deve.
   local pane_id
-  pane_id="$(tmux list-panes -t "=$session" -F '#{pane_id}' 2>/dev/null | head -1)"
+  pane_id="$(tmux list-panes -t "=$session:" -F '#{pane_id}' 2>/dev/null | head -1)"
   if [ -z "$pane_id" ]; then
     rm -f "$evidence" 2>/dev/null || true
     return 1

@@ -500,7 +500,9 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
 
 
 def session_exists(s):
-    return subprocess.run(["tmux", "has-session", "-t", s], capture_output=True).returncode == 0
+    # `=` = exact match: senza, tmux risolve per prefisso e SENTINELLA morta
+    # risulterebbe viva finche' vive SENTINELLA-WORKER.
+    return subprocess.run(["tmux", "has-session", "-t", f"={s}"], capture_output=True).returncode == 0
 
 
 # ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────
@@ -855,7 +857,7 @@ def _esc_all_sessions():
     paused = []
     for s in (l.strip() for l in out.splitlines() if l.strip()):
         try:
-            subprocess.run(["tmux", "send-keys", "-t", s, "Escape"],
+            subprocess.run(["tmux", "send-keys", "-t", f"={s}:", "Escape"],
                            capture_output=True, timeout=10)
             paused.append(s)
         except (subprocess.SubprocessError, OSError):
@@ -884,7 +886,7 @@ def _session_pane_signatures():
     for session in (ln.strip() for ln in out.stdout.splitlines() if ln.strip()):
         try:
             pane = subprocess.run(
-                ["tmux", "capture-pane", "-p", "-t", session, "-S", "-120"],
+                ["tmux", "capture-pane", "-p", "-t", f"={session}:", "-S", "-120"],
                 capture_output=True, timeout=10,
             )
         except (subprocess.SubprocessError, OSError):
@@ -900,7 +902,7 @@ def _esc_sessions(sessions):
     for session in sessions:
         try:
             res = subprocess.run(
-                ["tmux", "send-keys", "-t", session, "Escape"],
+                ["tmux", "send-keys", "-t", f"={session}:", "Escape"],
                 capture_output=True, timeout=10,
             )
         except (subprocess.SubprocessError, OSError):
@@ -2347,7 +2349,7 @@ def _kill_worker():
     """Killa SENTINELLA-WORKER in modo non bloccante."""
     try:
         subprocess.run(
-            ["tmux", "kill-session", "-t", WORKER_SESSION],
+            ["tmux", "kill-session", "-t", f"={WORKER_SESSION}"],
             capture_output=True, timeout=5,
         )
     except (subprocess.TimeoutExpired, OSError):

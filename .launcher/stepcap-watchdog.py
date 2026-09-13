@@ -306,6 +306,16 @@ def _tmux(*args, timeout: float = 20):
     return res.stdout
 
 
+def _pane_target(session: str) -> str:
+    """Target PANE ancorato: `=NOME:` e' l'unica forma esatta.
+
+    tmux risolve un nome nudo per PREFISSO (`SCOUT-1` trova `SCOUT-10`), e il
+    `=` da solo vale per i target sessione: su un target pane `=NOME` fallisce
+    sempre. Con i due punti la parte sessione e' esatta e il pane e' l'attivo.
+    """
+    return f"={session}:"
+
+
 def list_sessions():
     """[(nome, session_created)] di tutte le sessioni tmux vive."""
     out = _tmux("list-sessions", "-F", "#{session_name}|#{session_created}")
@@ -321,7 +331,7 @@ def list_sessions():
 
 
 def capture_pane(session: str):
-    return _tmux("capture-pane", "-p", "-t", session)
+    return _tmux("capture-pane", "-p", "-t", _pane_target(session))
 
 
 def is_worker_session(name: str) -> bool:
@@ -641,17 +651,17 @@ def send_resume(session: str, agent: str, message: str) -> bool:
         return False
     if _tmux("load-buffer", "-b", TMUX_BUFFER, str(path)) is None:
         return False
-    if _tmux("paste-buffer", "-b", TMUX_BUFFER, "-d", "-t", session) is None:
+    if _tmux("paste-buffer", "-b", TMUX_BUFFER, "-d", "-t", _pane_target(session)) is None:
         return False
     # Le TUI Ink non registrano l'Enter se arriva prima del render del testo.
     time.sleep(float(os.environ.get("JHT_STEPCAP_PASTE_SETTLE", "0.5")))
-    if _tmux("send-keys", "-t", session, "Enter") is None:
+    if _tmux("send-keys", "-t", _pane_target(session), "Enter") is None:
         return False
     if _active_provider() == "kimi":
         # Kimi può accodare il prompt: Ctrl-S ne forza il submit (stesso
         # accorgimento di jht-tmux-send). Innocuo se l'Enter è già passato.
         time.sleep(0.2)
-        _tmux("send-keys", "-t", session, "C-s")
+        _tmux("send-keys", "-t", _pane_target(session), "C-s")
     return True
 
 

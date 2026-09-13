@@ -99,7 +99,12 @@ def save(s):
 
 
 def target(a):
-    return a[a.index("-t") + 1] if "-t" in a else ""
+    # Come tmux: `=NOME` (sessione) e `=NOME:` (finestra/pane) sono il nome
+    # ESATTO. Il doppio non riproduce il prefix matching del nome nudo.
+    t = a[a.index("-t") + 1] if "-t" in a else ""
+    if t.startswith("="):
+        t = t[1:].split(":", 1)[0]
+    return t
 
 
 def render(sess):
@@ -541,7 +546,8 @@ def test_07_five_expired_sessions_are_not_refreshed_in_the_same_tick(tmux_factor
     killed = [c[c.index("-t") + 1] for c in tmux.calls("kill-session")]
     assert len(killed) == 1, f"più di un refresh nello stesso tick: {killed}"
     # ordinate per età DECRESCENTE: la più vecchia per prima
-    assert killed == ["SCOUT-2"], killed
+    # ancorato (`=`): un kill non deve poter atterrare su una sorella per prefisso
+    assert killed == ["=SCOUT-2"], killed
     assert len(tmux.sessions()) == 4
 
 

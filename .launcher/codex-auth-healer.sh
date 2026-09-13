@@ -158,7 +158,11 @@ while true; do
     role="$(role_of "$sess")"
     [ -z "$role" ] && continue
 
-    pane="$(tmux capture-pane -t "$sess" -p 2>/dev/null | tail -25)"
+    # Target ancorati: `=NOME:` sul pane, `=NOME` sul kill. Il nome viene da
+    # list-sessions e quindi esiste, ma fra la lista e il kill la sessione puo'
+    # sparire: a quel punto un target nudo risolverebbe per PREFISSO e il
+    # restart colpirebbe una sorella (CRITICO → CRITICO-S1, SCOUT-1 → SCOUT-10).
+    pane="$(tmux capture-pane -t "=$sess:" -p 2>/dev/null | tail -25)"
     echo "$pane" | grep -qaE "$AUTH_FAIL_RE" || continue
 
     # Cooldown per-agente: evita restart-storm se il file auth è davvero morto.
@@ -172,7 +176,7 @@ while true; do
     echo "$now" > "$cd_file"
 
     log "$sess: AUTH FAILURE detected ('session has ended'/refresh); restarting to reload the current auth.json"
-    tmux kill-session -t "$sess" 2>/dev/null
+    tmux kill-session -t "=$sess" 2>/dev/null
     sleep 1
 
     # Sessione EFFIMERA con nome non canonico (`CRITICO-S1`, spawnata dallo

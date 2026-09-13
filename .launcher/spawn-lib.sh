@@ -193,7 +193,9 @@ jht_spawn_kill_sessions() {
   existing=$(tmux ls 2>/dev/null | awk -F: '{print $1}' | grep -iE "$pattern" || true)
   for s in $existing; do
     echo "[$label] killing old session: $s"
-    tmux kill-session -t "$s" 2>/dev/null || true
+    # `=`: il nome viene da `tmux ls`, ma fra la lista e il kill puo' sparire;
+    # a quel punto un target nudo risolverebbe per prefisso su una sorella.
+    tmux kill-session -t "=$s" 2>/dev/null || true
   done
 }
 
@@ -436,10 +438,15 @@ jht_spawn_new_session() {
 jht_spawn_wait_repl() {
   local session="$1" cmd="$2" label="$3" role="$4" logs_dir="$5" src="$6"
   local repl_up=0 attempt=1 _i pane last_cmd ts_fail
+  # Target ancorati: la domanda "il REPL e' su?" posta a un nome nudo, con la
+  # sessione assente, risponderebbe col pane di una SORELLA per prefisso
+  # (CRITICO → CRITICO-S1) e dichiarerebbe partito un agente mai nato.
+  # `=NOME:` e non `=NOME`: display-message ha un target pane, e su quello `=`
+  # vale solo per la parte sessione (misurato su tmux 3.6).
   while : ; do
     for _i in $(seq 1 12); do
       sleep 1
-      pane=$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo "")
+      pane=$(tmux display-message -p -t "=$session:" '#{pane_current_command}' 2>/dev/null || echo "")
       case "$pane" in
         ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;  # shell o vuoto → non ancora su
         *) repl_up=1; break ;;                     # un processo gira → REPL up
@@ -447,12 +454,12 @@ jht_spawn_wait_repl() {
     done
     [ "$repl_up" -eq 1 ] && return 0
     if [ "$attempt" -ge 2 ]; then
-      last_cmd=$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo "?")
+      last_cmd=$(tmux display-message -p -t "=$session:" '#{pane_current_command}' 2>/dev/null || echo "?")
       echo "[$label] ERROR: REPL ($(jht_spawn_active_provider)) did not start after 2 attempts (pane=$last_cmd) — spawn failed" >&2
       ts_fail="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       printf '{"ts":"%s","session":"%s","role":"%s","event":"spawn_failed","reason":"repl_not_up","pane_cmd":"%s","src":"%s"}\n' \
         "$ts_fail" "$session" "$role" "$last_cmd" "$src" >> "$logs_dir/$role-actions.jsonl"
-      tmux kill-session -t "$session" 2>/dev/null || true
+      tmux kill-session -t "=$session" 2>/dev/null || true
       return 1
     fi
     echo "[$label] REPL did not start (attempt $attempt) — retrying" >&2
