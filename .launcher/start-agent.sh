@@ -229,7 +229,10 @@ if [ "$ROLE" = "worker" ]; then
   _w_up=0
   for _i in $(seq 1 12); do
     sleep 1
-    case "$(tmux display-message -p -t "$WORKER_SESSION" '#{pane_current_command}' 2>/dev/null || echo "")" in
+    # `=NOME:`: se la sessione sparisce durante l'attesa (pane chiuso dal CLI
+    # che crasha), un nome nudo risolverebbe per PREFISSO sul pane di una
+    # sorella con un CLI vivo e dichiarerebbe partito un worker che non c'e'.
+    case "$(tmux display-message -p -t "=$WORKER_SESSION:" '#{pane_current_command}' 2>/dev/null || echo "")" in
       ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;
       *) _w_up=1; break ;;
     esac

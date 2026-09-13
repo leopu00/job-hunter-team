@@ -170,7 +170,7 @@ STUB_TMUX = r"""#!/usr/bin/env bash
 state="$T_SESSIONS"
 printf '%s\n' "$*" >> "$T_CALLS"
 sub="$1"; shift
-target=""; fmt=""; positional=""
+all_args="$*"; target=""; fmt=""; positional=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -t) target="$2"; shift 2 ;;
@@ -219,7 +219,12 @@ case "$sub" in
   list-panes) s="$(resolve window)"; [ -n "$s" ] || exit 1; render "$s" "$fmt" ;;
   display-message) s="$(resolve window)"; [ -n "$s" ] || exit 0; render "$s" "$positional" ;;
   capture-pane) s="$(resolve pane)"; [ -n "$s" ] || exit 1; echo "pane of $s"; cat "$state.typed-$s" 2>/dev/null ;;
-  send-keys) s="$(resolve pane)"; [ -n "$s" ] || exit 1; printf '%s\n' "$positional" >> "$state.typed-$s"; echo "TYPED-INTO $s" >> "$T_CALLS" ;;
+  new-session)
+    printf '%s|bash|1700000000\n' "$T_NEW" >> "$state" ;;
+  send-keys)
+    # Il CLI "crasha" al lancio e il pane si chiude: la sessione sparisce.
+    case "$all_args" in *" claude "*) grep -vF -- "$T_NEW|" "$state" > "$state.tmp"; mv "$state.tmp" "$state"; exit 0 ;; esac
+    s="$(resolve pane)"; [ -n "$s" ] || exit 1; printf '%s\n' "$positional" >> "$state.typed-$s"; echo "TYPED-INTO $s" >> "$T_CALLS" ;;
   *) exit 0 ;;
 esac
 """
@@ -454,3 +459,29 @@ def test_a_kickoff_still_reaches_its_own_session(capable_bash, tmux):
     assert "SENT" in result.stdout, result.stdout + result.stderr
     calls = tmux.calls.read_text(encoding="utf-8")
     assert "TYPED-INTO CRITICO" in calls and "TYPED-INTO CRITICO-S1" not in calls, calls
+
+
+# ── start-agent.sh worker: la sonda del REPL non legge il pane di una sorella ─
+
+
+def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_path):
+    """SENTINELLA-WORKER nasce, il CLI crasha e il pane si chiude; resta viva
+    una sessione che ne estende il nome con un CLI vivo. Col target nudo la
+    sonda leggeva `claude` nella sorella e stampava "started"."""
+    if sys.platform == "win32":
+        pytest.skip("il launcher gira nel container Linux")
+    tmux = _Tmux("stub", tmp_path)
+    tmux.add("SENTINELLA-WORKER-OLD", "claude")
+    home = tmp_path / "home"
+    home.mkdir()
+    script = (
+        f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}' T_NEW=SENTINELLA-WORKER\n"
+        f"export PATH='{tmux.bin}':\"$PATH\" JHT_HOME='{home}'\n"
+        f"bash '{LAUNCHER / 'start-agent.sh'}' worker; echo \"rc=$?\"\n"
+    )
+    result = subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=90)
+    out = result.stdout + result.stderr
+    assert "rc=1" in out, out
+    assert "SENTINELLA-WORKER started" not in out, out
+    assert "REPL did not start" in out, out
+    assert tmux.alive() == ["SENTINELLA-WORKER-OLD"], "la sorella non va toccata"
