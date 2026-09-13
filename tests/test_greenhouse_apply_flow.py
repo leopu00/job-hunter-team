@@ -437,6 +437,50 @@ def test_greenhouse_react_select_requires_an_exact_saved_option(
     assert page.locator(".select__single-value").inner_text() == "Yes"
 
 
+def test_greenhouse_missing_select_exposes_exact_type_and_options(
+    page, tmp_path: Path, cv_path: Path
+):
+    question = "Are you authorised to work here?"
+    field = f"""
+      <div class="field-wrapper">
+        <label id="question_2002-label" for="question_2002">{question}*</label>
+        <div class="select-shell">
+          <input id="question_2002" role="combobox" aria-required="true"
+                 aria-labelledby="question_2002-label">
+          <input id="question_2002-required" type="hidden" aria-hidden="true" required>
+          <div id="options" hidden>
+            <div role="option">Yes</div>
+            <div role="option">No</div>
+          </div>
+        </div>
+      </div>
+      <script>
+        document.querySelector('#question_2002').addEventListener(
+          'click', () => document.querySelector('#options').hidden = false
+        );
+      </script>
+    """
+    html = greenhouse_form().replace(
+        '<button class="btn btn--pill"', field + '<button class="btn btn--pill"'
+    )
+    page.set_content(html)
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason == "required_answer_missing"
+    request = notifications[0]["answer_request"]["payload"]
+    # The required marker is text in this fixture (not aria-hidden), so it is
+    # part of the exact accessible label shown to the user.
+    assert request["label"] == question + "*"
+    assert request["key"] == "are you authorised to work here"
+    assert request["field_type"] == "select"
+    assert request["options"] == ["Yes", "No"]
+    assert page.evaluate("window.submitCount") == 0
+
+
 def test_greenhouse_checkbox_answers_match_every_saved_label(
     page, tmp_path: Path, cv_path: Path
 ):

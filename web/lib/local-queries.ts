@@ -1549,27 +1549,6 @@ export function sendUserChatLocal(
   return sid(Number(result.lastInsertRowid));
 }
 
-export function replyPendingMessageLocal(
-  ws: string,
-  id: string,
-  reply: string,
-): boolean {
-  const db = getDb(ws);
-  // Risposta + ack atomico: una reply implica visione.
-  const result = db
-    .prepare(
-      `
-    UPDATE pending_user_messages
-    SET user_reply = ?,
-        user_reply_at = CURRENT_TIMESTAMP,
-        acknowledged_at = COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
-    WHERE id = ?
-  `,
-    )
-    .run(reply, id);
-  return result.changes > 0;
-}
-
 // ── Team activity (per-agente nel tempo) ───────────────────────────
 // Stream di eventi di lavoro: ogni timestamp = un'azione di un agente.
 //   scout     → positions.found_at

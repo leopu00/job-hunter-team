@@ -14,8 +14,10 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
+  isApplicationAnswerRequest,
   optimisticUserTurn,
   postChat,
+  postReply,
   retryChatSignal,
   withAgentAcked,
   withConfirmedTurn,
@@ -24,6 +26,7 @@ import {
   unreadIdsOf,
 } from "./messages-thread";
 import type { PendingMessage } from "./types";
+import { assertCloudApplicationAnswerReply } from "./application-answer-request";
 
 const msg = (over: Partial<PendingMessage> = {}): PendingMessage => ({
   id: "m1",
@@ -162,5 +165,54 @@ describe("non letti e ack (comportamento invariato)", () => {
     const out = withReply([msg({ id: "a" })], "a", "va bene", now);
     expect(out[0].user_reply).toBe("va bene");
     expect(out[0].acknowledged_at).toBe(now);
+  });
+});
+
+describe("richiesta risposta CLOSER", () => {
+  it("rende azionabile solo la domanda esatta ancora senza risposta", () => {
+    const request = msg({
+      agent: "closer",
+      kind: "question",
+      related_position_id: "42",
+      body:
+        "CLOSER needs one required application answer before it can continue.\n" +
+        "Question: Work mode?\nField type: radio\nOptions:\n- Remote\n- Hybrid\n" +
+        "Reply to this request in the dashboard. The answer is saved under the " +
+        "question's exact normalized key and reused only for an identical key.",
+    });
+    expect(isApplicationAnswerRequest(request)).toBe(true);
+    expect(
+      isApplicationAnswerRequest({ ...request, user_reply: "Remote" }),
+    ).toBe(false);
+    expect(
+      isApplicationAnswerRequest({ ...request, agent: "assistente" }),
+    ).toBe(false);
+    expect(
+      isApplicationAnswerRequest({ ...request, kind: "notification" }),
+    ).toBe(false);
+    expect(
+      isApplicationAnswerRequest({ ...request, body: "Other CLOSER question" }),
+    ).toBe(false);
+    expect(() =>
+      assertCloudApplicationAnswerReply(request.body, "Remote"),
+    ).not.toThrow();
+    expect(() =>
+      assertCloudApplicationAnswerReply(request.body, "remote"),
+    ).toThrow("closer_answer_not_exact_option");
+  });
+
+  it("salva la risposta sulla riga esatta che il box rilegge", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await postReply("request-uuid", "Remote");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/pending-messages/request-uuid/reply",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ reply: "Remote" }),
+      }),
+    );
   });
 });
