@@ -48,18 +48,28 @@ const TABLE_SET = new Set(RECEIPT_TABLES);
  * tipo sbagliato vuol dire che non sappiamo *di quale riga* stiamo parlando,
  * e una ricevuta su una riga sbagliata è peggio di nessuna ricevuta.
  */
-export class ReceiptKeyInvalid extends Error {}
+export class ReceiptKeyInvalid extends Error {
+  /**
+   * `label` è `tabella.campo` e nient'altro: chi scarta la riga lo scrive nel
+   * log e lo conta, e il valore della riga non deve finirci mai.
+   */
+  constructor(label) {
+    super(`invalid cloud push source identity: ${label}`);
+    this.name = "ReceiptKeyInvalid";
+    this.label = label;
+  }
+}
 
 function positiveInteger(value, label) {
   if (!Number.isInteger(value) || value <= 0) {
-    throw new ReceiptKeyInvalid(`invalid cloud push source identity: ${label}`);
+    throw new ReceiptKeyInvalid(label);
   }
   return value;
 }
 
 function nonEmptyString(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new ReceiptKeyInvalid(`invalid cloud push source identity: ${label}`);
+    throw new ReceiptKeyInvalid(label);
   }
   return value;
 }
@@ -101,14 +111,16 @@ export function receiptKey(table, row) {
     case "profile":
       return ["candidate_profile"];
     default:
-      throw new ReceiptKeyInvalid(`unsupported receipt table: ${table}`);
+      // Una tabella sconosciuta e' un bug del chiamante, non una riga senza
+      // chiave: non si esclude una riga, si ferma il push.
+      throw new Error(`unsupported receipt table: ${table}`);
   }
 }
 
 /** L'id opaco di una chiave già estratta. Stessa forma su entrambi i lati. */
 export function receiptIdForKey(table, key) {
   if (!TABLE_SET.has(table)) {
-    throw new ReceiptKeyInvalid(`unsupported receipt table: ${table}`);
+    throw new Error(`unsupported receipt table: ${table}`);
   }
   const parts = Array.isArray(key) ? key : [key];
   return `q_${createHash("sha256")
