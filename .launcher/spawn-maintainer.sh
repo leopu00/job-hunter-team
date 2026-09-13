@@ -43,11 +43,10 @@ jht_spawn_copy_skills mantenitore "$MANT_DIR" "$LABEL" \
 # 3) Soppressione auto-update Codex (stesso fix di spawn-doctor/start-agent).
 jht_spawn_codex_dismiss_update
 
-# 4) Crea la sessione tmux MANTENITORE nella workdir corretta.
-tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$MANT_DIR" || {
-  echo "[$LABEL] ERROR: tmux new-session failed" >&2
-  exit 1
-}
+# 4) Crea la sessione tmux MANTENITORE nella workdir corretta, con lo stesso
+#    tetto di tempo del gemello: `-c` fa chdir() nel bind mount e su un mount
+#    stallato non ritorna mai (vedi jht_spawn_new_session in spawn-lib.sh).
+jht_spawn_new_session "$SESSION" "$MANT_DIR" "$LABEL" || exit 1
 
 # 5) PATH nel pane (shell non interattiva: non carica .bashrc). Include
 #    /opt/jht-deps/bin (prefisso globale) così il Mantenitore vede gli extra.

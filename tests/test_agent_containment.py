@@ -1,5 +1,6 @@
 """Containment is a declared lifecycle state, not an inferred missing pane."""
 from __future__ import annotations
+import re
 
 import importlib.machinery
 import importlib.util
@@ -221,7 +222,12 @@ def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_pat
             f'  echo "$*" >> "{_bash_path(tmux_calls)}"',
             '  case "$1" in',
             '    list-sessions) echo SCRITTORE-1 ;;',
-            '    capture-pane) echo "preserved pane before enforcement" ;;',
+            # Il doppio imita la RISOLUZIONE DEI TARGET, non solo i sottocomandi:
+            # prima rispondeva a capture-pane qualunque fosse il target, cioe' era
+            # piu' permissivo del tmux reale — ed e' il motivo per cui il bug del
+            # prefisso `=` e' sopravvissuto a questo test ed e' finito in produzione.
+            '''    list-panes) case "$3" in "=SCRITTORE-1"|SCRITTORE-1) echo "%7" ;; *) return 1 ;; esac ;;''',
+            '''    capture-pane) case "$3" in %[0-9]*) echo "preserved pane before enforcement" ;; *) return 1 ;; esac ;;''',
             '    kill-session) return 0 ;;',
             '  esac',
             "}",
@@ -248,3 +254,39 @@ def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_pat
     assert "preserved pane" in evidence[0].read_text(encoding="utf-8")
     notice = sender_calls.read_text(encoding="utf-8")
     assert "CAPITANO [CONTAINMENT] SCRITTORE-1 was started despite" in notice
+
+
+# ── Il target di capture-pane ────────────────────────────────────────────────
+# Origine: trovato in produzione il 2026-09-04. `capture_for_containment` usava
+# `tmux capture-pane -t "=$session"`, ma `=` e' un prefisso valido solo per i
+# target SESSIONE/FINESTRA: su un target PANE tmux esce con "can't find pane".
+# Con lo stderr scartato, il chiamante leggeva solo "cattura fallita" e per
+# contratto NON uccideva la sessione — quindi il ri-contenimento non e' mai
+# avvenuto. Evidenza: 24.340 righe "capture failed — NOT killing" nel log del
+# watchdog e una sessione viva per 15 giorni contro un keep-down esplicito.
+
+def test_capture_pane_is_never_targeted_with_the_session_prefix():
+    """`=` su un target pane fa fallire capture-pane a ogni invocazione."""
+    src = WATCHDOG_PATH.read_text(encoding="utf-8")
+    offenders = [
+        line.strip()
+        for line in src.splitlines()
+        if "capture-pane" in line
+        and not line.strip().startswith("#")
+        and re.search(r'-t\s+"=', line)
+    ]
+    assert not offenders, offenders
+
+
+def test_the_containment_capture_resolves_an_exact_pane_id():
+    """L'esattezza non va persa tornando al nome nudo: si risolve il pane_id
+    con list-panes (target sessione, dove `=` e' valido) e si cattura quello,
+    che e' univoco su tutto il server tmux."""
+    src = WATCHDOG_PATH.read_text(encoding="utf-8")
+    body = src[src.index("capture_for_containment()") :]
+    body = body[: body.index("\n}\n") + 3]
+    assert "list-panes -t \"=$session\"" in body, body
+    assert "#{pane_id}" in body, body
+    assert 'capture-pane -t "$pane_id"' in body, body
+    # e una cattura vuota non deve passare per evidenza
+    assert '[ ! -s "$evidence" ]' in body, body
