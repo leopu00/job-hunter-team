@@ -134,6 +134,12 @@ _spawn_on_exit() {
   local rc=$? now duration timestamp
   # Evita ricorsione se una futura modifica introducesse un `exit` qui.
   trap - EXIT
+  # Un solo handler EXIT deve coordinare anche eventuali cleanup aggiunti da
+  # altri strati del launcher. Il callback e' opzionale in questo branch e
+  # riceve l'rc originale; deve completare prima che la ricevuta venga scritta.
+  if declare -F _spawn_abort_cleanup >/dev/null 2>&1; then
+    _spawn_abort_cleanup "$rc"
+  fi
   now="$(date -u +%s 2>/dev/null)" || now="$_spawn_started_s"
   if [ "$_spawn_stage" = "lock_wait" ] || [ "$_spawn_stage" = "lock_timeout" ]; then
     _spawn_flock_wait_s=$((now - _spawn_flock_started_s))

@@ -129,3 +129,15 @@ def test_launcher_declares_only_one_exit_trap():
         if re.match(r"^\s*trap\s+(?!-)\S+\s+EXIT\s*$", line)
     ]
     assert exit_traps == ["trap _spawn_on_exit EXIT"]
+
+
+def test_exit_handler_offers_one_optional_cleanup_hook_before_receipt():
+    source = LAUNCHER.read_text(encoding="utf-8")
+    handler_start = source.index("_spawn_on_exit() {")
+    handler_end = source.index("\n}\ntrap _spawn_on_exit EXIT", handler_start)
+    handler = source[handler_start:handler_end]
+
+    reset = handler.index("trap - EXIT")
+    hook = handler.index('_spawn_abort_cleanup "$rc"')
+    receipt = handler.index("printf '{\"timestamp\"")
+    assert reset < hook < receipt
