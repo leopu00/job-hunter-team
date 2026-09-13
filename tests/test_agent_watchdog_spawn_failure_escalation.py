@@ -17,6 +17,7 @@ di comando non lo regge.
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -565,6 +566,123 @@ def test_the_respawn_slows_down_but_never_stops(wd):
     assert probe["backoff"] == "on"
     assert probe["backoff_after"] == "off", "il backoff non si è mai riaperto"
     assert probe["attempts_after"] == "3", "il respawn si è FERMATO invece di rallentare"
+
+
+# ── Worker numerati: la serie deve passare dal ROSTER vero ──────────────────
+# I test sopra chiamano respawn_worker direttamente. In produzione un worker
+# numerato arriva a respawn_worker solo se `team_roster.py next-respawn` lo
+# sceglie, e il roster lo ritirava al PRIMO respawn fallito («sonda già spesa»):
+# la serie si fermava a 1 e l'escalation dei worker non scattava mai. Questi
+# casi passano da maybe_respawn_workers e dal team_roster.py del repo.
+
+ROSTER = ROOT / "shared" / "skills" / "team_roster.py"
+
+
+def _roster_case(wd, *, respawns=None):
+    """SCORER-2 attivo nel roster, sparito dopo un'attività recente."""
+    import json
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    (wd.home / "jht.config.json").write_text("{}", encoding="utf-8")
+    (wd.logs / "team-roster.json").write_text(json.dumps({"version": 1, "agents": {
+        "SCORER-2": {"session": "SCORER-2", "role": "scorer", "instance": 2,
+                     "status": "active", "respawns": respawns or []},
+    }}), encoding="utf-8")
+    (wd.logs / "messages.jsonl").write_text(
+        json.dumps({"ts": now, "from": "scorer-2", "to": "capitano"}) + "\n",
+        encoding="utf-8",
+    )
+    # live_sessions() del roster chiede a tmux: il finto legge lo stesso file
+    # di liveness del PREAMBLE, cosi' roster e watchdog vedono lo stesso mondo.
+    _fake(
+        wd.bin / "tmux",
+        'if [ "$1" = list-sessions ] && [ "$(cat "$T_STATE")" = alive ]; then echo SCORER-2; fi\n',
+    )
+    python_dir = _bash_path(Path(sys.executable).parent)
+    return {
+        "JHT_ROSTER_TOOL": _bash_path(ROSTER),
+        "PATH": f"{_bash_path(wd.bin)}:{python_dir}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    }
+
+
+def _roster_entry(wd):
+    import json
+
+    return json.loads((wd.logs / "team-roster.json").read_text(encoding="utf-8"))["agents"]["SCORER-2"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="roster e watchdog girano nel container Linux")
+def test_a_worker_whose_respawns_fail_reaches_both_escalations_through_the_roster(wd):
+    result = wd.run(
+        # `|| :`: un tentativo fallito esce 1, ed e' il caso sotto prova.
+        "for i in $(seq 1 8); do maybe_respawn_workers || :; done",
+        JHT_SPAWN_FAIL_ESCALATE_AFTER=5,
+        JHT_SPAWN_FAIL_ESCALATE_MIN_SEC=0,
+        JHT_SPAWN_FAIL_ALERT_AFTER=8,
+        JHT_SPAWN_FAIL_ALERT_MIN_SEC=0,
+        **NO_BACKOFF,
+        **_roster_case(wd),
+    )
+
+    assert result.returncode == 0, result.stderr
+    attempts = wd.lines(wd.start_calls)
+    assert attempts == ["scorer 2"] * 8, (
+        f"il roster ha smesso di proporre il worker dopo {len(attempts)} tentativi"
+    )
+    assert wd.streak("SCORER-2")[0] == "8"
+    entry = _roster_entry(wd)
+    assert entry["status"] == "active", entry
+    assert entry.get("respawn_failed_at"), entry
+    captain = [n for n in wd.lines(wd.sender_calls) if "SCORER-2 cannot be started" in n]
+    assert len(captain) == 1, wd.lines(wd.sender_calls)
+    alerts = [a for a in wd.lines(wd.notify_calls) if "SCORER-2 is not starting" in a]
+    assert len(alerts) == 1, wd.lines(wd.notify_calls)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="roster e watchdog girano nel container Linux")
+def test_a_worker_recreated_and_then_removed_again_is_still_retired(wd):
+    """Contro-prova: la sonda a colpo singolo resta per chi e' PARTITO davvero
+    ed e' stato tolto di nuovo — e' la guardia contro la lotta col Capitano."""
+    result = wd.run(
+        'touch "$T_OK"\n'
+        "maybe_respawn_workers\n"
+        'printf "after_first=%s\\n" "$(cat "$T_STATE")" >> "$T_OUT"\n'
+        # il Capitano lo toglie di nuovo: sessione giu', spawner sempre sano
+        'echo down > "$T_STATE"\n'
+        "maybe_respawn_workers\n"
+        "maybe_respawn_workers",
+        **NO_BACKOFF,
+        **_roster_case(wd),
+    )
+
+    assert result.returncode == 0, result.stderr
+    probe = dict(line.split("=", 1) for line in wd.lines(wd.out) if "=" in line)
+    assert probe["after_first"] == "alive"
+    assert wd.lines(wd.start_calls) == ["scorer 2"], "ricreato una seconda volta"
+    entry = _roster_entry(wd)
+    assert entry["status"] == "retired", entry
+    assert "respawn_failed_at" not in entry, entry
+    assert wd.rows() == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="roster e watchdog girano nel container Linux")
+def test_a_failed_respawn_followed_by_a_success_closes_the_roster_series(wd):
+    result = wd.run(
+        "maybe_respawn_workers\n"
+        "maybe_respawn_workers\n"
+        'touch "$T_OK"\n'
+        "maybe_respawn_workers",
+        **NO_BACKOFF,
+        **_roster_case(wd),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert wd.lines(wd.start_calls) == ["scorer 2"] * 3
+    entry = _roster_entry(wd)
+    assert entry["status"] == "active"
+    assert "respawn_failed_at" not in entry, entry
+    assert wd.streak("SCORER-2") is None
 
 
 def test_the_source_has_no_cap_that_gives_up_on_an_agent(wd):

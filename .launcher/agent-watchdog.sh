@@ -648,6 +648,18 @@ worker_kickoff() {
   ) >/dev/null 2>&1 &
 }
 
+mark_roster_respawn() {
+  # Esito del respawn nel ROSTER, accanto al registro dei fallimenti. Serve a
+  # team_roster.py per distinguere "ricreato e poi tolto di nuovo" (si ritira,
+  # sonda a colpo singolo) da "il respawn e' fallito" (resta candidato, e la
+  # serie arriva alle soglie di escalation qui sopra). Senza, il roster ritirava
+  # il worker al primo avvio fallito e per i worker l'escalation non scattava
+  # mai. Best-effort: un roster non scrivibile non deve fermare il watchdog.
+  local session="$1" outcome="$2"
+  [ -f "$ROSTER_TOOL" ] || return 0
+  JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" "mark-respawn-$outcome" "$session" >/dev/null 2>&1 || true
+}
+
 respawn_worker() {
   # start-agent.sh con lo STESSO numero d'istanza (il dado di
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
@@ -659,11 +671,13 @@ respawn_worker() {
     detail="$(spawn_detail_since "$mark")"
     if ! is_session_alive "$session"; then
       log "worker $session: start reported OK but session is still inactive — recovery not recorded"
+      mark_roster_respawn "$session" failed
       observe_spawn_failure "$session" \
         "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "worker $session: start OK and session verified alive"
+    mark_roster_respawn "$session" ok
     clear_spawn_failures "$session"
     worker_kickoff "$session" "$role"
     if [ "$recovery_kind" = "unexpected" ]; then
@@ -680,6 +694,7 @@ respawn_worker() {
     rc=$?
     detail="$(spawn_detail_since "$mark")"
     log "worker $session: start FAILED (rc=$rc) — retrying at the next tick"
+    mark_roster_respawn "$session" failed
     observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
     return 1
   fi
