@@ -2354,6 +2354,27 @@ def _kill_worker():
         pass
 
 
+def _worker_spawn_output_lines(value, limit=20):
+    """Return a bounded, display-safe tail from subprocess output."""
+    if isinstance(value, bytes):
+        value = value.decode(errors="replace")
+    lines = [line.strip() for line in str(value or "").splitlines() if line.strip()]
+    return [line[:500] for line in lines[-limit:]]
+
+
+def _log_worker_spawn_result(result, status=None):
+    """Write the launcher's captured worker output to the bridge daemon log.
+
+    start-agent launches this bridge with stdout/stderr redirected to
+    sentinel-bridge.log, so stderr here is durable and size-rotated.
+    """
+    rc = status if status is not None else getattr(result, "returncode", "unknown")
+    print(f"[bridge V5] worker spawn rc={rc}", file=sys.stderr)
+    for stream in ("stdout", "stderr"):
+        for line in _worker_spawn_output_lines(getattr(result, stream, None)):
+            print(f"[bridge V5] worker spawn {stream}: {line}", file=sys.stderr)
+
+
 def _try_claude_tui_parser():
     """Primario per Claude: capture-pane SENTINELLA-WORKER + parse.
 
@@ -2398,13 +2419,21 @@ def _try_claude_tui_parser():
     # Worker deve essere attivo. Se non lo è, spawn + 18s wait.
     if not cu.tmux_has_session(WORKER_SESSION):
         try:
-            subprocess.run(
+            spawn_result = subprocess.run(
                 ["bash", START_AGENT_SH, "worker"],
                 env={**os.environ, "JHT_SPAWN_SRC": "sentinel-bridge"},
-                capture_output=True, timeout=10,
+                capture_output=True, text=True, timeout=10,
             )
+            _log_worker_spawn_result(spawn_result)
             time.sleep(cu.WORKER_BOOT_WAIT_S)
-        except (subprocess.TimeoutExpired, OSError):
+        except subprocess.TimeoutExpired as exc:
+            _log_worker_spawn_result(exc, status="timeout")
+            return None
+        except OSError as exc:
+            print(
+                f"[bridge V5] worker spawn rc=os-error type={type(exc).__name__}",
+                file=sys.stderr,
+            )
             return None
         if not cu.tmux_has_session(WORKER_SESSION):
             return None
