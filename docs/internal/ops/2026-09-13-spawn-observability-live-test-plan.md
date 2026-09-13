@@ -214,13 +214,68 @@ docker exec \
     rmdir /jht_home/logs/observability-rotation-probe
   '
 
+# Prova che il watchdog ruoti DURANTE la propria vita, non soltanto al boot.
+# Il gate halted e il JHT_HOME separato impediscono qualunque spawn reale.
+docker exec "$JHT_CONTAINER" bash -lc '
+  set -eu
+  probe=/jht_home/observability-watchdog-probe
+  test ! -e "$probe"
+  mkdir -p "$probe/logs"
+  touch "$probe/.team-halted.flag"
+  set +e
+  JHT_HOME="$probe" JHT_DAEMON_LOG_MAX_BYTES=128 \
+    JHT_AGENT_WATCHDOG_INTERVAL=0 timeout 2 \
+    bash /app/.launcher/agent-watchdog.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+  case "$rc" in 0|124|143) ;; *) exit "$rc";; esac
+  test -s "$probe/logs/agent-watchdog.log.old"
+  rm -f "$probe/.team-halted.flag" \
+    "$probe/logs/agent-watchdog.log" "$probe/logs/agent-watchdog.log.old"
+  rmdir "$probe/logs" "$probe"
+'
+
+# Prova che l'output figlio senza timestamp segua la riga watchdog che lo
+# introduce, invece di restare immortale nel file vivo.
+docker exec "$JHT_CONTAINER" bash -lc '
+  set -eu
+  probe=/jht_home/observability-archive-probe
+  test ! -e "$probe"
+  mkdir -p "$probe/logs"
+  fresh="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf "%s\n" \
+    "[2026-01-05T12:00:00Z] old spawn" \
+    "old launcher detail" \
+    "[$fresh] fresh tick" \
+    "fresh launcher detail" >"$probe/logs/agent-watchdog.log"
+  JHT_HOME="$probe" python3 /app/shared/skills/log_archive.py run \
+    --retain-days 30 >/dev/null
+  JHT_HOME="$probe" python3 - <<"PY"
+from pathlib import Path
+import zipfile
+root = Path("/jht_home/observability-archive-probe/logs")
+live = (root / "agent-watchdog.log").read_text()
+assert "old spawn" not in live and "old launcher detail" not in live
+assert "fresh tick" in live and "fresh launcher detail" in live
+bundles = list((root / "archive").glob("logs-*.zip"))
+assert len(bundles) == 1
+with zipfile.ZipFile(bundles[0]) as bundle:
+    archived = "".join(bundle.read(name).decode() for name in bundle.namelist())
+assert "old spawn" in archived and "old launcher detail" in archived
+PY
+  rm -f "$probe/logs/agent-watchdog.log" "$probe/logs/archive/logs-2026-W02.zip"
+  rmdir "$probe/logs/archive" "$probe/logs" "$probe"
+'
+
 docker exec "$JHT_CONTAINER" python3 /app/shared/skills/log_archive.py run \
   --dry-run --retain-days 30 >/dev/null
 ```
 
 **Passa se:** le quattro fonti risultano registrate, `.old` contiene la riga
-ruotata, il vivo è vuoto e il dry-run termina zero. **Fallisce se:** una fonte
-manca, la rotazione perde entrambi i file o il dry-run modifica un log.
+ruotata, il watchdog acceso crea il proprio `.old`, il blocco vecchio finisce
+interamente nello zip, e il dry-run termina zero. **Fallisce se:** una fonte
+manca, la rotazione avviene soltanto al boot, una riga figlia vecchia resta nel
+vivo o il dry-run modifica un log.
 
 **Esito:** _(da compilare)_
 
@@ -259,6 +314,11 @@ docker exec "$JHT_CONTAINER" tmux has-session -t '=SENTINELLA-WORKER'
 **Passa se:** il log del bridge cresce con `worker spawn rc=...`, la trace attribuisce
 il tentativo a `sentinel-bridge` e il worker torna attivo. **Fallisce se:** il worker
 ricompare ma il log resta muto, oppure l'attesa scade.
+
+Nota: il bridge concede 10 secondi al launcher mentre il worker può attendere il
+REPL fino a 12; `rc=timeout` può quindi essere un esito preesistente ora finalmente
+visibile. Non è da solo un fallimento di questa modifica: contano log, trace e stato
+finale della sessione.
 
 **Esito:** _(da compilare)_
 
