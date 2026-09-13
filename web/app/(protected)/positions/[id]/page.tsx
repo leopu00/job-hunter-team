@@ -28,6 +28,9 @@ import { sourceDisplayName } from "@/lib/case-study-sources";
 import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { ApplyRequestButton } from "./ApplyRequestButton";
+import { applyRequestState } from "@/lib/apply-request-rule";
+import { getApplyRequestSignals } from "@/lib/apply-request-signals";
 import { CoverLetterRequestButton } from "./CoverLetterRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
@@ -280,6 +283,22 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const data = await getPositionById(id);
 
   if (!data) notFound();
+
+  // [JHT-CLOSER] Lo stato del bottone «candidati» si calcola qui, sul server,
+  // dalla stessa regola che applicano la route e il gate del box.
+  const applyState = applyRequestState({
+    status: data.position.status,
+    apply_requested: data.position.apply_requested === true,
+    apply_requested_at: data.position.apply_requested_at ?? null,
+    application: data.application
+      ? {
+          applied: data.application.applied === true,
+          applied_at: data.application.applied_at ?? null,
+          applied_via: data.application.applied_via ?? null,
+        }
+      : null,
+    ...(await getApplyRequestSignals(data.position.id)),
+  });
 
   // NB: data.highlights esiste ancora nel DB ma è segnale interno per gli
   // agenti (Scorer/Capitano) — la card Pro/Contro duplicava jd_summary,
@@ -1219,6 +1238,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
       {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
           annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
       <div className="mt-6 space-y-4">
+        {position.legacy_id != null && applyState.kind !== "hidden" && (
+          <ApplyRequestButton
+            legacyId={position.legacy_id}
+            state={applyState}
+          />
+        )}
         {position.legacy_id != null && (
           <div className="mt-4 flex items-center gap-3">
             <TeamActionsSheet
