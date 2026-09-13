@@ -50,7 +50,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-08-13 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-13 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-13 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-08-13 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-08-16 | ✅ |
@@ -62,6 +62,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-08-13 | ✅ |
 | [agents/mantenitore/mantenitore.md](../agents/mantenitore/mantenitore.md) | 👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team. | — | 2026-08-13 | ✅ |
 | [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent). | — | 2026-08-13 | ✅ |
+| [agents/closer/closer.md](../agents/closer/closer.md) | 📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima | — | 2026-09-13 | ✅ |
 
 
 ## 📐 Team architecture & manuals
@@ -144,6 +145,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
+| [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-13 | ✅ |
+| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-13 | ✅ |
 
 
 ## 💂 Skill Sentinella
