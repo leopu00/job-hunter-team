@@ -254,13 +254,13 @@ def main() -> int:
         print("jht-notify-user: body vuoto", file=sys.stderr)
         return 1
     if args.existing_id is not None and args.existing_id <= 0:
-        print("jht-notify-user: existing-id non valido", file=sys.stderr)
+        print("jht-notify-user: invalid existing-id", file=sys.stderr)
         return 1
     if args.source_id and not re.fullmatch(r"[A-Za-z0-9_.:-]{1,180}", args.source_id):
-        print("jht-notify-user: source-id non valido", file=sys.stderr)
+        print("jht-notify-user: invalid source-id", file=sys.stderr)
         return 1
     if args.source_action and not re.fullmatch(r"[a-z0-9_]{1,80}", args.source_action):
-        print("jht-notify-user: source-action non valida", file=sys.stderr)
+        print("jht-notify-user: invalid source-action", file=sys.stderr)
         return 1
     if bool(args.source_action) != bool(args.source_payload) or bool(args.source_id) != bool(args.source_action):
         print("jht-notify-user: source metadata incompleti", file=sys.stderr)
@@ -272,7 +272,7 @@ def main() -> int:
             print("jht-notify-user: source-payload non e JSON valido", file=sys.stderr)
             return 1
         if not isinstance(decoded_payload, dict) or len(args.source_payload) > 16_000:
-            print("jht-notify-user: source-payload non valido", file=sys.stderr)
+            print("jht-notify-user: invalid source-payload", file=sys.stderr)
             return 1
 
     # Normalizza una sola volta: il body interpretato finisce sia in DB

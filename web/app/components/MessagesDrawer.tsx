@@ -663,12 +663,16 @@ export default function MessagesDrawer() {
                                   rows={2}
                                   maxLength={4000}
                                   disabled={sendingAnswerId === m.id}
-                                  placeholder={tr("application_answer_placeholder")}
+                                  placeholder={tr(
+                                    "application_answer_placeholder",
+                                  )}
                                   className="w-full px-2.5 py-2 text-[11px] bg-[var(--color-panel)] border border-[var(--color-border)] rounded resize-y text-[var(--color-base)] focus:outline-none focus:border-[var(--color-border-glow)] disabled:opacity-50"
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => void handleApplicationAnswer(m)}
+                                  onClick={() =>
+                                    void handleApplicationAnswer(m)
+                                  }
                                   disabled={
                                     !!sendingAnswerId ||
                                     !(answerDrafts[m.id] ?? "").trim()

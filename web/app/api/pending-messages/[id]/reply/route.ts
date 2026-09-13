@@ -107,7 +107,10 @@ export async function POST(
     });
   }
   if (!target) {
-    return NextResponse.json({ error: "messaggio non trovato" }, { status: 404 });
+    return NextResponse.json(
+      { error: "messaggio non trovato" },
+      { status: 404 },
+    );
   }
   const reauthorisesApplication =
     target.agent === "closer" &&
@@ -194,21 +197,20 @@ export async function POST(
   if (reauthorisesApplication) {
     // Asking is not obtaining: success means both the reply and the newer
     // per-position authorisation are observable before this route returns.
-    const [messageObservation, positionObservation] =
-      await Promise.all([
-        supabase
-          .from("pending_user_messages")
-          .select("user_reply, user_reply_at")
-          .eq("id", id)
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("positions")
-          .select("apply_requested, apply_requested_at, apply_requested_by")
-          .eq("id", target.related_position_id)
-          .eq("user_id", user.id)
-          .maybeSingle(),
-      ]);
+    const [messageObservation, positionObservation] = await Promise.all([
+      supabase
+        .from("pending_user_messages")
+        .select("user_reply, user_reply_at")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("positions")
+        .select("apply_requested, apply_requested_at, apply_requested_by")
+        .eq("id", target.related_position_id)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
     const observedMessage = messageObservation.data;
     const observedPosition = positionObservation.data;
     const sameInstant = (value: string | null | undefined) =>

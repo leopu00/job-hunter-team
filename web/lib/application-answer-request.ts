@@ -21,7 +21,8 @@ type AnswerShape = { fieldType: string; options: string[] };
 function assertAnswerShape(shape: AnswerShape, reply: string): void {
   const { fieldType, options } = shape;
   if (fieldType === "radio" || fieldType === "select") {
-    if (!options.includes(reply)) throw new Error("closer_answer_not_exact_option");
+    if (!options.includes(reply))
+      throw new Error("closer_answer_not_exact_option");
     return;
   }
   if (fieldType === "checkbox") {
