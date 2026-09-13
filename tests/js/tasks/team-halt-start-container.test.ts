@@ -235,7 +235,13 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.stdout).toContain("0 started");
     expect(result.stdout).toContain("1 already active");
     expect(result.stdout).toContain("6 errors");
-  });
+    // Stesso budget degli altri due bootstrap completi del file. Qui non c'e'
+    // nessuna attesa (nulla parte, quindi nessun preDelayMs): il tempo e' tutto
+    // processi, 63 invocazioni del docker finto da ~50ms l'una, ~3,5s a
+    // macchina scarica. Col default di 5s il margine era 1,5s e il test andava
+    // rosso con qualunque carico: 16 run su 20 sotto 8 processi CPU-bound,
+    // tutte su questo caso.
+  }, 15_000);
 
   it("in modalità locale rimuove solo il gate sotto JHT_HOME", () => {
     const sb = sandbox();
