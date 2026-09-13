@@ -42,6 +42,10 @@ LOCK = LOGS / "log-archive.lock"
 # Gli storici che crescono. csv_header: la prima riga resta nel vivo.
 SOURCES = [
     {"file": "sentinel-data.jsonl", "kind": "jsonl"},
+    {"file": "spawn-attempts.jsonl", "kind": "jsonl"},
+    {"file": "agent-watchdog.log", "kind": "log"},
+    {"file": "agent-recoveries.tsv", "kind": "tsv"},
+    {"file": "agent-spawn-failures.tsv", "kind": "tsv"},
     {"file": "token-meter.csv", "kind": "csv"},
     {"file": "throttle-events.jsonl", "kind": "jsonl"},
     {"file": "agent-vitals.jsonl", "kind": "jsonl"},
@@ -53,7 +57,12 @@ def row_ts(line: str, kind: str) -> float:
     """Unix ts della riga, 0.0 se illeggibile (→ resta nel vivo)."""
     try:
         if kind == "jsonl":
-            raw = json.loads(line).get("ts")
+            payload = json.loads(line)
+            raw = payload.get("ts") or payload.get("timestamp")
+        elif kind == "tsv":
+            raw = line.split("\t", 1)[0]
+        elif kind == "log":
+            raw = line.split("]", 1)[0].lstrip("[")
         else:
             raw = line.split(",", 1)[0]
         d = datetime.fromisoformat(str(raw).replace(" ", "T").replace("Z", "+00:00"))
@@ -84,8 +93,21 @@ def archive_source(src: dict, cutoff: float, stamp: str, dry: bool) -> dict:
         header = lines.pop(0)
     old: dict = {}  # settimana → [righe]
     keep: list = []
+    log_block_ts = 0.0
     for line in lines:
         ts = row_ts(line, src["kind"])
+        if src["kind"] == "log":
+            if ts > 0.0:
+                log_block_ts = ts
+            elif not (line.startswith("[") and line[1:5].isdigit()):
+                # Child stdout/stderr is appended immediately after the
+                # watchdog's timestamped action. It belongs to that block;
+                # keeping it timestamp-less would make it immortal.
+                ts = log_block_ts
+            else:
+                # A malformed timestamp-looking row stays live (fail-safe)
+                # and must not lend the previous block's date to its tail.
+                log_block_ts = 0.0
         if ts > 0.0 and ts < cutoff:
             old.setdefault(week_of(ts), []).append(line)
         else:

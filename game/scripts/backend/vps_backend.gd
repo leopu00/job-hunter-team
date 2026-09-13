@@ -1078,7 +1078,8 @@ func ensure_assistant() -> void:
 
 func _do_ensure_assistant() -> void:
 	_ssh("docker exec jht sh -lc 'tmux has-session -t ASSISTENTE 2>/dev/null " \
-			+ "|| setsid -f bash /app/.launcher/start-agent.sh assistente'")
+			+ "|| JHT_SPAWN_SRC=desktop-assistant-recovery setsid -f " \
+			+ "bash /app/.launcher/start-agent.sh assistente'")
 
 ## Upload CV/documenti nella drop-zone del container (/jht_user/allegati,
 ## stessa destinazione di POST /api/assistente/upload). Il file viaggia

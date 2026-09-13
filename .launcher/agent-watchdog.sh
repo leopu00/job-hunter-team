@@ -57,10 +57,23 @@ set -u
 export PATH="/app/agents/_tools:${PATH}"
 
 JHT_HOME="${JHT_HOME:-/jht_home}"
+_AGENT_WATCHDOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_DAEMON_LIB="${JHT_DAEMON_LIB:-$_AGENT_WATCHDOG_DIR/daemon-lib.sh}"
+if [ -f "$_DAEMON_LIB" ]; then
+  # Keep the watchdog evidence under the same bounded-log policy as the other
+  # launcher daemons. Sliced unit harnesses inject paths and lack this sibling.
+  source "$_DAEMON_LIB"
+else
+  jht_daemon_log() {
+    local dir="${JHT_LOGS_DIR:-${JHT_HOME:-/jht_home}/logs}"
+    mkdir -p "$dir" 2>/dev/null || true
+    printf '%s\n' "$dir/$1"
+  }
+fi
 CONFIG="$JHT_HOME/jht.config.json"
 JHT_BIN="/app/cli/bin/jht.js"
 INTERVAL_SEC="${JHT_AGENT_WATCHDOG_INTERVAL:-30}"
-LOG="$JHT_HOME/logs/agent-watchdog.log"
+LOG="${JHT_AGENT_WATCHDOG_LOG:-$(jht_daemon_log agent-watchdog.log)}"
 AGENTS=(assistente capitano mentor sentinella)
 # Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
 # il context window accumulato. Refresh deterministico, near-stateless.
@@ -82,7 +95,7 @@ PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_healt
 # SCOUT-1?" anche dopo che i messaggi al Capitano sono scorsi via.
 # Le tre dipendenze si iniettano nei test: il comportamento si prova con tmux,
 # spawner e sender finti, senza una macchina o una TUI vera.
-RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
+RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$(jht_daemon_log agent-recoveries.tsv)}"
 NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
 TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
 # Canale verso l'UTENTE: CLI Python deterministico (scrive in
@@ -109,7 +122,7 @@ INTENTIONAL_RECREATE_SESSION=""
 # Registro SEPARATO da RECOVERY_LOG di proposito: recovery_today_count() conta
 # le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
 # nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
-SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
+SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$(jht_daemon_log agent-spawn-failures.tsv)}"
 # Stato per-sessione: serie corrente + marcatori di escalation (che fanno anche
 # da cooldown). Directory iniettabile per poter esercitare l'anti-spam nei test.
 SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
@@ -157,8 +170,26 @@ BRIDGE_ESCALATE_COOLDOWN_SEC="${JHT_BRIDGE_ESCALATE_COOLDOWN_SEC:-3600}"
 
 mkdir -p "$(dirname "$LOG")"
 
+_rotate_watchdog_log() {
+  [ -n "${JHT_AGENT_WATCHDOG_LOG:-}" ] \
+    || LOG="$(jht_daemon_log agent-watchdog.log)"
+}
+
+_rotate_recovery_log() {
+  [ -n "${JHT_AGENT_RECOVERY_LOG:-}" ] \
+    || RECOVERY_LOG="$(jht_daemon_log agent-recoveries.tsv)"
+}
+
+_rotate_spawn_failure_log() {
+  [ -n "${JHT_AGENT_SPAWN_FAILURE_LOG:-}" ] \
+    || SPAWN_FAILURE_LOG="$(jht_daemon_log agent-spawn-failures.tsv)"
+}
+
 log() {
   local ts
+  # The daemon lives as long as the container, so startup-only rotation is
+  # not a bound. Every real write rechecks the shared 5 MB threshold.
+  _rotate_watchdog_log
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "[$ts] $*" | tee -a "$LOG"
 }
@@ -242,10 +273,13 @@ recovery_today_count() {
   # campi sono prodotti solo qui (timestamp UTC, nome tmux, osservazione),
   # quindi il separatore non può entrare nei dati.
   local day="$1" session="$2"
-  [ -f "$RECOVERY_LOG" ] || { echo 0; return 0; }
+  local files=()
+  [ -f "$RECOVERY_LOG.old" ] && files+=("$RECOVERY_LOG.old")
+  [ -f "$RECOVERY_LOG" ] && files+=("$RECOVERY_LOG")
+  [ "${#files[@]}" -gt 0 ] || { echo 0; return 0; }
   awk -F '\t' -v day="$day" -v session="$session" \
     '$1 ~ ("^" day "T") && $2 == session { count += 1 } END { print count + 0 }' \
-    "$RECOVERY_LOG" 2>/dev/null
+    "${files[@]}" 2>/dev/null
 }
 
 record_recovery() {
@@ -253,6 +287,7 @@ record_recovery() {
   # scrittura fallisce non mandiamo un numero inventato al Capitano: log loud,
   # nessuna misura dichiarata completa.
   local session="$1" observation="$2" now day count
+  _rotate_recovery_log
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   day="${now%%T*}"
   mkdir -p "$(dirname "$RECOVERY_LOG")" 2>/dev/null || {
@@ -352,6 +387,7 @@ record_spawn_failure() {
   # non mandiamo a nessuno un numero inventato — log loud, nessuna misura
   # dichiarata completa.
   local session="$1" detail="$2" now ts count first last f
+  _rotate_spawn_failure_log
   now="$(date -u +%s)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
@@ -535,7 +571,7 @@ ensure_agent() {
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
   mark="$(spawn_log_offset)"
-  if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+  if JHT_SPAWN_SRC=agent-watchdog "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
     # PRIMA della sonda: is_session_alive puo' scrivere la sua riga ZOMBIE nel
     # LOG, e attribuirla allo spawner sarebbe dichiarare una causa non
     # osservata su un messaggio che va al Capitano e all'utente.
@@ -665,7 +701,7 @@ respawn_worker() {
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
   local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}" mark rc detail
   mark="$(spawn_log_offset)"
-  if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+  if JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
     # PRIMA della sonda, come in ensure_agent: la riga ZOMBIE di
     # is_session_alive non e' output dello spawner e non va attribuita a lui.
     detail="$(spawn_detail_since "$mark")"
@@ -846,7 +882,7 @@ maybe_respawn_bridges() {
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
       log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
-      JHT_HOME="$JHT_HOME" bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
+      JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
@@ -871,7 +907,7 @@ maybe_respawn_bridges() {
     for _tg_role in $PROC_TG_MISSING; do
       if bridge_flap_ok "tg-bridge-$_tg_role"; then
         log "bridge-watchdog: tg-bridge[$_tg_role] missing (alive=${PROC_TG_ALIVE:-0}, expected=${PROC_TG_EXPECTED:-0}) — respawning that role only"
-        JHT_HOME="$JHT_HOME" bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
+        JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
           || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
         bridge_flap_record "tg-bridge-$_tg_role"
       else

@@ -212,7 +212,8 @@ def _remove_tg_lock(env):
     mkdir -p "${JHT_HOME:-/jht_home}/locks"
     exec 9>"${JHT_HOME:-/jht_home}/locks/start-tg-bridge.lock"
     if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
-      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES]." >&2
+      _holder="$(_spawn_lock_holder "$_spawn_lock" 9>&-)"
+      echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of tg-bridge [$TG_ROLES] (lock holder: ${_holder:-unknown})." >&2
       exit 1
     fi
   fi

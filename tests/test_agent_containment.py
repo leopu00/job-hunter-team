@@ -133,7 +133,12 @@ def test_capture_failure_aborts_before_state_change_or_kill(monkeypatch):
 
 def _watchdog_function(name: str) -> str:
     source = WATCHDOG_PATH.read_text(encoding="utf-8")
-    start = source.index(f"{name}() {{")
+    # Match the declaration at the start of a line.  A substring lookup for
+    # ``log() {`` also matches the suffix of ``jht_daemon_log() {`` and then
+    # extracts an unrelated top-level region instead of the requested helper.
+    match = re.search(rf"(?m)^{re.escape(name)}\(\) \{{", source)
+    assert match is not None, f"watchdog function not found: {name}"
+    start = match.start()
     end = source.index("\n}\n", start) + 3
     # On Windows the `bash` shim crosses a wsl.exe command-line boundary;
     # backticks inside comments can be expanded by that boundary. Comments

@@ -168,7 +168,7 @@ function startTgBridge() {
   const child = spawnLabeled('tg-bridge-launcher', '/bin/bash', [
     TG_BRIDGE_LAUNCHER,
     'tg-bridge',
-  ]);
+  ], { JHT_SPAWN_SRC: 'pid1' });
   child.on('exit', (code) => {
     if (code === 0) {
       pid1Log('tg-bridge bootstrap OK (3 process detached)');
@@ -192,7 +192,7 @@ function startSentinelBridges() {
   const child = spawnLabeled('bridge-launcher', '/bin/bash', [
     TG_BRIDGE_LAUNCHER,
     'bridge',
-  ]);
+  ], { JHT_SPAWN_SRC: 'pid1' });
   child.on('exit', (code) => {
     if (code === 0) {
       pid1Log('sentinel/pacing bridge bootstrap OK (2 process detached)');
@@ -323,7 +323,7 @@ async function startUserFacingAgents() {
         'team',
         'start',
         role,
-      ]);
+      ], { JHT_SPAWN_SRC: 'pid1-autostart' });
       child.on('exit', (code) => {
         if (code === 0) {
           pid1Log(`auto-start ${role}: OK`);
@@ -382,8 +382,11 @@ async function isCloudConfigured() {
  * stdio='inherit' direttamente perderebbe l'identita'; usiamo pipe e
  * prefiggiamo ogni riga con il label.
  */
-function spawnLabeled(label, cmd, args) {
-  const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+function spawnLabeled(label, cmd, args, extraEnv = {}) {
+  const child = spawn(cmd, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ...extraEnv },
+  });
   const prefix = `[${label}] `;
 
   // Persisti l'output del figlio su file, OLTRE a docker logs. I docker logs

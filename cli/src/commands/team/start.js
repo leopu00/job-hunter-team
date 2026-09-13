@@ -11,6 +11,15 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
+const SPAWN_ERROR_TAIL_LINES = 5;
+
+export function spawnErrorTail(output, maxLines = SPAWN_ERROR_TAIL_LINES) {
+  const lines = String(output ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.slice(-maxLines).join('\n') || 'unknown error';
+}
 
 // Serve solo al path host legacy (tmux fuori dal container): dentro al
 // container gli argomenti passano separati, senza shell di mezzo.
@@ -286,7 +295,14 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   // Argomenti ed env passati separati (docker exec -e / spawn env): niente
   // stringa di shell da quotare a mano, quindi niente quarta variante di
   // escaping da tenere allineata alle altre tre.
-  const childEnv = { ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}), ...(env || {}) };
+  // This variable must be copied explicitly: execScriptInContainer forwards
+  // only the keys listed here across `docker exec`, so inheriting it in the
+  // host-side CLI process is not enough.
+  const childEnv = {
+    JHT_SPAWN_SRC: process.env.JHT_SPAWN_SRC || 'cli-team-start',
+    ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}),
+    ...(env || {}),
+  };
   const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
     env: Object.keys(childEnv).length ? childEnv : null,
     // Cold starts can spend close to 30s in provider/config preflight before
@@ -298,8 +314,8 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     console.log(`  ${c.green('✓')} ${sName} started`);
     return 'started';
   }
-  const msg = (r.stderr || r.stdout || 'unknown error').split('\n').filter(Boolean).slice(-1)[0];
-  console.log(`  ${c.red('✗')} ${sName} — ${msg}`);
+  const msg = spawnErrorTail(r.stderr || r.stdout);
+  console.log(`  ${c.red('✗')} ${sName} — ${msg.replace(/\n/g, '\n      ')}`);
   return 'error';
 }
 
