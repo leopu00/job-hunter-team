@@ -19,6 +19,7 @@ Eseguire con: pytest tests/test_apply_gate.py -v
 """
 
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -451,3 +452,215 @@ def test_il_launcher_rifiuta_anche_senza_il_modulo(tmp_path):
         "un percorso del cancello prosegue invece di uscire: un gate che non "
         "sa rispondere deve rispondere no"
     )
+
+
+# ── La coda: la domanda che si fanno il Capitano e il CLOSER ─────────────────
+#
+# `application_queue` decide DUE cose irreversibili in due posti diversi: se
+# un agente nasce (Capitano) e quale form si apre (CLOSER). Questi test
+# chiedono la stessa cosa dei precedenti — esiste un percorso in cui parte
+# qualcosa che l'utente non ha chiesto? — più una seconda, che è sua: esiste un
+# percorso in cui la coda si dice pronta per una posizione su cui il flusso si è
+# già fermato? Quello è il giro a vuoto (Capitano che rispawna a ogni tick) e il
+# tentativo cieco (CLOSER che rilancia un captcha) insieme.
+
+from apply_gate import application_queue, checkpoint_path  # noqa: E402
+
+
+def make_queue_db(tmp_path: Path, positions=(), applications=()) -> str:
+    """Le colonne che la coda legge: stato, flag, URL, PDF, invio di oggi."""
+    path = tmp_path / "jobs.db"
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT, url TEXT, "
+        "apply_requested INTEGER DEFAULT 0, apply_requested_at TIMESTAMP, "
+        "apply_requested_by TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE applications (id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE, "
+        "cv_pdf_path TEXT, applied INTEGER DEFAULT 0, applied_via TEXT, applied_at TIMESTAMP)"
+    )
+    conn.executemany(
+        "INSERT INTO positions (id, status, url, apply_requested, apply_requested_at, "
+        "apply_requested_by) VALUES (?, ?, ?, ?, ?, ?)",
+        positions,
+    )
+    conn.executemany(
+        "INSERT INTO applications (position_id, cv_pdf_path, applied, applied_via, applied_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        applications,
+    )
+    conn.commit()
+    conn.close()
+    return str(path)
+
+
+def cv_file(tmp_path: Path, name="cv.pdf") -> str:
+    p = tmp_path / name
+    p.write_bytes(b"%PDF-1.4 test")
+    return str(p)
+
+
+def queue(tmp_path, db, config=CONSENT_ON):
+    return application_queue(
+        config_path=write_config(tmp_path, config), db_path=db, jht_home=tmp_path
+    )
+
+
+URL = "https://jobs.ashbyhq.com/example/123"
+ASKED = "2026-09-12T10:00:00Z"
+
+
+def authorised(pid=1, status="ready", asked=ASKED, by="user_web", url=URL):
+    return (pid, status, url, 1, asked, by)
+
+
+def write_checkpoint(tmp_path, pid, state, updated_at):
+    p = checkpoint_path(pid, tmp_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"position_id": pid, "state": state, "updated_at": updated_at}))
+
+
+def test_coda_senza_consenso_non_e_pronta_anche_con_posizioni_autorizzate(tmp_path):
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": False}}}
+    q = queue(tmp_path, db, cfg)
+    assert not q["ready"]
+    assert q["reason"] == "consent_disabled"
+    assert q["positions"] == []
+
+
+def test_coda_pronta_con_consenso_flag_url_e_cv(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv, 0, None, None)])
+    q = queue(tmp_path, db)
+    assert q["ready"], q
+    assert q["reason"] == "queue_ready"
+    assert q["positions"] == [{"position_id": 1, "url": URL, "cv_pdf_path": cv}]
+    assert q["remaining_today"] == 3
+
+
+def test_coda_prende_solo_ready_flaggate_da_un_utente(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(
+        tmp_path,
+        [
+            (1, "ready", URL, 0, None, None),                  # non flaggata
+            authorised(2, status="review"),                    # il Critico non ha votato
+            authorised(3, by="agent_closer"),                  # flag acceso da un processo
+            authorised(4, asked=None),                         # flag senza istante
+        ],
+        [(pid, cv, 0, None, None) for pid in (1, 2, 3, 4)],
+    )
+    q = queue(tmp_path, db)
+    assert not q["ready"]
+    assert q["reason"] == "queue_empty"
+    held = {h["position_id"]: h["reason"] for h in q["held"]}
+    assert held == {3: "authorisation_not_from_user", 4: "authorisation_undated"}
+
+
+def test_coda_non_ripropone_una_candidatura_gia_partita(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv, 1, "user_manual", "2026-09-12 11:00:00")])
+    q = queue(tmp_path, db)
+    assert not q["ready"]
+    assert q["held"] == [{"position_id": 1, "reason": "already_submitted"}]
+
+
+def test_coda_trattiene_senza_url_o_senza_pdf(tmp_path):
+    db = make_queue_db(
+        tmp_path,
+        [authorised(1, url=""), authorised(2)],
+        [(1, cv_file(tmp_path), 0, None, None), (2, str(tmp_path / "missing.pdf"), 0, None, None)],
+    )
+    q = queue(tmp_path, db)
+    assert not q["ready"]
+    assert {h["reason"] for h in q["held"]} == {"url_missing", "cv_pdf_missing"}
+
+
+@pytest.mark.parametrize("state", ["blocked_human", "dry_run"])
+def test_un_flusso_fermo_tiene_la_posizione_fuori_dalla_coda(tmp_path, state):
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    write_checkpoint(tmp_path, 1, state, "2026-09-12T12:00:00+00:00")
+    q = queue(tmp_path, db)
+    assert not q["ready"], "la coda ripropone una posizione su cui il flusso si e' gia' fermato"
+    assert q["held"] == [{"position_id": 1, "reason": f"checkpoint_{state}"}]
+
+
+def test_una_nuova_autorizzazione_dopo_il_blocco_la_rimette_in_coda(tmp_path):
+    db = make_queue_db(
+        tmp_path,
+        [authorised(asked="2026-09-12T13:00:00Z")],
+        [(1, cv_file(tmp_path), 0, None, None)],
+    )
+    write_checkpoint(tmp_path, 1, "blocked_human", "2026-09-12T12:00:00+00:00")
+    q = queue(tmp_path, db)
+    assert q["ready"], q
+    assert [p["position_id"] for p in q["positions"]] == [1]
+
+
+def test_checkpoint_illeggibile_trattiene(tmp_path):
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    p = checkpoint_path(1, tmp_path)
+    p.parent.mkdir(parents=True)
+    p.write_text("{ broken")
+    q = queue(tmp_path, db)
+    assert not q["ready"]
+    assert q["held"] == [{"position_id": 1, "reason": "checkpoint_unreadable"}]
+
+
+def test_un_checkpoint_in_corso_non_trattiene(tmp_path):
+    """Un crash a metà compilazione deve riprendere, non restare fermo."""
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    write_checkpoint(tmp_path, 1, "fill", "2026-09-12T12:00:00+00:00")
+    assert queue(tmp_path, db)["ready"]
+
+
+def test_tetto_giornaliero_chiude_la_coda(tmp_path):
+    cv = cv_file(tmp_path)
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": 1}}}
+    conn_rows = [authorised(1), (2, "applied", URL, 1, ASKED, "user_web")]
+    db = make_queue_db(tmp_path, conn_rows, [(1, cv, 0, None, None)])
+    c = sqlite3.connect(db)
+    c.execute(
+        "INSERT INTO applications (position_id, cv_pdf_path, applied, applied_via, applied_at) "
+        "VALUES (2, ?, 1, 'agent_closer', datetime('now', 'localtime'))",
+        (cv,),
+    )
+    c.commit()
+    c.close()
+    q = queue(tmp_path, db, cfg)
+    assert not q["ready"]
+    assert q["reason"] == "daily_cap_reached"
+    assert q["sent_today"] == 1
+
+
+def test_un_invio_a_mano_non_consuma_il_tetto_del_closer(tmp_path):
+    cv = cv_file(tmp_path)
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": 1}}}
+    db = make_queue_db(tmp_path, [authorised(1), (2, "applied", URL, 0, None, None)], [(1, cv, 0, None, None)])
+    c = sqlite3.connect(db)
+    c.execute(
+        "INSERT INTO applications (position_id, applied, applied_via, applied_at) "
+        "VALUES (2, 1, 'user_manual', datetime('now', 'localtime'))"
+    )
+    c.commit()
+    c.close()
+    assert queue(tmp_path, db, cfg)["ready"]
+
+
+def test_cli_queue_esce_0_solo_se_qualcosa_puo_partire(tmp_path):
+    cv = cv_file(tmp_path)
+    cfg = str(write_config(tmp_path, CONSENT_ON))
+    ready_db = make_queue_db(tmp_path, [authorised()], [(1, cv, 0, None, None)])
+    env_home = {**os.environ, "JHT_HOME": str(tmp_path)}
+    r = run_cli("queue", "--json", "--config", cfg, "--db", ready_db, env=env_home)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["positions"][0]["position_id"] == 1
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    empty_db = make_queue_db(empty, [], [])
+    r = run_cli("queue", "--config", cfg, "--db", empty_db, env=env_home)
+    assert r.returncode == 1
+    assert "queue_empty" in r.stderr

@@ -37,6 +37,7 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 | 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
 | 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | user-facing career mentor: strategic nudges (no CV/pipeline) |
+| 📮 CLOSER | `CLOSER-1` (singleton) | 1 | Sonnet | sends ONLY the applications the user authorised, with a receipt — spawned by you when the application queue is open (RULE C-27) |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: scalable workers (Scout / Analista / Scorer / Scrittore) **have no fixed cap** — **you** decide how many to spawn based on queue depth and **budget** (`vel_team` vs `vel_target` on the 5h window + `weekly_remaining`, see C-07 throttle + C-09 weekly-awareness + the `pipeline-triage` skill). The `≤N` numbers are **anti-runaway safety ceilings**, not targets nor operational limits: if the user asks "spawn another Scout" or the queues call for it and the budget holds, do it (e.g. `SCOUT-3`). The guard is the **budget, not the count**. Singletons (Critico / Sentinella / Dottore / Assistente / Capitano) stay 1 by design.
 >
@@ -374,6 +375,18 @@ Procedure (bounded):
 4. **Empty care queues ≠ idling — surplus budget goes back to finding (C-25).** When `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **and** the expired set are ALL empty, the mode's own work is done until the 14-day window re-matures more positions — but if there is budget headroom, do NOT park the team: per **C-25** the surplus goes to **new positions** (1 Scout, normal pacing), unless the user explicitly forbade any sourcing (board, C-26). Care mode reprioritizes the budget; it never justifies wasting it.
 
 When the file does NOT exist → normal behaviour (active sourcing; C-13 recheck stays on-demand).
+
+**C-27 — CLOSER on-demand only, and only when something can go out (JHT-CLOSER, 2026-09-13).** The CLOSER sends the applications the user authorised, one at a time, with a receipt. It exists ONLY when both hold: the user's general consent is on AND at least one authorised position can be sent now. A single command answers both, and it is the same queue the CLOSER itself reads:
+
+```
+python3 /app/shared/skills/apply_gate.py queue >/dev/null
+```
+
+1. Exit `0` AND no `CLOSER-1` in `tmux list-sessions` → `bash /app/.launcher/start-agent.sh closer 1`.
+2. Exit `0` AND `CLOSER-1` already alive → do nothing: it re-reads the queue at every iteration.
+3. Exit non-zero → **do not spawn**. Consent off, empty queue, every authorised position held, or the daily cap reached: **zero CLOSER instances is the correct state**, not idling to fix — C-05 anti-idle does not apply here.
+
+Always `closer 1`: it is a single instance (the launcher refuses `closer 2`, two CLOSERs could send the same application twice), so no `roll_worker_number.py` and no scaling. Never set `apply_requested` yourself, never write `applied`, never ask the CLOSER to retry a position whose flow stopped on `blocked_human` — the next move there is the user's. And never urge the user to authorise applications (RULE-T18): the flag is theirs to set.
 
 ---
 

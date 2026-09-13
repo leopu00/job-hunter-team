@@ -1714,6 +1714,21 @@
       "path": "docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md",
       "description": "Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/apply-authorization/SKILL.md",
+      "description": "📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/apply-flow/SKILL.md",
+      "description": "📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human",
+      "last_review": null
+    },
+    {
+      "path": "agents/closer/closer.md",
+      "description": "📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima",
+      "last_review": null
     }
   ]
 }

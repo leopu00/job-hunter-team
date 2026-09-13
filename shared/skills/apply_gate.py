@@ -50,6 +50,7 @@ Uso come CLI (gate da shell)::
     python3 -m shared.skills.apply_gate consent            # exit 0 = spawn ammesso
     python3 -m shared.skills.apply_gate position 42        # exit 0 = invio ammesso
     python3 -m shared.skills.apply_gate position 42 --json # verdetto su stdout
+    python3 -m shared.skills.apply_gate queue --json       # cosa c'è da inviare ORA
 
     # exit 0 = passa · exit 1 = rifiutato (il perché su stderr) · exit 2 = uso errato
 """
@@ -69,6 +70,7 @@ __all__ = [
     "DEFAULT_MAX_PER_DAY",
     "USER_REQUEST_ORIGINS",
     "Verdict",
+    "application_queue",
     "apply_verdict",
     "consent_verdict",
     "position_verdict",
@@ -83,9 +85,10 @@ __all__ = [
 # ATS nuova senza spedire davvero: non è il percorso dell'utente.
 AUTO_APPLY_MODES = ("authorised", "dry_run")
 
-# Tetto giornaliero di default. Non è una politica di rate qui dentro — quella
-# è roba della fase C — ma il valore deve avere un default sano perché un
-# config a metà non autorizzi un numero indefinito di invii.
+# Tetto giornaliero di default. Lo applica `application_queue` (la coda si
+# chiude quando il CLOSER ha già spedito `max_per_day` candidature oggi), e il
+# valore deve avere un default sano perché un config a metà non autorizzi un
+# numero indefinito di invii.
 DEFAULT_MAX_PER_DAY = 3
 
 # Chi può accendere il flag per-posizione. Il vocabolario vive QUI e non in un
@@ -467,6 +470,195 @@ def apply_verdict(
     )
 
 
+# ── La coda: cosa c'è da inviare ADESSO ──────────────────────────────────────
+#
+# La domanda che si fanno in due, con lo stesso bisogno di una risposta sola:
+# il CAPITANO («devo spawnare il CLOSER?») e il CLOSER («quale posizione
+# prendo?»). Se la risposta del primo fosse una query scritta nel suo prompt e
+# quella del secondo un'altra, il giorno che divergono il Capitano spawna un
+# agente che non trova niente da fare — e lo rispawna a ogni tick, che è il
+# giro a vuoto che la regola di spawn esiste per impedire.
+#
+# ⚠️ Una posizione autorizzata NON è per forza una posizione da prendere. Tre
+# casi la tengono ferma, e nessuno dei tre si risolve riprovando:
+#
+#   - il flusso si è già fermato su di lei (`blocked_human`): serve una persona,
+#     e rilanciarlo è esattamente il «tentativo cieco» che la spec vieta;
+#   - è già stata compilata in `dry_run`: rifarlo non aggiunge niente;
+#   - manca ciò che serve a compilare (URL, PDF del CV).
+#
+# Ferma finché l'utente non la ri-autorizza: un `apply_requested_at` PIÙ
+# RECENTE del checkpoint è una nuova azione dell'utente (spegne e riaccende il
+# flag dopo aver aggiunto la risposta mancante), ed è l'unica cosa che la
+# rimette in coda. Un timestamp che non si confronta vale «ferma».
+
+# Il checkpoint di `apply_flow.ApplicationFlow`, relativo a `$JHT_HOME`. Stesso
+# percorso di là, ripetuto qui per non importare Playwright in un gate da
+# shell; `tests/test_closer_wiring.py` asserisce che i due coincidano.
+CHECKPOINT_SUBDIR = (".cache", "apply-flow")
+
+# Stati del checkpoint che tengono la posizione fuori dalla coda.
+HELD_CHECKPOINT_STATES = ("blocked_human", "dry_run")
+
+
+def _jht_home() -> Path:
+    return Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
+
+
+def checkpoint_path(position_id: int, jht_home: Path | None = None) -> Path:
+    return (jht_home or _jht_home()).joinpath(*CHECKPOINT_SUBDIR, f"{int(position_id)}.json")
+
+
+def _parse_instant(value: Any):
+    """ISO (`…Z`, `…+00:00`) o il `YYYY-MM-DD HH:MM:SS` di SQLite. `None` se no.
+
+    Un istante senza fuso si legge come UTC: è ciò che scrivono sia la route
+    web sia `datetime('now')`. Sbagliare il fuso qui sposta al massimo di
+    qualche ora il momento in cui una posizione ferma torna in coda, e sempre
+    dopo un'azione dell'utente — mai prima.
+    """
+    from datetime import datetime, timezone
+
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None) -> str:
+    """Il motivo per cui il checkpoint tiene ferma la posizione, o `""`."""
+    path = checkpoint_path(position_id, jht_home)
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return "checkpoint_unreadable"
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return "checkpoint_unreadable"
+    if not isinstance(data, dict):
+        return "checkpoint_unreadable"
+    state = data.get("state")
+    if state not in HELD_CHECKPOINT_STATES:
+        return ""
+    held_at = _parse_instant(data.get("updated_at"))
+    asked_at = _parse_instant(authorised_at)
+    if held_at and asked_at and asked_at > held_at:
+        return ""
+    return f"checkpoint_{state}"
+
+
+def _resolve_file(value: Any, jht_home: Path | None) -> Path | None:
+    if not value or not str(value).strip():
+        return None
+    p = Path(str(value).strip())
+    if not p.is_absolute():
+        p = (jht_home or _jht_home()) / p
+    return p if p.is_file() else None
+
+
+def application_queue(
+    config: dict | None = None,
+    config_path: Path | None = None,
+    conn: sqlite3.Connection | None = None,
+    db_path: str | None = None,
+    jht_home: Path | None = None,
+) -> dict[str, Any]:
+    """Le posizioni che il CLOSER può prendere adesso, e il perché delle altre.
+
+    `ready` è vero SOLO se il consenso c'è, il tetto giornaliero non è
+    raggiunto e almeno una posizione passa `position_verdict` senza essere
+    ferma. In ogni altro caso è falso, con un `reason` stabile:
+    `consent_*`/`config_*`, `db_unavailable`, `queue_unreadable`,
+    `queue_empty`, `daily_cap_reached`.
+    """
+    out: dict[str, Any] = {
+        "ready": False,
+        "reason": "",
+        "detail": "",
+        "mode": None,
+        "max_per_day": None,
+        "sent_today": None,
+        "remaining_today": None,
+        "positions": [],
+        "held": [],
+    }
+
+    consent = consent_verdict(config, config_path)
+    if not consent.allowed:
+        out.update(reason=consent.reason, detail=consent.detail)
+        return out
+    out["mode"] = consent.context.get("mode")
+    out["max_per_day"] = consent.context.get("max_per_day")
+
+    own_conn = conn is None
+    if own_conn:
+        try:
+            conn = sqlite3.connect(db_path or _db_path())
+        except sqlite3.Error as err:
+            out.update(reason="db_unavailable", detail=f"cannot open the local database: {err}")
+            return out
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path "
+                "FROM positions p LEFT JOIN applications a ON a.position_id = p.id "
+                "WHERE p.apply_requested = 1 AND p.status = 'ready' "
+                "ORDER BY p.apply_requested_at, p.id"
+            ).fetchall()
+            # Il tetto conta SOLO ciò che il CLOSER ha davvero spedito oggi. Un
+            # invio dell'utente a mano non consuma la sua quota: il tetto
+            # esiste per il ritmo dell'automazione, non per quello della persona.
+            sent_today = conn.execute(
+                "SELECT COUNT(*) FROM applications WHERE applied = 1 "
+                "AND applied_via = 'agent_closer' "
+                "AND date(applied_at) = date('now', 'localtime')"
+            ).fetchone()[0]
+        except sqlite3.Error as err:
+            out.update(reason="queue_unreadable", detail=f"cannot read the application queue: {err}")
+            return out
+
+        positions, held = [], []
+        for pid, url, asked_at, cv_pdf in rows:
+            verdict = position_verdict(pid, conn=conn)
+            if not verdict.allowed:
+                held.append({"position_id": pid, "reason": verdict.reason})
+                continue
+            if not url or not str(url).strip():
+                held.append({"position_id": pid, "reason": "url_missing"})
+                continue
+            cv = _resolve_file(cv_pdf, jht_home)
+            if cv is None:
+                held.append({"position_id": pid, "reason": "cv_pdf_missing"})
+                continue
+            hold = _checkpoint_hold(pid, asked_at, jht_home)
+            if hold:
+                held.append({"position_id": pid, "reason": hold})
+                continue
+            positions.append({"position_id": pid, "url": str(url).strip(), "cv_pdf_path": str(cv)})
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
+
+    remaining = max(0, int(out["max_per_day"]) - int(sent_today))
+    out.update(sent_today=sent_today, remaining_today=remaining, positions=positions, held=held)
+    if not positions:
+        out.update(reason="queue_empty", detail="no authorised position can be taken now")
+    elif remaining <= 0:
+        out.update(
+            reason="daily_cap_reached",
+            detail="the daily cap of automated applications is reached; the queue waits for tomorrow",
+        )
+    else:
+        out.update(ready=True, reason="queue_ready", detail=f"{len(positions)} authorised position(s) can be taken")
+    return out
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
@@ -487,8 +679,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "check",
-        choices=("consent", "position"),
-        help="consent = may the CLOSER exist at all · position = may THIS one go out",
+        choices=("consent", "position", "queue"),
+        help="consent = may the CLOSER exist at all · position = may THIS one go out · "
+        "queue = what can go out now (exit 0 only if something can)",
     )
     parser.add_argument(
         "position_id",
@@ -505,6 +698,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check == "consent":
         return _emit(consent_verdict(path=cfg_path), args.json)
+
+    if args.check == "queue":
+        q = application_queue(config_path=cfg_path, db_path=args.db)
+        if args.json:
+            print(json.dumps(q, ensure_ascii=False))
+        elif q["ready"]:
+            print(f"[apply-gate] QUEUE {q['reason']} — {q['detail']} (remaining_today={q['remaining_today']})")
+        else:
+            print(f"[apply-gate] QUEUE {q['reason']} — {q['detail']}", file=sys.stderr)
+        return 0 if q["ready"] else 1
 
     if args.position_id is None:
         parser.error("the `position` check needs a position id")
