@@ -37,6 +37,7 @@ import { registerCloudCommand } from './commands/cloud.js';
 import { registerSentinellaCommand } from './commands/sentinella.js';
 import { registerContainerCommand } from './commands/container.js';
 import { registerPositionsCommand } from './commands/positions.js';
+import { registerApplyCommand } from './commands/apply.js';
 import { registerTicketCommand, registerDirectivesCommand, registerFeedbackCommand } from './commands/decisions.js';
 import { registerArtifactCommand } from './commands/artifacts.js';
 import { registerCoordinatorCommand } from './commands/coordinator.js';
@@ -130,6 +131,7 @@ export function buildProgram() {
   registerSentinellaCommand(program);
   registerContainerCommand(program);
   registerPositionsCommand(program);
+  registerApplyCommand(program);
   registerTicketCommand(program);
   registerDirectivesCommand(program);
   registerArtifactCommand(program);
