@@ -285,6 +285,42 @@ def test_greenhouse_invisible_recaptcha_plumbing_is_not_a_challenge(
     assert result.status == "applied"
 
 
+def test_greenhouse_invisible_recaptcha_badge_is_not_a_challenge(
+    page, tmp_path: Path, cv_path: Path
+):
+    html = greenhouse_form().replace(
+        "<button class=\"btn btn--pill\"",
+        '<iframe title="reCAPTCHA" '
+        'src="/recaptcha/enterprise/anchor?size=invisible"></iframe>'
+        '<button class="btn btn--pill"',
+    )
+    page.set_content(html)
+    flow = build_flow(tmp_path, cv_path)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "applied"
+
+
+def test_greenhouse_runtime_redirect_outside_trusted_hosts_blocks_before_click(
+    page, tmp_path: Path, cv_path: Path
+):
+    page.route(
+        "https://careers.example.invalid/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body=greenhouse_form()),
+    )
+    page.goto("https://careers.example.invalid/role")
+    recorded: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, recorded=recorded)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason == "greenhouse_redirect_untrusted"
+    assert page.evaluate("window.submitCount") == 0
+    assert recorded == []
+
+
 def test_greenhouse_accepts_the_current_filename_upload_receipt(
     page, tmp_path: Path, cv_path: Path
 ):

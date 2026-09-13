@@ -717,7 +717,16 @@ class AshbyRecipe:
         for selector, reason in selectors:
             matches = page.locator(selector)
             for index in range(matches.count()):
-                if matches.nth(index).is_visible():
+                match = matches.nth(index)
+                if (
+                    reason == "captcha"
+                    and match.evaluate("element => element.tagName") == "IFRAME"
+                    and AshbyRecipe._is_invisible_recaptcha_badge(
+                        match.get_attribute("src") or ""
+                    )
+                ):
+                    continue
+                if match.is_visible():
                     return reason
         body = page.locator("body")
         text = body.inner_text().casefold() if body.count() else ""
@@ -726,6 +735,17 @@ class AshbyRecipe:
         if any(marker in text for marker in ("enter verification code", "two-factor authentication")):
             return "two_factor"
         return ""
+
+    @staticmethod
+    def _is_invisible_recaptcha_badge(src: str) -> bool:
+        try:
+            parsed = urllib.parse.urlsplit(src)
+            sizes = urllib.parse.parse_qs(parsed.query).get("size", [])
+        except ValueError:
+            return False
+        return parsed.path.rstrip("/").endswith("/anchor") and any(
+            size.casefold() == "invisible" for size in sizes
+        )
 
     def review(self, page) -> None:
         challenge = self._challenge_reason(page)
@@ -1512,6 +1532,34 @@ class ApplicationFlow:
         return recipe(self.profile, self.cv_path)
 
     @staticmethod
+    def _greenhouse_page_url_trusted(url: str) -> bool:
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            port = parsed.port
+        except ValueError:
+            return False
+        return bool(
+            parsed.scheme == "https"
+            and (parsed.hostname or "").casefold() in GREENHOUSE_HOSTS
+            and port in {None, 443}
+        )
+
+    @staticmethod
+    def _assert_recipe_page(
+        page, platform: str, step: str, *, allow_injected_blank: bool = False
+    ) -> None:
+        if platform != "greenhouse":
+            return
+        if allow_injected_blank and page.url == "about:blank":
+            return
+        if not ApplicationFlow._greenhouse_page_url_trusted(page.url):
+            raise BlockedHuman(
+                "greenhouse_redirect_untrusted",
+                "Greenhouse redirected outside its three trusted public hosts",
+                step,
+            )
+
+    @staticmethod
     def _same_confirmation_origin(
         application_url: str, confirmation_url: str, platform: str
     ) -> bool:
@@ -1775,7 +1823,20 @@ class ApplicationFlow:
                     )
                 checkpoint.platform = detection.platform
                 recipe = self._recipe(detection.platform)
+                injected_blank = not navigate and active_page.url == "about:blank"
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "detect",
+                    allow_injected_blank=injected_blank,
+                )
                 recipe.open_form(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "detect",
+                    allow_injected_blank=injected_blank,
+                )
                 # Confirm the rendered form too.  URL-only detection is not
                 # enough to interact when a block/error page owns that URL.
                 rendered = detect_ats(self.url, active_page.content())
@@ -1789,18 +1850,42 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "fill",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("fill", "upload_cv")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.upload_cv(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "upload_cv",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("upload_cv", "screening")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_screening(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "screening",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("screening", "review")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.review(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "review",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("review", "submit")
                 checkpoint.save(self.checkpoint_path)
 
