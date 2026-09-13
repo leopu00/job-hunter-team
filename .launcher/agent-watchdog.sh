@@ -170,8 +170,26 @@ BRIDGE_ESCALATE_COOLDOWN_SEC="${JHT_BRIDGE_ESCALATE_COOLDOWN_SEC:-3600}"
 
 mkdir -p "$(dirname "$LOG")"
 
+_rotate_watchdog_log() {
+  [ -n "${JHT_AGENT_WATCHDOG_LOG:-}" ] \
+    || LOG="$(jht_daemon_log agent-watchdog.log)"
+}
+
+_rotate_recovery_log() {
+  [ -n "${JHT_AGENT_RECOVERY_LOG:-}" ] \
+    || RECOVERY_LOG="$(jht_daemon_log agent-recoveries.tsv)"
+}
+
+_rotate_spawn_failure_log() {
+  [ -n "${JHT_AGENT_SPAWN_FAILURE_LOG:-}" ] \
+    || SPAWN_FAILURE_LOG="$(jht_daemon_log agent-spawn-failures.tsv)"
+}
+
 log() {
   local ts
+  # The daemon lives as long as the container, so startup-only rotation is
+  # not a bound. Every real write rechecks the shared 5 MB threshold.
+  _rotate_watchdog_log
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "[$ts] $*" | tee -a "$LOG"
 }
@@ -245,10 +263,13 @@ recovery_today_count() {
   # campi sono prodotti solo qui (timestamp UTC, nome tmux, osservazione),
   # quindi il separatore non può entrare nei dati.
   local day="$1" session="$2"
-  [ -f "$RECOVERY_LOG" ] || { echo 0; return 0; }
+  local files=()
+  [ -f "$RECOVERY_LOG.old" ] && files+=("$RECOVERY_LOG.old")
+  [ -f "$RECOVERY_LOG" ] && files+=("$RECOVERY_LOG")
+  [ "${#files[@]}" -gt 0 ] || { echo 0; return 0; }
   awk -F '\t' -v day="$day" -v session="$session" \
     '$1 ~ ("^" day "T") && $2 == session { count += 1 } END { print count + 0 }' \
-    "$RECOVERY_LOG" 2>/dev/null
+    "${files[@]}" 2>/dev/null
 }
 
 record_recovery() {
@@ -256,6 +277,7 @@ record_recovery() {
   # scrittura fallisce non mandiamo un numero inventato al Capitano: log loud,
   # nessuna misura dichiarata completa.
   local session="$1" observation="$2" now day count
+  _rotate_recovery_log
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   day="${now%%T*}"
   mkdir -p "$(dirname "$RECOVERY_LOG")" 2>/dev/null || {
@@ -355,6 +377,7 @@ record_spawn_failure() {
   # non mandiamo a nessuno un numero inventato — log loud, nessuna misura
   # dichiarata completa.
   local session="$1" detail="$2" now ts count first last f
+  _rotate_spawn_failure_log
   now="$(date -u +%s)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"

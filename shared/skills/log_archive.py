@@ -93,8 +93,21 @@ def archive_source(src: dict, cutoff: float, stamp: str, dry: bool) -> dict:
         header = lines.pop(0)
     old: dict = {}  # settimana → [righe]
     keep: list = []
+    log_block_ts = 0.0
     for line in lines:
         ts = row_ts(line, src["kind"])
+        if src["kind"] == "log":
+            if ts > 0.0:
+                log_block_ts = ts
+            elif not (line.startswith("[") and line[1:5].isdigit()):
+                # Child stdout/stderr is appended immediately after the
+                # watchdog's timestamped action. It belongs to that block;
+                # keeping it timestamp-less would make it immortal.
+                ts = log_block_ts
+            else:
+                # A malformed timestamp-looking row stays live (fail-safe)
+                # and must not lend the previous block's date to its tail.
+                log_block_ts = 0.0
         if ts > 0.0 and ts < cutoff:
             old.setdefault(week_of(ts), []).append(line)
         else:

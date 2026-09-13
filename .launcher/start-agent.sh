@@ -77,6 +77,9 @@ SESSION="$ROLE${INSTANCE:+-$INSTANCE}"
 
 _spawn_json_escape() {
   local value="${1:-}"
+  # ROLE and source can arrive before validation. Strip ASCII control bytes
+  # so even a hostile/local invocation cannot corrupt the JSONL framing.
+  value="$(printf '%s' "$value" | LC_ALL=C tr -d '\000-\037')"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
   value="${value//$'\n'/\\n}"
@@ -132,7 +135,7 @@ _spawn_on_exit() {
   # Evita ricorsione se una futura modifica introducesse un `exit` qui.
   trap - EXIT
   now="$(date -u +%s 2>/dev/null)" || now="$_spawn_started_s"
-  if [ "$_spawn_stage" = "lock_wait" ]; then
+  if [ "$_spawn_stage" = "lock_wait" ] || [ "$_spawn_stage" = "lock_timeout" ]; then
     _spawn_flock_wait_s=$((now - _spawn_flock_started_s))
     [ "$rc" -eq 0 ] || _spawn_stage="lock_timeout"
   fi

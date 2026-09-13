@@ -83,6 +83,7 @@ def test_worker_fallback_logs_the_actual_launcher_result(
 
     assert parsed == {"usage": 12, "reset_at": "18:00", "weekly_usage": 34}
     assert launches[0][1]["env"]["JHT_SPAWN_SRC"] == "sentinel-bridge"
+    assert launches[0][1]["errors"] == "replace"
     logged = capsys.readouterr().err
     assert "worker spawn rc=3" in logged
     assert "worker spawn stdout: launcher out" in logged

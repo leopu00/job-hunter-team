@@ -34,6 +34,12 @@ def _load_archiver(tmp_path: Path):
     return module
 
 
+def _shell_function(source: str, name: str) -> str:
+    start = source.index(f"\n{name}() {{") + 1
+    end = source.index("\n}\n", start)
+    return source[start : end + 3]
+
+
 def test_watchdog_and_spawn_trace_use_the_shared_size_rotation():
     watchdog = WATCHDOG.read_text(encoding="utf-8")
     launcher = START_AGENT.read_text(encoding="utf-8")
@@ -45,6 +51,43 @@ def test_watchdog_and_spawn_trace_use_the_shared_size_rotation():
         assert f"{variable}=\"${{" in watchdog
         assert f"jht_daemon_log {name}" in watchdog
     assert "jht_daemon_log spawn-attempts.jsonl" in launcher
+
+
+def test_watchdog_refreshes_bounded_paths_while_the_daemon_is_running():
+    watchdog = WATCHDOG.read_text(encoding="utf-8")
+    assert "_rotate_watchdog_log" in _shell_function(watchdog, "log")
+    assert "_rotate_recovery_log" in _shell_function(watchdog, "record_recovery")
+    assert "_rotate_spawn_failure_log" in _shell_function(
+        watchdog, "record_spawn_failure"
+    )
+
+
+def test_daily_recovery_count_survives_size_rotation(tmp_path):
+    watchdog = WATCHDOG.read_text(encoding="utf-8")
+    recovery_count = _shell_function(watchdog, "recovery_today_count")
+    live = tmp_path / "agent-recoveries.tsv"
+    rotated = tmp_path / "agent-recoveries.tsv.old"
+    live.write_text(
+        "2026-09-13T12:02:00Z\tSCOUT-1\tzombie\n", encoding="utf-8"
+    )
+    rotated.write_text(
+        "2026-09-13T12:00:00Z\tSCOUT-1\tmissing\n"
+        "2026-09-13T12:01:00Z\tSCOUT-1\tzombie\n",
+        encoding="utf-8",
+    )
+    script = tmp_path / "count.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\nset -eu\n"
+        f"RECOVERY_LOG={live!s}\n"
+        f"{recovery_count}\n"
+        'recovery_today_count "2026-09-13" "SCOUT-1"\n',
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "3"
 
 
 def test_shared_rotation_moves_an_oversized_log(tmp_path):
@@ -104,3 +147,29 @@ def test_archiver_registers_and_parses_every_spawn_log_format(tmp_path):
         with zipfile.ZipFile(path) as bundle:
             members.extend(bundle.namelist())
     assert {name for name in EXPECTED if any(m.startswith(name) for m in members)} == set(EXPECTED)
+
+
+def test_watchdog_spawn_output_follows_its_timestamped_log_entry(tmp_path):
+    archive = _load_archiver(tmp_path)
+    path = archive.LOGS / "agent-watchdog.log"
+    fresh = "2026-09-13T12:00:00Z"
+    path.write_text(
+        "[2026-01-05T12:00:00Z] relaunching worker\n"
+        "launcher detail without its own timestamp\n"
+        f"[{fresh}] next tick\n"
+        "fresh launcher detail\n",
+        encoding="utf-8",
+    )
+    cutoff = time.mktime(time.strptime("2026-06-01", "%Y-%m-%d"))
+
+    result = archive.archive_source(
+        {"file": "agent-watchdog.log", "kind": "log"},
+        cutoff,
+        "test-run",
+        dry=False,
+    )
+
+    assert result["archived"] == 2
+    assert path.read_text(encoding="utf-8") == (
+        f"[{fresh}] next tick\nfresh launcher detail\n"
+    )

@@ -2422,7 +2422,7 @@ def _try_claude_tui_parser():
             spawn_result = subprocess.run(
                 ["bash", START_AGENT_SH, "worker"],
                 env={**os.environ, "JHT_SPAWN_SRC": "sentinel-bridge"},
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, errors="replace", timeout=10,
             )
             _log_worker_spawn_result(spawn_result)
             time.sleep(cu.WORKER_BOOT_WAIT_S)
