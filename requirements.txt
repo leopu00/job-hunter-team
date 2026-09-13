@@ -19,7 +19,7 @@ gspread==6.2.1
 # finestra tmux. I due SDK erano installati a ogni build per la sola
 # `shared/llm/`, che nessuno importava — rimossi con essa il 2026-07-25.
 # PDF reading per gli agenti che leggono CV/lettere degli utenti.
-pypdf==6.15.0
+pypdf==6.16.1
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
 beautifulsoup4==4.15.0
 lxml==6.1.1
