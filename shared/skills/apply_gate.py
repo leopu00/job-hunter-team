@@ -74,6 +74,7 @@ __all__ = [
     "apply_verdict",
     "toggle_verdict",
     "consent_verdict",
+    "daily_cap_verdict",
     "position_verdict",
 ]
 
@@ -142,6 +143,27 @@ def _load_rule(path: Path = RULE_PATH) -> tuple[str | None, tuple[str, ...], tup
 # Lo stato in cui l'utente può autorizzare (`ready`): il CV esiste ed è passato
 # dal Critico. Prima non c'è niente di approvato da spedire.
 AUTHORISABLE_STATUS, POST_SUBMISSION_STATES, USER_REQUEST_ORIGINS, RULE_ERROR = _load_rule()
+
+
+def _load_automated_channels(path: Path = RULE_PATH) -> tuple[tuple[str, ...], str]:
+    """The `applied_via` values that consume the CLOSER's daily cap.
+
+    Browser (`agent_closer`) and email (`agent_closer_email`) sends share ONE
+    cap: the cap limits how fast the automation writes to recruiters, and a
+    second channel with its own budget would double that pace silently. An
+    absent or malformed list leaves the cap closed, not unlimited.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        channels = tuple(data["automated_applied_via"])
+        if not channels or not all(isinstance(v, str) and v for v in channels):
+            raise ValueError("empty or non-string vocabulary")
+    except (OSError, ValueError, KeyError, TypeError) as err:
+        return (), f"{type(err).__name__}: {err}"
+    return channels, ""
+
+
+AUTOMATED_APPLIED_VIA, AUTOMATED_RULE_ERROR = _load_automated_channels()
 
 
 @dataclass(frozen=True)
@@ -617,6 +639,21 @@ CHECKPOINT_SUBDIR = (".cache", "apply-flow")
 # Stati del checkpoint che tengono la posizione fuori dalla coda.
 HELD_CHECKPOINT_STATES = ("blocked_human", "dry_run")
 
+# ── The email channel (`email_application.py`) ───────────────────────────────
+#
+# Its durable register is the `email_application_attempts` table; its human
+# stops live in a state file next to the browser checkpoint. Both are read
+# here, not in the email module, because the queue and the cap are this
+# gate's decisions: an email the skill may have sent must hold the position
+# and consume the cap whoever asks.
+EMAIL_ATTEMPTS_TABLE = "email_application_attempts"
+EMAIL_STATE_SUBDIR = (".cache", "email-application")
+# After `send_started` nobody knows whether the recruiter got the email until
+# a receipt says so. These states are never retried and always counted.
+EMAIL_UNRESOLVED_STATES = ("send_started", "send_outcome_unknown", "receipt_incomplete")
+# Human stops of the email flow, released by a newer user authorisation.
+EMAIL_HELD_STATES = ("blocked_human", "denied")
+
 
 def _jht_home() -> Path:
     return Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
@@ -668,6 +705,134 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     if held_at and asked_at and asked_at > held_at:
         return ""
     return f"checkpoint_{state}"
+
+
+def email_state_path(position_id: int, jht_home: Path | None = None) -> Path:
+    return (jht_home or _jht_home()).joinpath(*EMAIL_STATE_SUBDIR, f"{int(position_id)}.json")
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _email_hold(
+    conn: sqlite3.Connection, position_id: int, authorised_at: Any, jht_home: Path | None
+) -> str:
+    """Why the email channel holds this position out of the queue, or `""`."""
+    try:
+        if _table_exists(conn, EMAIL_ATTEMPTS_TABLE):
+            marks = ",".join("?" for _ in EMAIL_UNRESOLVED_STATES)
+            row = conn.execute(
+                f"SELECT state FROM {EMAIL_ATTEMPTS_TABLE} "
+                f"WHERE position_id = ? AND state IN ({marks}) ORDER BY id DESC LIMIT 1",
+                (int(position_id), *EMAIL_UNRESOLVED_STATES),
+            ).fetchone()
+            if row:
+                return f"email_{row[0]}"
+    except sqlite3.Error:
+        # An unreadable register may hide a send in flight: hold, never pass.
+        return "email_attempts_unreadable"
+    path = email_state_path(position_id, jht_home)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return ""
+    except (OSError, ValueError):
+        return "email_state_unreadable"
+    if not isinstance(data, dict):
+        return "email_state_unreadable"
+    state = data.get("state")
+    if state not in EMAIL_HELD_STATES:
+        return ""
+    held_at = _parse_instant(data.get("updated_at"))
+    asked_at = _parse_instant(authorised_at)
+    if held_at and asked_at and asked_at > held_at:
+        return ""
+    return f"email_{state}"
+
+
+def _sent_today(conn: sqlite3.Connection) -> int:
+    """Automated sends that consume today's cap, browser and email together.
+
+    An email attempt whose outcome is still open counts as sent: it may have
+    reached the recruiter, and a cap that ignores it lets the next run write
+    one more letter than the user allowed.
+    """
+    if AUTOMATED_RULE_ERROR:
+        raise sqlite3.DatabaseError(f"automated channels unreadable: {AUTOMATED_RULE_ERROR}")
+    marks = ",".join("?" for _ in AUTOMATED_APPLIED_VIA)
+    sent = conn.execute(
+        f"SELECT COUNT(*) FROM applications WHERE applied = 1 "
+        f"AND applied_via IN ({marks}) "
+        f"AND date(applied_at) = date('now', 'localtime')",
+        AUTOMATED_APPLIED_VIA,
+    ).fetchone()[0]
+    if _table_exists(conn, EMAIL_ATTEMPTS_TABLE):
+        states = ",".join("?" for _ in EMAIL_UNRESOLVED_STATES)
+        sent += conn.execute(
+            f"SELECT COUNT(DISTINCT e.position_id) FROM {EMAIL_ATTEMPTS_TABLE} e "
+            f"LEFT JOIN applications a ON a.position_id = e.position_id "
+            f"WHERE e.state IN ({states}) "
+            f"AND date(e.send_started_at, 'localtime') = date('now', 'localtime') "
+            f"AND COALESCE(a.applied, 0) != 1",
+            EMAIL_UNRESOLVED_STATES,
+        ).fetchone()[0]
+    return int(sent)
+
+
+def daily_cap_verdict(
+    config: dict | None = None,
+    config_path: Path | None = None,
+    conn: sqlite3.Connection | None = None,
+    db_path: str | None = None,
+) -> Verdict:
+    """May ONE more automated application go out today?
+
+    The queue asks it before a run and the email skill asks it again
+    immediately before the transport: between the two, another send may have
+    used the last slot. Closed when consent is off, the channel list is
+    unreadable, or the database cannot be counted.
+    """
+    consent = consent_verdict(config, config_path)
+    if not consent.allowed:
+        return consent
+    if AUTOMATED_RULE_ERROR:
+        return Verdict(
+            False,
+            "rule_unavailable",
+            f"the automated channel list cannot be read: {AUTOMATED_RULE_ERROR}",
+            {"path": str(RULE_PATH)},
+        )
+    max_per_day = int(consent.context.get("max_per_day"))
+    own_conn = conn is None
+    if own_conn:
+        try:
+            conn = sqlite3.connect(db_path or _db_path())
+        except sqlite3.Error as err:
+            return Verdict(False, "db_unavailable", f"cannot open the local database: {err}")
+    try:
+        try:
+            sent_today = _sent_today(conn)
+        except sqlite3.Error as err:
+            return Verdict(False, "cap_unreadable", f"cannot count today's sends: {err}")
+    finally:
+        if own_conn and conn is not None:
+            conn.close()
+    remaining = max(0, max_per_day - sent_today)
+    context = {"max_per_day": max_per_day, "sent_today": sent_today, "remaining_today": remaining}
+    if remaining <= 0:
+        return Verdict(
+            False,
+            "daily_cap_reached",
+            "the daily cap of automated applications is reached",
+            context,
+        )
+    return Verdict(True, "cap_available", "the daily cap leaves room for one more send", context)
 
 
 def _resolve_file(value: Any, jht_home: Path | None) -> Path | None:
@@ -732,11 +897,8 @@ def application_queue(
             # Il tetto conta SOLO ciò che il CLOSER ha davvero spedito oggi. Un
             # invio dell'utente a mano non consuma la sua quota: il tetto
             # esiste per il ritmo dell'automazione, non per quello della persona.
-            sent_today = conn.execute(
-                "SELECT COUNT(*) FROM applications WHERE applied = 1 "
-                "AND applied_via = 'agent_closer' "
-                "AND date(applied_at) = date('now', 'localtime')"
-            ).fetchone()[0]
+            # Browser ed email condividono lo stesso tetto (`_sent_today`).
+            sent_today = _sent_today(conn)
         except sqlite3.Error as err:
             out.update(reason="queue_unreadable", detail=f"cannot read the application queue: {err}")
             return out
@@ -754,7 +916,9 @@ def application_queue(
             if cv is None:
                 held.append({"position_id": pid, "reason": "cv_pdf_missing"})
                 continue
-            hold = _checkpoint_hold(pid, asked_at, jht_home)
+            hold = _checkpoint_hold(pid, asked_at, jht_home) or _email_hold(
+                conn, pid, asked_at, jht_home
+            )
             if hold:
                 held.append({"position_id": pid, "reason": hold})
                 continue

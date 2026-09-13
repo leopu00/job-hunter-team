@@ -899,6 +899,55 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_user_notes_origin(conn)
     _migrate_applications_critic_round(conn)
     _migrate_applications_rejection_reason(conn)
+    _migrate_email_application_attempts(conn)
+
+
+def _migrate_email_application_attempts(conn: sqlite3.Connection) -> None:
+    """The register of email application attempts. [JHT-CLOSER-EMAIL]
+
+    One row per attempt to send ONE application by email. `send_started` is
+    committed BEFORE the SMTP DATA command: a process killed after it leaves a
+    row that says "this may have gone out", and `email_application.py` never
+    sends again for that position — a second letter to a recruiter cannot be
+    taken back, a missing one can be asked for.
+
+    `UNIQUE(position_id, idempotency_key)`: the key hashes recipients, subject,
+    body and attachments together with the user's authorisation instant, so a
+    replay of the same draft cannot create a second row. No secret is stored:
+    `receipt_json` is redacted (no body, no credential) and the body is kept
+    only as its hash.
+
+    Local only: the web does not read it, so there is no Supabase twin.
+    Additive and idempotent (CREATE ... IF NOT EXISTS).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_application_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            state TEXT NOT NULL CHECK (state IN (
+                'draft_ready', 'send_started', 'sent',
+                'send_outcome_unknown', 'receipt_incomplete', 'error'
+            )),
+            message_id TEXT NOT NULL,
+            recipients_json TEXT NOT NULL,
+            body_sha256 TEXT NOT NULL,
+            attachments_json TEXT NOT NULL,
+            receipt_json TEXT,
+            error_class TEXT,
+            send_started_at TEXT,
+            accepted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            UNIQUE (position_id, idempotency_key)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_email_attempts_position "
+        "ON email_application_attempts(position_id, state)"
+    )
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:

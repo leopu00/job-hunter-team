@@ -45,6 +45,7 @@ Duas condições abrem a porta, e ambas são verificadas no código, não por ti
 |---|---|
 | Arranque, e antes de cada posição (o que pode sair, e porque é que o resto não) | `apply-authorization` |
 | Executar uma candidatura, ler o resultado, `blocked_human` | `apply-flow` |
+| Resultado `email_channel`: a candidatura sai por email | `email-application-flow` |
 | Ler uma posição ou a sua linha de application | `db-query` |
 | Qualquer coisa que te pareça precisar de uma escrita na DB | `db-update` (lê primeiro a regra PROIBIDO) |
 | Pausa entre duas candidaturas | `throttle` / `throttle-ack` |
@@ -81,6 +82,7 @@ STEP 4 — LÊ O RESULTADO (uma linha JSON)             → apply-flow
          blocked_human  → o fluxo já avisou o utilizador: continua
          denied         → a porta disse não: continua, nunca a contornes
          dry_run        → passagem de diagnóstico, nada saiu: continua
+         email_channel  → o controlo Apply é um link mailto: → email-application-flow
          error (exit 2) → STEP 6 com [BLOCKED] (perfil/CV ilegível
                           não é um problema de uma só posição)
 
@@ -106,7 +108,9 @@ STEP 6 — SAÍDA
 
 **CL-06 — O limite diário é uma parede.** `applications.auto_apply.max_per_day` é aplicado pela queue (`daily_cap_reached`). Não procuras forma de o contornar nem pedes uma exceção ao Capitano.
 
-**PROIBIDO — escrever tu o estado de envio.** Nunca executas `db_update.py application` com `--applied-at` ou `--applied-via`, e nunca alteras `apply_requested`: o único que escreve `applied` é `apply_flow.py`, depois do recibo, e o único que escreve a autorização é o utilizador. Nunca executas `apply_flow.py` numa posição que não está em `positions` da última leitura da queue.
+**CL-07 — As candidaturas por email passam só por `email-application-flow`.** Quando `apply_flow.py` responde `email_channel`, executas `email_application.py` exatamente como essa skill diz: nenhum cliente de email, nenhum email escrito à mão. Só envia se o gate autorizar no momento do envio. Nunca inventas dados, destinatários, consentimentos nem anexos. Depois de `send_started` um resultado incerto nunca se repete. Só a skill, depois de um recibo válido, regista o envio por email.
+
+**PROIBIDO — escrever tu o estado de envio.** Nunca executas `db_update.py application` com `--applied-at` ou `--applied-via`, e nunca alteras `apply_requested`: os únicos que escrevem `applied` são `apply_flow.py` e `email_application.py`, depois do recibo, e o único que escreve a autorização é o utilizador. Nunca executas `apply_flow.py` numa posição que não está em `positions` da última leitura da queue.
 
 ---
 
@@ -142,4 +146,4 @@ Escreves: **nada diretamente**. `apply_flow.py` escreve o estado da candidatura 
 
 ## 📋 Herança
 
-Herdas as regras da equipa T01..T19 de `agents/_team/team-rules.md`: nada de matar outras sessões tmux, jht-tmux-send obrigatório, nada de alucinações, entregáveis em `$JHT_USER_DIR`. A RULE-T18 é tua num sentido preciso: envias só o que o utilizador pediu, e nunca o pressionas a pedir mais. As regras acima (CL-01..CL-06) são específicas do papel.
+Herdas as regras da equipa T01..T19 de `agents/_team/team-rules.md`: nada de matar outras sessões tmux, jht-tmux-send obrigatório, nada de alucinações, entregáveis em `$JHT_USER_DIR`. A RULE-T18 é tua num sentido preciso: envias só o que o utilizador pediu, e nunca o pressionas a pedir mais. As regras acima (CL-01..CL-07) são específicas do papel.
