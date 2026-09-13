@@ -30,10 +30,15 @@ position's authorisation as `user_telegram`.
 
 Commands (one JSON line on stdout)::
 
-    application_answers.py essentials --position-id ID --json
+    application_answers.py essentials --position-id ID --json          # read only
+    application_answers.py essentials --position-id ID --ask --json    # asks what is missing
     application_answers.py list --json
 
-Exit codes: 0 complete / listed · 3 waiting for the user · 2 error.
+`essentials` without `--ask` only reports: it writes nothing, not even a
+question. The questions are created by `apply_flow.py` before the first run of
+a position, or by an explicit `--ask`.
+
+Exit codes: 0 complete / listed · 3 missing (waiting for the user) · 2 error.
 """
 from __future__ import annotations
 
@@ -525,6 +530,57 @@ def _default_notifier(*, position_id: int, message: str, source_id: str, payload
     return result.stdout.strip().split(maxsplit=1)[0] if result.stdout.strip() else ""
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+    ).fetchone() is not None
+
+
+def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> dict[str, Any]:
+    """What `ensure_essentials` would ask, without writing anything.
+
+    Reads the saved answers, the profile (YAML answers included) and any valid
+    reply already written on a question row, all in memory.
+    """
+    answers: dict[str, Any] = {}
+    raw = profile.get("application_answers") if isinstance(profile, Mapping) else None
+    if isinstance(raw, Mapping):
+        answers.update({normalise_label(str(k)): v for k, v in raw.items()})
+    elif isinstance(raw, list):
+        answers.update({
+            normalise_label(str(i["question"])): i.get("answer")
+            for i in raw if isinstance(i, Mapping) and i.get("question")
+        })
+    if _table_exists(conn, "application_answers"):
+        for key, answer_json in conn.execute("SELECT key, answer_json FROM application_answers"):
+            try:
+                answers[str(key)] = json.loads(answer_json)
+            except (TypeError, ValueError):
+                continue
+    asked: set[str] = set()
+    if _table_exists(conn, "pending_user_messages"):
+        for source_id, payload_text, reply in conn.execute(
+            "SELECT source_id, source_payload, user_reply FROM pending_user_messages "
+            "WHERE source_id LIKE 'closer-essential:%'"
+        ):
+            asked.add(str(source_id))
+            if reply is None:
+                continue
+            try:
+                payload = json.loads(payload_text or "")
+                field_type, options = payload_shape(payload)
+                validate_reply(field_type, options, reply)
+            except (ValueError, AnswerRejected):
+                continue
+            answers.setdefault(normalise_label(payload["key"]), decode_reply(field_type, reply))
+    missing = missing_essentials(answers, profile)
+    return {
+        "status": "complete" if not missing else "missing",
+        "missing": [fact.key for fact in missing],
+        "already_asked": [fact.key for fact in missing if essential_source_id(fact) in asked],
+    }
+
+
 def ensure_essentials(
     conn: sqlite3.Connection,
     profile: Mapping[str, Any],
@@ -585,6 +641,14 @@ def _connect(db: str | None) -> sqlite3.Connection:
     return conn
 
 
+def _connect_read_only(db: str | None) -> sqlite3.Connection:
+    path = db or os.environ.get("JHT_DB") or str(Path(os.environ.get("JHT_HOME") or Path.home() / ".jht") / "jobs.db")
+    if not Path(path).is_file():
+        raise FileNotFoundError("jobs.db not found")
+    # mode=ro: a check cannot write, even by mistake (no migration, no question).
+    return sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True, timeout=10)
+
+
 def _load_profile(path: Path) -> Mapping[str, Any]:
     import yaml
 
@@ -600,6 +664,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     ess = sub.add_parser("essentials", help="ask each missing essential fact once")
     ess.add_argument("--position-id", type=int, required=True)
+    ess.add_argument("--ask", action="store_true", help="send one question per missing fact")
     lst = sub.add_parser("list", help="the remembered answers (keys and channels only)")
     for p in (ess, lst):
         p.add_argument("--json", action="store_true")
@@ -609,11 +674,17 @@ def main(argv: list[str] | None = None) -> int:
     home = Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
     profile_path = Path(args.profile) if args.profile else home / "profile" / "candidate_profile.yml"
     try:
-        conn = _connect(args.db)
+        if args.command == "essentials" and not args.ask:
+            conn = _connect_read_only(args.db)
+        else:
+            conn = _connect(args.db)
         try:
             profile = _load_profile(profile_path)
             if args.command == "essentials":
-                out = ensure_essentials(conn, profile, args.position_id)
+                if args.ask:
+                    out = ensure_essentials(conn, profile, args.position_id)
+                else:
+                    out = check_essentials(conn, profile)
                 code = 0 if out["status"] == "complete" else 3
             else:
                 ensure_table(conn)

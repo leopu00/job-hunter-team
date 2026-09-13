@@ -341,3 +341,90 @@ def test_apply_flow_reads_answers_from_the_database(db, tmp_path):
     )
     recipe = flow._recipe("ashby")
     assert recipe._answer_for("Which work model can you accept?", "x") == (True, "Remote")
+
+
+# ── found on the box with patch 03 ───────────────────────────────────────────
+
+NOTIFY = ROOT / "agents" / "_tools" / "jht-notify-user"
+SKILL = ROOT / "shared" / "skills" / "application_answers.py"
+
+
+def test_the_essentials_check_writes_nothing_and_only_ask_creates_questions(db, tmp_path):
+    import subprocess
+
+    profile = tmp_path / "profile.yml"
+    profile.write_text("name: Test Candidate\n", encoding="utf-8")
+    before = db.read_bytes()
+    env = {**__import__("os").environ, "JHT_DB": str(db), "JHT_HOME": str(tmp_path),
+           "JHT_NOTIFY_USER_BIN": str(tmp_path / "no-notifier")}
+    for _ in range(2):
+        done = subprocess.run(
+            [sys.executable, str(SKILL), "essentials", "--position-id", "7", "--json", "--db", str(db),
+             "--profile", str(profile)],
+            capture_output=True, text=True, env=env,
+        )
+        out = json.loads(done.stdout)
+        assert (done.returncode, out["status"]) == (3, "missing"), done.stdout + done.stderr
+        assert len(out["missing"]) == 7
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
+    assert db.read_bytes() == before
+
+    asked = []
+    with sqlite3.connect(db) as conn:
+        aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7, notifier=lambda **kw: asked.append(kw) or "1")
+    assert len(asked) == 7
+
+
+def _off_hours_box(tmp_path, db):
+    """A working-hours window that never contains now, and a Telegram stub."""
+    import os
+
+    (tmp_path / "jht.config.json").write_text(json.dumps({"team": {"working_hours": {
+        "timezone": "UTC", "windows": [{"start": "00:00", "end": "00:01", "days": []}],
+    }}}))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    sent = tmp_path / "telegram-sent.txt"
+    stub = bin_dir / "jht-telegram-send"
+    stub.write_text(f'#!/bin/sh\necho sent >> "{sent}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}", "JHT_HOME": str(tmp_path),
+           "JHT_DB": str(db), "JHT_NOTIFY_USER_BIN": str(NOTIFY)}
+    env.pop("JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY", None)
+    return env, sent
+
+
+def test_off_hours_a_closer_question_still_reaches_telegram(db, tmp_path, monkeypatch):
+    import subprocess
+
+    env, sent = _off_hours_box(tmp_path, db)
+    # Control: an ordinary notification IS held off hours, so the window works.
+    plain = subprocess.run([str(NOTIFY), "--agent", "closer", "held for working hours"],
+                           capture_output=True, text=True, env=env)
+    assert plain.returncode == 0 and "via=web" in plain.stdout
+    assert not sent.exists()
+
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    with sqlite3.connect(db) as conn:
+        out = aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7)
+    assert len(out["asked"]) == 7
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE source_id LIKE 'closer-essential:%' "
+                   "AND delivered_via = 'telegram'") == [(7,)]
+    assert sent.read_text().count("sent") == 7
+
+
+def test_off_hours_a_form_answer_request_still_reaches_telegram(db, tmp_path):
+    import subprocess
+
+    env, sent = _off_hours_box(tmp_path, db)
+    payload = {"version": 1, "position_id": 7, "key": "notice period", "label": "Notice period?",
+               "field_type": "text", "options": []}
+    done = subprocess.run(
+        [str(NOTIFY), "--agent", "closer", "--kind", "question", "--position-id", "7",
+         "--source-id", "closer-answer:7:fixture", "--source-action", aa.SOURCE_ACTION,
+         "--source-payload", json.dumps(payload), "Question: Notice period?"],
+        capture_output=True, text=True, env=env,
+    )
+    assert done.returncode == 0 and "via=telegram" in done.stdout, done.stdout + done.stderr
+    assert sent.exists()
