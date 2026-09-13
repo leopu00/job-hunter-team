@@ -286,7 +286,14 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   // Argomenti ed env passati separati (docker exec -e / spawn env): niente
   // stringa di shell da quotare a mano, quindi niente quarta variante di
   // escaping da tenere allineata alle altre tre.
-  const childEnv = { ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}), ...(env || {}) };
+  // This variable must be copied explicitly: execScriptInContainer forwards
+  // only the keys listed here across `docker exec`, so inheriting it in the
+  // host-side CLI process is not enough.
+  const childEnv = {
+    JHT_SPAWN_SRC: process.env.JHT_SPAWN_SRC || 'cli-team-start',
+    ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}),
+    ...(env || {}),
+  };
   const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
     env: Object.keys(childEnv).length ? childEnv : null,
     // Cold starts can spend close to 30s in provider/config preflight before

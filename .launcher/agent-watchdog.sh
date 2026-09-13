@@ -525,7 +525,7 @@ ensure_agent() {
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
   mark="$(spawn_log_offset)"
-  if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+  if JHT_SPAWN_SRC=agent-watchdog "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
     # PRIMA della sonda: is_session_alive puo' scrivere la sua riga ZOMBIE nel
     # LOG, e attribuirla allo spawner sarebbe dichiarare una causa non
     # osservata su un messaggio che va al Capitano e all'utente.
@@ -643,7 +643,7 @@ respawn_worker() {
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
   local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}" mark rc detail
   mark="$(spawn_log_offset)"
-  if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+  if JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
     # PRIMA della sonda, come in ensure_agent: la riga ZOMBIE di
     # is_session_alive non e' output dello spawner e non va attribuita a lui.
     detail="$(spawn_detail_since "$mark")"
@@ -821,7 +821,7 @@ maybe_respawn_bridges() {
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
       log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
-      JHT_HOME="$JHT_HOME" bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
+      JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
@@ -846,7 +846,7 @@ maybe_respawn_bridges() {
     for _tg_role in $PROC_TG_MISSING; do
       if bridge_flap_ok "tg-bridge-$_tg_role"; then
         log "bridge-watchdog: tg-bridge[$_tg_role] missing (alive=${PROC_TG_ALIVE:-0}, expected=${PROC_TG_EXPECTED:-0}) — respawning that role only"
-        JHT_HOME="$JHT_HOME" bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
+        JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
           || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
         bridge_flap_record "tg-bridge-$_tg_role"
       else

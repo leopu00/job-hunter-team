@@ -63,7 +63,10 @@ MODE="${3:-default}"
 # sola riga conclusiva per invocazione evita di dover ricostruire coppie
 # attempt/result fra processi concorrenti.
 JHT_SPAWN_TRACE="$(jht_daemon_log spawn-attempts.jsonl)"
-JHT_SPAWN_SOURCE="${JHT_SPAWN_SRC:-unknown}"
+# Le TUI esportano JHT_AGENT_NAME: una chiamata diretta del Capitano o di una
+# skill conserva quindi il proprio autore anche senza un wrapper intermedio.
+# I processi deterministici impostano invece JHT_SPAWN_SRC esplicitamente.
+JHT_SPAWN_SOURCE="${JHT_SPAWN_SRC:-${JHT_AGENT_NAME:-unknown}}"
 _spawn_started_s="$(date -u +%s)"
 _spawn_flock_wait_s=0
 _spawn_stage="role_validation"
