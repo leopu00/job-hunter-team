@@ -198,10 +198,23 @@ RUN python3 shared/skills/tool_health.py --only playwright_browser \
 # Xvfb fails the BUILD, not the first application the user wanted to watch.
 # Xvfb is started directly: xvfb-run waits for a signal that never reaches it
 # when the shell is PID 1 of a build step, and hangs.
+# Under QEMU the check proves nothing about the product: the multi-arch build
+# emulates linux/arm64 on an amd64 runner, where Chromium cannot ptrace and its
+# GPU process never starts — the gate went red on every build from 17ed183cb
+# while the amd64 layer printed HEADED_LAUNCH_OK. So it runs where the build
+# architecture IS the target (amd64, the VPS image) and says so when it skips.
+# A native arm64 build (Colima on Apple Silicon) still runs it.
+ARG TARGETARCH
+ARG BUILDARCH
 RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     for _ in $(seq 1 100); do [ -S /tmp/.X11-unix/X98 ] && break; sleep 0.1; done; \
-    DISPLAY=:98 python3 -c "from playwright.sync_api import sync_playwright as s; p = s().start(); b = p.chromium.launch(headless=False, args=['--no-sandbox', '--disable-dev-shm-usage']); b.new_page().set_content('<p>live screen</p>'); b.close(); p.stop(); print('HEADED_LAUNCH_OK')"; \
-    rc=$?; kill "$xvfb_pid"; rm -f /tmp/.X98-lock /tmp/.X11-unix/X98; \
+    if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
+      echo "HEADED_LAUNCH_SKIPPED: emulated $TARGETARCH build on $BUILDARCH (QEMU cannot run headed Chromium)"; rc=0; \
+    else \
+      DISPLAY=:98 python3 -c "from playwright.sync_api import sync_playwright as s; p = s().start(); b = p.chromium.launch(headless=False, args=['--no-sandbox', '--disable-dev-shm-usage']); b.new_page().set_content('<p>live screen</p>'); b.close(); p.stop(); print('HEADED_LAUNCH_OK')"; \
+      rc=$?; \
+    fi; \
+    kill "$xvfb_pid"; rm -f /tmp/.X98-lock /tmp/.X11-unix/X98; \
     [ "$rc" -eq 0 ] || { echo "BUILD GATE FAILED: headed chromium cannot open on Xvfb — see .launcher/live-screen.sh" >&2; exit 1; }
 
 RUN for pkg in shared/*/package.json; do \

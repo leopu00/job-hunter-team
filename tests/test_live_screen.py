@@ -409,4 +409,8 @@ def test_image_build_gate_launches_headed_chromium_on_xvfb():
     gate = gate[: gate.index("exit 1; }") + len("exit 1; }")]
     assert "headless=False" in gate
     assert "DISPLAY=:98" in gate
+    # Skipped ONLY for an emulated target: a native build must still launch.
+    assert '[ "$TARGETARCH" != "$BUILDARCH" ]' in gate
+    assert "HEADED_LAUNCH_SKIPPED" in gate
+    assert "ARG TARGETARCH" in DOCKERFILE and "ARG BUILDARCH" in DOCKERFILE
     assert "xvfb-run" not in gate.replace("xvfb-run waits", "")
