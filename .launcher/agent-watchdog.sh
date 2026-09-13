@@ -300,7 +300,7 @@ is_agent_session() {
   case "$1" in
     DOTTORE*|DOCTOR-WATCHDOG|MANTENITORE*|SENTINELLA-WORKER) return 1 ;;
     ASSISTENTE|CAPITANO|MENTOR|SENTINELLA|CRITICO) return 0 ;;
-    SCOUT-[0-9]*|ANALISTA-[0-9]*|SCORER-[0-9]*|SCRITTORE-[0-9]*|CRITICO-S[0-9]*) return 0 ;;
+    SCOUT-[0-9]*|ANALISTA-[0-9]*|SCORER-[0-9]*|SCRITTORE-[0-9]*|CLOSER-[0-9]*|CRITICO-S[0-9]*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -336,6 +336,7 @@ worker_kickoff() {
     analista)  body="Resume the main loop using the db_query.py next-for-analista queue." ;;
     scorer)    body="Resume the main loop using the db_query.py next-for-scorer queue." ;;
     scrittore) body="Resume the main loop using the db_query.py next-for-scrittore queue." ;;
+    closer)    body="Resume the main loop from apply_gate.py queue. Never re-run a position whose application flow stopped." ;;
     *)         body="Resume the main loop as instructed by your prompt." ;;
   esac
   ( sleep 12

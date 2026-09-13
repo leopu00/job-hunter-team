@@ -1,0 +1,95 @@
+<!-- @translation: hu, ai-translated 2026-09-13 -->
+---
+name: apply-flow
+description: Hogyan futtatja a CLOSER egy engedélyezett jelentkezést az `apply_flow.py`-jal — a checkpointos állapotgép (detect, fill, upload_cv, screening, review, submit), a kötelező nyugta, amely nélkül az `applied` soha nem íródik be, és mit kell tenni az egyes eredményeknél, mindenekelőtt `blocked_human` esetén. Használd minden, a queue-ból felvett pozícióhoz. A CLOSER-é.
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+---
+
+# apply-flow — egy jelentkezés, egy nyugta, nincs vak újrapróbálás
+
+```bash
+python3 /app/shared/skills/apply_flow.py \
+  --position-id "$PID" \
+  --url "$URL" \
+  --profile "$JHT_HOME/profile/candidate_profile.yml" \
+  --cv "$CV"
+```
+
+A `PID`, `URL` és `CV` az `apply_gate.py queue` legutóbbi olvasásából jön (skill
+`apply-authorization`), soha nem a memóriából.
+
+## Az állapotgép
+
+```
+detect → fill → upload_cv → screening → review → submit → applied
+                                                        ↘ blocked_human
+```
+
+- Minden befejezett lépés checkpointba mentődik (`$JHT_HOME/.cache/apply-flow/<id>.json`).
+  Összeomlás után a folyamat ott folytatja: a kitöltés megismétlődik, a kattintás nem.
+- A `submit_started` a kattintás **előtt** mentődik. Ha egy folyamat e sor után hal
+  meg, az eredmény ismeretlen, és ismeretlen eredményre soha nem kattint újra: a
+  folyamat megerősítést keres az oldalon, és ha nincs, `submit_outcome_unknown`-nal
+  blokkol.
+- A kapu induláskor **és** közvetlenül a kattintás előtt is ellenőrződik. Egy flag,
+  amelyet az űrlap kitöltése közben vontak vissza, leállítja a beküldést.
+- Ma az egyetlen teljes recept az **Ashby**. Minden más platform emberre vár.
+
+## A nyugta
+
+Az `applied` csak akkor íródik be, ha a folyamatnak **mindkettő** megvan:
+
+1. egy képernyőkép a megerősítő oldalról, és
+2. egy megerősítő URL vagy szöveg.
+
+Ezután maga a folyamat rögzíti a jelentkezést `applied_via = agent_closer` értékkel,
+és visszaolvassa a sort, hogy ellenőrizze, megtörtént-e az írás. Ezt az állapotot
+senki más nem írja: sem te, sem a Capitano.
+
+## Az eredmény olvasása
+
+Egy JSON sor a stdout-on: `status`, `state`, `reason`, `receipt`.
+
+| `status` | Exit | Jelentés | Teendőd |
+|---|---|---|---|
+| `applied` | 0 | elküldve, nyugta mentve, állapot rögzítve | következő pozíció |
+| `dry_run` | 0 | `mode: dry_run`: kitöltve, a gomb előtt megállt, semmi nem ment ki | következő pozíció |
+| `denied` | 1 | a kapu elutasította (hozzájárulás kikapcsolva, flag visszavonva, már elküldve) | következő pozíció; soha ne próbáld újra |
+| `blocked_human` | 3 | ember kell; a felhasználó már értesítést kapott | következő pozíció; soha ne próbáld újra |
+| `error` | 2 | olvashatatlan profil vagy CV, hibás argumentumok | állj meg: `[BLOCKED]` a Capitanónak |
+
+## `blocked_human` — mit jelent és mit teszel
+
+A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
+
+| `reason` (példák) | Tipikus ok |
+|---|---|
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználónak hozzá kell adnia az `application_answers`-hez |
+| `captcha` / `two_factor` | az oldal ellenőrizni akarja, hogy ember van-e ott |
+| `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | egy mező, amelyet a recept nem tud mentett válasszal kitölteni |
+| `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | ehhez az oldalhoz még nincs recept |
+| `page_unavailable` / `browser_uncertainty` | az oldal vagy a böngésző a folyamat közepén hibázott |
+| `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | a beküldésre rákattintott, de a megerősítés nem biztos |
+| `submit_outcome_unknown` | egy korábbi futás elindította a beküldést és nem hagyott nyugtát |
+| `applied_record_failed` | a nyugta létezik, de az állapotot nem sikerült rögzíteni — a jelentkezés szinte biztosan kiment |
+
+Mit teszel, mindig ugyanazt:
+
+1. **Semmit azzal a pozícióval.** A folyamat már megírta a checkpointot és a
+   `jht-notify-user`-rel értesítette a felhasználót. Ne értesítsd újra.
+2. **Ne próbáld újra.** Se most, se „még egyszer pár perc múlva". A queue
+   visszatartja (`checkpoint_blocked_human`), amíg a felhasználó újra nem engedélyezi.
+3. **Lépj a queue következő pozíciójára.**
+
+Egy blokkolt pozíció újrapróbálása éppen az a vak próbálkozás, amelynek
+megakadályozására ez a design létezik: captchánál leégeti a felhasználó fiókját,
+ismeretlen eredménynél második levelet küld ugyanannak a recruiternek.
+
+## Egy jelentkezés utólagos ellenőrzése
+
+```bash
+python3 /app/shared/skills/db_query.py application "$PID"
+```
+
+`applied_via: agent_closer` és egy nem üres `applied_at` = a folyamat rögzítette.

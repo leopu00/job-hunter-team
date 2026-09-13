@@ -2,7 +2,7 @@
 # .launcher/start-agent.sh — Avvia un singolo agente del Job Hunter Team
 # Uso: ./start-agent.sh <ruolo> [istanza] [mode]
 #
-# Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente
+# Ruoli: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, closer
 # Istanza: numero per agenti multipli (es: scout 1 → SCOUT-1) e per il
 # Critico effimero posseduto dallo Scrittore (critico 1 → CRITICO-S1)
 # Mode: default|fast (default se omesso)
@@ -41,6 +41,7 @@ if [ -z "${1:-}" ]; then
   echo "  critico     → CRITICO[-SN] (CV quality review; SN is Writer-owned)"
   echo "  sentinella  → SENTINELLA   (Monitors token usage and rate limits)"
   echo "  assistente  → ASSISTENTE   (Helps the user navigate the platform)"
+  echo "  closer      → CLOSER-1     (Sends the applications the user authorised)"
   echo ""
   echo "Examples:"
   echo "  $0 capitano              → start CAPITANO"
@@ -504,6 +505,10 @@ get_agent_info() {
     # Sonnet high — la Sentinella governa pacing/throttle/escalation: le
     # decisioni (vel vs target, ordini al Capitano) meritano effort high.
     sentinella) echo "SENTINELLA|high|sonnet" ;;
+    # Sonnet high — il CLOSER compila form: il ragionamento difficile (cosa
+    # rispondere, se fermarsi) sta nel codice di `apply_flow.py` e nel gate,
+    # non nel modello. Stesso profilo dei worker leggeri come lo Scout.
+    closer)     echo "CLOSER|high|sonnet" ;;
     *)          echo "" ;;
   esac
 }
@@ -538,13 +543,23 @@ if [ "$ROLE" = "closer" ]; then
     echo "  Set applications.auto_apply.enabled = true in jht.config.json." >&2
     exit 1
   fi
+  # UNA istanza, sempre CLOSER-1. Due CLOSER vivi leggono la stessa coda e
+  # possono aprire lo stesso form: il checkpoint di `apply_flow` è per
+  # posizione, non un lock fra processi, e il secondo click è una seconda
+  # lettera allo stesso recruiter. Con un tetto di poche candidature al giorno
+  # una seconda istanza non compra niente e rischia tutto.
+  if [ -n "$INSTANCE" ] && [ "$INSTANCE" != "1" ]; then
+    echo "Refusing to start closer $INSTANCE: the CLOSER runs as a single instance (CLOSER-1)," >&2
+    echo "  two of them could submit the same application twice." >&2
+    exit 1
+  fi
 fi
 
 AGENT_INFO=$(get_agent_info "$ROLE")
 
 if [ -z "$AGENT_INFO" ]; then
   echo "Error: unrecognized role '$ROLE'."
-  echo "Valid roles: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, mentor"
+  echo "Valid roles: capitano, scout, analista, scorer, scrittore, critico, sentinella, assistente, mentor, closer"
   exit 1
 fi
 

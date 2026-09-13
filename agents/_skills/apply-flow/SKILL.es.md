@@ -1,0 +1,95 @@
+<!-- @translation: es, ai-translated 2026-09-13 -->
+---
+name: apply-flow
+description: Cómo el CLOSER ejecuta una candidatura autorizada con `apply_flow.py` — la máquina de estados con checkpoints (detect, fill, upload_cv, screening, review, submit), el recibo obligatorio sin el cual `applied` nunca se escribe, y qué hacer con cada resultado, `blocked_human` antes que nada. Úsala para cada posición tomada de la cola. Del CLOSER.
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+---
+
+# apply-flow — una candidatura, un recibo, ningún reintento a ciegas
+
+```bash
+python3 /app/shared/skills/apply_flow.py \
+  --position-id "$PID" \
+  --url "$URL" \
+  --profile "$JHT_HOME/profile/candidate_profile.yml" \
+  --cv "$CV"
+```
+
+`PID`, `URL` y `CV` vienen de la última lectura de `apply_gate.py queue` (skill
+`apply-authorization`), nunca de la memoria.
+
+## La máquina de estados
+
+```
+detect → fill → upload_cv → screening → review → submit → applied
+                                                        ↘ blocked_human
+```
+
+- Cada paso completado se guarda en un checkpoint (`$JHT_HOME/.cache/apply-flow/<id>.json`).
+  Tras un crash el flujo retoma donde estaba: el rellenado se repite, el clic no.
+- `submit_started` se guarda **antes** del clic. Si un proceso muere después de esa
+  línea, el resultado es desconocido, y un resultado desconocido nunca se vuelve a
+  clicar: el flujo busca una confirmación en la página y, sin ella, se bloquea con
+  `submit_outcome_unknown`.
+- La puerta se comprueba al arrancar **y** justo antes del clic. Un flag revocado
+  mientras se rellenaba el formulario detiene el envío.
+- Hoy la única receta completa es **Ashby**. Cualquier otra plataforma se bloquea para una persona.
+
+## El recibo
+
+`applied` se escribe solo cuando el flujo tiene **ambos**:
+
+1. una captura de pantalla de la página de confirmación, y
+2. una URL o un texto de confirmación.
+
+Después es el propio flujo quien registra la candidatura con `applied_via = agent_closer`,
+y relee la fila para comprobar que la escritura ocurrió. Nadie más escribe ese
+estado: ni tú, ni el Capitano.
+
+## Leer el resultado
+
+Una línea JSON en stdout: `status`, `state`, `reason`, `receipt`.
+
+| `status` | Exit | Significado | Qué haces |
+|---|---|---|---|
+| `applied` | 0 | enviada, recibo guardado, estado registrado | siguiente posición |
+| `dry_run` | 0 | `mode: dry_run`: rellenada, detenida antes del botón, nada enviado | siguiente posición |
+| `denied` | 1 | la puerta rechazó (consentimiento apagado, flag revocado, ya enviada) | siguiente posición; nunca reintentar |
+| `blocked_human` | 3 | hace falta una persona; el usuario ya fue avisado | siguiente posición; nunca reintentar |
+| `error` | 2 | perfil o CV ilegible, argumentos erróneos | detente: `[BLOCKED]` al Capitano |
+
+## `blocked_human` — qué significa y qué haces
+
+El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
+
+| `reason` (ejemplos) | Causa típica |
+|---|---|
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obligatorio no tiene respuesta guardada — el usuario debe añadirla en `application_answers` |
+| `captcha` / `two_factor` | el sitio quiere verificar que hay una persona |
+| `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo que la receta no sabe rellenar con una respuesta guardada |
+| `upload_rejected` / `resume_field_missing` / `cv_missing` | el CV no se puede adjuntar |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` | todavía no hay receta para esta página |
+| `page_unavailable` / `browser_uncertainty` | la página o el navegador fallaron a mitad del flujo |
+| `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | se hizo clic en enviar pero la confirmación no es segura |
+| `submit_outcome_unknown` | una pasada anterior inició el envío y no dejó recibo |
+| `applied_record_failed` | el recibo existe pero el estado no se pudo registrar — la candidatura casi seguro salió |
+
+Qué haces, siempre igual:
+
+1. **Nada con esa posición.** El flujo ya escribió el checkpoint y avisó al
+   usuario con `jht-notify-user`. No lo avises otra vez.
+2. **No la reintentes.** Ni ahora, ni «una vez más dentro de unos minutos». La cola
+   la retiene (`checkpoint_blocked_human`) hasta que el usuario la autorice de nuevo.
+3. **Pasa a la siguiente posición** de la cola.
+
+Reintentar una posición bloqueada es el intento a ciegas que este diseño existe
+para impedir: en un captcha quema la cuenta del usuario, en un resultado
+desconocido envía una segunda carta al mismo recruiter.
+
+## Comprobar una candidatura después
+
+```bash
+python3 /app/shared/skills/db_query.py application "$PID"
+```
+
+`applied_via: agent_closer` y un `applied_at` no vacío = el flujo la registró.

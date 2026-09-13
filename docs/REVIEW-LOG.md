@@ -29,7 +29,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-24 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-24 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-09-12 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-13 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
@@ -237,7 +237,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-24 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-09-12 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -373,7 +373,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap e milestone full-team dei worker API isolati: contratti proposal-only, coordinamento, canary sintetici/live e percorso di promozione | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/architecture/2026-08-24-desktop-setup-modes.md](./internal/architecture/2026-08-24-desktop-setup-modes.md) | Matrice dei setup desktop e perimetro attivo own PC, Podman e chiave API effimera | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md](./internal/roadmap/2026-08-24-desktop-tauri-migration.md) | Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione | 2026-08-24 | 2026-08-24 | 🟢 |
-| [docs/internal/architecture/closer-application-assistant-design.md](./internal/architecture/closer-application-assistant-design.md) | 📮 [JHT-CLOSER] design: assistente alle candidature — sessione loggata + broker credenziali, ricette ATS, ricevuta obbligatoria, gate di autorizzazione | — | — | ✅ |
+| [docs/internal/architecture/closer-application-assistant-design.md](./internal/architecture/closer-application-assistant-design.md) | 📮 [JHT-CLOSER] design: assistente alle candidature — sessione loggata + broker credenziali, ricette ATS, ricevuta obbligatoria, gate di autorizzazione | — | 2026-09-12 | ✅ |
 
 
 ## 🔒 docs/security
