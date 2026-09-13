@@ -76,7 +76,7 @@ jobs:
         shell: pwsh
         run: ./game/tools/windows_instance_guard_windows_selftest.ps1
 
-      - uses: chickensoft-games/setup-godot@v2.4.1
+      - uses: chickensoft-games/setup-godot@v2.4.2
         with:
           version: 4.7.0
           use-dotnet: false
