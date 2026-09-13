@@ -465,6 +465,11 @@ def test_greenhouse_confirmation_redirect_may_cross_only_trusted_hosts():
         "https://job-boards.greenhouse.io:444/confirmation",
         "greenhouse",
     )
+    assert not ApplicationFlow._same_confirmation_origin(
+        "https://boards.greenhouse.io/example/jobs/1001",
+        "http://job-boards.greenhouse.io/confirmation",
+        "greenhouse",
+    )
 
 
 def test_greenhouse_submit_started_checkpoint_never_clicks_again(

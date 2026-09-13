@@ -799,11 +799,11 @@ class GreenhouseRecipe:
         "last_name": (("last_name",),),
         "preferred_name": (("preferred_name",),),
         "email": (("contacts", "email"), ("email",)),
-        "phone": (("contacts", "phone"),),
-        "location": (("location",),),
         # A telephone country, nationality, and current residence are not
         # interchangeable.  Country therefore needs an exact saved answer.
         "country": (),
+        "phone": (("contacts", "phone"),),
+        "location": (("location",),),
     }
     _CORE_LABELS = {
         "linkedin": (("contacts", "linkedin"),),
@@ -1522,7 +1522,7 @@ class ApplicationFlow:
             final_port = final.port
         except ValueError:
             return False
-        if original.scheme not in {"http", "https"} or final.scheme not in {"http", "https"}:
+        if original.scheme not in {"http", "https"} or final.scheme != "https":
             return False
         default_ports = {"http": 80, "https": 443}
         if (
