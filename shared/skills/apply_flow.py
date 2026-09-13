@@ -7,7 +7,8 @@ checkpoint.  Filling steps are replayed idempotently after a browser restart;
 submission is different: ``submit_started`` is persisted *before* the click,
 and an uncertain outcome is never clicked again.
 
-The first complete recipe is Ashby.  A real submit has four hard conditions:
+The complete public-form recipes are Ashby and Greenhouse.  A real submit has
+four hard conditions:
 
 * the phase-A gate allows this position at start and immediately before click;
 * every required value comes from the candidate profile (nothing is guessed);
@@ -47,7 +48,14 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
-SUPPORTED_PLATFORM = "ashby"
+SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse"})
+GREENHOUSE_HOSTS = frozenset(
+    {
+        "job-boards.greenhouse.io",
+        "job-boards.eu.greenhouse.io",
+        "boards.greenhouse.io",
+    }
+)
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
 
 
@@ -709,7 +717,16 @@ class AshbyRecipe:
         for selector, reason in selectors:
             matches = page.locator(selector)
             for index in range(matches.count()):
-                if matches.nth(index).is_visible():
+                match = matches.nth(index)
+                if (
+                    reason == "captcha"
+                    and match.evaluate("element => element.tagName") == "IFRAME"
+                    and AshbyRecipe._is_invisible_recaptcha_badge(
+                        match.get_attribute("src") or ""
+                    )
+                ):
+                    continue
+                if match.is_visible():
                     return reason
         body = page.locator("body")
         text = body.inner_text().casefold() if body.count() else ""
@@ -718,6 +735,17 @@ class AshbyRecipe:
         if any(marker in text for marker in ("enter verification code", "two-factor authentication")):
             return "two_factor"
         return ""
+
+    @staticmethod
+    def _is_invisible_recaptcha_badge(src: str) -> bool:
+        try:
+            parsed = urllib.parse.urlsplit(src)
+            sizes = urllib.parse.parse_qs(parsed.query).get("size", [])
+        except ValueError:
+            return False
+        return parsed.path.rstrip("/").endswith("/anchor") and any(
+            size.casefold() == "invisible" for size in sizes
+        )
 
     def review(self, page) -> None:
         challenge = self._challenge_reason(page)
@@ -763,6 +791,611 @@ class AshbyRecipe:
     def submit(self, page) -> None:
         # Called once only.  The checkpoint that makes retries impossible is
         # persisted by ApplicationFlow before entering this method.
+        page.locator(self.SUBMIT).click(timeout=10_000)
+
+
+class GreenhouseRecipe:
+    """Fail-closed adapter for current and legacy public Greenhouse forms."""
+
+    PLATFORM = "greenhouse"
+    FORM = "#application-form.application--form, #application_form"
+    FIELD_ENTRY = (
+        "#application-form .field-wrapper, "
+        "#application-form fieldset.phone-input, "
+        "#application_form .field"
+    )
+    SUBMIT = (
+        "#application-form button[type=submit], "
+        "#application_form button[type=submit], "
+        "#application_form input[type=submit]"
+    )
+    SUCCESS = (
+        ".application--confirmation, .application-confirmation, "
+        "#application_confirmation, [data-testid=application-confirmation]"
+    )
+
+    _CORE_CONTROLS = {
+        "first_name": (("first_name",),),
+        "last_name": (("last_name",),),
+        "preferred_name": (("preferred_name",),),
+        "email": (("contacts", "email"), ("email",)),
+        # A telephone country, nationality, and current residence are not
+        # interchangeable.  Country therefore needs an exact saved answer.
+        "country": (),
+        "phone": (("contacts", "phone"),),
+        "location": (("location",),),
+    }
+    _CORE_LABELS = {
+        "linkedin": (("contacts", "linkedin"),),
+        "linkedin profile": (("contacts", "linkedin"),),
+        "website": (("contacts", "website"),),
+        "website portfolio": (("contacts", "website"),),
+        "portfolio": (("contacts", "website"),),
+        "location city": (("location",),),
+        "current location": (("location",),),
+    }
+    _SEMANTIC_ANSWER_KEYS = AshbyRecipe._SEMANTIC_ANSWER_KEYS
+
+    def __init__(self, profile: Mapping[str, Any], cv_path: Path):
+        self.profile = profile
+        self.cv_path = cv_path
+        self.answers = AshbyRecipe._answer_index(profile.get("application_answers"))
+
+    @staticmethod
+    def _profile_value(profile: Mapping[str, Any], path: tuple[str, ...]) -> str | None:
+        return AshbyRecipe._profile_value(profile, path)
+
+    @staticmethod
+    def _entries(page):
+        return page.locator(GreenhouseRecipe.FIELD_ENTRY)
+
+    @staticmethod
+    def _label(entry) -> str:
+        legend = entry.locator("legend")
+        if legend.count():
+            return legend.first.inner_text().replace("\u00a0", " ").strip()
+        controls = entry.locator(
+            "input:not([type=hidden]):not([aria-hidden=true]), textarea, select"
+        )
+        for index in range(controls.count()):
+            control = controls.nth(index)
+            label = control.get_attribute("aria-label")
+            if label:
+                return label.replace("\u00a0", " ").strip()
+            labelled_by = control.get_attribute("aria-labelledby")
+            if labelled_by:
+                labelled = entry.locator(f"#{labelled_by}")
+                if labelled.count():
+                    return labelled.first.inner_text().replace("\u00a0", " ").strip()
+            control_id = control.get_attribute("id")
+            if control_id:
+                associated = entry.locator(f"label[for='{control_id}']")
+                if associated.count():
+                    return associated.first.inner_text().replace("\u00a0", " ").strip()
+        label = entry.locator("label")
+        return label.first.inner_text().replace("\u00a0", " ").strip() if label.count() else ""
+
+    @staticmethod
+    def _field_key(entry) -> str:
+        fieldset = entry.locator("fieldset[id]")
+        if fieldset.count():
+            return (fieldset.first.get_attribute("id") or "").removesuffix("[]")
+        controls = entry.locator(
+            "input:not([type=hidden]):not([aria-hidden=true]), textarea, select"
+        )
+        if not controls.count():
+            return ""
+        control = controls.first
+        return (
+            control.get_attribute("name")
+            or control.get_attribute("id")
+            or ""
+        ).removesuffix("[]")
+
+    @staticmethod
+    def _required(entry) -> bool:
+        if (
+            entry.get_attribute("aria-required") == "true"
+            or entry.locator("[aria-required=true], input[required], textarea[required], select[required]").count()
+            or entry.locator(".required, .asterisk, .field-required").count()
+        ):
+            return True
+        labels = entry.locator("legend, label")
+        return any(
+            labels.nth(index).inner_text().replace("\u00a0", " ").strip().endswith("*")
+            for index in range(labels.count())
+        )
+
+    @staticmethod
+    def _is_answered(entry) -> bool:
+        if entry.locator("input[type=radio]:checked, input[type=checkbox]:checked").count():
+            return True
+        if entry.locator(".select__single-value, .select__multi-value__label").count():
+            return True
+        if entry.locator(".file-upload__filename").count():
+            return True
+        controls = entry.locator(
+            "input:not([type=hidden]):not([aria-hidden=true]), textarea, select"
+        )
+        for index in range(controls.count()):
+            control = controls.nth(index)
+            control_type = (control.get_attribute("type") or "").casefold()
+            if control_type in {"radio", "checkbox"}:
+                continue
+            if control_type == "file":
+                if control.evaluate("element => element.files.length") > 0:
+                    return True
+            elif control_type != "search" and control.input_value().strip():
+                return True
+        return False
+
+    def _answer_for(self, label: str, field_key: str) -> tuple[bool, Any]:
+        keys = [_normalise_label(field_key), _normalise_label(label)]
+        for pattern, semantic in self._SEMANTIC_ANSWER_KEYS:
+            if pattern.search(label):
+                keys.append(_normalise_label(semantic))
+        for key in keys:
+            if key in self.answers:
+                return True, self.answers[key]
+        return False, None
+
+    def _core_value(
+        self, control_id: str, label: str, paths: tuple[tuple[str, ...], ...]
+    ) -> tuple[bool, Any]:
+        present, answer = self._answer_for(label, control_id)
+        if present:
+            return True, answer
+        for path in paths:
+            value = self._profile_value(self.profile, path)
+            if value is not None:
+                return True, value
+        return False, None
+
+    @staticmethod
+    def _control_label(scope, control) -> str:
+        label = control.get_attribute("aria-label")
+        if label:
+            return label.strip()
+        labelled_by = control.get_attribute("aria-labelledby")
+        if labelled_by:
+            labelled = scope.locator(f"#{labelled_by}")
+            if labelled.count():
+                return labelled.first.inner_text().replace("\u00a0", " ").strip()
+        control_id = control.get_attribute("id") or ""
+        associated = scope.locator(f"label[for='{control_id}']") if control_id else None
+        if associated is not None and associated.count():
+            return associated.first.inner_text().replace("\u00a0", " ").strip()
+        return control_id
+
+    @staticmethod
+    def _control_required(control) -> bool:
+        if (
+            control.get_attribute("aria-required") == "true"
+            or control.get_attribute("required") is not None
+        ):
+            return True
+        entry = control.locator(
+            "xpath=ancestor::*[contains(@class, 'field-wrapper') or "
+            "contains(concat(' ', normalize-space(@class), ' '), ' field ') or self::fieldset][1]"
+        )
+        return bool(entry.count() and GreenhouseRecipe._required(entry.first))
+
+    @staticmethod
+    def _fill_scalar(control, label: str, answer: Any, step: str) -> None:
+        if not isinstance(answer, (str, int, float)) or isinstance(answer, bool):
+            raise BlockedHuman(
+                "answer_type_unknown",
+                f"Greenhouse text field has no explicit scalar answer: {_safe_label(label)}",
+                step,
+            )
+        rendered = str(answer).strip()
+        if not rendered:
+            raise BlockedHuman(
+                "required_answer_missing",
+                f"Saved answer is empty for: {_safe_label(label)}",
+                step,
+            )
+        control.fill(rendered)
+        if control.input_value().strip() != rendered:
+            raise BlockedHuman(
+                "answer_not_accepted",
+                f"Greenhouse did not retain the answer for: {_safe_label(label)}",
+                step,
+            )
+
+    def open_form(self, page) -> None:
+        forms = page.locator(self.FORM)
+        if forms.count() == 1:
+            return
+        if forms.count() > 1:
+            raise BlockedHuman(
+                "greenhouse_form_ambiguous",
+                "More than one Greenhouse application form was found",
+                "detect",
+            )
+        candidates = []
+        pattern = re.compile(r"^(apply|apply for this job|click to apply|submit an application)$", re.I)
+        for role in ("button", "link"):
+            matches = page.get_by_role(role, name=pattern)
+            for index in range(matches.count()):
+                if matches.nth(index).is_visible():
+                    candidates.append(matches.nth(index))
+        if len(candidates) != 1:
+            raise BlockedHuman(
+                "greenhouse_form_missing",
+                "Greenhouse application form or a single Apply control was not found",
+                "detect",
+            )
+        candidates[0].click()
+        try:
+            page.locator(self.FORM).first.wait_for(state="attached", timeout=10_000)
+        except Exception as exc:
+            raise BlockedHuman(
+                "greenhouse_form_missing",
+                "Greenhouse Apply control did not open an application form",
+                "detect",
+            ) from exc
+
+    def fill_core(self, page) -> None:
+        form = page.locator(self.FORM)
+        if form.count() != 1:
+            raise BlockedHuman(
+                "greenhouse_form_ambiguous",
+                "Greenhouse application form is missing or ambiguous",
+                "fill",
+            )
+        scope = form.first
+        for control_id, paths in self._CORE_CONTROLS.items():
+            matches = scope.locator(f"#{control_id}")
+            if not matches.count():
+                continue
+            if matches.count() != 1:
+                raise BlockedHuman(
+                    "unknown_required_control",
+                    f"Greenhouse core field is ambiguous: {_safe_label(control_id)}",
+                    "fill",
+                )
+            control = matches.first
+            label = self._control_label(scope, control)
+            present, value = self._core_value(control_id, label, paths)
+            required = self._control_required(control)
+            if not present:
+                if required:
+                    raise BlockedHuman(
+                        "required_profile_field_missing",
+                        f"Required Greenhouse field needs profile data: {_safe_label(label)}",
+                        "fill",
+                    )
+                continue
+            if control.get_attribute("role") == "combobox":
+                self._fill_answer(page, control.locator("xpath=ancestor::*[contains(@class, 'field-wrapper') or self::fieldset][1]"), label, value)
+            else:
+                self._fill_scalar(control, label, value, "fill")
+
+        entries = self._entries(page)
+        for index in range(entries.count()):
+            entry = entries.nth(index)
+            label = self._label(entry)
+            paths = self._CORE_LABELS.get(_normalise_label(label))
+            if not paths or self._is_answered(entry):
+                continue
+            present, value = self._core_value(self._field_key(entry), label, paths)
+            if present:
+                self._fill_answer(page, entry, label, value)
+            elif self._required(entry):
+                raise BlockedHuman(
+                    "required_profile_field_missing",
+                    f"Required Greenhouse field needs profile data: {_safe_label(label)}",
+                    "fill",
+                )
+
+    def upload_cv(self, page) -> None:
+        if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
+            raise BlockedHuman("cv_missing", "The selected CV file is missing or empty", "upload_cv")
+        form = page.locator(self.FORM)
+        resume = form.locator("#resume, input[name='resume'], input[name='job_application[resume]']")
+        if resume.count() != 1 or (resume.first.get_attribute("type") or "").casefold() != "file":
+            raise BlockedHuman(
+                "resume_field_missing",
+                "Greenhouse resume upload field was not found unambiguously",
+                "upload_cv",
+            )
+        resume.first.set_input_files(str(self.cv_path))
+        page.wait_for_timeout(100)
+        # Current Greenhouse replaces the file input with an exact filename
+        # and a Remove file button after accepting the upload.  Older forms
+        # retain the input.  Verify either observable effect; the vanished
+        # input by itself is not proof of acceptance.
+        retained = form.locator(
+            "#resume, input[name='resume'], input[name='job_application[resume]']"
+        )
+        upload_scope = None
+        if retained.count() == 1:
+            if retained.first.evaluate("element => element.files.length") != 1:
+                raise BlockedHuman(
+                    "upload_rejected",
+                    "Greenhouse did not retain the selected CV",
+                    "upload_cv",
+                )
+            upload_scope = retained.first.locator(
+                "xpath=ancestor::*[contains(@class, 'field-wrapper') or contains(@class, 'field')][1]"
+            )
+        else:
+            filename = form.get_by_text(self.cv_path.name, exact=True)
+            try:
+                filename.first.wait_for(state="visible", timeout=5_000)
+            except Exception as exc:
+                raise BlockedHuman(
+                    "upload_rejected",
+                    "Greenhouse did not show the selected CV filename",
+                    "upload_cv",
+                ) from exc
+            if filename.count() != 1:
+                raise BlockedHuman(
+                    "upload_rejected",
+                    "Greenhouse did not show the selected CV filename",
+                    "upload_cv",
+                )
+            upload_scope = filename.first.locator(
+                "xpath=ancestor::*[contains(@class, 'field-wrapper') or contains(@class, 'field')][1]"
+            )
+            if not upload_scope.count() or "resume" not in _normalise_label(
+                upload_scope.first.inner_text()
+            ):
+                raise BlockedHuman(
+                    "upload_rejected",
+                    "Greenhouse showed the filename outside the resume field",
+                    "upload_cv",
+                )
+        if upload_scope.count() and self._visible_error_text(upload_scope.first):
+            raise BlockedHuman("upload_rejected", "Greenhouse reported a CV upload error", "upload_cv")
+
+    def fill_screening(self, page) -> None:
+        challenge = self._challenge_reason(page)
+        if challenge:
+            raise BlockedHuman(
+                challenge,
+                f"Greenhouse requires human intervention ({challenge})",
+                "screening",
+            )
+        entries = self._entries(page)
+        core_ids = tuple(self._CORE_CONTROLS) + ("resume",)
+        for index in range(entries.count()):
+            entry = entries.nth(index)
+            if any(entry.locator(f"#{control_id}").count() for control_id in core_ids):
+                continue
+            label = self._label(entry)
+            if _normalise_label(label) in self._CORE_LABELS or self._is_answered(entry):
+                continue
+            field_key = self._field_key(entry)
+            present, answer = self._answer_for(label, field_key)
+            if not present:
+                if self._required(entry):
+                    raise BlockedHuman(
+                        "required_answer_missing",
+                        f"Required Greenhouse question needs an answer: {_safe_label(label)}",
+                        "screening",
+                    )
+                continue
+            self._fill_answer(page, entry, label, answer)
+            if not self._is_answered(entry):
+                raise BlockedHuman(
+                    "answer_not_accepted",
+                    f"Greenhouse did not retain the answer for: {_safe_label(label)}",
+                    "screening",
+                )
+
+    def _fill_answer(self, page, entry, label: str, answer: Any) -> None:
+        if not entry.count():
+            raise BlockedHuman(
+                "unknown_required_control",
+                f"Greenhouse field has no recognised container: {_safe_label(label)}",
+                "screening",
+            )
+        radios = entry.locator("input[type=radio]")
+        if radios.count():
+            wanted = _normalise_label(str(answer))
+            matches = []
+            for index in range(radios.count()):
+                radio = radios.nth(index)
+                labels = radio.evaluate(
+                    "element => Array.from(element.labels || []).map(label => label.innerText)"
+                )
+                if any(_normalise_label(str(value)) == wanted for value in labels):
+                    matches.append(radio)
+            if len(matches) != 1:
+                raise BlockedHuman(
+                    "answer_option_unknown",
+                    f"No single Greenhouse option matches the saved answer for: {_safe_label(label)}",
+                    "screening",
+                )
+            matches[0].check()
+            return
+
+        checkboxes = entry.locator("input[type=checkbox]")
+        if checkboxes.count():
+            if checkboxes.count() == 1 and isinstance(answer, bool):
+                checkboxes.first.set_checked(answer)
+                return
+            values = answer if isinstance(answer, list) else [answer]
+            if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
+                raise BlockedHuman(
+                    "answer_type_unknown",
+                    f"Greenhouse checkbox question needs explicit option labels: {_safe_label(label)}",
+                    "screening",
+                )
+            wanted = {_normalise_label(str(value)) for value in values}
+            matched: dict[str, Any] = {}
+            for index in range(checkboxes.count()):
+                checkbox = checkboxes.nth(index)
+                labels = checkbox.evaluate(
+                    "element => Array.from(element.labels || []).map(label => label.innerText)"
+                )
+                for option_label in labels:
+                    normalised = _normalise_label(str(option_label))
+                    if normalised in wanted:
+                        matched[normalised] = checkbox
+            if set(matched) != wanted:
+                raise BlockedHuman(
+                    "answer_option_unknown",
+                    f"Greenhouse checkbox options do not exactly match the saved answer for: {_safe_label(label)}",
+                    "screening",
+                )
+            for checkbox in matched.values():
+                checkbox.check()
+            return
+
+        select = entry.locator("select")
+        if select.count() == 1:
+            try:
+                select.first.select_option(label=str(answer))
+            except Exception as exc:
+                raise BlockedHuman(
+                    "answer_option_unknown",
+                    f"Greenhouse select has no option matching the saved answer for: {_safe_label(label)}",
+                    "screening",
+                ) from exc
+            return
+
+        comboboxes = entry.locator("input[role=combobox]")
+        if comboboxes.count() == 1:
+            values = answer if isinstance(answer, list) else [answer]
+            if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
+                raise BlockedHuman(
+                    "answer_type_unknown",
+                    f"Greenhouse select needs explicit option labels: {_safe_label(label)}",
+                    "screening",
+                )
+            for value in values:
+                comboboxes.first.click()
+                option = page.get_by_role("option", name=str(value), exact=True)
+                try:
+                    option.first.wait_for(state="visible", timeout=3_000)
+                except Exception as exc:
+                    raise BlockedHuman(
+                        "answer_option_unknown",
+                        f"Greenhouse select has no option matching the saved answer for: {_safe_label(label)}",
+                        "screening",
+                    ) from exc
+                if option.count() != 1:
+                    raise BlockedHuman(
+                        "answer_option_unknown",
+                        f"Greenhouse select option is ambiguous for: {_safe_label(label)}",
+                        "screening",
+                    )
+                option.first.click()
+            selected = entry.locator(".select__single-value, .select__multi-value__label")
+            observed = {_normalise_label(selected.nth(i).inner_text()) for i in range(selected.count())}
+            wanted = {_normalise_label(str(value)) for value in values}
+            if not wanted.issubset(observed):
+                raise BlockedHuman(
+                    "answer_not_accepted",
+                    f"Greenhouse did not retain the selected answer for: {_safe_label(label)}",
+                    "screening",
+                )
+            return
+
+        text = entry.locator(
+            "textarea, input:not([type=hidden]):not([type=file]):not([type=radio]):not([type=checkbox]):not([role=combobox])"
+        )
+        if text.count() == 1:
+            self._fill_scalar(text.first, label, answer, "screening")
+            return
+        raise BlockedHuman(
+            "unknown_required_control",
+            f"Greenhouse field type is not supported safely: {_safe_label(label)}",
+            "screening",
+        )
+
+    @staticmethod
+    def _visible_error_text(scope) -> str:
+        selectors = (
+            "[role=alert]",
+            ".field-error",
+            ".error-message",
+            "[id$='-error']",
+            "[aria-invalid=true]",
+        )
+        for selector in selectors:
+            matches = scope.locator(selector)
+            for index in range(matches.count()):
+                match = matches.nth(index)
+                if match.is_visible():
+                    return (match.inner_text() or match.get_attribute("aria-label") or selector).strip()
+        return ""
+
+    @staticmethod
+    def _challenge_reason(page) -> str:
+        common = AshbyRecipe._challenge_reason(page)
+        if common:
+            return common
+        selectors = (
+            "#security_code",
+            "input[name='security_code']",
+            "input[name*='captcha' i]",
+        )
+        for selector in selectors:
+            matches = page.locator(selector)
+            for index in range(matches.count()):
+                if matches.nth(index).is_visible():
+                    return "captcha"
+        body = page.locator("body")
+        text = body.inner_text().casefold() if body.count() else ""
+        if "verification code" in text and "not a robot" in text:
+            return "captcha"
+        if "flagged as potential bot traffic" in text:
+            return "captcha"
+        return ""
+
+    def review(self, page) -> None:
+        challenge = self._challenge_reason(page)
+        if challenge:
+            raise BlockedHuman(
+                challenge,
+                f"Greenhouse requires human intervention ({challenge})",
+                "review",
+            )
+        if self._visible_error_text(page):
+            raise BlockedHuman("form_error", "Greenhouse reports a form validation error", "review")
+
+        entries = self._entries(page)
+        for index in range(entries.count()):
+            entry = entries.nth(index)
+            if not self._required(entry):
+                continue
+            label = self._label(entry)
+            if not self._is_answered(entry):
+                raise BlockedHuman(
+                    "required_field_unanswered",
+                    f"Required Greenhouse field remains unanswered: {_safe_label(label)}",
+                    "review",
+                )
+            controls = entry.locator(
+                "input:not([type=hidden]):not([aria-hidden=true]), textarea, select"
+            )
+            for control_index in range(controls.count()):
+                control = controls.nth(control_index)
+                control_type = (control.get_attribute("type") or "").casefold()
+                if control_type not in {"radio", "checkbox", "file"} and not control.evaluate(
+                    "element => element.checkValidity()"
+                ):
+                    raise BlockedHuman(
+                        "field_invalid",
+                        f"Greenhouse rejected the format of: {_safe_label(label)}",
+                        "review",
+                    )
+
+        submit = page.locator(self.SUBMIT)
+        if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
+            raise BlockedHuman(
+                "submit_unavailable",
+                "Greenhouse submit button is missing, ambiguous, or disabled",
+                "review",
+            )
+
+    def submit(self, page) -> None:
+        # ApplicationFlow has already persisted submit_started and repeated
+        # the authorisation gate before this irreversible click.
         page.locator(self.SUBMIT).click(timeout=10_000)
 
 
@@ -884,9 +1517,92 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return FlowResult("denied", checkpoint.state, checkpoint.blocked_reason)
 
+    def _recipe(self, platform: str):
+        recipes = {
+            "ashby": AshbyRecipe,
+            "greenhouse": GreenhouseRecipe,
+        }
+        recipe = recipes.get(platform)
+        if recipe is None:
+            raise BlockedHuman(
+                "ats_unsupported",
+                "Application platform is unknown, conflicting, or has no safe recipe",
+                "detect",
+            )
+        return recipe(self.profile, self.cv_path)
+
     @staticmethod
-    def _confirmation(page, application_url: str) -> tuple[str, str] | None:
-        success = page.locator(AshbyRecipe.SUCCESS)
+    def _greenhouse_page_url_trusted(url: str) -> bool:
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            port = parsed.port
+        except ValueError:
+            return False
+        return bool(
+            parsed.scheme == "https"
+            and (parsed.hostname or "").casefold() in GREENHOUSE_HOSTS
+            and port in {None, 443}
+        )
+
+    @staticmethod
+    def _assert_recipe_page(
+        page, platform: str, step: str, *, allow_injected_blank: bool = False
+    ) -> None:
+        if platform != "greenhouse":
+            return
+        if allow_injected_blank and page.url == "about:blank":
+            return
+        if not ApplicationFlow._greenhouse_page_url_trusted(page.url):
+            raise BlockedHuman(
+                "greenhouse_redirect_untrusted",
+                "Greenhouse redirected outside its three trusted public hosts",
+                step,
+            )
+
+    @staticmethod
+    def _same_confirmation_origin(
+        application_url: str, confirmation_url: str, platform: str
+    ) -> bool:
+        try:
+            original = urllib.parse.urlsplit(application_url)
+            final = urllib.parse.urlsplit(confirmation_url)
+            original_port = original.port
+            final_port = final.port
+        except ValueError:
+            return False
+        if original.scheme not in {"http", "https"} or final.scheme != "https":
+            return False
+        default_ports = {"http": 80, "https": 443}
+        if (
+            original_port not in {None, default_ports[original.scheme]}
+            or final_port not in {None, default_ports[final.scheme]}
+        ):
+            return False
+        original_host = (original.hostname or "").casefold()
+        final_host = (final.hostname or "").casefold()
+        if platform == "greenhouse":
+            # boards.greenhouse.io currently redirects to job-boards.*.  All
+            # three exact hosts are one trusted public ATS boundary; no other
+            # greenhouse-looking suffix is accepted.
+            return original_host in GREENHOUSE_HOSTS and final_host in GREENHOUSE_HOSTS
+        return bool(original_host and final_host == original_host)
+
+    @staticmethod
+    def _confirmation(
+        page,
+        application_url: str,
+        platform: str | None = None,
+        *,
+        pre_submit: bool = False,
+    ) -> tuple[str, str] | None:
+        platform = platform or detect_ats(application_url).platform
+        recipe = {
+            "ashby": AshbyRecipe,
+            "greenhouse": GreenhouseRecipe,
+        }.get(platform)
+        if recipe is None:
+            return None
+        success = page.locator(recipe.SUCCESS)
         if success.count() and success.first.is_visible():
             text = " ".join(success.first.inner_text().split())[:1000]
             if text:
@@ -904,21 +1620,24 @@ class ApplicationFlow:
             "your application is on its way",
         )
         lower = visible.casefold()
+        submit_present = page.locator(recipe.SUBMIT).count() > 0
         for marker in markers:
             offset = lower.find(marker)
-            if offset >= 0:
+            # Before a click this evidence deliberately triggers the
+            # confirmation_ambiguous guard.  During crash recovery, employer
+            # copy on a reloaded form cannot prove an earlier submission.
+            if offset >= 0 and (pre_submit or not submit_present):
                 return "", visible[offset : offset + 1000]
 
         final_url = page.url
         # A changed URL is evidence only when it is an HTTP(S) confirmation
-        # URL on the same Ashby origin.  A fresh browser starts at about:blank;
-        # accepting any different URL plus an absent form turned a blank page
-        # into a valid receipt during crash recovery.
+        # URL inside the recipe's trusted origin boundary.  A fresh browser
+        # starts at about:blank; accepting any different URL plus an absent
+        # form turned a blank page into a valid receipt during crash recovery.
         try:
             final = urllib.parse.urlsplit(final_url)
-            original = urllib.parse.urlsplit(application_url)
         except ValueError:
-            final = original = urllib.parse.SplitResult("", "", "", "", "")
+            final = urllib.parse.SplitResult("", "", "", "", "")
         confirmation_url_markers = (
             "confirmation",
             "confirmed",
@@ -929,21 +1648,33 @@ class ApplicationFlow:
         )
         final_route = f"{final.path}?{final.query}".casefold()
         if (
-            final.scheme in {"http", "https"}
-            and final.netloc.casefold() == original.netloc.casefold()
+            ApplicationFlow._same_confirmation_origin(
+                application_url, final_url, platform
+            )
             and final_url != application_url
             and any(marker in final_route for marker in confirmation_url_markers)
-            and page.locator(AshbyRecipe.SUBMIT).count() == 0
+            and page.locator(recipe.SUBMIT).count() == 0
         ):
             return final_url, ""
         return None
 
-    def _wait_for_confirmation(self, page) -> tuple[str, str] | None:
+    def _wait_for_confirmation(self, page, platform: str) -> tuple[str, str] | None:
+        recipe = {
+            "ashby": AshbyRecipe,
+            "greenhouse": GreenhouseRecipe,
+        }[platform]
         deadline = time.monotonic() + self.confirmation_timeout_ms / 1000
         while True:
-            found = self._confirmation(page, self.url)
+            found = self._confirmation(page, self.url, platform)
             if found:
                 return found
+            challenge = recipe._challenge_reason(page)
+            if challenge:
+                raise BlockedHuman(
+                    challenge,
+                    f"{platform.title()} requires human intervention after submit ({challenge})",
+                    "submit",
+                )
             if time.monotonic() >= deadline:
                 return None
             page.wait_for_timeout(min(250, max(1, self.confirmation_timeout_ms)))
@@ -1051,7 +1782,16 @@ class ApplicationFlow:
                     # intentional: uncertainty cannot authorise a second click.
                     if navigate:
                         self._navigate(active_page)
-                    confirmation = self._confirmation(active_page, self.url)
+                    recovery_platform = checkpoint.platform or detect_ats(self.url).platform
+                    if recovery_platform not in SUPPORTED_PLATFORMS:
+                        raise BlockedHuman(
+                            "ats_unsupported",
+                            "Saved submission has no safe recovery recipe",
+                            "submit",
+                        )
+                    confirmation = self._confirmation(
+                        active_page, self.url, recovery_platform
+                    )
                     if confirmation:
                         receipt = self._capture_receipt(active_page, confirmation)
                         checkpoint.receipt = receipt.to_dict()
@@ -1070,12 +1810,11 @@ class ApplicationFlow:
                     ),
                 )
 
-            recipe = AshbyRecipe(self.profile, self.cv_path)
             try:
                 if navigate:
                     self._navigate(active_page)
                 detection = detect_ats(self.url, active_page.content())
-                if detection.platform != SUPPORTED_PLATFORM:
+                if detection.platform not in SUPPORTED_PLATFORMS:
                     reason = "ats_conflict" if detection.conflict else "ats_unsupported"
                     raise BlockedHuman(
                         reason,
@@ -1083,32 +1822,70 @@ class ApplicationFlow:
                         "detect",
                     )
                 checkpoint.platform = detection.platform
+                recipe = self._recipe(detection.platform)
+                injected_blank = not navigate and active_page.url == "about:blank"
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "detect",
+                    allow_injected_blank=injected_blank,
+                )
                 recipe.open_form(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "detect",
+                    allow_injected_blank=injected_blank,
+                )
                 # Confirm the rendered form too.  URL-only detection is not
                 # enough to interact when a block/error page owns that URL.
                 rendered = detect_ats(self.url, active_page.content())
-                if rendered.platform != SUPPORTED_PLATFORM or not rendered.dom_match:
+                if rendered.platform != detection.platform or not rendered.dom_match:
                     raise BlockedHuman(
-                        "ashby_dom_unrecognised",
-                        "URL is Ashby but the rendered application form is not recognised",
+                        f"{detection.platform}_dom_unrecognised",
+                        f"URL is {detection.platform} but the rendered application form is not recognised",
                         "detect",
                     )
                 checkpoint.complete_step("detect", "fill")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "fill",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("fill", "upload_cv")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.upload_cv(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "upload_cv",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("upload_cv", "screening")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_screening(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "screening",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("screening", "review")
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.review(active_page)
+                self._assert_recipe_page(
+                    active_page,
+                    detection.platform,
+                    "review",
+                    allow_injected_blank=injected_blank,
+                )
                 checkpoint.complete_step("review", "submit")
                 checkpoint.save(self.checkpoint_path)
 
@@ -1116,7 +1893,12 @@ class ApplicationFlow:
                 # prove that this click succeeded.  Stop instead of reusing a
                 # footer, stale banner, or employer-authored sentence as a
                 # receipt after submit.
-                if self._confirmation(active_page, self.url):
+                if self._confirmation(
+                    active_page,
+                    self.url,
+                    detection.platform,
+                    pre_submit=True,
+                ):
                     raise BlockedHuman(
                         "confirmation_ambiguous",
                         "Confirmation evidence is already visible before submit",
@@ -1145,7 +1927,7 @@ class ApplicationFlow:
                 checkpoint.submit_started_at = _utc_now()
                 checkpoint.save(self.checkpoint_path)
                 recipe.submit(active_page)
-                confirmation = self._wait_for_confirmation(active_page)
+                confirmation = self._wait_for_confirmation(active_page, detection.platform)
                 if not confirmation:
                     raise BlockedHuman(
                         "receipt_missing",

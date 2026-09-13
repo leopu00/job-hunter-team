@@ -17,6 +17,10 @@
 #       sopravvive al recreate del container — /tmp è il layer effimero e i log
 #       ci sparivano a ogni `docker compose up --force-recreate`), creando la
 #       directory e ruotando il file se supera la soglia.
+#
+#   jht_timeout <secondi> <comando...>
+#       Esegue <comando> con un tetto di tempo DOVE il tetto è disponibile.
+#       Propaga sempre il rc del comando (124 se il tetto è scattato).
 
 # Directory di questo file — risolta una volta sola, funziona anche quando lo
 # script sorgente viene invocato via path relativo.
@@ -24,6 +28,38 @@ JHT_LAUNCHER_DIR="${JHT_LAUNCHER_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && p
 JHT_PROC_KILL_PY="${JHT_PROC_KILL_PY:-$JHT_LAUNCHER_DIR/proc-kill.py}"
 # Stessa soglia della rotazione di pid1 (cli/src/commands/pid1.js, spawnLabeled).
 JHT_DAEMON_LOG_MAX_BYTES="${JHT_DAEMON_LOG_MAX_BYTES:-5242880}"
+
+# `timeout` è GNU coreutils: c'è sempre nel container (Dockerfile: Debian
+# bookworm) e sugli host Linux, NON su macOS/BSD — lì al più si chiama
+# `gtimeout`, e solo con `brew install coreutils`. Senza questa cascata un
+# `timeout` assente esce 127 e ogni chiamante che tratta il non-zero come
+# errore fatale trasforma un guard-rail mancante nel fallimento
+# dell'operazione che doveva proteggere. `.launcher/` non si è mai concesso
+# quella scelta per un binario opzionale: la cascata `stat -c`/`stat -f`/`wc`
+# qui sotto e il `flock` di codex-auth-healer.sh degradano invece di morire.
+# Nudo significa "senza tetto", non "non eseguito": chi vuole discriminare il
+# tetto scattato guarda il 124, che solo `timeout`/`gtimeout` producono.
+#
+# Niente `-k`: SIGKILL non scioglie un processo bloccato in I/O
+# ininterrompibile (stato D su un bind mount stallato) più di quanto faccia
+# SIGTERM, e nel caso in cui il tetto serve davvero — un client tmux appeso —
+# il processo non ignora SIGTERM, quindi `-k` non copre nessuno scenario in
+# più. In cambio costerebbe un rischio: un `timeout` che non conosce `-k`
+# risponde 125 (errore d'uso), e chi discrimina l'rc leggerebbe "wrapper
+# rotto" a ogni spawn. L'assicurazione contro il figlio che sopravvive è
+# altrove ed è già in casa: la chiusura del fd del lock (`9>&-`) nei figli,
+# che rende irrilevante quanto a lungo essi restino vivi.
+jht_timeout() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  else
+    "$@"
+  fi
+}
 
 jht_daemon_log_dir() {
   printf '%s\n' "${JHT_LOGS_DIR:-${JHT_HOME:-/jht_home}/logs}"

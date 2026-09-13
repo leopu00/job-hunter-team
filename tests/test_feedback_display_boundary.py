@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import urllib.error
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -69,7 +70,13 @@ def test_shared_sanitizer_redacts_infra_and_bounds(monkeypatch):
 def test_check_recent_and_themes_share_the_raw_display_boundary(monkeypatch):
     event = {
         "action": "dislike",
-        "created_at": "2026-08-13T10:00:00Z",
+        # Relativa a oggi, non una data fissa: `recent_feedback(days=30)` filtra
+        # sulla finestra, e il 2026-08-13 scritto qui era uscito dalla finestra
+        # il 12/09 — il test e' diventato rosso da solo, senza che nessun codice
+        # cambiasse. Il confine che verifica e' la visualizzazione, non la data.
+        "created_at": (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
         "reason": SYNTHETIC_INTERNALS,
         "comment": SYNTHETIC_INTERNALS,
         "score": 2,
