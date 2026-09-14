@@ -51,6 +51,10 @@ try:
     import application_answers
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import application_answers
+try:
+    import profile_facts
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import profile_facts
 
 
 LOG = logging.getLogger("jht.apply_flow")
@@ -318,6 +322,53 @@ def _control_option_labels(controls) -> list[str]:
             return []
         values.append(exact[0])
     return values
+
+
+# Profile path a recipe reads → the profile_facts fact with its aliases.
+_CORE_PATH_FACTS = {
+    ("name",): "full name",
+    ("first_name",): "first name",
+    ("last_name",): "last name",
+    ("contacts", "email"): "email",
+    ("email",): "email",
+    ("contacts", "phone"): "phone",
+    ("contacts", "linkedin"): "linkedin",
+    ("contacts", "github"): "github",
+    ("contacts", "website"): "website",
+    ("location",): "location",
+}
+
+
+def _profile_fact(profile: Mapping[str, Any], paths: tuple[tuple[str, ...], ...]) -> str | None:
+    """A core fact from the profile: the recipe's own paths, then the known aliases."""
+    for path in paths:
+        fact = _CORE_PATH_FACTS.get(tuple(path))
+        value = profile_facts.profile_value(profile, fact) if fact else None
+        if value is not None:
+            return value
+    return None
+
+
+def _core_fact_missing(platform: str, label: str, step: str, control_type: str = "text") -> "BlockedHuman":
+    """A required core field the profile and the saved answers do not hold.
+
+    1967 (14/09): Greenhouse "First Name" with a profile holding only `name`
+    was a hard stop. It is a question the CLOSER works out from the profile
+    (CL-08), never a name split in code.
+    """
+    request = profile_facts.core_answer_request(label, control_type)
+    if request is None:
+        return BlockedHuman(
+            "required_profile_field_missing",
+            f"Required {platform} field needs profile data: {_safe_label(label)}",
+            step,
+        )
+    return BlockedHuman(
+        "required_answer_missing",
+        f"Required {platform} field needs a fact the profile does not state: {_safe_label(label)}",
+        step,
+        answer_request=request,
+    )
 
 
 class FlowError(RuntimeError):
@@ -1051,11 +1102,16 @@ class AshbyRecipe:
             if value is None and profile_path == ("contacts", "email"):
                 value = self._profile_value(self.profile, ("email",))
             if value is None:
+                value = _profile_fact(self.profile, (profile_path,))
+            if value is None:
+                present, answer = self._answer_for(label, field_path)
+                if present and isinstance(answer, str) and answer.strip():
+                    value = answer.strip()
+            if value is None:
                 if self._required(entry):
-                    raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required Ashby field needs profile data: {_safe_label(label)}",
-                        "fill",
+                    control = self._first_control(entry)
+                    raise _core_fact_missing(
+                        "Ashby", label, "fill", (control.get_attribute("type") or "text") if control else "text"
                     )
                 continue
             control = self._first_control(entry)
@@ -1543,15 +1599,18 @@ class GreenhouseRecipe:
     def _core_value(
         self, control_id: str, label: str, paths: tuple[tuple[str, ...], ...]
     ) -> tuple[bool, Any]:
-        present, answer = self._answer_for(label, control_id)
-        if present:
-            return True, answer
+        # profile_facts rule: the profile (own paths, then aliases), then a
+        # saved answer; the caller turns a missing required one into a question.
         for path in paths:
             value = self._profile_value(self.profile, path)
             if value is not None:
                 self.answer_sources[_normalise_label(label) or _normalise_label(control_id)] = "profile"
                 return True, value
-        return False, None
+        value = _profile_fact(self.profile, paths)
+        if value is not None:
+            self.answer_sources[_normalise_label(label) or _normalise_label(control_id)] = "profile"
+            return True, value
+        return self._answer_for(label, control_id)
 
     @staticmethod
     def _control_label(scope, control) -> str:
@@ -1671,10 +1730,8 @@ class GreenhouseRecipe:
             required = self._control_required(control)
             if not present:
                 if required:
-                    raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required Greenhouse field needs profile data: {_safe_label(label)}",
-                        "fill",
+                    raise _core_fact_missing(
+                        "Greenhouse", label, "fill", (control.get_attribute("type") or "text").casefold()
                     )
                 continue
             if control.get_attribute("role") == "combobox":
@@ -1693,11 +1750,7 @@ class GreenhouseRecipe:
             if present:
                 self._fill_answer(page, entry, label, value)
             elif self._required(entry):
-                raise BlockedHuman(
-                    "required_profile_field_missing",
-                    f"Required Greenhouse field needs profile data: {_safe_label(label)}",
-                    "fill",
-                )
+                raise _core_fact_missing("Greenhouse", label, "fill")
 
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
