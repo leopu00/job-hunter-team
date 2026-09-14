@@ -3424,6 +3424,12 @@ class ApplicationFlow:
         ) + tuple(getattr(recipe, "CONFIRMATION_MARKERS", ()))
         lower = visible.casefold()
         submit_present = page.locator(recipe.SUBMIT).count() > 0
+        text_rule = getattr(recipe, "confirmation_text", None)
+        if callable(text_rule) and not pre_submit and not text_rule(page):
+            # A recipe with its own, stricter reading of a thank-you text (the
+            # company form: no form still there, no submit phrase next to it)
+            # has the last word on text evidence after the click.
+            markers = ()
         for marker in markers:
             offset = lower.find(marker)
             # Before a click this evidence deliberately triggers the
