@@ -732,6 +732,10 @@ class FlowCheckpoint:
     modal_step: int = 0
     # sha256 of the CV file as the flow handed it to the form (see Receipt).
     cv_sha256: str = ""
+    # A site's one-time code after Submit: "" · code_required (the code screen
+    # is open, no code typed) · code_entered (typed and confirmed once).  The
+    # code itself is never saved.
+    verification: str = ""
     # The vacancy page as the browser last opened it: HTTP status and
     # scheme://host/path (no query).  None / "" before any navigation.
     http_status: int | None = None
@@ -808,6 +812,8 @@ class FlowCheckpoint:
             raise FlowError("checkpoint has an invalid handoff or pre-submit screenshot")
         if not isinstance(raw.get("cv_sha256", ""), str):
             raise FlowError("checkpoint has an invalid CV digest")
+        if raw.get("verification", "") not in {"", "code_required", "code_entered"}:
+            raise FlowError("checkpoint has an invalid verification state")
         step = raw.get("modal_step", 0)
         if isinstance(step, bool) or not isinstance(step, int) or step < 0:
             raise FlowError("checkpoint has an invalid form step")
@@ -2598,6 +2604,51 @@ class GreenhouseRecipe:
         # the authorisation gate before this irreversible click.
         page.locator(self.SUBMIT).click(timeout=10_000)
 
+    # 1967 (patch 25): after Submit, "A verification code was sent to <email>.
+    # To submit your application, enter the 8-character code to confirm you're
+    # human", with eight "Security code" boxes above the Submit button.
+    SECURITY_CODE_INPUTS = (
+        "input[aria-label*='security code' i], input[id^='security-input'], "
+        "input[name*='security_code' i], input[autocomplete='one-time-code']"
+    )
+    SECURITY_CODE_SENDERS = ("greenhouse.io", "greenhouse-mail.io")
+
+    @classmethod
+    def _security_code_boxes(cls, page) -> list:
+        boxes = page.locator(cls.SECURITY_CODE_INPUTS)
+        return [boxes.nth(index) for index in range(boxes.count()) if boxes.nth(index).is_visible()]
+
+    @classmethod
+    def security_code_screen(cls, page) -> bool:
+        """The code screen after Submit: visible code boxes and the page saying a code was sent."""
+        if not cls._security_code_boxes(page):
+            return False
+        body = page.locator("body")
+        text = body.inner_text().casefold() if body.count() else ""
+        return "verification code" in text or "security code" in text
+
+    @classmethod
+    def enter_security_code(cls, page, code: str) -> None:
+        boxes = cls._security_code_boxes(page)
+        if len(boxes) == 1:
+            boxes[0].fill(code)
+        elif len(boxes) == len(code):
+            for box, character in zip(boxes, code):
+                box.fill(character)
+        else:
+            raise BlockedHuman(
+                "greenhouse_verification_failed",
+                "The Greenhouse verification code boxes are not the ones the recipe knows",
+                "submit",
+            )
+
+    @classmethod
+    def clear_security_code(cls, page) -> None:
+        """Before any screenshot: a typed code never stays on the page."""
+        for box in cls._security_code_boxes(page):
+            with contextlib.suppress(Exception):
+                box.fill("")
+
 
 class LeverRecipe:
     """Fail-closed adapter for the public Lever application form (jobs.lever.co).
@@ -2999,6 +3050,14 @@ class LeverRecipe:
         # ApplicationFlow has already persisted submit_started and repeated
         # the authorisation gate before this irreversible click.
         self._form(page, "submit").locator("button[type=submit]").click(timeout=10_000)
+
+
+def _parse_utc(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _file_sha256(path: Path) -> str:
@@ -4041,14 +4100,21 @@ class ApplicationFlow:
             return final_url, ""
         return None
 
-    def _wait_for_confirmation(self, page, platform: str) -> tuple[str, str] | None:
+    def _wait_for_confirmation(
+        self, page, platform: str, *, stop_on_code_screen: bool = True
+    ) -> tuple[str, str] | None:
         recipe = _recipe_class(platform)
         deadline = time.monotonic() + self.confirmation_timeout_ms / 1000
         while True:
             found = self._confirmation(page, self.url, platform)
             if found:
                 return found
-            challenge = recipe._challenge_reason(page)
+            code_screen = getattr(recipe, "security_code_screen", None)
+            on_code_screen = callable(code_screen) and code_screen(page)
+            if on_code_screen and stop_on_code_screen:
+                return None  # the site wants its one-time code: the flow takes over
+            # The code screen's own boxes are not a captcha.
+            challenge = "" if on_code_screen else recipe._challenge_reason(page)
             if challenge:
                 raise BlockedHuman(
                     challenge,
@@ -4408,6 +4474,87 @@ class ApplicationFlow:
                 return
             page.wait_for_timeout(500)
 
+    VERIFICATION_CODE_TIMEOUT_S = 300.0
+
+    @staticmethod
+    def _code_screen_open(recipe, page) -> bool:
+        check = getattr(recipe, "security_code_screen", None)
+        try:
+            return bool(callable(check) and check(page))
+        except Exception:
+            return False
+
+    def _verification_code(self, checkpoint: FlowCheckpoint, recipe) -> str:
+        """The site's code: from the user's mailbox when it is configured, otherwise on Telegram."""
+        import verification_code
+
+        since = _parse_utc(checkpoint.submit_started_at) or datetime.now(timezone.utc)
+        reader = getattr(self, "mailbox_reader", None)
+        if reader is not None or verification_code.mailbox_configured():
+            return verification_code.code_from_mailbox(
+                sender_domain=recipe.SECURITY_CODE_SENDERS,
+                since=since,
+                timeout_s=self.VERIFICATION_CODE_TIMEOUT_S,
+                reader=reader,
+                poll_s=getattr(self, "mailbox_poll_s", 10.0),
+            )
+        return verification_code.code_from_telegram(
+            service=recipe.PLATFORM,
+            site=recipe.PLATFORM.title(),
+            position_id=self.position_id,
+            db_path=_resolve_db_path(self.db_path),
+            jht_home=self._jht_home(),
+            timeout_s=self.VERIFICATION_CODE_TIMEOUT_S,
+            notifier=self.code_notifier,
+        )
+
+    def _finish_with_code(self, checkpoint: FlowCheckpoint, recipe, page, platform: str) -> tuple[str, str]:
+        """Type the site's one-time code and confirm ONCE: the last step of the same submit.
+
+        The code is held in this frame only.  A wrong, expired or missing code
+        stops as greenhouse_verification_failed, never with another submit.
+        """
+        import verification_code
+
+        checkpoint.verification = "code_required"
+        checkpoint.save(self.checkpoint_path)
+        try:
+            code = self._verification_code(checkpoint, recipe)
+        except verification_code.CodeUnavailable as missing:
+            raise BlockedHuman(
+                "greenhouse_verification_failed",
+                f"No usable verification code ({missing.reason}): {missing.detail}",
+                "submit",
+            ) from None
+        try:
+            recipe.enter_security_code(page, code)
+        finally:
+            del code
+        checkpoint.verification = "code_entered"
+        try:
+            checkpoint.save(self.checkpoint_path)
+            recipe.submit(page)
+            # The code screen stays up while the site checks the code: wait for
+            # the confirmation, do not stop on the screen itself.
+            confirmation = self._wait_for_confirmation(page, platform, stop_on_code_screen=False)
+        except BaseException:
+            recipe.clear_security_code(page)
+            raise
+        if not confirmation:
+            recipe.clear_security_code(page)
+            if self._code_screen_open(recipe, page):
+                raise BlockedHuman(
+                    "greenhouse_verification_failed",
+                    "Greenhouse did not accept the verification code (wrong or expired)",
+                    "submit",
+                )
+            raise BlockedHuman(
+                "receipt_missing",
+                "The verification code was confirmed once but no confirmation appeared",
+                "submit",
+            )
+        return confirmation
+
     def _jht_home(self) -> Path:
         return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
@@ -4651,6 +4798,28 @@ class ApplicationFlow:
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
         headed_retry = False
         with manager as active_page:
+            if checkpoint.submit_started and checkpoint.verification == "code_required":
+                # The code screen of this submit: finish it on the same page, or
+                # stop.  Opening the vacancy again would be a new application.
+                try:
+                    recipe = self._recipe(checkpoint.platform) if _recipe_class(checkpoint.platform) else None
+                    if navigate or recipe is None or not self._code_screen_open(recipe, active_page):
+                        raise BlockedHuman(
+                            "greenhouse_verification_lost",
+                            "The verification code screen of the submit is gone; it is never submitted again",
+                            "submit",
+                        )
+                    confirmation = self._finish_with_code(checkpoint, recipe, active_page, checkpoint.platform)
+                    receipt = replace(
+                        self._capture_receipt(active_page, confirmation),
+                        answer_sources=dict(checkpoint.answer_sources),
+                        cv_sha256=checkpoint.cv_sha256,
+                    )
+                    checkpoint.receipt = receipt.to_dict()
+                    checkpoint.save(self.checkpoint_path)
+                    return self._record(checkpoint, receipt)
+                except BlockedHuman as blocked:
+                    return self._block(checkpoint, blocked, page=active_page)
             if checkpoint.submit_started:
                 try:
                     # Production recovery owns a fresh about:blank page.  It
@@ -4853,6 +5022,8 @@ class ApplicationFlow:
                     raise
                 recipe.submit(active_page)
                 confirmation = self._wait_for_confirmation(active_page, detection.platform)
+                if not confirmation and self._code_screen_open(recipe, active_page):
+                    confirmation = self._finish_with_code(checkpoint, recipe, active_page, detection.platform)
                 if not confirmation and detection.platform == "generic":
                     # A company site has no known confirmation: the outcome is unknown.
                     raise BlockedHuman(
