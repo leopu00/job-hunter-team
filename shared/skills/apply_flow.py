@@ -2810,8 +2810,11 @@ class ApplicationFlow:
             "field_type": str(blocked.answer_request["field_type"]),
             "options": list(blocked.answer_request.get("options") or []),
         }
+        # The question as the page asks it now: a field that changed type or
+        # options is a new request, never the old one's row (1967, 14/09).
+        schema = json.dumps([payload["field_type"], payload["options"]], ensure_ascii=False)
         identity = hashlib.sha256(
-            f"{self.position_id}\0{self.url}\0{payload['key']}".encode("utf-8")
+            f"{self.position_id}\0{self.url}\0{payload['key']}\0{schema}".encode("utf-8")
         ).hexdigest()[:24]
         return {
             "source_id": f"closer-answer:{self.position_id}:{identity}",
@@ -2895,7 +2898,18 @@ class ApplicationFlow:
             # (`ask_pending_question`).  In a dry run as in an authorised run.
             candidate = self._answer_request_record(blocked)
             current = checkpoint.answer_request
-            if not current or current.get("source_id") != candidate["source_id"]:
+            stale = getattr(self, "_stale_request", None)
+            if not current and stale and self._request_schema(stale) == self._request_schema(candidate):
+                # Read again after a new authorisation and still the same field:
+                # the same request, asked or not, and its row answerable again.
+                checkpoint.answer_request = stale
+                self._supersede_request_rows(self._request_schema(stale)[0], restore=str(stale.get("source_id", "")))
+            elif not current or self._request_schema(current) != self._request_schema(candidate):
+                if current and self._request_schema(current)[0] == self._request_schema(candidate)[0]:
+                    # Same question, another shape on the page: the saved
+                    # request and its refusals describe a field that is gone.
+                    checkpoint.answer_refusals.pop(self._request_schema(current)[0], None)
+                self._supersede_request_rows(str(candidate["payload"]["key"]), keep=candidate["source_id"])
                 checkpoint.answer_request = candidate
             reason = blocked.reason
             digest = getattr(blocked, "refused_digest", "")
@@ -2932,6 +2946,47 @@ class ApplicationFlow:
         except Exception as exc:
             LOG.error("blocked_human notification failed: %s", type(exc).__name__)
         return FlowResult("blocked_human", checkpoint.state, blocked.reason)
+
+    @staticmethod
+    def _request_schema(request: Mapping[str, Any]) -> tuple[str, str, tuple[str, ...]]:
+        payload = request.get("payload") if isinstance(request.get("payload"), Mapping) else {}
+        return (
+            str(payload.get("key", "")),
+            str(payload.get("field_type", "")),
+            tuple(str(option) for option in payload.get("options") or []),
+        )
+
+    def _supersede_request_rows(self, key: str, *, keep: str = "", restore: str = "") -> None:
+        """Close the open dashboard/Telegram rows of an older shape of this question.
+
+        No user_reply is written: the row leaves the answerable requests
+        (`closer_application_answer`), so neither the bridge nor the dashboard
+        takes an answer for a field the page no longer has.
+        """
+        try:
+            db = _resolve_db_path(self.db_path)
+            if not db.is_file():
+                return
+            with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+                if restore:
+                    conn.execute(
+                        "UPDATE pending_user_messages SET source_action = 'closer_application_answer' "
+                        "WHERE source_id = ? AND source_action = 'closer_application_answer_superseded' "
+                        "AND user_reply IS NULL",
+                        (restore,),
+                    )
+                    conn.commit()
+                    return
+                conn.execute(
+                    "UPDATE pending_user_messages SET source_action = 'closer_application_answer_superseded', "
+                    "acknowledged_at = COALESCE(acknowledged_at, CURRENT_TIMESTAMP) "
+                    "WHERE agent = 'closer' AND related_position_id = ? AND source_action = 'closer_application_answer' "
+                    "AND user_reply IS NULL AND source_id != ? AND json_extract(source_payload, '$.key') = ?",
+                    (self.position_id, keep, key),
+                )
+                conn.commit()
+        except Exception as exc:  # noqa: BLE001 — the stale row is a nuisance, never a reason to stop
+            LOG.error("superseding an old answer request failed: %s", type(exc).__name__)
 
     @staticmethod
     def _request_asked(request: Mapping[str, Any]) -> bool:
@@ -3837,6 +3892,18 @@ class ApplicationFlow:
             # notification.  Only the user authorising the position again after
             # this stop makes the next run look at the page once more.
             return FlowResult("blocked_human", checkpoint.state, "vacancy_closed")
+
+        if (
+            checkpoint.answer_request
+            and not checkpoint.submit_started
+            and self._reauthorised_since(checkpoint, first_gate)
+        ):
+            # The user authorised the position again after the stop: the page
+            # is read again (the field's type and options as they are now),
+            # and the old question's rows close without an answer.
+            self._stale_request = checkpoint.answer_request
+            self._supersede_request_rows(self._request_schema(checkpoint.answer_request)[0])
+            self._close_answer_request(checkpoint)
 
         fresh = (
             checkpoint.state == "detect"
