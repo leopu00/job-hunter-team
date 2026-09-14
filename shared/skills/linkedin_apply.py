@@ -112,6 +112,14 @@ _EASY_APPLY_LABEL = re.compile(
 # vendor id and class, and the Easy Apply flow link of the 2026 layout.  The
 # class also dresses the offsite "Apply" (it opens the company site in a new
 # tab, with an external-link icon): such a control is never Easy Apply.
+# The control's OWN name starts with the label ("Candidatura semplice per questa
+# offerta di lavoro").  Live 14/09 (patch 27): the "similar jobs" cards are links
+# whose accessible name is the whole card and ENDS with "· Candidatura
+# semplice"; an unanchored search took 6 and 8 of them for Easy Apply.
+_EASY_APPLY_START = re.compile(r"^\s*(?:" + _EASY_APPLY_LABEL.pattern + r")\b", re.I)
+# Controls that lead to other vacancies or to a search, never this application.
+_OTHER_VACANCIES = "[id^='JobDetailsSimilarJobsSlot'], [data-view-name*='similar-jobs']"
+_OTHER_VACANCY_PATH = re.compile(r"/jobs/(?:search-results|search|collections)/|SIMILAR_JOBS", re.I)
 _EASY_APPLY_STRUCTURE = (
     "#jobs-apply-button-id, button.jobs-apply-button, a.jobs-apply-button, "
     "[data-live-test-job-apply-button], a[href*='openSDUIApplyFlow=true']"
@@ -899,41 +907,78 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 "detect",
             )
 
+    # Where a control leads: its own link, the link around it or inside it,
+    # as origin + path.  "" when it leads nowhere else (a button, "#", this page).
+    _DESTINATION_JS = """el => {
+      const link = el.closest('a[href]') || el.querySelector('a[href]');
+      if (!link) return '';
+      const raw = (link.getAttribute('href') || '').trim();
+      if (!raw || raw.startsWith('#') || raw.toLowerCase().startsWith('javascript:')) return '';
+      const target = new URL(raw, location.href);
+      const here = new URL(location.href);
+      if (target.origin === here.origin && target.pathname === here.pathname) return '';
+      return target.origin + target.pathname;
+    }"""
+
     @staticmethod
-    def _control_signature(control) -> tuple[str, str, str]:
-        return (
-            " ".join((control.get_attribute("aria-label") or "").split()).casefold(),
-            " ".join((control.inner_text() or "").split()).casefold(),
-            (control.get_attribute("href") or "").split("?")[0],
-        )
+    def _other_vacancy(href: str, page_url: str) -> bool:
+        """A link to another vacancy's page (/jobs/view/<another id>)."""
+        wanted = re.search(r"/jobs/view/(?:[^/?#]*-)?(\d{6,})", page_url or "")
+        found = re.search(r"/jobs/view/(?:[^/?#]*-)?(\d{6,})", href or "")
+        return bool(found and wanted and found.group(1) != wanted.group(1))
 
     def _easy_apply(self, page) -> list:
-        """The visible Easy Apply controls: by label in LinkedIn's languages, or by structure.
+        """The Easy Apply control, or one control per real destination when there are several.
 
-        One union, so an element found both ways counts once.  The same
-        control drawn twice (the top card and the sticky bar) is one control.
+        Found by label in LinkedIn's languages or by structure, visible and
+        enabled.  Live 14/09 (patch 27): one button on screen read as two,
+        because the "similar jobs" cards below matched the label too.  So the
+        label must START the control's own name, links to other vacancies or
+        to a search never count, and only controls leading to really different
+        places are counted apart: the same button in the top card and in the
+        sticky bar, or a link and the button inside it, are one.
         """
         union = (
             page.locator(_EASY_APPLY_STRUCTURE)
             .or_(page.get_by_role("button", name=_EASY_APPLY_LABEL))
             .or_(page.get_by_role("link", name=_EASY_APPLY_LABEL))
         )
-        found, signatures = [], set()
+        candidates = []
         for index in range(union.count()):
             control = union.nth(index)
-            if not control.is_visible():
+            if not control.is_visible() or not control.is_enabled():
                 continue
-            label = f"{control.get_attribute('aria-label') or ''} {control.inner_text() or ''}"
+            handle = control.element_handle()
+            aria = " ".join((control.get_attribute("aria-label") or "").split())
+            text = " ".join((control.inner_text() or "").split())
+            label = f"{aria} {text}"
+            structural = handle.evaluate("(el, selector) => el.matches(selector)", _EASY_APPLY_STRUCTURE)
+            if not structural and not (_EASY_APPLY_START.search(aria) or _EASY_APPLY_START.search(text)):
+                continue  # the label is somewhere inside a bigger control (a job card), not its name
+            href = control.get_attribute("href") or ""
+            if _OTHER_VACANCY_PATH.search(href) or self._other_vacancy(href, page.url) or handle.evaluate(
+                "(el, selector) => !!el.closest(selector)", _OTHER_VACANCIES
+            ):
+                continue  # a similar vacancy or a search, never this application
             if control.locator(_EXTERNAL_ICON).count() or (
                 _OFFSITE_LABEL.search(label) and not _EASY_APPLY_LABEL.search(label)
             ):
                 continue  # the offsite Apply dressed like Easy Apply
-            signature = self._control_signature(control)
-            if signature in signatures:
-                continue
-            signatures.add(signature)
-            found.append(control)
-        return found
+            candidates.append((control, handle))
+        chosen: dict[str, Any] = {}
+        # A link and the button inside it, or the same control twice, lead to
+        # the same place: grouping by destination keeps one of each.
+        for control, handle in candidates:
+            destination = handle.evaluate(self._DESTINATION_JS)
+            chosen.setdefault(destination, control)
+        # A control that leads nowhere else opens the dialog on this page: it
+        # is the same Easy Apply as any one real destination.
+        real = {key: control for key, control in chosen.items() if key}
+        if len(real) > 1:
+            return list(real.values())
+        if real:
+            return list(real.values())
+        return list(chosen.values())[:1]
 
     def apply_control_present(self, page) -> bool:
         return (

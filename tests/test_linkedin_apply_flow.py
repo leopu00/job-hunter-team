@@ -1031,3 +1031,81 @@ def test_an_apply_button_to_the_company_site_is_never_taken_for_easy_apply(page,
     recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
 
     assert recipe._easy_apply(page) == []
+
+
+# ── live 14/09 (patch 27): one Easy Apply button and the "similar jobs" cards ──
+
+REAL_TOP_CARD_BUTTON = (
+    # Shape read on the box: hashed classes, no vendor id, the label at the start of its own name.
+    '<div class="_6ce302b8 c114e5fa"><button type="button" data-easy-apply-fixture '
+    'class="_5dfaadcf _11c561b9 _752db2a5" aria-label="Candidatura semplice per questa offerta di lavoro">'
+    '<span class="c5ca9708"><svg><path d=""></path></svg></span><span class="b7895f36">Candidatura semplice</span>'
+    "</button></div>"
+)
+
+
+def similar_job_cards(count: int) -> str:
+    cards = "".join(
+        f'<a tabindex="0" class="d9f2bdde _873a8d0a" href="https://www.linkedin.com/jobs/search-results/'
+        f'?keywords=Engineer&origin=JobSearchOrigin_JOB_DETAILS_SIMILAR_JOBS_CARD&currentJobId=400000010{n}">'
+        f"<div>Synthetic Similar Role {n}</div><div>Example Company {n}</div><div>Madrid</div>"
+        "<div>Promosso · 2 giorni fa · Candidatura semplice</div></a>"
+        for n in range(count)
+    )
+    return f'<div id="JobDetailsSimilarJobsSlot_4000000001" class="_8aaf5c5f">{cards}</div>'
+
+
+def test_the_real_top_card_button_among_similar_job_cards_is_one_easy_apply(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+    site = Site(easy_button=REAL_TOP_CARD_BUTTON + similar_job_cards(8))
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    assert len(recorded) == 1
+
+
+def test_similar_job_cards_alone_are_never_easy_apply(page, cv_path: Path):
+    chips = (
+        # A card whose own link is named exactly like Easy Apply still leads to another vacancy.
+        '<a href="https://www.linkedin.com/jobs/search-results/?currentJobId=4000000109">Candidatura semplice</a>'
+        '<div id="JobDetailsSimilarJobsSlot_4000000001"><button type="button">Candidatura semplice</button></div>'
+    )
+    page.set_content(f"<html><body>{similar_job_cards(3)}{chips}</body></html>")
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._easy_apply(page) == []
+
+
+def test_two_easy_apply_controls_to_really_different_places_are_still_ambiguous(page, cv_path: Path):
+    page.set_content(
+        '<html><body><a href="https://www.linkedin.com/jobs/view/4000000001/apply/?openSDUIApplyFlow=true">Easy Apply</a>'
+        '<a href="https://www.linkedin.com/jobs/view/4000000002/apply/?openSDUIApplyFlow=true">Easy Apply</a></body></html>'
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert len(recipe._easy_apply(page)) == 2
+
+
+def test_a_control_that_only_ends_with_the_label_is_not_easy_apply(page, cv_path: Path):
+    body = (
+        '<html><body><div role="button">Jobs you may like · Example Company · Candidatura semplice</div>'
+        '<a href="https://www.linkedin.com/jobs/view/4000000300/">Candidatura semplice</a></body></html>'
+    )
+    page.route(JOB, lambda route: route.fulfill(status=200, content_type="text/html", body=body))
+    page.goto(JOB)
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._easy_apply(page) == []
+
+
+def test_a_link_and_the_button_inside_it_are_one_easy_apply(page, cv_path: Path):
+    page.set_content(
+        '<html><body><a href="https://www.linkedin.com/jobs/view/4000000001/apply/?openSDUIApplyFlow=true">'
+        '<button class="jobs-apply-button">Easy Apply</button></a>'
+        '<div role="button" aria-label="Easy Apply"><button type="button">Easy Apply</button></div></body></html>'
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert len(recipe._easy_apply(page)) == 1
