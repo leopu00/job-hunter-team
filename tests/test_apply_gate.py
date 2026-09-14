@@ -699,10 +699,13 @@ def test_una_domanda_di_form_mai_chiesta_non_trattiene_la_posizione(tmp_path, re
 
 import pdf_layout_check  # noqa: E402
 
+# Imported before the suite's autouse stub replaces it for each test.
+REAL_ANALYZE = pdf_layout_check.analyze
+
 
 @pytest.fixture
 def layout_check_on(monkeypatch):
-    monkeypatch.delenv("JHT_TEST_SKIP_PDF_LAYOUT", raising=False)
+    monkeypatch.setattr(pdf_layout_check, "analyze", REAL_ANALYZE)
     return monkeypatch
 
 

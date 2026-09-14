@@ -723,11 +723,6 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     return f"checkpoint_{state}"
 
 
-# Test suites build queues on placeholder PDFs that no layout check can measure;
-# they set this to "1" once for the whole run. Never set on a box.
-PDF_LAYOUT_SKIP_ENV = "JHT_TEST_SKIP_PDF_LAYOUT"
-
-
 def cv_layout_hold(cv: Path) -> str:
     """Why this CV PDF must not go out, or `""`.
 
@@ -738,8 +733,6 @@ def cv_layout_hold(cv: Path) -> str:
     Scrittore renders again lifts the hold by itself, and no stale verdict can
     wave a new file through.
     """
-    if os.environ.get(PDF_LAYOUT_SKIP_ENV) == "1":
-        return ""
     try:
         from pdf_layout_check import CheckError, analyze
     except ImportError:
@@ -873,6 +866,10 @@ def _email_hold(
         return "email_state_unreadable"
     state = data.get("state")
     if state not in EMAIL_HELD_STATES:
+        return ""
+    if data.get("reason") in CV_LAYOUT_REASONS:
+        # Same rule as the browser checkpoint: the CV is judged from the file on
+        # every queue read, so a CV rendered again is not kept out by this stop.
         return ""
     held_at = _parse_instant(data.get("updated_at"))
     asked_at = _parse_instant(authorised_at)
