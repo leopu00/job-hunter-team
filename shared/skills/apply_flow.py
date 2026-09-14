@@ -115,6 +115,90 @@ _MAILTO_APPLY_LABEL = re.compile(
 )
 
 
+# A vacancy that is no longer open.  Seen live (13-14/09): the page said so, or
+# the vacancy URL redirected to the generic careers page, and the flow went on
+# looking for a form.  Each phrase names the posting AND says it is gone, so a
+# job description that merely contains "no longer" does not match.
+# Pattern text for page INPUT in several languages, not user-visible copy.
+_NOUNS_EN = r"(?:job|position|posting|vacancy|role|opening|listing|requisition)"
+_NOUNS_IT = r"(?:posizione|offerta|annuncio|ruolo|lavoro|selezione)"
+_NOUNS_DE = r"(?:stelle|stellenanzeige|stellenangebot|position|job|ausschreibung|anzeige)"
+_NOUNS_FR = r"(?:offre|poste|annonce|emploi)"
+_NOUNS_ES = r"(?:oferta|vacante|puesto|empleo)"
+_NOUNS_PT = r"(?:vaga|oferta|posição|posicao|emprego)"
+_NOUNS_HU = r"(?:állás\w*|pozíció\w*|hirdetés\w*)"
+_NEAR = r"\b[^.!?\n]{0,60}?"
+_VACANCY_CLOSED_PATTERNS = tuple(
+    (lang, re.compile(pattern, re.I))
+    for lang, pattern in (
+        ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b"),
+        ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:is|has been|was) no longer (?:available|open|active|live|online)\b"),
+        ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:has|have) (?:expired|been filled|been closed)\b"),
+        ("en", r"\bapplications (?:for this \w+ )?(?:are|have been) (?:now )?closed\b"),
+        ("en", rf"\b{_NOUNS_EN} (?:not found|does not exist|doesn't exist)\b"),
+        ("it", rf"\b{_NOUNS_IT}{_NEAR}\bnon (?:è|e'|risulta) più (?:disponibile|attiv[ao]|apert[ao]|valid[ao])\b"),
+        ("it", r"\bnon (?:accetta|riceve) più candidature\b"),
+        ("it", r"\bcandidature (?:sono )?chiuse\b"),
+        ("it", r"\b(?:annuncio|offerta|posizione) (?:è )?(?:scadut[ao]|chius[ao])\b"),
+        ("it", r"\bposizione (?:è )?(?:stata )?(?:coperta|chiusa)\b"),
+        ("de", rf"\b{_NOUNS_DE}{_NEAR}\bnicht mehr (?:verfügbar|aktiv|online|offen|ausgeschrieben)\b"),
+        ("de", r"\b(?:stelle|position) (?:ist )?(?:bereits )?(?:besetzt|vergeben)\b"),
+        ("de", r"\bbewerbungsfrist (?:ist )?abgelaufen\b"),
+        ("de", r"\bkeine bewerbungen mehr\b"),
+        ("fr", rf"\b{_NOUNS_FR}{_NEAR}\bn'est plus (?:disponible|active|ouverte?|en ligne)\b"),
+        ("fr", r"\bn'accept(?:e|ons) plus de candidatures\b"),
+        ("fr", r"\b(?:poste|offre) (?:a été |est )?(?:pourvue?|expirée?|clôturée?)\b"),
+        ("fr", r"\bcandidatures (?:sont )?(?:closes|clôturées)\b"),
+        ("es", rf"\b{_NOUNS_ES}{_NEAR}\bya no (?:está|esta) (?:disponible|activa?|abierta?)\b"),
+        ("es", r"\bya no (?:acepta|aceptamos|admite) (?:candidaturas|solicitudes|postulaciones)\b"),
+        ("es", r"\b(?:oferta|vacante) (?:ha )?(?:expirado|caducado|cerrada)\b"),
+        ("es", r"\bpuesto (?:ha sido )?cubierto\b"),
+        ("pt", rf"\b{_NOUNS_PT}{_NEAR}\bnão (?:está|esta) mais (?:disponível|disponivel|aberta|ativa)\b"),
+        ("pt", r"\b(?:vaga|oferta) (?:foi )?(?:encerrada|preenchida|expirada)\b"),
+        ("pt", r"\bnão (?:aceita|aceitamos) mais candidaturas\b"),
+        ("hu", rf"\b{_NOUNS_HU}{_NEAR}\b(?:már nem (?:elérhető|aktív|érhető el)|lejárt|betöltésre került)\b"),
+    )
+)
+
+
+def vacancy_closed_evidence(text: str) -> str | None:
+    """The language of a "this vacancy is closed" notice in the page text, or None.
+
+    Only the language tag leaves this function: the page text is employer
+    content and never goes into a checkpoint, a log or a notification.
+    """
+    clean = " ".join(str(text or "").replace("\u2019", "'").replace("\u00a0", " ").split())
+    for lang, pattern in _VACANCY_CLOSED_PATTERNS:
+        if pattern.search(clean):
+            return lang
+    return None
+
+
+def vacancy_redirected_away(requested_url: str, final_url: str) -> bool:
+    """Did opening the vacancy land somewhere that is not that vacancy?
+
+    A closed posting typically redirects to the company's job list, its
+    careers page or its home page ("Book a demo").  The vacancy survives a
+    redirect when its identifier (a path segment carrying a digit: a numeric
+    id or a UUID) is still in the final path; without such an identifier, the
+    final path must still start with the requested one.  Scheme, host moves
+    (boards → job-boards) and query strings do not count.
+    """
+    try:
+        requested = urllib.parse.urlsplit(requested_url)
+        final = urllib.parse.urlsplit(final_url)
+    except ValueError:
+        return True
+    if final.scheme not in {"http", "https"}:
+        return True
+    requested_segments = [s.casefold() for s in requested.path.split("/") if s]
+    final_segments = [s.casefold() for s in final.path.split("/") if s]
+    identifiers = [s for s in requested_segments if any(ch.isdigit() for ch in s)]
+    if identifiers:
+        return not any(identifier in final_segments for identifier in identifiers)
+    return final_segments[: len(requested_segments)] != requested_segments
+
+
 def mailto_application_href(page) -> str | None:
     """Return the raw href of the page's single mailto application control.
 
@@ -281,6 +365,9 @@ class FlowCheckpoint:
     # flow stops there; the email channel reads these two fields.
     channel: str = ""
     mailto_href: str = ""
+    # The page as it looked when the flow last stopped (blocked, denied or an
+    # error), saved next to the checkpoint.  Empty when no page was open.
+    stop_screenshot: str = ""
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -326,6 +413,8 @@ class FlowCheckpoint:
             raw.get("channel") == "email" and str(raw.get("mailto_href", "")).lower().startswith("mailto:")
         ):
             raise FlowError("checkpoint email channel has no mailto target")
+        if not isinstance(raw.get("stop_screenshot", ""), str):
+            raise FlowError("checkpoint has an invalid stop screenshot")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -686,6 +775,10 @@ class AshbyRecipe:
 
     def form_present(self, page) -> bool:
         return page.locator(self.FIELD_ENTRY).count() > 0
+
+    def apply_control_present(self, page) -> bool:
+        """The control `open_form` would click; with no form, its absence means no vacancy."""
+        return page.get_by_text("Apply for this Job", exact=False).count() > 0
 
     def _container(self, page, step: str):
         """The one application form every Ashby action is confined to.
@@ -1303,6 +1396,11 @@ class GreenhouseRecipe:
 
     def form_present(self, page) -> bool:
         return page.locator(self.FORM).count() > 0
+
+    def apply_control_present(self, page) -> bool:
+        """The control `open_form` would click; with no form, its absence means no vacancy."""
+        pattern = re.compile(r"^(apply|apply for this job|click to apply|submit an application)$", re.I)
+        return any(page.get_by_role(role, name=pattern).count() for role in ("button", "link"))
 
     def open_form(self, page) -> None:
         forms = page.locator(self.FORM)
@@ -1964,11 +2062,14 @@ class ApplicationFlow:
             answer_request=request,
         )
 
-    def _block(self, checkpoint: FlowCheckpoint, blocked: BlockedHuman) -> FlowResult:
+    def _block(
+        self, checkpoint: FlowCheckpoint, blocked: BlockedHuman, *, page: Any | None = None
+    ) -> FlowResult:
         checkpoint.state = "blocked_human"
         checkpoint.resume_state = blocked.step
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
+        previous_screenshot = self._capture_stop_screenshot(checkpoint, blocked.reason, page)
         legacy_message = ""
         if blocked.answer_request:
             candidate = self._answer_request_record(blocked)
@@ -1981,6 +2082,7 @@ class ApplicationFlow:
         else:
             message = self._notification_message(blocked)
         checkpoint.save(self.checkpoint_path)
+        self._discard_stop_screenshot(checkpoint, previous_screenshot)
         if blocked.answer_request:
             persisted = False
             try:
@@ -2024,12 +2126,109 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
 
-    def _deny(self, checkpoint: FlowCheckpoint, verdict: Any) -> FlowResult:
+    def _deny(
+        self, checkpoint: FlowCheckpoint, verdict: Any, *, page: Any | None = None
+    ) -> FlowResult:
         checkpoint.state = "denied"
         checkpoint.blocked_reason = str(getattr(verdict, "reason", "gate_denied"))
         checkpoint.blocked_detail = str(getattr(verdict, "detail", "authorisation denied"))
+        previous_screenshot = self._capture_stop_screenshot(checkpoint, checkpoint.blocked_reason, page)
         checkpoint.save(self.checkpoint_path)
+        self._discard_stop_screenshot(checkpoint, previous_screenshot)
         return FlowResult("denied", checkpoint.state, checkpoint.blocked_reason)
+
+    @staticmethod
+    def _reauthorised_since(checkpoint: FlowCheckpoint, verdict: Any) -> bool:
+        """Did the user authorise the position again after the checkpoint stopped?
+
+        The same rule the queue uses to lift a checkpoint hold.  An instant
+        that cannot be read never counts as a new authorisation.
+        """
+
+        def instant(value: Any) -> datetime | None:
+            try:
+                parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+        context = getattr(verdict, "context", None)
+        authorised = instant(context.get("at")) if isinstance(context, Mapping) else None
+        stopped = instant(checkpoint.updated_at)
+        return bool(authorised and stopped and authorised > stopped)
+
+    def _stop_screenshot_prefix(self) -> str:
+        return f"{self.checkpoint_path.stem}.stop-"
+
+    def _capture_stop_screenshot(
+        self, checkpoint: FlowCheckpoint, reason: str, page: Any | None
+    ) -> str:
+        """Save the page the flow stopped on next to the checkpoint.
+
+        Best effort and never a reason to fail the stop itself.  The file name
+        carries only the checkpoint name, a UTC instant and the reason slug —
+        nothing from the profile or the page.  Returns the previous screenshot,
+        to be removed once the checkpoint naming the new one is saved.
+        """
+        previous = checkpoint.stop_screenshot
+        checkpoint.stop_screenshot = ""
+        if page is None:
+            return previous
+        temporary: Path | None = None
+        try:
+            if page.is_closed():
+                return previous
+            directory = self.checkpoint_path.parent
+            directory.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            slug = re.sub(r"[^a-z0-9_]+", "_", str(reason).casefold()).strip("_")[:60] or "stop"
+            target = directory / f"{self._stop_screenshot_prefix()}{stamp}-{slug}.png"
+            temporary = directory / f".{target.name}.partial.png"
+            page.screenshot(path=str(temporary), full_page=True, timeout=10_000)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, target)
+            temporary = None
+            checkpoint.stop_screenshot = str(target)
+        except Exception as exc:
+            LOG.error("stop screenshot failed: %s", type(exc).__name__)
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    temporary.unlink()
+        return previous
+
+    def _discard_stop_screenshot(self, checkpoint: FlowCheckpoint, previous: str) -> None:
+        """Keep one stop screenshot per checkpoint: the one it names."""
+        if not previous or previous == checkpoint.stop_screenshot:
+            return
+        old = Path(previous)
+        # Only a file this flow wrote: a tampered checkpoint cannot delete others.
+        if old.parent != self.checkpoint_path.parent or not old.name.startswith(
+            self._stop_screenshot_prefix()
+        ) or old.suffix != ".png":
+            return
+        with contextlib.suppress(OSError):
+            old.unlink()
+
+    def _assert_vacancy_open(self, page, *, navigated: bool) -> None:
+        """Stop before any form work when the vacancy itself is gone."""
+        if navigated and vacancy_redirected_away(self.url, page.url):
+            raise BlockedHuman(
+                "vacancy_closed",
+                "The vacancy URL redirected away from the vacancy (job list, careers or home page)",
+                "detect",
+            )
+        try:
+            text = page.locator("body").inner_text(timeout=5_000)
+        except Exception:
+            text = ""
+        language = vacancy_closed_evidence(text)
+        if language:
+            raise BlockedHuman(
+                "vacancy_closed",
+                f"The page says the vacancy is no longer open (notice language: {language})",
+                "detect",
+            )
 
     def _recipe(self, platform: str):
         recipes = {
@@ -2431,6 +2630,16 @@ class ApplicationFlow:
             # rerun must not reopen the page and "find" a form again.
             return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
 
+        if (
+            checkpoint.state == "blocked_human"
+            and checkpoint.blocked_reason == "vacancy_closed"
+            and not self._reauthorised_since(checkpoint, first_gate)
+        ):
+            # A closed vacancy does not reopen by retrying: no browser, no new
+            # notification.  Only the user authorising the position again after
+            # this stop makes the next run look at the page once more.
+            return FlowResult("blocked_human", checkpoint.state, "vacancy_closed")
+
         fresh = (
             checkpoint.state == "detect"
             and not checkpoint.completed_steps
@@ -2499,11 +2708,13 @@ class ApplicationFlow:
                         "A previous process started submit but left no receipt; it will not be clicked again",
                         "submit",
                     ),
+                    page=active_page,
                 )
 
             try:
                 if navigate:
                     self._navigate(active_page)
+                self._assert_vacancy_open(active_page, navigated=navigate)
                 detection = detect_ats(self.url, active_page.content())
                 if detection.platform not in SUPPORTED_PLATFORMS:
                     email = self._email_channel(checkpoint, active_page)
@@ -2525,6 +2736,12 @@ class ApplicationFlow:
                     email = self._email_channel(checkpoint, active_page)
                     if email is not None:
                         return email
+                    if not recipe.apply_control_present(active_page):
+                        raise BlockedHuman(
+                            "vacancy_closed",
+                            "The vacancy page has no application form, no Apply control and no email channel",
+                            "detect",
+                        )
                 injected_blank = not navigate and active_page.url == "about:blank"
                 self._assert_recipe_page(
                     active_page,
@@ -2614,7 +2831,7 @@ class ApplicationFlow:
 
                 final_gate = self._gate()
                 if getattr(final_gate, "allowed", None) is not True:
-                    return self._deny(checkpoint, final_gate)
+                    return self._deny(checkpoint, final_gate, page=active_page)
                 if getattr(final_gate, "context", {}).get("mode") != "authorised":
                     return self._deny(
                         checkpoint,
@@ -2622,6 +2839,7 @@ class ApplicationFlow:
                             "gate_mode_changed",
                             "application mode changed before submit; refusing the click",
                         ),
+                        page=active_page,
                     )
 
                 checkpoint.state = "submit"
@@ -2641,7 +2859,7 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
                 return self._record(checkpoint, receipt)
             except BlockedHuman as blocked:
-                return self._block(checkpoint, blocked)
+                return self._block(checkpoint, blocked, page=active_page)
             except Exception as exc:
                 step = checkpoint.state if checkpoint.state in STEP_ORDER else "review"
                 return self._block(
@@ -2651,6 +2869,7 @@ class ApplicationFlow:
                         f"Browser interaction stopped with {type(exc).__name__}; no blind retry is allowed",
                         step,
                     ),
+                    page=active_page,
                 )
 
 

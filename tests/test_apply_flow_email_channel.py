@@ -271,7 +271,8 @@ def test_newsletter_page_without_application_form_fills_nothing(page, tmp_path: 
     result = build_flow(tmp_path, cv_path, url).run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason in {"ats_unsupported", "ashby_form_missing", "greenhouse_form_missing"}
+    # The page says applications are closed: that is the reason, on every host.
+    assert result.reason == "vacancy_closed"
     checkpoint = _checkpoint(tmp_path)
     assert checkpoint["completed_steps"] == []
     assert checkpoint["submit_started"] is False
