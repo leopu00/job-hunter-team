@@ -222,6 +222,64 @@ def test_with_the_letter_the_contact_form_is_sent_once_with_the_application_subj
     receipt = recorded[0]["receipt"]
     assert "Message sent" in receipt.confirmation_text
     assert Path(saved(tmp_path)["pre_submit_screenshot"]).is_file()
+    # The receipt tells the truth (1800, patch 22): no file field, no CV sent.
+    assert (receipt.channel, receipt.attachments, receipt.cv_sha256) == ("contact_form", [], "")
+    checkpoint = saved(tmp_path)
+    assert checkpoint["channel"] == "contact_form"
+    assert "upload_cv" not in checkpoint["completed_steps"]
+    assert (checkpoint["cv_sha256"], checkpoint["receipt"]["attachments"]) == ("", [])
+    assert checkpoint["receipt"]["channel"] == "contact_form"
+
+
+def test_the_contact_channel_survives_the_rerun_after_the_letter_is_saved(browser, cv_path, tmp_path):
+    page = orbit(browser)
+    first = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+    assert first.reason == "required_answer_missing"
+    assert saved(tmp_path)["channel"] == "contact_form"
+
+    page.goto(f"{BASE}/careers")
+    recorded: list = []
+    again = build_flow(tmp_path, cv_path, f"{BASE}/careers", answers={"Message": LETTER}, recorded=recorded).run(
+        page=page, navigate=False
+    )
+
+    assert again.status == "applied", again
+    assert recorded[0]["receipt"].attachments == []
+
+
+def test_an_application_form_receipt_names_the_cv_it_sent(browser, cv_path, tmp_path, monkeypatch):
+    import hashlib
+
+    from test_apply_generic import CLASSIC, PROFILE as GENERIC_PROFILE
+
+    monkeypatch.setitem(globals(), "PROFILE", GENERIC_PROFILE)
+    page = site(browser, {"/jobs/7": CLASSIC})
+    page.goto(f"{BASE}/jobs/7")
+    recorded: list = []
+
+    result = build_flow(
+        tmp_path, cv_path, f"{BASE}/jobs/7", answers=GENERIC_PROFILE["application_answers"], recorded=recorded
+    ).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    expected = hashlib.sha256(cv_path.read_bytes()).hexdigest()
+    checkpoint = saved(tmp_path)
+    assert (checkpoint["channel"], checkpoint["cv_sha256"]) == ("", expected)
+    assert "upload_cv" in checkpoint["completed_steps"]
+    receipt = recorded[0]["receipt"]
+    assert (receipt.channel, receipt.attachments) == ("web_form", [{"role": "cv", "sha256": expected}])
+
+
+def test_an_old_receipt_without_the_fields_reads_its_cv_as_the_attachment(tmp_path):
+    from apply_flow import Receipt
+
+    sha = "b" * 64
+    old = Receipt.from_dict({"screenshot_path": "x.png", "confirmation_text": "ok", "cv_sha256": sha})
+    assert (old.channel, old.attachments) == ("web_form", [{"role": "cv", "sha256": sha}])
+    forged = Receipt.from_dict({"screenshot_path": "x.png", "channel": "fax", "attachments": [{"role": "cv", "sha256": "zz"}]})
+    assert (forged.channel, forged.attachments) == ("web_form", [])
+    contact = Receipt(Path("x.png"), confirmation_text="ok", channel="contact_form")
+    assert Receipt.from_dict(contact.to_dict()).to_dict() == contact.to_dict()
 
 
 def test_a_contact_form_without_an_application_topic_is_never_the_application(browser, cv_path, tmp_path):
@@ -271,7 +329,8 @@ def test_the_contact_page_mailto_never_becomes_a_second_channel(browser, cv_path
 
     build_flow(tmp_path, cv_path, f"{BASE}/careers", answers={"Message": LETTER}).run(page=page, navigate=False)
 
-    assert saved(tmp_path)["channel"] == ""
+    checkpoint = saved(tmp_path)
+    assert (checkpoint["channel"], checkpoint["mailto_href"]) == ("contact_form", "")
 
 
 @pytest.mark.parametrize(

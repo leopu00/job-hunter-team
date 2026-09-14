@@ -581,6 +581,9 @@ class GenericRecipe:
         # The vacancy's Apply control was followed: only then may a contact
         # form with an application topic be the application form (1800).
         self.via_apply = False
+        # web_form, or contact_form once the chosen form is a contact form: the
+        # flow then skips the CV upload and the receipt says no CV was sent.
+        self.application_channel = "web_form"
         # Seam for tests: synthetic pages live on hosts that do not resolve.
         self.url_guard = guard_public_url
 
@@ -705,6 +708,7 @@ class GenericRecipe:
         if not forms:
             self._stop_without_form(page, snapshot, step)
         form = forms[0]
+        self.application_channel = "contact_form" if self._contact_topic(form) else "web_form"
         return page.locator(f"[data-jht-form='{form['index']}']").first, form
 
     def _handoff_or_refuse(self, target: str, step: str) -> None:
