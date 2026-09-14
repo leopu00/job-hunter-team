@@ -933,6 +933,11 @@ def _migrate_application_answers(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    # Where an answer the CLOSER worked out came from: profile · cv · vacancy ·
+    # judgement. Empty for the user's own answers. Additive.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(application_answers)")}
+    if "basis" not in columns:
+        conn.execute("ALTER TABLE application_answers ADD COLUMN basis TEXT NOT NULL DEFAULT ''")
 
 
 def _migrate_closer_wakes(conn: sqlite3.Connection) -> None:
