@@ -243,9 +243,10 @@ def observe(page: Any, *, response: Any = None, error: BaseException | None = No
         html = page.content()
     except Exception:
         html = ""
-    if status is None and safe_url(getattr(page, "url", "")):
-        # A real document with no readable status (an injected page, an old
-        # engine): only a challenge fingerprint can speak against it.
+    if status is None:
+        # No response and no error: content set in place, about:blank, an old
+        # engine. Nothing says the page failed; only a challenge fingerprint
+        # can speak against it.
         wall = challenge_evidence(html)
         verdict = (
             Verdict(BOT_PROTECTION, wall)
