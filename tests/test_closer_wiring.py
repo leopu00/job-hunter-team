@@ -274,7 +274,10 @@ def _flow_block_reasons() -> set[str]:
     dove la spec vuole che si fermi.
     """
     src = (SKILLS_DIR / "apply_flow.py").read_text()
-    reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src))
+    # The recipes that live in their own module stop the same flow.
+    recipes = (SKILLS_DIR / "linkedin_apply.py").read_text()
+    reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src + recipes))
+    reasons |= set(re.findall(r'FlowDeferred\(\s*"([a-z_]+)"', src + recipes))
     flow = _load("apply_flow_for_reasons", "apply_flow.py")
     if "{detection.platform}_dom_unrecognised" in src:
         reasons |= {f"{p}_dom_unrecognised" for p in flow.SUPPORTED_PLATFORMS}

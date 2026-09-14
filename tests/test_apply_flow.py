@@ -1122,7 +1122,10 @@ def test_a_closed_notice_on_an_unsupported_page_with_a_form_or_apply_is_not_evid
 
     result = flow.run(page=page, navigate=False)
 
-    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+    # An Apply control now goes to the company-form recipe, which stops on its
+    # own terms; either way the notice next to it never closes the vacancy.
+    assert result.status == "blocked_human"
+    assert result.reason != "vacancy_closed"
 
 
 def test_a_failed_checkpoint_save_leaves_no_orphan_screenshot(

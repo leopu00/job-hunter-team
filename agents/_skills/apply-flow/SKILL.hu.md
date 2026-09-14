@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   blokkol.
 - A kapu induláskor **és** közvetlenül a kattintás előtt is ellenőrződik. Egy flag,
   amelyet az űrlap kitöltése közben vontak vissza, leállítja a beküldést.
-- Ma három teljes recept van: **Ashby**, **Greenhouse** (csak a három nyilvános hostja, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, HTTPS-en; az oldalt minden lépés után újra ellenőrzi) és **Lever** (csak `jobs.lever.co` és `jobs.eu.lever.co`, HTTPS-en, ugyanígy újraellenőrizve). Minden más platform emberre vár.
+- Ma három teljes recept van: **Ashby**, **Greenhouse** (csak a három nyilvános hostja, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, HTTPS-en; az oldalt minden lépés után újra ellenőrzi) és **Lever** (csak `jobs.lever.co` és `jobs.eu.lever.co`, HTTPS-en, ugyanígy újraellenőrizve). LinkedIn: a „jelentkezés a cég oldalán” azon az oldalon folytatódik a saját receptjével; az Easy Apply a felhasználó fiókjával jelentkezik be (a munkamenet megmarad, ellenőrző kód Telegramon) és kitölti az ablakot. Minden más platform emberre vár.
 
 ## A nyugta
 
@@ -74,9 +74,17 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
 | `cv_pdf_layout_bad` | a CV PDF nem ment át a vizuális ellenőrzésen (`pdf_layout_check.py`: keskeny oszlopba préselt szöveg, majdnem üres oldal, 2-nél több oldal, nem beágyazott fontok, túl kicsi törzsszöveg): semmit nem csatoltunk és nem küldtünk el. Az Írónak újra kell generálnia; soha ne csatold kézzel. Az 1. oldal előnézete a checkpoint mellett van: nézd meg |
 | `cv_pdf_check_unavailable` | a CV PDF-et nem lehetett megmérni (a konténerből hiányzik a poppler, a fájl olvashatatlan): semmit nem csatoltunk és nem küldtünk el — egy nem mért CV nem pass. A megoldás a konténerben van, nem az Írónál: jelezd a Capitano-nak |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` / `generic_dom_unrecognised` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |
 | `greenhouse_redirect_untrusted` | a folyamat közben a Greenhouse oldal kilépett a három megbízható hostjából |
 | `lever_redirect_untrusted` | a folyamat közben a Lever oldal kilépett a `jobs.lever.co` / `jobs.eu.lever.co` hostokból |
+| `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | a LinkedIn-hirdetés vagy az Easy Apply ablaka nem az, amit a recept ismer |
+| `linkedin_credentials_missing` | a `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) hiányzik, nem ennek a felhasználónak a 0600-as rendes fájlja, vagy üres: a felhasználó a hitelesítő szkripttel hozza létre. Jelszót chatben soha ne kérj |
+| `linkedin_login_failed` | a LinkedIn kétszer elutasította a bejelentkezést: nincs új próbálkozás, amíg a felhasználó új hitelesítő adatokat nem ír |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | a LinkedIn ellenőrző kódját Telegramon kértük, és nem érkezett meg időben (vagy a kérés nem jutott el Telegramra): egy új kör új kódot kér |
+| `linkedin_challenge` | a LinkedIn captchát vagy biztonsági ellenőrzést mutat: a felhasználó megoldja az élő képernyőn, majd újra engedélyezi a pozíciót |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a LinkedIn-oldal elhagyta a `www.linkedin.com`-ot, vagy a megadott céges cím nem LinkedInen kívüli HTTPS-oldal (vagy második átadás) |
+| `linkedin_follow_not_cleared` | a „cég követése” jelölőnégyzetet nem sikerült Submit előtt kikapcsolni: semmi nem megy el |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **elutasítva, nem blokkolva**: a LinkedIn-jelentkezések között szünet van (`linkedin_min_interval_minutes`, alapértelmezés 20), a bejelentkezés egyszer nem sikerült és a következő kör még egyszer próbálja, vagy ez a beállítás nem egész percszám. A sor magától újrapróbálja |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | két különböző mailto jelentkezési cím, vagy a jelentkezési űrlap, a mezői vagy a küldés gombja nem köthető egyetlen űrlaphoz (hírlevél, lábléc és demó űrlap soha nem része) |
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |
