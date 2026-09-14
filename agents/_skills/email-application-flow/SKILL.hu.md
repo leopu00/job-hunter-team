@@ -56,7 +56,7 @@ Egy JSON sor: `state`, `reason`, `detail`, plusz adatok.
 | `sent` | 0 | a szerver elfogadta, nyugta mentve, jelentkezés rögzítve | következő pozíció |
 | `draft_ready` | 0 | dry run: vázlat és mellékletek érvényesek, semmi nem ment ki | következő pozíció |
 | `denied` | 1 | a gate elutasította (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | következő pozíció; soha ne próbáld újra |
-| `blocked_human` | 1 | ember kell hozzá; a felhasználót értesítették | következő pozíció; soha ne próbáld újra |
+| `blocked_human` | 1 | ember kell hozzá; a leállás a kör összefoglalójában van | következő pozíció; soha ne próbáld újra |
 | `send_outcome_unknown` | 3 | az e-mail lehet, hogy kiment | következő pozíció; soha ne próbáld újra |
 | `receipt_incomplete` | 3 | elfogadva, de a nyugta vagy a rögzítés hiányos; ha csak egyes címzetteket utasítottak el, a levél valószínűleg megérkezett | következő pozíció; soha ne próbáld újra |
 | `error` | 2 | az adatbázis, a profil vagy a checkpoint olvashatatlan | megállás: `[BLOCKED]` a Capitanónak |
@@ -80,7 +80,7 @@ a `blocked_human` 3). A `state` alapján dönts, soha ne a szám alapján.
 
 Mit teszel, mindig ugyanazt:
 
-1. **Semmit azon a pozíción.** A parancs egyszer már értesítette a felhasználót.
+1. **Semmit azon a pozíción.** A parancs betette a leállást a kör összefoglalójába (`closer_notices.py flush` a STEP 6-ban).
 2. **Ne próbáld újra.** A queue visszatartja (`email_blocked_human`,
    `email_send_outcome_unknown`, ...), amíg a felhasználó nem lép.
 3. **Lépj a queue következő pozíciójára.**

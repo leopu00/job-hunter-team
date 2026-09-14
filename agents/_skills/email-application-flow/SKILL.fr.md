@@ -57,7 +57,7 @@ Une ligne JSON : `state`, `reason`, `detail`, plus les données.
 | `sent` | 0 | accepté par le serveur, reçu enregistré, candidature enregistrée | position suivante |
 | `draft_ready` | 0 | dry run : brouillon et pièces jointes valides, rien n'est parti | position suivante |
 | `denied` | 1 | le gate a refusé (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | position suivante ; ne jamais retenter |
-| `blocked_human` | 1 | un humain est nécessaire ; l'utilisateur a été prévenu | position suivante ; ne jamais retenter |
+| `blocked_human` | 1 | un humain est nécessaire ; l'arrêt est dans le résumé du tour | position suivante ; ne jamais retenter |
 | `send_outcome_unknown` | 3 | l'e-mail est peut-être parti | position suivante ; ne jamais retenter |
 | `receipt_incomplete` | 3 | accepté, mais le reçu ou l'enregistrement est incomplet ; avec certains destinataires refusés, la lettre est probablement arrivée | position suivante ; ne jamais retenter |
 | `error` | 2 | base de données, profil ou checkpoint illisible | arrêt : `[BLOCKED]` au Capitano |
@@ -81,7 +81,7 @@ Une ligne JSON : `state`, `reason`, `detail`, plus les données.
 
 Ce que tu fais, toujours pareil :
 
-1. **Rien sur cette position.** La commande a déjà prévenu l'utilisateur une fois.
+1. **Rien sur cette position.** La commande a mis l'arrêt dans le résumé du tour (`closer_notices.py flush` au STEP 6).
 2. **Ne la retente pas.** La queue la retient (`email_blocked_human`,
    `email_send_outcome_unknown`, ...) jusqu'à ce que l'utilisateur agisse.
 3. **Passe à la position suivante** de la queue.

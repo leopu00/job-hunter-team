@@ -58,7 +58,7 @@ Une ligne JSON sur stdout : `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run` : remplie, arrêtée avant le bouton, rien envoyé | position suivante |
 | `denied` | 1 | la porte a refusé (consentement désactivé, flag révoqué, déjà envoyée) | position suivante ; jamais de nouvelle tentative |
 | `retry_later` | 5 | la page de l'offre ne répond pas pour l'instant (5xx, délai dépassé) ; ce n'est pas un arrêt, personne n'est averti ; le checkpoint contient `retry_after` | position suivante ; la file la redonne d'elle-même après `retry_after` — jamais relancer avant |
-| `blocked_human` | 3 | un humain est nécessaire ; l'utilisateur a déjà été prévenu | position suivante ; jamais de nouvelle tentative |
+| `blocked_human` | 3 | il faut une personne ; l'arrêt est dans le résumé du tour | position suivante ; jamais de nouvelle tentative |
 | `blocked_human` réponses manquantes (`essential_facts_missing` avec `missing`, `required_answer_missing` avec `pending_question`) | 3 | pas un arrêt et rien n'a été demandé : il manque des réponses au flux | déduis chacune du profil, du CV et de l'offre et enregistre-la (`application_answers.py save … --basis …`), puis relance le flux ; seulement sans aucune base `application_answers.py ask --position-id $PID --key K` (prompt du CLOSER, CL-08). Une question que tu as posée retient la position jusqu'à ce que l'utilisateur réponde, un jour par question au plus |
 | `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | lance `email_application.py send` pour cette position comme le dit la skill `email-application-flow` : elle lit ce checkpoint ; ne remplis jamais de formulaire web et n'écris jamais l'e-mail à la main |
 | `error` | 2 | profil ou CV illisible, mauvais arguments | arrête-toi : `[BLOCKED]` au Capitano |
@@ -103,8 +103,8 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 
 Ce que tu fais pour toute autre raison (les réponses manquantes sont plus haut) :
 
-1. **Rien sur cette position.** Le flux a déjà écrit le checkpoint et prévenu
-   l'utilisateur via `jht-notify-user`. Ne le préviens pas une deuxième fois.
+1. **Rien sur cette position.** Le flux a déjà écrit le checkpoint et
+   mis l'arrêt dans le résumé du tour. Ne préviens pas l'utilisateur toi-même.
 2. **Ne la retente pas.** Ni maintenant, ni « encore une fois dans quelques minutes ».
    La queue la retient (`checkpoint_blocked_human`) jusqu'à ce que l'utilisateur l'autorise à nouveau.
 3. **Passe à la position suivante** de la queue.
@@ -126,11 +126,12 @@ formulaire rempli est photographié avant le clic ; sans confirmation reconnue
 (texte ou URL) le résultat est `submit_outcome_unknown`, jamais un second clic.
 Un bouton Postuler qui mène à un ATS connu confie le poste à cette recette.
 
-**Un récapitulatif par tournée.** Les arrêts propres au site (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) ne sont pas
-notifiés un par un : ils attendent le récapitulatif que tu envoies au STEP 6 avec
-`python3 /app/shared/skills/closer_notices.py flush`. Chaque avis arrive à
-l'utilisateur dans la langue de son profil.
+**Un résumé par tour.** Aucun arrêt n'est signalé seul : chaque `blocked_human`
+qui n'est pas une question du formulaire (sites comme `ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable` ; LinkedIn, CV, offres fermées, issues
+incertaines, arrêts du canal e-mail) attend l'UNIQUE message que tu envoies au STEP 6 avec
+`python3 /app/shared/skills/closer_notices.py flush`. Seules partent tout de suite une question
+que tu poses explicitement, les faits essentiels et un code de vérification LinkedIn.
+Chaque avis arrive à l'utilisateur dans la langue de son profil.
 
 ## Vérifier une candidature ensuite
 
