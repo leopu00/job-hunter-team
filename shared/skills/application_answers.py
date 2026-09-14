@@ -927,7 +927,10 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     """Answers not yet announced, from jobs.db alone: the cheap check of every poll.
 
     - a position still authorised whose CLOSER form questions are all answered;
-    - the essential facts, once one of them has a new answer.
+    - the essential facts, once one of them has a new answer;
+    - a position the user has just authorised (in the last
+      `AUTHORISATION_WAKE_WINDOW`), keyed by its authorisation instant: the
+      CLI, the web page and the cloud pull all land on the same row.
 
     The key names the last answered question, so several answers arriving
     together make one wake-up, and a later question answered later makes a
@@ -935,9 +938,11 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     authorises it again its answers become one. Channel-blind: a dashboard
     reply and a Telegram reply land on the same question rows.
     """
-    if not _table_exists(conn, "pending_user_messages") or not _table_exists(conn, "positions"):
+    if not _table_exists(conn, "positions"):
         return []
-    wakes: list[Wake] = []
+    wakes: list[Wake] = _authorisation_candidates(conn)
+    if not _table_exists(conn, "pending_user_messages"):
+        return _not_yet_woken(conn, wakes)
     rows = conn.execute(
         "SELECT q.related_position_id, "
         "SUM(CASE WHEN q.user_reply IS NULL THEN 1 ELSE 0 END), "
@@ -958,6 +963,30 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     ).fetchone()
     if essential and essential[0] is not None:
         wakes.append(Wake(f"essentials:{int(essential[0])}", None, "essentials_complete"))
+    return _not_yet_woken(conn, wakes)
+
+
+# A flag older than this is not "new": a position held for days (a CV to
+# render again, a checkpoint stop) does not keep the poll reading the queue.
+# Once its hold lifts, the ready queue is what the Capitano's rule sees.
+AUTHORISATION_WAKE_WINDOW = timedelta(hours=24)
+
+
+def _authorisation_candidates(conn: sqlite3.Connection) -> list[Wake]:
+    now = datetime.now(timezone.utc)
+    wakes = []
+    for position_id, requested_at in conn.execute(
+        "SELECT id, apply_requested_at FROM positions WHERE apply_requested = 1 AND status = ?",
+        (apply_gate.AUTHORISABLE_STATUS,),
+    ):
+        at = apply_gate._parse_instant(requested_at)
+        if at is None or not (timedelta(0) <= now - at < AUTHORISATION_WAKE_WINDOW):
+            continue
+        wakes.append(Wake(f"authorised:{int(position_id)}:{str(requested_at).strip()}", int(position_id), "position_authorised"))
+    return wakes
+
+
+def _not_yet_woken(conn: sqlite3.Connection, wakes: list[Wake]) -> list[Wake]:
     if not wakes or not _table_exists(conn, "closer_wakes"):
         return wakes
     done = {row[0] for row in conn.execute("SELECT wake_key FROM closer_wakes")}
@@ -999,6 +1028,11 @@ def _tmux_send(session: str, text: str) -> bool:
 def wake_message(wake: Wake) -> str:
     if wake.reason == "essentials_complete":
         what = "the user answered the essential application facts"
+    elif wake.reason == "position_authorised":
+        return (
+            f"[BRIDGE INFO] the user authorised position #{wake.position_id}. "
+            "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
+        )
     else:
         what = f"the user answered the CLOSER questions for position #{wake.position_id}"
     return (
@@ -1037,6 +1071,7 @@ def wake_closer(
     live = (sessions or _closer_sessions)()
     if not live:
         return sent
+    claimed_wakes: list[Wake] = []
     for wake in wakes:
         if wake.position_id is not None and wake.position_id not in ready:
             continue
@@ -1045,16 +1080,45 @@ def wake_closer(
             (wake.key, wake.position_id),
         ).rowcount
         conn.commit()
-        if claimed != 1:
+        if claimed == 1:
+            claimed_wakes.append(wake)
+    # Several flags set together make ONE message: the CLOSER re-reads the
+    # whole queue anyway, one message per flag would only queue turns.
+    # A Telegram answer also re-authorises its position: that flag rides on
+    # the answers message instead of waking the CLOSER a second time.
+    batches = [[wake] for wake in claimed_wakes if wake.reason != "position_authorised"]
+    by_position = {batch[0].position_id: batch for batch in batches if batch[0].position_id is not None}
+    authorised = []
+    for wake in claimed_wakes:
+        if wake.reason != "position_authorised":
             continue
+        if wake.position_id in by_position:
+            by_position[wake.position_id].append(wake)
+        else:
+            authorised.append(wake)
+    if authorised:
+        batches.append(authorised)
+    for batch in batches:
+        if batch[0].reason != "position_authorised" or len(batch) == 1:
+            text = wake_message(batch[0])
+        else:
+            text = authorisations_message(batch)
         delivered = False
         for session in live:
-            delivered = (sender or _tmux_send)(session, wake_message(wake)) or delivered
+            delivered = (sender or _tmux_send)(session, text) or delivered
         if delivered:
-            conn.execute("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", (wake.key,))
+            conn.executemany("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", [(w.key,) for w in batch])
             conn.commit()
-            sent.append(wake)
+            sent.extend(batch)
     return sent
+
+
+def authorisations_message(wakes: Sequence[Wake]) -> str:
+    ids = ", ".join(f"#{wake.position_id}" for wake in wakes)
+    return (
+        f"[BRIDGE INFO] the user authorised positions {ids}. "
+        "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
+    )
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

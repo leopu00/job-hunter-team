@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - Das Tor wird beim Start **und** direkt vor dem Klick geprüft. Ein Flag, das
   während des Ausfüllens widerrufen wurde, stoppt das Absenden.
-- Heute zwei vollständige Rezepte: **Ashby** und **Greenhouse** (nur seine drei öffentlichen Hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, über HTTPS; die Seite wird nach jedem Schritt erneut geprüft). Jede andere Plattform blockiert für einen Menschen.
+- Heute drei vollständige Rezepte: **Ashby**, **Greenhouse** (nur seine drei öffentlichen Hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, über HTTPS; die Seite wird nach jedem Schritt erneut geprüft) und **Lever** (nur `jobs.lever.co` und `jobs.eu.lever.co`, über HTTPS, genauso erneut geprüft). Jede andere Plattform blockiert für einen Menschen.
 
 ## Der Beleg
 
@@ -74,8 +74,9 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | der CV lässt sich nicht anhängen |
 | `cv_pdf_layout_bad` | das CV-PDF hat die visuelle Prüfung nicht bestanden (`pdf_layout_check.py`: Text in eine schmale Spalte gedrückt, eine fast leere Seite, mehr als 2 Seiten, Schriften nicht eingebettet, Fließtext zu klein): nichts wurde angehängt oder gesendet. Der Writer muss es neu rendern; nie von Hand anhängen. Die Vorschau von Seite 1 liegt neben dem Checkpoint: sieh sie dir an |
 | `cv_pdf_check_unavailable` | das CV-PDF konnte nicht gemessen werden (poppler fehlt im Container, Datei unlesbar): nichts wurde angehängt oder gesendet — ein ungemessener CV ist kein Pass. Die Abhilfe liegt im Container, nicht beim Writer: melde es dem Capitano |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | noch kein Rezept für diese Seite, oder das Formular ist nicht das, das das Rezept kennt |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | noch kein Rezept für diese Seite, oder das Formular ist nicht das, das das Rezept kennt |
 | `greenhouse_redirect_untrusted` | die Greenhouse-Seite hat während des Flows ihre drei vertrauenswürdigen Hosts verlassen |
+| `lever_redirect_untrusted` | die Lever-Seite hat während des Flows `jobs.lever.co` / `jobs.eu.lever.co` verlassen |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | zwei verschiedene mailto-Bewerbungsadressen, oder das Bewerbungsformular, seine Felder oder sein Absende-Button lassen sich nicht einem einzigen Formular zuordnen (Newsletter, Footer und Demo-Formulare gehören nie dazu) |
 | `form_error` / `field_invalid` / `submit_unavailable` | das Formular meldet einen Fehler, ein Feldformat wird abgelehnt, oder der Absende-Button fehlt oder ist deaktiviert |
 | `url_refused` / `checkpoint_invalid` | die Bewerbungs-URL hat die Prüfung auf öffentliche Adressen nicht bestanden, oder der gespeicherte Checkpoint ist unlesbar |

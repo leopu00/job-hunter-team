@@ -867,3 +867,100 @@ def test_tetto_non_valido_chiude_anche_coda_e_prenotazione(tmp_path):
     assert (q["ready"], q["reason"], q["positions"]) == (False, "consent_cap_invalid", [])
     slot = apply_gate.reserve_daily_slot(1, "email", config_path=write_config(tmp_path, cfg), db_path=db)
     assert (slot.allowed, slot.reason) == (False, "consent_cap_invalid")
+
+
+# ── un CV bocciato chiede da solo di essere rifatto (application_rework, HQ-BACKEND-2) ──
+
+
+@pytest.fixture
+def rework_box(tmp_path, layout_check_on):
+    import _db
+
+    db = tmp_path / "jobs.db"
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    _db.ensure_schema(conn)
+    cv = tmp_path / "cv-1.pdf"
+    cv.write_bytes(b"%PDF-1.4 squeezed")
+    conn.execute(
+        "INSERT INTO positions (id, title, company, url, status, apply_requested, apply_requested_at, apply_requested_by) "
+        "VALUES (1, 'Synthetic role', 'Synthetic company', ?, 'ready', 1, ?, 'user_web')",
+        (URL, ASKED),
+    )
+    conn.execute("INSERT INTO applications (position_id, cv_path, cv_pdf_path, applied) VALUES (1, '/synthetic/cv.md', ?, 0)", (str(cv),))
+    conn.commit()
+    conn.close()
+    return tmp_path, str(db), cv, layout_check_on
+
+
+def _flag(db):
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute("SELECT write_requested, write_request_kind FROM positions WHERE id = 1").fetchone()
+    finally:
+        conn.close()
+
+
+def test_un_cv_bocciato_accende_la_richiesta_allo_scrittore_una_volta(rework_box):
+    home, db, cv, mp = rework_box
+    mp.setattr(pdf_layout_check, "analyze", lambda path, **_: {"ok": b"full width" in Path(path).read_bytes(), "reasons": []})
+    mp.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
+
+    q = queue(home, db)
+    assert q["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
+    assert q["cv_rework"] == [{"position_id": 1, "status": "requested", "reason": "cv_pdf_layout_bad"}]
+    assert _flag(db) == (1, "cv")
+    assert queue(home, db)["cv_rework"][0]["status"] == "already_requested"
+
+    cv.write_bytes(b"%PDF-1.4 full width")  # the Scrittore renders it again
+    q = queue(home, db)
+    assert q["ready"] and "cv_rework" not in q
+
+
+def test_nessuna_richiesta_se_il_controllo_non_e_disponibile(rework_box):
+    home, db, _cv, mp = rework_box
+    mp.setattr(pdf_layout_check, "analyze", lambda _p, **_: (_ for _ in ()).throw(pdf_layout_check.CheckError("no poppler")))
+    q = queue(home, db)
+    assert q["held"] == [{"position_id": 1, "reason": "cv_pdf_check_unavailable"}]
+    assert "cv_rework" not in q and _flag(db)[0] == 0
+
+
+def test_mai_una_richiesta_su_una_candidatura_con_invio_iniziato(rework_box):
+    home, db, _cv, mp = rework_box
+    mp.setattr(pdf_layout_check, "analyze", lambda _p, **_: {"ok": False, "reasons": ["narrow_text"]})
+    p = checkpoint_path(1, home)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"position_id": 1, "state": "submit", "submit_started": True, "updated_at": ASKED}))
+    q = queue(home, db)
+    assert q["cv_rework"] == [{"position_id": 1, "status": "not_needed", "reason": "submit_started"}]
+    assert _flag(db)[0] == 0
+
+
+def test_senza_il_modulo_la_trattenuta_resta_e_niente_si_rompe(rework_box):
+    home, db, _cv, mp = rework_box
+    mp.setattr(pdf_layout_check, "analyze", lambda _p, **_: {"ok": False, "reasons": ["narrow_text"]})
+    mp.setitem(sys.modules, "application_rework", None)
+    mp.setitem(sys.modules, "shared.skills.application_rework", None)
+    q = queue(home, db)
+    assert q["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
+    assert q["cv_rework"] == [{"position_id": 1, "status": "not_needed", "reason": "cv_rework_unavailable"}]
+    assert _flag(db)[0] == 0
+
+
+def test_la_richiesta_automatica_non_e_mai_manuale(rework_box):
+    # The queue saw a bad layout, then the check became unmeasurable before the
+    # request re-read it: only a manual request may go on without a measure.
+    home, db, _cv, mp = rework_box
+    calls = []
+
+    def analyze(_p, **_):
+        calls.append(1)
+        if len(calls) == 1:
+            return {"ok": False, "reasons": ["narrow_text"]}
+        raise pdf_layout_check.CheckError("poppler gone")
+
+    mp.setattr(pdf_layout_check, "analyze", analyze)
+    mp.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
+    q = queue(home, db)
+    assert q["cv_rework"] == [{"position_id": 1, "status": "not_needed", "reason": "cv_pdf_check_unavailable"}]
+    assert _flag(db)[0] == 0

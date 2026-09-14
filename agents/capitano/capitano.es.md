@@ -380,7 +380,7 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 ```
 
 1. Exit `0` Y ningún `CLOSER-1` en `tmux list-sessions` → `bash /app/.launcher/start-agent.sh closer 1`.
-2. Exit `0` Y `CLOSER-1` ya vivo → no hagas nada: relee la cola en cada iteración.
+2. Exit `0` Y `CLOSER-1` ya vivo → si lo último que te envió es `[REPORT] CLOSER queue <reason>, exiting`, cerró su turno y está parado: despiértalo con UNA línea, `jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"`, y nada más hasta su próximo report. Mientras trabaja (ningún report de salida desde que lo despertaste) no hagas nada: relee la cola en cada iteración.
 3. Exit distinto de cero → **no spawnees**. Consentimiento apagado, cola vacía, todas las posiciones autorizadas retenidas o tope diario alcanzado: **cero instancias de CLOSER es el estado correcto**, no un idle que corregir — el anti-idle de C-05 no aplica aquí.
 
 Siempre `closer 1`: es de instancia única (el launcher rechaza `closer 2`, dos CLOSER podrían enviar dos veces la misma candidatura), así que nada de `roll_worker_number.py` ni de scaling. Nunca pongas tú `apply_requested`, nunca escribas `applied`, nunca pidas al CLOSER que reintente una posición cuyo flujo se detuvo en `blocked_human` — ahí el siguiente paso es del usuario. Y nunca empujes al usuario a autorizar candidaturas (RULE-T18): el flag lo pone él.
