@@ -1336,16 +1336,57 @@ def test_a_tampered_screenshot_path_is_never_deleted(page, tmp_path: Path, cv_pa
     assert target.read_bytes() == b"not ours"
 
 
-def test_missing_essential_facts_are_listed_for_the_closer_without_asking(tmp_path: Path, cv_path: Path):
+def test_missing_essential_facts_are_listed_for_the_closer_without_asking(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form())
     notifications: list[dict] = []
     flow = build_flow(tmp_path, cv_path, notifications=notifications)
     flow.essentials_checker = lambda **_kwargs: ["sponsorship", "salary expectations"]
 
-    result = flow.run(page=object(), navigate=False)
+    result = flow.run(page=page, navigate=False)
 
     assert (result.status, result.reason) == ("blocked_human", "essential_facts_missing")
     assert result.to_dict()["missing"] == ["sponsorship", "salary expectations"]
     assert notifications == []
+    # Recognised, not filled: the facts come before the first field.
+    assert page.locator("#_systemfield_name").input_value() == ""
+
+
+@pytest.mark.parametrize(
+    ("html", "reason"),
+    (
+        ("<html><body><h1>Careers</h1><p>Read about us.</p></body></html>", "ats_unsupported"),
+        ("<html><body><p>This job is no longer accepting applications.</p></body></html>", "vacancy_closed"),
+    ),
+)
+def test_essential_facts_are_never_worked_out_for_a_page_the_flow_cannot_send(
+    page, tmp_path: Path, cv_path: Path, html: str, reason: str
+):
+    # Seen live: the CLOSER worked out and saved the salary for four LinkedIn
+    # positions, then each one stopped on ats_unsupported.
+    page.set_content(html)
+    asked: list = []
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/7"
+    flow.essentials_checker = lambda **kwargs: asked.append(kwargs) or ["salary expectations"]
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", reason)
+    assert asked == []
+    assert result.missing == ()
+
+
+def test_essential_facts_wait_behind_the_email_channel(page, tmp_path: Path, cv_path: Path):
+    page.set_content("<html><body><h1>Engineer</h1><a href='mailto:jobs@example.invalid'>Apply by email</a></body></html>")
+    asked: list = []
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/7"
+    flow.essentials_checker = lambda **kwargs: asked.append(kwargs) or ["salary expectations"]
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "email_channel"
+    assert asked == []
 
 
 def test_answer_sources_keep_only_known_origins_and_never_values():

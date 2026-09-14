@@ -3731,6 +3731,35 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return None
 
+    def _essentials_stop(self, checkpoint: FlowCheckpoint, mode: str) -> FlowResult | None:
+        """The facts almost every form asks for, before the first fill of a position.
+
+        Each missing one is asked once, on Telegram first, and nothing is saved
+        in the checkpoint: the position is not held, it waits until the
+        answers exist.
+        """
+        try:
+            if mode == "dry_run":
+                # A dry run only looks: it never sends the user a question
+                # and never stops on a fact it would have asked.
+                self._log_dry_run_essentials()
+                missing = []
+            else:
+                missing = self.essentials_checker(
+                    profile=self.profile, position_id=self.position_id, db_path=self.db_path
+                )
+        except Exception as exc:
+            LOG.error("essential facts check failed: %s", type(exc).__name__)
+            return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
+        if missing:
+            return FlowResult(
+                "blocked_human",
+                checkpoint.state,
+                "essential_facts_missing",
+                missing=tuple(str(key) for key in missing),
+            )
+        return None
+
     def _jht_home(self) -> Path:
         return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
@@ -3890,32 +3919,6 @@ class ApplicationFlow:
             and not checkpoint.submit_started
             and not checkpoint.answer_request
         )
-        if fresh:
-            # Before the first run of a position: the facts almost every form
-            # asks for. Each missing one is asked once, on Telegram first, and
-            # nothing is saved in the checkpoint — the position is not held,
-            # it simply waits until the answers exist.
-            try:
-                if mode == "dry_run":
-                    # A dry run only looks: it never sends the user a question
-                    # and never stops on a fact it would have asked.
-                    self._log_dry_run_essentials()
-                    missing = []
-                else:
-                    missing = self.essentials_checker(
-                        profile=self.profile, position_id=self.position_id, db_path=self.db_path
-                    )
-            except Exception as exc:
-                LOG.error("essential facts check failed: %s", type(exc).__name__)
-                return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
-            if missing:
-                return FlowResult(
-                    "blocked_human",
-                    checkpoint.state,
-                    "essential_facts_missing",
-                    missing=tuple(str(key) for key in missing),
-                )
-
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
             return waiting
@@ -4012,6 +4015,13 @@ class ApplicationFlow:
                 if isinstance(opened, FlowResult):
                     return opened
                 detection, recipe, injected_blank = opened
+                if fresh:
+                    # Only now that the page is an application the flow can
+                    # really send (a recipe opened its form; not unsupported,
+                    # closed or email) are the essential facts worked out.
+                    waiting_facts = self._essentials_stop(checkpoint, mode)
+                    if waiting_facts is not None:
+                        return waiting_facts
                 checkpoint.complete_step("detect", "fill")
                 checkpoint.save(self.checkpoint_path)
 
