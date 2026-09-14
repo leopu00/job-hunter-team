@@ -254,3 +254,81 @@ def test_the_flow_opens_the_real_profile_with_its_cookie_and_holds_it(home: Path
         assert "li_at" in names
         assert linkedin_apply.profile_busy(home)
     assert not linkedin_apply.profile_busy(home)
+
+
+# ── a browser a person can sign in with (live 14/09: Chrome for Testing left Google's popup blank) ──
+
+
+def executable(path: Path, body: str = "exit 0") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+    return path
+
+
+def test_the_sign_in_browser_is_the_system_chromium_never_chrome_for_testing(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("JHT_CHROMIUM_BIN", raising=False)
+    bin_dir = tmp_path / "bin"
+    playwright_build = executable(tmp_path / "ms-playwright" / "chromium-1228" / "chrome-linux" / "chrome")
+    bin_dir.mkdir()
+    (bin_dir / "chromium").symlink_to(playwright_build)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    assert linkedin_apply.chromium_binary() is None  # the only Chromium is the testing build
+
+    (bin_dir / "chromium").unlink()
+    system = executable(bin_dir / "chromium")
+    assert linkedin_apply.chromium_binary() == str(system)
+
+    monkeypatch.setenv("JHT_CHROMIUM_BIN", str(executable(tmp_path / "Google Chrome for Testing")))
+    assert linkedin_apply.chromium_binary() is None
+
+
+def test_without_a_sign_in_browser_nothing_is_opened(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("JHT_CHROMIUM_BIN", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+
+    assert linkedin_apply.interactive_login(tmp_path, timeout_s=1.0, poll_s=0.1) == {"status": "browser_missing"}
+    assert not (tmp_path / ".cache" / "linkedin" / "profile").exists()
+
+
+def test_a_window_manager_runs_on_the_display_only_during_the_sign_in(tmp_path: Path, fake_chromium, monkeypatch):
+    binary, record = fake_chromium
+    monkeypatch.setenv("FAKE_CHROMIUM_MODE", "login")
+    events = tmp_path / "wm-events"
+    manager = tmp_path / "fake-openbox"
+    manager.write_text(
+        f"#!{sys.executable}\n"
+        "import os, signal, sys, time\n"
+        f"log = open({str(events)!r}, 'a')\n"
+        "log.write('start ' + os.environ.get('DISPLAY', '') + '\\n'); log.flush()\n"
+        "signal.signal(signal.SIGTERM, lambda *_: (log.write('stop\\n'), log.flush(), sys.exit(0)))\n"
+        "while True: time.sleep(0.1)\n"
+    )
+    manager.chmod(0o755)
+    monkeypatch.setenv("JHT_WINDOW_MANAGER_BIN", str(manager))
+
+    result = linkedin_apply.interactive_login(tmp_path, binary=str(binary), timeout_s=10.0, poll_s=0.1)
+
+    assert result == {"status": "logged_in"}
+    assert events.read_text().splitlines() == ["start :99", "stop"]
+
+
+def test_the_tool_health_gate_refuses_chrome_for_testing_and_needs_a_window_manager(tmp_path: Path, monkeypatch):
+    import tool_health
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    executable(bin_dir / "openbox")
+    testing = executable(tmp_path / "ms-playwright" / "chrome", 'echo "<p>manual-login-ok</p>"')
+    (bin_dir / "chromium").symlink_to(testing)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    status, evidence = tool_health.check_manual_login_browser()
+    assert status == "BROKEN" and "Chrome for Testing" in evidence
+
+    (bin_dir / "chromium").unlink()
+    executable(bin_dir / "chromium", 'echo "<html><body><p>manual-login-ok</p></body></html>"')
+    assert tool_health.check_manual_login_browser()[0] == "OK"
+
+    (bin_dir / "openbox").unlink()
+    status, evidence = tool_health.check_manual_login_browser()
+    assert status == "BROKEN" and "window manager" in evidence

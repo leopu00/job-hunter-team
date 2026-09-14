@@ -329,21 +329,42 @@ def profile_state(jht_home: Path) -> str:
     return "valid" if state == "valid" else "expired"
 
 
+# Chrome for Testing (Playwright's build) shows "only for automated testing"
+# and leaves Google's sign-in popup (accounts.google.com/gsi/select) blank: three
+# live attempts on 14/09 never got a session.  The manual sign-in needs the
+# distribution's Chromium (or Chrome stable), never that build.
+_FOR_TESTING_MARKERS = ("for testing", "chrome-for-testing", "ms-playwright", "/opt/playwright")
+_SYSTEM_CHROMIUMS = ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome")
+_WINDOW_MANAGERS = ("openbox", "matchbox-window-manager")
+
+
+def _for_testing(path: str) -> bool:
+    lowered = str(path).casefold()
+    return any(marker in lowered for marker in _FOR_TESTING_MARKERS)
+
+
 def chromium_binary() -> str | None:
-    """The full Chromium the flow already uses (Playwright's build), else a system one."""
+    """A browser a person signs in with: JHT_CHROMIUM_BIN, else the system Chromium or Chrome stable.
+
+    Never Chrome for Testing, even when it is the only browser on the box:
+    then None, and the command says browser_missing.
+    """
     configured = os.environ.get("JHT_CHROMIUM_BIN", "").strip()
     if configured:
-        return configured if Path(configured).is_file() else None
-    try:
-        from playwright.sync_api import sync_playwright
+        return configured if Path(configured).is_file() and not _for_testing(configured) else None
+    for name in _SYSTEM_CHROMIUMS:
+        found = shutil.which(name)
+        if found and not _for_testing(os.path.realpath(found)):
+            return found
+    return None
 
-        with sync_playwright() as runtime:
-            path = runtime.chromium.executable_path
-        if path and Path(path).is_file():
-            return path
-    except Exception:  # noqa: BLE001 — a missing driver falls back to the system browser
-        pass
-    for name in ("chromium", "chromium-browser", "google-chrome"):
+
+def window_manager_binary() -> str | None:
+    """A minimal window manager for the sign-in, so Google's popup is drawn and can be moved."""
+    configured = os.environ.get("JHT_WINDOW_MANAGER_BIN", "").strip()
+    if configured:
+        return configured if Path(configured).is_file() else None
+    for name in _WINDOW_MANAGERS:
         found = shutil.which(name)
         if found:
             return found
@@ -354,7 +375,11 @@ def interactive_command(binary: str, profile: Path) -> list[str]:
     """A plain Chromium: no --enable-automation, no remote debugging, nothing that marks a robot.
 
     --password-store=basic is what Playwright passes too, so the cookies the
-    user's sign-in writes are readable by the flow's browser afterwards.
+    user's sign-in writes are readable by the flow's browser afterwards
+    (measured 14/09: Debian's Chromium 152 profile read by Playwright's 149).
+    --no-sandbox is not an automation flag: inside the container neither the
+    namespace nor the setuid sandbox can start (measured), and the flow's own
+    browser runs the same way.
     """
     return [
         binary,
@@ -406,16 +431,26 @@ def interactive_login(
             profile.chmod(0o700)
             environment = dict(os.environ)
             environment["DISPLAY"] = display or environment.get("DISPLAY") or ":99"
-            process = popen(
-                interactive_command(binary, profile),
-                env=environment,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            deadline = time.monotonic() + timeout_s
-            status = "timeout"
-            try:
+            manager = window_manager_binary()
+            with contextlib.ExitStack() as cleanup:
+                if manager:
+                    # Only for the sign-in.  If the display already has a window
+                    # manager this one exits at once, and nothing is replaced.
+                    window_manager = popen(
+                        [manager], env=environment, stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    cleanup.callback(_stop_browser, window_manager, 5.0)
+                process = popen(
+                    interactive_command(binary, profile),
+                    env=environment,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                cleanup.callback(_stop_browser, process)  # runs first: the browser, then its window manager
+                deadline = time.monotonic() + timeout_s
+                status = "timeout"
                 while time.monotonic() < deadline:
                     if session_cookie_state(profile) == "valid":
                         status = "logged_in"
@@ -424,8 +459,6 @@ def interactive_login(
                         status = "browser_exited"
                         break
                     time.sleep(poll_s)
-            finally:
-                _stop_browser(process)
             if status == "browser_exited" and session_cookie_state(profile) == "valid":
                 status = "logged_in"  # the user closed the window after signing in
             return {"status": status}

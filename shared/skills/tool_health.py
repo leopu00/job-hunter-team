@@ -180,10 +180,41 @@ def check_cv_pdf_render():
 
 
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
+def check_manual_login_browser():
+    """The browser the user signs in to LinkedIn with, by hand (linkedin_apply.py login --interactive).
+
+    A system Chromium that is not Chrome for Testing (whose build left Google's
+    sign-in popup blank, 14/09), that really starts and renders a page, and a
+    window manager for the popup."""
+    for name in ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome"):
+        binary = shutil.which(name)
+        if binary:
+            break
+    else:
+        return "BROKEN", "no system Chromium for the manual LinkedIn sign-in"
+    real = os.path.realpath(binary).casefold()
+    if any(marker in real for marker in ("for testing", "chrome-for-testing", "ms-playwright", "/opt/playwright")):
+        return "BROKEN", "the only Chromium is Chrome for Testing: %s" % real
+    if not (shutil.which("openbox") or shutil.which("matchbox-window-manager")):
+        return "BROKEN", "no window manager (openbox) for the sign-in popup"
+    # stdout alone: the rendered DOM comes first and Chromium's stderr (dbus,
+    # GPU) would push it out of _run's 600-character tail.
+    command = [binary, "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+               "--dump-dom", "data:text/html,<p>manual-login-ok</p>"]
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except (subprocess.TimeoutExpired, OSError, ValueError) as e:
+        return "BROKEN", "%s did not start: %s" % (binary, e)
+    if done.returncode == 0 and "manual-login-ok" in done.stdout:
+        return "OK", "%s starts and renders" % binary
+    return "BROKEN", "%s did not render (rc=%d): %s" % (binary, done.returncode, done.stderr.strip()[-200:])
+
+
 CHECKS = {
     "playwright_browser": check_playwright_browser,
     "linkedin_check": check_linkedin_check,
     "cv_pdf_render": check_cv_pdf_render,
+    "manual_login_browser": check_manual_login_browser,
 }
 
 
