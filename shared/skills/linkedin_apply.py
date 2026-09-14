@@ -56,9 +56,11 @@ from apply_flow import (  # noqa: E402
     GreenhouseRecipe,
     LeverRecipe,
     PlatformHandoff,
+    _normalise_label,
     _resolve_db_path,
     _safe_label,
 )
+from profile_facts import core_answer_request, profile_value  # noqa: E402
 
 LOGIN_URL = "https://www.linkedin.com/login"
 CREDENTIALS_FILE = ("credentials", "linkedin.json")
@@ -518,16 +520,17 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
     _SUBMIT_BUTTON = "button[aria-label='Submit application']"
     _FOLLOW = "input[type=checkbox][id*='follow-company']"
     _ERRORS = (".artdeco-inline-feedback--error", "[role=alert]")
-    # Contact fields of the dialog by their label; the email and the phone
-    # country arrive filled from the account and are kept as they are.
+    # Contact fields of the dialog by their label, to the profile_facts fact
+    # they hold; the email and the phone country arrive filled from the
+    # account and are kept as they are.
     _CORE_LABELS = {
-        "first name": (("first_name",),),
-        "last name": (("last_name",),),
-        "mobile phone number": (("contacts", "phone"),),
-        "phone": (("contacts", "phone"),),
-        "email address": (("contacts", "email"), ("email",)),
-        "email": (("contacts", "email"), ("email",)),
-        "city": (("location",),),
+        "first name": "first name",
+        "last name": "last name",
+        "mobile phone number": "phone",
+        "phone": "phone",
+        "email address": "email",
+        "email": "email",
+        "city": "location",
     }
 
     def __init__(self, profile: Mapping[str, Any], cv_path: Path):
@@ -703,20 +706,54 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue
             label = self._label(entry)
             key = self._field_key(entry)
-            paths = self._CORE_LABELS.get(label.casefold())
-            if paths:
-                present, value = self._core_value(key, label, paths)
-                if present:
-                    self._fill_answer(entry, label, value, "fill")
-                    continue
-                if self._required(entry):
-                    raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required Easy Apply field needs profile data: {_safe_label(label)}",
-                        "fill",
-                    )
+            fact = self._CORE_LABELS.get(label.casefold())
+            if fact:
+                self._core_entry(page, entry, label, key, fact)
                 continue
             self._answer_entry(page, entry, label, key)
+
+    def _core_request(self, page, entry, label: str) -> dict[str, Any] | None:
+        control = entry.locator(LeverRecipe._CONTROLS).first
+        if entry.locator("input:not([type=radio]):not([type=checkbox])").count():
+            return core_answer_request(label, control.get_attribute("type") or "text")
+        # A select or a choice keeps its exact options.
+        return GreenhouseRecipe._answer_request(page, entry, label)
+
+    def _core_entry(self, page, entry, label: str, key: str, fact: str) -> None:
+        """The profile_facts rule: the profile under its aliases, a saved answer, then a question.
+
+        Never a hard stop for a fact the CLOSER can work out (CL-08), and never
+        a name split or joined in code: the CLOSER saves "first name" from
+        `name`, with its basis.
+        """
+        value = profile_value(self.profile, fact)
+        present = value is not None
+        if present:
+            self.answer_sources[_normalise_label(label) or fact] = "profile"
+        else:
+            present, value = self._answer_for(label, key)
+        if not present:
+            if not self._required(entry):
+                return
+            request = self._core_request(page, entry, label)
+            if request is None:
+                raise BlockedHuman(
+                    "unknown_required_control",
+                    f"Required Easy Apply field has no usable label: {_safe_label(fact)}",
+                    "fill",
+                )
+            raise BlockedHuman(
+                "required_answer_missing",
+                f"Required Easy Apply field needs a fact the profile does not state: {_safe_label(label)}",
+                "fill",
+                answer_request=request,
+            )
+        from apply_flow import _inferred_answer_refused
+
+        try:
+            self._fill_answer(entry, label, value, "fill")
+        except BlockedHuman as refused:
+            raise _inferred_answer_refused(self, refused, lambda: self._core_request(page, entry, label)) from None
 
     def _answer_entry(self, page, entry, label: str, key: str) -> None:
         present, answer = self._answer_for(label, key)

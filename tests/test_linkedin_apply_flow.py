@@ -124,7 +124,7 @@ SIGNED_IN_OFFSITE_CONTROLS = (
 
 
 def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, question: bool = True,
-             reject_upload: bool = False, guest_offsite: bool = False) -> str:
+             reject_upload: bool = False, guest_offsite: bool = False, question_html: str | None = None) -> str:
     nav = '<nav id="global-nav">Home</nav>' if signed_in else '<a href="/login">Sign in</a>'
     if guest_offsite:
         controls = SIGNED_IN_OFFSITE_CONTROLS if signed_in else GUEST_OFFSITE_CONTROLS
@@ -138,7 +138,8 @@ def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, quest
         return f"<html><body>{nav}<h1>Test Role</h1>{control}</body></html>"
     if not easy:
         return f"<html><body>{nav}<h1>Test Role</h1><p>Details.</p></body></html>"
-    script = EASY_APPLY_SCRIPT.replace("__QUESTION__", QUESTION if question else "").replace(
+    step_three = question_html if question_html is not None else (QUESTION if question else "")
+    script = EASY_APPLY_SCRIPT.replace("__QUESTION__", step_three).replace(
         "__REJECT_UPLOAD__", "true" if reject_upload else "false"
     )
     return (
@@ -189,6 +190,7 @@ class Site:
     reject_upload: bool = False
     guest_offsite: bool = False
     wrong_code: bool = False
+    question_html: str | None = None
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -199,7 +201,8 @@ class Site:
             signed_in = "li_at=synthetic" in (request.all_headers().get("cookie") or "")
             if url.startswith(JOB):
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
-                                reject_upload=self.reject_upload, guest_offsite=self.guest_offsite)
+                                reject_upload=self.reject_upload, guest_offsite=self.guest_offsite,
+                                question_html=self.question_html)
             elif url.startswith("https://www.linkedin.com/login"):
                 body = (
                     "<html><body><h1>Let's do a quick security check</h1></body></html>"
@@ -279,9 +282,10 @@ def write_session(home: Path) -> None:
 
 
 def build_flow(home: Path, cv_path: Path, *, answers: dict | None = None, recorded: list | None = None,
-               code_notifier=None, code_timeout: float = 5.0) -> ApplicationFlow:
+               code_notifier=None, code_timeout: float = 5.0, extra_profile: dict | None = None) -> ApplicationFlow:
     recorded = recorded if recorded is not None else []
     candidate = {"name": "Test Candidate", "contacts": {"email": EMAIL, "phone": "+10000000000"}}
+    candidate.update(extra_profile or {})
     candidate["application_answers"] = answers if answers is not None else {"Are you comfortable commuting?": "Yes"}
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
@@ -766,3 +770,50 @@ def test_a_rejected_code_is_not_a_failed_sign_in(page, home: Path, cv_path: Path
     assert (result.status, result.reason) == ("blocked_human", "linkedin_login_code_missing")
     assert not (home / ".cache" / "linkedin" / "login-failures.json").exists()
     assert [row[0] for row in login_rows(home)] == ["[used]"]
+
+
+# ── core facts (profile_facts, D1) ───────────────────────────────────────────
+
+FIRST_NAME_STEP = (
+    '<div class="jobs-easy-apply-form-section__grouping"><label for="first">First name</label>'
+    '<input id="first" name="firstName" type="text" required></div>'
+)
+
+
+def test_a_first_name_the_profile_does_not_state_is_a_question_never_a_split_name(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(build_flow(home, cv_path, answers={}), page, Site(question_html=FIRST_NAME_STEP))
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["key"] == "first name"
+    assert (result.pending_question["label"], result.pending_question["field_type"]) == ("First name", "text")
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_saved_first_name_fills_the_dialog(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+
+    result = run(
+        build_flow(home, cv_path, answers={"first name": "Test"}, recorded=recorded),
+        page,
+        Site(question_html=FIRST_NAME_STEP),
+    )
+
+    assert result.status == "applied", result
+    assert page.evaluate("window.submitCount") == 1
+
+
+def test_a_first_name_under_a_profile_alias_comes_from_the_profile(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+
+    result = run(
+        build_flow(home, cv_path, answers={}, recorded=recorded, extra_profile={"given_name": "Test"}),
+        page,
+        Site(question_html=FIRST_NAME_STEP),
+    )
+
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].answer_sources.get("first name") == "profile"
