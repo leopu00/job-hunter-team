@@ -89,10 +89,8 @@ __all__ = [
 # ATS nuova senza spedire davvero: non è il percorso dell'utente.
 AUTO_APPLY_MODES = ("authorised", "dry_run")
 
-# Tetto giornaliero di default. Lo applica `application_queue` (la coda si
-# chiude quando il CLOSER ha già spedito `max_per_day` candidature oggi), e il
-# valore deve avere un default sano perché un config a metà non autorizzi un
-# numero indefinito di invii.
+# Tetto giornaliero. Se configurato lo applicano la coda e la prenotazione
+# (`daily_cap_reached` quando il CLOSER ha già spedito `max_per_day` oggi).
 # Nessun tetto per default (ordine dell'operatore, 2026-09-14: «non ci deve
 # essere un massimo»). Un intero positivo in config resta un tetto, se l'utente
 # lo vuole; assente o null = nessun tetto.
@@ -1096,6 +1094,32 @@ def _cap_value(consent: Verdict) -> int | None:
     return None if value is None else int(value)
 
 
+def _request_cv_rework(position_id: int, conn: sqlite3.Connection, jht_home: Path | None) -> dict[str, str]:
+    """Ask the Scrittore for this CV again (HQ-BACKEND-2's `application_rework`), once.
+
+    Idempotent there (`already_requested`), never raising here: a queue read
+    must keep answering whatever the request does. The request opens its own
+    write connection on the same database file as the queue.
+    """
+    try:
+        try:
+            from application_rework import request_cv_rework
+        except ImportError:
+            from shared.skills.application_rework import request_cv_rework
+    except ImportError:
+        return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2]) if row and row[2] else ""
+        if not path:
+            return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+        result = request_cv_rework(int(position_id), jht_home=jht_home, db_path=path, manual=False)
+        return {"status": str(result.get("status", "not_needed")), "reason": str(result.get("reason", ""))}
+    except Exception as err:  # noqa: BLE001 — the hold stands whatever happens here
+        print(f"[apply-gate] CV rework request failed: {type(err).__name__}", file=sys.stderr)
+        return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+
+
 def _resolve_file(value: Any, jht_home: Path | None) -> Path | None:
     if not value or not str(value).strip():
         return None
@@ -1164,7 +1188,7 @@ def application_queue(
             out.update(reason="queue_unreadable", detail=f"cannot read the application queue: {err}")
             return out
 
-        positions, held = [], []
+        positions, held, cv_rework = [], [], []
         essentials_hold = _essentials_hold(conn, jht_home)
         for pid, url, asked_at, cv_pdf in rows:
             verdict = position_verdict(pid, conn=conn)
@@ -1182,6 +1206,9 @@ def application_queue(
             if layout:
                 if layout == "cv_pdf_layout_bad":
                     refresh_cv_preview(pid, cv, jht_home)
+                    # The Scrittore renders it again without the user asking
+                    # (never on cv_pdf_check_unavailable: that remedy is the box).
+                    cv_rework.append({"position_id": pid, **_request_cv_rework(pid, conn, jht_home)})
                 held.append({"position_id": pid, "reason": layout})
                 continue
             hold = (
@@ -1199,6 +1226,8 @@ def application_queue(
 
     remaining = _remaining_today(out["max_per_day"], sent_today)
     out.update(sent_today=sent_today, remaining_today=remaining, positions=positions, held=held)
+    if cv_rework:
+        out["cv_rework"] = cv_rework
     if not positions:
         out.update(reason="queue_empty", detail="no authorised position can be taken now")
     elif remaining is not None and remaining <= 0:

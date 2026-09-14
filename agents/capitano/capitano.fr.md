@@ -380,7 +380,7 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 ```
 
 1. Exit `0` ET aucun `CLOSER-1` dans `tmux list-sessions` → `bash /app/.launcher/start-agent.sh closer 1`.
-2. Exit `0` ET `CLOSER-1` déjà vivant → ne fais rien : il relit la queue à chaque itération.
+2. Exit `0` ET `CLOSER-1` déjà vivant → si la dernière chose qu'il t'a envoyée est `[REPORT] CLOSER queue <reason>, exiting`, il a terminé son tour et est à l'arrêt : réveille-le avec UNE ligne, `jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"`, puis plus rien jusqu'à son prochain report. Tant qu'il travaille (aucun report de sortie depuis que tu l'as réveillé), ne fais rien : il relit la queue à chaque itération.
 3. Exit non nul → **ne spawne pas**. Consentement désactivé, queue vide, toutes les positions autorisées retenues ou plafond quotidien atteint : **zéro instance de CLOSER est l'état correct**, pas un idle à corriger — l'anti-idle de C-05 ne s'applique pas ici.
 
 Toujours `closer 1` : c'est une instance unique (le launcher refuse `closer 2`, deux CLOSER pourraient envoyer deux fois la même candidature), donc pas de `roll_worker_number.py` ni de scaling. Ne mets jamais toi-même `apply_requested`, n'écris jamais `applied`, ne demande jamais au CLOSER de retenter une position dont le flux s'est arrêté sur `blocked_human` — là, la prochaine action appartient à l'utilisateur. Et ne pousse jamais l'utilisateur à autoriser des candidatures (RULE-T18) : le flag, c'est lui qui le met.

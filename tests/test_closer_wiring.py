@@ -228,6 +228,11 @@ def test_il_capitano_spawna_il_closer_solo_se_la_coda_e_aperta(lang):
     # correggere» (C-05) e il Capitano rispawna a ogni tick.
     assert rule.count("`0`") >= 2
     assert "C-05" in rule
+    # A live CLOSER that exited on an empty queue is idle, not working: seen
+    # live on 2026-09-14, new flags waited until a manual kickoff. The rule
+    # must wake it on its exit report, with the queue re-read.
+    assert "[REPORT] CLOSER queue <reason>, exiting" in rule, f"{path.name}: nessuna sveglia per un CLOSER vivo e fermo"
+    assert 'jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"' in rule
 
 
 def test_la_coda_che_il_capitano_legge_resta_chiusa_senza_niente_da_inviare(tmp_path):

@@ -117,6 +117,37 @@ def _queue_summary() -> dict:
     }
 
 
+def _wake_closer() -> bool:
+    """A live CLOSER that already exited on an empty queue is told now.
+
+    The same claimed wake as the Telegram bridge (`application_answers.wake_closer`,
+    key per authorisation): the bridge poll would find it already announced.
+    Best effort: with no CLOSER alive, the ready queue is what the Capitano's
+    spawn rule reads.
+    """
+    try:
+        import os
+        from pathlib import Path
+
+        import application_answers
+        import yaml
+
+        home = Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
+        try:
+            profile = yaml.safe_load((home / "profile" / "candidate_profile.yml").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 — the profile only filters essentials wakes
+            profile = {}
+        conn = get_db()
+        try:
+            ensure_schema(conn)
+            return bool(application_answers.wake_closer(conn, profile if isinstance(profile, dict) else {}))
+        finally:
+            conn.close()
+    except Exception as err:  # noqa: BLE001 — the flag is written; waking is only a nudge
+        print(f"[apply-request] closer wake failed: {type(err).__name__}", file=sys.stderr)
+        return False
+
+
 def show(pid: int) -> tuple[dict, int]:
     conn = get_db()
     try:
@@ -187,6 +218,7 @@ def toggle(pid: int, requested: bool) -> tuple[dict, int]:
     }
     if requested:
         out["queue"] = _queue_summary()
+        out["closer_woken"] = _wake_closer() if out["queue"].get("ready") else False
     return out, 0
 
 
