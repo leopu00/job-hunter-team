@@ -28,7 +28,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from _db import ensure_schema, get_db
-from apply_gate import _parse_instant, application_queue, toggle_verdict
+from apply_gate import USER_REQUEST_ORIGINS, _parse_instant, application_queue, toggle_verdict
 
 ORIGIN = "user_local"
 
@@ -69,6 +69,38 @@ def _next_instant(previous) -> str:
     if prev is not None and now <= prev:
         now = prev + timedelta(milliseconds=1)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def write_authorisation(conn, pid: int, requested: bool, origin: str) -> str:
+    """Write the flag, its instant and its author. The caller holds the transaction
+    and has already asked `toggle_verdict`.
+
+    Shared by `jht apply` (`user_local`) and a Telegram answer
+    (`user_telegram`): one writer shape, so the queue, the push cursor and the
+    gate see the same row whichever channel the user spoke on.
+    """
+    if requested and origin not in USER_REQUEST_ORIGINS:
+        raise ValueError(f"{origin!r} is not a user channel")
+    previous = conn.execute(
+        "SELECT apply_requested_at FROM positions WHERE id = ?", (pid,)
+    ).fetchone()
+    at = _next_instant(previous[0] if previous else None)
+    conn.execute(
+        "UPDATE positions "
+        "   SET apply_requested = ?, "
+        "       apply_requested_at = ?, "
+        "       apply_requested_by = ?, "
+        # `updated_at` moves too: it is the cursor the box push reads,
+        # and a flag that does not move it never reaches the cloud.
+        "       updated_at = CASE "
+        "         WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+        "              > COALESCE(updated_at, '') "
+        "         THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
+        "         ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at, '+0.001 seconds') END "
+        " WHERE id = ?",
+        (1 if requested else 0, at, origin if requested else None, pid),
+    )
+    return at
 
 
 def _queue_summary() -> dict:
@@ -125,22 +157,7 @@ def toggle(pid: int, requested: bool) -> tuple[dict, int]:
         # Withdrawing what is not authorised writes nothing: a no-op that moved
         # `updated_at` would push a row that did not change.
         if requested or previous:
-            at = _next_instant(row["apply_requested_at"])
-            conn.execute(
-                "UPDATE positions "
-                "   SET apply_requested = ?, "
-                "       apply_requested_at = ?, "
-                "       apply_requested_by = ?, "
-                # `updated_at` moves too: it is the cursor the box push reads,
-                # and a flag that does not move it never reaches the cloud.
-                "       updated_at = CASE "
-                "         WHEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
-                "              > COALESCE(updated_at, '') "
-                "         THEN strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') "
-                "         ELSE strftime('%Y-%m-%d %H:%M:%f', updated_at, '+0.001 seconds') END "
-                " WHERE id = ?",
-                (1 if requested else 0, at, ORIGIN if requested else None, pid),
-            )
+            write_authorisation(conn, pid, requested, ORIGIN)
         after = _position(conn, pid)
         conn.commit()
     except Exception:

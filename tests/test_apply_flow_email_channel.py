@@ -86,6 +86,7 @@ def build_flow(tmp_path: Path, cv_path: Path, url: str, notifications=None, reco
     notifications = notifications if notifications is not None else []
     recorded = recorded if recorded is not None else []
     return ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
         position_id=77,
         url=url,
         profile={

@@ -6,7 +6,8 @@
   ],
   "user_request_origins": [
     "user_web",
-    "user_local"
+    "user_local",
+    "user_telegram"
   ],
   "automated_applied_via": [
     "agent_closer",

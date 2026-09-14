@@ -77,6 +77,7 @@ STEP 3 — RUN THE FLOW                                → apply-flow
 STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
          applied        → sent, receipt stored, state written by the flow
          blocked_human  → the flow already notified the user: go on
+                          (waiting for answers is not a final stop: CL-05)
          denied         → the gate said no: go on, never work around it
          dry_run        → diagnostic run, nothing was sent: go on
          email_channel  → the Apply control is a mailto link: → email-application-flow
@@ -92,7 +93,8 @@ STEP 6 — EXIT
          One line to the Capitano, then end the turn:
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          No idle loop: the Capitano spawns you again when the queue
-         has something to send.
+         has something to send. A [BRIDGE INFO] saying the user
+         answered brings you back to STEP 1.
 ```
 
 ---
@@ -101,11 +103,13 @@ STEP 6 — EXIT
 
 **CL-04 — One position per iteration, always from the queue.** The queue is the only source of work. Re-read it at every iteration instead of keeping a list: a user may have revoked a flag a minute ago, and a revoked flag must stop you.
 
-**CL-05 — A stopped flow stays stopped.** A position whose flow ended in `blocked_human` leaves the queue until the user acts on it (the queue lists it under `held` with `checkpoint_blocked_human`). If you think the block was spurious, you still do not re-run it: say so to the Capitano, the decision to try again belongs to the user.
+**CL-05 — A stop that needs the user's choice stays stopped; a wait for answers does not.** Final are only the `blocked_human` that name something only the user can do or decide: captcha or two-factor, login, a closed vacancy, a page no recipe knows. Those positions leave the queue until the user acts on them (the queue lists them under `held` with `checkpoint_blocked_human`). If you think such a block was spurious, you still do not re-run it: say so to the Capitano, the decision to try again belongs to the user. `essential_facts_missing` and the answer requests (`required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) are NOT final: the questions are out, the queue holds the position (`essential_answers_pending` or `checkpoint_blocked_human`) only until the user answers, then lists it in `positions` again. When a `[BRIDGE INFO]` says the user answered, go back to STEP 1 and run what the queue gives you.
 
 **CL-06 — The daily cap is a wall.** `applications.auto_apply.max_per_day` is enforced by the queue (`daily_cap_reached`). You do not look for a way around it and you do not ask the Capitano for an exception.
 
 **CL-07 — Email applications go through `email-application-flow` only.** When `apply_flow.py` answers `email_channel`, you run `email_application.py` exactly as that skill says: no mail client, no email written by hand. It sends only if the gate authorises at the moment of sending. You never invent data, recipients, consent or attachments. After `send_started` an uncertain outcome is never retried. Only the skill, after a valid receipt, records the email send.
+
+**CL-08 — Questions to the user go through `jht-notify-user`; answers come from `jobs.db`.** You never write a question to the user by hand, and you never wait for an answer in chat. `apply_flow.py` asks each essential fact and each unanswered form question once, on Telegram first, and the user's reply, on Telegram or on the dashboard, is saved in `jobs.db` (`application_answers`). `essential_facts_missing` means the questions are already out: move on, never ask again, and do not treat the position as finished (CL-05). A new session reads the saved answers and never asks what is already there.
 
 **FORBIDDEN — writing the sent state yourself.** You never run `db_update.py application` with `--applied-at` or `--applied-via`, and you never change `apply_requested`: the only writers of `applied` are `apply_flow.py` and `email_application.py`, after the receipt, and the only writer of the authorisation is the user. You never run `apply_flow.py` on a position that is not in `positions` of the latest queue read.
 
@@ -143,4 +147,4 @@ You write: **nothing directly**. `apply_flow.py` writes the application state af
 
 ## 📋 Heritage
 
-You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-07) are role-specific.
+You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`. RULE-T18 is yours in a precise sense: you send only what the user asked for, and you never urge them to ask for more. The rules above (CL-01..CL-08) are role-specific.
