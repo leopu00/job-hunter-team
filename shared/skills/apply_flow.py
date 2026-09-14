@@ -520,6 +520,9 @@ class Receipt:
     # Where each saved answer used in the form came from: key → user / profile /
     # agent_inferred.  Keys and origins only, never a value.
     answer_sources: dict[str, str] = field(default_factory=dict)
+    # sha256 of the CV file handed to the form, as the email receipt records
+    # its attachment: which document the employer received.
+    cv_sha256: str = ""
 
     def is_valid(self) -> bool:
         try:
@@ -537,16 +540,19 @@ class Receipt:
             "confirmation_text": self.confirmation_text,
             "captured_at": self.captured_at,
             "answer_sources": dict(self.answer_sources),
+            "cv_sha256": self.cv_sha256,
         }
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Receipt":
+        sha = str(value.get("cv_sha256", ""))
         return cls(
             Path(str(value.get("screenshot_path", ""))),
             str(value.get("confirmation_url", "")),
             str(value.get("confirmation_text", "")),
             str(value.get("captured_at", "")) or _utc_now(),
             _answer_sources(value.get("answer_sources")),
+            sha if re.fullmatch(r"[0-9a-f]{64}", sha) else "",
         )
 
 
@@ -584,6 +590,8 @@ class FlowCheckpoint:
     pre_submit_screenshot: str = ""
     # The last step a multi-step form (LinkedIn Easy Apply) reached.
     modal_step: int = 0
+    # sha256 of the CV file as the flow handed it to the form (see Receipt).
+    cv_sha256: str = ""
     # The vacancy page as the browser last opened it: HTTP status and
     # scheme://host/path (no query).  None / "" before any navigation.
     http_status: int | None = None
@@ -658,6 +666,8 @@ class FlowCheckpoint:
             raw.get("pre_submit_screenshot", ""), str
         ):
             raise FlowError("checkpoint has an invalid handoff or pre-submit screenshot")
+        if not isinstance(raw.get("cv_sha256", ""), str):
+            raise FlowError("checkpoint has an invalid CV digest")
         step = raw.get("modal_step", 0)
         if isinstance(step, bool) or not isinstance(step, int) or step < 0:
             raise FlowError("checkpoint has an invalid form step")
@@ -2236,6 +2246,19 @@ class GreenhouseRecipe:
                         "review",
                     )
 
+        forms = page.locator(self.FORM)
+        if forms.count() == 1 and not forms.first.evaluate(
+            "form => typeof form.checkValidity !== 'function' || form.checkValidity()"
+        ):
+            # A required consent or survey control outside the questions: the
+            # browser would refuse the click and nothing would be sent (the
+            # same hole HQ-FULLSTACK-2 found in the Lever recipe).
+            raise BlockedHuman(
+                "required_field_unanswered",
+                "A required Greenhouse control outside the application questions is empty or invalid",
+                "review",
+            )
+
         submit = page.locator(self.SUBMIT)
         if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
             raise BlockedHuman(
@@ -2641,6 +2664,18 @@ class LeverRecipe:
         # ApplicationFlow has already persisted submit_started and repeated
         # the authorisation gate before this irreversible click.
         self._form(page, "submit").locator("button[type=submit]").click(timeout=10_000)
+
+
+def _file_sha256(path: Path) -> str:
+    """sha256 of a file, or "" when it cannot be read (the upload step then stops)."""
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 16), b""):
+                digest.update(chunk)
+    except OSError:
+        return ""
+    return digest.hexdigest()
 
 
 def _linkedin_module():
@@ -3558,6 +3593,12 @@ class ApplicationFlow:
         ) + tuple(getattr(recipe, "CONFIRMATION_MARKERS", ()))
         lower = visible.casefold()
         submit_present = page.locator(recipe.SUBMIT).count() > 0
+        text_rule = getattr(recipe, "confirmation_text", None)
+        if callable(text_rule) and not pre_submit and not text_rule(page):
+            # A recipe with its own, stricter reading of a thank-you text (the
+            # company form: no form still there, no submit phrase next to it)
+            # has the last word on text evidence after the click.
+            markers = ()
         for marker in markers:
             offset = lower.find(marker)
             # Before a click this evidence deliberately triggers the
@@ -4159,6 +4200,7 @@ class ApplicationFlow:
                         receipt = replace(
                             self._capture_receipt(active_page, confirmation),
                             answer_sources=dict(checkpoint.answer_sources),
+                            cv_sha256=checkpoint.cv_sha256,
                         )
                         checkpoint.receipt = receipt.to_dict()
                         checkpoint.save(self.checkpoint_path)
@@ -4214,6 +4256,9 @@ class ApplicationFlow:
                     if waiting_facts is not None:
                         return waiting_facts
                 checkpoint.complete_step("detect", "fill")
+                # The bytes the recipe is about to upload (a multi-step form
+                # uploads while it fills), for the receipt.
+                checkpoint.cv_sha256 = _file_sha256(self.cv_path)
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
@@ -4340,6 +4385,7 @@ class ApplicationFlow:
                 receipt = replace(
                     self._capture_receipt(active_page, confirmation),
                     answer_sources=dict(checkpoint.answer_sources),
+                    cv_sha256=checkpoint.cv_sha256,
                 )
                 checkpoint.receipt = receipt.to_dict()
                 checkpoint.save(self.checkpoint_path)

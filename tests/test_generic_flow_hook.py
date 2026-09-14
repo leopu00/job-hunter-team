@@ -209,3 +209,19 @@ def test_conflicting_ats_markers_never_become_a_company_form(browser, cv_path, t
 
     assert (result.status, result.reason) == ("blocked_human", "ats_conflict")
     assert page.evaluate("window.submitCount") == 0
+
+
+def test_after_the_click_a_thank_you_next_to_a_submit_phrase_is_not_a_receipt(browser, cv_path, tmp_path):
+    ambiguous = CLASSIC.replace(
+        "document.body.innerHTML = '<main><h1>Thank you for your application!</h1></main>';",
+        "document.body.innerHTML = '<main><h1>Thank you for your application!</h1><p>Apply now to another role</p></main>';",
+    )
+    assert ambiguous != CLASSIC
+    page = _site_page(browser, {"/jobs/7": ambiguous})
+    page.goto(f"{BASE}/jobs/7")
+    recorded: list = []
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/jobs/7", recorded=recorded).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "submit_outcome_unknown")
+    assert page.evaluate("window.submitCount") == 1 and recorded == []
