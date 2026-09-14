@@ -433,3 +433,31 @@ def test_an_application_form_on_the_page_wins_over_an_address_in_the_text(browse
 
     assert result.reason != "email_instruction"
     assert saved(tmp_path)["platform"] == "generic"
+
+
+def test_a_letter_answered_on_the_dashboard_is_kept_for_its_position_only(tmp_path, cv_path):
+    # A second vacancy of the same company never reuses a letter that names another one (review m3).
+    import sqlite3
+
+    import _db
+    import application_answers as aa
+
+    db = tmp_path / "jobs.db"
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        for pid in (91, 92):
+            conn.execute(
+                "INSERT INTO positions(id, title, company, url, status) VALUES (?, 'Fixture Role', 'Fixture Co', ?, 'ready')",
+                (pid, f"https://jobs.example.com/{pid}"),
+            )
+    flow = build_flow(tmp_path, cv_path, f"{BASE}/careers")
+    flow.db_path = db
+    request = {"payload": {"key": "message", "label": "Message", "field_type": "textarea", "options": [],
+                           "purpose": "contact_form_application"}}
+
+    flow._save_application_answer("message", request, LETTER)
+
+    with sqlite3.connect(db) as conn:
+        assert aa.load_answers(conn, 91).get("message") == LETTER
+        assert aa.load_answers(conn, 92).get("message") is None
