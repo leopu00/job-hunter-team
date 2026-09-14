@@ -3138,6 +3138,8 @@ class ApplicationFlow:
         self._page_managed = False
         # What _navigate saw; read (and cleared) by _check_page_access.
         self._page_access: page_failure.Access | None = None
+        # The LinkedIn profile the user signed in to by hand, when this run uses it.
+        self._linkedin_profile: Path | None = None
 
     def _gate(self):
         try:
@@ -3157,7 +3159,25 @@ class ApplicationFlow:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:
             raise FlowError("playwright is not installed") from exc
+        profile = getattr(self, "_linkedin_profile", None)
         with sync_playwright() as runtime:
+            if profile is not None:
+                # The profile the user signed in to by hand (linkedin_apply.py
+                # login --interactive): one browser at a time on it.
+                module = _linkedin_module()
+                with module.profile_lock(self._jht_home(), wait_s=module.PROFILE_WAIT_S):
+                    context = runtime.chromium.launch_persistent_context(
+                        str(profile),
+                        headless=self.headless,
+                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                        locale="en-US",
+                        viewport={"width": 1280, "height": 900},
+                    )
+                    try:
+                        yield context.pages[0] if context.pages else context.new_page()
+                    finally:
+                        context.close()
+                return
             browser = runtime.chromium.launch(
                 headless=self.headless,
                 args=["--no-sandbox", "--disable-dev-shm-usage"],
@@ -4313,6 +4333,41 @@ class ApplicationFlow:
             return FlowResult("denied", checkpoint.state, deferred.reason)
         return None
 
+    def _linkedin_profile_stop(self, checkpoint: FlowCheckpoint) -> FlowResult | None:
+        """Which browser a LinkedIn vacancy opens in, decided before it opens.
+
+        The user's hand-made sign-in (profile) when there is one.  A profile
+        whose session expired stops for the user to sign in by hand again,
+        never a sign-in with Google by the CLOSER; the credentials file, when
+        the user has one, is still the fallback.  A profile another browser
+        holds is a denial the queue retries.
+        """
+        self._linkedin_profile = None
+        if not is_linkedin_job(getattr(self, "_queue_url", "") or self.url):
+            return None
+        module = _linkedin_module()
+        if module is None:
+            return None
+        home = self._jht_home()
+        state = module.profile_state(home)
+        if state == "absent":
+            return None
+        if state == "busy":
+            LOG.warning("[apply-flow] DENY linkedin_profile_busy")
+            return FlowResult("denied", checkpoint.state, "linkedin_profile_busy")
+        if state == "expired" and not module._private_file(module._home_path(home, module.CREDENTIALS_FILE)):
+            return self._block(
+                checkpoint,
+                BlockedHuman(
+                    "linkedin_session_expired",
+                    "The LinkedIn session the user signed in to by hand has expired: "
+                    "sign in again by hand (linkedin_apply.py login --interactive)",
+                    "detect",
+                ),
+            )
+        self._linkedin_profile = module.profile_dir(home)
+        return None
+
     GENERIC_RENDER_WAIT_MS = 10_000
 
     def _wait_for_company_form(self, page, recipe) -> None:
@@ -4567,6 +4622,9 @@ class ApplicationFlow:
         throttled = self._linkedin_pause(checkpoint)
         if throttled is not None:
             return throttled
+        profile_stop = self._linkedin_profile_stop(checkpoint)
+        if profile_stop is not None:
+            return profile_stop
 
         managed = self._page_managed = page is None
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
@@ -4583,7 +4641,7 @@ class ApplicationFlow:
                     if checkpoint.handoff_url:
                         # The click happened on the site the board handed over to.
                         self.url = checkpoint.handoff_url
-                    elif is_linkedin_job(self.url):
+                    elif is_linkedin_job(self.url) and self._linkedin_profile is None:
                         # Easy Apply's outcome shows only to the signed-in account.
                         module = _linkedin_module()
                         if module is not None:
@@ -4624,9 +4682,10 @@ class ApplicationFlow:
                 )
 
             try:
-                if is_linkedin_job(self.url):
+                if is_linkedin_job(self.url) and self._linkedin_profile is None:
                     # The saved session goes in before the first request, so the
                     # vacancy page already shows the signed-in apply controls.
+                    # A hand-made profile already holds its own, newer cookies.
                     module = _linkedin_module()
                     if module is not None:
                         module.restore_session(active_page.context, self._jht_home())
@@ -4933,6 +4992,10 @@ def main(argv: list[str] | None = None) -> int:
             headless=_resolve_headless(args.headless),
         )
         result = flow.run()
+    except FlowDeferred as deferred:
+        # The LinkedIn profile was taken between the check and the launch.
+        print(json.dumps({"status": "denied", "state": "", "reason": deferred.reason, "receipt": None}))
+        return 1
     except (FlowError, ValueError) as exc:
         print(json.dumps({"status": "error", "reason": str(exc)}))
         return 2

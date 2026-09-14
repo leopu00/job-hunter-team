@@ -32,10 +32,14 @@ The account is the user's, so the recipe is careful with it:
 """
 from __future__ import annotations
 
+import argparse
 import contextlib
+import fcntl
 import json
 import os
 import re
+import shutil
+import signal
 import sqlite3
 import stat
 import subprocess
@@ -70,6 +74,14 @@ MAX_LOGIN_FAILURES = 2
 DEFAULT_MIN_INTERVAL_MINUTES = 20
 LOGIN_CODE_SOURCE_ACTION = "closer_login_code"
 MAX_MODAL_STEPS = 12
+# The browser profile the user signs in to by hand (`login --interactive`).
+PROFILE_DIR = (".cache", "linkedin", "profile")
+PROFILE_LOCK = (".cache", "linkedin", "profile.lock")
+SESSION_COOKIE = "li_at"
+INTERACTIVE_TIMEOUT_S = 15 * 60
+PROFILE_WAIT_S = 60.0
+# Seconds between 1601-01-01 (Chromium's cookie epoch) and 1970-01-01.
+_CHROMIUM_EPOCH_OFFSET_S = 11_644_473_600
 
 _SIGNED_IN = "#global-nav, nav.global-nav"
 # On the public page, signed out, this tracking name is also carried by the
@@ -202,6 +214,223 @@ def min_interval_minutes(config_path: Path) -> int:
             "`applications.auto_apply.linkedin_min_interval_minutes` is not a whole number of minutes",
         )
     return value
+
+
+# ── the profile the user signs in to by hand ────────────────────────────────
+#
+# 14/09: the operator signs in to LinkedIn with "Continue with Google" and has
+# no LinkedIn password.  Google refuses automated browsers, so the CLOSER cannot
+# do that sign-in: the user does it once, by hand, in a plain Chromium on the
+# box's display, and the recipe reuses that profile.
+
+
+class ProfileBusy(FlowDeferred):
+    """Another Chromium holds the LinkedIn profile (a manual sign-in, another run)."""
+
+    def __init__(self, detail: str = "Another browser is using the LinkedIn profile; the queue retries later"):
+        super().__init__("linkedin_profile_busy", detail)
+
+
+def profile_dir(jht_home: Path) -> Path:
+    return _home_path(jht_home, PROFILE_DIR)
+
+
+def _private_dir(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+
+
+@contextlib.contextmanager
+def profile_lock(jht_home: Path, *, wait_s: float = 0.0, poll_s: float = 0.5):
+    """Hold the profile for one browser.  Raises ProfileBusy after `wait_s`.
+
+    An flock, so a killed holder releases it with its process: nothing to
+    unstick at boot.  The lock file sits next to the profile, never inside it.
+    """
+    path = _home_path(jht_home, PROFILE_LOCK)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        path.parent.chmod(0o700)
+    handle = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        deadline = time.monotonic() + max(0.0, wait_s)
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise ProfileBusy() from None
+                time.sleep(poll_s)
+        try:
+            yield path
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+    finally:
+        os.close(handle)
+
+
+def profile_busy(jht_home: Path) -> bool:
+    try:
+        with profile_lock(jht_home):
+            return False
+    except ProfileBusy:
+        return True
+
+
+def _cookie_databases(profile: Path) -> list[Path]:
+    return [path for path in (profile / "Default" / "Network" / "Cookies", profile / "Default" / "Cookies") if path.is_file()]
+
+
+def session_cookie_state(profile: Path, *, now: float | None = None) -> str:
+    """valid · expired · absent: LinkedIn's session cookie in a Chromium profile.
+
+    Reads only the cookie's name, host and expiry, never its value.  Chromium
+    keeps the database locked while it runs, so a copy is read.
+    """
+    now = time.time() if now is None else now
+    found = "absent"
+    for database in _cookie_databases(profile):
+        with tempfile.TemporaryDirectory() as scratch:
+            copy = Path(scratch) / "Cookies"
+            try:
+                shutil.copyfile(database, copy)
+                for suffix in ("-wal", "-journal"):
+                    side = database.with_name(database.name + suffix)
+                    if side.is_file():
+                        shutil.copyfile(side, copy.with_name(copy.name + suffix))
+                with contextlib.closing(sqlite3.connect(copy)) as conn:
+                    rows = conn.execute(
+                        "SELECT host_key, expires_utc FROM cookies WHERE name = ?", (SESSION_COOKIE,)
+                    ).fetchall()
+            except (OSError, sqlite3.Error):
+                continue
+        for host, expires in rows:
+            if not linkedin_host(f"https://{str(host).lstrip('.')}/"):
+                continue
+            expiry = int(expires or 0)
+            if expiry == 0 or expiry / 1_000_000 - _CHROMIUM_EPOCH_OFFSET_S > now:
+                return "valid"
+            found = "expired"
+    return found
+
+
+def profile_state(jht_home: Path) -> str:
+    """absent (no manual sign-in yet) · busy · valid · expired."""
+    profile = profile_dir(jht_home)
+    if not _private_dir(profile):
+        return "absent"
+    if profile_busy(jht_home):
+        return "busy"
+    state = session_cookie_state(profile)
+    return "valid" if state == "valid" else "expired"
+
+
+def chromium_binary() -> str | None:
+    """The full Chromium the flow already uses (Playwright's build), else a system one."""
+    configured = os.environ.get("JHT_CHROMIUM_BIN", "").strip()
+    if configured:
+        return configured if Path(configured).is_file() else None
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as runtime:
+            path = runtime.chromium.executable_path
+        if path and Path(path).is_file():
+            return path
+    except Exception:  # noqa: BLE001 — a missing driver falls back to the system browser
+        pass
+    for name in ("chromium", "chromium-browser", "google-chrome"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def interactive_command(binary: str, profile: Path) -> list[str]:
+    """A plain Chromium: no --enable-automation, no remote debugging, nothing that marks a robot.
+
+    --password-store=basic is what Playwright passes too, so the cookies the
+    user's sign-in writes are readable by the flow's browser afterwards.
+    """
+    return [
+        binary,
+        f"--user-data-dir={profile}",
+        "--password-store=basic",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--window-size=1280,900",
+        LOGIN_URL,
+    ]
+
+
+def _stop_browser(process: subprocess.Popen, grace_s: float = 10.0) -> None:
+    if process.poll() is not None:
+        return
+    with contextlib.suppress(ProcessLookupError):
+        process.send_signal(signal.SIGTERM)  # Chromium flushes its cookies on a clean exit
+    try:
+        process.wait(timeout=grace_s)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        process.wait(timeout=grace_s)
+
+
+def interactive_login(
+    jht_home: Path,
+    *,
+    binary: str | None = None,
+    display: str | None = None,
+    timeout_s: float = INTERACTIVE_TIMEOUT_S,
+    poll_s: float = 2.0,
+    popen: Callable[..., subprocess.Popen] = subprocess.Popen,
+) -> dict[str, str]:
+    """Open LinkedIn's sign-in in a plain Chromium and wait for the user's session.
+
+    Returns {"status": logged_in | timeout | busy | browser_missing | browser_exited}.
+    Nothing from the cookies or the page is returned or logged.
+    """
+    binary = binary or chromium_binary()
+    if not binary:
+        return {"status": "browser_missing"}
+    profile = profile_dir(jht_home)
+    try:
+        with profile_lock(jht_home):
+            profile.mkdir(parents=True, exist_ok=True)
+            profile.chmod(0o700)
+            environment = dict(os.environ)
+            environment["DISPLAY"] = display or environment.get("DISPLAY") or ":99"
+            process = popen(
+                interactive_command(binary, profile),
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            deadline = time.monotonic() + timeout_s
+            status = "timeout"
+            try:
+                while time.monotonic() < deadline:
+                    if session_cookie_state(profile) == "valid":
+                        status = "logged_in"
+                        break
+                    if process.poll() is not None:
+                        status = "browser_exited"
+                        break
+                    time.sleep(poll_s)
+            finally:
+                _stop_browser(process)
+            if status == "browser_exited" and session_cookie_state(profile) == "valid":
+                status = "logged_in"  # the user closed the window after signing in
+            return {"status": status}
+    except ProfileBusy:
+        return {"status": "busy"}
 
 
 class LinkedInSession:
@@ -541,6 +770,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         self.cv_attached = False
         self.job_url = ""
         self.dry_run = False
+        self.profile_session = False
 
     def attach(self, flow) -> None:
         self.session = LinkedInSession(
@@ -552,6 +782,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         )
         self.job_url = flow.url
         self.dry_run = getattr(flow, "_mode", "") == "dry_run"
+        self.profile_session = getattr(flow, "_linkedin_profile", None) is not None
 
         def saved(step: int, _flow=flow) -> None:
             checkpoint = getattr(_flow, "_live_checkpoint", None)
@@ -644,6 +875,15 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 raise FlowDeferred(
                     "linkedin_dry_run_signed_out",
                     "A dry run does not sign in to LinkedIn; without a saved session it stops here",
+                )
+            if self.profile_session and not _private_file(_home_path(self.session.jht_home, CREDENTIALS_FILE)):
+                # The hand-made session's cookie is there but LinkedIn no longer
+                # accepts it: only the user can sign in again (Google refuses robots).
+                raise BlockedHuman(
+                    "linkedin_session_expired",
+                    "LinkedIn no longer accepts the session the user signed in to by hand: "
+                    "sign in again by hand (linkedin_apply.py login --interactive)",
+                    "detect",
                 )
             # Before the account does anything: the pause between applications.
             self.session.assert_interval()
@@ -872,3 +1112,25 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         if any(marker in text for marker in _CHALLENGE_TEXT):
             return "linkedin_challenge"
         return GreenhouseRecipe._challenge_reason(page)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="LinkedIn for the CLOSER: the user's manual sign-in")
+    sub = parser.add_subparsers(dest="command", required=True)
+    login = sub.add_parser("login", help="sign in to LinkedIn by hand, once, in the CLOSER's browser profile")
+    login.add_argument("--interactive", action="store_true", required=True)
+    login.add_argument("--timeout-minutes", type=float, default=INTERACTIVE_TIMEOUT_S / 60)
+    login.add_argument("--display", default=None)
+    sub.add_parser("status", help="print the state of the LinkedIn profile session")
+    args = parser.parse_args(argv)
+    jht_home = Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
+    if args.command == "status":
+        print(json.dumps({"status": profile_state(jht_home)}))
+        return 0
+    result = interactive_login(jht_home, display=args.display, timeout_s=max(1.0, args.timeout_minutes * 60))
+    print(json.dumps(result))
+    return {"logged_in": 0, "timeout": 3, "busy": 4}.get(result["status"], 2)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
