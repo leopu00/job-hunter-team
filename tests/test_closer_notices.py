@@ -99,7 +99,7 @@ def test_scraped_title_and_company_are_cleaned_of_bidi_controls(home):
                      ("Data\u202e Engineer\u2066", "Example\u200b Corp"))
     message = notices.stop_message("captcha", "detail", 1817)
     assert not any(ch in message for ch in "\u202e\u2066\u200b")
-    assert "#1817 (Data Engineer at ExampleCorp)" in message  # ZWSP goes without a space (external_content rule)
+    assert "#1817 (Data Engineer at Example Corp)" in message
     notices.defer(1817, "ats_unsupported", "https://a.example.com")
     summary = notices.summary_message(notices._read_state(notices._state_path())["pending"])
     assert "\u202e" not in summary
