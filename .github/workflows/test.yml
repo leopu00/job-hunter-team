@@ -249,6 +249,13 @@ jobs:
       - name: Install Playwright browser (Python driver)
         run: python -m playwright install --with-deps --only-shell chromium
 
+      # `tests/test_pdf_layout_check.py` renders CVs with the cv-structure command
+      # (pandoc + wkhtmltopdf) and measures them with poppler (pdftotext
+      # -bbox-layout, pdffonts): the toolchain the container bakes. PDFs never
+      # enter the repo, and skipping here would leave the layout gate untested.
+      - name: Install CV PDF toolchain (layout gate)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pandoc wkhtmltopdf poppler-utils
+
       # `-m "not production"`: 38 dei 806 test (tests/test_vercel_pages.py e
       # tests/test_missing_pages.py) fanno HTTP su https://jobhunterteam.ai e
       # asseriscono per lo più `status != 404`. Non testano il codice della PR:

@@ -155,6 +155,17 @@ Décision technique 2026-05-18 après investigation "CV esthétique simplifiée"
 - **`wkhtmltopdf 0.12.6` (Qt 5.15.8)** → moteur officiel, déjà installé dans le conteneur. Produit des CV professionnels HTML+CSS, 2 pages, ~30 Ko (sortie identique aux "beaux" CV du 16 mai).
 - ❌ **NE PAS utiliser `--pdf-engine=typst`** : typst n'est pas disponible dans pandoc 2.17 du conteneur (nécessiterait pandoc 3.x). Erreur historique dans la skill, signalée 2026-05-18.
 - ❌ **NE PAS utiliser `pdf_gen.py` (fpdf2)** pour les CV : c'est un fallback minimaliste qui couvre 80% des cas simples. Pour les CV destinés à l'utilisateur, il produit une mise en page spartiate 1 page, pas de CSS, pas d'espacement fin.
+- ⚠️ **Mise en page : CSS de base + vraies marges + gate visuel** (2026-09-14,
+  un CV joint avec le texte tassé au centre de la feuille). Le template HTML de
+  pandoc limite le body à `max-width: 36em`, centré avec 50px de padding, et
+  wkhtmltopdf ignore les marges `@page` : un `<style>` à 9.3pt sortait en
+  colonne à ~41% et passait quand même le gate taille + Producer. La commande
+  de rendu charge donc TOUJOURS `/app/shared/skills/pdf_layout_base.css`
+  (`-c … --self-contained`) et passe les marges à wkhtmltopdf (`-V margin-*`).
+  Dans le `<style>` du `.md`, jamais de `max-width`, `margin: auto` ni de
+  padding sur le body, et ne pas compter sur `@page`. Ensuite
+  `pdf_layout_check.py` mesure le résultat : texte ≥ 75% de la largeur utile sur
+  chaque page, 1–2 pages, aucune page presque vide, polices incorporées.
 
 L'anti-pattern historique : générer le PDF directement dans `$JHT_USER_DIR/cv/`, puis exécuter `db_update.py application --cv-pdf-path ...` séparément. Si la Sentinella tuait le Scrittore entre les deux étapes (EMERGENZA freeze 2026-05-17 04:43), le PDF restait sur disque mais la DB avait `cv_pdf_path=NULL`. Sisal 7.5/10 PASS était devenu *"CV à écrire"* sur le tableau de bord de l'utilisateur — opportunité top invisible.
 
@@ -171,19 +182,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Sans cela, en cas de skill obsolète (typst absent, pandoc 3.x manquant, …)
 # le Scrittore exécutait la commande, échouait, improvisait un fallback
 # aléatoire → CV moches du 2026-05-18 matin.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT preflight: wkhtmltopdf non disponible."
-  echo "  Moteurs alternatifs acceptables : weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  JAMAIS de fallback vers pdf_gen.py / fpdf2 pour les CV (sortie moche)."
   echo "  Rapporter le problème au Capitano via [REPORT] et ABORT."
   exit 2
 fi
 
 # 1. Rendu via pandoc → html → wkhtmltopdf (moteur gagnant, 32 Ko / 2 pages).
-#    --metadata title=... évite le warning de wkhtmltopdf "no title element".
+#    Le CSS de base annule la colonne 36em de pandoc ; -V margin-* : wkhtmltopdf ignore @page.
+#    pagetitle (pas title) fixe <title> sans imprimer d'en-tête "CV …".
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── PORTE POST-RENDU : taille + Producer ─────────────────────────────
 # DEUX vérifications obligatoires. AUCUNE des deux n'est optionnelle.
@@ -223,6 +237,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) mise en page : taille et Producer prouvent le moteur, pas où est le texte.
+# pdf_layout_check.py la mesure (≥75% de la largeur utile sur chaque page, 1-2
+# pages, aucune page presque vide, polices incorporées). Exit 1 ou 2 : ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: mise en page incorrecte (pdf_layout_check.py) — corriger le .md et relancer le rendu."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Déplacement atomique + UPDATE en séquence ; rollback si UPDATE échoue
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -238,6 +261,7 @@ Codes de sortie :
 - `2` → échec preflight (moteur non disponible) — signaler au Capitano
 - `3` → échec post-rendu (taille < 20 Ko, sortie minimaliste) — moteur incorrect
 - `4` → échec post-rendu (Producer != Qt) — moteur incorrect
+- `5` → échec post-rendu (mise en page, `reasons` de `pdf_layout_check.py`) — corriger le `.md` et relancer le rendu : `narrow_text` → retirer du `<style>` toute règle de largeur/marge/padding sur le body ; `near_empty_page` → resserrer ou couper jusqu'à ce que la dernière page se remplisse ou disparaisse ; `too_many_pages` → couper. Après 2 rendus en échec, signaler au Capitano. Un CV qui échoue au gate n'arrive jamais au critic-loop.
 - `1` → échec UPDATE DB (rollback fichier)
 
 Le Dottore via le healthcheck `cv-disk-audit` (bug #18) raccorde les éventuels orphelins disque↔DB ; en plus, il signale désormais aussi les CV avec Producer non-Qt comme "moteur incorrect — à régénérer".
