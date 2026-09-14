@@ -222,18 +222,22 @@ PHONE_FIELDSET = """
           const menu = document.createElement('div');
           menu.className = 'select__menu';
           menu.innerHTML = '<div class="select__menu-list" role="listbox" id="react-select-country-listbox">'
-            + names.map((n, i) => `<div role="option" class="select__option" id="react-select-country-option-${i}">${n}</div>`).join('')
+            + names.map((n, i) => `<div role="option" class="select__option" id="react-select-country-option-${i}"><div class="iti__flag"></div>${n}</div>`).join('')
             + '</div>';
           input.closest('.select__container').appendChild(menu);
           input.setAttribute('aria-controls', 'react-select-country-listbox');
           input.setAttribute('aria-expanded', 'true');
           menu.querySelectorAll('[role=option]').forEach(option => option.addEventListener('click', () => {
-            const value = document.createElement('div');
-            value.className = 'select__single-value';
-            value.textContent = option.textContent;
-            input.parentElement.prepend(value);
-            document.querySelector('.requiredInput').value = option.textContent;
+            // As on the box: the chosen value is a flag and the code only, rendered a moment later.
+            const code = option.textContent.slice(option.textContent.lastIndexOf('+'));
             menu.remove();
+            setTimeout(() => {
+              const value = document.createElement('div');
+              value.className = 'select__single-value';
+              value.innerHTML = '<div class="iti__flag"></div>' + code;
+              input.parentElement.prepend(value);
+              document.querySelector('.requiredInput').value = option.textContent;
+            }, 400);
           }));
         }, 600));
       })();
@@ -312,3 +316,27 @@ def test_the_box_1967_after_patch_20_applies_with_the_dialling_code(page, tmp_pa
         assert conn.execute("SELECT source_action FROM pending_user_messages WHERE id = 1221").fetchone()[0] == "closer_application_answer_superseded"
     finally:
         conn.close()
+
+
+def test_the_phone_country_goes_on_to_phone_and_the_cv(page, tmp_path, cv_path):
+    page.set_content(phone_page())
+    flow = phone_flow(tmp_path, cv_path, {"phone": "+39 333 0000000"})
+    flow.gate_checker = lambda **_kwargs: GateVerdict(context={"mode": "dry_run"})
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "dry_run", result
+    assert page.locator(".select__single-value").inner_text().strip() == "+39"
+    assert page.locator("#phone").input_value() == "+39 333 0000000"
+    assert page.locator("#resume").evaluate("e => e.files.length") == 1
+
+
+def test_a_phone_country_the_menu_did_not_keep_stops_before_the_click(page, tmp_path, cv_path):
+    wrong = phone_page().replace("value.innerHTML = '<div class=\"iti__flag\"></div>' + code;", "value.innerHTML = '<div class=\"iti__flag\"></div>+1';")
+    assert wrong != phone_page()
+    page.set_content(wrong)
+
+    result = phone_flow(tmp_path, cv_path, {"phone": "+39 333 0000000"}).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "answer_not_accepted")
+    assert page.evaluate("window.submitCount") == 0

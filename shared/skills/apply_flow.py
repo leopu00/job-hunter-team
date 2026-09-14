@@ -1996,6 +1996,22 @@ class GreenhouseRecipe:
                 options.append((text, text[: match.start()].strip(), code))
         return listbox, options
 
+    @staticmethod
+    def _phone_country_kept(page, container, chosen: str, code: str) -> bool:
+        """Did the menu keep the option?  1967 (patch 21): the chosen value shows
+        as a flag and "+39" only, never the option's "Italy +39"; and it renders
+        a moment after the click."""
+        deadline = time.monotonic() + 3
+        while True:
+            shown = container.locator(".select__single-value") if container.count() else None
+            if shown is not None and shown.count():
+                text = _exact_form_text(shown.first.inner_text(), maximum=200)
+                if text == chosen or ("+" in text and re.sub(r"\D", "", text) == code):
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            page.wait_for_timeout(200)
+
     def _fill_phone_country(self, page, control, label: str, required: bool) -> None:
         listbox, options = self._phone_country_options(page, control)
         if not options:
@@ -2063,8 +2079,8 @@ class GreenhouseRecipe:
             )
         option.first.click()
         container = control.locator("xpath=ancestor::*[contains(@class, 'select__container')][1]")
-        shown = container.locator(".select__single-value") if container.count() else page.locator("#__none__")
-        if not shown.count() or _exact_form_text(shown.first.inner_text(), maximum=200) != chosen:
+        code = next(item_code for text, _country, item_code in options if text == chosen)
+        if not self._phone_country_kept(page, container, chosen, code):
             raise BlockedHuman(
                 "answer_not_accepted",
                 f"Greenhouse did not keep the phone country: {_safe_label(label)}",
