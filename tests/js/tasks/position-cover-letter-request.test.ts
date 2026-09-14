@@ -30,7 +30,7 @@ db.exec(`
   );
   CREATE TABLE scores (position_id INTEGER UNIQUE, total_score INTEGER);
   CREATE TABLE applications (
-    id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE,
+    id INTEGER PRIMARY KEY, position_id INTEGER UNIQUE, applied INTEGER DEFAULT 0,
     cv_path TEXT, cv_pdf_path TEXT, cl_path TEXT, cl_pdf_path TEXT
   );
   INSERT INTO positions (id, title, company, status, write_requested)

@@ -32,7 +32,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - The gate is checked at start **and** immediately before the click. A flag
   revoked while the form was being filled stops the submission.
-- Two complete recipes today: **Ashby** and **Greenhouse** (only its three public hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, over HTTPS; the page is re-checked after every step). Any other platform blocks for a human.
+- Three complete recipes today: **Ashby**, **Greenhouse** (only its three public hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, over HTTPS; the page is re-checked after every step) and **Lever** (only `jobs.lever.co` and `jobs.eu.lever.co`, over HTTPS, re-checked the same way). Any other platform blocks for a human.
 
 ## The receipt
 
@@ -73,8 +73,9 @@ The flow stops on anything it cannot do with certainty:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | the CV cannot be attached |
 | `cv_pdf_layout_bad` | the CV PDF failed the visual check (`pdf_layout_check.py`: text squeezed into a narrow column, a nearly empty page, more than 2 pages, fonts not embedded, body font too small): nothing was attached and nothing was sent. The Writer must render it again; never attach it by hand. The preview of page 1 is saved next to the checkpoint: look at it |
 | `cv_pdf_check_unavailable` | the CV PDF could not be measured (poppler missing in the container, file unreadable): nothing was attached and nothing was sent — an unmeasured CV is not a pass. The remedy is on the box, not the Writer: report it to the Capitano |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | no recipe for this page yet, or the form is not the one the recipe knows |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | no recipe for this page yet, or the form is not the one the recipe knows |
 | `greenhouse_redirect_untrusted` | the Greenhouse page left its three trusted hosts during the flow |
+| `lever_redirect_untrusted` | the Lever page left `jobs.lever.co` / `jobs.eu.lever.co` during the flow |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | two different mailto application addresses, or the application form, its fields or its submit button cannot be pinned to one single form (newsletter, footer, demo forms are never part of it) |
 | `form_error` / `field_invalid` / `submit_unavailable` | the form reports an error, a field format is rejected, or the submit button is missing or disabled |
 | `url_refused` / `checkpoint_invalid` | the application URL failed the public-address guard, or the saved checkpoint is unreadable |

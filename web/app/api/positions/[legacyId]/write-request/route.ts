@@ -40,6 +40,14 @@ const WRITE_REQUEST_KINDS = new Set<WriteRequestKind>(["cv", "cover_letter"]);
 // In entrambi i path la validazione (status='scored', no application
 // esistente) viene applicata sulla source disponibile.
 //
+// [JHT-CV-REWORK] Eccezione: una richiesta CV su una candidatura MAI inviata
+// (applied != 1, nessun invio email avviato) di una posizione 'scored' o
+// 'ready' è accettata qui. Il PDF non è raggiungibile da questa route (e in
+// cloud mode nemmeno il box): la valida il box, `db_query.py
+// next-for-scrittore` la mette in coda solo se il CV è bocciato dal controllo
+// di layout (`application_rework.rework_verdict`). Una candidatura inviata
+// resta rifiutata ovunque.
+//
 // Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29), [JHT-CLOUDSYNC-01]
 // pull-desired-state (2026-05-31) e migration V6 in
 // `shared/skills/_db.py::_migrate_positions_write_requested`.
@@ -54,6 +62,7 @@ interface PositionRow {
   write_requested_at: string | null;
   write_request_kind: WriteRequestKind | null;
   has_application: number;
+  application_sent: number;
 }
 
 interface ResponsePosition {
@@ -82,10 +91,13 @@ function nextRequestTimestamp(previous: string | null): string {
   ).toISOString();
 }
 
-function validateRequested(
+const REWORK_STATUSES = new Set(["scored", "ready"]);
+
+export function validateRequested(
   kind: WriteRequestKind,
   status: string | null,
   hasApplication: boolean,
+  applicationSent = false,
 ): { ok: true } | { ok: false; status: number; body: Record<string, unknown> } {
   if (kind === "cover_letter") {
     return hasApplication
@@ -98,6 +110,10 @@ function validateRequested(
             position: { status },
           },
         };
+  }
+  if (hasApplication && !applicationSent && REWORK_STATUSES.has(status ?? "")) {
+    // CV rework of a never-sent application: the box decides on the PDF.
+    return { ok: true };
   }
   if (status !== "scored") {
     return {
@@ -120,6 +136,27 @@ function validateRequested(
     };
   }
   return { ok: true };
+}
+
+// An email application that has started may have reached the recruiter: same
+// states as `application_rework.EMAIL_STARTED_STATES`. No register, no start.
+function emailSendStarted(db: Database.Database, legacyId: number): boolean {
+  const table = db
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'email_application_attempts'",
+    )
+    .get();
+  if (!table) return false;
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM email_application_attempts
+          WHERE position_id = ?
+            AND state IN ('send_started', 'send_outcome_unknown', 'receipt_incomplete', 'sent')
+          LIMIT 1`,
+      )
+      .get(legacyId),
+  );
 }
 
 // Path A: SQLite locale e' la source of truth (Local PC o web nel container).
@@ -145,7 +182,8 @@ export function toggleViaLocal(
           p.write_requested,
           p.write_requested_at,
           p.write_request_kind,
-          CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS has_application
+          CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS has_application,
+          CASE WHEN COALESCE(a.applied, 0) = 1 THEN 1 ELSE 0 END AS application_sent
         FROM positions p
         LEFT JOIN scores s ON s.position_id = p.id
         LEFT JOIN applications a ON a.position_id = p.id
@@ -171,6 +209,7 @@ export function toggleViaLocal(
           kind,
           row.status,
           row.has_application === 1,
+          row.application_sent === 1 || emailSendStarted(db, legacyId),
         );
         if (!guard.ok) {
           return {
@@ -222,7 +261,8 @@ export function toggleViaLocal(
           p.write_requested,
           p.write_requested_at,
           p.write_request_kind,
-          CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS has_application
+          CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS has_application,
+          CASE WHEN COALESCE(a.applied, 0) = 1 THEN 1 ELSE 0 END AS application_sent
         FROM positions p
         LEFT JOIN scores s ON s.position_id = p.id
         LEFT JOIN applications a ON a.position_id = p.id
@@ -272,7 +312,7 @@ export async function toggleViaCloud(
   const { data: row, error } = await supabase
     .from("positions")
     .select(
-      "id, title, company, status, write_requested, write_requested_at, write_request_kind, scores(total_score), applications(id)",
+      "id, title, company, status, write_requested, write_requested_at, write_request_kind, scores(total_score), applications(id, applied)",
     )
     .eq("user_id", userId)
     .eq("legacy_id", legacyId)
@@ -301,17 +341,25 @@ export async function toggleViaCloud(
     write_requested_at: string | null;
     write_request_kind: WriteRequestKind | null;
     scores: Array<{ total_score: number | null }> | null;
-    applications: Array<{ id: string }> | null;
+    applications: Array<{ id: string; applied: boolean | null }> | null;
   };
   const r = row as unknown as R;
   const score =
     Array.isArray(r.scores) && r.scores[0] ? r.scores[0].total_score : null;
   const hasApplication =
     Array.isArray(r.applications) && r.applications.length > 0;
+  const applicationSent =
+    Array.isArray(r.applications) &&
+    r.applications.some((application) => application.applied === true);
   const activeKind = r.write_requested ? (r.write_request_kind ?? "cv") : null;
 
   if (requested && activeKind !== kind) {
-    const guard = validateRequested(kind, r.status, hasApplication);
+    const guard = validateRequested(
+      kind,
+      r.status,
+      hasApplication,
+      applicationSent,
+    );
     if (!guard.ok) {
       return {
         ok: false,

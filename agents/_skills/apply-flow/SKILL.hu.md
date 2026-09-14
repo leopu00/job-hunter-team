@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   blokkol.
 - A kapu induláskor **és** közvetlenül a kattintás előtt is ellenőrződik. Egy flag,
   amelyet az űrlap kitöltése közben vontak vissza, leállítja a beküldést.
-- Ma két teljes recept van: **Ashby** és **Greenhouse** (csak a három nyilvános hostja, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, HTTPS-en; az oldalt minden lépés után újra ellenőrzi). Minden más platform emberre vár.
+- Ma három teljes recept van: **Ashby**, **Greenhouse** (csak a három nyilvános hostja, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, HTTPS-en; az oldalt minden lépés után újra ellenőrzi) és **Lever** (csak `jobs.lever.co` és `jobs.eu.lever.co`, HTTPS-en, ugyanígy újraellenőrizve). Minden más platform emberre vár.
 
 ## A nyugta
 
@@ -74,8 +74,9 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
 | `cv_pdf_layout_bad` | a CV PDF nem ment át a vizuális ellenőrzésen (`pdf_layout_check.py`: keskeny oszlopba préselt szöveg, majdnem üres oldal, 2-nél több oldal, nem beágyazott fontok, túl kicsi törzsszöveg): semmit nem csatoltunk és nem küldtünk el. Az Írónak újra kell generálnia; soha ne csatold kézzel. Az 1. oldal előnézete a checkpoint mellett van: nézd meg |
 | `cv_pdf_check_unavailable` | a CV PDF-et nem lehetett megmérni (a konténerből hiányzik a poppler, a fájl olvashatatlan): semmit nem csatoltunk és nem küldtünk el — egy nem mért CV nem pass. A megoldás a konténerben van, nem az Írónál: jelezd a Capitano-nak |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |
 | `greenhouse_redirect_untrusted` | a folyamat közben a Greenhouse oldal kilépett a három megbízható hostjából |
+| `lever_redirect_untrusted` | a folyamat közben a Lever oldal kilépett a `jobs.lever.co` / `jobs.eu.lever.co` hostokból |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | két különböző mailto jelentkezési cím, vagy a jelentkezési űrlap, a mezői vagy a küldés gombja nem köthető egyetlen űrlaphoz (hírlevél, lábléc és demó űrlap soha nem része) |
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |

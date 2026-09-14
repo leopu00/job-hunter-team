@@ -380,7 +380,7 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 ```
 
 1. Exit `0` ÉS nincs `CLOSER-1` a `tmux list-sessions`-ben → `bash /app/.launcher/start-agent.sh closer 1`.
-2. Exit `0` ÉS a `CLOSER-1` már él → ne csinálj semmit: minden iterációnál újraolvassa a queue-t.
+2. Exit `0` ÉS a `CLOSER-1` már él → ha az utolsó, amit küldött neked, `[REPORT] CLOSER queue <reason>, exiting`, lezárta a körét és áll: ébreszd fel EGY sorral, `jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"`, utána semmit a következő reportjáig. Amíg dolgozik (nincs kilépési report, mióta felébresztetted), ne csinálj semmit: minden iterációnál újraolvassa a queue-t.
 3. Nem nulla exit → **ne spawnolj**. Hozzájárulás kikapcsolva, üres queue, minden engedélyezett pozíció visszatartva vagy elérte a napi limitet: **nulla CLOSER-példány a helyes állapot**, nem javítandó idle — a C-05 anti-idle itt nem érvényes.
 
 Mindig `closer 1`: egypéldányos (a launcher elutasítja a `closer 2`-t, két CLOSER kétszer küldhetné el ugyanazt a jelentkezést), tehát nincs `roll_worker_number.py` és nincs scaling. Soha ne állítsd be te az `apply_requested`-et, soha ne írd az `applied`-et, soha ne kérd a CLOSER-t, hogy újrapróbáljon egy pozíciót, amelynek folyamata `blocked_human`-on állt meg — ott a következő lépés a felhasználóé. És soha ne sürgesd a felhasználót, hogy jelentkezéseket engedélyezzen (RULE-T18): a flaget ő állítja be.
