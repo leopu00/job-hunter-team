@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Cómo el CLOSER ejecuta una candidatura autorizada con `apply_flow.py` — la máquina de estados con checkpoints (detect, fill, upload_cv, screening, review, submit), el recibo obligatorio sin el cual `applied` nunca se escribe, y qué hacer con cada resultado, `blocked_human` antes que nada. Úsala para cada posición tomada de la cola. Del CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — una candidatura, un recibo, ningún reintento a ciegas
@@ -81,10 +81,14 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 | `form_error` / `field_invalid` / `submit_unavailable` | el formulario señala un error, se rechaza el formato de un campo, o el botón de envío falta o está deshabilitado |
 | `url_refused` / `checkpoint_invalid` | la URL de la candidatura no pasó el control de direcciones públicas, o el checkpoint guardado es ilegible |
 | `page_unavailable` / `browser_uncertainty` | la página o el navegador fallaron a mitad del flujo |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | la página de la oferta ya no existe (404/410 sin pruebas de oferta cerrada), un control anti-bot detuvo el navegador (tras un intento en un navegador visible), o el sitio no respondió tres veces en un día. Un único 5xx o timeout NO es una parada: el checkpoint dice `retry_later`, la cola devuelve la posición más tarde por sí sola y no se avisa a nadie. El checkpoint guarda `http_status` y `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | se hizo clic en enviar pero la confirmación no es segura |
 | `receipt_screenshot_failed` | la confirmación era visible pero no se pudo guardar su captura |
 | `submit_outcome_unknown` | una pasada anterior inició el envío y no dejó recibo |
 | `applied_record_failed` | el recibo existe pero el estado no se pudo registrar — la candidatura casi seguro salió |
+| `login_required` / `account_creation` | el sitio pide iniciar sesión o crear una cuenta antes de la candidatura: el CLOSER nunca inicia sesión ni crea cuentas |
+| `generic_form_missing` / `generic_form_unrecognised` / `application_form_embedded` / `application_redirect_untrusted` | un sitio de empresa: no hay formulario de candidatura, hay uno que la receta genérica no logra identificar, está incrustado desde otro host (el detail lo nombra), o el botón de postularse lleva a un sitio sin receta |
+| `cover_letter_required` / `pre_submit_screenshot_failed` | el formulario exige un archivo de carta de presentación · no se pudo capturar el formulario relleno antes del clic |
 
 Qué haces con cualquier otro motivo (las respuestas que faltan están arriba):
 
@@ -97,6 +101,25 @@ Qué haces con cualquier otro motivo (las respuestas que faltan están arriba):
 Reintentar una posición bloqueada es el intento a ciegas que este diseño existe
 para impedir: en un captcha quema la cuenta del usuario, en un resultado
 desconocido envía una segunda carta al mismo recruiter.
+
+## Sitios de empresa — la receta genérica
+
+Cuando no se reconoce ningún ATS y la página no es un canal `mailto:`, el flujo
+usa `apply_generic.py` en el sitio de la empresa: encuentra el ÚNICO formulario
+de candidatura (una subida de CV, o nombre y email con un botón de postularse —
+también detrás de un botón de postularse o en una página enlazada del mismo
+sitio), rellena los campos por sus etiquetas (perfil para nombre, email,
+teléfono, enlaces; respuestas guardadas para las preguntas) y nunca toca un
+formulario de newsletter, contacto, búsqueda o inicio de sesión. El formulario
+relleno se captura antes del clic; sin una confirmación reconocible (texto o
+URL) el resultado es `submit_outcome_unknown`, nunca un segundo clic. Un botón
+que lleva a un ATS conocido pasa la posición a esa receta.
+
+**Un resumen por ronda.** Las paradas que dependen del sitio (`ats_unsupported`,
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) no se
+notifican una a una: esperan el resumen que envías en el STEP 6 con
+`python3 /app/shared/skills/closer_notices.py flush`. Cada aviso llega al usuario
+en el idioma de su perfil.
 
 ## Comprobar una candidatura después
 

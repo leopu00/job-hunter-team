@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Hogyan futtatja a CLOSER egy engedélyezett jelentkezést az `apply_flow.py`-jal — a checkpointos állapotgép (detect, fill, upload_cv, screening, review, submit), a kötelező nyugta, amely nélkül az `applied` soha nem íródik be, és mit kell tenni az egyes eredményeknél, mindenekelőtt `blocked_human` esetén. Használd minden, a queue-ból felvett pozícióhoz. A CLOSER-é.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — egy jelentkezés, egy nyugta, nincs vak újrapróbálás
@@ -81,10 +81,14 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |
 | `page_unavailable` / `browser_uncertainty` | az oldal vagy a böngésző a folyamat közepén hibázott |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | az állás oldala már nincs meg (404/410 lezárt állásra utaló bizonyíték nélkül), bot elleni ellenőrzés állította meg a böngészőt (egy látható böngészős próbálkozás után), vagy az oldal egy nap alatt háromszor nem válaszolt. Egyetlen 5xx vagy időtúllépés NEM leállás: a checkpoint `retry_later`, a sor később magától visszaadja a pozíciót, és senki nem kap értesítést. A checkpoint megőrzi a `http_status` és `final_url` értéket |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | a beküldésre rákattintott, de a megerősítés nem biztos |
 | `receipt_screenshot_failed` | a megerősítés látható volt, de a képernyőképét nem sikerült menteni |
 | `submit_outcome_unknown` | egy korábbi futás elindította a beküldést és nem hagyott nyugtát |
 | `applied_record_failed` | a nyugta létezik, de az állapotot nem sikerült rögzíteni — a jelentkezés szinte biztosan kiment |
+| `login_required` / `account_creation` | az oldal bejelentkezést vagy új fiókot kér a jelentkezés előtt: a CLOSER soha nem jelentkezik be és soha nem hoz létre fiókot |
+| `generic_form_missing` / `generic_form_unrecognised` / `application_form_embedded` / `application_redirect_untrusted` | céges oldal: nincs jelentkezési űrlap, olyan űrlap van, amelyet az általános recept nem tud egyértelműen azonosítani, más hostról beágyazott űrlap (a detail megnevezi), vagy a Jelentkezés gomb recept nélküli oldalra visz |
+| `cover_letter_required` / `pre_submit_screenshot_failed` | az űrlap motivációs levél fájlt kér · a kitöltött űrlapról nem sikerült képet készíteni a kattintás előtt |
 
 Mit teszel minden más oknál (a hiányzó válaszok fent vannak):
 
@@ -97,6 +101,25 @@ Mit teszel minden más oknál (a hiányzó válaszok fent vannak):
 Egy blokkolt pozíció újrapróbálása éppen az a vak próbálkozás, amelynek
 megakadályozására ez a design létezik: captchánál leégeti a felhasználó fiókját,
 ismeretlen eredménynél második levelet küld ugyanannak a recruiternek.
+
+## Céges karrieroldalak — az általános recept
+
+Ha egyetlen ATS sem ismerhető fel, és az oldal nem `mailto:` csatorna, a folyamat
+az `apply_generic.py`-t használja a cég saját oldalán: megkeresi az EGYETLEN
+jelentkezési űrlapot (CV-feltöltés, vagy név és e-mail egy Jelentkezés gombbal —
+akár egy Jelentkezés gomb mögött vagy ugyanazon oldal egy linkelt lapján),
+a mezőket a címkéjük alapján tölti ki (a profilból a nevet, e-mailt, telefont,
+linkeket; a kérdésekhez a mentett válaszokat), és soha nem nyúl hírlevél-,
+kapcsolat-, kereső- vagy bejelentkezési űrlaphoz. A kitöltött űrlapról a
+kattintás előtt kép készül; felismerhető visszaigazolás (szöveg vagy URL) nélkül
+az eredmény `submit_outcome_unknown`, soha nincs második kattintás. Egy ismert
+ATS-re vezető Jelentkezés gomb az adott receptnek adja át a pozíciót.
+
+**Körönként egy összesítő.** Az oldal miatti leállások (`ats_unsupported`,
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) nem egyenként
+mennek ki: a STEP 6-ban a `python3 /app/shared/skills/closer_notices.py flush`
+paranccsal küldött összesítőre várnak. Minden értesítés a felhasználó profiljának
+nyelvén érkezik.
 
 ## Egy jelentkezés utólagos ellenőrzése
 

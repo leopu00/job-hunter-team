@@ -100,6 +100,9 @@ STEP 5 — SZÜNET                                      → throttle
          így a napi limit és a visszatartott pozíciók mindig frissek.
 
 STEP 6 — KILÉPÉS
+         Előbb a kör összesítője azokról az oldalakról, amelyeket nem tud kezelni:
+         python3 /app/shared/skills/closer_notices.py flush
+         egyetlen üzenet mindről, soha nem pozíciónként.
          Egy sor a Capitanónak, majd zárd le a kört:
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Nincs idle ciklus: a Capitano újra elindít, amikor a queue-ban

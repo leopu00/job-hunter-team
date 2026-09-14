@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Comment le CLOSER exécute une candidature autorisée avec `apply_flow.py` — la machine à états avec checkpoints (detect, fill, upload_cv, screening, review, submit), le reçu obligatoire sans lequel `applied` n'est jamais écrit, et que faire pour chaque résultat, `blocked_human` avant tout. Utilise-la pour chaque position prise dans la queue. Au CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — une candidature, un reçu, aucune nouvelle tentative à l'aveugle
@@ -81,10 +81,14 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |
 | `page_unavailable` / `browser_uncertainty` | la page ou le navigateur a lâché en plein flux |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | la page de l'offre n'existe plus (404/410 sans preuve d'offre fermée), un contrôle anti-bot a arrêté le navigateur (après un essai dans un navigateur visible), ou le site n'a pas répondu trois fois en une journée. Un seul 5xx ou timeout N'EST PAS un arrêt : le checkpoint indique `retry_later`, la file rend le poste plus tard d'elle-même et personne n'est averti. Le checkpoint garde `http_status` et `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | l'envoi a été cliqué mais la confirmation n'est pas certaine |
 | `receipt_screenshot_failed` | la confirmation était visible mais sa capture n'a pas pu être enregistrée |
 | `submit_outcome_unknown` | un passage précédent a lancé l'envoi et n'a laissé aucun reçu |
 | `applied_record_failed` | le reçu existe mais l'état n'a pas pu être enregistré — la candidature est très probablement partie |
+| `login_required` / `account_creation` | le site veut une connexion ou un nouveau compte avant la candidature : le CLOSER ne se connecte jamais et ne crée jamais de compte |
+| `generic_form_missing` / `generic_form_unrecognised` / `application_form_embedded` / `application_redirect_untrusted` | un site d'entreprise : aucun formulaire de candidature, un formulaire que la recette générique ne sait pas cerner, un formulaire intégré depuis un autre hôte (le detail le nomme), ou un bouton Postuler qui mène à un site sans recette |
+| `cover_letter_required` / `pre_submit_screenshot_failed` | le formulaire exige un fichier de lettre de motivation · le formulaire rempli n'a pas pu être photographié avant le clic |
 
 Ce que tu fais pour toute autre raison (les réponses manquantes sont plus haut) :
 
@@ -97,6 +101,25 @@ Ce que tu fais pour toute autre raison (les réponses manquantes sont plus haut)
 Retenter une position bloquée, c'est la tentative à l'aveugle que ce design existe
 pour empêcher : sur un captcha elle grille le compte de l'utilisateur, sur un
 résultat inconnu elle envoie une deuxième lettre au même recruteur.
+
+## Sites carrières d'entreprise — la recette générique
+
+Quand aucun ATS n'est reconnu et que la page n'est pas un canal `mailto:`, le
+flux utilise `apply_generic.py` sur le site de l'entreprise : il trouve LE
+formulaire de candidature (un envoi de CV, ou un nom et un email avec un bouton
+Postuler — aussi derrière un bouton Postuler ou sur une page liée du même site),
+remplit les champs d'après leurs libellés (profil pour nom, email, téléphone,
+liens ; réponses enregistrées pour les questions) et ne touche jamais un
+formulaire de newsletter, de contact, de recherche ou de connexion. Le
+formulaire rempli est photographié avant le clic ; sans confirmation reconnue
+(texte ou URL) le résultat est `submit_outcome_unknown`, jamais un second clic.
+Un bouton Postuler qui mène à un ATS connu confie le poste à cette recette.
+
+**Un récapitulatif par tournée.** Les arrêts propres au site (`ats_unsupported`,
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) ne sont pas
+notifiés un par un : ils attendent le récapitulatif que tu envoies au STEP 6 avec
+`python3 /app/shared/skills/closer_notices.py flush`. Chaque avis arrive à
+l'utilisateur dans la langue de son profil.
 
 ## Vérifier une candidature ensuite
 

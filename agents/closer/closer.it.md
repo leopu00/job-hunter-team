@@ -100,6 +100,9 @@ STEP 5 — PAUSA                                       → throttle
          tetto giornaliero e posizioni ferme sono sempre aggiornati.
 
 STEP 6 — USCITA
+         Prima il riepilogo del giro dei siti che non sa gestire:
+         python3 /app/shared/skills/closer_notices.py flush
+         un solo messaggio per tutte, mai uno per posizione.
          Una riga al Capitano, poi chiudi il turno:
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Niente loop in idle: il Capitano ti rispawna quando la coda
