@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -230,9 +231,8 @@ def test_a_queue_written_before_the_dedupe_still_sends_one_line_per_position(hom
     assert saved["pending"] == [] and saved["sent"] == ["1817:ats_unsupported:a", "1817:ats_unsupported:b"]
 
 
-def test_the_real_notify_tool_accepts_the_summary(home, tmp_path, monkeypatch):
-    # Patch 20 (14/09): jht-notify-user refused a source id without its action
-    # and payload (exit 1), and every flush failed behind a fake notifier.
+def _real_notify_box(tmp_path, monkeypatch) -> tuple[Path, Path]:
+    """The real agents/_tools/jht-notify-user on a full-schema jobs.db, Telegram stubbed."""
     db_path = tmp_path / "box-jobs.db"  # the real schema, as on the box
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -254,6 +254,13 @@ def test_the_real_notify_tool_accepts_the_summary(home, tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ.get('PATH', '')}")
     monkeypatch.setenv("JHT_DB", str(db_path))
     monkeypatch.delenv("JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY", raising=False)
+    return db_path, telegram
+
+
+def test_the_real_notify_tool_accepts_the_summary(home, tmp_path, monkeypatch):
+    # Patch 20 (14/09): jht-notify-user refused a source id without its action
+    # and payload (exit 1), and every flush failed behind a fake notifier.
+    db_path, telegram = _real_notify_box(tmp_path, monkeypatch)
     notices.defer(1817, "linkedin_credentials_missing", "https://www.linkedin.com/jobs/view/1")
     notices.defer(1845, "ats_unsupported", "https://b.example.com")
 
@@ -274,6 +281,30 @@ def test_the_real_notify_tool_accepts_the_summary(home, tmp_path, monkeypatch):
     assert notices._read_state(notices._state_path())["pending"] == []
     # The same queue again is not a second row: the source id is idempotent.
     assert notices.flush()["status"] == "empty"
+
+
+def test_off_hours_the_summary_still_reaches_telegram(home, tmp_path, monkeypatch):
+    # Live after patch 21 (14/09): the summary left, but outside working hours
+    # jht-notify-user kept it on the web. It is the outcome of applications the
+    # user asked for, like a CLOSER question: Telegram at any hour.
+    (home / "jht.config.json").write_text(json.dumps({"team": {"working_hours": {
+        "timezone": "UTC", "windows": [{"start": "00:00", "end": "00:01", "days": []}],
+    }}}), encoding="utf-8")
+    db_path, telegram = _real_notify_box(tmp_path, monkeypatch)
+    plain = subprocess.run(
+        ["jht-notify-user", "--agent", "closer", "held for working hours"],
+        capture_output=True, text=True, env=dict(os.environ),
+    )
+    assert plain.returncode == 0 and "via=web" in plain.stdout, plain.stdout + plain.stderr
+    assert not telegram.exists()
+
+    notices.defer(1817, "ats_unsupported", "https://a.example.com")
+    assert notices.flush()["status"] == "sent"
+
+    with sqlite3.connect(db_path) as conn:
+        via = conn.execute("SELECT delivered_via FROM pending_user_messages WHERE kind = 'digest'").fetchone()[0]
+    assert via == "telegram"
+    assert "#1817" in telegram.read_text(encoding="utf-8")
 
 
 def test_a_failed_send_keeps_the_stops_and_reuses_the_source_id(home):
