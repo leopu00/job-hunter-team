@@ -333,6 +333,22 @@ def test_the_contact_page_mailto_never_becomes_a_second_channel(browser, cv_path
     assert (checkpoint["channel"], checkpoint["mailto_href"]) == ("contact_form", "")
 
 
+def test_a_contact_form_without_a_letter_field_is_never_the_application(browser, cv_path, tmp_path):
+    no_letter = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
+        '<label for="message">Message</label><textarea id="message" required placeholder="How can we help?"></textarea>',
+        '<label for="notes">Notes</label><textarea id="notes"></textarea>'
+        '<label for="other">Other notes</label><textarea id="other"></textarea>',
+    ).replace("message: document.getElementById('message').value", "message: ''")
+    careers = CAREERS.format(roles=ROLE.format(title="AI Engineer"))
+    page = site(browser, {"/careers": careers, "/contact": no_letter})
+    page.goto(f"{BASE}/careers")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
+    assert page.evaluate("window.submitCount") == 0
+
+
 def test_only_the_message_of_a_contact_form_is_the_letter(browser, cv_path, tmp_path):
     extra = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
         '<label for="message">',
