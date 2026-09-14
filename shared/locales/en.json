@@ -257,5 +257,7 @@
   "closer.reason.linkedin_challenge.why": "LinkedIn asked for a security check the CLOSER does not solve.",
   "closer.reason.linkedin_challenge.action": "Sign in to LinkedIn yourself once, then authorise the position again, or apply by hand.",
   "closer.reason.unknown_required_control.why": "The form has a required field the CLOSER cannot fill safely.",
-  "closer.reason.unknown_required_control.action": "Open the vacancy and apply by hand."
+  "closer.reason.unknown_required_control.action": "Open the vacancy and apply by hand.",
+  "closer.reason.linkedin_session_expired.why": "Your hand-made LinkedIn session has expired, or LinkedIn no longer accepts it.",
+  "closer.reason.linkedin_session_expired.action": "Sign in to LinkedIn again by hand in the CLOSER's browser, then authorise the position again."
 }
