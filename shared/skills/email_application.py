@@ -393,6 +393,8 @@ class SmtpTransport:
         self._password = password
         self.timeout = timeout
         self._smtp: smtplib.SMTP | None = None
+        # The numeric reply to DATA (250 when the server took the letter), for the receipt.
+        self.last_reply_code: int | None = None
 
     def open(self) -> None:
         context = ssl.create_default_context()
@@ -423,10 +425,23 @@ class SmtpTransport:
     def send(self, message: EmailMessage, envelope_from: str, recipients: Sequence[str]) -> dict:
         if self._smtp is None:
             raise TransportUnavailable("the transport is not open")
+        smtp = self._smtp
+        self.last_reply_code = None
+        data = smtp.data
+
+        def data_with_reply(msg):
+            # sendmail() drops the reply to DATA: keep its code.
+            code, reply = data(msg)
+            self.last_reply_code = int(code)
+            return code, reply
+
+        smtp.data = data_with_reply
         try:
-            return dict(self._smtp.sendmail(envelope_from, list(recipients), message.as_bytes()))
+            return dict(smtp.sendmail(envelope_from, list(recipients), message.as_bytes()))
         except (smtplib.SMTPRecipientsRefused, smtplib.SMTPSenderRefused) as exc:
             raise RecipientsRefused(type(exc).__name__) from exc
+        finally:
+            del smtp.data
 
     def close(self) -> None:
         if self._smtp is not None:
@@ -1243,6 +1258,8 @@ class EmailApplication:
             "accepted_at": accepted_at,
             "recipients": accepted,
             "refused": sorted((refused or {}).keys()),
+            # The server's numeric reply to the letter (SMTP: 250); None for a transport without one.
+            "smtp_reply_code": getattr(transport, "last_reply_code", None),
             "body_sha256": draft["body_sha256"],
             "attachments": [{"role": a["role"], "sha256": a["sha256"], "size": a["size"]} for a in draft["attachments"]],
         }
