@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import hashlib
 import json
 import logging
@@ -48,6 +47,10 @@ try:
     from ats_detect import detect_ats
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills.ats_detect import detect_ats
+try:
+    import application_answers
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import application_answers
 
 
 LOG = logging.getLogger("jht.apply_flow")
@@ -112,6 +115,117 @@ _MAILTO_APPLY_LABEL = re.compile(
 )
 
 
+# A vacancy that is no longer open.  Seen live (13-14/09): the page said so, or
+# the vacancy URL redirected to the generic careers page, and the flow went on
+# looking for a form.  Each phrase names the posting AND says it is gone, so a
+# job description that merely contains "no longer" does not match.
+# Pattern text for page INPUT in several languages, not user-visible copy.
+_NOUNS_EN = r"(?:job|position|posting|vacancy|role|opening|listing|requisition)"
+_NOUNS_IT = r"(?:posizione|offerta|annuncio|ruolo|lavoro|selezione)"
+_NOUNS_DE = r"(?:stelle|stellenanzeige|stellenangebot|position|job|ausschreibung|anzeige)"
+_NOUNS_FR = r"(?:offre|poste|annonce|emploi)"
+_NOUNS_ES = r"(?:oferta|vacante|puesto|empleo)"
+_NOUNS_PT = r"(?:vaga|oferta|posição|posicao|emprego)"
+_NOUNS_HU = r"(?:állás\w*|pozíció\w*|hirdetés\w*)"
+_NEAR = r"\b[^.!?,;:\n]{0,40}?"
+_VACANCY_CLOSED_PATTERNS = tuple(
+    (lang, re.compile(pattern, re.I))
+    for lang, pattern in (
+        ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b(?! (?:from|by|via|through|at|on)\b)"),
+        ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:is|has been|was) no longer (?:available|open|active|live|online)\b"),
+        ("en", rf"\b{_NOUNS_EN} (?:has|have) (?:expired|been filled|been closed)\b"),
+        ("en", r"\bapplications (?:for this \w+ )?(?:are|have been) (?:now )?closed\b"),
+        ("it", rf"\b{_NOUNS_IT}{_NEAR}\bnon (?:è|e'|risulta) più (?:disponibile|attiv[ao]|apert[ao])\b"),
+        ("it", r"\bnon (?:accetta|riceve) più candidature\b"),
+        ("it", r"\bcandidature (?:sono )?chiuse\b"),
+        ("it", r"\b(?:annuncio|offerta|posizione) (?:è )?(?:scadut[ao]|chius[ao])\b"),
+        ("it", r"\bposizione (?:è )?(?:stata )?(?:coperta|chiusa)\b"),
+        ("de", rf"\b{_NOUNS_DE}{_NEAR}\bnicht mehr (?:verfügbar|aktiv|online|offen|ausgeschrieben)\b"),
+        ("de", r"\b(?:stelle|position) (?:ist )?(?:bereits )?(?:besetzt|vergeben)\b"),
+        ("de", r"\bbewerbungsfrist (?:ist )?abgelaufen\b"),
+        ("de", r"\bkeine (?:weiteren )?bewerbungen mehr (?:an|entgegen)\b"),
+        ("fr", rf"\b{_NOUNS_FR}{_NEAR}\bn'est plus (?:disponible|active|ouverte?|en ligne)\b"),
+        ("fr", r"\bn'accept(?:e|ons) plus de candidatures\b"),
+        ("fr", r"\b(?:poste|offre) (?:a été |est )?(?:pourvue?|expirée?|clôturée?)\b"),
+        ("fr", r"\bcandidatures (?:sont )?(?:closes|clôturées)\b"),
+        ("es", rf"\b{_NOUNS_ES}{_NEAR}\bya no (?:está|esta) (?:disponible|activa?|abierta?)\b"),
+        ("es", r"\bya no (?:acepta|aceptamos|admite) (?:candidaturas|solicitudes|postulaciones)\b"),
+        ("es", r"\b(?:oferta|vacante) (?:ha )?(?:expirado|caducado|cerrada)\b"),
+        ("es", r"\bpuesto (?:ha sido )?cubierto\b"),
+        ("pt", rf"\b{_NOUNS_PT}{_NEAR}\bnão (?:está|esta) mais (?:disponível|disponivel|aberta|ativa)\b"),
+        ("pt", r"\b(?:vaga|oferta) (?:foi )?(?:encerrada|preenchida|expirada)\b"),
+        ("pt", r"\bnão (?:aceita|aceitamos) mais candidaturas\b"),
+        ("hu", rf"\b{_NOUNS_HU}{_NEAR}\b(?:már nem (?:elérhető|aktív|érhető el)|lejárt|betöltésre került)\b"),
+    )
+)
+
+
+_NOTICE_CONDITION = re.compile(
+    r"\b(?:until|till|once|when|whenever|after|before|if|unless|as soon as|"
+    r"bis|sobald|wenn|falls|nachdem|finché|fino a quando|quando|una volta che|se|dopo che|"
+    r"jusqu'à ce que|dès que|lorsque|quand|si|hasta que|cuando|una vez que|en cuanto|"
+    r"até que|quando|assim que|amíg|miután|ha)\b",
+    re.I,
+)
+_NOTICE_DATE_AFTER = re.compile(
+    r"\s*(?:on|by|at|from|as of|am|ab|il|entro|dal|le|à partir du|el|a partir del|em|a partir de)\b[^.!?]{0,15}\d",
+    re.I,
+)
+
+
+def vacancy_closed_evidence(text: str) -> str | None:
+    """The language of a "this vacancy is closed" notice in the page text, or None.
+
+    Only the language tag leaves this function: the page text is employer
+    content and never goes into a checkpoint, a log or a notification.
+    """
+    clean = " ".join(str(text or "").replace("\u2019", "'").replace("\u00a0", " ").split())
+    for lang, pattern in _VACANCY_CLOSED_PATTERNS:
+        for match in pattern.finditer(clean):
+            sentence_start = max(clean.rfind(mark, 0, match.start()) for mark in ".!?")
+            before = clean[sentence_start + 1 : match.start()]
+            after = clean[match.end() : match.end() + 30]
+            # "open until it has been filled", "closed on 30 September": a
+            # condition or a future date describes an OPEN vacancy.
+            if _NOTICE_CONDITION.search(before) or _NOTICE_DATE_AFTER.match(after):
+                continue
+            return lang
+    return None
+
+
+def vacancy_redirected_away(requested_url: str, final_url: str) -> bool:
+    """Did opening the vacancy land somewhere that is not that vacancy?
+
+    A closed posting typically redirects to the company's job list, its
+    careers page or its home page ("Book a demo").  The vacancy survives a
+    redirect when its identifier (a path segment carrying a digit: a numeric
+    id or a UUID) is still in the final path; without such an identifier, only
+    a shorter prefix of the requested path (down to the root) counts as away.
+    Scheme, host moves (boards → job-boards) and query strings do not count.
+    """
+    try:
+        requested = urllib.parse.urlsplit(requested_url)
+        final = urllib.parse.urlsplit(final_url)
+    except ValueError:
+        return True
+    if final.scheme not in {"http", "https"}:
+        return True
+    requested_segments = [s.casefold() for s in requested.path.split("/") if s]
+    final_segments = [s.casefold() for s in final.path.split("/") if s]
+    # ".../senior-engineer/apply" landing on ".../senior-engineer" is the vacancy itself.
+    if requested_segments and requested_segments[-1] in {"apply", "application", "form"}:
+        requested_segments = requested_segments[:-1]
+    identifiers = [s for s in requested_segments if any(ch.isdigit() for ch in s)]
+    if identifiers:
+        return not any(identifier in final_segments for identifier in identifiers)
+    # No identifier: only a landing on a shorter prefix of the requested path
+    # (the job list, careers or home page) is a redirect away.  A language
+    # prefix or a move to another subdomain proves nothing.
+    return len(final_segments) < len(requested_segments) and (
+        final_segments == requested_segments[: len(final_segments)]
+    )
+
+
 def mailto_application_href(page) -> str | None:
     """Return the raw href of the page's single mailto application control.
 
@@ -173,9 +287,7 @@ def _resolve_headless(
 
 
 def _normalise_label(value: str) -> str:
-    value = value.replace("\u00a0", " ").strip().casefold()
-    value = re.sub(r"[\s\W_]+", " ", value, flags=re.UNICODE)
-    return value.strip()
+    return application_answers.normalise_label(value)
 
 
 def _safe_label(value: str) -> str:
@@ -280,6 +392,9 @@ class FlowCheckpoint:
     # flow stops there; the email channel reads these two fields.
     channel: str = ""
     mailto_href: str = ""
+    # The page as it looked when the flow last stopped (blocked, denied or an
+    # error), saved next to the checkpoint.  Empty when no page was open.
+    stop_screenshot: str = ""
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -325,6 +440,8 @@ class FlowCheckpoint:
             raw.get("channel") == "email" and str(raw.get("mailto_href", "")).lower().startswith("mailto:")
         ):
             raise FlowError("checkpoint email channel has no mailto target")
+        if not isinstance(raw.get("stop_screenshot", ""), str):
+            raise FlowError("checkpoint has an invalid stop screenshot")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -470,6 +587,44 @@ def _default_notifier(
     if not notification_id.isdigit():
         raise FlowError("jht-notify-user returned no durable message id")
     return notification_id
+
+
+def _default_essentials_checker(
+    *, profile: Mapping[str, Any], position_id: int, db_path: str | Path | None
+) -> list[str]:
+    """Ask each missing essential fact once (Telegram first); return what is missing."""
+    db = _resolve_db_path(db_path)
+    with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+        result = application_answers.ensure_essentials(conn, profile, position_id)
+    return list(result["missing"])
+
+
+def _read_only_essentials(
+    *, profile: Mapping[str, Any], position_id: int, db_path: str | Path | None
+) -> list[str]:
+    """What is missing, without asking: a dry run has no effect on the user."""
+    db = _resolve_db_path(db_path)
+    if not db.is_file():
+        raise FlowError("jobs.db not found")
+    with contextlib.closing(
+        sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=10)
+    ) as conn:
+        return list(application_answers.check_essentials(conn, profile)["missing"])
+
+
+def _default_cap_reserver(*, position_id: int, db_path: str | Path | None):
+    """One slot of today's cap, atomically, before the irreversible click."""
+    try:
+        from apply_gate import reserve_daily_slot
+    except ImportError:
+        try:
+            from shared.skills.apply_gate import reserve_daily_slot
+        except ImportError:
+            return _DeniedVerdict("gate_missing", "shared/skills/apply_gate.py is unavailable; submission is closed")
+    try:
+        return reserve_daily_slot(position_id, "browser", db_path=str(db_path) if db_path else None)
+    except Exception as exc:
+        return _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
 
 
 def _resolve_db_path(db_path: str | Path | None) -> Path:
@@ -675,6 +830,10 @@ class AshbyRecipe:
 
     def form_present(self, page) -> bool:
         return page.locator(self.FIELD_ENTRY).count() > 0
+
+    def apply_control_present(self, page) -> bool:
+        """The control `open_form` would click; only without it can a closed notice count."""
+        return page.get_by_text("Apply for this Job", exact=False).count() > 0
 
     def _container(self, page, step: str):
         """The one application form every Ashby action is confined to.
@@ -1293,6 +1452,11 @@ class GreenhouseRecipe:
     def form_present(self, page) -> bool:
         return page.locator(self.FORM).count() > 0
 
+    def apply_control_present(self, page) -> bool:
+        """The control `open_form` would click; only without it can a closed notice count."""
+        pattern = re.compile(r"^(apply|apply for this job|click to apply|submit an application)$", re.I)
+        return any(page.get_by_role(role, name=pattern).count() for role in ("button", "link"))
+
     def open_form(self, page) -> None:
         forms = page.locator(self.FORM)
         if forms.count() == 1:
@@ -1775,6 +1939,8 @@ class ApplicationFlow:
         gate_checker: Callable[..., Any] | None = None,
         notifier: Callable[..., str] | None = None,
         applied_recorder: Callable[..., None] | None = None,
+        essentials_checker: Callable[..., list[str]] | None = None,
+        cap_reserver: Callable[..., Any] | None = None,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
     ):
@@ -1796,6 +1962,8 @@ class ApplicationFlow:
         self.gate_checker = gate_checker or _default_gate_checker
         self.notifier = notifier or _default_notifier
         self.applied_recorder = applied_recorder or _default_applied_recorder
+        self.essentials_checker = essentials_checker or _default_essentials_checker
+        self.cap_reserver = cap_reserver or _default_cap_reserver
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
 
@@ -1846,7 +2014,9 @@ class ApplicationFlow:
             raise BlockedHuman("page_unavailable", "Application page did not return a successful response", "detect")
         page.wait_for_timeout(500)
 
-    def _notification_message(self, blocked: BlockedHuman) -> str:
+    def _notification_message(
+        self, blocked: BlockedHuman, source_id: str = "", *, telegram_hint: bool = True
+    ) -> str:
         if blocked.answer_request:
             request = blocked.answer_request
             options = request.get("options") or []
@@ -1859,6 +2029,11 @@ class ApplicationFlow:
                 f"{options_text}\n\n"
                 "Reply to this request in the dashboard. The answer is saved under the "
                 "question's exact normalized key and reused only for an identical key."
+                + (
+                    "\n" + application_answers.telegram_hint(source_id)
+                    if telegram_hint and source_id
+                    else ""
+                )
             )
         if blocked.reason in {"required_answer_missing", "required_profile_field_missing"}:
             return (
@@ -1890,7 +2065,9 @@ class ApplicationFlow:
             "payload": payload,
         }
 
-    def _persist_answer_request(self, checkpoint: FlowCheckpoint, message: str) -> None:
+    def _persist_answer_request(
+        self, checkpoint: FlowCheckpoint, message: str, legacy_message: str = ""
+    ) -> None:
         request = checkpoint.answer_request
         if not request:
             raise FlowError("answer request checkpoint is missing")
@@ -1919,7 +2096,9 @@ class ApplicationFlow:
             "closer_application_answer",
             payload_text,
         )
-        if not row or row[1:] != expected:
+        # A request persisted before the Telegram hint existed keeps its body.
+        legacy = expected[:1] + (legacy_message,) + expected[2:] if legacy_message else None
+        if not row or (row[1:] != expected and row[1:] != legacy):
             raise FlowError("durable answer request could not be verified")
         request["message_id"] = str(row[0])
         checkpoint.save(self.checkpoint_path)
@@ -1940,24 +2119,43 @@ class ApplicationFlow:
             answer_request=request,
         )
 
-    def _block(self, checkpoint: FlowCheckpoint, blocked: BlockedHuman) -> FlowResult:
+    def _block(
+        self,
+        checkpoint: FlowCheckpoint,
+        blocked: BlockedHuman,
+        *,
+        page: Any | None = None,
+        dry_run: bool = False,
+    ) -> FlowResult:
         checkpoint.state = "blocked_human"
         checkpoint.resume_state = blocked.step
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
-        message = self._notification_message(blocked)
+        previous_screenshot = self._capture_stop_screenshot(checkpoint, blocked.reason, page)
+        if dry_run and blocked.answer_request:
+            # A dry run never asks the user anything: the stop lives only in the
+            # checkpoint, with no durable request and no notification.  The
+            # first authorised run reaches the same field and asks then.
+            self._save_stop(checkpoint, previous_screenshot)
+            return FlowResult("blocked_human", checkpoint.state, blocked.reason)
+        legacy_message = ""
         if blocked.answer_request:
             candidate = self._answer_request_record(blocked)
             current = checkpoint.answer_request
             if not current or current.get("source_id") != candidate["source_id"]:
                 checkpoint.answer_request = candidate
-        checkpoint.save(self.checkpoint_path)
+            source_id = str(checkpoint.answer_request["source_id"])
+            message = self._notification_message(blocked, source_id)
+            legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
+        else:
+            message = self._notification_message(blocked)
+        self._save_stop(checkpoint, previous_screenshot)
         if blocked.answer_request:
             persisted = False
             try:
                 # The request itself does not depend on Telegram or on the
                 # notifier executable: it is committed and reread first.
-                self._persist_answer_request(checkpoint, message)
+                self._persist_answer_request(checkpoint, message, legacy_message)
                 persisted = True
             except Exception as exc:
                 LOG.error("durable answer request failed: %s", type(exc).__name__)
@@ -1995,12 +2193,155 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
 
-    def _deny(self, checkpoint: FlowCheckpoint, verdict: Any) -> FlowResult:
+    def _deny(
+        self, checkpoint: FlowCheckpoint, verdict: Any, *, page: Any | None = None
+    ) -> FlowResult:
         checkpoint.state = "denied"
         checkpoint.blocked_reason = str(getattr(verdict, "reason", "gate_denied"))
         checkpoint.blocked_detail = str(getattr(verdict, "detail", "authorisation denied"))
-        checkpoint.save(self.checkpoint_path)
+        previous_screenshot = self._capture_stop_screenshot(checkpoint, checkpoint.blocked_reason, page)
+        self._save_stop(checkpoint, previous_screenshot)
         return FlowResult("denied", checkpoint.state, checkpoint.blocked_reason)
+
+    @staticmethod
+    def _reauthorised_since(checkpoint: FlowCheckpoint, verdict: Any) -> bool:
+        """Did the user authorise the position again after the checkpoint stopped?
+
+        The same rule the queue uses to lift a checkpoint hold.  An instant
+        that cannot be read never counts as a new authorisation.
+        """
+
+        def instant(value: Any) -> datetime | None:
+            try:
+                parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+        context = getattr(verdict, "context", None)
+        authorised = instant(context.get("at")) if isinstance(context, Mapping) else None
+        stopped = instant(checkpoint.updated_at)
+        return bool(authorised and stopped and authorised > stopped)
+
+    def _release_cap_slot(self, slot: Any) -> None:
+        """Give back a reserved slot whose click certainly did not happen."""
+        context = getattr(slot, "context", None)
+        token = context.get("token") if isinstance(context, Mapping) else None
+        if not token:
+            return
+        try:
+            from apply_gate import release_daily_slot
+        except ImportError:  # pragma: no cover - package import
+            from shared.skills.apply_gate import release_daily_slot
+        try:
+            release_daily_slot(str(token), db_path=str(self.db_path) if self.db_path else None)
+        except Exception as exc:
+            LOG.error("cap slot release failed: %s", type(exc).__name__)
+
+    def _stop_screenshot_prefix(self) -> str:
+        return f"{self.checkpoint_path.stem}.stop-"
+
+    def _capture_stop_screenshot(
+        self, checkpoint: FlowCheckpoint, reason: str, page: Any | None
+    ) -> str:
+        """Save the page the flow stopped on next to the checkpoint.
+
+        Best effort and never a reason to fail the stop itself.  The file name
+        carries only the checkpoint name, a UTC instant and the reason slug —
+        nothing from the profile or the page.  Returns the previous screenshot,
+        to be removed once the checkpoint naming the new one is saved.
+        """
+        previous = checkpoint.stop_screenshot
+        checkpoint.stop_screenshot = ""
+        if page is None:
+            return previous
+        temporary: Path | None = None
+        try:
+            if page.is_closed():
+                return previous
+            directory = self.checkpoint_path.parent
+            directory.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            slug = re.sub(r"[^a-z0-9_]+", "_", str(reason).casefold()).strip("_")[:60] or "stop"
+            target = directory / f"{self._stop_screenshot_prefix()}{stamp}-{slug}.png"
+            temporary = directory / f".{target.name}.partial.png"
+            page.screenshot(path=str(temporary), full_page=True, timeout=10_000)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, target)
+            temporary = None
+            checkpoint.stop_screenshot = str(target)
+        except Exception as exc:
+            LOG.error("stop screenshot failed: %s", type(exc).__name__)
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    temporary.unlink()
+        return previous
+
+    def _save_stop(self, checkpoint: FlowCheckpoint, previous_screenshot: str) -> None:
+        """Save the stopped checkpoint; the screenshot it does not name never stays behind."""
+        try:
+            checkpoint.save(self.checkpoint_path)
+        except Exception:
+            # The new screenshot is named by no checkpoint: remove it, keep the old one.
+            orphan, checkpoint.stop_screenshot = checkpoint.stop_screenshot, previous_screenshot
+            self._discard_stop_screenshot(checkpoint, orphan)
+            raise
+        self._discard_stop_screenshot(checkpoint, previous_screenshot)
+
+    def _discard_stop_screenshot(self, checkpoint: FlowCheckpoint, previous: str) -> None:
+        """Keep one stop screenshot per checkpoint: the one it names."""
+        if not previous or previous == checkpoint.stop_screenshot:
+            return
+        old = Path(previous)
+        # Only a file this flow wrote: a tampered checkpoint cannot delete others.
+        if old.parent != self.checkpoint_path.parent or not old.name.startswith(
+            self._stop_screenshot_prefix()
+        ) or old.suffix != ".png":
+            return
+        with contextlib.suppress(OSError):
+            old.unlink()
+
+    def _assert_not_redirected_away(self, page, *, navigated: bool) -> None:
+        """Stop before any form work when opening the vacancy landed elsewhere."""
+        if navigated and vacancy_redirected_away(self.url, page.url):
+            raise BlockedHuman(
+                "vacancy_closed",
+                "The vacancy URL redirected away from the vacancy (job list, careers or home page)",
+                "detect",
+            )
+
+    @staticmethod
+    def _generic_application_controls(page) -> bool:
+        """On a page no recipe knows: any form, or a link or button labelled apply."""
+        try:
+            if page.locator("form").count():
+                return True
+            for role in ("button", "link"):
+                if page.get_by_role(role, name=_MAILTO_APPLY_LABEL).count():
+                    return True
+        except Exception:
+            return True  # unsure: a closed notice proves nothing here
+        return False
+
+    @staticmethod
+    def _assert_no_closed_notice(page) -> None:
+        """Called only where the page has no form, no Apply control and no email channel.
+
+        There a closed notice is positive evidence.  Next to a form it is not:
+        job descriptions say "open until filled" and dates of closing.
+        """
+        try:
+            text = page.locator("body").inner_text(timeout=5_000)
+        except Exception:
+            return
+        language = vacancy_closed_evidence(text)
+        if language:
+            raise BlockedHuman(
+                "vacancy_closed",
+                f"The page has no application form and says the vacancy is no longer open (notice language: {language})",
+                "detect",
+            )
 
     def _recipe(self, platform: str):
         recipes = {
@@ -2014,7 +2355,37 @@ class ApplicationFlow:
                 "Application platform is unknown, conflicting, or has no safe recipe",
                 "detect",
             )
-        return recipe(self.profile, self.cv_path)
+        return recipe(self._profile_with_saved_answers(), self.cv_path)
+
+    def _log_dry_run_essentials(self) -> None:
+        try:
+            missing = _read_only_essentials(
+                profile=self.profile, position_id=self.position_id, db_path=self.db_path
+            )
+        except Exception as exc:
+            LOG.warning("dry run: essential facts not readable: %s", type(exc).__name__)
+            return
+        if missing:
+            LOG.warning("dry run: %d essential facts unknown, not asked", len(missing))
+
+    def _profile_with_saved_answers(self) -> dict[str, Any]:
+        """The profile with every remembered answer; the database wins over the YAML."""
+        merged = dict(self.profile)
+        answers = AshbyRecipe._answer_index(self.profile.get("application_answers"))
+        try:
+            db = _resolve_db_path(self.db_path)
+        except FlowError:
+            db = None
+        if db is not None and db.is_file():
+            with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+                # Only the profile FILE is imported: a mapping handed in by a
+                # caller is not the user's profile and must not become memory.
+                if self.profile_path is not None:
+                    application_answers.import_profile_answers(conn, self.profile)
+                    conn.commit()
+                answers.update(application_answers.load_answers(conn, self.position_id))
+        merged["application_answers"] = answers
+        return merged
 
     @staticmethod
     def _greenhouse_page_url_trusted(url: str) -> bool:
@@ -2262,63 +2633,32 @@ class ApplicationFlow:
             return exact
         raise FlowError("answer request field type is unsupported")
 
-    def _save_application_answer(self, key: str, answer: Any) -> None:
-        if self.profile_path is None or not self.profile_path.is_file():
-            raise FlowError("candidate profile path is unavailable")
-        try:
-            import yaml
-        except ImportError as exc:
-            raise FlowError("pyyaml is not installed") from exc
-        lock_path = self.profile_path.with_name(f".{self.profile_path.name}.lock")
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a+", encoding="utf-8") as lock:
-            with contextlib.suppress(OSError):
-                os.chmod(lock_path, 0o600)
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            current = _load_profile(self.profile_path)
-            saved = current.get("application_answers")
-            answers: dict[str, Any] = {}
-            if isinstance(saved, Mapping):
-                answers.update(saved)
-            elif isinstance(saved, list):
-                for item in saved:
-                    if isinstance(item, Mapping) and item.get("question"):
-                        answers[_normalise_label(str(item["question"]))] = item.get("answer")
-            for existing in list(answers):
-                if _normalise_label(str(existing)) == key:
-                    del answers[existing]
-            answers[key] = answer
-            updated = dict(current)
-            updated["application_answers"] = answers
-            temporary = ""
-            handle = None
-            try:
-                handle = tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=self.profile_path.parent,
-                    prefix=f".{self.profile_path.name}.",
-                    delete=False,
-                )
-                temporary = handle.name
-                yaml.safe_dump(updated, handle, allow_unicode=True, sort_keys=False)
-                handle.flush()
-                os.fsync(handle.fileno())
-                handle.close()
-                os.chmod(temporary, 0o600)
-                os.replace(temporary, self.profile_path)
-            except Exception:
-                if handle and not handle.closed:
-                    handle.close()
-                if temporary:
-                    with contextlib.suppress(OSError):
-                        os.unlink(temporary)
-                raise
-        observed = _load_profile(self.profile_path)
-        indexed = AshbyRecipe._answer_index(observed.get("application_answers"))
-        if key not in indexed or indexed[key] != answer:
-            raise FlowError("candidate profile write could not be verified")
-        self.profile = dict(observed)
+    def _save_application_answer(self, key: str, request: Mapping[str, Any], answer: Any) -> None:
+        """Remember the answer in jobs.db, where every later run reads it first.
+
+        The YAML profile is not rewritten any more: an answer kept only there
+        was invisible to the email channel and lost whenever the profile was
+        regenerated, so a new session asked the same question again.
+        """
+        payload = request.get("payload") if isinstance(request.get("payload"), Mapping) else {}
+        db = _resolve_db_path(self.db_path)
+        field_type = str(payload.get("field_type") or "text")
+        with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+            application_answers.save_answer(
+                conn,
+                key=key,
+                label=str(payload.get("label") or key),
+                answer=answer,
+                field_type=field_type,
+                options=list(payload.get("options") or []),
+                channel="reply",
+                message_id=int(str(request.get("message_id") or 0)) or None,
+                scope=application_answers.answer_scope(conn, field_type, self.position_id),
+            )
+            conn.commit()
+            stored = application_answers.load_answers(conn, self.position_id)
+        if key not in stored or stored[key] != answer:
+            raise FlowError("saved application answer could not be verified")
 
     def _resume_dashboard_answer(
         self, checkpoint: FlowCheckpoint
@@ -2327,15 +2667,16 @@ class ApplicationFlow:
         if not request:
             return None
         try:
-            message = self._notification_message(
-                BlockedHuman(
-                    "required_answer_missing",
-                    checkpoint.blocked_detail,
-                    checkpoint.resume_state or "screening",
-                    answer_request=request.get("payload"),
-                )
+            blocked = BlockedHuman(
+                "required_answer_missing",
+                checkpoint.blocked_detail,
+                checkpoint.resume_state or "screening",
+                answer_request=request.get("payload"),
             )
-            self._persist_answer_request(checkpoint, message)
+            source_id = str(request.get("source_id", ""))
+            message = self._notification_message(blocked, source_id)
+            legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
+            self._persist_answer_request(checkpoint, message, legacy_message)
             message_id = int(str(request.get("message_id", "")))
             db = _resolve_db_path(self.db_path)
             with sqlite3.connect(db) as conn:
@@ -2352,7 +2693,7 @@ class ApplicationFlow:
             key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
             if not key or key != _normalise_label(key):
                 raise FlowError("answer request key is not canonical")
-            self._save_application_answer(key, answer)
+            self._save_application_answer(key, request, answer)
             with sqlite3.connect(db) as conn:
                 changed = conn.execute(
                     "UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP "
@@ -2415,6 +2756,43 @@ class ApplicationFlow:
             # rerun must not reopen the page and "find" a form again.
             return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
 
+        if (
+            checkpoint.state == "blocked_human"
+            and checkpoint.blocked_reason == "vacancy_closed"
+            and not self._reauthorised_since(checkpoint, first_gate)
+        ):
+            # A closed vacancy does not reopen by retrying: no browser, no new
+            # notification.  Only the user authorising the position again after
+            # this stop makes the next run look at the page once more.
+            return FlowResult("blocked_human", checkpoint.state, "vacancy_closed")
+
+        fresh = (
+            checkpoint.state == "detect"
+            and not checkpoint.completed_steps
+            and not checkpoint.submit_started
+            and not checkpoint.answer_request
+        )
+        if fresh:
+            # Before the first run of a position: the facts almost every form
+            # asks for. Each missing one is asked once, on Telegram first, and
+            # nothing is saved in the checkpoint — the position is not held,
+            # it simply waits until the answers exist.
+            try:
+                if mode == "dry_run":
+                    # A dry run only looks: it never sends the user a question
+                    # and never stops on a fact it would have asked.
+                    self._log_dry_run_essentials()
+                    missing = []
+                else:
+                    missing = self.essentials_checker(
+                        profile=self.profile, position_id=self.position_id, db_path=self.db_path
+                    )
+            except Exception as exc:
+                LOG.error("essential facts check failed: %s", type(exc).__name__)
+                return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
+            if missing:
+                return FlowResult("blocked_human", checkpoint.state, "essential_facts_missing")
+
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
             return waiting
@@ -2462,16 +2840,20 @@ class ApplicationFlow:
                         "A previous process started submit but left no receipt; it will not be clicked again",
                         "submit",
                     ),
+                    page=active_page,
                 )
 
             try:
                 if navigate:
                     self._navigate(active_page)
+                self._assert_not_redirected_away(active_page, navigated=navigate)
                 detection = detect_ats(self.url, active_page.content())
                 if detection.platform not in SUPPORTED_PLATFORMS:
                     email = self._email_channel(checkpoint, active_page)
                     if email is not None:
                         return email
+                    if not self._generic_application_controls(active_page):
+                        self._assert_no_closed_notice(active_page)
                     reason = "ats_conflict" if detection.conflict else "ats_unsupported"
                     raise BlockedHuman(
                         reason,
@@ -2488,6 +2870,10 @@ class ApplicationFlow:
                     email = self._email_channel(checkpoint, active_page)
                     if email is not None:
                         return email
+                    if not recipe.apply_control_present(active_page):
+                        # No Apply control found is not a closed vacancy (a
+                        # localised board, a slow render): only a notice is.
+                        self._assert_no_closed_notice(active_page)
                 injected_blank = not navigate and active_page.url == "about:blank"
                 self._assert_recipe_page(
                     active_page,
@@ -2577,7 +2963,7 @@ class ApplicationFlow:
 
                 final_gate = self._gate()
                 if getattr(final_gate, "allowed", None) is not True:
-                    return self._deny(checkpoint, final_gate)
+                    return self._deny(checkpoint, final_gate, page=active_page)
                 if getattr(final_gate, "context", {}).get("mode") != "authorised":
                     return self._deny(
                         checkpoint,
@@ -2585,12 +2971,30 @@ class ApplicationFlow:
                             "gate_mode_changed",
                             "application mode changed before submit; refusing the click",
                         ),
+                        page=active_page,
                     )
+
+                # The cap, atomically, as the last decision before the click:
+                # another run with the last slot waits for this commit and is
+                # refused.  The slot counts for the day whatever happens next.
+                try:
+                    slot = self.cap_reserver(position_id=self.position_id, db_path=self.db_path)
+                except Exception as exc:
+                    slot = _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
+                if getattr(slot, "allowed", None) is not True:
+                    return self._deny(checkpoint, slot, page=active_page)
 
                 checkpoint.state = "submit"
                 checkpoint.submit_started = True
                 checkpoint.submit_started_at = _utc_now()
-                checkpoint.save(self.checkpoint_path)
+                try:
+                    checkpoint.save(self.checkpoint_path)
+                except Exception:
+                    # No durable submit marker, so no click: the slot goes back.
+                    checkpoint.submit_started = False
+                    checkpoint.submit_started_at = ""
+                    self._release_cap_slot(slot)
+                    raise
                 recipe.submit(active_page)
                 confirmation = self._wait_for_confirmation(active_page, detection.platform)
                 if not confirmation:
@@ -2604,7 +3008,7 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
                 return self._record(checkpoint, receipt)
             except BlockedHuman as blocked:
-                return self._block(checkpoint, blocked)
+                return self._block(checkpoint, blocked, page=active_page, dry_run=mode == "dry_run")
             except Exception as exc:
                 step = checkpoint.state if checkpoint.state in STEP_ORDER else "review"
                 return self._block(
@@ -2614,6 +3018,7 @@ class ApplicationFlow:
                         f"Browser interaction stopped with {type(exc).__name__}; no blind retry is allowed",
                         step,
                     ),
+                    page=active_page,
                 )
 
 

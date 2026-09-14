@@ -148,6 +148,8 @@ def build_flow(
         return gate_results.pop(0) if len(gate_results) > 1 else gate_results[0]
 
     return ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=52,
         url=url,
         profile=candidate or profile(),

@@ -42,8 +42,8 @@ Transport configuration (no secret) lives in `$JHT_HOME/jht.config.json`::
 
     "applications": {
       "email_transport": {
-        "kind": "smtp", "host": "smtp.example.com", "port": 465,
-        "security": "ssl" | "starttls", "username": "jobs@example.com",
+        "kind": "smtp", "host": "smtp.example.com", "port": 587 (default),
+        "security": "starttls" (default) | "ssl", "username": "jobs@example.com",
         "from_address": "jobs@example.com", "from_name": "optional",
         "verified_senders": ["optional@example.com"]
       }
@@ -78,6 +78,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import apply_gate  # noqa: E402
+import application_answers  # noqa: E402
 
 __all__ = [
     "APPLIED_VIA",
@@ -133,6 +134,7 @@ MAX_SUBJECT = 300
 MAX_BODY = 10_000
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 SMTP_TIMEOUT_SECONDS = 30
+DEFAULT_SMTP_PORT = 587
 
 _ADDRESS = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
@@ -697,8 +699,11 @@ class EmailApplication:
             settings = TransportSettings(
                 kind=str(raw["kind"]),
                 host=str(raw["host"]).strip(),
-                port=int(raw["port"]),
-                security=str(raw.get("security", "ssl")),
+                # 587 STARTTLS by default: many hosts (Hetzner among them)
+                # block outbound 465 and 25, and a default that cannot connect
+                # reads as a broken mailbox rather than a blocked port.
+                port=int(raw.get("port", DEFAULT_SMTP_PORT)),
+                security=str(raw.get("security", "starttls")),
                 username=str(raw["username"]).strip(),
                 from_address=str(raw.get("from_address") or raw["username"]).strip(),
                 from_name=" ".join(str(raw.get("from_name") or "").split()),
@@ -780,14 +785,11 @@ class EmailApplication:
         return {"ok": bool(payload.get("ok")), "status_code": payload.get("status_code", "")}
 
     def _facts(self, profile: Mapping[str, Any], position: sqlite3.Row, mailto: Mailto) -> dict[str, str]:
-        answers: dict[str, Any] = {}
-        raw_answers = profile.get("application_answers")
-        if isinstance(raw_answers, Mapping):
-            answers = {" ".join(str(k).casefold().split()): v for k, v in raw_answers.items()}
-        elif isinstance(raw_answers, list):
-            for item in raw_answers:
-                if isinstance(item, Mapping) and item.get("question"):
-                    answers[" ".join(str(item["question"]).casefold().split())] = item.get("answer")
+        # jobs.db first: an answer the user gave on Telegram or on the dashboard
+        # lives there. Read only: inspect and the draft write nothing; the YAML
+        # answers are imported when the letter is really sent.
+        with contextlib.closing(self._connect()) as conn:
+            answers: dict[str, Any] = application_answers.read_answers(conn, profile, self.position_id)
 
         haystack = "\n".join(
             str(v) for v in (mailto.subject, mailto.body, position["jd_text"], position["requirements"]) if v
@@ -1157,6 +1159,16 @@ class EmailApplication:
         ):
             raise RuntimeError("db_update returned success but the applied transition is absent")
 
+    def _import_profile_answers(self) -> None:
+        """Best effort: the letter already holds the answers, this only remembers them."""
+        try:
+            profile = self._profile()
+            with contextlib.closing(self._connect()) as conn:
+                application_answers.import_profile_answers(conn, profile)
+                conn.commit()
+        except (_Stop, sqlite3.Error, OSError, ValueError):
+            pass
+
     def _send(self, dry_run: bool) -> Outcome:
         previous = self._existing_send()
         if previous is not None:
@@ -1171,6 +1183,7 @@ class EmailApplication:
                 {**public, "dry_run": True},
             )
         settings: TransportSettings = ctx["settings"]
+        self._import_profile_answers()
         message = self._message(draft, settings, ctx["identity"])
         transport = self.transports[settings.kind](settings, ctx["password"])
         try:
@@ -1186,11 +1199,27 @@ class EmailApplication:
             gate = self._gate()
             if gate.get("mode") != "authorised":
                 raise _denied("gate_mode_changed", "the apply mode is no longer authorised; nothing was sent")
-            self._mark_send_started(draft["idempotency_key"])
+            # The cap, atomically: a run racing for the last slot waits for this
+            # commit and is refused. From here the slot counts for the day.
+            slot = apply_gate.reserve_daily_slot(
+                self.position_id, "email", config_path=self.config_path, db_path=str(self.db_path)
+            )
+            if not slot.allowed:
+                context = {k: v for k, v in slot.context.items() if k in ("max_per_day", "sent_today", "remaining_today")}
+                raise _denied(slot.reason, slot.detail, gate_reason=slot.reason, **context)
+            token = str(slot.context["token"])
+            try:
+                self._mark_send_started(draft["idempotency_key"])
+            except BaseException:
+                # No marker, no send: the slot goes back.
+                apply_gate.release_daily_slot(token, db_path=str(self.db_path))
+                raise
             try:
                 refused = transport.send(message, settings.from_address, draft["recipients"])
             except RecipientsRefused as exc:
                 self._update_attempt(draft["idempotency_key"], state="error", error_class="recipients_refused")
+                # Refused before DATA: certainly nothing reached anyone.
+                apply_gate.release_daily_slot(token, db_path=str(self.db_path))
                 raise _blocked("recipient_refused", "the mail server refused the recipients; nothing was sent") from exc
             except Exception as exc:
                 self._update_attempt(

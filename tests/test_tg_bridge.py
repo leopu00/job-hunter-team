@@ -241,6 +241,7 @@ def test_journal_nasce_atomico_con_identita_stabile_e_permessi_minimi(bridge):
         "delivered_via": "telegram",
         "created_at": "2024-08-12 16:26:40",
         "edited": False,
+        "reply_to_text": None,
     }]
     queue_file = next(bridge.INBOUND_QUEUE_DIR.iterdir())
     assert bridge.INBOUND_QUEUE_DIR.stat().st_mode & 0o777 == 0o700

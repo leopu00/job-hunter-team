@@ -214,6 +214,8 @@ def build_flow(
         return gate_results.pop(0) if len(gate_results) > 1 else gate_results[0]
 
     return ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=41,
         url=ASHBY_URL,
         profile=candidate or profile(),
@@ -593,6 +595,8 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
 
     def new_flow() -> ApplicationFlow:
         return ApplicationFlow(
+            essentials_checker=lambda **_kwargs: [],
+            cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
             position_id=41,
             url=ASHBY_URL,
             profile=_load_profile(profile_path),
@@ -684,10 +688,13 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
     assert resumed.status == "applied"
     assert page.evaluate("window.submitCount") == 1
     assert len(recorded) == 1
-    saved = _load_profile(profile_path)
-    assert saved["application_answers"] == {
-        "which work model can you accept": "Remote"
-    }
+    # The answer lives in jobs.db now, where the email channel and a new
+    # session read it; the YAML profile is left as the user wrote it.
+    with sqlite3.connect(db_path) as observed:
+        assert observed.execute(
+            "SELECT key, answer_json, channel, source_message_id FROM application_answers"
+        ).fetchall() == [("which work model can you accept", '"Remote"', "reply", request[0])]
+    assert "application_answers" not in _load_profile(profile_path)
     with sqlite3.connect(db_path) as observed:
         seen = observed.execute(
             "SELECT agent_seen_reply_at FROM pending_user_messages WHERE id = ?",
@@ -738,6 +745,8 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
         raise RuntimeError("fixture notifier unavailable")
 
     flow = ApplicationFlow(
+        essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=41,
         url=ASHBY_URL,
         profile=profile(),
@@ -772,3 +781,460 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
     assert row is not None
     assert "Question: Fixture question?" in row[0]
     assert row[1] == "closer_application_answer"
+
+
+def _answers_db(tmp_path: Path) -> Path:
+    import _db
+
+    db_path = tmp_path / "jobs.db"
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO positions(id, title, company, url, status) "
+            "VALUES (41, 'Fixture Role', 'Fixture Company', ?, 'ready')",
+            (ASHBY_URL,),
+        )
+        conn.commit()
+    return db_path
+
+
+def test_a_dry_run_never_asks_a_form_question_and_the_authorised_run_does(
+    page, tmp_path: Path, cv_path: Path
+):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+
+    def flow_in(mode: str) -> ApplicationFlow:
+        flow = build_flow(
+            tmp_path,
+            cv_path,
+            verdicts=[GateVerdict(True, context={"mode": mode, "max_per_day": 3})],
+            notifications=notifications,
+        )
+        flow.db_path = db_path
+        return flow
+
+    def requests() -> list:
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            return conn.execute(
+                "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
+            ).fetchall()
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    dry = flow_in("dry_run").run(page=page, navigate=False)
+
+    assert (dry.status, dry.reason) == ("blocked_human", "required_answer_missing")
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["blocked_reason"] == "required_answer_missing"
+    assert checkpoint["answer_request"] is None
+    assert notifications == []
+    assert requests() == []
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    authorised = flow_in("authorised").run(page=page, navigate=False)
+
+    assert (authorised.status, authorised.reason) == ("blocked_human", "required_answer_missing")
+    assert requests() == [("closer_application_answer",)]
+    assert len(notifications) == 1
+    assert notifications[0]["answer_request"]["payload"]["label"] == "Why do you want to join us?"
+    assert page.evaluate("window.submitCount") == 0
+
+
+# ── A vacancy that is no longer open ────────────────────────────────────────
+#
+# Seen live on two positions: the page said the vacancy was closed, or its URL
+# redirected to the company's job list / "Book a demo", and the flow went on.
+# A closed vacancy stops in detect as `vacancy_closed`, touches no field, and a
+# rerun does not reopen the browser.
+
+
+CLOSED_NOTICES = [
+    ("en", "This job is no longer available."),
+    ("en", "We are no longer accepting applications for this role."),
+    ("en", "The job you are looking for is no longer open."),
+    ("en", "This posting has expired."),
+    ("it", "Questa posizione non è più disponibile."),
+    ("it", "L'annuncio è scaduto."),
+    ("de", "Diese Stelle ist leider nicht mehr verfügbar."),
+    ("fr", "Cette offre n’est plus disponible."),
+    ("es", "Esta oferta ya no está disponible."),
+    ("pt", "Esta vaga não está mais disponível."),
+    ("hu", "Ez az állás már nem elérhető."),
+]
+
+
+@pytest.mark.parametrize(("language", "notice"), CLOSED_NOTICES)
+def test_closed_vacancy_notice_is_recognised_in_several_languages(language: str, notice: str):
+    page_text = f"Careers\nBook a demo\n{notice}\nSee all open roles"
+    assert apply_flow_module.vacancy_closed_evidence(page_text) == language
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We no longer use legacy tooling, and the role is open to remote candidates.",
+        "Applications are reviewed on a rolling basis.",
+        "Posizione aperta: la selezione è in corso, inviaci la tua candidatura.",
+        "Die Stelle ist ab sofort verfügbar.",
+        # Seen in review: open job descriptions that name filling or closing.
+        "This position will remain open until it has been filled.",
+        "We will contact shortlisted candidates once the role has been filled.",
+        "Applications are closed on 30 September 2026, apply soon.",
+        "Job not found? Search all openings.",
+        "Bitte senden Sie keine Bewerbungen mehr per Post, nur online.",
+        "Il ruolo prevede che l'offerta non è più valida oltre 30 giorni dalla firma.",
+        "We are no longer accepting applications from recruitment agencies.",
+        "Please note we are no longer accepting applications by email, apply below.",
+        "",
+    ],
+)
+def test_job_description_wording_is_not_a_closed_notice(text: str):
+    assert apply_flow_module.vacancy_closed_evidence(text) is None
+
+
+@pytest.mark.parametrize(
+    ("requested", "final", "away"),
+    [
+        (ASHBY_URL, "https://jobs.ashbyhq.com/example", True),
+        (ASHBY_URL, ASHBY_URL.removesuffix("/application"), False),
+        (ASHBY_URL, ASHBY_URL + "?utm_source=board", False),
+        (
+            "https://boards.greenhouse.io/example/jobs/1001",
+            "https://job-boards.greenhouse.io/example/jobs/1001?gh_jid=1001",
+            False,
+        ),
+        (
+            "https://job-boards.greenhouse.io/example/jobs/1001",
+            "https://job-boards.greenhouse.io/example?error=true",
+            True,
+        ),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/jobs/senior-engineer/", False),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/", True),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/jobs", True),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/", True),
+        # No identifier and not a shorter prefix: no conclusion.
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/book-a-demo", False),
+        ("https://example.invalid/careers/senior-engineer", "https://example.invalid/en/careers/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer", "https://careers.example.invalid/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer/apply", "https://example.invalid/careers/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer/apply", "https://example.invalid/careers", True),
+        (ASHBY_URL, "chrome-error://chromewebdata/", True),
+    ],
+)
+def test_redirect_away_from_the_vacancy_is_told_apart_from_a_harmless_one(
+    requested: str, final: str, away: bool
+):
+    assert apply_flow_module.vacancy_redirected_away(requested, final) is away
+
+
+def _read_checkpoint(tmp_path: Path) -> dict:
+    return json.loads((tmp_path / "checkpoint.json").read_text(encoding="utf-8"))
+
+
+def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, cv_path: Path):
+    page.set_content(
+        "<html><body><h1>Senior Engineer</h1><p>This job is no longer available.</p>"
+        "<form><input id='_systemfield_name'></form></body></html>"
+    )
+    notifications: list[dict] = []
+    recorded: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, notifications=notifications, recorded=recorded)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    assert page.eval_on_selector("#_systemfield_name", "element => element.value") == ""
+    assert recorded == []
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["completed_steps"] == []
+    assert checkpoint["submit_started"] is False
+    assert checkpoint["blocked_reason"] == "vacancy_closed"
+    assert len(notifications) == 1
+    # Employer text stays out of the checkpoint and the notification.
+    assert "no longer available" not in json.dumps(checkpoint)
+    assert "no longer available" not in json.dumps(notifications)
+
+
+def _serve(page, body: str) -> None:
+    page.route(
+        "https://jobs.ashbyhq.com/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body=body),
+    )
+
+
+def test_redirect_to_the_job_list_is_a_closed_vacancy_even_with_a_form_there(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    # The landing page carries a form: only the redirect says it is not the vacancy.
+    _serve(page, ashby_form())
+    recorded: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, recorded=recorded)
+    monkeypatch.setattr(flow, "_managed_page", lambda: contextlib.nullcontext(page))
+    monkeypatch.setattr(flow, "_navigate", lambda active: active.goto("https://jobs.ashbyhq.com/example"))
+
+    result = flow.run(page=None)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    assert "redirected" in _read_checkpoint(tmp_path)["blocked_detail"]
+    assert page.evaluate("window.submitCount") == 0
+    assert recorded == []
+
+
+def test_a_redirect_that_keeps_the_vacancy_still_applies(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    _serve(page, ashby_form())
+    flow = build_flow(tmp_path, cv_path)
+    monkeypatch.setattr(flow, "_managed_page", lambda: contextlib.nullcontext(page))
+    monkeypatch.setattr(flow, "_navigate", lambda active: active.goto(ASHBY_URL + "?utm_source=board"))
+
+    assert flow.run(page=None).status == "applied"
+
+
+def test_no_form_and_no_apply_control_without_a_notice_is_not_called_closed(
+    page, tmp_path: Path, cv_path: Path
+):
+    # A localised board or a slow render: honest, not final.
+    page.set_content("<html><body><h1>Senior Engineer</h1><button>Bewerben</button></body></html>")
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ashby_form_missing")
+
+
+def test_a_closed_notice_next_to_a_form_is_not_evidence(page, tmp_path: Path, cv_path: Path):
+    page.set_content(
+        ashby_form().replace("<html><body>", "<html><body><p>This job is no longer available.</p>")
+    )
+
+    assert build_flow(tmp_path, cv_path).run(page=page, navigate=False).status == "applied"
+
+
+def test_a_closed_notice_next_to_an_apply_control_is_not_evidence(page, tmp_path: Path, cv_path: Path):
+    page.set_content(
+        "<html><body><p>This job is no longer available.</p><a href='#'>Apply for this Job</a></body></html>"
+    )
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ashby_form_missing")
+
+
+def test_a_closed_notice_on_an_unsupported_page_without_email_is_closed(page, tmp_path: Path, cv_path: Path):
+    page.set_content("<html><body><h1>Senior Engineer</h1><p>Esta oferta ya no está disponible.</p></body></html>")
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/senior-engineer"
+    flow.checkpoint_path = tmp_path / "checkpoint.json"
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+
+
+@pytest.mark.parametrize(
+    "control",
+    ["<form action='/submit'><input name='q'></form>", "<a href='/jobs/senior-engineer/apply'>Apply now</a>"],
+)
+def test_a_closed_notice_on_an_unsupported_page_with_a_form_or_apply_is_not_evidence(
+    page, tmp_path: Path, cv_path: Path, control: str
+):
+    page.set_content(f"<html><body><p>Esta oferta ya no está disponible.</p>{control}</body></html>")
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/senior-engineer"
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+
+
+def test_a_failed_checkpoint_save_leaves_no_orphan_screenshot(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    page.set_content(ashby_form(captcha=True))
+    flow = build_flow(tmp_path, cv_path)
+    real_save = FlowCheckpoint.save
+
+    def failing_save(self, path):
+        if self.state == "blocked_human":
+            raise OSError("synthetic disk full")
+        return real_save(self, path)
+
+    monkeypatch.setattr(FlowCheckpoint, "save", failing_save)
+
+    with pytest.raises(OSError):
+        flow.run(page=page, navigate=False)
+
+    assert list(tmp_path.glob("checkpoint.stop-*")) == []
+
+
+def test_an_apply_control_that_opens_nothing_is_not_called_closed(page, tmp_path: Path, cv_path: Path):
+    page.set_content("<html><body><h1>Senior Engineer</h1><a href='#'>Apply for this Job</a></body></html>")
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ashby_form_missing")
+
+
+def test_a_closed_vacancy_is_not_retried_blindly(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    page.set_content("<html><body><p>Applications are closed.</p></body></html>")
+    notifications: list[dict] = []
+    assert build_flow(tmp_path, cv_path, notifications=notifications).run(
+        page=page, navigate=False
+    ).reason == "vacancy_closed"
+
+    rerun = build_flow(tmp_path, cv_path, notifications=notifications)
+    opened: list[str] = []
+    monkeypatch.setattr(rerun, "_managed_page", lambda: opened.append("browser") or contextlib.nullcontext(page))
+    result = rerun.run(page=None)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    assert opened == []
+    assert len(notifications) == 1
+
+
+@pytest.mark.parametrize(("minutes", "reopened"), [(-5, False), (5, True)])
+def test_only_a_new_user_authorisation_looks_at_a_closed_vacancy_again(
+    page, tmp_path: Path, cv_path: Path, monkeypatch, minutes: int, reopened: bool
+):
+    page.set_content("<html><body><p>Applications are closed.</p></body></html>")
+    build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+    stopped = datetime.fromisoformat(_read_checkpoint(tmp_path)["updated_at"])
+    at = (stopped + timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+    verdict = GateVerdict(True, context={"mode": "authorised", "max_per_day": 3, "at": at})
+
+    page.set_content(ashby_form())
+    result = build_flow(tmp_path, cv_path, verdicts=[verdict, verdict]).run(page=page, navigate=False)
+
+    assert (result.status == "applied") is reopened
+    assert (page.evaluate("window.submitCount") == 1) is reopened
+
+
+# ── A screenshot at every stop ───────────────────────────────────────────────
+
+
+STOP_SCREENSHOT_NAME = r"^checkpoint\.stop-\d{8}T\d{12}Z-{reason}\.png$"
+
+
+def _assert_stop_screenshot(tmp_path: Path, reason: str) -> Path:
+    import re
+    import stat
+
+    recorded = _read_checkpoint(tmp_path)["stop_screenshot"]
+    shot = Path(recorded)
+    assert shot.parent == tmp_path
+    assert re.match(STOP_SCREENSHOT_NAME.replace("{reason}", reason), shot.name), shot.name
+    for private in ("test candidate", "candidate@example", "test-profile"):
+        assert private not in shot.name.casefold()
+    assert shot.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    assert stat.S_IMODE(shot.stat().st_mode) == 0o600
+    return shot
+
+
+def test_a_blocked_stop_saves_a_screenshot_next_to_the_checkpoint(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form(captcha=True))
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert result.reason == "captcha"
+    _assert_stop_screenshot(tmp_path, "captcha")
+
+
+def test_a_denied_stop_before_submit_saves_a_screenshot(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form())
+    flow = build_flow(
+        tmp_path, cv_path, verdicts=[GateVerdict(True), GateVerdict(False, "apply_not_requested")]
+    )
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("denied", "apply_not_requested")
+    _assert_stop_screenshot(tmp_path, "apply_not_requested")
+
+
+def test_a_browser_error_stop_saves_a_screenshot(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    page.set_content(ashby_form())
+
+    def broken(self, _page):
+        raise RuntimeError("synthetic browser failure")
+
+    monkeypatch.setattr(apply_flow_module.AshbyRecipe, "fill_core", broken)
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert result.reason == "browser_uncertainty"
+    _assert_stop_screenshot(tmp_path, "browser_uncertainty")
+
+
+def test_a_new_stop_replaces_the_previous_screenshot(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form(captcha=True))
+    build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+    first = _assert_stop_screenshot(tmp_path, "captcha")
+
+    page.set_content(ashby_form(captcha=True))
+    build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+    second = _assert_stop_screenshot(tmp_path, "captcha")
+
+    assert second != first
+    assert not first.exists()
+    assert sorted(p.name for p in tmp_path.glob("checkpoint.stop-*")) == [second.name]
+
+
+def test_a_failed_screenshot_never_breaks_the_stop(page, tmp_path: Path, cv_path: Path):
+    class NoScreenshot:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def screenshot(self, **_kwargs):
+            raise RuntimeError("synthetic screenshot failure")
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    page.set_content(ashby_form(captcha=True))
+    notifications: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, notifications=notifications).run(
+        page=NoScreenshot(page), navigate=False
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "captcha")
+    assert _read_checkpoint(tmp_path)["stop_screenshot"] == ""
+    assert len(notifications) == 1
+    assert [p.name for p in tmp_path.iterdir() if ".stop-" in p.name] == []
+
+
+def test_a_denial_before_any_page_opens_has_no_screenshot(tmp_path: Path, cv_path: Path):
+    flow = build_flow(tmp_path, cv_path, verdicts=[GateVerdict(False, "apply_not_requested")])
+
+    result = flow.run(page=None)
+
+    assert result.status == "denied"
+    assert _read_checkpoint(tmp_path)["stop_screenshot"] == ""
+
+
+def test_a_checkpoint_with_a_non_text_screenshot_is_refused(tmp_path: Path):
+    checkpoint = FlowCheckpoint.new(41, ASHBY_URL)
+    checkpoint.save(tmp_path / "checkpoint.json")
+    raw = _read_checkpoint(tmp_path)
+    raw["stop_screenshot"] = ["../elsewhere.png"]
+    (tmp_path / "checkpoint.json").write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(FlowError):
+        FlowCheckpoint.load(tmp_path / "checkpoint.json", 41, ASHBY_URL)
+
+
+@pytest.mark.parametrize("victim", ["elsewhere/checkpoint.stop-keep.png", "keep-me.png"])
+def test_a_tampered_screenshot_path_is_never_deleted(page, tmp_path: Path, cv_path: Path, victim: str):
+    target = tmp_path / victim
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"not ours")
+    checkpoint = FlowCheckpoint.new(41, ASHBY_URL)
+    checkpoint.stop_screenshot = str(target)
+    checkpoint.save(tmp_path / "checkpoint.json")
+    page.set_content(ashby_form(captcha=True))
+
+    build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    _assert_stop_screenshot(tmp_path, "captcha")
+    assert target.read_bytes() == b"not ours"

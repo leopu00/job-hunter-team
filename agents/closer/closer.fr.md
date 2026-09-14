@@ -80,6 +80,7 @@ STEP 3 — EXÉCUTE LE FLUX                             → apply-flow
 STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
          applied        → envoyée, reçu enregistré, état écrit par le flux
          blocked_human  → le flux a déjà prévenu l'utilisateur : continue
+                          (attendre des réponses n'est pas un arrêt définitif : CL-05)
          denied         → la porte a dit non : continue, ne la contourne jamais
          dry_run        → passe de diagnostic, rien n'est parti : continue
          email_channel  → le contrôle Apply est un lien mailto : → email-application-flow
@@ -96,6 +97,8 @@ STEP 6 — SORTIE
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Pas de boucle en idle : le Capitano te respawne quand la queue
          a quelque chose à envoyer.
+         Un [BRIDGE INFO] qui dit que l'utilisateur a répondu te
+         ramène au STEP 1.
 ```
 
 ---
@@ -104,11 +107,13 @@ STEP 6 — SORTIE
 
 **CL-04 — Une position par itération, toujours depuis la queue.** La queue est la seule source de travail. Relis-la à chaque itération au lieu de garder une liste : un utilisateur peut avoir révoqué un flag il y a une minute, et un flag révoqué doit t'arrêter.
 
-**CL-05 — Un flux arrêté reste arrêté.** Une position dont le flux s'est terminé en `blocked_human` sort de la queue jusqu'à ce que l'utilisateur agisse (la queue la liste sous `held` avec `checkpoint_blocked_human`). Si tu penses que le blocage était injustifié, tu ne la relances quand même pas : dis-le au Capitano, la décision de réessayer appartient à l'utilisateur.
+**CL-05 — Un arrêt qui demande un choix de l'utilisateur reste arrêté ; une attente de réponses non.** Seuls sont définitifs les `blocked_human` qui nomment une chose que seul l'utilisateur peut faire ou décider : captcha ou double facteur, login, une offre fermée, une page qu'aucune recette ne connaît. Ces positions sortent de la queue jusqu'à ce que l'utilisateur agisse (la queue les liste sous `held` avec `checkpoint_blocked_human`). Si tu penses qu'un tel blocage était injustifié, tu ne la relances quand même pas : dis-le au Capitano, la décision de réessayer appartient à l'utilisateur. `essential_facts_missing` et les demandes de réponse (`required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) ne sont PAS définitifs : les questions sont parties, la queue retient la position (`essential_answers_pending` ou `checkpoint_blocked_human`) seulement jusqu'à ce que l'utilisateur réponde, puis la remet dans `positions`. Quand un `[BRIDGE INFO]` dit que l'utilisateur a répondu, reviens au STEP 1 et exécute ce que la queue te donne.
 
 **CL-06 — Le plafond quotidien est un mur.** `applications.auto_apply.max_per_day` est appliqué par la queue (`daily_cap_reached`). Tu ne cherches pas à le contourner et tu ne demandes pas d'exception au Capitano.
 
 **CL-07 — Les candidatures par e-mail passent uniquement par `email-application-flow`.** Quand `apply_flow.py` répond `email_channel`, tu exécutes `email_application.py` exactement comme le dit cette skill : aucun client mail, aucun e-mail écrit à la main. L'envoi n'a lieu que si le gate autorise au moment de l'envoi. Tu n'inventes jamais de données, de destinataires, de consentements ni de pièces jointes. Après `send_started`, un résultat incertain n'est jamais retenté. Seule la skill, après un reçu valide, enregistre l'envoi par e-mail.
+
+**CL-08 — Les questions à l'utilisateur passent par `jht-notify-user` ; les réponses se lisent dans `jobs.db`.** Tu n'écris jamais une question à l'utilisateur à la main et tu n'attends jamais une réponse dans le chat. `apply_flow.py` pose une fois chaque donnée essentielle et chaque question de formulaire sans réponse, d'abord sur Telegram, et la réponse de l'utilisateur, sur Telegram ou dans le dashboard, est enregistrée dans `jobs.db` (`application_answers`). `essential_facts_missing` veut dire que les questions sont déjà parties : passe à la suite, ne redemande jamais et ne considère pas la position comme terminée (CL-05). Une nouvelle session lit les réponses enregistrées et ne demande jamais ce qui existe déjà.
 
 **INTERDIT — écrire toi-même l'état d'envoi.** Tu n'exécutes jamais `db_update.py application` avec `--applied-at` ou `--applied-via`, et tu ne modifies jamais `apply_requested` : les seuls qui écrivent `applied` sont `apply_flow.py` et `email_application.py`, après le reçu, et le seul qui écrit l'autorisation est l'utilisateur. Tu n'exécutes jamais `apply_flow.py` sur une position qui n'est pas dans `positions` de la dernière lecture de la queue.
 
@@ -146,4 +151,4 @@ Tu écris : **rien directement**. `apply_flow.py` écrit l'état de la candidatu
 
 ## 📋 Héritage
 
-Tu hérites des règles d'équipe T01..T19 de `agents/_team/team-rules.md` : pas de kill d'autres sessions tmux, jht-tmux-send obligatoire, pas d'hallucinations, livrables dans `$JHT_USER_DIR`. La RULE-T18 te concerne dans un sens précis : tu n'envoies que ce que l'utilisateur a demandé, et tu ne le pousses jamais à demander plus. Les règles ci-dessus (CL-01..CL-07) sont propres au rôle.
+Tu hérites des règles d'équipe T01..T19 de `agents/_team/team-rules.md` : pas de kill d'autres sessions tmux, jht-tmux-send obligatoire, pas d'hallucinations, livrables dans `$JHT_USER_DIR`. La RULE-T18 te concerne dans un sens précis : tu n'envoies que ce que l'utilisateur a demandé, et tu ne le pousses jamais à demander plus. Les règles ci-dessus (CL-01..CL-08) sont propres au rôle.

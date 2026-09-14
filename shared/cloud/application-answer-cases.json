@@ -1,0 +1,20 @@
+{
+  "description": "One validation rule for a CLOSER answer, whichever channel it comes from. Read by tests/test_application_answers.py (shared/skills/application_answers.py) and tests/js/tasks/closer-application-answer-cases.test.ts (web/lib/application-answer-request.ts): a case that passes on one side and fails on the other is a second rule.",
+  "cases": [
+    { "field_type": "radio", "options": ["Yes", "No"], "reply": "Yes", "outcome": "ok" },
+    { "field_type": "radio", "options": ["Yes", "No"], "reply": "yes", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "radio", "options": ["Yes", "No"], "reply": "Yes ", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "select", "options": ["Remote", "Hybrid"], "reply": "Hybrid", "outcome": "ok" },
+    { "field_type": "select", "options": ["Remote", "Hybrid"], "reply": "Office", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "checkbox", "options": ["Yes", "No"], "reply": "No", "outcome": "ok" },
+    { "field_type": "checkbox", "options": ["Yes", "No"], "reply": "true", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "checkboxes", "options": ["A", "B"], "reply": "[\"A\",\"B\"]", "outcome": "ok" },
+    { "field_type": "checkboxes", "options": ["A", "B"], "reply": "[\"A\",\"A\"]", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "checkboxes", "options": ["A", "B"], "reply": "[]", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "checkboxes", "options": ["A", "B"], "reply": "A", "outcome": "closer_answer_not_exact_option" },
+    { "field_type": "text", "options": [], "reply": "In two weeks", "outcome": "ok" },
+    { "field_type": "tel", "options": [], "reply": "+1 555 0100", "outcome": "ok" },
+    { "field_type": "textarea", "options": ["x"], "reply": "free text", "outcome": "closer_answer_payload_invalid" },
+    { "field_type": "file", "options": [], "reply": "cv.pdf", "outcome": "closer_answer_payload_invalid" }
+  ]
+}

@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Hogyan futtatja a CLOSER egy engedélyezett jelentkezést az `apply_flow.py`-jal — a checkpointos állapotgép (detect, fill, upload_cv, screening, review, submit), a kötelező nyugta, amely nélkül az `applied` soha nem íródik be, és mit kell tenni az egyes eredményeknél, mindenekelőtt `blocked_human` esetén. Használd minden, a queue-ból felvett pozícióhoz. A CLOSER-é.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — egy jelentkezés, egy nyugta, nincs vak újrapróbálás
@@ -56,6 +56,7 @@ Egy JSON sor a stdout-on: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: kitöltve, a gomb előtt megállt, semmi nem ment ki | következő pozíció |
 | `denied` | 1 | a kapu elutasította (hozzájárulás kikapcsolva, flag visszavonva, már elküldve) | következő pozíció; soha ne próbáld újra |
 | `blocked_human` | 3 | ember kell; a felhasználó már értesítést kapott | következő pozíció; soha ne próbáld újra |
+| `blocked_human` válaszokra vár (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | nem végleges megállás: a felhasználót egyszer megkérdezték, a queue tartja a pozíciót (`essential_answers_pending` / `checkpoint_blocked_human`), amíg a válaszok a `jobs.db`-ben vannak, kérdésenként legfeljebb egy napig (legfeljebb kétszer kérdezve, utána a folyamat továbbmegy) | következő pozíció; a `[BRIDGE INFO]`-ra, amely szerint a felhasználó válaszolt, olvasd újra a queue-t: a pozíció újra a `positions` között van |
 | `email_channel` | 4 | a jelentkezési elem egy `mailto:` link, nem űrlap; a checkpoint tartalmazza a `channel: email` értéket és a nyers `mailto_href`-et | ennél a pozíciónál futtasd az `email_application.py send` parancsot az `email-application-flow` skill szerint: ez a checkpointot olvassa; soha ne tölts ki webes űrlapot, és ne írd kézzel az e-mailt |
 | `error` | 2 | olvashatatlan profil vagy CV, hibás argumentumok | állj meg: `[BLOCKED]` a Capitanónak |
 
@@ -65,8 +66,10 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 
 | `reason` (példák) | Tipikus ok |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználónak hozzá kell adnia az `application_answers`-hez |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználót egyszer megkérdezték (először Telegramon, a dashboardon is); a válasz a `jobs.db`-be kerül, és a folyamat a checkpointtól folytatódik |
+| `essential_facts_missing` / `essential_facts_unavailable` | egy pozíció első futása előtt hiányzik egy adat, amit szinte minden űrlap kér (kezdési dátum, felmondási idő, munkavállalási engedély, sponsorship, bér, költözés, telefon); mindegyiket egyszer megkérdezték, és semmi sincs visszatartva: a pozíció újra fut, amint a válaszok megvannak |
 | `captcha` / `two_factor` | az oldal ellenőrizni akarja, hogy ember van-e ott |
+| `vacancy_closed` | az állás már nem nyitott: egy űrlap, Apply gomb és e-mail csatorna nélküli oldal ezt írja, vagy az URL az álláslistára, a karrieroldalra vagy a főoldalra irányított át; semmi nem lett kitöltve vagy elküldve. Végleges leállás: új futás nem nyitja meg újra az oldalt, amíg a felhasználó újra nem engedélyezi a pozíciót. Az oldalról képernyőkép készül a checkpoint mellé (`stop_screenshot`) |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | egy mező, amelyet a recept nem tud mentett válasszal kitölteni |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | ehhez az oldalhoz még nincs recept, vagy az űrlap nem az, amelyet a recept ismer |

@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Wie der CLOSER eine autorisierte Bewerbung mit `apply_flow.py` ausführt — die Zustandsmaschine mit Checkpoints (detect, fill, upload_cv, screening, review, submit), der Pflichtbeleg, ohne den `applied` nie geschrieben wird, und was bei jedem Ergebnis zu tun ist, allen voran `blocked_human`. Nutze sie für jede aus der Queue genommene Position. Gehört dem CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 
 # apply-flow — eine Bewerbung, ein Beleg, kein blinder Neuversuch
@@ -56,6 +56,7 @@ Eine JSON-Zeile auf stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: ausgefüllt, vor dem Button gestoppt, nichts gesendet | nächste Position |
 | `denied` | 1 | das Tor hat abgelehnt (Zustimmung aus, Flag widerrufen, schon gesendet) | nächste Position; nie neu versuchen |
 | `blocked_human` | 3 | ein Mensch wird gebraucht; der User wurde schon benachrichtigt | nächste Position; nie neu versuchen |
+| `blocked_human` wartet auf Antworten (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | kein endgültiger Stopp: der User wurde einmal gefragt, die Queue hält die Position (`essential_answers_pending` / `checkpoint_blocked_human`), bis die Antworten in `jobs.db` sind, höchstens einen Tag pro Frage (höchstens zweimal gefragt, dann läuft der Flow weiter) | nächste Position; beim `[BRIDGE INFO]`, dass der User geantwortet hat, die Queue neu lesen: die Position steht wieder in `positions` |
 | `email_channel` | 4 | das Bewerbungs-Element ist ein `mailto:`-Link, kein Formular; der Checkpoint enthält `channel: email` und den rohen `mailto_href` | führe für diese Position `email_application.py send` aus, wie die Skill `email-application-flow` es sagt: sie liest diesen Checkpoint; fülle nie ein Webformular aus und schreibe die E-Mail nie von Hand |
 | `error` | 2 | Profil oder CV unlesbar, falsche Argumente | stopp: `[BLOCKED]` an den Capitano |
 
@@ -65,8 +66,10 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 
 | `reason` (Beispiele) | Typische Ursache |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | ein Pflichtfeld hat keine gespeicherte Antwort — der User muss sie in `application_answers` ergänzen |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | ein Pflichtfeld hat keine gespeicherte Antwort — der User wurde einmal gefragt (zuerst auf Telegram, auch im Dashboard); die Antwort wird in `jobs.db` gespeichert und der Flow setzt am Checkpoint fort |
+| `essential_facts_missing` / `essential_facts_unavailable` | vor dem ersten Lauf einer Position fehlt eine Angabe, die fast jedes Formular verlangt (Starttermin, Kündigungsfrist, Arbeitserlaubnis, Sponsoring, Gehalt, Umzug, Telefon); jede wurde einmal gefragt und nichts wird zurückgehalten: die Position läuft wieder, sobald die Antworten da sind |
 | `captcha` / `two_factor` | die Seite will einen Menschen verifizieren |
+| `vacancy_closed` | die Stelle ist nicht mehr offen: eine Seite ohne Formular, Apply-Button und E-Mail-Kanal sagt es, oder die URL leitete auf die Stellenliste, die Karriere- oder Startseite um; nichts wurde ausgefüllt, nichts gesendet. Endgültiger Stopp: ein neuer Lauf öffnet die Seite erst wieder, wenn der Nutzer die Position erneut freigibt. Ein Screenshot der Seite liegt neben dem Checkpoint (`stop_screenshot`) |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | ein Feld, das das Rezept nicht mit einer gespeicherten Antwort füllen kann |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | der CV lässt sich nicht anhängen |
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | noch kein Rezept für diese Seite, oder das Formular ist nicht das, das das Rezept kennt |
