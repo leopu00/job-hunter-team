@@ -174,6 +174,10 @@ BOT_COMMANDS = {
         ("candles",     "bot_commands.assistente.candles"),
         ("mappa",       "bot_commands.assistente.mappa"),
         ("mappa_it",    "bot_commands.assistente.mappa_it"),
+        # Gli ultimi due bottoni della vecchia tastiera persistente (⭐ Top CV,
+        # 📅 Reset) non avevano un comando: senza tastiera sparirebbero.
+        ("top_cv",      "bot_commands.assistente.top_cv"),
+        ("reset",       "bot_commands.assistente.reset"),
         ("stato",       "bot_commands.assistente.stato"),
         ("help",        "bot_commands.assistente.help"),
     ],

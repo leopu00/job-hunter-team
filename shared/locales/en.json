@@ -171,6 +171,8 @@
   "bot_commands.assistente.candles": "3 candles: start/mid/end of last window",
   "bot_commands.assistente.mappa": "Positions map Europe",
   "bot_commands.assistente.mappa_it": "Positions map Italy",
+  "bot_commands.assistente.top_cv": "Top-scoring CVs ready to send",
+  "bot_commands.assistente.reset": "When the provider usage window resets",
   "bot_commands.assistente.stato": "Quick team status (text)",
   "bot_commands.assistente.help": "List of available commands",
   "bot_commands.capitano.pipeline": "Pipeline status + current bottleneck",

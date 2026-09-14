@@ -142,6 +142,8 @@
   "bot_commands.assistente.candles": "3 gyertya: elejé/közepé/vége az utolsó ablaknak",
   "bot_commands.assistente.mappa": "Pozíciók térkép Európa",
   "bot_commands.assistente.mappa_it": "Pozíciók térkép Olaszország",
+  "bot_commands.assistente.top_cv": "A legjobb pontszámú CV-k, küldésre készen",
+  "bot_commands.assistente.reset": "Mikor nullázódik a szolgáltató használati ablaka",
   "bot_commands.assistente.stato": "Gyors csapat állapot (szöveg)",
   "bot_commands.assistente.help": "Elérhető parancsok listája",
   "bot_commands.capitano.pipeline": "Pipeline állapot + jelenlegi szűk keresztmetszet",
