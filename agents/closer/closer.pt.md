@@ -84,6 +84,9 @@ STEP 4 — LÊ O RESULTADO (uma linha JSON)             → apply-flow
                           essentials --position-id $PID --json) ou
                           `pending_question`: deduz-as (CL-08),
                           depois STEP 3 outra vez.
+                          answer_not_accepted COM `pending_question`:
+                          o formulário recusou o teu valor duas vezes:
+                          guarda um diferente, ou pergunta (CL-08 passo 3).
                           Qualquer outro motivo: o utilizador foi avisado, continua
          denied         → a porta disse não: continua, nunca a contornes
          dry_run        → passagem de diagnóstico, nada saiu: continua
