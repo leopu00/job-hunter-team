@@ -100,6 +100,9 @@ STEP 5 — PAUSA                                       → throttle
          tope diario y las posiciones retenidas están siempre al día.
 
 STEP 6 — SALIDA
+         Primero el resumen de la ronda de los sitios que no sabe gestionar:
+         python3 /app/shared/skills/closer_notices.py flush
+         un solo mensaje para todas, nunca uno por posición.
          Una línea al Capitano, luego cierra el turno:
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Sin loop en idle: el Capitano te vuelve a spawnear cuando la
