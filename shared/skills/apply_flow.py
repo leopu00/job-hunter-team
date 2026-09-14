@@ -169,11 +169,14 @@ _VACANCY_CLOSED_PATTERNS = tuple(
     (lang, re.compile(pattern, re.I))
     for lang, pattern in (
         ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b(?! (?:from|by|via|through|at|on)\b)"),
+        # LinkedIn's signed-in notice on a closed vacancy (seen live, 14/09).
+        ("en", r"\bnot currently accepting (?:new )?applications\b(?! (?:from|by|via|through|at|on)\b)"),
         ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:is|has been|was) no longer (?:available|open|active|live|online)\b"),
         ("en", rf"\b{_NOUNS_EN} (?:has|have) (?:expired|been filled|been closed)\b"),
         ("en", r"\bapplications (?:for this \w+ )?(?:are|have been) (?:now )?closed\b"),
         ("it", rf"\b{_NOUNS_IT}{_NEAR}\bnon (?:è|e'|risulta) più (?:disponibile|attiv[ao]|apert[ao])\b"),
         ("it", r"\bnon (?:accetta|riceve) più candidature\b"),
+        ("it", r"\b(?:al momento|attualmente) non (?:accetta|riceve) candidature\b"),
         ("it", r"\bcandidature (?:sono )?chiuse\b"),
         ("it", r"\b(?:annuncio|offerta|posizione) (?:è )?(?:scadut[ao]|chius[ao])\b"),
         ("it", r"\bposizione (?:è )?(?:stata )?(?:coperta|chiusa)\b"),

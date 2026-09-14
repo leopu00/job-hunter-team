@@ -83,7 +83,11 @@ PROFILE_WAIT_S = 60.0
 # Seconds between 1601-01-01 (Chromium's cookie epoch) and 1970-01-01.
 _CHROMIUM_EPOCH_OFFSET_S = 11_644_473_600
 
-_SIGNED_IN = "#global-nav, nav.global-nav"
+# Signed in, LinkedIn's top bar links to the network and the messages; the
+# public page never does (seven real vacancies, 14/09).  The 2026 layout has no
+# #global-nav any more: on the box a signed-in page read as signed out and
+# stopped as linkedin_session_expired.
+_SIGNED_IN = "#global-nav, nav.global-nav, a[href*='/mynetwork/'], a[href*='/messaging/']"
 # On the public page, signed out, this tracking name is also carried by the
 # "Join now" and "Dismiss" controls of the sign-in dialog the Apply button
 # opens: the company address is not on that page at all.  Only a link whose
@@ -863,6 +867,22 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             return offsite_target(target, page.url)
         return None
 
+    @staticmethod
+    def _assert_open(page) -> None:
+        from apply_flow import vacancy_closed_evidence
+
+        try:
+            text = page.locator("body").inner_text(timeout=5_000)
+        except Exception:
+            return
+        language = vacancy_closed_evidence(text)
+        if language:
+            raise BlockedHuman(
+                "vacancy_closed",
+                f"The LinkedIn vacancy has no Apply control and says it is not accepting applications (notice language: {language})",
+                "detect",
+            )
+
     def _easy_apply(self, page) -> list:
         found = []
         for role in ("button", "link"):
@@ -890,6 +910,11 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             signed_in = self.session.signed_in(page)
             if controls and signed_in:
                 break
+            if signed_in and not controls:
+                # Signed in, no Apply control: a closed vacancy says so on the
+                # page ("Not currently accepting applications").  Never a
+                # sign-in problem.
+                self._assert_open(page)
             if attempt == 1:
                 raise BlockedHuman(
                     "linkedin_apply_control_missing",

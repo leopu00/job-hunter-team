@@ -332,3 +332,61 @@ def test_the_tool_health_gate_refuses_chrome_for_testing_and_needs_a_window_mana
     (bin_dir / "openbox").unlink()
     status, evidence = tool_health.check_manual_login_browser()
     assert status == "BROKEN" and "window manager" in evidence
+
+
+
+def signed_in_cookie(page) -> None:
+    page.context.add_cookies([{"name": "li_at", "value": "synthetic", "domain": "www.linkedin.com", "path": "/",
+                               "secure": True, "httpOnly": True, "sameSite": "Lax", "expires": time.time() + 3600}])
+
+
+# ── live 14/09: a valid session read as expired, a closed vacancy read as a sign-in problem ──
+
+
+def test_the_2026_signed_in_top_bar_counts_as_signed_in(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() + 3600)
+    signed_in_cookie(page)  # what the hand-made profile carries: LinkedIn shows the signed-in layout
+    recorded: list = []
+    site = Site(modern_nav=True)
+
+    site.install(page)
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert site.logins() == 0 and len(recorded) == 1
+
+
+def test_a_closed_vacancy_seen_signed_in_is_closed_not_an_expired_session(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() + 3600)
+    signed_in_cookie(page)
+    site = Site(modern_nav=True, closed=True)
+
+    site.install(page)
+    result = build_flow(home, cv_path).run(page=page, navigate=True)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    assert site.logins() == 0
+
+
+def test_the_recipe_itself_recognises_the_closed_notice_when_signed_in(page, cv_path: Path):
+    # The flow's own check can miss it (a public page with Apply controls before
+    # the sign-in); the recipe, signed in and with no control, must not.
+    class SignedIn:
+        def signed_in(self, _page):
+            return True
+
+        def challenge(self, _page):
+            return False
+
+    page.set_content(
+        '<html><body><a href="https://www.linkedin.com/messaging/">Messaggistica</a>'
+        "<p>Not currently accepting applications</p></body></html>"
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+    recipe.session = SignedIn()
+    recipe.job_url = "about:blank"
+
+    with pytest.raises(apply_flow.BlockedHuman) as stop:
+        recipe.open_form(page)
+    assert stop.value.reason == "vacancy_closed"
+    assert linkedin_apply.LinkedInSession.signed_in(page)
