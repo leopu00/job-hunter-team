@@ -1747,7 +1747,14 @@ def test_without_the_check_module_the_cv_is_not_a_pass(page, tmp_path: Path, cv_
     assert page.evaluate("window.submitCount") == 0
 
 
-def test_the_real_layout_check_stops_a_bad_cv_and_renders_page_one(page, tmp_path: Path):
+import pdf_layout_check  # noqa: E402
+
+# Taken at import, before the suite's autouse pass replaces it (tests/conftest.py).
+REAL_ANALYZE = pdf_layout_check.analyze
+
+
+def test_the_real_layout_check_stops_a_bad_cv_and_renders_page_one(page, tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pdf_layout_check, "analyze", REAL_ANALYZE)
     layout = pytest.importorskip("test_pdf_layout_check")
     if not layout.POPPLER and not __import__("os").environ.get("CI"):
         pytest.skip("poppler-utils not installed")
@@ -1767,7 +1774,10 @@ def test_the_real_layout_check_stops_a_bad_cv_and_renders_page_one(page, tmp_pat
     assert page.evaluate("window.submitCount") == 0
 
 
-def test_the_real_layout_check_on_an_unreadable_pdf_is_unavailable(page, tmp_path: Path, cv_path: Path):
+def test_the_real_layout_check_on_an_unreadable_pdf_is_unavailable(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pdf_layout_check, "analyze", REAL_ANALYZE)
     layout = pytest.importorskip("test_pdf_layout_check")
     if not layout.POPPLER and not __import__("os").environ.get("CI"):
         pytest.skip("poppler-utils not installed")
