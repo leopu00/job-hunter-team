@@ -3271,18 +3271,14 @@ class ApplicationFlow:
         if allow_injected_blank and page.url == "about:blank":
             return
         if platform == "generic":
-            # A company form stays on the company's site: the same host or a
-            # subdomain relation (careers.example.com ↔ example.com).
+            # A company form stays on the company's site: the recipe's own rule
+            # (sibling subdomains of one company, tenants of a shared suffix apart).
+            module = _optional_module("apply_generic")
             try:
-                page_host = (urllib.parse.urlsplit(page.url).hostname or "").casefold()
-                own_host = (urllib.parse.urlsplit(application_url).hostname or "").casefold()
                 secure = urllib.parse.urlsplit(page.url).scheme == "https"
             except ValueError:
-                page_host, own_host, secure = "", "", False
-            same_site = bool(page_host and own_host) and (
-                page_host == own_host or page_host.endswith("." + own_host) or own_host.endswith("." + page_host)
-            )
-            if not (secure and same_site):
+                secure = False
+            if not (secure and module is not None and module.same_site(page.url, application_url)):
                 raise BlockedHuman(
                     "application_redirect_untrusted",
                     "The company application page left the company's site during the flow",
