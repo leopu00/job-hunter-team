@@ -864,13 +864,6 @@ def test_an_answer_the_closer_saves_completes_the_flow_without_asking(
             scope=application_answers.answer_scope(conn, "textarea", 41),
         )
         conn.commit()
-    if not hasattr(application_answers, "answer_origins"):  # until HQ-BACKEND's function lands
-        monkeypatch.setattr(
-            application_answers,
-            "answer_origins",
-            lambda conn, pid: {"why do you want to join us": "agent_inferred"},
-            raising=False,
-        )
 
     page.set_content(ashby_form(question=question))
     resumed = flow().run(page=page, navigate=False)
@@ -1341,3 +1334,68 @@ def test_answer_sources_keep_only_known_origins_and_never_values():
     })
     assert receipt.answer_sources == {"phone": "user", "motivation": "agent_inferred"}
     assert receipt.to_dict()["answer_sources"] == {"phone": "user", "motivation": "agent_inferred"}
+
+
+def _cli(tmp_path: Path, *args: str) -> tuple[int, dict]:
+    import os
+    import subprocess
+
+    env = {
+        **os.environ,
+        "JHT_HOME": str(tmp_path),
+        "JHT_DB": str(tmp_path / "jobs.db"),
+        "JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY": "1",
+    }
+    done = subprocess.run(
+        [sys.executable, str(SKILLS / "application_answers.py"), *args, "--json"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    return done.returncode, json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def test_end_to_end_the_closer_saves_with_the_cli_and_the_flow_completes(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    question = "Why do you want to join us?"
+    notifications: list[dict] = []
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path, notifications=notifications)
+        built.db_path = db_path
+        return built
+
+    page.set_content(ashby_form(question=question))
+    stop = flow().run(page=page, navigate=False).to_dict()
+    pending = stop["pending_question"]
+
+    code, saved = _cli(
+        tmp_path, "save", "--key", pending["key"], "--label", pending["label"],
+        "--value", "Synthetic motivation written from the vacancy.",
+        "--field-type", pending["field_type"], "--basis", "vacancy", "--position-id", "41", "--db", str(db_path),
+    )
+    assert code == 0, saved
+
+    page.set_content(ashby_form(question=question))
+    resumed = flow().run(page=page, navigate=False)
+
+    assert resumed.status == "applied"
+    assert notifications == []
+    assert resumed.receipt.answer_sources["why do you want to join us"] == "agent_inferred"
+
+
+def test_end_to_end_the_closer_asks_with_the_cli_when_it_has_no_basis(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    checkpoint_path = tmp_path / ".cache" / "apply-flow" / "41.json"
+    page.set_content(ashby_form(question="Do you hold a synthetic licence?"))
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+    flow.checkpoint_path = checkpoint_path
+    pending = flow.run(page=page, navigate=False).pending_question
+
+    code, asked = _cli(tmp_path, "ask", "--position-id", "41", "--key", pending["key"], "--db", str(db_path))
+
+    assert code == 0, asked
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
+        ).fetchall() == [("closer_application_answer",)]
+    assert json.loads(checkpoint_path.read_text())["answer_request"]["asked"] is True
