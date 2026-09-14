@@ -1980,6 +1980,12 @@ class GreenhouseRecipe:
             combo.first.click()
             options = []
             visible = page.locator("[role=option]")
+            # React boards fetch the options after the click (1967, 14/09: read
+            # at once they were none, and Country came back as a text question).
+            try:
+                page.locator("[role=option]:visible").first.wait_for(state="visible", timeout=5_000)
+            except Exception:
+                pass
             for index in range(visible.count()):
                 option = visible.nth(index)
                 if option.is_visible():
@@ -2743,9 +2749,14 @@ def _optional_module(name: str):
     for qualified in (name, f"shared.skills.{name}"):
         try:
             return importlib.import_module(qualified)
-        except ImportError:
+        except ImportError as exc:
+            _OPTIONAL_IMPORT_ERRORS[name] = f"{type(exc).__name__}: {exc}"
             continue
     return None
+
+
+# Why an optional module could not be imported: logged, never a silent downgrade.
+_OPTIONAL_IMPORT_ERRORS: dict[str, str] = {}
 
 
 def _recipe_class(platform: str):
@@ -3956,6 +3967,25 @@ class ApplicationFlow:
             return FlowResult("denied", checkpoint.state, deferred.reason)
         return None
 
+    GENERIC_RENDER_WAIT_MS = 10_000
+
+    def _wait_for_company_form(self, page, recipe) -> None:
+        """A company page may build its form or its Apply control after load: give it time.
+
+        Bounded, and nothing is clicked while waiting.  The recipe's own checks
+        decide afterwards, exactly as on a page that rendered at once.
+        """
+        deadline = time.monotonic() + self.GENERIC_RENDER_WAIT_MS / 1000
+        while True:
+            try:
+                if recipe.form_present(page) or recipe.apply_control_present(page):
+                    return
+            except Exception:
+                return  # an unreadable page: the recipe's checks say why
+            if time.monotonic() >= deadline:
+                return
+            page.wait_for_timeout(500)
+
     def _jht_home(self) -> Path:
         return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
@@ -3969,14 +3999,17 @@ class ApplicationFlow:
             email = self._email_channel(checkpoint, page)
             if email is not None:
                 return email
-            generic = _recipe_class("generic") if detection.platform == "unknown" and not detection.conflict else None
-            if generic is not None:
-                # No ATS named the page and nothing contradicts that: a company
-                # form, if the page has one.  A known ATS without a recipe
-                # (Workday, SmartRecruiters…) never gets here: it stays unsupported.
-                probe = generic()
-                if probe.form_present(page) or probe.apply_control_present(page):
+            if not detection.url_match and not detection.conflict:
+                # The host is no known ATS (a vendor name in the markup is not
+                # the host): the company-form recipe always gets its turn and
+                # says why when it cannot apply.  2071 (14/09): a quick look
+                # right after load saw no form on a page that renders it later,
+                # and the recipe was never tried.  A known ATS host without a
+                # recipe (Workday, SmartRecruiters…) stays unsupported.
+                if _recipe_class("generic") is not None:
                     detection = replace(detection, platform="generic")
+                else:
+                    LOG.error("[apply-flow] company-form recipe unavailable: %s", _OPTIONAL_IMPORT_ERRORS.get("apply_generic", "absent"))
         if detection.platform not in SUPPORTED_PLATFORMS:
             if not self._generic_application_controls(page):
                 self._assert_no_closed_notice(page)
@@ -3988,6 +4021,8 @@ class ApplicationFlow:
             )
         checkpoint.platform = detection.platform
         recipe = self._recipe(detection.platform)
+        if detection.platform == "generic":
+            self._wait_for_company_form(page, recipe)
         # Before any click: an Apply control that opens a mail client is
         # the application channel.  Clicking it would open nothing in
         # the browser and read as a missing form.  A recognised form on
@@ -3996,13 +4031,29 @@ class ApplicationFlow:
             email = self._email_channel(checkpoint, page)
             if email is not None:
                 return email
-            if not recipe.apply_control_present(page):
+            if not recipe.apply_control_present(page) and not (
+                # On a company page any form or apply-labelled control keeps a
+                # notice from counting (a newsletter under "applications closed
+                # for this round" proves nothing), as before the recipe existed.
+                detection.platform == "generic" and self._generic_application_controls(page)
+            ):
                 # No Apply control found is not a closed vacancy (a
                 # localised board, a slow render): only a notice is.
                 self._assert_no_closed_notice(page)
         injected_blank = not navigate and page.url == "about:blank"
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
-        recipe.open_form(page)
+        try:
+            recipe.open_form(page)
+        except BlockedHuman as refused:
+            if detection.platform == "generic" and refused.reason == "generic_form_missing":
+                # The company-form recipe found nothing to apply with either:
+                # the page stays unsupported, with the recipe's own finding.
+                raise BlockedHuman(
+                    "ats_unsupported",
+                    f"No known ATS and no company application form: {refused.detail} (generic_form_missing)",
+                    "detect",
+                ) from None
+            raise
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
         # Confirm the rendered form too.  URL-only detection is not
         # enough to interact when a block/error page owns that URL.
