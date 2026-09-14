@@ -175,18 +175,117 @@ def test_two_open_questions_and_no_code_resolve_nothing(db, bridge):
     assert row(db, "SELECT apply_requested_by FROM positions WHERE id = 7") == [("user_web",)]
 
 
-def test_the_next_message_answers_only_the_single_question_delivered_on_this_bot(db, bridge):
-    ask(db, 7, "notice period", "Notice period?", field_type="text", options=(), via="web")
-    telegram(bridge(), db, 6, "one month")
+def test_the_next_message_answers_only_the_single_choice_question_delivered_on_this_bot(db, bridge):
+    ask(db, 7, "which work model can you accept", "Which work model can you accept?", via="web")
+    telegram(bridge(), db, 6, "Hybrid")
     assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE user_reply IS NOT NULL") == [(0,)]
 
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE pending_user_messages SET delivered_via = 'telegram' WHERE author = 'agent'")
-    telegram(bridge("capitano"), db, 7, "one month")
+    telegram(bridge("capitano"), db, 7, "Hybrid")
     assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE user_reply IS NOT NULL") == [(0,)]
 
-    telegram(bridge(), db, 8, "one month")
-    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE author = 'agent'") == [("one month",)]
+    mod = bridge()
+    telegram(mod, db, 8, "Hybrid")
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE author = 'agent'") == [("Hybrid",)]
+    assert [o.status for o in mod.feedback] == ["resolved"]
+
+
+def test_a_bare_message_that_is_not_an_option_stays_chat(db, bridge):
+    qid, _, _ = ask(db, 7, "which work model can you accept", "Which work model can you accept?")
+    mod = bridge()
+    telegram(mod, db, 9, "hi, any news on my applications?")
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (qid,)) == [(None,)]
+    assert mod.feedback == []
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE author = 'user'") == [(1,)]
+
+
+def test_an_unrelated_chat_message_never_answers_a_free_text_question(db, bridge):
+    # Cross-review R1: the user withdrew position 7 and chats about something else.
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET apply_requested = 0, apply_requested_by = NULL WHERE id = 7")
+    mid, body, source_id = ask(db, 7, "notice period", "What is your notice period?", "text", ())
+    mod = bridge()
+    telegram(mod, db, 1, "hi, any news on my applications today?")
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (mid,)) == [(None,)]
+    assert row(db, "SELECT apply_requested FROM positions WHERE id = 7") == [(0,)]
+    assert mod.feedback == []
+    # With its code it is an answer: saved, and the position stays withdrawn.
+    telegram(mod, db, 2, f"{aa.answer_code(source_id)} two months")
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (mid,)) == [("two months",)]
+    assert row(db, "SELECT apply_requested, apply_requested_by FROM positions WHERE id = 7") == [(0, None)]
+    assert row(db, "SELECT answer_json FROM application_answers WHERE key = 'notice period'") == [('"two months"',)]
+    assert [(o.status, o.reason) for o in mod.feedback] == [("resolved", "position_withdrawn")]
+    assert "withdrawn" in mod._answer_feedback_text(mod.feedback[0])
+
+
+def test_a_telegram_answer_never_turns_a_withdrawn_position_back_on(db, bridge):
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET apply_requested = 0, apply_requested_by = 'user_web' WHERE id = 7")
+    _, body, _ = ask(db, 7, "which work model can you accept", "Which work model can you accept?")
+    telegram(bridge(), db, 3, "Remote", reply_to=body)
+    assert row(db, "SELECT apply_requested, apply_requested_by FROM positions WHERE id = 7") == [(0, "user_web")]
+    assert row(db, "SELECT answer_json FROM application_answers") == [('"Remote"',)]
+
+
+def test_a_reply_to_an_answered_question_never_resolves_another_position(db, bridge):
+    # Cross-review R2: the same question later asked for position 8.
+    label = "Which work model can you accept?"
+    mid_a, body_a, _ = ask(db, 7, "which work model can you accept", label)
+    mod = bridge()
+    telegram(mod, db, 1, "Remote", reply_to=body_a)
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (mid_a,)) == [("Remote",)]
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET apply_requested = 0, apply_requested_by = NULL WHERE id = 8")
+    mid_b, _, _ = ask(db, 8, "which work model can you accept", label)
+    telegram(mod, db, 2, "Hybrid", reply_to=body_a)
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (mid_b,)) == [(None,)]
+    assert row(db, "SELECT apply_requested FROM positions WHERE id = 8") == [(0,)]
+    assert [o.status for o in mod.feedback] == ["resolved", "already_answered"]
+    assert "already" in mod._answer_feedback_text(mod.feedback[1])
+    assert "More than one" not in mod._answer_feedback_text(mod.feedback[1])
+
+
+def test_an_unknown_code_is_not_called_ambiguous(db, bridge):
+    ask(db, 7, "which work model can you accept", "Which work model can you accept?")
+    mod = bridge()
+    unknown = next(f"Q{n:04X}" for n in range(65536) if f"Q{n:04X}" != aa.answer_code("closer-answer:7:whichworkmodelcanyou"))
+    telegram(mod, db, 4, f"{unknown} Remote")
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE user_reply IS NOT NULL") == [(0,)]
+    assert [o.status for o in mod.feedback] == ["unknown_code"]
+    assert "More than one" not in mod._answer_feedback_text(mod.feedback[0])
+
+
+def test_a_quoted_message_without_codes_matches_only_the_whole_question_line(db):
+    # "Question: Phone" is not the question quoted as "Question: Phone number?".
+    ask(db, 7, "phone", "Phone", field_type="tel", options=())
+    with sqlite3.connect(db) as conn:
+        found = aa.resolve_telegram_reply(conn, text="+1 555 0100", reply_to_text="Question: Phone number?\nField type: tel")
+        assert found.status == "not_an_answer"
+        found = aa.resolve_telegram_reply(conn, text="+1 555 0100", reply_to_text="Question: Phone\nField type: tel")
+        assert found.status == "resolved"
+
+
+def test_the_bridge_uses_the_module_code_pattern():
+    source = BRIDGE_PATH.read_text(encoding="utf-8")
+    assert "Q[0-9A-F]{4}" not in source and "application_answers._CODE" in source
+
+
+def test_a_motivation_is_kept_per_company_and_facts_are_global(db, bridge):
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET company = 'Other Fixture Ltd' WHERE id = 8")
+    _, why_body, _ = ask(db, 7, "why do you want to join us", "Why do you want to join us?", "textarea", ())
+    _, notice_body, _ = ask(db, 7, "notice period", "Notice period?", "text", ())
+    mod = bridge()
+    telegram(mod, db, 1, "Fixture motivation", reply_to=why_body)
+    telegram(mod, db, 2, "one month", reply_to=notice_body)
+    with sqlite3.connect(db) as conn:
+        same = aa.load_answers(conn, 7)
+        other = aa.load_answers(conn, 8)
+        anywhere = aa.load_answers(conn)
+    assert same["why do you want to join us"] == "Fixture motivation"
+    assert "why do you want to join us" not in other and "why do you want to join us" not in anywhere
+    assert other["notice period"] == anywhere["notice period"] == "one month"
 
 
 def test_a_replayed_telegram_update_does_not_answer_twice(db, bridge):
@@ -304,7 +403,11 @@ def test_each_missing_essential_is_asked_once_and_an_answer_closes_it(db, bridge
     assert second["already_asked"] == ["notice period"] and len(asked) == 1
     assert "Field type: text" in asked[0]["message"]
 
-    telegram(bridge(), db, 12, "three months")
+    mod = bridge()
+    telegram(mod, db, 12, "three months")  # a free-text fact: a bare message is chat
+    with sqlite3.connect(db) as conn:
+        assert aa.ensure_essentials(conn, profile, 8, notifier=notifier)["status"] == "waiting"
+    telegram(mod, db, 13, "three months", reply_to=asked[0]["message"])
     with sqlite3.connect(db) as conn:
         third = aa.ensure_essentials(conn, profile, 8, notifier=notifier)
     assert third["status"] == "complete" and len(asked) == 1
@@ -621,3 +724,95 @@ def test_two_bridges_checking_together_send_one_wake(db):
         woken = aa.wake_closer(conn, FULL_PROFILE, sessions=lambda: ["CLOSER-1"],
                                sender=lambda s, t: sent.append(s) or True, queue=other_bridge_claims_first)
     assert (woken, sent) == ([], [])
+
+
+# ── cross-review decisions (N1 · M4 in apply_flow) ───────────────────────────
+
+
+def test_a_dry_run_never_asks_the_user_for_essentials(db, tmp_path, monkeypatch, caplog):
+    import apply_flow
+
+    asked = []
+    flow = apply_flow.ApplicationFlow(
+        position_id=7, url="https://jobs.ashbyhq.com/fixture/1", profile={"name": "Test Candidate"},
+        cv_path=tmp_path / "cv.pdf", checkpoint_path=tmp_path / "checkpoint.json", db_path=db,
+        gate_checker=lambda **_: type("V", (), {"allowed": True, "context": {"mode": "dry_run"}})(),
+        essentials_checker=lambda **kw: asked.append(kw) or ["phone"],
+        notifier=lambda **kw: asked.append(kw) or "1",
+    )
+
+    class Opened(Exception):
+        pass
+
+    monkeypatch.setattr(flow, "_managed_page", lambda: (_ for _ in ()).throw(Opened()))
+    before = row(db, "SELECT COUNT(*) FROM pending_user_messages")
+    with pytest.raises(Opened):
+        flow.run()  # the diagnostic run goes on to the page
+    assert asked == []
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages") == before
+    assert "7 essential facts unknown, not asked" in caplog.text
+
+
+def test_the_cross_review_dry_run_case(tmp_path):
+    from apply_flow import ApplicationFlow
+
+    class V:
+        allowed = True
+        reason = "ok"
+        context = {"mode": "dry_run"}
+
+    asked = []
+    flow = ApplicationFlow(
+        essentials_checker=lambda **kw: asked.append(kw) or ["phone"],
+        position_id=41, url="https://jobs.ashbyhq.com/example/00000000-0000-0000-0000-000000000000",
+        profile={"name": "Fixture"}, cv_path=tmp_path / "cv.pdf",
+        checkpoint_path=tmp_path / "checkpoint.json", receipt_dir=tmp_path / "receipts",
+        gate_checker=lambda **_: V(), notifier=lambda **_: "n", applied_recorder=lambda **_: None,
+    )
+    flow.run(page=object(), navigate=False)
+    assert asked == []
+
+
+def test_a_textarea_answer_from_the_dashboard_is_asked_again_for_another_company(db, tmp_path):
+    import apply_flow
+
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET company = 'Other Fixture Ltd' WHERE id = 8")
+    flow_a = apply_flow.ApplicationFlow(
+        position_id=7, url="https://jobs.ashbyhq.com/fixture/1", profile={"name": "Test Candidate"},
+        cv_path=tmp_path / "cv.pdf", db_path=db,
+    )
+    request = {"payload": {"label": "Why do you want to join us?", "field_type": "textarea", "options": []}}
+    flow_a._save_application_answer("why do you want to join us", request, "Fixture motivation")
+    flow_a._save_application_answer("years of python", {"payload": {"label": "Years of Python?", "field_type": "number", "options": []}}, "6")
+    flow_b = apply_flow.ApplicationFlow(
+        position_id=8, url="https://jobs.ashbyhq.com/fixture/2", profile={"name": "Test Candidate"},
+        cv_path=tmp_path / "cv.pdf", db_path=db,
+    )
+    assert flow_a._recipe("ashby")._answer_for("Why do you want to join us?", "x") == (True, "Fixture motivation")
+    assert flow_b._recipe("ashby")._answer_for("Why do you want to join us?", "x") == (False, None)
+    assert flow_b._recipe("ashby")._answer_for("Years of Python?", "x") == (True, "6")
+
+
+def test_a_harvested_dashboard_motivation_is_kept_per_company(db):
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET company = 'Other Fixture Ltd' WHERE id = 8")
+    qid, _, _ = ask(db, 7, "why do you want to join us", "Why do you want to join us?", "textarea", (), via="web")
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE pending_user_messages SET user_reply = 'Fixture motivation', user_reply_at = '2026-09-14' WHERE id = ?", (qid,))
+        assert aa.harvest_replies(conn) == 1
+        assert aa.harvest_replies(conn) == 0
+        assert "why do you want to join us" in aa.load_answers(conn, 7)
+        assert "why do you want to join us" not in aa.load_answers(conn, 8)
+
+
+def test_an_essential_textarea_stays_global(db):
+    with sqlite3.connect(db) as c:
+        c.execute("UPDATE positions SET company = 'Other Fixture Ltd' WHERE id = 8")
+    qid = _essential_question(db, "work_authorization")
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE pending_user_messages SET source_payload = ?, user_reply = 'EU', user_reply_at = '2026-09-14' WHERE id = ?",
+                     (json.dumps({"version": 1, "position_id": 7, "key": "work authorization", "label": "Work?",
+                                  "field_type": "textarea", "options": []}), qid))
+        aa.harvest_replies(conn)
+        assert aa.load_answers(conn, 8)["work authorization"] == "EU"

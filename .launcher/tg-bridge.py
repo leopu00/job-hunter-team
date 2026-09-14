@@ -41,7 +41,6 @@ direttamente. Questo bridge gestisce solo l'inbound.
 
 import json
 import os
-import re
 import sqlite3
 import subprocess
 import sys
@@ -457,8 +456,11 @@ def _resolve_closer_answer(db: sqlite3.Connection, rec: dict):
     if outcome.status == "rejected":
         log(f"closer answer rejected message={outcome.message_id} reason={outcome.reason}")
         return outcome
+    if outcome.status in {"already_answered", "unknown_code"}:
+        # Only a quoted or written code gets here: the user meant to answer.
+        return outcome
     if outcome.status == "ambiguous" and (
-        rec.get("reply_to_text") or re.search(r"(?i)\bQ[0-9A-F]{4}\b", str(rec.get("body") or ""))
+        rec.get("reply_to_text") or application_answers._CODE.search(str(rec.get("body") or ""))
     ):
         return outcome
     return None
@@ -473,8 +475,17 @@ _REJECTION_TEXT = {
 
 
 def _answer_feedback_text(outcome) -> str:
+    if outcome.status == "resolved" and outcome.reason == "position_withdrawn":
+        return (
+            "Answer saved. That application is withdrawn, so CLOSER will not send it: "
+            "the answer is used only if you ask to apply again."
+        )
     if outcome.status == "resolved":
         return "Answer saved. CLOSER will use it for this application and will not ask it again."
+    if outcome.status == "already_answered":
+        return "That CLOSER question already has an answer, so this message was not saved as a new one."
+    if outcome.status == "unknown_code":
+        return "No open CLOSER question has that code, so this message was not saved as an answer."
     if outcome.status == "rejected":
         why = _REJECTION_TEXT.get(outcome.reason, "it does not fit this question")
         return f"That answer was not saved: {why}. Here is the question again:\n\n{outcome.question}"

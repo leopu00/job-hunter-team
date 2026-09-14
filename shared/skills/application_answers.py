@@ -62,6 +62,11 @@ import apply_gate  # noqa: E402
 SOURCE_ACTION = "closer_application_answer"
 TELEGRAM_ORIGIN = "user_telegram"
 TEXT_FIELD_TYPES = frozenset({"textarea", "text", "email", "tel", "url", "number", "date"})
+# Only these may be answered by a bare message: the exact-option rule filters
+# out ordinary chat. A free-text question needs a reply or its code.
+CHOICE_FIELD_TYPES = frozenset({"radio", "select", "checkbox", "checkboxes"})
+# A normalised label never contains "@": a scoped key cannot collide with a global one.
+_SCOPE_SEP = " @ "
 MAX_ANSWER_CHARS = 4000
 
 _CODE = re.compile(r"(?<![A-Za-z0-9])(Q[0-9A-F]{4})(?![A-Za-z0-9])", re.I)
@@ -169,16 +174,55 @@ def ensure_table(conn: sqlite3.Connection) -> None:
     _db._migrate_application_answers(conn)
 
 
-def load_answers(conn: sqlite3.Connection) -> dict[str, Any]:
-    ensure_table(conn)
-    rows = conn.execute("SELECT key, answer_json FROM application_answers").fetchall()
+def position_company(conn: sqlite3.Connection, position_id: int | None) -> str:
+    """The scope of a company-specific answer: the normalised company name."""
+    if position_id is None:
+        return ""
+    try:
+        found = conn.execute("SELECT company FROM positions WHERE id = ?", (int(position_id),)).fetchone()
+    except (sqlite3.Error, TypeError, ValueError):
+        found = None
+    company = normalise_label(found[0]) if found and found[0] else ""
+    return company or normalise_label(f"position {position_id}")
+
+
+def answer_scope(
+    conn: sqlite3.Connection, field_type: str, position_id: int | None, *, essential: bool = False
+) -> str:
+    """Facts are global; a textarea (motivation, "why us", cover) belongs to one company.
+
+    A motivation written for one company must never be pasted into another
+    company's form: there the question is asked again.
+    """
+    if field_type != "textarea" or essential:
+        return ""
+    return position_company(conn, position_id)
+
+
+def _read_answers(conn: sqlite3.Connection, position_id: int | None) -> dict[str, Any]:
+    if not _table_exists(conn, "application_answers"):
+        return {}
+    company = position_company(conn, position_id) if position_id is not None else ""
     answers: dict[str, Any] = {}
-    for key, answer_json in rows:
+    scoped: dict[str, Any] = {}
+    for key, answer_json in conn.execute("SELECT key, answer_json FROM application_answers").fetchall():
         try:
-            answers[str(key)] = json.loads(answer_json)
+            value = json.loads(answer_json)
         except (TypeError, ValueError):
             continue
+        base, sep, scope = str(key).partition(_SCOPE_SEP)
+        if not sep:
+            answers[base] = value
+        elif company and scope == company:
+            scoped[base] = value
+    answers.update(scoped)
     return answers
+
+
+def load_answers(conn: sqlite3.Connection, position_id: int | None = None) -> dict[str, Any]:
+    """Every global answer, plus the company answers of `position_id`'s company."""
+    ensure_table(conn)
+    return _read_answers(conn, position_id)
 
 
 def save_answer(
@@ -191,9 +235,13 @@ def save_answer(
     options: Sequence[str] = (),
     channel: str,
     message_id: int | None = None,
+    scope: str = "",
 ) -> None:
     if not key or key != normalise_label(key):
         raise ValueError("answer key is not canonical")
+    if scope != normalise_label(scope):
+        raise ValueError("answer scope is not canonical")
+    key = f"{key}{_SCOPE_SEP}{scope}" if scope else key
     ensure_table(conn)
     conn.execute(
         "INSERT INTO application_answers "
@@ -239,11 +287,34 @@ def import_profile_answers(conn: sqlite3.Connection, profile: Mapping[str, Any])
     return imported
 
 
-def answers_with_profile(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> dict[str, Any]:
+def _profile_answers(profile: Mapping[str, Any]) -> dict[str, Any]:
+    raw = profile.get("application_answers") if isinstance(profile, Mapping) else None
+    if isinstance(raw, Mapping):
+        return {normalise_label(str(k)): v for k, v in raw.items()}
+    if isinstance(raw, list):
+        return {
+            normalise_label(str(i["question"])): i.get("answer")
+            for i in raw if isinstance(i, Mapping) and i.get("question")
+        }
+    return {}
+
+
+def answers_with_profile(
+    conn: sqlite3.Connection, profile: Mapping[str, Any], position_id: int | None = None
+) -> dict[str, Any]:
     """YAML answers imported, then every answer keyed by its normalised label."""
     import_profile_answers(conn, profile)
     conn.commit()
-    return load_answers(conn)
+    return load_answers(conn, position_id)
+
+
+def read_answers(
+    conn: sqlite3.Connection, profile: Mapping[str, Any], position_id: int | None = None
+) -> dict[str, Any]:
+    """What `answers_with_profile` returns, without writing: for previews and checks."""
+    answers = {k: v for k, v in _profile_answers(profile).items() if k and v is not None}
+    answers.update(_read_answers(conn, position_id))
+    return answers
 
 
 # ── Answers arriving on the question rows ────────────────────────────────────
@@ -257,13 +328,13 @@ def harvest_replies(conn: sqlite3.Connection) -> int:
     """
     ensure_table(conn)
     rows = conn.execute(
-        "SELECT id, source_payload, user_reply, delivered_via FROM pending_user_messages "
+        "SELECT id, source_payload, user_reply, source_id, related_position_id FROM pending_user_messages "
         "WHERE agent = 'closer' AND kind = 'question' AND source_action = ? "
         "AND user_reply IS NOT NULL AND user_reply_at IS NOT NULL",
         (SOURCE_ACTION,),
     ).fetchall()
     saved = 0
-    for message_id, payload_text, reply, _via in rows:
+    for message_id, payload_text, reply, source_id, position_id in rows:
         try:
             payload = json.loads(payload_text or "")
             field_type, options = payload_shape(payload)
@@ -271,8 +342,12 @@ def harvest_replies(conn: sqlite3.Connection) -> int:
         except (ValueError, AnswerRejected):
             continue
         key = normalise_label(payload["key"])
+        scope = answer_scope(
+            conn, field_type, position_id, essential=str(source_id).startswith("closer-essential:")
+        )
         existing = conn.execute(
-            "SELECT source_message_id FROM application_answers WHERE key = ?", (key,)
+            "SELECT source_message_id FROM application_answers WHERE key = ?",
+            (f"{key}{_SCOPE_SEP}{scope}" if scope else key,),
         ).fetchone()
         if existing and existing[0] is not None and int(existing[0]) >= int(message_id):
             continue
@@ -285,6 +360,7 @@ def harvest_replies(conn: sqlite3.Connection) -> int:
             options=options,
             channel="reply",
             message_id=int(message_id),
+            scope=scope,
         )
         saved += 1
     return saved
@@ -304,7 +380,7 @@ def telegram_hint(source_id: str) -> str:
 
 @dataclass(frozen=True)
 class Resolution:
-    status: str  # not_an_answer · ambiguous · rejected · resolved
+    status: str  # not_an_answer · ambiguous · already_answered · unknown_code · rejected · resolved
     reason: str = ""
     message_id: int | None = None
     position_id: int | None = None
@@ -329,32 +405,69 @@ def _question_line(body: str) -> str:
     return ""
 
 
-def _pick_target(open_rows: list[tuple], text: str, reply_to_text: str | None, *, direct: bool):
+def _closed_codes(conn: sqlite3.Connection) -> set[str]:
+    return {
+        answer_code(source_id)
+        for (source_id,) in conn.execute(
+            "SELECT source_id FROM pending_user_messages "
+            "WHERE agent = 'closer' AND kind = 'question' AND source_action = ? AND user_reply IS NOT NULL",
+            (SOURCE_ACTION,),
+        )
+    }
+
+
+def _code_miss(codes: set[str], closed: set[str]) -> str:
+    return "already_answered" if codes & closed else "unknown_code"
+
+
+def _field_type(payload_text: Any) -> str:
+    try:
+        return payload_shape(json.loads(payload_text or ""))[0]
+    except (ValueError, AnswerRejected):
+        return ""
+
+
+def _pick_target(
+    open_rows: list[tuple], closed: set[str], text: str, reply_to_text: str | None, *, direct: bool
+):
+    """(row, answer text, why not, how it was matched: reply · code · direct)."""
     by_code: dict[str, list[tuple]] = {}
     for row in open_rows:
         by_code.setdefault(answer_code(row[2]), []).append(row)
 
     if reply_to_text:
         codes = {c.upper() for c in _CODE.findall(reply_to_text)}
-        matched = [r for c in codes for r in by_code.get(c, [])]
-        if not matched:
-            # A question sent before codes existed: its Question line identifies it.
-            matched = [r for r in open_rows if _question_line(r[1]) and _question_line(r[1]) in reply_to_text]
+        if codes:
+            # The quoted message names its question: that one or nothing. A
+            # code that is no longer open never falls back to another question.
+            matched = [r for c in codes for r in by_code.get(c, [])]
+            if len(matched) == 1:
+                return matched[0], text, "", "reply"
+            return None, text, "ambiguous" if matched else _code_miss(codes, closed), "reply"
+        # A question sent before codes existed: its whole Question line identifies it.
+        lines = {line.strip() for line in reply_to_text.splitlines()}
+        matched = [r for r in open_rows if _question_line(r[1]) and _question_line(r[1]).strip() in lines]
         if len(matched) == 1:
-            return matched[0], text, ""
-        return None, text, "ambiguous" if matched or codes else "not_an_answer"
+            return matched[0], text, "", "reply"
+        return None, text, "ambiguous" if matched else "not_an_answer", "reply"
 
     found = _CODE.search(text)
     if found:
-        matched = by_code.get(found.group(1).upper(), [])
+        code = found.group(1).upper()
+        matched = by_code.get(code, [])
         if len(matched) == 1:
             remainder = (text[: found.start()] + text[found.end():]).strip(" \t:-—\n")
-            return matched[0], remainder, ""
-        return None, text, "ambiguous"
+            return matched[0], remainder, "", "code"
+        return None, text, "ambiguous" if matched else _code_miss({code}, closed), "code"
 
-    if direct and len(open_rows) == 1 and open_rows[0][5] == "telegram":
-        return open_rows[0], text, ""
-    return None, text, "ambiguous" if len(open_rows) > 1 else "not_an_answer"
+    if (
+        direct
+        and len(open_rows) == 1
+        and open_rows[0][5] == "telegram"
+        and _field_type(open_rows[0][3]) in CHOICE_FIELD_TYPES
+    ):
+        return open_rows[0], text, "", "direct"
+    return None, text, "ambiguous" if len(open_rows) > 1 else "not_an_answer", ""
 
 
 def resolve_telegram_reply(
@@ -373,9 +486,10 @@ def resolve_telegram_reply(
     if not isinstance(text, str) or not text.strip():
         return Resolution("not_an_answer")
     open_rows = _open_requests(conn)
-    if not open_rows:
+    closed = _closed_codes(conn)
+    if not open_rows and not closed:
         return Resolution("not_an_answer")
-    row, answer_text, why = _pick_target(open_rows, text, reply_to_text, direct=direct)
+    row, answer_text, why, via = _pick_target(open_rows, closed, text, reply_to_text, direct=direct)
     if row is None:
         return Resolution(why)
     message_id, body, source_id, payload_text, position_id = row[0], row[1], row[2], row[3], int(row[4])
@@ -389,6 +503,9 @@ def resolve_telegram_reply(
             raise AnswerRejected("closer_answer_not_exact_option" if options else "closer_answer_empty")
         validate_reply(field_type, options, reply)
     except AnswerRejected as exc:
+        if via == "direct":
+            # A bare message that is not one of the options is chat, not a wrong answer.
+            return Resolution("not_an_answer")
         return Resolution("rejected", exc.reason, message_id, position_id, body)
     except ValueError:
         return Resolution("rejected", "closer_answer_payload_invalid", message_id, position_id, body)
@@ -411,7 +528,11 @@ def resolve_telegram_reply(
     ).rowcount
     if changed != 1:
         return Resolution("not_an_answer")
-    if verdict.allowed:
+    # An answer renews an authorisation that is on; it never turns a withdrawn
+    # one back on. The answer is still kept for the next time the user asks.
+    flag = conn.execute("SELECT apply_requested FROM positions WHERE id = ?", (position_id,)).fetchone()
+    withdrawn = not (flag and flag[0] == 1)
+    if verdict.allowed and not withdrawn:
         apply_request.write_authorisation(conn, position_id, True, TELEGRAM_ORIGIN)
     save_answer(
         conn,
@@ -422,8 +543,10 @@ def resolve_telegram_reply(
         options=options,
         channel="telegram",
         message_id=message_id,
+        scope=answer_scope(conn, field_type, position_id, essential=essential),
     )
-    return Resolution("resolved", "", message_id, position_id, body)
+    reason = "position_withdrawn" if withdrawn and not essential else ""
+    return Resolution("resolved", reason, message_id, position_id, body)
 
 
 # ── Essential facts ──────────────────────────────────────────────────────────
@@ -542,21 +665,8 @@ def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> di
     Reads the saved answers, the profile (YAML answers included) and any valid
     reply already written on a question row, all in memory.
     """
-    answers: dict[str, Any] = {}
-    raw = profile.get("application_answers") if isinstance(profile, Mapping) else None
-    if isinstance(raw, Mapping):
-        answers.update({normalise_label(str(k)): v for k, v in raw.items()})
-    elif isinstance(raw, list):
-        answers.update({
-            normalise_label(str(i["question"])): i.get("answer")
-            for i in raw if isinstance(i, Mapping) and i.get("question")
-        })
-    if _table_exists(conn, "application_answers"):
-        for key, answer_json in conn.execute("SELECT key, answer_json FROM application_answers"):
-            try:
-                answers[str(key)] = json.loads(answer_json)
-            except (TypeError, ValueError):
-                continue
+    answers = _profile_answers(profile)
+    answers.update(_read_answers(conn, None))
     asked: set[str] = set()
     if _table_exists(conn, "pending_user_messages"):
         for source_id, payload_text, reply in conn.execute(

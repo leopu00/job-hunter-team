@@ -572,6 +572,19 @@ def _default_essentials_checker(
     return list(result["missing"])
 
 
+def _read_only_essentials(
+    *, profile: Mapping[str, Any], position_id: int, db_path: str | Path | None
+) -> list[str]:
+    """What is missing, without asking: a dry run has no effect on the user."""
+    db = _resolve_db_path(db_path)
+    if not db.is_file():
+        raise FlowError("jobs.db not found")
+    with contextlib.closing(
+        sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=10)
+    ) as conn:
+        return list(application_answers.check_essentials(conn, profile)["missing"])
+
+
 def _resolve_db_path(db_path: str | Path | None) -> Path:
     if db_path:
         return Path(db_path)
@@ -2244,6 +2257,17 @@ class ApplicationFlow:
             )
         return recipe(self._profile_with_saved_answers(), self.cv_path)
 
+    def _log_dry_run_essentials(self) -> None:
+        try:
+            missing = _read_only_essentials(
+                profile=self.profile, position_id=self.position_id, db_path=self.db_path
+            )
+        except Exception as exc:
+            LOG.warning("dry run: essential facts not readable: %s", type(exc).__name__)
+            return
+        if missing:
+            LOG.warning("dry run: %d essential facts unknown, not asked", len(missing))
+
     def _profile_with_saved_answers(self) -> dict[str, Any]:
         """The profile with every remembered answer; the database wins over the YAML."""
         merged = dict(self.profile)
@@ -2259,7 +2283,7 @@ class ApplicationFlow:
                 if self.profile_path is not None:
                     application_answers.import_profile_answers(conn, self.profile)
                     conn.commit()
-                answers.update(application_answers.load_answers(conn))
+                answers.update(application_answers.load_answers(conn, self.position_id))
         merged["application_answers"] = answers
         return merged
 
@@ -2518,19 +2542,21 @@ class ApplicationFlow:
         """
         payload = request.get("payload") if isinstance(request.get("payload"), Mapping) else {}
         db = _resolve_db_path(self.db_path)
+        field_type = str(payload.get("field_type") or "text")
         with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
             application_answers.save_answer(
                 conn,
                 key=key,
                 label=str(payload.get("label") or key),
                 answer=answer,
-                field_type=str(payload.get("field_type") or "text"),
+                field_type=field_type,
                 options=list(payload.get("options") or []),
                 channel="reply",
                 message_id=int(str(request.get("message_id") or 0)) or None,
+                scope=application_answers.answer_scope(conn, field_type, self.position_id),
             )
             conn.commit()
-            stored = application_answers.load_answers(conn)
+            stored = application_answers.load_answers(conn, self.position_id)
         if key not in stored or stored[key] != answer:
             raise FlowError("saved application answer could not be verified")
 
@@ -2652,9 +2678,15 @@ class ApplicationFlow:
             # nothing is saved in the checkpoint — the position is not held,
             # it simply waits until the answers exist.
             try:
-                missing = self.essentials_checker(
-                    profile=self.profile, position_id=self.position_id, db_path=self.db_path
-                )
+                if mode == "dry_run":
+                    # A dry run only looks: it never sends the user a question
+                    # and never stops on a fact it would have asked.
+                    self._log_dry_run_essentials()
+                    missing = []
+                else:
+                    missing = self.essentials_checker(
+                        profile=self.profile, position_id=self.position_id, db_path=self.db_path
+                    )
             except Exception as exc:
                 LOG.error("essential facts check failed: %s", type(exc).__name__)
                 return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
