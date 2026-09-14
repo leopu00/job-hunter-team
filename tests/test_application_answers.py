@@ -593,6 +593,21 @@ def test_the_last_answer_wakes_the_closer_once_and_an_intermediate_one_does_not(
     assert _wake(db) == ([], [])
 
 
+def test_a_wake_no_closer_took_is_given_back_for_the_next_poll(db):
+    first, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    _answer(db, first, "one month")
+    with sqlite3.connect(db) as conn:
+        lost = aa.wake_closer(
+            conn, FULL_PROFILE, sessions=lambda: ["CLOSER-1"], sender=lambda session, text: False,
+            queue=lambda _c: {"ready": True, "positions": [{"position_id": 7}]},
+        )
+    assert lost == []
+    assert row(db, "SELECT COUNT(*) FROM closer_wakes") == [(0,)]
+
+    woken, sent = _wake(db)
+    assert [w.reason for w in woken] == ["answers_complete"] and len(sent) == 1
+
+
 def test_answers_arriving_together_make_a_single_wake(db):
     ids = [ask(db, 7, f"q{i}", f"Q{i}?", field_type="text", options=())[0] for i in range(3)]
     for qid in ids:

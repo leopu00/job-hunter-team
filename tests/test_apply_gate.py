@@ -950,14 +950,15 @@ def test_senza_il_modulo_la_trattenuta_resta_e_niente_si_rompe(rework_box):
 def test_la_richiesta_automatica_non_e_mai_manuale(rework_box):
     # The queue saw a bad layout, then the check became unmeasurable before the
     # request re-read it: only a manual request may go on without a measure.
+    # (A new check function: a verdict is remembered per file content AND check.)
     home, db, _cv, mp = rework_box
-    calls = []
+
+    def gone(_p, **_):
+        raise pdf_layout_check.CheckError("poppler gone")
 
     def analyze(_p, **_):
-        calls.append(1)
-        if len(calls) == 1:
-            return {"ok": False, "reasons": ["narrow_text"]}
-        raise pdf_layout_check.CheckError("poppler gone")
+        mp.setattr(pdf_layout_check, "analyze", gone)
+        return {"ok": False, "reasons": ["narrow_text"]}
 
     mp.setattr(pdf_layout_check, "analyze", analyze)
     mp.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
