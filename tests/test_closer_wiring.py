@@ -191,6 +191,9 @@ def test_prompt_del_closer_intestazione_e_invarianti(lang):
     step4 = text[text.index("STEP 4"):text.index("STEP 5")]
     retry = step4[step4.index("retry_later"):step4.index("dry_run")]
     assert "exit 5" in retry and "retry_after" in retry and "5xx" in retry, lang
+    # The pause blocks inside the turn; the turn ends only on ready=false.
+    step5 = " ".join(text[text.index("STEP 5 —"):text.index("STEP 6 —")].split())
+    assert "jht-throttle-wait" in step5 and "STEP 1" in step5 and "ready=false" in step5, lang
     # A contact form's Message is a letter for THIS vacancy, saved per position;
     # an address written in the page is the email channel too.
     assert "--purpose contact_form_application" in " ".join(step4.split()), lang
@@ -238,11 +241,13 @@ def test_il_capitano_spawna_il_closer_solo_se_la_coda_e_aperta(lang):
     # correggere» (C-05) e il Capitano rispawna a ogni tick.
     assert rule.count("`0`") >= 2
     assert "C-05" in rule
-    # A live CLOSER that exited on an empty queue is idle, not working: seen
-    # live on 2026-09-14, new flags waited until a manual kickoff. The rule
-    # must wake it on its exit report, with the queue re-read.
-    assert "[REPORT] CLOSER queue <reason>, exiting" in rule, f"{path.name}: nessuna sveglia per un CLOSER vivo e fermo"
-    assert 'jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"' in rule
+    # A live CLOSER idle with a ready queue is woken whatever it last wrote:
+    # seen live after 1845 (14/09), a turn closed on "stays queued for the
+    # next paced iteration" matched no exit report and nobody woke it.
+    assert "python3 /app/shared/skills/application_answers.py wake-idle-closer" in rule, (
+        f"{path.name}: nessuna sveglia per un CLOSER vivo e fermo"
+    )
+    assert "[REPORT] CLOSER queue" not in rule, f"{path.name}: la sveglia dipende ancora dal testo del report"
 
 
 def test_la_coda_che_il_capitano_legge_resta_chiusa_senza_niente_da_inviare(tmp_path):

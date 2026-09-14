@@ -383,7 +383,7 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 ```
 
 1. Exit `0` AND no `CLOSER-1` in `tmux list-sessions` → `bash /app/.launcher/start-agent.sh closer 1`.
-2. Exit `0` AND `CLOSER-1` already alive → if the last thing it sent you is `[REPORT] CLOSER queue <reason>, exiting`, it ended its turn and is idle: wake it with ONE line, `jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"`, then nothing more until its next report. While it is working (no exit report since you woke it) do nothing: it re-reads the queue at every iteration.
+2. Exit `0` AND `CLOSER-1` already alive → run `python3 /app/shared/skills/application_answers.py wake-idle-closer`, whatever the CLOSER last wrote (an exit report, a line saying the rest "stays queued for the next iteration", or nothing at all). It wakes CLOSER-1 only when its pane sits idle at the prompt and no wake went out in the last 10 minutes, so running it at every tick is safe; while the CLOSER works it does nothing. Never wake it by hand with jht-tmux-send.
 3. Exit non-zero → **do not spawn**. Consent off, empty queue, every authorised position held, or the daily cap reached: **zero CLOSER instances is the correct state**, not idling to fix — C-05 anti-idle does not apply here.
 
 Always `closer 1`: it is a single instance (the launcher refuses `closer 2`, two CLOSERs could send the same application twice), so no `roll_worker_number.py` and no scaling. Never set `apply_requested` yourself, never write `applied`, never ask the CLOSER to retry a position whose flow stopped on `blocked_human` — the next move there is the user's. And never urge the user to authorise applications (RULE-T18): the flag is theirs to set.

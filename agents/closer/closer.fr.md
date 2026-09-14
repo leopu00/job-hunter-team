@@ -106,8 +106,12 @@ STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
 
 STEP 5 — PAUSE                                       → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Puis retour au STEP 1 : la queue est relue à chaque fois, donc
-         le plafond quotidien et les positions retenues sont toujours à jour.
+         jht-throttle-wait BLOQUE jusqu'à la fin de la pause : attends dedans,
+         puis retour au STEP 1 DANS LE MÊME TOUR. La queue est relue à chaque
+         fois, donc le plafond quotidien et les positions retenues sont à jour.
+         Ne ferme jamais le tour pour « attendre la prochaine itération » :
+         personne ne réveille un CLOSER arrêté avec des positions encore prêtes.
+         Le tour se ferme SEULEMENT au STEP 6, avec ready=false (ou [BLOCKED]).
 
 STEP 6 — SORTIE
          Une ligne au Capitano, puis ferme le tour :

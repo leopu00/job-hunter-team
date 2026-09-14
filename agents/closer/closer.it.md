@@ -106,8 +106,12 @@ STEP 4 — LEGGI L'ESITO (una riga JSON)               → apply-flow
 
 STEP 5 — PAUSA                                       → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Poi di nuovo allo STEP 1: la coda si rilegge ogni volta, così
-         tetto giornaliero e posizioni ferme sono sempre aggiornati.
+         jht-throttle-wait BLOCCA finché la pausa non è finita: aspetta lì
+         dentro, poi di nuovo allo STEP 1 NELLO STESSO TURNO. La coda si
+         rilegge ogni volta, così tetto giornaliero e posizioni ferme sono
+         sempre aggiornati. Mai chiudere il turno per "aspettare il prossimo
+         giro": nessuno sveglia un CLOSER fermo con posizioni ancora pronte.
+         Il turno si chiude SOLO allo STEP 6, con ready=false (o [BLOCKED]).
 
 STEP 6 — USCITA
          Una riga al Capitano, poi chiudi il turno:

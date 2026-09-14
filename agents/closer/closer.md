@@ -103,8 +103,12 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
 
 STEP 5 — PAUSE                                       → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Then back to STEP 1: the queue is re-read every time, so the
-         daily cap and the held positions are always current.
+         jht-throttle-wait BLOCKS until the pause is over: wait inside it,
+         then back to STEP 1 IN THE SAME TURN. The queue is re-read every
+         time, so the daily cap and the held positions are always current.
+         Never end the turn to "wait for the next iteration": nobody wakes
+         a CLOSER that stopped with positions still ready. The turn ends
+         ONLY at STEP 6, when the queue says ready=false (or [BLOCKED]).
 
 STEP 6 — EXIT
          One line to the Capitano, then end the turn:
