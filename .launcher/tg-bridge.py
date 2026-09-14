@@ -777,8 +777,8 @@ def _discard_partial(local: Path | None) -> None:
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
 
-# Buste che scrive solo il trasporto o un agente: in testa a un testo
-# dell'utente farebbero passare le sue parole per un messaggio del daemon
+# Buste che scrive solo il trasporto o un agente: in testa a una riga di un
+# testo dell'utente farebbero passare le sue parole per un messaggio del daemon
 # ([BRIDGE INFO]) o di un collega ([@x -> @y]). Il testo resta intatto, ma
 # chi lo legge vede per prima cosa che l'ha scritto l'utente.
 _FORGED_ENVELOPE_RE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I)
@@ -789,8 +789,14 @@ def handle_text(msg: dict) -> str | None:
     text = msg.get("text", "").strip()
     if not text:
         return None
-    if _FORGED_ENVELOPE_RE.match(text):
-        text = f"{USER_TEXT_MARK} {text}"
+    lines = text.split("\n")
+    if any(_FORGED_ENVELOPE_RE.match(line) for line in lines):
+        # Ogni riga che comincia come una busta porta il marchio, e anche la
+        # prima: chi legge il pane vede una riga per volta.
+        lines = [f"{USER_TEXT_MARK} {line}" if _FORGED_ENVELOPE_RE.match(line) else line for line in lines]
+        if not lines[0].startswith(USER_TEXT_MARK):
+            lines[0] = f"{USER_TEXT_MARK} {lines[0]}"
+        text = "\n".join(lines)
     log(f"text len={len(text)} → {TARGET_SESSION}")
     return text
 
