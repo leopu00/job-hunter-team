@@ -850,11 +850,17 @@ class EmailApplication:
         cv = self._attachment(position["cv_pdf_path"], "cv_missing", "cv")
         layout = apply_gate.cv_layout_hold(Path(cv["path"]))
         if layout:
+            preview = (
+                apply_gate.refresh_cv_preview(self.position_id, Path(cv["path"]), self.jht_home)
+                if layout == "cv_pdf_layout_bad"
+                else ""
+            )
             raise _blocked(
                 layout,
                 "the CV PDF failed the visual layout check; nothing was attached or sent"
                 if layout == "cv_pdf_layout_bad"
                 else "the CV PDF could not be measured; an unmeasured CV is never sent",
+                cv_preview=preview,
             )
         attachments = [cv]
         haystack = "\n".join(

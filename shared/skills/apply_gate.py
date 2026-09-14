@@ -702,6 +702,10 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     state = data.get("state")
     if state not in HELD_CHECKPOINT_STATES:
         return ""
+    if data.get("blocked_reason") in CV_LAYOUT_REASONS:
+        # The CV is judged from the file on every queue read (cv_layout_hold):
+        # a CV rendered again must not stay held by the stop the old one caused.
+        return ""
     request = data.get("answer_request")
     if (
         isinstance(request, dict)
@@ -750,7 +754,50 @@ def cv_layout_hold(cv: Path) -> str:
     except Exception as err:  # noqa: BLE001 — a crashing check is an unmeasured CV
         print(f"[apply-gate] CV layout check failed: {type(err).__name__}", file=sys.stderr)
         return "cv_pdf_check_unavailable"
-    return "" if isinstance(report, dict) and report.get("ok") is True else "cv_pdf_layout_bad"
+    if not isinstance(report, dict):
+        return "cv_pdf_check_unavailable"  # no report is no measurement
+    return "" if report.get("ok") is True else "cv_pdf_layout_bad"
+
+
+CV_LAYOUT_REASONS = ("cv_pdf_layout_bad", "cv_pdf_check_unavailable")
+
+
+def cv_preview_path(position_id: int, jht_home: Path | None = None) -> Path:
+    """Page 1 of the CV next to the checkpoint: the same file the browser flow writes."""
+    path = checkpoint_path(position_id, jht_home)
+    return path.with_name(f"{path.stem}.cv-page1.png")
+
+
+def refresh_cv_preview(position_id: int, cv: Path, jht_home: Path | None = None) -> str:
+    """Best effort: render page 1 of a CV that failed the layout check, once per file.
+
+    Rendered again only when the PDF is newer than the preview; tmp then
+    rename, 0600. Returns the preview path, or `""` when it cannot be made.
+    """
+    target = cv_preview_path(position_id, jht_home)
+    try:
+        if target.is_file() and target.stat().st_mtime_ns >= Path(cv).stat().st_mtime_ns:
+            return str(target)
+    except OSError:
+        pass
+    temporary = target.with_name(f".{target.stem}.partial.png")
+    try:
+        try:
+            from pdf_layout_check import render_preview
+        except ImportError:
+            from shared.skills.pdf_layout_check import render_preview
+        target.parent.mkdir(parents=True, exist_ok=True)
+        render_preview(Path(cv), temporary)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, target)
+        return str(target)
+    except Exception as err:  # noqa: BLE001 — a preview never decides anything
+        print(f"[apply-gate] CV preview failed: {type(err).__name__}", file=sys.stderr)
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        return ""
 
 
 def _essentials_hold(conn: sqlite3.Connection, jht_home: Path | None) -> str:
@@ -1117,6 +1164,8 @@ def application_queue(
                 continue
             layout = cv_layout_hold(cv)
             if layout:
+                if layout == "cv_pdf_layout_bad":
+                    refresh_cv_preview(pid, cv, jht_home)
                 held.append({"position_id": pid, "reason": layout})
                 continue
             hold = (

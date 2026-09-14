@@ -720,7 +720,7 @@ def test_un_cv_non_misurabile_non_parte_mai(tmp_path, layout_check_on):
         ({"ok": True, "reasons": []}, ""),
         ({"ok": False, "reasons": ["narrow_text"]}, "cv_pdf_layout_bad"),
         ({"ok": "yes"}, "cv_pdf_layout_bad"),
-        (["not a report"], "cv_pdf_layout_bad"),
+        (["not a report"], "cv_pdf_check_unavailable"),
         (pdf_layout_check.CheckError("pdftotext not found"), "cv_pdf_check_unavailable"),
         (RuntimeError("boom"), "cv_pdf_check_unavailable"),
     ],
@@ -757,3 +757,55 @@ def test_un_cv_rigenerato_toglie_la_trattenuta_da_solo(tmp_path, layout_check_on
     assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
     Path(cv).write_bytes(b"%PDF-1.4 full width")  # the Scrittore renders it again
     assert queue(tmp_path, db)["ready"]
+
+
+def test_uno_stop_del_flusso_sul_cv_non_trattiene_un_cv_rigenerato(tmp_path, layout_check_on):
+    layout_check_on.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": True, "reasons": []})
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    for reason in ("cv_pdf_layout_bad", "cv_pdf_check_unavailable"):
+        p = checkpoint_path(1, tmp_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"position_id": 1, "state": "blocked_human", "blocked_reason": reason,
+                                 "updated_at": "2026-09-12T12:00:00+00:00"}))
+        assert queue(tmp_path, db)["ready"], reason
+    p.write_text(json.dumps({"position_id": 1, "state": "blocked_human", "blocked_reason": "captcha",
+                             "updated_at": "2026-09-12T12:00:00+00:00"}))
+    assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "checkpoint_blocked_human"}]
+
+
+def test_la_coda_lascia_la_preview_del_cv_rotto_una_volta_per_file(tmp_path, layout_check_on):
+    import apply_gate
+
+    renders = []
+
+    def render(pdf, png):
+        renders.append(Path(pdf))
+        png.write_bytes(b"\x89PNG synthetic")
+        return png
+
+    layout_check_on.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": False, "reasons": ["narrow_text"]})
+    layout_check_on.setattr(pdf_layout_check, "render_preview", render)
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv, 0, None, None)])
+
+    assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
+    preview = apply_gate.cv_preview_path(1, tmp_path)
+    assert preview == checkpoint_path(1, tmp_path).with_name("1.cv-page1.png")
+    assert preview.read_bytes().startswith(b"\x89PNG") and preview.stat().st_mode & 0o077 == 0
+    queue(tmp_path, db)
+    assert len(renders) == 1  # up to date: not rendered again
+
+    os.utime(cv, ns=(preview.stat().st_mtime_ns + 10**9,) * 2)  # a newer (still bad) CV
+    queue(tmp_path, db)
+    assert len(renders) == 2
+    assert not list(preview.parent.glob(".*partial*"))
+
+
+def test_una_preview_che_fallisce_non_cambia_la_trattenuta(tmp_path, layout_check_on):
+    def render(_pdf, _png):
+        raise pdf_layout_check.CheckError("pdftoppm not found")
+
+    layout_check_on.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": False, "reasons": ["narrow_text"]})
+    layout_check_on.setattr(pdf_layout_check, "render_preview", render)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]

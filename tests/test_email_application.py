@@ -635,8 +635,12 @@ def test_a_cv_that_fails_the_layout_check_is_never_attached(box, monkeypatch, an
         return analyze_result
 
     monkeypatch.setattr(pdf_layout_check, "analyze", analyze)
+    monkeypatch.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
     out = flow(box).send()
     assert (out.state, out.reason) == ("blocked_human", reason)
+    # The same preview file as the browser flow and the queue, only for a bad layout.
+    expected = str(apply_gate.cv_preview_path(1, box)) if reason == "cv_pdf_layout_bad" else ""
+    assert out.data["cv_preview"] == expected
     assert FakeTransport.sends == []
     assert sql(box, "SELECT COUNT(*) FROM email_application_attempts WHERE state IN ('send_started', 'sent')") == [(0,)]
     assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
