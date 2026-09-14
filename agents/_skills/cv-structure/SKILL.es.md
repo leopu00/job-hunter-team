@@ -155,6 +155,17 @@ Decisión técnica 2026-05-18 tras investigación "estética CV simplificada":
 - **`wkhtmltopdf 0.12.6` (Qt 5.15.8)** → motor oficial, ya instalado en el contenedor. Produce CVs profesionales HTML+CSS, 2 páginas, ~30 KB (salida idéntica a los CVs "bonitos" del 16 de mayo).
 - ❌ **NO usar `--pdf-engine=typst`**: typst no está disponible en pandoc 2.17 del contenedor (requeriría pandoc 3.x). Error histórico en la skill, reportado 2026-05-18.
 - ❌ **NO usar `pdf_gen.py` (fpdf2)** para CVs: es solo respaldo minimalista para el 80% de casos simples. Para CVs orientados al usuario produce layout espartano de 1 página, sin CSS, sin spacing fino.
+- ⚠️ **Layout: CSS base + márgenes reales + gate visual** (2026-09-14, un CV
+  adjunto con el texto apretado en el centro de la hoja). La plantilla HTML de
+  pandoc limita el body a `max-width: 36em`, centrado con padding de 50px, y
+  wkhtmltopdf ignora los márgenes `@page`: un `<style>` a 9.3pt salía como una
+  columna al ~41% y aun así pasaba el gate de tamaño + Producer. Por eso el
+  comando de render carga SIEMPRE `/app/shared/skills/pdf_layout_base.css`
+  (`-c … --self-contained`) y pasa los márgenes a wkhtmltopdf (`-V margin-*`).
+  En el `<style>` del `.md` nunca `max-width`, `margin: auto` ni padding en el
+  body, y no confíes en `@page`. Después `pdf_layout_check.py` mide el resultado:
+  texto ≥ 75% del ancho útil en cada página, 1–2 páginas, ninguna página casi
+  vacía, fuentes incrustadas.
 
 El anti-patrón histórico: generar el PDF directamente en `$JHT_USER_DIR/cv/`, luego ejecutar `db_update.py application --cv-pdf-path ...` por separado. Si el Sentinel mató al Writer entre los dos pasos (EMERGENCIA freeze 2026-05-17 04:43), el PDF quedó en disco pero la DB tenía `cv_pdf_path=NULL`. Sisal 7.5/10 PASS se convirtió en *"CV por escribir"* en el dashboard del usuario — oportunidad top invisible.
 
@@ -171,19 +182,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Sin esto, en caso de skill obsoleta (typst que no existe, pandoc 3.x que
 # falta, …) el Scrittore ejecutaba el comando, fallaba, improvisaba
 # fallback random → CVs feos del 2026-05-18 por la mañana.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT preflight: wkhtmltopdf no disponible."
-  echo "  Motores alternativos aceptables: weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  NUNCA fallback a pdf_gen.py / fpdf2 para CVs (salida fea)."
   echo "  Reportar el problema al Capitano vía [REPORT] y ABORT."
   exit 2
 fi
 
 # 1. Render vía pandoc → html → wkhtmltopdf (motor ganador, 32 KB / 2 pág).
-#    --metadata title=... evita el warning de wkhtmltopdf "no title element".
+#    El CSS base anula la columna de 36em de pandoc; -V margin-*: wkhtmltopdf ignora @page.
+#    pagetitle (no title) fija <title> sin imprimir un encabezado "CV …".
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── PUERTA POST-RENDER: tamaño + Producer ─────────────────────────────
 # DOS checks obligatorios. NINGUNO de los dos es opcional.
@@ -224,6 +238,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) layout: tamaño y Producer prueban el motor, no dónde queda el texto.
+# pdf_layout_check.py lo mide (≥75% del ancho útil en cada página, 1-2 páginas,
+# ninguna página casi vacía, fuentes incrustadas). Exit 1 o 2: ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: layout incorrecto (pdf_layout_check.py) — corrige el .md y vuelve a renderizar."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Move atómico + UPDATE en secuencia; rollback si UPDATE falla
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -239,6 +262,7 @@ Códigos de salida:
 - `2` → preflight FALLO (motor no disponible) — señalar al Capitano
 - `3` → post-render FALLO (tamaño < 20 KB, salida minimalista) — motor equivocado
 - `4` → post-render FALLO (Producer != Qt) — motor equivocado
+- `5` → post-render FALLO (layout, `reasons` de `pdf_layout_check.py`) — corrige el `.md` y vuelve a renderizar: `narrow_text` → quita del `<style>` toda regla de ancho/margen/padding en el body; `near_empty_page` → ajusta o recorta hasta que la última página se llene o desaparezca; `too_many_pages` → recorta. Tras 2 renders fallidos avisa al Capitano. Un CV que no pasa el gate nunca llega al critic-loop.
 - `1` → DB UPDATE FALLO (rollback de archivo)
 
 El Dottore vía `cv-disk-audit` healthcheck (bug #18) reconecta eventuales huérfanos disco↔DB; además ahora señala también los CVs con Producer no-Qt como "motor equivocado — regenerar".
