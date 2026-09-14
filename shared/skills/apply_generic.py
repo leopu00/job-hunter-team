@@ -80,7 +80,12 @@ _APPLY_WORDS = (
     r"|bewerb\w*|candidat\w*|candidatur\w*|postul\w*|solicitud|inscri\w* (?:à|a) l'offre"
     r"|jelentkez\w*|pályáz\w*"
 )
-APPLY_LABEL = re.compile(rf"\b(?:{_APPLY_WORDS})\b", re.I)
+try:
+    from apply_vocabulary import MORE_APPLY
+except ImportError:  # pragma: no cover - package import
+    from shared.skills.apply_vocabulary import MORE_APPLY  # type: ignore[no-redef]
+# The seven languages with \b, and the others bounded for JavaScript too (2071).
+APPLY_LABEL = re.compile(rf"\b(?:{_APPLY_WORDS})\b|{MORE_APPLY}", re.I)
 _CV_WORDS = re.compile(
     r"\b(?:cv|c\.v\.|resume|résumé|curriculum|lebenslauf|önéletrajz|currículo|curr[íi]culum)\b", re.I
 )

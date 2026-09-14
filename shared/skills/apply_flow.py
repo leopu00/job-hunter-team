@@ -63,6 +63,10 @@ try:
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import profile_facts
 try:
+    import apply_vocabulary
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import apply_vocabulary
+try:
     import page_failure
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import page_failure
@@ -136,7 +140,10 @@ _MAILTO_CONTROLS_JS = r"""
 # the footer is a contact, and a contact is not a channel.
 _MAILTO_APPLY_LABEL = re.compile(
     r"\b(apply|application|send\s+(?:us\s+)?(?:your\s+)?(?:cv|resume|application)|"
-    r"candidat\w*|bewerb\w*|postul\w*|solicit\w*|invia\w*\s+(?:il\s+)?cv)\b",
+    r"candidat\w*|bewerb\w*|postul\w*|solicit\w*|invia\w*\s+(?:il\s+)?cv)\b"
+    # Czech, Polish, Slovak, Nordic, Baltic, Balkan, Greek, Cyrillic… (2071:
+    # "Poslat přihlášku"), bounded for Python and for the browser alike.
+    rf"|{apply_vocabulary.MORE_APPLY}",
     re.I,
 )
 
