@@ -57,7 +57,7 @@ One JSON line on stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: filled, stopped before the button, nothing sent | next position |
 | `denied` | 1 | the gate refused (consent off, flag revoked, already sent) | next position; never retry |
 | `retry_later` | 5 | the vacancy page did not answer for now (5xx, timeout); not a stop, nobody notified; the checkpoint holds `retry_after` | next position; the queue gives this one back after `retry_after` by itself — never rerun it before |
-| `blocked_human` | 3 | a human is needed; the user has already been notified | next position; never retry |
+| `blocked_human` | 3 | a human is needed; the stop is in the round's summary | next position; never retry |
 | `blocked_human` missing answers (`essential_facts_missing` with `missing`, `required_answer_missing` with `pending_question`) | 3 | not a stop and nothing was asked: the flow needs answers it does not have | work each one out from profile, CV and vacancy and save it (`application_answers.py save … --basis …`), then run the flow again; only with no basis `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). A question you asked holds the position until the user answers, a day per question at most |
 | `email_channel` | 4 | the application control is a `mailto:` link, not a form; the checkpoint holds `channel: email` and the raw `mailto_href` (reason `mailto_application`); or, with no application form on the page, reason `email_instruction`: the page's own text names the one mailbox ("Send your CV to careers@…") | run `email_application.py send` for this position as the `email-application-flow` skill says: it reads this checkpoint; never fill a web form or write the email by hand |
 | `error` | 2 | profile or CV unreadable, bad arguments | stop: `[BLOCKED]` to the Capitano |
@@ -103,7 +103,7 @@ The flow stops on anything it cannot do with certainty:
 What you do for every other reason (the missing answers are above):
 
 1. **Nothing on that position.** The flow already wrote the checkpoint and
-   notified the user through `jht-notify-user`. Do not notify them again.
+   put the stop in the round's summary. Do not notify the user yourself.
 2. **Do not retry it.** Not now, not "one more time in a few minutes". The queue
    holds it (`checkpoint_blocked_human`) until the user authorises it again.
 3. **Move to the next position** of the queue.
@@ -124,10 +124,11 @@ photographed before the click; without a confirmation it recognises (text or
 URL) the result is `submit_outcome_unknown`, never a second click. An Apply
 control that leads to a known ATS hands the position to that recipe.
 
-**One summary per round.** Stops that are a property of the site
-(`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
-`application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) are not notified one by one: they wait for the
-summary you send at STEP 6 with `python3 /app/shared/skills/closer_notices.py flush`.
+**One summary per round.** No stop is notified on its own: every `blocked_human`
+that is not a form question (site stops such as `ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`; LinkedIn, CV, closed vacancies, unknown
+outcomes, email stops) waits for the ONE message you send at STEP 6 with
+`python3 /app/shared/skills/closer_notices.py flush`. Only a question you ask
+explicitly, the essential facts and a LinkedIn verification code are sent at once.
 Every notice reaches the user in the language of their profile.
 
 ## Checking an application afterwards

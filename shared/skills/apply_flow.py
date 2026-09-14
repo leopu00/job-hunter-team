@@ -1913,6 +1913,11 @@ class GreenhouseRecipe:
             control = matches.first
             label = self._control_label(scope, control)
             required = self._control_required(control)
+            if control_id == "country" and control.evaluate("e => !!e.closest('fieldset.phone-input')"):
+                # 1967 (patch 20): this "Country*" is the dialling code of the
+                # phone number, not where the candidate lives.
+                self._fill_phone_country(page, control, label, required)
+                continue
             if control.get_attribute("role") == "combobox" or control.evaluate("e => e.tagName") == "SELECT":
                 # A core choice (country, location...): the page's options are
                 # the only valid answers. 1967 (14/09) stopped on "Country*"
@@ -1966,6 +1971,112 @@ class GreenhouseRecipe:
             required=required,
             step="fill",
         )
+
+    PHONE_COUNTRY_KEY = "phone country"
+    _DIALLING_CODE = re.compile(r"\+\s*(\d[\d\s-]{0,7})\s*$")
+
+    @staticmethod
+    def _phone_country_options(page, control) -> tuple[Any, list[tuple[str, str, str]]]:
+        """Open the dialling-code menu: (listbox, [(option text, country, code digits)])."""
+        control.click()
+        listbox = None
+        try:
+            page.wait_for_function(
+                "e => { const id = e.getAttribute('aria-controls');"
+                " const box = id && document.getElementById(id);"
+                " return !!(box && box.querySelector('[role=option]')); }",
+                arg=control.element_handle(),
+                timeout=5_000,
+            )
+            listbox = page.locator(f"#{control.get_attribute('aria-controls')}")
+        except Exception:
+            return None, []
+        options: list[tuple[str, str, str]] = []
+        # Only the menu this control owns: the page also carries a hidden
+        # intl-tel-input country list with its own role=option items.
+        found = listbox.locator("[role=option]")
+        for index in range(found.count()):
+            text = _exact_form_text(found.nth(index).inner_text(), maximum=200)
+            match = GreenhouseRecipe._DIALLING_CODE.search(text)
+            if text and match:
+                code = re.sub(r"\D", "", match.group(1))
+                options.append((text, text[: match.start()].strip(), code))
+        return listbox, options
+
+    def _fill_phone_country(self, page, control, label: str, required: bool) -> None:
+        listbox, options = self._phone_country_options(page, control)
+        if not options:
+            with contextlib.suppress(Exception):
+                page.keyboard.press("Escape")
+            if not required:
+                return
+            raise BlockedHuman(
+                "unknown_required_control",
+                f"Greenhouse phone country options are not readable: {_safe_label(label)}",
+                "fill",
+            )
+        texts = [text for text, _country, _code in options]
+        chosen = ""
+        saved = self.answers.get(self.PHONE_COUNTRY_KEY)
+        if isinstance(saved, str) and saved in texts:
+            chosen = saved
+            self.answer_sources[self.PHONE_COUNTRY_KEY] = self.answer_origins.get(self.PHONE_COUNTRY_KEY, "profile")
+            self.last_answer_key = self.PHONE_COUNTRY_KEY
+        candidates = texts
+        if not chosen:
+            phone = profile_facts.profile_value(self.profile, "phone") or ""
+            compact = re.sub(r"[\s().-]", "", phone)
+            digits = compact[1:] if compact.startswith("+") else compact[2:] if compact.startswith("00") else ""
+            if digits.isdigit():
+                matching = [(text, country, code) for text, country, code in options if digits.startswith(code)]
+                longest = max((len(code) for _t, _c, code in matching), default=0)
+                matching = [item for item in matching if len(item[2]) == longest]
+                if len(matching) > 1:
+                    # Several countries share the code (+1, +7, +44): the profile's own place decides.
+                    place = " ".join(
+                        value.casefold()
+                        for value in (profile_facts.profile_value(self.profile, "location"), self.profile.get("country"))
+                        if isinstance(value, str)
+                    )
+                    named = [item for item in matching if item[1] and item[1].casefold() in place]
+                    matching = named if len(named) == 1 else matching
+                if len(matching) == 1:
+                    chosen = matching[0][0]
+                    self.answer_sources[self.PHONE_COUNTRY_KEY] = "profile"
+                elif matching:
+                    candidates = [text for text, _country, _code in matching]
+        if not chosen:
+            with contextlib.suppress(Exception):
+                page.keyboard.press("Escape")
+            if not required:
+                return
+            raise BlockedHuman(
+                "required_answer_missing",
+                f"Greenhouse phone country needs one of the page's dialling codes: {_safe_label(label)}",
+                "fill",
+                answer_request={
+                    "key": self.PHONE_COUNTRY_KEY,
+                    "label": "Phone country (dialling code)",
+                    "field_type": "select",
+                    "options": candidates,
+                },
+            )
+        option = listbox.get_by_role("option", name=chosen, exact=True)
+        if option.count() != 1:
+            raise BlockedHuman(
+                "answer_option_unknown",
+                f"Greenhouse phone country option is ambiguous: {_safe_label(label)}",
+                "fill",
+            )
+        option.first.click()
+        container = control.locator("xpath=ancestor::*[contains(@class, 'select__container')][1]")
+        shown = container.locator(".select__single-value") if container.count() else page.locator("#__none__")
+        if not shown.count() or _exact_form_text(shown.first.inner_text(), maximum=200) != chosen:
+            raise BlockedHuman(
+                "answer_not_accepted",
+                f"Greenhouse did not keep the phone country: {_safe_label(label)}",
+                "fill",
+            )
 
     def _fill_core_choice(self, page, control, control_id: str, label: str, required: bool) -> None:
         entry = control.locator(
@@ -3250,9 +3361,12 @@ class ApplicationFlow:
         message = self._notification_message(blocked)
         self._save_stop(checkpoint, previous_screenshot)
         notices = _optional_module("closer_notices")
-        if notices is not None and blocked.reason in getattr(notices, "DIGEST_REASONS", ()):
-            # A stop of the site, not of the application: one summary per
-            # round (closer_notices flush), not a message per position.
+        if notices is not None:
+            # Every stop joins the round's summary (closer_notices flush at the
+            # end of the CLOSER's round): one message, never one per position.
+            # Live 14/09: eight positions, eight Telegram alerts, because only
+            # the site stops (DIGEST_REASONS) were deferred.  A form question
+            # never gets here; it is sent only by the CLOSER's explicit ask.
             try:
                 notices.defer(self.position_id, blocked.reason, self.url)
                 return FlowResult("blocked_human", checkpoint.state, blocked.reason)
@@ -3273,6 +3387,27 @@ class ApplicationFlow:
             tuple(str(option) for option in payload.get("options") or []),
         )
 
+    def _request_row_open(self, request: Mapping[str, Any]) -> bool:
+        """Is the dashboard/Telegram row of this asked request still waiting for the user?"""
+        source_id = str(request.get("source_id") or "")
+        if not source_id:
+            return False
+        try:
+            db = _resolve_db_path(self.db_path)
+            if not db.is_file():
+                return False
+            with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM pending_user_messages WHERE source_id = ? "
+                    "AND source_action = 'closer_application_answer' AND user_reply IS NULL "
+                    "AND acknowledged_at IS NULL",
+                    (source_id,),
+                ).fetchone()
+        except Exception as exc:  # noqa: BLE001 — unknown counts as closed: ask again, never wait on it
+            LOG.error("reading an answer request row failed: %s", type(exc).__name__)
+            return False
+        return row is not None
+
     def _supersede_request_rows(self, key: str, *, keep: str = "", restore: str = "") -> None:
         """Close the open dashboard/Telegram rows of an older shape of this question.
 
@@ -3287,7 +3422,7 @@ class ApplicationFlow:
             with contextlib.closing(sqlite3.connect(db, timeout=10)) as conn:
                 if restore:
                     conn.execute(
-                        "UPDATE pending_user_messages SET source_action = 'closer_application_answer' "
+                        "UPDATE pending_user_messages SET source_action = 'closer_application_answer', acknowledged_at = NULL "
                         "WHERE source_id = ? AND source_action = 'closer_application_answer_superseded' "
                         "AND user_reply IS NULL",
                         (restore,),
@@ -4335,7 +4470,14 @@ class ApplicationFlow:
             # The user authorised the position again after the stop: the page
             # is read again (the field's type and options as they are now),
             # and the old question's rows close without an answer.
-            self._stale_request = checkpoint.answer_request
+            # Kept to come back only while it can still be answered: a question
+            # never asked, or one whose row is still open.  1967 (patch 20): the
+            # row had been closed (acknowledged) and the same text shape came
+            # back as "asked", a question nobody could answer any more.
+            stale = checkpoint.answer_request
+            self._stale_request = stale if (
+                not self._request_asked(stale) or self._request_row_open(stale)
+            ) else None
             self._supersede_request_rows(self._request_schema(checkpoint.answer_request)[0])
             self._close_answer_request(checkpoint)
 

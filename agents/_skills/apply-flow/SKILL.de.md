@@ -58,7 +58,7 @@ Eine JSON-Zeile auf stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: ausgefüllt, vor dem Button gestoppt, nichts gesendet | nächste Position |
 | `denied` | 1 | das Tor hat abgelehnt (Zustimmung aus, Flag widerrufen, schon gesendet) | nächste Position; nie neu versuchen |
 | `retry_later` | 5 | die Seite der Stelle antwortet gerade nicht (5xx, Zeitüberschreitung); kein Stopp, niemand wird benachrichtigt; der Checkpoint hat `retry_after` | nächste Position; die Warteschlange gibt sie nach `retry_after` von selbst zurück — nie vorher neu starten |
-| `blocked_human` | 3 | ein Mensch wird gebraucht; der User wurde schon benachrichtigt | nächste Position; nie neu versuchen |
+| `blocked_human` | 3 | ein Mensch wird gebraucht; der Stopp steht in der Zusammenfassung der Runde | nächste Position; nie neu versuchen |
 | `blocked_human` fehlende Antworten (`essential_facts_missing` mit `missing`, `required_answer_missing` mit `pending_question`) | 3 | kein Stopp und nichts wurde gefragt: dem Flow fehlen Antworten | leite jede aus Profil, CV und Stellenanzeige her und speichere sie (`application_answers.py save … --basis …`), dann den Flow erneut starten; nur ohne jede Grundlage `application_answers.py ask --position-id $PID --key K` (CLOSER-Prompt, CL-08). Eine Frage, die du gestellt hast, hält die Position, bis der User antwortet, höchstens einen Tag pro Frage |
 | `email_channel` | 4 | das Bewerbungs-Element ist ein `mailto:`-Link, kein Formular; der Checkpoint enthält `channel: email` und den rohen `mailto_href` (Grund `mailto_application`); oder, ohne Bewerbungsformular auf der Seite, Grund `email_instruction`: der Text der Seite selbst nennt das eine Postfach („Send your CV to careers@…") | führe für diese Position `email_application.py send` aus, wie die Skill `email-application-flow` es sagt: sie liest diesen Checkpoint; fülle nie ein Webformular aus und schreibe die E-Mail nie von Hand |
 | `error` | 2 | Profil oder CV unlesbar, falsche Argumente | stopp: `[BLOCKED]` an den Capitano |
@@ -104,7 +104,7 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 Was du bei jedem anderen Grund tust (die fehlenden Antworten stehen oben):
 
 1. **Nichts an dieser Position.** Der Flow hat den Checkpoint schon geschrieben
-   und den User über `jht-notify-user` benachrichtigt. Benachrichtige ihn nicht erneut.
+   und den Stopp in die Zusammenfassung der Runde gelegt. Benachrichtige den User nicht selbst.
 2. **Nicht neu versuchen.** Nicht jetzt, nicht „noch einmal in ein paar Minuten". Die
    Queue hält sie zurück (`checkpoint_blocked_human`), bis der User sie erneut autorisiert.
 3. **Geh zur nächsten Position** der Queue.
@@ -127,12 +127,12 @@ ausgefüllte Formular wird vor dem Klick fotografiert; ohne erkennbare Bestätig
 Ein Bewerben-Button, der zu einem bekannten ATS führt, übergibt die Stelle an
 dieses Rezept.
 
-**Eine Zusammenfassung pro Runde.** Stopps, die an der Website liegen
-(`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
-`application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`), werden nicht einzeln gemeldet: Sie warten auf die
-Zusammenfassung, die du in STEP 6 mit
-`python3 /app/shared/skills/closer_notices.py flush` sendest. Jede Meldung
-erreicht die Person in der Sprache ihres Profils.
+**Eine Zusammenfassung pro Runde.** Kein Stopp wird einzeln gemeldet: jeder `blocked_human`,
+der keine Formularfrage ist (Seiten wie `ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`; LinkedIn, Lebenslauf, geschlossene Stellen, unklare
+Ergebnisse, Stopps des E-Mail-Kanals), wartet auf die EINE Nachricht, die du in STEP 6 mit
+`python3 /app/shared/skills/closer_notices.py flush` sendest. Sofort gesendet werden nur eine
+Frage, die du ausdrücklich stellst, die wesentlichen Angaben und ein LinkedIn-Bestätigungscode.
+Jede Meldung erreicht den User in der Sprache seines Profils.
 
 ## Eine Bewerbung danach prüfen
 

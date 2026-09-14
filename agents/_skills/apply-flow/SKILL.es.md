@@ -58,7 +58,7 @@ Una línea JSON en stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: rellenada, detenida antes del botón, nada enviado | siguiente posición |
 | `denied` | 1 | la puerta rechazó (consentimiento apagado, flag revocado, ya enviada) | siguiente posición; nunca reintentar |
 | `retry_later` | 5 | la página de la oferta no responde por ahora (5xx, tiempo agotado); no es una parada, no se avisa a nadie; el checkpoint tiene `retry_after` | siguiente posición; la cola la devuelve sola después de `retry_after` — nunca relanzarla antes |
-| `blocked_human` | 3 | hace falta una persona; el usuario ya fue avisado | siguiente posición; nunca reintentar |
+| `blocked_human` | 3 | hace falta una persona; la parada está en el resumen de la ronda | siguiente posición; nunca reintentar |
 | `blocked_human` respuestas que faltan (`essential_facts_missing` con `missing`, `required_answer_missing` con `pending_question`) | 3 | no es un stop y no se preguntó nada: al flujo le faltan respuestas | deduce cada una de perfil, CV y oferta y guárdala (`application_answers.py save … --basis …`), luego relanza el flujo; solo sin ninguna base `application_answers.py ask --position-id $PID --key K` (prompt del CLOSER, CL-08). Una pregunta que hiciste retiene la posición hasta que el usuario responde, como mucho un día por pregunta |
 | `email_channel` | 4 | el control de candidatura es un enlace `mailto:`, no un formulario; el checkpoint guarda `channel: email` y el `mailto_href` en bruto (motivo `mailto_application`); o, sin formulario de candidatura en la página, motivo `email_instruction`: el propio texto de la página indica la única dirección («Send your CV to careers@…») | ejecuta `email_application.py send` para esta posición como dice la skill `email-application-flow`: lee este checkpoint; nunca rellenes un formulario web ni escribas el email a mano |
 | `error` | 2 | perfil o CV ilegible, argumentos erróneos | detente: `[BLOCKED]` al Capitano |
@@ -103,8 +103,8 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 
 Qué haces con cualquier otro motivo (las respuestas que faltan están arriba):
 
-1. **Nada con esa posición.** El flujo ya escribió el checkpoint y avisó al
-   usuario con `jht-notify-user`. No lo avises otra vez.
+1. **Nada con esa posición.** El flujo ya escribió el checkpoint y
+   puso la parada en el resumen de la ronda. No avises tú al usuario.
 2. **No la reintentes.** Ni ahora, ni «una vez más dentro de unos minutos». La cola
    la retiene (`checkpoint_blocked_human`) hasta que el usuario la autorice de nuevo.
 3. **Pasa a la siguiente posición** de la cola.
@@ -126,11 +126,12 @@ relleno se captura antes del clic; sin una confirmación reconocible (texto o
 URL) el resultado es `submit_outcome_unknown`, nunca un segundo clic. Un botón
 que lleva a un ATS conocido pasa la posición a esa receta.
 
-**Un resumen por ronda.** Las paradas que dependen del sitio (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) no se
-notifican una a una: esperan el resumen que envías en el STEP 6 con
-`python3 /app/shared/skills/closer_notices.py flush`. Cada aviso llega al usuario
-en el idioma de su perfil.
+**Un resumen por ronda.** Ninguna parada se avisa sola: cada `blocked_human`
+que no es una pregunta del formulario (sitios como `ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`; LinkedIn, CV, ofertas cerradas, resultados
+inciertos, paradas del canal de email) espera el ÚNICO mensaje que envías en el STEP 6 con
+`python3 /app/shared/skills/closer_notices.py flush`. Solo salen enseguida una pregunta
+que haces explícitamente, los datos esenciales y un código de verificación de LinkedIn.
+Cada aviso llega al usuario en el idioma de su perfil.
 
 ## Comprobar una candidatura después
 

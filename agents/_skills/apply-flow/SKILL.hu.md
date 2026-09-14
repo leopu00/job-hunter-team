@@ -58,7 +58,7 @@ Egy JSON sor a stdout-on: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: kitöltve, a gomb előtt megállt, semmi nem ment ki | következő pozíció |
 | `denied` | 1 | a kapu elutasította (hozzájárulás kikapcsolva, flag visszavonva, már elküldve) | következő pozíció; soha ne próbáld újra |
 | `retry_later` | 5 | az állás oldala most nem válaszol (5xx, időtúllépés); nem leállás, senki nem kap értesítést; a checkpointban ott a `retry_after` | következő pozíció; a sor a `retry_after` után magától visszaadja — előtte soha ne futtasd újra |
-| `blocked_human` | 3 | ember kell; a felhasználó már értesítést kapott | következő pozíció; soha ne próbáld újra |
+| `blocked_human` | 3 | ember kell; a leállás a kör összefoglalójában van | következő pozíció; soha ne próbáld újra |
 | `blocked_human` hiányzó válaszok (`essential_facts_missing` a `missing`-gel, `required_answer_missing` a `pending_question`-nel) | 3 | nem megállás, és semmit nem kérdeztek: a folyamatnak hiányoznak válaszok | mindegyiket következtesd ki a profilból, a CV-ből és a hirdetésből, és mentsd (`application_answers.py save … --basis …`), aztán futtasd újra a folyamatot; csak ha semmilyen alap nincs, `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). Egy általad feltett kérdés tartja a pozíciót, amíg a felhasználó válaszol, kérdésenként legfeljebb egy napig |
 | `email_channel` | 4 | a jelentkezési elem egy `mailto:` link, nem űrlap; a checkpoint tartalmazza a `channel: email` értéket és a nyers `mailto_href`-et (ok: `mailto_application`); vagy, ha az oldalon nincs jelentkezési űrlap, ok: `email_instruction`: maga az oldal szövege nevezi meg az egyetlen postafiókot („Send your CV to careers@…") | ennél a pozíciónál futtasd az `email_application.py send` parancsot az `email-application-flow` skill szerint: ez a checkpointot olvassa; soha ne tölts ki webes űrlapot, és ne írd kézzel az e-mailt |
 | `error` | 2 | olvashatatlan profil vagy CV, hibás argumentumok | állj meg: `[BLOCKED]` a Capitanónak |
@@ -103,8 +103,8 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 
 Mit teszel minden más oknál (a hiányzó válaszok fent vannak):
 
-1. **Semmit azzal a pozícióval.** A folyamat már megírta a checkpointot és a
-   `jht-notify-user`-rel értesítette a felhasználót. Ne értesítsd újra.
+1. **Semmit azzal a pozícióval.** A folyamat már megírta a checkpointot és
+   betette a leállást a kör összefoglalójába. Ne te értesítsd a felhasználót.
 2. **Ne próbáld újra.** Se most, se „még egyszer pár perc múlva". A queue
    visszatartja (`checkpoint_blocked_human`), amíg a felhasználó újra nem engedélyezi.
 3. **Lépj a queue következő pozíciójára.**
@@ -126,11 +126,12 @@ kattintás előtt kép készül; felismerhető visszaigazolás (szöveg vagy URL
 az eredmény `submit_outcome_unknown`, soha nincs második kattintás. Egy ismert
 ATS-re vezető Jelentkezés gomb az adott receptnek adja át a pozíciót.
 
-**Körönként egy összesítő.** Az oldal miatti leállások (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) nem egyenként
-mennek ki: a STEP 6-ban a `python3 /app/shared/skills/closer_notices.py flush`
-paranccsal küldött összesítőre várnak. Minden értesítés a felhasználó profiljának
-nyelvén érkezik.
+**Körönként egy összefoglaló.** Egyetlen leállásról sem megy külön értesítés: minden
+`blocked_human`, ami nem űrlapkérdés (oldalak, pl. `ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`; LinkedIn, önéletrajz, lezárt állások, bizonytalan
+kimenetek, az e-mail-csatorna leállásai), arra az EGY üzenetre vár, amit a STEP 6-ban küldesz a
+`python3 /app/shared/skills/closer_notices.py flush` paranccsal. Azonnal csak egy kifejezetten
+feltett kérdés, az alapvető adatok és egy LinkedIn ellenőrző kód megy ki.
+Minden értesítés a felhasználó profiljának nyelvén érkezik.
 
 ## Egy jelentkezés utólagos ellenőrzése
 

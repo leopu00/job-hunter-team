@@ -1389,9 +1389,17 @@ class EmailApplication:
             + f": {outcome.detail} [{outcome.reason}]"
         )
         try:
-            self.notifier(position_id=self.position_id, message=message, source_id=source_id)
+            # The round's summary (closer_notices flush at the end of the
+            # CLOSER's round), never a message per position: live 14/09, eight
+            # stops reached the user as eight Telegram alerts.
+            import closer_notices
+
+            closer_notices.defer(self.position_id, outcome.reason, "")
         except Exception:
-            return False
+            try:
+                self.notifier(position_id=self.position_id, message=message, source_id=source_id)
+            except Exception:
+                return False
         self._write_state(outcome, {"notified_source_id": source_id})
         return True
 

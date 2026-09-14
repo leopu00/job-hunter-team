@@ -56,7 +56,7 @@ Una línea JSON: `state`, `reason`, `detail`, más los datos.
 | `sent` | 0 | aceptado por el servidor, recibo guardado, candidatura registrada | siguiente posición |
 | `draft_ready` | 0 | dry run: borrador y adjuntos válidos, no salió nada | siguiente posición |
 | `denied` | 1 | el gate rechazó (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | siguiente posición; nunca reintentar |
-| `blocked_human` | 1 | hace falta una persona; se avisó al usuario | siguiente posición; nunca reintentar |
+| `blocked_human` | 1 | hace falta una persona; la parada está en el resumen de la ronda | siguiente posición; nunca reintentar |
 | `send_outcome_unknown` | 3 | el email puede haber salido | siguiente posición; nunca reintentar |
 | `receipt_incomplete` | 3 | aceptado, pero el recibo o el registro están incompletos; con algunos destinatarios rechazados la carta probablemente llegó | siguiente posición; nunca reintentar |
 | `error` | 2 | base de datos, perfil o checkpoint ilegibles | stop: `[BLOCKED]` al Capitano |
@@ -80,7 +80,7 @@ Una línea JSON: `state`, `reason`, `detail`, más los datos.
 
 Qué haces, siempre igual:
 
-1. **Nada sobre esa posición.** El comando ya avisó al usuario una vez.
+1. **Nada sobre esa posición.** El comando puso la parada en el resumen de la ronda (`closer_notices.py flush` en el STEP 6).
 2. **No la reintentes.** La cola la retiene (`email_blocked_human`,
    `email_send_outcome_unknown`, ...) hasta que el usuario actúe.
 3. **Pasa a la siguiente posición** de la cola.
