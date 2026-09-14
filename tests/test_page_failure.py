@@ -40,6 +40,7 @@ CAREERS_WITH_RECAPTCHA = """<html><head><title>Apply — Example</title></head><
         (403, "<html><body>Forbidden</body></html>", pf.BOT_PROTECTION),
         (401, "", pf.BOT_PROTECTION),
         (429, "", pf.BOT_PROTECTION),
+        (999, "", pf.BOT_PROTECTION),  # LinkedIn refusing an automated client: never retried as a blip
         (503, CLOUDFLARE, pf.BOT_PROTECTION),  # a challenge behind a 5xx is a wall, not a blip
         (200, CLOUDFLARE, pf.BOT_PROTECTION),
         (200, DATADOME, pf.BOT_PROTECTION),
@@ -155,6 +156,14 @@ def test_a_gone_page_that_says_it_is_closed_is_vacancy_closed():
     )
     assert (decision.action, decision.reason) == (pf.BLOCK, "vacancy_closed")
     assert "410" in decision.detail
+
+
+def test_a_closed_notice_closes_the_vacancy_only_on_a_gone_page():
+    decision, _, _ = pf.decide(
+        access(pf.NOT_FOUND, 400), headless=True, headed_available=True, headed_retry_used=False,
+        closed_evidence="notice language: en",
+    )
+    assert (decision.action, decision.reason) == (pf.BLOCK, "page_not_found")
 
 
 def test_a_wall_in_a_headless_browser_gets_one_headed_try():

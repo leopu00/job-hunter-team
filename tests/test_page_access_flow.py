@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import apply_flow as apply_flow_module  # noqa: E402
 import page_failure  # noqa: E402
 from apply_flow import FlowCheckpoint  # noqa: E402
-from test_apply_flow import ASHBY_URL, ashby_form, build_flow, cv_path, page  # noqa: E402,F401
+from test_apply_flow import ASHBY_URL, GateVerdict, ashby_form, build_flow, cv_path, page  # noqa: E402,F401
 from test_linkedin_apply_flow import (  # noqa: E402
     JOB,
     LEVER_APPLY,
@@ -111,6 +111,25 @@ def test_a_404_with_no_evidence_is_page_not_found(page, tmp_path: Path, cv_path:
 
     assert (result.status, result.reason) == ("blocked_human", "page_not_found")
     assert read(tmp_path)["http_status"] == 404
+
+
+def test_a_404_after_a_redirect_away_from_the_vacancy_is_vacancy_closed(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    # The vacancy address lands on the job list, which answers 404 with no
+    # notice.  The landing is simulated like the flow's other redirect tests: a
+    # fulfilled 302 is followed outside page.route, on the real network.
+    job_list = "https://jobs.ashbyhq.com/example"
+    serve(page, 404, "<html><body>Not found</body></html>")
+    flow = build_flow(tmp_path, cv_path)
+    monkeypatch.setattr(flow, "_navigate", lambda active: active.goto(job_list))
+
+    result = flow.run(page=page, navigate=True)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    saved = read(tmp_path)
+    assert (saved["http_status"], saved["final_url"]) == (404, job_list)
+    assert "HTTP 404" in saved["blocked_detail"] and "redirected away" in saved["blocked_detail"]
 
 
 def test_the_checkpoint_never_keeps_the_query_of_the_final_url(page, tmp_path: Path, cv_path: Path, monkeypatch):
@@ -398,6 +417,39 @@ def test_a_page_that_opens_after_a_blip_goes_on_and_forgets_it(page, tmp_path: P
     assert result.status == "applied", result
     saved = read(tmp_path)
     assert (saved["transient_failures"], saved["retry_after"], saved["http_status"]) == ([], "", 200)
+
+
+def _stopped_after_three_failures(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    checkpoint = FlowCheckpoint.new(41, ASHBY_URL)
+    checkpoint.state = "blocked_human"
+    checkpoint.blocked_reason = "page_temporarily_unavailable"
+    checkpoint.resume_state = "detect"
+    checkpoint.transient_failures = [(now - timedelta(minutes=m)).isoformat() for m in (150, 90, 30)]
+    checkpoint.save(tmp_path / "checkpoint.json")
+
+
+@pytest.mark.parametrize(
+    ("authorised_after_stop", "expected"),
+    [(True, ("retry_later", "page_retry_later")), (False, ("blocked_human", "page_temporarily_unavailable"))],
+    ids=["reauthorised", "not-reauthorised"],
+)
+def test_a_new_authorisation_after_three_failures_starts_a_new_series(
+    page, tmp_path: Path, cv_path: Path, monkeypatch, authorised_after_stop, expected
+):
+    _stopped_after_three_failures(tmp_path)
+    serve(page, 503, "<html><body>down</body></html>")
+    stopped = datetime.fromisoformat(read(tmp_path)["updated_at"].replace("Z", "+00:00"))
+    at = stopped + (timedelta(minutes=5) if authorised_after_stop else -timedelta(minutes=5))
+    verdict = GateVerdict(True, context={"mode": "authorised", "max_per_day": 3, "at": at.isoformat()})
+    flow = build_flow(tmp_path, cv_path, verdicts=[verdict])
+    managed(flow, monkeypatch, {True: page})
+
+    result = flow.run(page=None)
+
+    assert (result.status, result.reason) == expected
+    if authorised_after_stop:
+        assert len(read(tmp_path)["transient_failures"]) == 1
 
 
 # --- the checkpoint -------------------------------------------------------------
