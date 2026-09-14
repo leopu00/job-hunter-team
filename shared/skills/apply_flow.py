@@ -4201,18 +4201,9 @@ class ApplicationFlow:
                 self._assert_no_closed_notice(page)
         injected_blank = not navigate and page.url == "about:blank"
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
-        try:
-            recipe.open_form(page)
-        except BlockedHuman as refused:
-            if detection.platform == "generic" and refused.reason == "generic_form_missing":
-                # The company-form recipe found nothing to apply with either:
-                # the page stays unsupported, with the recipe's own finding.
-                raise BlockedHuman(
-                    "ats_unsupported",
-                    f"No known ATS and no company application form: {refused.detail} (generic_form_missing)",
-                    "detect",
-                ) from None
-            raise
+        # A company page the recipe finds nothing to apply with stops with the
+        # recipe's own reason (generic_form_missing), never a wrapped one.
+        recipe.open_form(page)
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
         # Confirm the rendered form too.  URL-only detection is not
         # enough to interact when a block/error page owns that URL.

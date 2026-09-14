@@ -165,8 +165,8 @@ def test_a_site_stop_goes_to_the_round_summary_not_to_a_message(browser, cv_path
 
     result = build_flow(tmp_path, cv_path, "https://careers.example.invalid/x", notified=notified).run(page=page, navigate=False)
 
-    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
-    assert deferred == [(81, "ats_unsupported", "https://careers.example.invalid/x")]
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
+    assert deferred == [(81, "generic_form_missing", "https://careers.example.invalid/x")]
     assert notified == []
 
 
@@ -183,7 +183,7 @@ def test_a_broken_summary_still_notifies_the_stop(browser, cv_path, tmp_path, mo
 
     result = build_flow(tmp_path, cv_path, "https://careers.example.invalid/x", notified=notified).run(page=page, navigate=False)
 
-    assert result.reason == "ats_unsupported"
+    assert result.reason == "generic_form_missing"
     assert len(notified) == 1
 
 
@@ -260,15 +260,16 @@ def test_a_vendor_name_in_the_markup_of_a_company_host_is_not_a_known_ats(browse
     assert result.status == "applied", result
 
 
-def test_a_company_page_with_nothing_to_apply_with_is_unsupported_with_the_recipes_finding(browser, cv_path, tmp_path):
+def test_a_company_page_with_nothing_to_apply_with_stops_with_the_recipes_own_reason(browser, cv_path, tmp_path):
     page = browser.new_page()
     page.set_content("<html><body><h1>About us</h1><p>We build things.</p></body></html>")
 
     result = build_flow(tmp_path, cv_path, "https://careers.example.invalid/x").run(page=page, navigate=False)
 
-    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+    # 2071, 1798 (14/09): the slug was in the detail, the reason said ats_unsupported.
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
     saved = json.loads((tmp_path / ".cache" / "apply-flow" / "81.json").read_text())
-    assert "generic_form_missing" in saved["blocked_detail"]
+    assert saved["blocked_reason"] == "generic_form_missing"
 
 
 def test_a_missing_company_form_recipe_is_logged_never_silent(browser, cv_path, tmp_path, monkeypatch, caplog):

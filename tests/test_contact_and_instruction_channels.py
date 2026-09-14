@@ -229,9 +229,7 @@ def test_a_contact_form_without_an_application_topic_is_never_the_application(br
 
     result = build_flow(tmp_path, cv_path, f"{BASE}/careers", answers={"Message": LETTER}).run(page=page, navigate=False)
 
-    # The company-form recipe found no application form: unsupported, with its finding.
-    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
-    assert "no application form" in saved(tmp_path)["blocked_detail"].casefold()
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
     assert page.evaluate("window.submitCount") == 0
 
 
@@ -250,7 +248,7 @@ def test_a_contact_form_the_vacancy_did_not_lead_to_is_never_the_application(bro
     result = build_flow(tmp_path, cv_path, f"{BASE}/contact", answers={"Message": LETTER}).run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason in {"ats_unsupported", "generic_form_missing"}
+    assert result.reason == "generic_form_missing"
     assert page.evaluate("window.submitCount") == 0
 
 
@@ -341,13 +339,13 @@ def test_an_application_address_in_the_role_text_is_the_email_channel(browser, c
     assert page.evaluate("window.submitCount") == 0
 
 
-def test_two_application_addresses_stay_unsupported(browser, cv_path, tmp_path):
+def test_two_application_addresses_are_no_email_channel(browser, cv_path, tmp_path):
     page = site(browser, {"/careers/": instructions("Send your CV to uk@example.com", "Send your CV to it@example.com")})
     page.goto(f"{BASE}/careers/")
 
     result = build_flow(tmp_path, cv_path, f"{BASE}/careers/").run(page=page, navigate=False)
 
-    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
 
 
 def test_an_application_form_on_the_page_wins_over_an_address_in_the_text(browser, cv_path, tmp_path):

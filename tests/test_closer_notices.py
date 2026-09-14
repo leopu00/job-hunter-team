@@ -135,6 +135,7 @@ def test_site_and_page_stops_go_to_the_summary():
     assert {
         "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
         "page_not_found", "bot_protection", "page_temporarily_unavailable",
+        "generic_form_missing",  # 2071, 1798: the recipe's own reason, no longer wrapped as ats_unsupported
     } <= notices.DIGEST_REASONS
     assert "retry_later" not in notices.DIGEST_REASONS
 

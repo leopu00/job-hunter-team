@@ -60,6 +60,8 @@ except ImportError:  # pragma: no cover - package import
 
 DIGEST_REASONS = frozenset({
     "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
+    # A company page with nothing to apply with: a stop of the site, not of the application.
+    "generic_form_missing",
     # page_failure: a gone page, an anti-bot wall, a page down three times in a day.
     # A temporary failure below that is never a stop, so it never reaches here.
     "page_not_found", "bot_protection", "page_temporarily_unavailable",

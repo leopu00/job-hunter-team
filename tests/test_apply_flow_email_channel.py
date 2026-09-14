@@ -225,7 +225,7 @@ def test_contact_mailto_is_not_an_application_channel(page, tmp_path: Path, cv_p
     result = build_flow(tmp_path, cv_path, CAREERS_URL).run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason == "ats_unsupported"
+    assert result.reason == "generic_form_missing"
     assert _checkpoint(tmp_path)["channel"] == ""
     _nothing_filled(page)
 
@@ -276,7 +276,7 @@ def test_newsletter_page_without_application_form_fills_nothing(page, tmp_path: 
     # The page says applications are closed.  On a known ATS without its form
     # that is the reason; a page no recipe knows carries a (newsletter) form,
     # so the notice proves nothing there.
-    assert result.reason == ("ats_unsupported" if url == CAREERS_URL else "vacancy_closed")
+    assert result.reason == ("generic_form_missing" if url == CAREERS_URL else "vacancy_closed")
     checkpoint = _checkpoint(tmp_path)
     assert checkpoint["completed_steps"] == []
     assert checkpoint["submit_started"] is False

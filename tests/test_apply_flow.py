@@ -1354,7 +1354,7 @@ def test_missing_essential_facts_are_listed_for_the_closer_without_asking(page, 
 @pytest.mark.parametrize(
     ("html", "reason"),
     (
-        ("<html><body><h1>Careers</h1><p>Read about us.</p></body></html>", "ats_unsupported"),
+        ("<html><body><h1>Careers</h1><p>Read about us.</p></body></html>", "generic_form_missing"),
         ("<html><body><p>This job is no longer accepting applications.</p></body></html>", "vacancy_closed"),
     ),
 )
