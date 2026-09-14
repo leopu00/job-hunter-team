@@ -89,6 +89,10 @@ STEP 4 — LEE EL RESULTADO (una línea JSON)           → apply-flow
                           guarda uno distinto, o pregunta (CL-08 paso 3).
                           Cualquier otro motivo: el usuario está avisado, sigue
          denied         → la puerta dijo no: sigue, nunca la rodees
+         retry_later    → (exit 5) la página no responde por ahora
+                          (5xx/timeout): no es un stop, nadie avisado.
+                          Sigue, no la relances: la cola la devuelve
+                          tras retry_after
          dry_run        → pasada de diagnóstico, no salió nada: sigue
          email_channel  → el control Apply es un enlace mailto: → email-application-flow
          error (exit 2) → STEP 6 con [BLOCKED] (perfil/CV ilegible

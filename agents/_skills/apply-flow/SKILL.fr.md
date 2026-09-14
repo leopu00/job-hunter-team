@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Donne à cette commande un délai d'au moins **10 minutes** : une connexion LinkedIn peut attendre dans le navigateur jusqu'à 5 minutes le code de vérification que l'utilisateur envoie sur Telegram, et une commande tuée pendant l'attente laisse expirer la demande de code.
+
 `PID`, `URL` et `CV` viennent de la dernière lecture de `apply_gate.py queue`
 (skill `apply-authorization`), jamais de la mémoire.
 
@@ -55,6 +57,7 @@ Une ligne JSON sur stdout : `status`, `state`, `reason`, `receipt`.
 | `applied` | 0 | envoyée, reçu enregistré, état enregistré | position suivante |
 | `dry_run` | 0 | `mode: dry_run` : remplie, arrêtée avant le bouton, rien envoyé | position suivante |
 | `denied` | 1 | la porte a refusé (consentement désactivé, flag révoqué, déjà envoyée) | position suivante ; jamais de nouvelle tentative |
+| `retry_later` | 5 | la page de l'offre ne répond pas pour l'instant (5xx, délai dépassé) ; ce n'est pas un arrêt, personne n'est averti ; le checkpoint contient `retry_after` | position suivante ; la file la redonne d'elle-même après `retry_after` — jamais relancer avant |
 | `blocked_human` | 3 | un humain est nécessaire ; l'utilisateur a déjà été prévenu | position suivante ; jamais de nouvelle tentative |
 | `blocked_human` réponses manquantes (`essential_facts_missing` avec `missing`, `required_answer_missing` avec `pending_question`) | 3 | pas un arrêt et rien n'a été demandé : il manque des réponses au flux | déduis chacune du profil, du CV et de l'offre et enregistre-la (`application_answers.py save … --basis …`), puis relance le flux ; seulement sans aucune base `application_answers.py ask --position-id $PID --key K` (prompt du CLOSER, CL-08). Une question que tu as posée retient la position jusqu'à ce que l'utilisateur réponde, un jour par question au plus |
 | `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | lance `email_application.py send` pour cette position comme le dit la skill `email-application-flow` : elle lit ce checkpoint ; ne remplis jamais de formulaire web et n'écris jamais l'e-mail à la main |
@@ -80,11 +83,11 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | l'offre LinkedIn ou sa fenêtre Easy Apply n'est pas celle que la recette connaît |
 | `linkedin_credentials_missing` | `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) manque, n'est pas un fichier régulier 0600 de cet utilisateur, ou est vide : l'utilisateur le crée avec le script des identifiants. Ne jamais demander le mot de passe dans un chat |
 | `linkedin_login_failed` | LinkedIn a refusé la connexion deux fois : aucun nouvel essai tant que l'utilisateur n'écrit pas de nouveaux identifiants |
-| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | le code de vérification LinkedIn demandé sur Telegram n'est pas arrivé à temps (ou la demande n'a pas atteint Telegram) : un nouveau tour demande un nouveau code |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | le code de vérification LinkedIn demandé sur Telegram n'est pas arrivé à temps (ou la demande n'a pas atteint Telegram, ou LinkedIn n'a pas accepté le code — cela ne compte jamais comme une connexion échouée) : un nouveau tour demande un nouveau code |
 | `linkedin_challenge` | LinkedIn affiche un captcha ou un contrôle de sécurité : l'utilisateur le résout sur l'écran en direct, puis autorise à nouveau la position |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | la page LinkedIn a quitté `www.linkedin.com`, ou l'adresse de l'entreprise qu'elle donne n'est pas une page HTTPS hors de LinkedIn (ou c'est un second passage) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | la page LinkedIn a quitté LinkedIn (`www.linkedin.com` ou une page de pays comme `es.linkedin.com`), ou l'adresse de l'entreprise qu'elle donne n'est pas une page HTTPS hors de LinkedIn (ou c'est un second passage) |
 | `linkedin_follow_not_cleared` | la case « suivre l'entreprise » n'a pas pu être décochée avant Submit : rien n'est envoyé |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **refusé, pas bloqué** : les candidatures LinkedIn sont espacées (`linkedin_min_interval_minutes`, 20 par défaut), la connexion a échoué une fois et le prochain tour réessaie une fois, ou ce réglage n'est pas un nombre entier de minutes. La file réessaie d'elle-même |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **refusé, pas bloqué** : les candidatures LinkedIn sont espacées (`linkedin_min_interval_minutes`, 20 par défaut), la connexion a échoué une fois et le prochain tour réessaie une fois, ou ce réglage n'est pas un nombre entier de minutes. La file réessaie d'elle-même Un dry run ne se connecte jamais : sans session LinkedIn enregistrée, il est refusé comme `linkedin_dry_run_signed_out`. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | deux adresses mailto de candidature différentes, ou le formulaire de candidature, ses champs ou son bouton d'envoi ne tiennent pas dans un seul formulaire (newsletter, pied de page et formulaires de démo n'en font jamais partie) |
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |

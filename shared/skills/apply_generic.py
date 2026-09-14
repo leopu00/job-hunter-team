@@ -155,7 +155,7 @@ _SUBMIT_PHRASES = re.compile(
 # pool, job alerts, a referral, a spontaneous application. Never the application.
 _NOT_THIS_APPLICATION = re.compile(
     r"talent (?:pool|community|network)|join our (?:network|community)|job alerts?|stellenalarm|jobalert"
-    r"|refer (?:a )?(?:friend|colleague|someone)|referral|empfehl\w* (?:einen|eine) |segnala un amico|parrain\w*"
+    r"|refer (?:a )?(?:friend|colleague|someone|candidate|contact)|referral|empfehl\w* (?:einen|eine) |segnala un amico|parrain\w*"
     r"|recomendar (?:a )?(?:un )?amig\w*|indique um amigo|ajánl\w* (?:egy )?ismerős\w*"
     r"|spontaneous application|unsolicited application|open application|general application"
     r"|initiativbewerbung|candidatura spontanea|autocandidatura|candidature spontanée|candidatura espontánea"
