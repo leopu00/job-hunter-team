@@ -664,3 +664,32 @@ def test_cli_queue_esce_0_solo_se_qualcosa_puo_partire(tmp_path):
     r = run_cli("queue", "--config", cfg, "--db", empty_db, env=env_home)
     assert r.returncode == 1
     assert "queue_empty" in r.stderr
+
+
+def _write_form_stop(tmp_path, pid, request):
+    p = checkpoint_path(pid, tmp_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"position_id": pid, "state": "blocked_human", "blocked_reason": "required_answer_missing",
+                             "updated_at": "2026-09-12T12:00:00+00:00", "answer_request": request}))
+
+
+@pytest.mark.parametrize(
+    "request_fields, held",
+    [
+        ({"asked": False, "message_id": ""}, False),   # nobody asked: the CLOSER works it out
+        ({"asked": True, "message_id": "9"}, True),    # asked: waits for the user's answer
+        ({"message_id": "9"}, True),                   # checkpoint written before `asked`
+        ({"asked": True, "message_id": ""}, True),     # marked asked: never released
+        ({"message_id": ""}, True),                    # no mark at all: not provably unasked
+        ({"asked": False, "message_id": "9"}, True),   # a row exists: it was asked
+    ],
+)
+def test_una_domanda_di_form_mai_chiesta_non_trattiene_la_posizione(tmp_path, request_fields, held):
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    _write_form_stop(tmp_path, 1, {"source_id": "closer-answer:1:x", "payload": {"key": "why us"}, **request_fields})
+    q = queue(tmp_path, db)
+    if held:
+        assert q["held"] == [{"position_id": 1, "reason": "checkpoint_blocked_human"}]
+    else:
+        assert q["ready"], q
+        assert [p["position_id"] for p in q["positions"]] == [1]

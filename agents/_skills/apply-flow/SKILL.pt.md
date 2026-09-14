@@ -56,7 +56,7 @@ Uma linha JSON no stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: preenchida, parada antes do botão, nada enviado | posição seguinte |
 | `denied` | 1 | a porta recusou (consentimento desligado, flag revogado, já enviada) | posição seguinte; nunca repetir |
 | `blocked_human` | 3 | é preciso uma pessoa; o utilizador já foi avisado | posição seguinte; nunca repetir |
-| `blocked_human` à espera de respostas (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | não é uma paragem definitiva: o utilizador foi questionado uma vez, a queue retém a posição (`essential_answers_pending` / `checkpoint_blocked_human`) até as respostas estarem em `jobs.db`, no máximo um dia por pergunta (feita no máximo duas vezes, depois o fluxo continua) | posição seguinte; no `[BRIDGE INFO]` a dizer que o utilizador respondeu, relê a queue: a posição está de novo em `positions` |
+| `blocked_human` respostas em falta (`essential_facts_missing` com `missing`, `required_answer_missing` com `pending_question`) | 3 | não é uma paragem e nada foi perguntado: faltam respostas ao fluxo | deduz cada uma do perfil, do CV e da vaga e guarda-a (`application_answers.py save … --basis …`), depois relança o fluxo; só sem nenhuma base `application_answers.py ask --position-id $PID --key K` (prompt do CLOSER, CL-08). Uma pergunta que fizeste retém a posição até o utilizador responder, no máximo um dia por pergunta |
 | `email_channel` | 4 | o controlo de candidatura é um link `mailto:`, não um formulário; o checkpoint guarda `channel: email` e o `mailto_href` em bruto | executa `email_application.py send` para esta posição como diz a skill `email-application-flow`: ela lê este checkpoint; nunca preenchas um formulário web nem escrevas o email à mão |
 | `error` | 2 | perfil ou CV ilegível, argumentos errados | para: `[BLOCKED]` ao Capitano |
 
@@ -66,8 +66,8 @@ O fluxo para em tudo o que não consegue fazer com certeza:
 
 | `reason` (exemplos) | Causa típica |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | um campo obrigatório não tem resposta guardada — o utilizador foi questionado uma vez (primeiro no Telegram, também no dashboard); a resposta é guardada em `jobs.db` e o fluxo retoma a partir do checkpoint |
-| `essential_facts_missing` / `essential_facts_unavailable` | antes do primeiro run de uma posição falta um dado que quase todos os formulários pedem (data de início, pré-aviso, autorização de trabalho, sponsorship, salário, mudança, telefone); cada um foi perguntado uma vez e nada fica retido: a posição volta a correr quando as respostas existirem |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | um campo obrigatório não tem resposta guardada; `pending_question` nomeia-o (chave, rótulo, tipo, opções, scope). Nada é enviado ao utilizador até correres `ask`; uma resposta guardada retoma o fluxo a partir do checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | antes do primeiro run de uma posição falta um dado que quase todos os formulários pedem (data de início, pré-aviso, autorização de trabalho, sponsorship, salário, mudança, telefone); `missing` lista as chaves. Nada foi perguntado e nada fica retido |
 | `captcha` / `two_factor` | o site quer verificar que há uma pessoa |
 | `vacancy_closed` | a vaga já não está aberta: uma página sem formulário, botão Apply nem canal de email diz isso, ou o URL redirecionou para a lista de vagas, a página de carreiras ou a página inicial; nada foi preenchido nem enviado. Paragem definitiva: uma nova execução não reabre a página até o utilizador autorizar de novo a posição. Uma captura da página é guardada ao lado do checkpoint (`stop_screenshot`) |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | um campo que a receita não sabe preencher com uma resposta guardada |
@@ -83,7 +83,7 @@ O fluxo para em tudo o que não consegue fazer com certeza:
 | `submit_outcome_unknown` | uma passagem anterior iniciou o envio e não deixou recibo |
 | `applied_record_failed` | o recibo existe mas o estado não pôde ser registado — a candidatura quase certamente saiu |
 
-O que fazes, sempre igual:
+O que fazes em qualquer outro motivo (as respostas em falta estão acima):
 
 1. **Nada nessa posição.** O fluxo já escreveu o checkpoint e avisou o
    utilizador com `jht-notify-user`. Não o avises outra vez.

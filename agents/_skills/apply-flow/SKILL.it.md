@@ -55,7 +55,7 @@ Una riga JSON su stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: compilata, fermata prima del bottone, niente inviato | posizione successiva |
 | `denied` | 1 | il cancello ha rifiutato (consenso spento, flag revocato, già inviata) | posizione successiva; mai ritentare |
 | `blocked_human` | 3 | serve una persona; l'utente è già stato avvisato | posizione successiva; mai ritentare |
-| `blocked_human` in attesa di risposte (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | non è uno stop definitivo: all'utente è stato chiesto una volta, la coda tiene la posizione (`essential_answers_pending` / `checkpoint_blocked_human`) finché le risposte sono in `jobs.db`, al massimo un giorno per domanda (chiesta al massimo due volte, poi il flusso prosegue) | posizione successiva; al `[BRIDGE INFO]` che dice che l'utente ha risposto, rileggi la coda: la posizione è di nuovo in `positions` |
+| `blocked_human` risposte mancanti (`essential_facts_missing` con `missing`, `required_answer_missing` con `pending_question`) | 3 | non è uno stop e nulla è stato chiesto: al flusso servono risposte che non ha | ricava ciascuna da profilo, CV e annuncio e salvala (`application_answers.py save … --basis …`), poi rilancia il flusso; solo senza nessuna base `application_answers.py ask --position-id $PID --key K` (prompt del CLOSER, CL-08). Una domanda che hai fatto tiene la posizione finché l'utente risponde, al massimo un giorno per domanda |
 | `email_channel` | 4 | il controllo di candidatura è un link `mailto:`, non un form; il checkpoint contiene `channel: email` e il `mailto_href` grezzo | esegui `email_application.py send` per questa posizione come dice la skill `email-application-flow`: legge questo checkpoint; non compilare mai un form web e non scrivere l'email a mano |
 | `error` | 2 | profilo o CV illeggibile, argomenti sbagliati | fermati: `[BLOCKED]` al Capitano |
 
@@ -65,8 +65,8 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 
 | `reason` (esempi) | Causa tipica |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obbligatorio non ha risposta salvata — all'utente è stato chiesto una volta (prima su Telegram, anche in dashboard); la risposta si salva in `jobs.db` e il flusso riparte dal checkpoint |
-| `essential_facts_missing` / `essential_facts_unavailable` | prima del primo run di una posizione manca un dato che quasi ogni form chiede (data di inizio, preavviso, autorizzazione al lavoro, sponsorship, RAL, trasferimento, telefono); ognuno è stato chiesto una volta e nulla resta trattenuto: la posizione riparte quando le risposte esistono |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un campo obbligatorio non ha risposta salvata; `pending_question` lo nomina (chiave, etichetta, tipo, opzioni, scope). All'utente non parte nulla finché non lanci `ask`; una risposta salvata fa ripartire il flusso dal checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | prima del primo run di una posizione manca un dato che quasi ogni form chiede (data di inizio, preavviso, autorizzazione al lavoro, sponsorship, RAL, trasferimento, telefono); `missing` elenca le chiavi. Nulla è stato chiesto e nulla resta trattenuto |
 | `captcha` / `two_factor` | il sito vuole verificare che ci sia una persona |
 | `vacancy_closed` | l'annuncio non è più aperto: una pagina senza form, pulsante Apply e canale email lo dice, oppure l'URL ha rediretto alla lista delle posizioni, alle careers o alla home; nulla è stato compilato né inviato. Stop definitivo: un nuovo run non riapre la pagina finché l'utente non autorizza di nuovo la posizione. Uno screenshot della pagina è salvato accanto al checkpoint (`stop_screenshot`) |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un campo che la ricetta non sa compilare con una risposta salvata |
@@ -82,7 +82,7 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 | `submit_outcome_unknown` | un giro precedente ha avviato l'invio e non ha lasciato ricevuta |
 | `applied_record_failed` | la ricevuta c'è ma lo stato non si è potuto registrare — la candidatura quasi certamente è partita |
 
-Cosa fai, sempre uguale:
+Cosa fai per ogni altro motivo (le risposte mancanti sono sopra):
 
 1. **Niente su quella posizione.** Il flusso ha già scritto il checkpoint e
    avvisato l'utente con `jht-notify-user`. Non avvisarlo di nuovo.

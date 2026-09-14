@@ -64,6 +64,7 @@ class FakeTransport:
 
     def send(self, message, envelope_from, recipients):
         FakeTransport.sends.append((message, envelope_from, list(recipients)))
+        self.last_reply_code = 250
         if FakeTransport.send_error:
             raise FakeTransport.send_error
         return dict(FakeTransport.refused)
@@ -345,6 +346,7 @@ def test_send_records_receipt_and_application_once(box):
     receipt = json.loads(receipt)
     assert state == "sent" and receipt["message_id"] == out.data["message_id"]
     assert receipt["attachments"][0]["sha256"]
+    assert receipt["smtp_reply_code"] == 250
     files = list((box / "application-receipts").glob("email-1-*.json"))
     assert len(files) == 1 and files[0].stat().st_mode & 0o077 == 0
 
@@ -566,3 +568,53 @@ def test_the_draft_reads_answers_without_writing_them(box):
     assert sql(box, "SELECT COUNT(*) FROM application_answers") == [(0,)]
     flow(box).send()
     assert sql(box, "SELECT key, channel FROM application_answers") == [("start date", "profile_yaml")]
+
+
+class _ScriptedSmtp(ea.smtplib.SMTP):
+    """The real sendmail() against a server that only answers: no socket."""
+
+    def __init__(self, data_reply):
+        super().__init__()
+        self.data_reply = data_reply
+        self.does_esmtp = False
+
+    def ehlo_or_helo_if_needed(self):
+        pass
+
+    def mail(self, sender, options=()):
+        return 250, b"ok"
+
+    def rcpt(self, recip, options=()):
+        return 250, b"ok"
+
+    def data(self, msg):
+        return self.data_reply
+
+    def rset(self):
+        return 250, b"ok"
+
+
+def _smtp_transport(server):
+    transport = ea.SmtpTransport(ea.TransportSettings.__new__(ea.TransportSettings), "unused")
+    transport._smtp = server
+    return transport
+
+
+def test_the_smtp_transport_keeps_the_numeric_reply_to_the_letter():
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["From"] = "sender@example.com"
+    message.set_content("Synthetic letter.")
+    server = _ScriptedSmtp((250, b"2.0.0 queued"))
+    transport = _smtp_transport(server)
+
+    assert transport.send(message, "sender@example.com", ["jobs@example.com"]) == {}
+    assert transport.last_reply_code == 250
+    assert "data" not in vars(server)  # the wrapper never outlives the send
+
+    refusing = _ScriptedSmtp((554, b"5.7.1 rejected"))
+    transport = _smtp_transport(refusing)
+    with pytest.raises(ea.smtplib.SMTPDataError):
+        transport.send(message, "sender@example.com", ["jobs@example.com"])
+    assert transport.last_reply_code == 554

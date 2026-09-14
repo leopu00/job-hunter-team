@@ -61,6 +61,11 @@ import apply_gate  # noqa: E402
 
 SOURCE_ACTION = "closer_application_answer"
 TELEGRAM_ORIGIN = "user_telegram"
+INFERRED_CHANNEL = "agent_inferred"
+INFERENCE_BASES = ("profile", "cv", "vacancy", "judgement")
+# What the CLOSER works out per company: a motivation is written for one
+# company, a salary expectation is judged against one position.
+COMPANY_SCOPED_KEYS = frozenset({"salary expectations"})
 TEXT_FIELD_TYPES = frozenset({"textarea", "text", "email", "tel", "url", "number", "date"})
 # Only these may be answered by a bare message: the exact-option rule filters
 # out ordinary chat. A free-text question needs a reply or its code.
@@ -199,12 +204,17 @@ def answer_scope(
     return position_company(conn, position_id)
 
 
-def _read_answers(conn: sqlite3.Connection, position_id: int | None) -> dict[str, Any]:
+def _read_entries(conn: sqlite3.Connection, position_id: int | None) -> dict[str, tuple[Any, str]]:
+    """{key: (value, channel)} as a form of `position_id` sees them.
+
+    A company answer wins over a global one, except that something the CLOSER
+    worked out never wins over what the user said.
+    """
     if not _table_exists(conn, "application_answers"):
         return {}
     company = position_company(conn, position_id) if position_id is not None else ""
-    answers: dict[str, Any] = {}
-    scoped: dict[str, Any] = {}
+    entries: dict[str, tuple[Any, str]] = {}
+    scoped: dict[str, tuple[Any, str]] = {}
     essential_keys = {fact.key for fact in ESSENTIAL_FACTS}
     for key, answer_json, field_type, channel in conn.execute(
         "SELECT key, answer_json, field_type, channel FROM application_answers"
@@ -219,11 +229,25 @@ def _read_answers(conn: sqlite3.Connection, position_id: int | None) -> dict[str
                 # Saved before answers were kept per company: whose company it
                 # was is unknown, so it is never pasted into anyone's form.
                 continue
-            answers[base] = value
+            entries[base] = (value, str(channel))
         elif company and scope == company:
-            scoped[base] = value
-    answers.update(scoped)
-    return answers
+            scoped[base] = (value, str(channel))
+    for base, entry in scoped.items():
+        current = entries.get(base)
+        if current and entry[1] == INFERRED_CHANNEL and current[1] != INFERRED_CHANNEL:
+            continue
+        entries[base] = entry
+    return entries
+
+
+def _read_answers(conn: sqlite3.Connection, position_id: int | None) -> dict[str, Any]:
+    return {key: value for key, (value, _channel) in _read_entries(conn, position_id).items()}
+
+
+def answer_origins(conn: sqlite3.Connection, position_id: int | None = None) -> dict[str, str]:
+    """{key: user · profile · agent_inferred} for the answers `load_answers` returns. Never values."""
+    origin = {INFERRED_CHANNEL: "agent_inferred", "profile_yaml": "profile"}
+    return {key: origin.get(channel, "user") for key, (_value, channel) in _read_entries(conn, position_id).items()}
 
 
 def load_answers(conn: sqlite3.Connection, position_id: int | None = None) -> dict[str, Any]:
@@ -243,21 +267,25 @@ def save_answer(
     channel: str,
     message_id: int | None = None,
     scope: str = "",
-) -> None:
+    basis: str = "",
+) -> bool:
+    """Save one answer; False when an answer the CLOSER worked out met the user's own."""
     if not key or key != normalise_label(key):
         raise ValueError("answer key is not canonical")
     if scope != normalise_label(scope):
         raise ValueError("answer scope is not canonical")
     key = f"{key}{_SCOPE_SEP}{scope}" if scope else key
     ensure_table(conn)
-    conn.execute(
+    # The user's answer always replaces one the CLOSER worked out; the reverse never happens.
+    return conn.execute(
         "INSERT INTO application_answers "
-        "(key, label, answer_json, field_type, options_json, channel, source_message_id, answered_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "(key, label, answer_json, field_type, options_json, channel, source_message_id, answered_at, basis) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(key) DO UPDATE SET label = excluded.label, answer_json = excluded.answer_json, "
         "field_type = excluded.field_type, options_json = excluded.options_json, "
         "channel = excluded.channel, source_message_id = excluded.source_message_id, "
-        "answered_at = excluded.answered_at",
+        "answered_at = excluded.answered_at, basis = excluded.basis "
+        "WHERE excluded.channel != ? OR application_answers.channel = ?",
         (
             key,
             label,
@@ -267,8 +295,64 @@ def save_answer(
             channel,
             message_id,
             _utc_now(),
+            basis,
+            INFERRED_CHANNEL,
+            INFERRED_CHANNEL,
         ),
+    ).rowcount == 1
+
+
+class InferenceRejected(ValueError):
+    pass
+
+
+def save_inferred(
+    conn: sqlite3.Connection,
+    *,
+    key: str,
+    value: str,
+    field_type: str,
+    options: Sequence[str] = (),
+    basis: str,
+    position_id: int | None = None,
+    label: str = "",
+) -> dict[str, Any]:
+    """An answer the CLOSER worked out from profile, CV or vacancy, checked like a user's reply."""
+    canonical = normalise_label(key)
+    if not canonical:
+        raise InferenceRejected("key_empty")
+    if basis not in INFERENCE_BASES:
+        raise InferenceRejected("basis_invalid")
+    options = list(options)
+    try:
+        payload_shape({"version": 1, "key": canonical, "label": label or key,
+                       "field_type": field_type, "options": options})
+        reply = telegram_reply_text(field_type, str(value))
+        if not reply or len(reply) > MAX_ANSWER_CHARS:
+            raise AnswerRejected("closer_answer_empty")
+        validate_reply(field_type, options, reply)
+    except AnswerRejected as exc:
+        raise InferenceRejected(exc.reason) from None
+    essential = canonical in {fact.key for fact in ESSENTIAL_FACTS}
+    company_scoped = canonical in COMPANY_SCOPED_KEYS or (field_type == "textarea" and not essential)
+    if company_scoped and position_id is None:
+        raise InferenceRejected("position_id_required")
+    scope = position_company(conn, position_id) if company_scoped else ""
+    ensure_table(conn)
+    saved = save_answer(
+        conn,
+        key=canonical,
+        label=label or key,
+        answer=decode_reply(field_type, reply),
+        field_type=field_type,
+        options=options,
+        channel=INFERRED_CHANNEL,
+        scope=scope,
+        basis=basis,
     )
+    conn.commit()
+    return {"status": "saved" if saved else "user_answer_kept", "key": canonical,
+            "scope": "company" if scope else "global", "basis": basis}
 
 
 def import_profile_answers(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> int:
@@ -285,11 +369,16 @@ def import_profile_answers(conn: sqlite3.Connection, profile: Mapping[str, Any])
         key = normalise_label(label)
         if not key or answer is None:
             continue
+        # Once in; only an answer the CLOSER worked out gives way to the profile.
         imported += conn.execute(
-            "INSERT OR IGNORE INTO application_answers "
+            "INSERT INTO application_answers "
             "(key, label, answer_json, field_type, options_json, channel, answered_at) "
-            "VALUES (?, ?, ?, 'profile', '[]', 'profile_yaml', ?)",
-            (key, label, json.dumps(answer, ensure_ascii=False), _utc_now()),
+            "VALUES (?, ?, ?, 'profile', '[]', 'profile_yaml', ?) "
+            "ON CONFLICT(key) DO UPDATE SET label = excluded.label, answer_json = excluded.answer_json, "
+            "field_type = excluded.field_type, options_json = excluded.options_json, channel = excluded.channel, "
+            "source_message_id = NULL, answered_at = excluded.answered_at, basis = '' "
+            "WHERE application_answers.channel = ?",
+            (key, label, json.dumps(answer, ensure_ascii=False), _utc_now(), INFERRED_CHANNEL),
         ).rowcount
     return imported
 
@@ -659,6 +748,18 @@ def _essential_state(conn: sqlite3.Connection, fact: EssentialFact, now: datetim
     return "given_up", latest
 
 
+def _asked_explicitly(conn: sqlite3.Connection, fact: EssentialFact, round_no: int) -> bool:
+    row = conn.execute(
+        "SELECT source_payload FROM pending_user_messages WHERE source_id = ? ORDER BY id LIMIT 1",
+        (essential_source_id(fact, round_no),),
+    ).fetchone()
+    try:
+        payload = json.loads((row[0] if row else "") or "")
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and payload.get("explicit") is True
+
+
 def essential_message(fact: EssentialFact, round_no: int = 1) -> str:
     """Same structured head as a form request, so the dashboard can answer it too."""
     options = "".join(f"\n- {value}" for value in fact.options)
@@ -703,14 +804,16 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     ).fetchone() is not None
 
 
-def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> dict[str, Any]:
+def check_essentials(
+    conn: sqlite3.Connection, profile: Mapping[str, Any], position_id: int | None = None
+) -> dict[str, Any]:
     """What `ensure_essentials` would ask, without writing anything.
 
     Reads the saved answers, the profile (YAML answers included) and any valid
     reply already written on a question row, all in memory.
     """
     answers = _profile_answers(profile)
-    answers.update(_read_answers(conn, None))
+    answers.update(_read_answers(conn, position_id))
     now = datetime.now(timezone.utc)
     if _table_exists(conn, "pending_user_messages"):
         for payload_text, reply in conn.execute(
@@ -727,14 +830,19 @@ def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> di
                 continue
             answers.setdefault(normalise_label(payload["key"]), decode_reply(field_type, reply))
     missing = missing_essentials(answers, profile)
-    states = {fact.key: _essential_state(conn, fact, now)[0] for fact in missing}
+    states = {fact.key: _essential_state(conn, fact, now) for fact in missing}
     return {
         "status": "complete" if not missing else "missing",
         "missing": [fact.key for fact in missing],
-        # Asked and still inside its day: only these hold the queue.
-        "already_asked": [key for key, state in states.items() if state == "waiting"],
-        "expired": [key for key, state in states.items() if state == "expired"],
-        "given_up": [key for key, state in states.items() if state == "given_up"],
+        # Asked explicitly and still inside its day: only these hold the queue.
+        # A question sent before the CLOSER worked answers out by itself was not
+        # its choice, and must not stop it from working the fact out.
+        "already_asked": [
+            fact.key for fact in missing
+            if states[fact.key][0] == "waiting" and _asked_explicitly(conn, fact, states[fact.key][1])
+        ],
+        "expired": [key for key, (state, _) in states.items() if state == "expired"],
+        "given_up": [key for key, (state, _) in states.items() if state == "given_up"],
     }
 
 
@@ -743,27 +851,35 @@ def ensure_essentials(
     profile: Mapping[str, Any],
     position_id: int,
     *,
+    ask: Sequence[str] = (),
     notifier: Callable[..., str] | None = None,
 ) -> dict[str, Any]:
-    """Ask each missing essential fact (twice at most); report what still blocks.
+    """Report the essential facts still unknown; ask the user ONLY the keys in `ask`.
 
-    `missing` lists only what the flow must wait for: a fact asked just now or
-    still inside its day. A fact asked twice and never answered is `given_up`:
-    the flow goes on, and a form that needs it asks on its own position.
+    Nothing goes to the user by itself: the CLOSER first works each fact out
+    from profile, CV and vacancy (`save`), and asks only what has no basis.
+    `missing` is what the flow waits for: unknown and not given up. A fact
+    asked twice and never answered is `given_up` and no longer blocks.
     """
     harvest_replies(conn)
-    answers = answers_with_profile(conn, profile)
+    answers = answers_with_profile(conn, profile, position_id)
+    wanted = {normalise_label(key) for key in ask}
+    known_keys = {fact.key for fact in ESSENTIAL_FACTS}
     now = datetime.now(timezone.utc)
     asked: list[str] = []
     waiting: list[str] = []
     given_up: list[str] = []
+    missing: list[str] = []
     for fact in missing_essentials(answers, profile):
         state, round_no = _essential_state(conn, fact, now)
+        if state == "given_up":
+            given_up.append(fact.key)
+            continue
+        missing.append(fact.key)
         if state == "waiting":
             waiting.append(fact.key)
             continue
-        if state == "given_up":
-            given_up.append(fact.key)
+        if fact.key not in wanted:
             continue
         payload = {
             "version": 1,
@@ -772,6 +888,8 @@ def ensure_essentials(
             "label": fact.label,
             "field_type": fact.field_type,
             "options": list(fact.options),
+            # Only the CLOSER's explicit ask sends it; the queue holds on this mark.
+            "explicit": True,
         }
         (notifier or _default_notifier)(
             position_id=int(position_id),
@@ -781,13 +899,14 @@ def ensure_essentials(
         )
         asked.append(fact.key)
     conn.commit()
-    blocking = asked + waiting
     return {
-        "status": "complete" if not blocking else "waiting",
-        "missing": blocking,
+        "status": "complete" if not missing else "missing",
+        "missing": missing,
         "asked": asked,
         "already_asked": waiting,
         "given_up": given_up,
+        "not_essential": sorted(wanted - known_keys),
+        "not_missing": sorted((wanted & known_keys) - set(missing) - set(given_up)),
     }
 
 
@@ -971,14 +1090,47 @@ def _load_profile(path: Path) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _ask(conn: sqlite3.Connection, profile: Mapping[str, Any], position_id: int, key: str) -> tuple[dict, int]:
+    """The one explicit way a question reaches the user: an essential fact or a form question."""
+    canonical = normalise_label(key)
+    if canonical in {fact.key for fact in ESSENTIAL_FACTS}:
+        out = ensure_essentials(conn, profile, position_id, ask=[canonical])
+        if canonical in out["asked"]:
+            return {"status": "asked", "key": canonical, "kind": "essential"}, 0
+        if canonical in out["already_asked"]:
+            return {"status": "already_asked", "key": canonical, "kind": "essential"}, 3
+        if canonical in out["given_up"]:
+            return {"status": "given_up", "key": canonical, "kind": "essential"}, 3
+        return {"status": "not_missing", "key": canonical, "kind": "essential"}, 3
+    try:
+        from apply_flow import ask_pending_question
+    except ImportError:  # pragma: no cover - package import
+        from shared.skills.apply_flow import ask_pending_question
+    result = dict(ask_pending_question(position_id, canonical))
+    status = str(result.get("status", ""))
+    return {"status": status, "key": canonical, "kind": "form"}, 0 if status == "asked" else 3
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Essential facts and remembered application answers.")
     sub = parser.add_subparsers(dest="command", required=True)
-    ess = sub.add_parser("essentials", help="ask each missing essential fact once")
+    ess = sub.add_parser("essentials", help="which essential facts are unknown; --ask KEY asks the user that one")
     ess.add_argument("--position-id", type=int, required=True)
-    ess.add_argument("--ask", action="store_true", help="send one question per missing fact")
-    lst = sub.add_parser("list", help="the remembered answers (keys and channels only)")
-    for p in (ess, lst):
+    ess.add_argument("--ask", action="append", default=[], metavar="KEY",
+                     help="ask the user this essential fact (repeatable); only when no basis exists")
+    ask = sub.add_parser("ask", help="ask the user one question the CLOSER could not work out")
+    ask.add_argument("--position-id", type=int, required=True)
+    ask.add_argument("--key", required=True)
+    save = sub.add_parser("save", help="save an answer the CLOSER worked out (channel agent_inferred)")
+    save.add_argument("--key", required=True)
+    save.add_argument("--value", required=True)
+    save.add_argument("--field-type", required=True)
+    save.add_argument("--options", nargs="*", default=[])
+    save.add_argument("--basis", required=True, choices=INFERENCE_BASES)
+    save.add_argument("--position-id", type=int)
+    save.add_argument("--label", default="")
+    lst = sub.add_parser("list", help="the remembered answers (keys, channels and bases only)")
+    for p in (ess, ask, save, lst):
         p.add_argument("--json", action="store_true")
         p.add_argument("--db")
         p.add_argument("--profile")
@@ -994,17 +1146,30 @@ def main(argv: list[str] | None = None) -> int:
             profile = _load_profile(profile_path)
             if args.command == "essentials":
                 if args.ask:
-                    out = ensure_essentials(conn, profile, args.position_id)
+                    out = ensure_essentials(conn, profile, args.position_id, ask=args.ask)
                 else:
-                    out = check_essentials(conn, profile)
+                    out = check_essentials(conn, profile, args.position_id)
                 code = 0 if out["status"] == "complete" else 3
+            elif args.command == "ask":
+                out, code = _ask(conn, profile, args.position_id, args.key)
+            elif args.command == "save":
+                try:
+                    out = save_inferred(
+                        conn, key=args.key, value=args.value, field_type=args.field_type,
+                        options=args.options, basis=args.basis, position_id=args.position_id, label=args.label,
+                    )
+                    code = 0 if out["status"] == "saved" else 3
+                except InferenceRejected as exc:
+                    out = {"status": "rejected", "reason": str(exc), "key": normalise_label(args.key)}
+                    code = 1
             else:
                 ensure_table(conn)
                 rows = conn.execute(
-                    "SELECT key, field_type, channel, answered_at FROM application_answers ORDER BY key"
+                    "SELECT key, field_type, channel, basis, answered_at FROM application_answers ORDER BY key"
                 ).fetchall()
                 out = {"status": "listed", "answers": [
-                    {"key": r[0], "field_type": r[1], "channel": r[2], "answered_at": r[3]} for r in rows
+                    {"key": r[0], "field_type": r[1], "channel": r[2], "basis": r[3], "answered_at": r[4]}
+                    for r in rows
                 ]}
                 code = 0
         finally:
