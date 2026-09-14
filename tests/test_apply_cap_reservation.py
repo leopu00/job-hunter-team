@@ -261,6 +261,7 @@ def test_email_with_the_cap_taken_by_a_browser_slot_sends_nothing(box, monkeypat
 def _browser_flow(home: Path, cv: Path, position_id: int, **kwargs) -> apply_flow.ApplicationFlow:
     return apply_flow.ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cv_checker=lambda _path: {"ok": True, "reasons": []},
         position_id=position_id,
         url=f"https://jobs.ashbyhq.com/example/00000000-0000-0000-0000-0000000000{position_id}/application",
         profile={"name": "Test Candidate", "contacts": {"email": "candidate@example.invalid"}},
