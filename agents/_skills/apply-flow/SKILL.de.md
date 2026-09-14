@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Gib diesem Befehl ein Timeout von mindestens **10 Minuten**: eine LinkedIn-Anmeldung kann im Browser bis zu 5 Minuten auf den Bestätigungscode warten, den die Person auf Telegram schickt, und ein Befehl, der währenddessen beendet wird, lässt die Code-Anfrage verfallen.
+
 `PID`, `URL` und `CV` kommen aus dem letzten Lesen von `apply_gate.py queue`
 (Skill `apply-authorization`), nie aus dem Gedächtnis.
 
@@ -80,11 +82,11 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 | `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | die LinkedIn-Stelle oder ihr Easy-Apply-Dialog ist nicht der, den das Rezept kennt |
 | `linkedin_credentials_missing` | `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) fehlt, ist keine reguläre 0600-Datei dieses Benutzers oder ist leer: der Benutzer legt sie mit dem Zugangsdaten-Skript an. Nie im Chat nach dem Passwort fragen |
 | `linkedin_login_failed` | LinkedIn hat die Anmeldung zweimal abgelehnt: kein neuer Versuch, bis der Benutzer neue Zugangsdaten schreibt |
-| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | der LinkedIn-Bestätigungscode wurde auf Telegram angefragt und kam nicht rechtzeitig (oder die Anfrage erreichte Telegram nicht): ein neuer Lauf fragt nach einem neuen Code |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | der LinkedIn-Bestätigungscode wurde auf Telegram angefragt und kam nicht rechtzeitig (oder die Anfrage erreichte Telegram nicht, oder LinkedIn nahm den Code nicht an — das zählt nie als fehlgeschlagene Anmeldung): ein neuer Lauf fragt nach einem neuen Code |
 | `linkedin_challenge` | LinkedIn zeigt ein Captcha oder eine Sicherheitsprüfung: der Benutzer löst sie auf dem Live-Bildschirm und autorisiert die Stelle erneut |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | die LinkedIn-Seite hat `www.linkedin.com` verlassen, oder die angegebene Firmenadresse ist keine HTTPS-Seite außerhalb von LinkedIn (oder eine zweite Übergabe) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | die LinkedIn-Seite hat LinkedIn (`www.linkedin.com` oder eine Länderseite wie `es.linkedin.com`) verlassen, oder die angegebene Firmenadresse ist keine HTTPS-Seite außerhalb von LinkedIn (oder eine zweite Übergabe) |
 | `linkedin_follow_not_cleared` | das Kästchen „Unternehmen folgen“ ließ sich vor Submit nicht abwählen: nichts wird gesendet |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **abgelehnt, nicht blockiert**: LinkedIn-Bewerbungen werden zeitlich verteilt (`linkedin_min_interval_minutes`, Standard 20), die Anmeldung schlug einmal fehl und der nächste Lauf versucht es noch einmal, oder diese Einstellung ist keine ganze Minutenzahl. Die Warteschlange versucht es selbst erneut |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **abgelehnt, nicht blockiert**: LinkedIn-Bewerbungen werden zeitlich verteilt (`linkedin_min_interval_minutes`, Standard 20), die Anmeldung schlug einmal fehl und der nächste Lauf versucht es noch einmal, oder diese Einstellung ist keine ganze Minutenzahl. Die Warteschlange versucht es selbst erneut Ein Probelauf meldet sich nie an: ohne gespeicherte LinkedIn-Sitzung wird er als `linkedin_dry_run_signed_out` abgelehnt. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | zwei verschiedene mailto-Bewerbungsadressen, oder das Bewerbungsformular, seine Felder oder sein Absende-Button lassen sich nicht einem einzigen Formular zuordnen (Newsletter, Footer und Demo-Formulare gehören nie dazu) |
 | `form_error` / `field_invalid` / `submit_unavailable` | das Formular meldet einen Fehler, ein Feldformat wird abgelehnt, oder der Absende-Button fehlt oder ist deaktiviert |
 | `url_refused` / `checkpoint_invalid` | die Bewerbungs-URL hat die Prüfung auf öffentliche Adressen nicht bestanden, oder der gespeicherte Checkpoint ist unlesbar |
