@@ -216,6 +216,7 @@ def build_flow(
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
         cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
+        cv_checker=lambda _path: {"ok": True, "reasons": []},
         position_id=41,
         url=ASHBY_URL,
         profile=candidate or profile(),
@@ -604,6 +605,7 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
         return ApplicationFlow(
             essentials_checker=lambda **_kwargs: [],
             cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
+            cv_checker=lambda _path: {"ok": True, "reasons": []},
             position_id=41,
             url=ASHBY_URL,
             profile=_load_profile(profile_path),
@@ -1628,3 +1630,117 @@ def test_a_user_answer_is_never_held_by_the_count_of_refused_guesses(
     # The form refuses the user's own answer: a human stop, not a question for the CLOSER.
     assert (result.status, result.reason, result.pending_question) == ("blocked_human", "answer_not_accepted", None)
     assert "which work model can you accept" not in _read_checkpoint(tmp_path)["answer_refusals"]
+
+
+# ── The CV PDF is checked before the page is touched ────────────────────────
+
+
+def _cv_flow(tmp_path: Path, cv_path: Path, notifications: list, checker, previewer=None) -> ApplicationFlow:
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+    flow.cv_checker = checker
+    if previewer is not None:
+        flow.cv_previewer = previewer
+    return flow
+
+
+def _write_png(_cv: Path, target: Path) -> None:
+    target.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic page one")
+
+
+def test_a_cv_with_a_bad_layout_stops_before_the_page_and_notifies(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form())
+    notifications: list[dict] = []
+    checked: list[Path] = []
+
+    def checker(path: Path):
+        checked.append(path)
+        return {"ok": False, "reasons": ["narrow_text", "Synthetic Candidate <script>"], "pages": 1}
+
+    result = _cv_flow(tmp_path, cv_path, notifications, checker, _write_png).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "cv_pdf_layout_bad")
+    assert checked == [cv_path]
+    assert page.eval_on_selector("#_systemfield_name", "element => element.value") == ""
+    assert page.evaluate("window.submitCount") == 0
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["completed_steps"] == []
+    assert checkpoint["blocked_detail"].endswith(": narrow_text")
+    assert Path(checkpoint["cv_preview"]).name == "checkpoint.cv-page1.png"
+    assert Path(checkpoint["cv_preview"]).read_bytes().startswith(b"\x89PNG")
+    assert len(notifications) == 1 and "answer_request" not in notifications[0]
+    assert result.pending_question is None
+
+
+@pytest.mark.parametrize(
+    "checker",
+    [
+        lambda _path: (_ for _ in ()).throw(apply_flow_module.CvCheckUnavailable("pdftotext missing")),
+        lambda _path: None,
+    ],
+    ids=["check-error", "no-report"],
+)
+def test_a_cv_that_cannot_be_checked_is_never_sent(page, tmp_path: Path, cv_path: Path, checker):
+    page.set_content(ashby_form())
+    notifications: list[dict] = []
+
+    result = _cv_flow(tmp_path, cv_path, notifications, checker, _write_png).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "cv_pdf_check_unavailable")
+    assert page.evaluate("window.submitCount") == 0
+    assert _read_checkpoint(tmp_path)["cv_preview"] == ""
+
+
+def test_a_report_without_an_explicit_ok_is_not_a_pass(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form())
+
+    result = _cv_flow(tmp_path, cv_path, [], lambda _path: {"ok": "true", "reasons": []}).run(page=page, navigate=False)
+
+    assert result.reason == "cv_pdf_layout_bad"
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_regenerated_cv_that_passes_applies_on_the_rerun(page, tmp_path: Path, cv_path: Path):
+    verdicts = [{"ok": False, "reasons": ["too_many_pages"]}, {"ok": True, "reasons": []}]
+    page.set_content(ashby_form())
+    assert _cv_flow(tmp_path, cv_path, [], lambda _p: verdicts[0], _write_png).run(page=page, navigate=False).reason == "cv_pdf_layout_bad"
+
+    page.set_content(ashby_form())
+    assert _cv_flow(tmp_path, cv_path, [], lambda _p: verdicts[1]).run(page=page, navigate=False).status == "applied"
+
+
+def test_a_failing_preview_never_hides_the_stop(page, tmp_path: Path, cv_path: Path):
+    page.set_content(ashby_form())
+
+    def broken_preview(_cv: Path, target: Path) -> None:
+        target.write_bytes(b"partial")
+        raise RuntimeError("synthetic render failure")
+
+    result = _cv_flow(
+        tmp_path, cv_path, [], lambda _p: {"ok": False, "reasons": ["no_text"]}, broken_preview
+    ).run(page=page, navigate=False)
+
+    assert result.reason == "cv_pdf_layout_bad"
+    assert _read_checkpoint(tmp_path)["cv_preview"] == ""
+    assert [p.name for p in tmp_path.iterdir() if "cv-page1" in p.name] == []
+
+
+def test_without_the_check_module_the_cv_is_not_a_pass(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_module(name, *args, **kwargs):
+        if name.endswith("pdf_layout_check") or (name == "shared.skills" and "pdf_layout_check" in (args[2] or ())):
+            raise ImportError("synthetic: module absent")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_module)
+    monkeypatch.delitem(sys.modules, "pdf_layout_check", raising=False)
+    page.set_content(ashby_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.cv_checker = apply_flow_module._default_cv_checker
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.reason == "cv_pdf_check_unavailable"
+    assert page.evaluate("window.submitCount") == 0
