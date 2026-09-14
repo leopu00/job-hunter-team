@@ -181,6 +181,23 @@ experience_years: 5
 
 
 @pytest.fixture(scope="session", autouse=True)
+def placeholder_pdfs_skip_layout_check():
+    """Queues in the suite attach placeholder PDFs that poppler cannot measure.
+
+    `apply_gate.cv_layout_hold` would hold every one of them as
+    `cv_pdf_check_unavailable`. The env var reaches subprocess CLIs too; the
+    tests of the layout hold itself remove it.
+    """
+    previous = os.environ.get("JHT_TEST_SKIP_PDF_LAYOUT")
+    os.environ["JHT_TEST_SKIP_PDF_LAYOUT"] = "1"
+    yield
+    if previous is None:
+        os.environ.pop("JHT_TEST_SKIP_PDF_LAYOUT", None)
+    else:
+        os.environ["JHT_TEST_SKIP_PDF_LAYOUT"] = previous
+
+
+@pytest.fixture(scope="session", autouse=True)
 def isolated_jht_home():
     if os.environ.get("JHT_TESTS_KEEP_HOME") == "1":
         # Via di fuga per chi vuole deliberatamente girare contro la propria
