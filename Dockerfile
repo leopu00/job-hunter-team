@@ -124,14 +124,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # bookworm dipende da `nodejs` e `libnode` di Debian, un secondo Node
       # accanto a quello dell'immagine; il client VNC vive nell'app desktop.
       xvfb x11vnc python3-websockify \
-      # CV impaginati dello SCRITTORE (skill cv-structure, shared/skills/pdf_gen.py):
-      # `pandoc input.md -o out.pdf --pdf-engine=wkhtmltopdf`. L'immagine non li
-      # aveva MAI installati: nel container lo SCRITTORE non produceva il PDF
-      # del CV e ripiegava su testo o su fpdf2 a una pagina, che pdf_gen.py
-      # rifiuta apposta per i CV. Nel layer finale ~+338 MB non compressi,
-      # ~+87 MB compressi (51 pacchetti, misurati su arm64 sopra questo stesso
-      # set: le librerie X/Qt gia' presenti per Chromium e Xvfb ne coprono una
-      # parte). Gate di render vero piu' sotto.
+      # CV PDF (skill cv-structure): pandoc -> HTML -> wkhtmltopdf. Were never
+      # baked: they came from an agent's `sudo apt-get` inside a running
+      # container, so every recreate lost them in silence and the Writer found
+      # only weasyprint. Checked by the cv_pdf_render build gate below.
       pandoc wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
@@ -202,6 +198,13 @@ RUN find /app/agents/_tools -type f -exec sed -i 's/\r$//' {} + \
 RUN python3 shared/skills/tool_health.py --only playwright_browser \
     || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
 
+# Same gate for the CV PDF: render a synthetic CV with the cv-structure command
+# (pandoc + wkhtmltopdf + pdf_layout_base.css) and measure it with pdf_layout_check.py.
+# A missing binary, or a layout back to a narrow centred column, fails the
+# BUILD instead of the first CV a CLOSER attaches.
+RUN python3 shared/skills/tool_health.py --only cv_pdf_render \
+    || { echo "BUILD GATE FAILED: CV PDF toolchain broken (pandoc/wkhtmltopdf/poppler) or the render is not full width — see shared/skills/tool_health.py" >&2; exit 1; }
+
 # Same gate for the live screen: the headed build (apply_flow.py --headful)
 # must open a window on a real X display. A missing full Chromium or a broken
 # Xvfb fails the BUILD, not the first application the user wanted to watch.
@@ -225,35 +228,6 @@ RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     fi; \
     kill "$xvfb_pid"; rm -f /tmp/.X98-lock /tmp/.X11-unix/X98; \
     [ "$rc" -eq 0 ] || { echo "BUILD GATE FAILED: headed chromium cannot open on Xvfb — see .launcher/live-screen.sh" >&2; exit 1; }
-
-# Build-time GATE for the Writer's CVs: a REAL `pandoc ... --pdf-engine=
-# wkhtmltopdf` render through tool_health.py (the same check the Maintainer's
-# sweep runs), failing the build if no non-empty PDF comes out. Two facts
-# measured on node:22-bookworm-slim, pandoc 2.17 + wkhtmltopdf 0.12.6:
-#   - no display is needed: the Debian wkhtmltopdf renders headless, also with
-#     the image-wide DISPLAY=:99 pointing at an X server that is not running,
-#     so no QT_QPA_PLATFORM override;
-#   - pandoc writes its intermediate HTML in the CURRENT directory: from a cwd
-#     the user cannot write (`/` for uid jht) it fails with "openTempFile:
-#     permission denied". tool_health.py renders inside a temp dir for that.
-# Under QEMU pandoc does not run at all: the GHC runtime is SIGKILLed (137)
-# even on `pandoc --version`, while wkhtmltopdf renders fine. So, as for the
-# headed gate above, the full chain runs where the build architecture IS the
-# target (amd64, the VPS image; a native arm64 build too); the emulated layer
-# still proves wkhtmltopdf renders a PDF and that the pandoc binary is there,
-# and says so.
-RUN if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
-      gate_dir="$(mktemp -d)" \
-      && printf '<h1>JHT CV build gate</h1><p>àèìòù €</p>' > "$gate_dir/gate.html" \
-      && wkhtmltopdf --quiet "$gate_dir/gate.html" "$gate_dir/gate.pdf" \
-      && [ -s "$gate_dir/gate.pdf" ] && [ "$(head -c 4 "$gate_dir/gate.pdf")" = "%PDF" ] \
-      && [ -x "$(command -v pandoc)" ] \
-      && echo "CV_PDF_RENDER_EMULATED: wkhtmltopdf rendered and pandoc is installed; pandoc cannot run under QEMU ($TARGETARCH on $BUILDARCH)" \
-      && rm -rf "$gate_dir"; \
-    else \
-      python3 shared/skills/tool_health.py --only cv_pdf_render; \
-    fi \
-    || { echo "BUILD GATE FAILED: pandoc + wkhtmltopdf cannot render a CV PDF — see shared/skills/tool_health.py (cv_pdf_render)" >&2; exit 1; }
 
 RUN for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \

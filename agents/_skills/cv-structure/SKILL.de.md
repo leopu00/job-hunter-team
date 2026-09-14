@@ -161,6 +161,17 @@ Technische Entscheidung 2026-05-18 nach Untersuchung "CV-Ästhetik vereinfacht":
 - ❌ **NICHT `pdf_gen.py` (fpdf2)** für CVs verwenden: ist nur Fallback
   Minimalist 80% einfache Fälle. Für nutzerorientierte CVs produziert es
   spartanisches 1-Seiten-Layout, kein CSS, kein Fein-Spacing.
+- ⚠️ **Layout: Basis-CSS + echte Ränder + visuelles Gate** (2026-09-14, ein
+  CV angehängt, dessen Text in der Blattmitte zusammengedrückt war). Das
+  HTML-Template von pandoc begrenzt den body auf `max-width: 36em`, zentriert
+  mit 50px Padding, und wkhtmltopdf ignoriert `@page`-Ränder: ein `<style>` mit
+  9.3pt ergab eine Spalte von ~41% und bestand trotzdem das Größe + Producer
+  Gate. Deshalb lädt der Render-Befehl IMMER `/app/shared/skills/pdf_layout_base.css`
+  (`-c … --self-contained`) und übergibt die Ränder an wkhtmltopdf
+  (`-V margin-*`). Im `<style>` der `.md` niemals `max-width`, `margin: auto`
+  oder Padding am body, und nicht auf `@page` verlassen. Danach misst
+  `pdf_layout_check.py` das Ergebnis: Text ≥ 75% der nutzbaren Breite auf jeder
+  Seite, 1–2 Seiten, keine fast leere Seite, Schriften eingebettet.
 
 Das historische Anti-Pattern: PDF direkt in
 `$JHT_USER_DIR/cv/` generieren, dann `db_update.py application --cv-pdf-path
@@ -183,19 +194,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Ohne diese Prüfung, bei veralteter Skill (typst nicht vorhanden, pandoc 3.x
 # fehlt, …) führte der Scrittore den Befehl aus, scheiterte, improvisierte
 # zufälligen Fallback → hässliche CVs vom 2026-05-18 Morgen.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT preflight: wkhtmltopdf nicht verfügbar."
-  echo "  Akzeptable alternative Engines: weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  NIEMALS Fallback auf pdf_gen.py / fpdf2 für CVs (hässlicher Output)."
   echo "  Das Problem dem Capitano via [REPORT] melden und ABBRECHEN."
   exit 2
 fi
 
 # 1. Rendern via pandoc → html → wkhtmltopdf (siegende Engine, 32 KB / 2 Seiten).
-#    --metadata title=... vermeidet die Warnung von wkhtmltopdf "no title element".
+#    Basis-CSS hebt die 36em-Spalte von pandoc auf; -V margin-*: wkhtmltopdf ignoriert @page.
+#    pagetitle (nicht title) setzt <title>, ohne eine "CV …"-Kopfzeile zu drucken.
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── GATE POST-RENDER: Größe + Producer ─────────────────────────────────
 # ZWEI verpflichtende Prüfungen. KEINE der beiden ist optional.
@@ -236,6 +250,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) Layout: Größe und Producer beweisen die Engine, nicht wo der Text steht.
+# pdf_layout_check.py misst es (≥75% der nutzbaren Breite auf jeder Seite, 1-2
+# Seiten, keine fast leere Seite, Schriften eingebettet). Exit 1 oder 2: ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: Layout fehlerhaft (pdf_layout_check.py) — .md korrigieren und neu rendern."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Atomares Verschieben + UPDATE in Sequenz; Rollback wenn UPDATE fehlschlägt
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -251,6 +274,7 @@ Exit-Codes:
 - `2` → Preflight FAIL (Engine nicht verfügbar) — dem Capitano melden
 - `3` → Post-Render FAIL (Größe < 20 KB, minimalistischer Output) — falsche Engine
 - `4` → Post-Render FAIL (Producer != Qt) — falsche Engine
+- `5` → Post-Render FAIL (Layout, `reasons` aus `pdf_layout_check.py`) — `.md` korrigieren und neu rendern: `narrow_text` → jede Breiten-/Rand-/Padding-Regel am body aus dem `<style>` entfernen; `near_empty_page` → straffen oder kürzen, bis die letzte Seite voll ist oder verschwindet; `too_many_pages` → kürzen. Nach 2 fehlgeschlagenen Renderings dem Capitano melden. Ein CV, der das Gate nicht besteht, erreicht nie den critic-loop.
 - `1` → DB UPDATE FAIL (Datei-Rollback)
 
 Der Dottore erkennt via `cv-disk-audit` Healthcheck (Bug #18) eventuelle

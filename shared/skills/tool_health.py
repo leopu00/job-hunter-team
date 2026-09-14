@@ -37,15 +37,16 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 APP = os.environ.get("JHT_APP_DIR", "/app")
 TIMEOUT = 25  # un browser headless freddo può metterci qualche secondo
 
 
-def _run(cmd, timeout=TIMEOUT):
+def _run(cmd, timeout=TIMEOUT, cwd=None):
     """Esegue un comando, ritorna (rc, stdout+stderr troncato). rc=-1 su timeout/errore."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         return p.returncode, (p.stdout + p.stderr)[-600:]
     except subprocess.TimeoutExpired:
         return -1, "timeout after %ds" % timeout
@@ -127,43 +128,54 @@ def check_linkedin_check():
 
 
 def check_cv_pdf_render():
-    """Render VERO del CV come lo fa lo SCRITTORE (skill cv-structure):
-    `pandoc input.md -o out.pdf --pdf-engine=wkhtmltopdf`. OK solo se esce un
-    file PDF non vuoto. Uno dei due binari assente = BROKEN: senza, il CV non si
-    impagina e la skill non ha alternative accettabili (pdf_gen.py rifiuta i CV).
+    """Il CV esce davvero, e largo quanto la pagina: pandoc + wkhtmltopdf + il
+    CSS base + pdf_layout_check.py, sullo stesso comando della skill cv-structure.
 
-    Si lavora in una directory temporanea anche come cwd: pandoc scrive l'HTML
-    intermedio nella directory CORRENTE, e da una cwd non scrivibile fallisce
-    con "openTempFile: permission denied" — un falso BROKEN che parlerebbe di
-    chi ha lanciato il check, non dei binari."""
-    import tempfile
-    missing = [b for b in ("pandoc", "wkhtmltopdf") if not shutil.which(b)]
+    Nessuno dei due binari era nell'immagine: erano arrivati con un `sudo
+    apt-get` degli agenti dentro il container, e il redeploy del 13/09 (container
+    ricreato) li ha persi in silenzio — lo Scrittore trovava solo weasyprint.
+    Ora sono nel Dockerfile e questo check e' il gate di build: se manca un
+    pezzo, o il layout torna una colonna stretta, il BUILD va rosso."""
+    missing = [b for b in ("pandoc", "wkhtmltopdf", "pdftotext", "pdffonts") if not shutil.which(b)]
     if missing:
-        return "BROKEN", "missing binaries: %s (CV PDFs cannot be produced)" % ", ".join(missing)
-    with tempfile.TemporaryDirectory(prefix="jht-cv-gate-") as tmp:
-        md = os.path.join(tmp, "cv.md")
-        pdf = os.path.join(tmp, "cv.pdf")
+        return "BROKEN", "missing CV PDF toolchain: %s (CVs cannot be rendered or checked)" % ", ".join(missing)
+    skills = os.path.join(APP, "shared", "skills")
+    css = os.path.join(skills, "pdf_layout_base.css")
+    if not os.path.isfile(css):
+        return "BROKEN", "pdf_layout_base.css not found at %s" % css
+    import tempfile
+    sys.path.insert(0, skills)
+    try:
+        import pdf_layout_check
+    finally:
+        sys.path.remove(skills)
+    bullet = ("- Synthetic health-check line that wraps across the whole usable width of the page "
+              "so the gate can measure the text column of the real renderer.")
+    body = "\n".join("## Section %d\n\n%s\n" % (i, "\n".join([bullet] * 4)) for i in range(1, 7))
+    with tempfile.TemporaryDirectory() as tmp:
+        md = os.path.join(tmp, "health.md")
+        pdf = os.path.join(tmp, "health.pdf")
         with open(md, "w", encoding="utf-8") as fh:
-            fh.write("# JHT CV render check\n\n**Role** — àèìòù €\n\n- one\n- two\n")
+            # Same small type a Writer's <style> uses: at the template's 36em the
+            # column is only narrow when the font is small, so the gate needs it.
+            fh.write("<style>body { font-size: 9.3pt; }</style>\n\n# Health Check\n\n" + body)
+        rc, out = _run([
+            "pandoc", md, "-o", pdf, "--pdf-engine=wkhtmltopdf",
+            "-c", css, "--self-contained",
+            "-V", "papersize=A4", "-V", "margin-top=11mm", "-V", "margin-bottom=11mm",
+            "-V", "margin-left=15mm", "-V", "margin-right=15mm",
+            "--metadata", "pagetitle=health",
+        ], timeout=60, cwd=tmp)  # pandoc writes its temp HTML in the cwd: /app is read-only for jht
+        if rc != 0 or not os.path.isfile(pdf):
+            return "BROKEN", "pandoc/wkhtmltopdf render failed (rc=%d): %s" % (rc, out.strip()[-200:])
         try:
-            p = subprocess.run(
-                ["pandoc", md, "-o", pdf, "--pdf-engine=wkhtmltopdf",
-                 "--metadata", "title=JHT CV render check"],
-                capture_output=True, text=True, timeout=60, cwd=tmp,
-            )
-        except subprocess.TimeoutExpired:
-            return "BROKEN", "pandoc render timed out after 60s"
-        except (OSError, ValueError) as e:
-            return "BROKEN", "unable to run pandoc: %s" % e
-        size = os.path.getsize(pdf) if os.path.exists(pdf) else 0
-        head = b""
-        if size:
-            with open(pdf, "rb") as fh:
-                head = fh.read(4)
-        if p.returncode == 0 and size > 0 and head == b"%PDF":
-            return "OK", "pandoc + wkhtmltopdf rendered a %d-byte PDF" % size
-        tail = (p.stdout + p.stderr).strip()[-200:]
-        return "BROKEN", "render failed (rc=%d, pdf=%d bytes): %s" % (p.returncode, size, tail)
+            report = pdf_layout_check.analyze(Path(pdf))
+        except pdf_layout_check.CheckError as e:
+            return "BROKEN", "pdf_layout_check cannot measure the render: %s" % e
+    if not report["ok"]:
+        widths = [p["width_ratio"] for p in report["per_page"]]
+        return "BROKEN", "rendered CV fails the layout gate: %s (width %s)" % (",".join(report["reasons"]), widths)
+    return "OK", "CV render ok (width %s of the usable page)" % report["per_page"][0]["width_ratio"]
 
 
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
