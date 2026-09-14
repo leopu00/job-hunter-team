@@ -2102,7 +2102,12 @@ class LeverRecipe:
     SUCCESS = ".application-confirmation, [data-qa=application-confirmation]"
     _CONTROLS = "input:not([type=hidden]):not([aria-hidden=true]), textarea, select"
     _ERRORS = ("[role=alert]", ".application-error", ".error-message", "[aria-invalid=true]")
-    _APPLY_LABEL = re.compile(r"^\s*(apply|apply now|apply for this job)\s*$", re.I)
+    # Lever translates the posting's Apply control with the posting's language.
+    _APPLY_LABEL = re.compile(
+        r"^\s*(apply|postuler|bewerben|jetzt bewerben|candidati|candidatarsi|candidatar-se|"
+        r"candidatura|aplicar|solicitar|jelentkez\w*)\b[^\n]{0,40}$",
+        re.I,
+    )
     # Lever's own field names.  A full name is one field: joined from exact
     # first and last names when the profile has no full name, never split.
     # Current company and "other" links are questions, not profile facts.
@@ -2205,9 +2210,7 @@ class LeverRecipe:
 
     def apply_control_present(self, page) -> bool:
         """The control `open_form` would click; only without it can a closed notice count."""
-        return any(
-            page.get_by_role(role, name=self._APPLY_LABEL).count() for role in ("link", "button")
-        )
+        return bool(self._apply_controls(page))
 
     def open_form(self, page) -> None:
         if page.locator(self.FORM).count():
@@ -2246,6 +2249,16 @@ class LeverRecipe:
             if not paths or self._is_answered(entry):
                 continue
             label = self._label(entry)
+            if name == "location" and entry.locator("input[type=hidden]").count():
+                # An autocomplete: the typed text is not the value Lever keeps
+                # (a hidden field is), so filling it proves nothing.
+                if self._required(entry):
+                    raise BlockedHuman(
+                        "unknown_required_control",
+                        f"Lever location must be chosen from its suggestions: {_safe_label(label or name)}",
+                        "fill",
+                    )
+                continue
             present, value = self._core_value(name, label, paths)
             if not present:
                 if self._required(entry):
@@ -2443,6 +2456,14 @@ class LeverRecipe:
                         f"Lever rejected the format of: {_safe_label(label)}",
                         "review",
                     )
+        if not form.evaluate("form => form.checkValidity()"):
+            # A required consent or survey control outside the questions: the
+            # browser would refuse the click and nothing would be sent.
+            raise BlockedHuman(
+                "required_field_unanswered",
+                "A required Lever control outside the application questions is empty or invalid",
+                "review",
+            )
         submit = form.locator("button[type=submit]")
         if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
             raise BlockedHuman(

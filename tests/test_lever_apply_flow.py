@@ -557,3 +557,76 @@ def test_lever_cv_the_form_does_not_keep_blocks_the_upload(page, tmp_path: Path,
     assert result.status == "blocked_human"
     assert result.reason == "upload_rejected"
     assert page.evaluate("window.submitCount") == 0
+
+
+def test_lever_required_consent_outside_the_questions_blocks_before_the_click(
+    page, tmp_path: Path, cv_path: Path
+):
+    consent = (
+        '<div class="application-additional"><label><input type="checkbox" name="consent[store]" required>'
+        " I consent to data processing</label></div>"
+    )
+    open_at(page, APPLY, lever_form(extra_in_form=consent))
+    recorded: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, recorded=recorded)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason == "required_field_unanswered"
+    assert json.loads((tmp_path / "checkpoint.json").read_text())["submit_started"] is False
+    assert recorded == []
+
+
+@pytest.mark.parametrize("required", (True, False))
+def test_lever_location_autocomplete_is_never_typed_into(page, tmp_path: Path, cv_path: Path, required):
+    mark = '<span class="required">✱</span>' if required else ""
+    location = (
+        f'<li class="application-question"><label><div class="application-label">Current location{mark}</div>'
+        f'<div class="application-field"><input type="text" name="location" {"required" if required else ""}>'
+        '<input type="hidden" name="selectedLocation"></div></label></li>'
+    )
+    html = lever_form(confirmation="none").replace("{custom}", "").replace(
+        '<li class="application-question">\n              <label><div class="application-label">Phone',
+        location + '<li class="application-question">\n              <label><div class="application-label">Phone',
+    )
+    assert "selectedLocation" in html
+    open_at(page, APPLY, html)
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Test City"))
+
+    result = flow.run(page=page, navigate=False)
+
+    assert page.locator("input[name=location]").input_value() == ""
+    if required:
+        assert result.reason == "unknown_required_control"
+        assert page.evaluate("window.submitCount") == 0
+    else:
+        assert result.reason == "receipt_missing"
+
+
+def test_lever_localised_apply_control_opens_the_form(page, tmp_path: Path, cv_path: Path):
+    serve(page, {POSTING: posting_page(APPLY).replace("Apply for this job", "Postuler à cette offre"), APPLY: lever_form()})
+    page.goto(POSTING)
+    flow = build_flow(tmp_path, cv_path, url=POSTING)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+
+
+def test_lever_hidden_apply_control_does_not_count_as_one():
+    class Hidden:
+        def count(self):
+            return 1
+
+        def nth(self, _index):
+            return self
+
+        def is_visible(self):
+            return False
+
+    class Page:
+        def get_by_role(self, _role, name=None):
+            return Hidden()
+
+    assert LeverRecipe(profile(), Path("unused.pdf")).apply_control_present(Page()) is False
