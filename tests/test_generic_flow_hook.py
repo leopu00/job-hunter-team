@@ -58,7 +58,7 @@ def home(tmp_path: Path, monkeypatch) -> Path:
 def build_flow(tmp_path: Path, cv_path: Path, url: str, *, recorded=None, notified=None) -> ApplicationFlow:
     recorded = recorded if recorded is not None else []
     notified = notified if notified is not None else []
-    return ApplicationFlow(
+    flow = ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
         cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         cv_checker=lambda _path: {"ok": True, "reasons": []},
@@ -73,6 +73,8 @@ def build_flow(tmp_path: Path, cv_path: Path, url: str, *, recorded=None, notifi
         applied_recorder=lambda **kwargs: recorded.append(kwargs),
         confirmation_timeout_ms=1500,
     )
+    flow.GENERIC_RENDER_WAIT_MS = 3_000  # a page with nothing to apply with waits this long in tests
+    return flow
 
 
 def test_a_company_form_no_ats_names_is_applied_to_with_the_generic_recipe(browser, cv_path, tmp_path):
@@ -225,3 +227,58 @@ def test_after_the_click_a_thank_you_next_to_a_submit_phrase_is_not_a_receipt(br
 
     assert (result.status, result.reason) == ("blocked_human", "submit_outcome_unknown")
     assert page.evaluate("window.submitCount") == 1 and recorded == []
+
+
+def test_a_company_form_rendered_after_load_is_still_applied_to(browser, cv_path, tmp_path):
+    # 2071 (14/09): a look right after load saw no form, and the company-form
+    # recipe was never tried. The page builds its form 1.5 s later.
+    body = CLASSIC.split("<body>", 1)[1].split("</body>", 1)[0]
+    late = (
+        "<html><body><main id='root'>Loading…</main><script>"
+        f"setTimeout(() => {{ document.body.innerHTML = {json.dumps(body).replace('</', '<\\/')};"
+        " document.querySelectorAll('script').forEach(old => { const s = document.createElement('script');"
+        " s.textContent = old.textContent; old.replaceWith(s); }); }, 1500);"
+        "</script></body></html>"
+    )
+    page = _site_page(browser, {"/jobs/7": late})
+    page.goto(f"{BASE}/jobs/7")
+    recorded: list = []
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/jobs/7", recorded=recorded).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    assert json.loads((tmp_path / ".cache" / "apply-flow" / "81.json").read_text())["platform"] == "generic"
+
+
+def test_a_vendor_name_in_the_markup_of_a_company_host_is_not_a_known_ats(browser, cv_path, tmp_path):
+    marked = CLASSIC.replace("<main>", '<main><script src="/resources/sap-ui-core.js"></script>', 1)
+    page = _site_page(browser, {"/jobs/7": marked})
+    page.goto(f"{BASE}/jobs/7")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/jobs/7").run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+
+
+def test_a_company_page_with_nothing_to_apply_with_is_unsupported_with_the_recipes_finding(browser, cv_path, tmp_path):
+    page = browser.new_page()
+    page.set_content("<html><body><h1>About us</h1><p>We build things.</p></body></html>")
+
+    result = build_flow(tmp_path, cv_path, "https://careers.example.invalid/x").run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+    saved = json.loads((tmp_path / ".cache" / "apply-flow" / "81.json").read_text())
+    assert "generic_form_missing" in saved["blocked_detail"]
+
+
+def test_a_missing_company_form_recipe_is_logged_never_silent(browser, cv_path, tmp_path, monkeypatch, caplog):
+    page = _site_page(browser, {"/jobs/7": CLASSIC})
+    page.goto(f"{BASE}/jobs/7")
+    monkeypatch.setitem(sys.modules, "apply_generic", None)
+    monkeypatch.setitem(sys.modules, "shared.skills.apply_generic", None)
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/jobs/7").run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
+    assert "company-form recipe unavailable:" in caplog.text and "apply_generic" in caplog.text
+    assert page.evaluate("window.submitCount") == 0
