@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "shared" / "skills"))
@@ -606,7 +607,8 @@ def test_completed_essentials_wake_the_closer(db):
             "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
             "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, 'closer-essential:notice_period', ?, ?, 'telegram')",
             (aa.SOURCE_ACTION, json.dumps({"version": 1, "position_id": 7, "key": "notice period",
-                                           "label": "Notice?", "field_type": "text", "options": []})),
+                                           "label": "Notice?", "field_type": "text", "options": [],
+                                           "explicit": True})),
         )
         qid = conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
     profile = {k: v for k, v in FULL_PROFILE.items() if k != "notice_period"}
@@ -625,7 +627,8 @@ def test_without_a_live_closer_nothing_is_sent_and_the_queue_shows_the_position(
             "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
             "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, 'closer-essential:notice_period', ?, ?, 'telegram')",
             (aa.SOURCE_ACTION, json.dumps({"version": 1, "position_id": 7, "key": "notice period",
-                                           "label": "Notice?", "field_type": "text", "options": []})),
+                                           "label": "Notice?", "field_type": "text", "options": [],
+                                           "explicit": True})),
         )
         qid = conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
     profile_yaml = "\n".join(
@@ -685,7 +688,7 @@ def _essential_question(db, key):
             "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, ?, ?, ?, 'telegram')",
             (f"closer-essential:{key}", aa.SOURCE_ACTION,
              json.dumps({"version": 1, "position_id": 7, "key": key.replace("_", " "),
-                         "label": key, "field_type": "text", "options": []})),
+                         "label": key, "field_type": "text", "options": [], "explicit": True})),
         )
         return conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
 
@@ -836,15 +839,19 @@ def _hours_ago(hours):
     return (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _asked_essential(db, key, *, hours, round_no=1):
+def _asked_essential(db, key, *, hours, round_no=1, explicit=True):
+    """An essential question row; `explicit` is the mark of the CLOSER's own ask."""
     source_id = f"closer-essential:{key}" + ("" if round_no == 1 else f":{round_no}")
+    payload = {"version": 1, "position_id": 7, "key": key.replace("_", " "),
+               "label": key, "field_type": "text", "options": []}
+    if explicit:
+        payload["explicit"] = True
     with sqlite3.connect(db) as conn:
         return conn.execute(
             "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
             "source_payload, delivered_via, created_at) VALUES ('closer', 'q', 'question', 7, ?, ?, ?, 'telegram', ?)",
             (source_id, aa.SOURCE_ACTION,
-             json.dumps({"version": 1, "position_id": 7, "key": key.replace("_", " "),
-                         "label": key, "field_type": "text", "options": []}), _hours_ago(hours)),
+             json.dumps(payload), _hours_ago(hours)),
         ).lastrowid
 
 
@@ -1301,3 +1308,40 @@ def test_a_later_user_answer_replaces_an_earlier_user_answer(db):
         assert aa.save_answer(conn, key="notice period", label="Notice?", answer="two months", field_type="text",
                               channel="reply")
         assert aa.load_answers(conn)["notice period"] == "two months"
+
+
+def test_a_question_the_closer_did_not_ask_explicitly_never_holds_the_queue(db, tmp_path, monkeypatch):
+    # A row left by the flow before the CLOSER worked answers out by itself:
+    # holding on it would make STEP 1 exit before anything is worked out.
+    _ready_box(db, tmp_path, monkeypatch)
+    _asked_essential(db, "notice_period", hours=1, explicit=False)
+    profile = {k: v for k, v in FULL_PROFILE.items() if k != "notice_period"}
+    (tmp_path / "profile" / "candidate_profile.yml").write_text(yaml.safe_dump(profile), encoding="utf-8")
+
+    queue = apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)
+    assert queue["ready"], queue
+    assert "essential_answers_pending" not in {h["reason"] for h in queue["held"]}
+    with sqlite3.connect(db) as conn:
+        report = aa.check_essentials(conn, profile)
+    assert report["missing"] == ["notice period"] and report["already_asked"] == []
+
+    # The CLOSER works it out: nothing left to hold or ask.
+    code = aa.main(["save", "--key", "notice period", "--value", "one month", "--field-type", "text",
+                    "--basis", "cv"])
+    assert code == 0
+    with sqlite3.connect(db) as conn:
+        assert aa.check_essentials(conn, profile)["missing"] == []
+
+
+def test_the_explicit_ask_marks_its_question_and_that_one_holds_the_queue(db, tmp_path, monkeypatch):
+    _ready_box(db, tmp_path, monkeypatch)
+    profile = {k: v for k, v in FULL_PROFILE.items() if k != "notice_period"}
+    (tmp_path / "profile" / "candidate_profile.yml").write_text(yaml.safe_dump(profile), encoding="utf-8")
+    asked = []
+    with sqlite3.connect(db) as conn:
+        aa.ensure_essentials(conn, profile, 7, ask=["notice period"], notifier=_writing_notifier(db, asked))
+    assert asked[0]["payload"]["explicit"] is True
+
+    queue = apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)
+    assert not queue["ready"]
+    assert {h["reason"] for h in queue["held"]} == {"essential_answers_pending"}

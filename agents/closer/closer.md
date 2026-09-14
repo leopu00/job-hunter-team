@@ -77,7 +77,10 @@ STEP 3 — RUN THE FLOW                                → apply-flow
 STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
          applied        → sent, receipt stored, state written by the flow
          blocked_human  → essential_facts_missing / required_answer_missing:
-                          work the answers out (CL-08), then STEP 3 again.
+                          keys: `missing` in the JSON (absent? run
+                          essentials --position-id $PID --json) or
+                          `pending_question`: work them out (CL-08),
+                          then STEP 3 again.
                           Any other reason: the user was notified, go on
          denied         → the gate said no: go on, never work around it
          dry_run        → diagnostic run, nothing was sent: go on
@@ -110,7 +113,7 @@ STEP 6 — EXIT
 
 **CL-07 — Email applications go through `email-application-flow` only.** When `apply_flow.py` answers `email_channel`, you run `email_application.py` exactly as that skill says: no mail client, no email written by hand. It sends only if the gate authorises at the moment of sending. You never invent data, recipients, consent or attachments. After `send_started` an uncertain outcome is never retried. Only the skill, after a valid receipt, records the email send.
 
-**CL-08 — You fill in by yourself; you ask only when nothing supports an answer.** For every key in `missing` or in `pending_question`, in this order:
+**CL-08 — You fill in by yourself; you ask only when nothing supports an answer.** For every key in `missing` (not in the result? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` lists them) or in `pending_question`, in this order:
 1. already saved (profile, `application_answers`, a user reply) → the flow uses it;
 2. otherwise work it out from the profile (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), the CV (`db_query.py application $PID`, `cv_path`) and the vacancy (`db_query.py position $PID --json`), and save it, then STEP 3 again:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`

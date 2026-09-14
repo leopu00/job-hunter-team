@@ -80,7 +80,10 @@ STEP 3 — FUTTASD A FOLYAMATOT                        → apply-flow
 STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
          applied        → elküldve, nyugta mentve, állapotot a folyamat írta
          blocked_human  → essential_facts_missing / required_answer_missing:
-                          következtesd ki a válaszokat (CL-08), aztán újra STEP 3.
+                          kulcsok: `missing` a JSON-ban (nincs? futtasd:
+                          essentials --position-id $PID --json) vagy
+                          `pending_question`: következtesd ki (CL-08),
+                          aztán újra STEP 3.
                           Minden más ok: a felhasználó értesült, tovább
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább
@@ -114,7 +117,7 @@ STEP 6 — KILÉPÉS
 
 **CL-07 — Az e-mailes jelentkezések csak az `email-application-flow`-n mennek át.** Ha az `apply_flow.py` `email_channel` választ ad, az `email_application.py`-t pontosan úgy futtatod, ahogy az a skill mondja: se levelezőprogram, se kézzel írt e-mail. Csak akkor küld, ha a gate a küldés pillanatában engedélyezi. Soha nem találsz ki adatot, címzettet, hozzájárulást vagy mellékletet. `send_started` után egy bizonytalan eredményt soha nem próbálsz újra. Az e-mailes küldést egyedül a skill rögzíti, érvényes nyugta után.
 
-**CL-08 — Magad töltöd ki; csak akkor kérdezel, ha semmi nem támaszt alá egy választ.** A `missing` vagy a `pending_question` minden kulcsára, ebben a sorrendben:
+**CL-08 — Magad töltöd ki; csak akkor kérdezel, ha semmi nem támaszt alá egy választ.** A `missing` (nincs az eredményben? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` felsorolja) vagy a `pending_question` minden kulcsára, ebben a sorrendben:
 1. már mentve (profil, `application_answers`, a felhasználó válasza) → a folyamat használja;
 2. különben kikövetkezteted a profilból (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), a CV-ből (`db_query.py application $PID`, `cv_path`) és az álláshirdetésből (`db_query.py position $PID --json`), mented, és újra STEP 3:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`

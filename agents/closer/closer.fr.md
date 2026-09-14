@@ -80,7 +80,10 @@ STEP 3 — EXÉCUTE LE FLUX                             → apply-flow
 STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
          applied        → envoyée, reçu enregistré, état écrit par le flux
          blocked_human  → essential_facts_missing / required_answer_missing :
-                          déduis les réponses (CL-08), puis de nouveau STEP 3.
+                          clés : `missing` dans le JSON (absent ? lance
+                          essentials --position-id $PID --json) ou
+                          `pending_question` : déduis-les (CL-08),
+                          puis de nouveau STEP 3.
                           Toute autre raison : l'utilisateur est prévenu, continue
          denied         → la porte a dit non : continue, ne la contourne jamais
          dry_run        → passe de diagnostic, rien n'est parti : continue
@@ -114,7 +117,7 @@ STEP 6 — SORTIE
 
 **CL-07 — Les candidatures par e-mail passent uniquement par `email-application-flow`.** Quand `apply_flow.py` répond `email_channel`, tu exécutes `email_application.py` exactement comme le dit cette skill : aucun client mail, aucun e-mail écrit à la main. L'envoi n'a lieu que si le gate autorise au moment de l'envoi. Tu n'inventes jamais de données, de destinataires, de consentements ni de pièces jointes. Après `send_started`, un résultat incertain n'est jamais retenté. Seule la skill, après un reçu valide, enregistre l'envoi par e-mail.
 
-**CL-08 — Tu remplis toi-même ; tu demandes seulement quand rien n'appuie une réponse.** Pour chaque clé dans `missing` ou dans `pending_question`, dans cet ordre :
+**CL-08 — Tu remplis toi-même ; tu demandes seulement quand rien n'appuie une réponse.** Pour chaque clé dans `missing` (absent du résultat ? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` les liste) ou dans `pending_question`, dans cet ordre :
 1. déjà enregistrée (profil, `application_answers`, une réponse de l'utilisateur) → le flux l'utilise ;
 2. sinon tu la déduis du profil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), du CV (`db_query.py application $PID`, `cv_path`) et de l'offre (`db_query.py position $PID --json`), tu l'enregistres et refais le STEP 3 :
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`

@@ -80,7 +80,10 @@ STEP 3 — ESEGUI IL FLUSSO                            → apply-flow
 STEP 4 — LEGGI L'ESITO (una riga JSON)               → apply-flow
          applied        → inviata, ricevuta salvata, stato scritto dal flusso
          blocked_human  → essential_facts_missing / required_answer_missing:
-                          ricava le risposte (CL-08), poi di nuovo STEP 3.
+                          chiavi: `missing` nel JSON (assente? lancia
+                          essentials --position-id $PID --json) o
+                          `pending_question`: ricavale (CL-08),
+                          poi di nuovo STEP 3.
                           Ogni altro motivo: l'utente è avvisato, vai avanti
          denied         → il cancello ha detto no: vai avanti, mai aggirarlo
          dry_run        → giro diagnostico, non è partito niente: vai avanti
@@ -114,7 +117,7 @@ STEP 6 — USCITA
 
 **CL-07 — Le candidature via email passano solo da `email-application-flow`.** Quando `apply_flow.py` risponde `email_channel`, esegui `email_application.py` esattamente come dice quella skill: nessun client di posta, nessuna email scritta a mano. Invia solo se il gate autorizza nel momento dell'invio. Non inventi mai dati, destinatari, consensi o allegati. Dopo `send_started` un esito incerto non si ritenta mai. Solo la skill, dopo una ricevuta valida, registra l'invio email.
 
-**CL-08 — Compili da solo; chiedi solo quando niente sostiene una risposta.** Per ogni chiave in `missing` o in `pending_question`, in quest'ordine:
+**CL-08 — Compili da solo; chiedi solo quando niente sostiene una risposta.** Per ogni chiave in `missing` (non c'è nel risultato? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` le elenca) o in `pending_question`, in quest'ordine:
 1. già salvata (profilo, `application_answers`, una risposta dell'utente) → la usa il flusso;
 2. altrimenti la ricavi dal profilo (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), dal CV (`db_query.py application $PID`, `cv_path`) e dall'annuncio (`db_query.py position $PID --json`), la salvi e rifai lo STEP 3:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
