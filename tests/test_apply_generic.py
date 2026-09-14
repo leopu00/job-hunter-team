@@ -644,3 +644,12 @@ def test_a_marker_already_there_before_the_click_is_not_a_confirmation():
 def test_url_markers_are_only_words_of_a_finished_submission():
     common = {"thanks", "danke", "merci", "grazie", "gracias", "obrigado", "koszonjuk", "apply", "jobs", "careers"}
     assert not common & set(apply_generic.CONFIRMATION_URL_MARKERS)
+
+
+def test_submit_selector_sees_the_application_form_not_a_footer_form(browser, cv_path):
+    thanks = f"<html><body><h1>Thank you for your application!</h1>{NEWSLETTER}</body></html>"
+    page = _site_page(browser, {"/jobs/7": CLASSIC, "/thanks": thanks})
+    page.goto(f"{BASE}/jobs/7")
+    assert page.locator(GenericRecipe.SUBMIT).count() >= 1  # a reloaded form reads as still there
+    page.goto(f"{BASE}/thanks")
+    assert page.locator(GenericRecipe.SUBMIT).count() == 0  # the footer newsletter does not hide the receipt

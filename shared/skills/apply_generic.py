@@ -465,9 +465,14 @@ def same_site(url_a: str, url_b: str) -> bool:
 
 class GenericRecipe:
     PLATFORM = PLATFORM
-    # Any form submit on the page: after a reload it reads as "the form is
-    # still there", the strict side for crash recovery.
-    SUBMIT = "form [type=submit], form button:not([type]), [data-jht-submit]"
+    # "The application form is still there", for the flow's confirmation: a
+    # form with a file upload (the CV), or the button review() pinned. Not
+    # every form: company pages keep a newsletter or search form in the footer
+    # of the thank-you page, and that must not hide the confirmation.
+    SUBMIT = (
+        "form:has(input[type=file]) [type=submit], form:has(input[type=file]) button:not([type]), "
+        "[data-jht-submit]"
+    )
     SUCCESS = ""
     CONFIRMATION_MARKERS = CONFIRMATION_MARKERS
     CONFIRMATION_URL_MARKERS = CONFIRMATION_URL_MARKERS
