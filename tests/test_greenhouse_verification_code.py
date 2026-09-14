@@ -291,3 +291,29 @@ def test_a_resume_in_a_new_browser_is_lost_without_opening_the_vacancy(tmp_path,
 )
 def test_the_code_is_read_only_when_the_email_names_exactly_one(text, code):
     assert verification_code.code_in_text(text) == code
+
+
+def test_the_real_bridge_hands_an_eight_character_code_to_the_flow(page, tmp_path, cv_path, db):
+    """HQ-BACKEND's resolve_login_code (alnum8): the user replies to the request with the code."""
+    page.set_content(code_page())
+
+    def notifier(*, position_id, message, source_id, payload):
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
+            "source_payload, delivered_via) VALUES ('closer', ?, 'alert', ?, ?, 'closer_login_code', ?, 'telegram')",
+            (message, position_id, source_id, json.dumps(payload)),
+        )
+        conn.commit()
+        outcome = application_answers.resolve_login_code(
+            conn, text=f"{CODE[:4]} {CODE[4:]}", reply_to_text=message, direct=False, jht_home=tmp_path
+        )
+        conn.commit()
+        conn.close()
+        assert outcome.status == "received", outcome
+        return "telegram"
+
+    result = flow_for(tmp_path, cv_path, db, notifier=notifier).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    assert CODE not in saved_text(tmp_path)
