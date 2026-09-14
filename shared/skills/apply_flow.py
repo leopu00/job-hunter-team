@@ -4694,6 +4694,12 @@ class ApplicationFlow:
                     detection = replace(detection, platform="generic")
                 else:
                     LOG.error("[apply-flow] company-form recipe unavailable: %s", _OPTIONAL_IMPORT_ERRORS.get("apply_generic", "absent"))
+        if detection.platform == "workday" and not detection.conflict:
+            # A single-page app: blank when the flow first looks (1817, 14/09).
+            # The module waits for it and names the stop; it never clicks.
+            workday = _optional_module("workday_apply")
+            if workday is not None:
+                raise workday.stop_for(page)
         if detection.platform not in SUPPORTED_PLATFORMS:
             if not self._generic_application_controls(page):
                 self._assert_no_closed_notice(page)
