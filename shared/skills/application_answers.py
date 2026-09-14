@@ -1246,6 +1246,14 @@ def wake_closer(
             conn.executemany("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", [(w.key,) for w in batch])
             conn.commit()
             sent.extend(batch)
+        else:
+            # Not one CLOSER took the message: give the claim back, so the
+            # next poll wakes it instead of the key standing for a wake that
+            # never happened.
+            conn.executemany(
+                "DELETE FROM closer_wakes WHERE wake_key = ? AND delivered = 0", [(w.key,) for w in batch]
+            )
+            conn.commit()
     return sent
 
 

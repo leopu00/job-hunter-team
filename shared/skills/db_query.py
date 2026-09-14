@@ -1088,8 +1088,13 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # whose PDF fails the layout check: the Scrittore does the PDF again
         # (`request_kind=cv_rework`). A request the box cannot confirm (the CV
         # passes now, the application went out) stays out of the queue.
-        from application_rework import rework_verdict
-        for candidate in conn.execute("""
+        try:
+            import application_rework
+        except Exception as err:  # noqa: BLE001 — CVs and cover letters still flow
+            print(f"[db-query] CV rework unavailable: {type(err).__name__}", file=sys.stderr)
+            application_rework = None
+        me = os.environ.get('JHT_AGENT_NAME') or os.environ.get('JHT_AGENT_ID') or 'scrittore'
+        for candidate in [] if application_rework is None else conn.execute("""
             SELECT p.id, p.title, p.company, s.total_score,
                    'cv_rework' AS request_kind,
                    p.write_requested_at AS _requested_at
@@ -1101,7 +1106,14 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
               AND COALESCE(a.applied, 0) != 1
               AND p.status IN ('scored', 'ready')
         """).fetchall():
-            if rework_verdict(conn, candidate['id'], manual=True)['allowed']:
+            pid = candidate['id']
+            # A flag the queue turned on keeps the automatic rule (an
+            # unmeasurable CV is not the Scrittore's); a rework another
+            # Scrittore claimed is its own.
+            manual = not application_rework.automatic_flag(conn, pid)
+            if application_rework.claimed_elsewhere(conn, pid, me):
+                continue
+            if application_rework.rework_verdict(conn, pid, manual=manual)['allowed']:
                 queued.append(dict(candidate))
         queued.sort(key=lambda r: (r['_requested_at'] or '', -(r['total_score'] or 0)))
         rows = [

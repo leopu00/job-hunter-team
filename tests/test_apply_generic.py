@@ -530,6 +530,7 @@ def test_pre_submit_screenshot_failure_is_a_stop(browser, cv_path, tmp_path):
         ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Send application"], "text": ""}, "application"),
         ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Send"], "text": ""}, "other"),
         ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Apply"], "heading": "Talent pool", "text": ""}, "talent"),
+        ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Submit application"], "heading": "Refer a candidate", "text": ""}, "talent"),
         ({"questions": [{"type": "text", "label": "Nome"}, {"type": "email", "label": "Email"}], "submits": ["Invia candidatura"], "text": ""}, "application"),
         ({"questions": [{"type": "text", "label": "Name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "Lettre de motivation"}], "submits": ["Envoyer"], "text": ""}, "other"),
     ],

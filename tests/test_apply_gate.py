@@ -599,6 +599,34 @@ def test_una_nuova_autorizzazione_dopo_il_blocco_la_rimette_in_coda(tmp_path):
     assert [p["position_id"] for p in q["positions"]] == [1]
 
 
+@pytest.mark.parametrize(
+    "retry_after, held",
+    [
+        ("2999-01-01T00:00:00Z", True),
+        ("2000-01-01T00:00:00Z", False),
+        ("not an instant", False),
+        (None, False),
+    ],
+)
+def test_una_pagina_momentaneamente_giu_aspetta_retry_after(tmp_path, retry_after, held):
+    # D2 page_unavailable: 5xx/timeout → the flow writes retry_later; the queue
+    # waits for retry_after, even after a newer authorisation, then lists it again.
+    db = make_queue_db(tmp_path, [authorised(asked="2026-09-12T13:00:00Z")], [(1, cv_file(tmp_path), 0, None, None)])
+    p = checkpoint_path(1, tmp_path)
+    p.parent.mkdir(parents=True)
+    data = {"state": "retry_later", "updated_at": "2026-09-12T12:00:00+00:00", "transient_failures": ["x"]}
+    if retry_after is not None:
+        data["retry_after"] = retry_after
+    p.write_text(json.dumps(data))
+    q = queue(tmp_path, db)
+    if held:
+        assert not q["ready"]
+        assert q["held"] == [{"position_id": 1, "reason": "checkpoint_retry_later"}]
+    else:
+        assert q["ready"], q
+        assert [x["position_id"] for x in q["positions"]] == [1]
+
+
 def test_checkpoint_illeggibile_trattiene(tmp_path):
     db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
     p = checkpoint_path(1, tmp_path)
@@ -950,14 +978,15 @@ def test_senza_il_modulo_la_trattenuta_resta_e_niente_si_rompe(rework_box):
 def test_la_richiesta_automatica_non_e_mai_manuale(rework_box):
     # The queue saw a bad layout, then the check became unmeasurable before the
     # request re-read it: only a manual request may go on without a measure.
+    # (A new check function: a verdict is remembered per file content AND check.)
     home, db, _cv, mp = rework_box
-    calls = []
+
+    def gone(_p, **_):
+        raise pdf_layout_check.CheckError("poppler gone")
 
     def analyze(_p, **_):
-        calls.append(1)
-        if len(calls) == 1:
-            return {"ok": False, "reasons": ["narrow_text"]}
-        raise pdf_layout_check.CheckError("poppler gone")
+        mp.setattr(pdf_layout_check, "analyze", gone)
+        return {"ok": False, "reasons": ["narrow_text"]}
 
     mp.setattr(pdf_layout_check, "analyze", analyze)
     mp.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)

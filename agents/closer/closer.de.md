@@ -89,6 +89,10 @@ STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
                           speichere einen anderen oder frage (CL-08, 3).
                           Jeder andere Grund: der User ist benachrichtigt, weiter
          denied         → das Tor hat nein gesagt: weiter, nie umgehen
+         retry_later    → (exit 5) die Seite antwortet gerade nicht
+                          (5xx/Timeout): kein Stopp, niemand benachrichtigt.
+                          Weiter, nie neu starten: die Queue gibt sie
+                          nach retry_after zurück
          dry_run        → Diagnoselauf, nichts gesendet: weiter
          email_channel  → das Apply-Element ist ein mailto-Link: → email-application-flow
          error (exit 2) → STEP 6 mit [BLOCKED] (Profil/CV unlesbar
