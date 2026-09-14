@@ -12,7 +12,12 @@ This script does, with poppler (baked in the image):
      --min-width-ratio (default 0.75) of the USABLE width (page width minus
      the left/right margins the render command passes to wkhtmltopdf);
   3. no nearly empty page (a spill of a few lines onto page 2);
-  4. every font is embedded.
+  4. every font is embedded;
+  5. the body font prints at ≥ --min-body-font-pt (default 9.5pt). wkhtmltopdf
+     with an unpatched Qt shrinks everything by ~0.744: a 9.3pt <style> printed
+     at 6.9pt, unreadable yet full width. The size is estimated from the word
+     boxes of `pdftotext -bbox`: the most common word height, divided by the
+     height of one point of DejaVu Sans (the base CSS font).
 
 Usage:
   python3 pdf_layout_check.py <file.pdf> [--json] [--preview page1.png]
@@ -22,7 +27,7 @@ Exit codes:
   0 → layout OK
   1 → layout bad; `reasons` lists the stable codes:
         too_many_pages · narrow_text · near_empty_page ·
-        fonts_not_embedded · no_text
+        small_body_font · fonts_not_embedded · no_text
   2 → cannot check (file unreadable, poppler missing): NOT a pass.
 
 The SCRITTORE runs it after every render and regenerates on exit 1. The
@@ -53,10 +58,17 @@ MIN_LINES_PER_PAGE = 4
 # Width is judged only on pages with enough lines to have wrapped at least once:
 # a page of five short lines says nothing about the column.
 MIN_LINES_FOR_WIDTH = 8
+MIN_BODY_FONT_PT = 9.5
+# Word-box height per point of font size in poppler's -bbox output, measured on
+# DejaVu Sans from wkhtmltopdf (6.92pt → 8.1, 9.80pt → 11.4, 10.95pt → 12.8).
+# A font with a shorter ascent + descent reads slightly smaller: the error is
+# on the strict side, never a small font passed as readable.
+BBOX_HEIGHT_PER_PT = 1.17
 
-REASONS = ("too_many_pages", "narrow_text", "near_empty_page", "fonts_not_embedded", "no_text")
+REASONS = ("too_many_pages", "narrow_text", "near_empty_page", "small_body_font", "fonts_not_embedded", "no_text")
 
 _PAGE_RE = re.compile(r'<page width="([\d.]+)" height="([\d.]+)">(.*?)</page>', re.S)
+_WORD_RE = re.compile(r'<word xMin="[\d.]+" yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]*)</word>')
 _LINE_RE = re.compile(r'<line xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">')
 
 
@@ -91,6 +103,22 @@ def read_pages(pdf: Path) -> list[dict]:
     return pages
 
 
+def body_font_pt(pdf: Path) -> float | None:
+    """Printed size of the body font: the word height carried by most words."""
+    xhtml = _run([_tool("pdftotext"), "-bbox", str(pdf), "-"])
+    heights: dict[float, int] = {}
+    for top, bottom, text in _WORD_RE.findall(xhtml):
+        if text.strip():
+            height = round(float(bottom) - float(top), 1)
+            heights[height] = heights.get(height, 0) + 1
+    if not heights:
+        return None
+    # Ties go to the smaller height: a CV split evenly between two sizes is
+    # judged by the one that has to be readable.
+    height = max(heights, key=lambda h: (heights[h], -h))
+    return round(height / BBOX_HEIGHT_PER_PT, 2)
+
+
 def read_fonts(pdf: Path) -> list[dict]:
     """Font names and embedded flag, from `pdffonts` (fixed-width columns)."""
     rows = _run([_tool("pdffonts"), str(pdf)]).splitlines()
@@ -116,6 +144,7 @@ def analyze(
     margin_tb_mm: float = DEFAULT_MARGIN_TB_MM,
     min_width_ratio: float = MIN_WIDTH_RATIO,
     max_pages: int = MAX_PAGES,
+    min_body_font_pt: float = MIN_BODY_FONT_PT,
 ) -> dict:
     if not pdf.is_file():
         raise CheckError(f"not a file: {pdf}")
@@ -123,6 +152,7 @@ def analyze(
     if not pages:
         raise CheckError("no pages found")
     fonts = read_fonts(pdf)
+    body_pt = body_font_pt(pdf)
 
     reasons: list[str] = []
     per_page = []
@@ -156,6 +186,8 @@ def analyze(
         reasons.append("too_many_pages")
     if not judged:
         reasons.append("no_text")
+    if body_pt is not None and body_pt < min_body_font_pt:
+        reasons.append("small_body_font")
     if not fonts or not all(f["embedded"] for f in fonts):
         reasons.append("fonts_not_embedded")
 
@@ -166,6 +198,8 @@ def analyze(
         "pages": len(pages),
         "usable_width_pt": round(first["width"] - (margin_left_mm + margin_right_mm) * PT_PER_MM, 1),
         "min_width_ratio": min_width_ratio,
+        "body_font_pt": body_pt,
+        "min_body_font_pt": min_body_font_pt,
         "per_page": per_page,
         "fonts": fonts,
     }
@@ -191,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--margin-right-mm", type=float, default=DEFAULT_MARGIN_LR_MM)
     parser.add_argument("--min-width-ratio", type=float, default=MIN_WIDTH_RATIO)
     parser.add_argument("--max-pages", type=int, default=MAX_PAGES)
+    parser.add_argument("--min-body-font-pt", type=float, default=MIN_BODY_FONT_PT)
     args = parser.parse_args(argv)
 
     try:
@@ -200,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             margin_right_mm=args.margin_right_mm,
             min_width_ratio=args.min_width_ratio,
             max_pages=args.max_pages,
+            min_body_font_pt=args.min_body_font_pt,
         )
         if args.preview:
             report["preview"] = str(render_preview(args.pdf, args.preview))
@@ -217,7 +253,8 @@ def main(argv: list[str] | None = None) -> int:
             for p in report["per_page"]
         )
         verdict = "OK" if report["ok"] else "LAYOUT BAD: " + ", ".join(report["reasons"])
-        print(f"[pdf_layout_check] {verdict} · pages {report['pages']} · text width {widths}")
+        print(f"[pdf_layout_check] {verdict} · pages {report['pages']} · text width {widths}"
+              f" · body font {report['body_font_pt']}pt")
     return 0 if report["ok"] else 1
 
 
