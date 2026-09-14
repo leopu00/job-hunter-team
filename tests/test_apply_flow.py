@@ -885,6 +885,22 @@ def test_an_answer_the_closer_saves_completes_the_flow_without_asking(
     assert "Synthetic motivation" not in json.dumps(checkpoint)
 
 
+def test_ashby_name_the_profile_lacks_is_a_question_not_a_hard_stop(page, tmp_path: Path, cv_path: Path):
+    # D1 (14/09): a core field the profile does not state is worked out by the
+    # CLOSER; first and last names are never joined in code.
+    candidate = {"first_name": "Test", "last_name": "Candidate", "contacts": {"email": "candidate@example.invalid"}}
+    notifications: list[dict] = []
+    page.set_content(ashby_form())
+    result = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications).run(page=page, navigate=False)
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "name"
+    assert page.locator("#_systemfield_name").input_value() == ""
+    assert notifications == []
+    page.set_content(ashby_form())
+    saved = {**candidate, "application_answers": {"Name": "Test Candidate"}}
+    assert build_flow(tmp_path, cv_path, candidate=saved).run(page=page, navigate=False).status == "applied"
+
+
 def test_the_explicit_ask_sends_the_question_once(page, tmp_path: Path, cv_path: Path):
     db_path = _answers_db(tmp_path)
     notifications: list[dict] = []
