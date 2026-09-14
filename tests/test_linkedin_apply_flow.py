@@ -101,9 +101,34 @@ QUESTION = (
 )
 
 
+# The public page of an offsite vacancy, signed out, as LinkedIn serves it:
+# the Apply button opens a sign-in dialog, and the only links carrying the
+# "apply-link-offsite" tracking name are that dialog's Join and Dismiss.  The
+# company address appears only signed in, behind a button opening a new tab.
+GUEST_OFFSITE_CONTROLS = (
+    '<button class="sign-up-modal__outlet top-card-layout__cta--primary" '
+    'data-tracking-control-name="public_jobs_contextual-sign-in-modal_ssr-ui-lib-outlet-button" '
+    'data-modal="job-details-topcard-apply-modal">Apply</button>'
+    '<div class="contextual-sign-in-modal">'
+    '<button data-tracking-control-name="public_jobs_apply-link-offsite_contextual-sign-in-modal_modal_dismiss" '
+    'aria-label="Dismiss"></button>'
+    '<a class="contextual-sign-in-modal__join-link" '
+    'data-tracking-control-name="public_jobs_apply-link-offsite_contextual-sign-in-modal_join-link" '
+    'href="https://www.linkedin.com/signup/cold-join?source=jobs_registration&amp;session_redirect='
+    'https%3A%2F%2Fes.linkedin.com%2Fjobs%2Fview%2F4000000001">Join now</a></div>'
+)
+SIGNED_IN_OFFSITE_CONTROLS = (
+    '<button class="jobs-apply-button" aria-label="Apply to Test Role on company website" '
+    f"onclick=\"window.open('{LEVER_APPLY}', '_blank')\">Apply</button>"
+)
+
+
 def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, question: bool = True,
-             reject_upload: bool = False) -> str:
+             reject_upload: bool = False, guest_offsite: bool = False, question_html: str | None = None) -> str:
     nav = '<nav id="global-nav">Home</nav>' if signed_in else '<a href="/login">Sign in</a>'
+    if guest_offsite:
+        controls = SIGNED_IN_OFFSITE_CONTROLS if signed_in else GUEST_OFFSITE_CONTROLS
+        return f"<html><body>{nav}<h1>Test Role</h1>{controls}</body></html>"
     if offsite:
         target = quote(LEVER_APPLY, safe="")
         control = (
@@ -113,7 +138,8 @@ def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, quest
         return f"<html><body>{nav}<h1>Test Role</h1>{control}</body></html>"
     if not easy:
         return f"<html><body>{nav}<h1>Test Role</h1><p>Details.</p></body></html>"
-    script = EASY_APPLY_SCRIPT.replace("__QUESTION__", QUESTION if question else "").replace(
+    step_three = question_html if question_html is not None else (QUESTION if question else "")
+    script = EASY_APPLY_SCRIPT.replace("__QUESTION__", step_three).replace(
         "__REJECT_UPLOAD__", "true" if reject_upload else "false"
     )
     return (
@@ -162,6 +188,9 @@ class Site:
     two_factor: bool = False
     challenge: bool = False
     reject_upload: bool = False
+    guest_offsite: bool = False
+    wrong_code: bool = False
+    question_html: str | None = None
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -172,7 +201,8 @@ class Site:
             signed_in = "li_at=synthetic" in (request.all_headers().get("cookie") or "")
             if url.startswith(JOB):
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
-                                reject_upload=self.reject_upload)
+                                reject_upload=self.reject_upload, guest_offsite=self.guest_offsite,
+                                question_html=self.question_html)
             elif url.startswith("https://www.linkedin.com/login"):
                 body = (
                     "<html><body><h1>Let's do a quick security check</h1></body></html>"
@@ -180,7 +210,7 @@ class Site:
                     else LOGIN_PAGE.replace("__TWO_FACTOR__", "true" if self.two_factor else "false")
                 )
             elif url.startswith("https://www.linkedin.com/checkpoint/challenge/"):
-                body = CODE_PAGE
+                body = CODE_PAGE.replace(CODE, "never-this-code") if self.wrong_code else CODE_PAGE
             elif url.startswith("https://www.linkedin.com/feed/"):
                 body = '<html><body><nav id="global-nav">Home</nav></body></html>'
             elif url == LEVER_APPLY:
@@ -190,7 +220,9 @@ class Site:
                 return
             route.fulfill(status=200, content_type="text/html", body=body)
 
-        page.route("**/*", handler)
+        # The context, not the page: a tab the company-site button opens is
+        # answered here too and never reaches the network.
+        page.context.route("**/*", handler)
 
     def logins(self) -> int:
         return sum(url.startswith("https://www.linkedin.com/login") for url in self.requests)
@@ -250,22 +282,24 @@ def write_session(home: Path) -> None:
 
 
 def build_flow(home: Path, cv_path: Path, *, answers: dict | None = None, recorded: list | None = None,
-               code_notifier=None, code_timeout: float = 5.0) -> ApplicationFlow:
+               code_notifier=None, code_timeout: float = 5.0, extra_profile: dict | None = None,
+               url: str = JOB, gate: GateVerdict | None = None) -> ApplicationFlow:
     recorded = recorded if recorded is not None else []
     candidate = {"name": "Test Candidate", "contacts": {"email": EMAIL, "phone": "+10000000000"}}
+    candidate.update(extra_profile or {})
     candidate["application_answers"] = answers if answers is not None else {"Are you comfortable commuting?": "Yes"}
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
         cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         cv_checker=lambda _path: {"ok": True, "reasons": []},
         position_id=71,
-        url=JOB,
+        url=url,
         profile=candidate,
         cv_path=cv_path,
         checkpoint_path=home / ".cache" / "apply-flow" / "71.json",
         receipt_dir=home / "receipts",
         db_path=home / "jobs.db",
-        gate_checker=lambda **_kwargs: GateVerdict(),
+        gate_checker=lambda **_kwargs: gate or GateVerdict(),
         notifier=lambda **_kwargs: "notification-1",
         applied_recorder=lambda **kwargs: recorded.append(kwargs),
         code_notifier=code_notifier,
@@ -653,3 +687,292 @@ def test_two_different_company_addresses_are_ambiguous(page, cv_path: Path):
         recipe._offsite(page)
 
     assert stop.value.reason == "linkedin_apply_ambiguous"
+
+
+# ── the public page as LinkedIn serves it (shapes read on real vacancies) ────
+
+
+def test_signed_out_offsite_signs_in_and_hands_over_to_the_company_site(page, home: Path, cv_path: Path):
+    write_credentials(home)
+    recorded: list = []
+    site = Site(guest_offsite=True)
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    saved = checkpoint(home)
+    assert (saved["url"], saved["handoff_url"], saved["platform"]) == (JOB, LEVER_APPLY, "lever")
+    assert site.logins() == 1
+    assert not any("/signup" in url for url in site.requests)
+    assert len(recorded) == 1
+
+
+def test_the_sign_in_dialog_links_are_never_a_company_address(page, cv_path: Path):
+    page.set_content(f"<html><body>{GUEST_OFFSITE_CONTROLS}</body></html>")
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._offsite(page) is None
+    assert recipe.apply_control_present(page)
+
+
+def test_signed_out_easy_apply_counts_as_an_apply_control(page, cv_path: Path):
+    page.set_content(
+        '<html><body><button class="apply-button" data-tracking-control-name="public_jobs_apply-link-onsite">'
+        "Apply</button></body></html>"
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._offsite(page) is None
+    assert recipe.apply_control_present(page)
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    (
+        ("https://es.linkedin.com/jobs/view/1", True),
+        ("https://www.linkedin.com/signup/cold-join", True),
+        ("https://linkedin.com/jobs/view/1", True),
+        ("https://jobs.lever.co/x/1/apply", False),
+        ("https://linkedin.com.example.invalid/jobs/view/1", False),
+        ("https://notlinkedin.com/jobs/view/1", False),
+    ),
+)
+def test_linkedin_host_includes_the_country_pages_and_nothing_else(url: str, expected: bool):
+    assert linkedin_apply.linkedin_host(url) is expected
+
+
+def test_a_country_page_redirect_is_unwrapped_too():
+    wrapped = "https://es.linkedin.com/jobs/view/externalApply/1?url=" + quote("https://jobs.lever.co/x/1/apply", safe="")
+    assert linkedin_apply.offsite_target(wrapped, JOB) == "https://jobs.lever.co/x/1/apply"
+
+
+def test_an_unreadable_pause_file_counts_from_its_write_time_not_forever(home: Path):
+    session = linkedin_apply.LinkedInSession(jht_home=home, db_path=home / "jobs.db", position_id=71)
+    marker = home / ".cache" / "linkedin" / "last-apply.json"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("{not json")
+
+    with pytest.raises(apply_flow.FlowDeferred) as fresh:
+        session.assert_interval()
+    assert fresh.value.reason == "linkedin_throttled"
+
+    long_ago = time.time() - 3600
+    os.utime(marker, (long_ago, long_ago))
+    session.assert_interval()  # an hour old: the 20-minute pause is over
+
+
+def test_a_rejected_code_is_not_a_failed_sign_in(page, home: Path, cv_path: Path):
+    write_credentials(home)
+
+    result = run(
+        build_flow(home, cv_path, code_notifier=telegram_bridge(home)), page, Site(two_factor=True, wrong_code=True)
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "linkedin_login_code_missing")
+    assert not (home / ".cache" / "linkedin" / "login-failures.json").exists()
+    assert [row[0] for row in login_rows(home)] == ["[used]"]
+
+
+# ── core facts (profile_facts, D1) ───────────────────────────────────────────
+
+FIRST_NAME_STEP = (
+    '<div class="jobs-easy-apply-form-section__grouping"><label for="first">First name</label>'
+    '<input id="first" name="firstName" type="text" required></div>'
+)
+
+
+def test_a_first_name_the_profile_does_not_state_is_a_question_never_a_split_name(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(build_flow(home, cv_path, answers={}), page, Site(question_html=FIRST_NAME_STEP))
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["key"] == "first name"
+    assert (result.pending_question["label"], result.pending_question["field_type"]) == ("First name", "text")
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_saved_first_name_fills_the_dialog(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+
+    result = run(
+        build_flow(home, cv_path, answers={"first name": "Test"}, recorded=recorded),
+        page,
+        Site(question_html=FIRST_NAME_STEP),
+    )
+
+    assert result.status == "applied", result
+    assert page.evaluate("window.submitCount") == 1
+
+
+def test_a_first_name_under_a_profile_alias_comes_from_the_profile(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+
+    result = run(
+        build_flow(home, cv_path, answers={}, recorded=recorded, extra_profile={"given_name": "Test"}),
+        page,
+        Site(question_html=FIRST_NAME_STEP),
+    )
+
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].answer_sources.get("first name") == "profile"
+
+
+# ── the flow around the recipe: country pages, pause, dry run, recovery ─────
+
+COUNTRY_JOB = "https://es.linkedin.com/jobs/view/test-role-at-example-4000000001"
+
+
+@pytest.mark.parametrize(
+    "url, job, opened",
+    (
+        (COUNTRY_JOB, True, JOB),
+        ("https://www.linkedin.com/jobs/view/4000000001", True, JOB),
+        ("https://linkedin.com/jobs/view/4000000001/?trk=public_jobs", True, JOB),
+        ("https://www.linkedin.com/jobs/search/?keywords=x", True, "https://www.linkedin.com/jobs/search/?keywords=x"),
+        ("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4000000001", True, JOB),
+        ("https://it.linkedin.com/jobs/search/?currentJobId=4000000001&keywords=x", True, JOB),
+        ("https://www.linkedin.com/jobs/search/?currentJobId=1&currentJobId=2", True,
+         "https://www.linkedin.com/jobs/search/?currentJobId=1&currentJobId=2"),
+        ("https://es.linkedin.com.example.invalid/jobs/view/4000000001", False, None),
+        ("https://a.b.linkedin.com/jobs/view/4000000001", False, None),
+        ("https://www.linkedin.com:8443/jobs/view/4000000001", False, None),
+        ("http://es.linkedin.com/jobs/view/4000000001", False, None),
+    ),
+)
+def test_a_country_page_is_the_same_vacancy_opened_on_www(url: str, job: bool, opened):
+    assert apply_flow.is_linkedin_job(url) is job
+    assert apply_flow.linkedin_job_url(url) == (opened or url)
+
+
+def test_a_vacancy_queued_with_its_country_page_applies_and_keeps_the_queue_address(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+    site = Site()
+
+    result = run(build_flow(home, cv_path, recorded=recorded, url=COUNTRY_JOB), page, site)
+
+    assert result.status == "applied", result
+    assert checkpoint(home)["url"] == COUNTRY_JOB
+    assert not any("es.linkedin.com" in url for url in site.requests)
+
+
+def test_a_handoff_to_a_linkedin_country_page_is_refused(home: Path, cv_path: Path):
+    flow = build_flow(home, cv_path)
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "linkedin"
+
+    with pytest.raises(apply_flow.BlockedHuman) as stop:
+        flow._follow_handoff(saved, page=None, handoff=PlatformHandoff("https://es.linkedin.com/signup"), count=1)
+
+    assert stop.value.reason == "application_redirect_untrusted"
+
+
+def test_the_pause_denies_before_linkedin_is_opened_and_leaves_the_checkpoint_alone(page, home: Path, cv_path: Path):
+    write_session(home)
+    linkedin_apply._write_private_json(home / ".cache" / "linkedin" / "last-apply.json", {"at": linkedin_apply._utc_now().isoformat()})
+    site = Site()
+
+    result = run(build_flow(home, cv_path), page, site)
+
+    assert (result.status, result.reason) == ("denied", "linkedin_throttled")
+    assert site.requests == []
+    assert not (home / ".cache" / "apply-flow" / "71.json").exists()
+
+
+def test_recovery_is_never_throttled_and_reads_the_outcome_signed_in(page, home: Path, cv_path: Path):
+    write_session(home)
+    linkedin_apply._write_private_json(home / ".cache" / "linkedin" / "last-apply.json", {"at": linkedin_apply._utc_now().isoformat()})
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "linkedin"
+    saved.state = "submit"
+    saved.submit_started = True
+    saved.save(home / ".cache" / "apply-flow" / "71.json")
+
+    def job(route):
+        signed_in = "li_at=synthetic" in (route.request.all_headers().get("cookie") or "")
+        sent = '<div role="alert">Your application was sent to Example!</div>' if signed_in else ""
+        route.fulfill(status=200, content_type="text/html", body=f"<html><body><h1>Test Role</h1>{sent}</body></html>")
+
+    page.context.route(JOB + "**", job)
+    recorded: list = []
+
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert len(recorded) == 1
+
+
+def test_a_dry_run_never_signs_in_nor_asks_for_a_code(page, home: Path, cv_path: Path):
+    write_credentials(home)
+    calls: list = []
+    site = Site(two_factor=True)
+    dry = GateVerdict(context={"mode": "dry_run"})
+
+    result = run(build_flow(home, cv_path, code_notifier=telegram_bridge(home, calls=calls), gate=dry), page, site)
+
+    assert (result.status, result.reason) == ("denied", "linkedin_dry_run_signed_out")
+    assert site.logins() == 0 and calls == []
+
+
+CITY_STEP = (
+    '<div class="jobs-easy-apply-form-section__grouping"><label for="city">City</label>'
+    '<select id="city" name="city" required><option value="">Select an option</option>'
+    '<option value="Madrid, Spain">Madrid, Spain</option><option value="Milan, Italy">Milan, Italy</option></select></div>'
+)
+
+
+def test_a_core_choice_asks_with_the_dialogs_exact_options_never_profile_text(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(
+        build_flow(home, cv_path, answers={}, extra_profile={"location": "Milan"}), page, Site(question_html=CITY_STEP)
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["label"] == "City"
+    assert result.pending_question["options"] == ["Madrid, Spain", "Milan, Italy"]
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_saved_exact_city_option_fills_the_choice(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(build_flow(home, cv_path, answers={"city": "Milan, Italy"}), page, Site(question_html=CITY_STEP))
+
+    assert result.status == "applied", result
+
+
+def test_the_same_flow_run_again_still_finds_the_queue_checkpoint(page, home: Path, cv_path: Path):
+    # A second run of one flow object (the headed retry after a bot wall does
+    # this) opened on www must still read the checkpoint of the country page.
+    write_session(home)
+    flow = build_flow(home, cv_path, answers={}, url=COUNTRY_JOB)
+    site = Site()
+
+    first = run(flow, page, site)
+    second = flow.run(page=page, navigate=True)
+
+    assert first.reason == "required_answer_missing"
+    assert second.reason == "required_answer_missing", second
+    assert checkpoint(home)["url"] == COUNTRY_JOB
+
+
+def test_recovery_receipt_keeps_the_digest_of_the_cv_sent_before(page, home: Path, cv_path: Path):
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "lever"
+    saved.handoff_url = LEVER_APPLY
+    saved.state = "submit"
+    saved.submit_started = True
+    saved.cv_sha256 = "a" * 64
+    saved.save(home / ".cache" / "apply-flow" / "71.json")
+    confirmation = '<html><body><div class="application-confirmation"><h3>Application submitted!</h3></div></body></html>'
+    page.route(LEVER_APPLY, lambda route: route.fulfill(status=200, content_type="text/html", body=confirmation))
+    recorded: list = []
+
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].cv_sha256 == "a" * 64

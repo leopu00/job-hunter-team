@@ -62,6 +62,10 @@ try:
     import profile_facts
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import profile_facts
+try:
+    import page_failure
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import page_failure
 
 
 LOG = logging.getLogger("jht.apply_flow")
@@ -78,8 +82,11 @@ GREENHOUSE_HOSTS = frozenset(
 # never proves a submit made on the other.
 LEVER_HOSTS = frozenset({"jobs.lever.co", "jobs.eu.lever.co"})
 LINKEDIN_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
+# The country pages the Scout's links also use (es.linkedin.com, nl.linkedin.com).
+_LINKEDIN_COUNTRY_HOST = re.compile(r"^[a-z]{2}\.linkedin\.com$")
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
 EMAIL_CHANNEL_STATE = "email_channel"
+RETRY_LATER_EXIT = 5
 
 # Collect every control that would hand the application to a mail client: an
 # anchor, a form action, or a button whose click handler/data attribute holds a
@@ -386,6 +393,10 @@ class FlowError(RuntimeError):
     pass
 
 
+class _HeadedRetry(FlowError):
+    """An anti-bot wall in a headless browser: open the page once more, headed."""
+
+
 class BlockedHuman(FlowError):
     def __init__(
         self,
@@ -509,6 +520,9 @@ class Receipt:
     # Where each saved answer used in the form came from: key → user / profile /
     # agent_inferred.  Keys and origins only, never a value.
     answer_sources: dict[str, str] = field(default_factory=dict)
+    # sha256 of the CV file handed to the form, as the email receipt records
+    # its attachment: which document the employer received.
+    cv_sha256: str = ""
 
     def is_valid(self) -> bool:
         try:
@@ -526,16 +540,19 @@ class Receipt:
             "confirmation_text": self.confirmation_text,
             "captured_at": self.captured_at,
             "answer_sources": dict(self.answer_sources),
+            "cv_sha256": self.cv_sha256,
         }
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Receipt":
+        sha = str(value.get("cv_sha256", ""))
         return cls(
             Path(str(value.get("screenshot_path", ""))),
             str(value.get("confirmation_url", "")),
             str(value.get("confirmation_text", "")),
             str(value.get("captured_at", "")) or _utc_now(),
             _answer_sources(value.get("answer_sources")),
+            sha if re.fullmatch(r"[0-9a-f]{64}", sha) else "",
         )
 
 
@@ -573,6 +590,16 @@ class FlowCheckpoint:
     pre_submit_screenshot: str = ""
     # The last step a multi-step form (LinkedIn Easy Apply) reached.
     modal_step: int = 0
+    # sha256 of the CV file as the flow handed it to the form (see Receipt).
+    cv_sha256: str = ""
+    # The vacancy page as the browser last opened it: HTTP status and
+    # scheme://host/path (no query).  None / "" before any navigation.
+    http_status: int | None = None
+    final_url: str = ""
+    # Temporary page failures (5xx, timeout) in the last 24 hours, and the
+    # instant before which a retry_later checkpoint is not opened again.
+    transient_failures: list[str] = field(default_factory=list)
+    retry_after: str = ""
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -598,6 +625,7 @@ class FlowCheckpoint:
             "dry_run",
             "complete",
             EMAIL_CHANNEL_STATE,
+            page_failure.RETRY_LATER_STATE,
         }
         if raw.get("state") not in valid_states:
             raise FlowError("checkpoint has an unknown state")
@@ -638,9 +666,21 @@ class FlowCheckpoint:
             raw.get("pre_submit_screenshot", ""), str
         ):
             raise FlowError("checkpoint has an invalid handoff or pre-submit screenshot")
+        if not isinstance(raw.get("cv_sha256", ""), str):
+            raise FlowError("checkpoint has an invalid CV digest")
         step = raw.get("modal_step", 0)
         if isinstance(step, bool) or not isinstance(step, int) or step < 0:
             raise FlowError("checkpoint has an invalid form step")
+        status = raw.get("http_status")
+        if status is not None and (isinstance(status, bool) or not isinstance(status, int)):
+            raise FlowError("checkpoint has an invalid HTTP status")
+        if not isinstance(raw.get("final_url", ""), str) or not isinstance(raw.get("retry_after", ""), str):
+            raise FlowError("checkpoint has an invalid page access record")
+        failures = raw.get("transient_failures", [])
+        if not isinstance(failures, list) or any(not isinstance(item, str) for item in failures):
+            raise FlowError("checkpoint has invalid transient failures")
+        if raw.get("state") == page_failure.RETRY_LATER_STATE and not raw.get("retry_after"):
+            raise FlowError("checkpoint waits for a retry with no retry time")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -2206,6 +2246,19 @@ class GreenhouseRecipe:
                         "review",
                     )
 
+        forms = page.locator(self.FORM)
+        if forms.count() == 1 and not forms.first.evaluate(
+            "form => typeof form.checkValidity !== 'function' || form.checkValidity()"
+        ):
+            # A required consent or survey control outside the questions: the
+            # browser would refuse the click and nothing would be sent (the
+            # same hole HQ-FULLSTACK-2 found in the Lever recipe).
+            raise BlockedHuman(
+                "required_field_unanswered",
+                "A required Greenhouse control outside the application questions is empty or invalid",
+                "review",
+            )
+
         submit = page.locator(self.SUBMIT)
         if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
             raise BlockedHuman(
@@ -2613,6 +2666,18 @@ class LeverRecipe:
         self._form(page, "submit").locator("button[type=submit]").click(timeout=10_000)
 
 
+def _file_sha256(path: Path) -> str:
+    """sha256 of a file, or "" when it cannot be read (the upload step then stops)."""
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 16), b""):
+                digest.update(chunk)
+    except OSError:
+        return ""
+    return digest.hexdigest()
+
+
 def _linkedin_module():
     """`linkedin_apply`, imported only for a LinkedIn position; None when it is absent."""
     try:
@@ -2625,17 +2690,50 @@ def _linkedin_module():
     return linkedin_apply
 
 
+def linkedin_vacancy_host(host: str) -> bool:
+    """www.linkedin.com, linkedin.com or a two-letter country page such as es.linkedin.com."""
+    host = str(host or "").casefold().rstrip(".")
+    return host in LINKEDIN_HOSTS or bool(_LINKEDIN_COUNTRY_HOST.match(host))
+
+
+def _any_linkedin_host(host: str) -> bool:
+    host = str(host or "").casefold().rstrip(".")
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
+
+
 def is_linkedin_job(url: str) -> bool:
-    """A LinkedIn vacancy page (`/jobs/…`) over HTTPS."""
+    """A LinkedIn vacancy page (`/jobs/…`) over HTTPS, on www or a country page."""
     try:
         parsed = urllib.parse.urlsplit(str(url or "").strip())
+        port = parsed.port
     except ValueError:
         return False
     return (
         parsed.scheme == "https"
-        and (parsed.hostname or "").casefold() in LINKEDIN_HOSTS
+        and port in {None, 443}
+        and linkedin_vacancy_host(parsed.hostname or "")
         and parsed.path.startswith("/jobs/")
     )
+
+
+def linkedin_job_url(url: str) -> str:
+    """The address the flow opens for a LinkedIn vacancy: https://www.linkedin.com/jobs/view/<id>/.
+
+    A country page (es.linkedin.com) or a slug with the id at its end is the
+    same vacancy; www is where the sign-in, the session cookies and the
+    English controls the recipe knows live.  Anything else is returned as it is.
+    """
+    if not is_linkedin_job(url):
+        return url
+    parts = urllib.parse.urlsplit(str(url).strip())
+    found = re.fullmatch(r"/jobs/view/(?:[^/]*-)?(\d{6,})/?", parts.path)
+    if found:
+        return f"https://www.linkedin.com/jobs/view/{found.group(1)}/"
+    # A vacancy selected inside a list (/jobs/collections/…, /jobs/search/…).
+    current = urllib.parse.parse_qs(parts.query).get("currentJobId", [])
+    if len(current) == 1 and re.fullmatch(r"\d{6,}", current[0]):
+        return f"https://www.linkedin.com/jobs/view/{current[0]}/"
+    return url
 
 
 def _optional_module(name: str):
@@ -2684,6 +2782,7 @@ class ApplicationFlow:
         login_code_timeout_s: float = 300.0,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
+        headed_available: Callable[[], bool] | None = None,
     ):
         if isinstance(position_id, bool) or int(position_id) <= 0:
             raise ValueError("position_id must be a positive integer")
@@ -2713,6 +2812,13 @@ class ApplicationFlow:
         self.jht_home = jht_home
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
+        self.headed_available = headed_available or (
+            lambda: page_failure.headed_screen_available(_resolve_headless)
+        )
+        self._headed_retry_used = False
+        self._page_managed = False
+        # What _navigate saw; read (and cleared) by _check_page_access.
+        self._page_access: page_failure.Access | None = None
 
     def _gate(self):
         try:
@@ -2756,10 +2862,66 @@ class ApplicationFlow:
             resolve_public_address(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80))
         except Exception as exc:
             raise BlockedHuman("url_refused", "Application URL failed the public-address guard", "detect") from exc
-        response = page.goto(checked, wait_until="domcontentloaded", timeout=30_000)
-        if response is None or response.status >= 400:
-            raise BlockedHuman("page_unavailable", "Application page did not return a successful response", "detect")
+        # A page that does not open is not decided here: _check_page_access
+        # reads this record, and classifies the page itself when a caller
+        # replaced this method.
+        self._page_access = page_failure.visit(page, checked)
         page.wait_for_timeout(500)
+
+    def _check_page_access(
+        self, checkpoint: FlowCheckpoint, page, *, navigated: bool, managed: bool
+    ) -> FlowResult | None:
+        """What the vacancy page answered, before anything reads it.
+
+        None when the page opened.  A gone page or an anti-bot wall raises
+        BlockedHuman; a wall in a headless browser first raises _HeadedRetry
+        once; a temporary failure returns retry_later without a stop and
+        without a notification.  Never called after submit_started.
+        """
+        access, self._page_access = self._page_access, None
+        if not navigated:
+            return None
+        if access is None:
+            access = page_failure.observe(page)
+        access = page_failure.settle(page, access)
+        checkpoint.http_status = access.status
+        checkpoint.final_url = access.final_url
+        closed = ""
+        if access.kind == page_failure.NOT_FOUND:
+            try:
+                language = vacancy_closed_evidence(page.locator("body").inner_text(timeout=5_000))
+            except Exception:
+                language = None
+            if language:
+                closed = f"notice language: {language}"
+            elif vacancy_redirected_away(self.url, page.url):
+                closed = "redirected away from the vacancy"
+        decision, history, retry_after = page_failure.decide(
+            access,
+            headless=self.headless,
+            headed_available=managed and self.headed_available(),
+            headed_retry_used=self._headed_retry_used,
+            closed_evidence=closed,
+            transient_history=checkpoint.transient_failures,
+        )
+        checkpoint.transient_failures = history
+        if decision.action == page_failure.PROCEED:
+            checkpoint.retry_after = ""
+            return None
+        if decision.action == page_failure.BLOCK:
+            checkpoint.retry_after = ""
+            raise BlockedHuman(decision.reason, decision.detail, "detect")
+        if decision.action == page_failure.RETRY_HEADED:
+            raise _HeadedRetry(access.verdict.evidence)
+        checkpoint.state = page_failure.RETRY_LATER_STATE
+        checkpoint.retry_after = retry_after
+        checkpoint.save(self.checkpoint_path)
+        LOG.info(
+            "application page temporarily unavailable (%s); retry after %s",
+            decision.detail,
+            retry_after,
+        )
+        return FlowResult("retry_later", checkpoint.state, "page_retry_later")
 
     def _notification_message(
         self, blocked: BlockedHuman, source_id: str = "", *, telegram_hint: bool = True
@@ -3341,10 +3503,17 @@ class ApplicationFlow:
                 )
             return
         if platform == "linkedin":
-            if not ApplicationFlow._page_url_on_hosts(page.url, LINKEDIN_HOSTS):
+            try:
+                parsed = urllib.parse.urlsplit(page.url)
+                trusted = parsed.scheme == "https" and parsed.port in {None, 443} and linkedin_vacancy_host(
+                    parsed.hostname or ""
+                )
+            except ValueError:
+                trusted = False
+            if not trusted:
                 raise BlockedHuman(
                     "linkedin_redirect_untrusted",
-                    "The LinkedIn page left www.linkedin.com during the flow",
+                    "The LinkedIn page left LinkedIn during the flow",
                     step,
                 )
             return
@@ -3424,6 +3593,12 @@ class ApplicationFlow:
         ) + tuple(getattr(recipe, "CONFIRMATION_MARKERS", ()))
         lower = visible.casefold()
         submit_present = page.locator(recipe.SUBMIT).count() > 0
+        text_rule = getattr(recipe, "confirmation_text", None)
+        if callable(text_rule) and not pre_submit and not text_rule(page):
+            # A recipe with its own, stricter reading of a thank-you text (the
+            # company form: no form still there, no submit phrase next to it)
+            # has the last word on text evidence after the click.
+            markers = ()
         for marker in markers:
             offset = lower.find(marker)
             # Before a click this evidence deliberately triggers the
@@ -3755,6 +3930,29 @@ class ApplicationFlow:
             )
         return None
 
+    def _linkedin_pause(self, checkpoint: FlowCheckpoint) -> FlowResult | None:
+        """The pause between LinkedIn applications, before any browser opens.
+
+        Inside the recipe alone, a throttled run still opened LinkedIn with the
+        account at every turn of the queue, only to be told to wait.  The
+        checkpoint is not touched: nothing happened to the application.  A run
+        after submit_started is recovery, never throttled (its own click just
+        started the pause).
+        """
+        if checkpoint.submit_started or not is_linkedin_job(self.url):
+            return None
+        module = _linkedin_module()
+        if module is None:
+            return None
+        try:
+            module.LinkedInSession(
+                jht_home=self._jht_home(), db_path=self.db_path, position_id=self.position_id
+            ).assert_interval()
+        except FlowDeferred as deferred:
+            LOG.warning("[apply-flow] DENY %s", deferred.reason)
+            return FlowResult("denied", checkpoint.state, deferred.reason)
+        return None
+
     def _jht_home(self) -> Path:
         return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
@@ -3820,7 +4018,7 @@ class ApplicationFlow:
 
     def _follow_handoff(
         self, checkpoint: FlowCheckpoint, page, handoff: PlatformHandoff, count: int
-    ) -> None:
+    ) -> FlowResult | None:
         """Go on to the site a recipe handed over to, once, or stop."""
         target = handoff.url.strip()
         try:
@@ -3830,7 +4028,7 @@ class ApplicationFlow:
         host = (parsed.hostname or "").casefold()
         if count > 1:
             allowed, why = False, "a second handoff in one run (handoff_loop)"
-        elif parsed.scheme != "https" or not host or host in LINKEDIN_HOSTS:
+        elif parsed.scheme != "https" or not host or _any_linkedin_host(host):
             allowed, why = False, "the handed-over address is not an HTTPS page outside the board"
         elif checkpoint.platform == "linkedin":
             # A board's "apply on company website": any public site, whose
@@ -3847,17 +4045,31 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         self.url = target
         self._navigate(page)
+        # The site handed over to is a page like any other: gone, walled or down.
+        waiting = self._check_page_access(
+            checkpoint, page, navigated=True, managed=self._page_managed
+        )
+        if waiting is not None:
+            return waiting
         self._assert_not_redirected_away(page, navigated=True)
+        return None
 
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
+        # The queue's address names the checkpoint.  self.url is where the
+        # browser goes (www for a LinkedIn country page, the company site after
+        # a handoff): a second run of this same flow must not compare that.
+        queue_url = getattr(self, "_queue_url", "") or self.url
+        self._queue_url = queue_url
         try:
             checkpoint = FlowCheckpoint.load(
-                self.checkpoint_path, self.position_id, self.url
+                self.checkpoint_path, self.position_id, queue_url
             )
             # A multi-step recipe saves its step on the checkpoint of this run.
             self._live_checkpoint = checkpoint
+            # A LinkedIn vacancy is opened on www (see linkedin_job_url).
+            self.url = linkedin_job_url(queue_url)
         except FlowError as exc:
-            checkpoint = FlowCheckpoint.new(self.position_id, self.url)
+            checkpoint = FlowCheckpoint.new(self.position_id, queue_url)
             return self._block(
                 checkpoint,
                 BlockedHuman("checkpoint_invalid", str(exc), "detect"),
@@ -3877,6 +4089,8 @@ class ApplicationFlow:
                 checkpoint,
                 _DeniedVerdict("gate_mode_unknown", "gate returned no recognised application mode"),
             )
+        # A recipe that works with the user's account reads it (no sign-in in a dry run).
+        self._mode = mode
 
         if checkpoint.state == EMAIL_CHANNEL_STATE:
             # Detection already handed this position to the email channel; a
@@ -3892,6 +4106,22 @@ class ApplicationFlow:
             # notification.  Only the user authorising the position again after
             # this stop makes the next run look at the page once more.
             return FlowResult("blocked_human", checkpoint.state, "vacancy_closed")
+
+        if checkpoint.state == page_failure.RETRY_LATER_STATE:
+            if page_failure.retry_pending(
+                {"state": checkpoint.state, "retry_after": checkpoint.retry_after}
+            ):
+                # A temporary page failure: not before retry_after, no browser.
+                return FlowResult("retry_later", checkpoint.state, "page_retry_later")
+            checkpoint.state = "detect"
+        if (
+            checkpoint.state == "blocked_human"
+            and checkpoint.blocked_reason == "page_temporarily_unavailable"
+            and self._reauthorised_since(checkpoint, first_gate)
+        ):
+            # The user authorised the position again after the third failure:
+            # a new series of tries, not a stop at the first 503.
+            checkpoint.transient_failures = []
 
         if (
             checkpoint.answer_request
@@ -3928,7 +4158,15 @@ class ApplicationFlow:
             if receipt.is_valid():
                 return self._record(checkpoint, receipt)
 
+        # After the answers and the CV, right before the browser: a pending
+        # question stays visible to the CLOSER during the pause.
+        throttled = self._linkedin_pause(checkpoint)
+        if throttled is not None:
+            return throttled
+
+        managed = self._page_managed = page is None
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
+        headed_retry = False
         with manager as active_page:
             if checkpoint.submit_started:
                 try:
@@ -3941,6 +4179,11 @@ class ApplicationFlow:
                     if checkpoint.handoff_url:
                         # The click happened on the site the board handed over to.
                         self.url = checkpoint.handoff_url
+                    elif is_linkedin_job(self.url):
+                        # Easy Apply's outcome shows only to the signed-in account.
+                        module = _linkedin_module()
+                        if module is not None:
+                            module.restore_session(active_page.context, self._jht_home())
                     if navigate:
                         self._navigate(active_page)
                     recovery_platform = checkpoint.platform or detect_ats(self.url).platform
@@ -3957,6 +4200,7 @@ class ApplicationFlow:
                         receipt = replace(
                             self._capture_receipt(active_page, confirmation),
                             answer_sources=dict(checkpoint.answer_sources),
+                            cv_sha256=checkpoint.cv_sha256,
                         )
                         checkpoint.receipt = receipt.to_dict()
                         checkpoint.save(self.checkpoint_path)
@@ -3984,6 +4228,11 @@ class ApplicationFlow:
                         module.restore_session(active_page.context, self._jht_home())
                 if navigate:
                     self._navigate(active_page)
+                waiting = self._check_page_access(
+                    checkpoint, active_page, navigated=navigate, managed=managed
+                )
+                if waiting is not None:
+                    return waiting
                 self._assert_not_redirected_away(active_page, navigated=navigate)
                 handoffs = 0
                 while True:
@@ -3992,7 +4241,9 @@ class ApplicationFlow:
                         break
                     except PlatformHandoff as handoff:
                         handoffs += 1
-                        self._follow_handoff(checkpoint, active_page, handoff, handoffs)
+                        waiting = self._follow_handoff(checkpoint, active_page, handoff, handoffs)
+                        if waiting is not None:
+                            return waiting
                         navigate = True
                 if isinstance(opened, FlowResult):
                     return opened
@@ -4005,6 +4256,9 @@ class ApplicationFlow:
                     if waiting_facts is not None:
                         return waiting_facts
                 checkpoint.complete_step("detect", "fill")
+                # The bytes the recipe is about to upload (a multi-step form
+                # uploads while it fills), for the receipt.
+                checkpoint.cv_sha256 = _file_sha256(self.cv_path)
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
@@ -4131,10 +4385,13 @@ class ApplicationFlow:
                 receipt = replace(
                     self._capture_receipt(active_page, confirmation),
                     answer_sources=dict(checkpoint.answer_sources),
+                    cv_sha256=checkpoint.cv_sha256,
                 )
                 checkpoint.receipt = receipt.to_dict()
                 checkpoint.save(self.checkpoint_path)
                 return self._record(checkpoint, receipt)
+            except _HeadedRetry:
+                headed_retry = True
             except BlockedHuman as blocked:
                 return self._block(checkpoint, blocked, page=active_page, dry_run=mode == "dry_run")
             except FlowDeferred as deferred:
@@ -4150,6 +4407,17 @@ class ApplicationFlow:
                     ),
                     page=active_page,
                 )
+        if not headed_retry:  # pragma: no cover - every other path returns
+            raise FlowError("application flow ended without a result")
+        # An anti-bot wall seen before any form work: the headless browser is
+        # closed; the page is opened once more, headed.
+        self._headed_retry_used = True
+        self.url = queue_url
+        previous_headless, self.headless = self.headless, False
+        try:
+            return self.run(page=None, navigate=navigate)
+        finally:
+            self.headless = previous_headless
 
 
 def _load_profile(path: Path) -> Mapping[str, Any]:
@@ -4273,6 +4541,10 @@ def main(argv: list[str] | None = None) -> int:
         # Not a failure and not a human block: the email channel takes over
         # from the checkpoint's channel/mailto_href.
         return 4
+    if result.status == page_failure.RETRY_LATER_STATE:
+        # Not a stop: the page did not answer for now; the queue gives the
+        # position back after the checkpoint's retry_after.
+        return RETRY_LATER_EXIT
     return 3
 
 

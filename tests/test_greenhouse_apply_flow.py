@@ -796,3 +796,22 @@ def test_greenhouse_core_country_never_takes_a_free_text_profile_value(page, tmp
     result = build_flow(tmp_path, cv_path, candidate=candidate).run(page=page, navigate=False)
     assert result.reason == "required_answer_missing"
     assert page.locator("#country").input_value() == ""
+
+
+def test_greenhouse_required_consent_outside_the_questions_blocks_before_the_click(
+    page, tmp_path: Path, cv_path: Path
+):
+    consent = (
+        '<div class="data-compliance"><label><input type="checkbox" name="gdpr_consent" required>'
+        " I consent to data processing</label></div>"
+    )
+    page.set_content(greenhouse_form().replace('<button class="btn btn--pill"', consent + '<button class="btn btn--pill"'))
+    recorded: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, recorded=recorded)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_field_unanswered")
+    assert page.evaluate("window.submitCount") == 0
+    assert json.loads((tmp_path / "checkpoint.json").read_text())["submit_started"] is False
+    assert recorded == []

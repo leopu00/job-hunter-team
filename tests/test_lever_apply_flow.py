@@ -663,3 +663,18 @@ def test_lever_hidden_apply_control_does_not_count_as_one():
             return Hidden()
 
     assert LeverRecipe(profile(), Path("unused.pdf")).apply_control_present(Page()) is False
+
+
+def test_lever_receipt_names_the_cv_that_was_uploaded(page, tmp_path: Path, cv_path: Path):
+    import hashlib
+
+    open_at(page, APPLY, lever_form())
+    recorded: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, recorded=recorded).run(page=page, navigate=False)
+
+    expected = hashlib.sha256(cv_path.read_bytes()).hexdigest()
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].cv_sha256 == expected
+    saved = json.loads((tmp_path / "checkpoint.json").read_text())
+    assert saved["receipt"]["cv_sha256"] == expected == saved["cv_sha256"]

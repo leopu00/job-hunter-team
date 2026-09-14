@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Adj ennek a parancsnak legalább **10 perces** időkorlátot: a LinkedIn-bejelentkezés akár 5 percig is várhat a böngészőben az ellenőrző kódra, amelyet a felhasználó Telegramon küld, és a várakozás közben leállított parancs hagyja lejárni a kódkérést.
+
 A `PID`, `URL` és `CV` az `apply_gate.py queue` legutóbbi olvasásából jön (skill
 `apply-authorization`), soha nem a memóriából.
 
@@ -55,6 +57,7 @@ Egy JSON sor a stdout-on: `status`, `state`, `reason`, `receipt`.
 | `applied` | 0 | elküldve, nyugta mentve, állapot rögzítve | következő pozíció |
 | `dry_run` | 0 | `mode: dry_run`: kitöltve, a gomb előtt megállt, semmi nem ment ki | következő pozíció |
 | `denied` | 1 | a kapu elutasította (hozzájárulás kikapcsolva, flag visszavonva, már elküldve) | következő pozíció; soha ne próbáld újra |
+| `retry_later` | 5 | az állás oldala most nem válaszol (5xx, időtúllépés); nem leállás, senki nem kap értesítést; a checkpointban ott a `retry_after` | következő pozíció; a sor a `retry_after` után magától visszaadja — előtte soha ne futtasd újra |
 | `blocked_human` | 3 | ember kell; a felhasználó már értesítést kapott | következő pozíció; soha ne próbáld újra |
 | `blocked_human` hiányzó válaszok (`essential_facts_missing` a `missing`-gel, `required_answer_missing` a `pending_question`-nel) | 3 | nem megállás, és semmit nem kérdeztek: a folyamatnak hiányoznak válaszok | mindegyiket következtesd ki a profilból, a CV-ből és a hirdetésből, és mentsd (`application_answers.py save … --basis …`), aztán futtasd újra a folyamatot; csak ha semmilyen alap nincs, `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). Egy általad feltett kérdés tartja a pozíciót, amíg a felhasználó válaszol, kérdésenként legfeljebb egy napig |
 | `email_channel` | 4 | a jelentkezési elem egy `mailto:` link, nem űrlap; a checkpoint tartalmazza a `channel: email` értéket és a nyers `mailto_href`-et | ennél a pozíciónál futtasd az `email_application.py send` parancsot az `email-application-flow` skill szerint: ez a checkpointot olvassa; soha ne tölts ki webes űrlapot, és ne írd kézzel az e-mailt |
@@ -80,11 +83,11 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | a LinkedIn-hirdetés vagy az Easy Apply ablaka nem az, amit a recept ismer |
 | `linkedin_credentials_missing` | a `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) hiányzik, nem ennek a felhasználónak a 0600-as rendes fájlja, vagy üres: a felhasználó a hitelesítő szkripttel hozza létre. Jelszót chatben soha ne kérj |
 | `linkedin_login_failed` | a LinkedIn kétszer elutasította a bejelentkezést: nincs új próbálkozás, amíg a felhasználó új hitelesítő adatokat nem ír |
-| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | a LinkedIn ellenőrző kódját Telegramon kértük, és nem érkezett meg időben (vagy a kérés nem jutott el Telegramra): egy új kör új kódot kér |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | a LinkedIn ellenőrző kódját Telegramon kértük, és nem érkezett meg időben (vagy a kérés nem jutott el Telegramra, vagy a LinkedIn nem fogadta el a kódot — ez sosem számít sikertelen bejelentkezésnek): egy új kör új kódot kér |
 | `linkedin_challenge` | a LinkedIn captchát vagy biztonsági ellenőrzést mutat: a felhasználó megoldja az élő képernyőn, majd újra engedélyezi a pozíciót |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a LinkedIn-oldal elhagyta a `www.linkedin.com`-ot, vagy a megadott céges cím nem LinkedInen kívüli HTTPS-oldal (vagy második átadás) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a LinkedIn-oldal elhagyta a LinkedInt (`www.linkedin.com` vagy egy országoldal, pl. `es.linkedin.com`), vagy a megadott céges cím nem LinkedInen kívüli HTTPS-oldal (vagy második átadás) |
 | `linkedin_follow_not_cleared` | a „cég követése” jelölőnégyzetet nem sikerült Submit előtt kikapcsolni: semmi nem megy el |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **elutasítva, nem blokkolva**: a LinkedIn-jelentkezések között szünet van (`linkedin_min_interval_minutes`, alapértelmezés 20), a bejelentkezés egyszer nem sikerült és a következő kör még egyszer próbálja, vagy ez a beállítás nem egész percszám. A sor magától újrapróbálja |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **elutasítva, nem blokkolva**: a LinkedIn-jelentkezések között szünet van (`linkedin_min_interval_minutes`, alapértelmezés 20), a bejelentkezés egyszer nem sikerült és a következő kör még egyszer próbálja, vagy ez a beállítás nem egész percszám. A sor magától újrapróbálja Egy próbafuttatás sosem jelentkezik be: mentett LinkedIn-munkamenet nélkül `linkedin_dry_run_signed_out` elutasítást kap. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | két különböző mailto jelentkezési cím, vagy a jelentkezési űrlap, a mezői vagy a küldés gombja nem köthető egyetlen űrlaphoz (hírlevél, lábléc és demó űrlap soha nem része) |
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |

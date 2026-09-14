@@ -56,9 +56,12 @@ from apply_flow import (  # noqa: E402
     GreenhouseRecipe,
     LeverRecipe,
     PlatformHandoff,
+    _core_fact_missing,
+    _normalise_label,
     _resolve_db_path,
     _safe_label,
 )
+from profile_facts import profile_value  # noqa: E402
 
 LOGIN_URL = "https://www.linkedin.com/login"
 CREDENTIALS_FILE = ("credentials", "linkedin.json")
@@ -69,7 +72,17 @@ LOGIN_CODE_SOURCE_ACTION = "closer_login_code"
 MAX_MODAL_STEPS = 12
 
 _SIGNED_IN = "#global-nav, nav.global-nav"
+# On the public page, signed out, this tracking name is also carried by the
+# "Join now" and "Dismiss" controls of the sign-in dialog the Apply button
+# opens: the company address is not on that page at all.  Only a link whose
+# address, unwrapped, leaves LinkedIn is a company application link.
 _OFFSITE_LINK = "a[data-tracking-control-name*='apply-link-offsite']"
+# The signed-out Apply controls: Easy Apply ("onsite") and the button that
+# opens the sign-in dialog of an offsite vacancy.  Neither says "Easy Apply".
+_GUEST_APPLY = (
+    "[data-tracking-control-name='public_jobs_apply-link-onsite'], "
+    "[data-modal='job-details-topcard-apply-modal']"
+)
 _OFFSITE_LABEL = re.compile(r"(apply|candidat\w*|bewerb\w*|postul\w*|solicit\w*).{0,40}(company|website|sito|site|web)", re.I)
 _EASY_APPLY_LABEL = re.compile(r"easy apply|candidatura semplificata|einfach bewerben|candidature simplifiée|solicitud sencilla|candidatura simplificada", re.I)
 _CHALLENGE_TEXT = ("security verification", "quick security check", "let's do a quick security check", "verify you are human")
@@ -151,11 +164,20 @@ def save_session(context, jht_home: Path) -> None:
     _write_private_json(_home_path(jht_home, SESSION_DIR) / "storage-state.json", {"cookies": state.get("cookies", [])})
 
 
+def linkedin_host(url: str) -> bool:
+    """linkedin.com or one of its subdomains (www, the country pages such as es.linkedin.com)."""
+    try:
+        host = (urllib.parse.urlsplit(str(url or "").strip()).hostname or "").casefold().rstrip(".")
+    except ValueError:
+        return False
+    return host in LINKEDIN_HOSTS or host.endswith(".linkedin.com")
+
+
 def offsite_target(href: str, base: str) -> str:
     """The company address behind an "apply on company website" link (LinkedIn's redirect unwrapped)."""
     absolute = urllib.parse.urljoin(base, str(href or "").strip())
     parsed = urllib.parse.urlsplit(absolute)
-    if (parsed.hostname or "").casefold() in LINKEDIN_HOSTS:
+    if linkedin_host(absolute):
         wrapped = urllib.parse.parse_qs(parsed.query).get("url", [])
         if len(wrapped) == 1:
             return wrapped[0].strip()
@@ -214,8 +236,15 @@ class LinkedInSession:
             return
         try:
             last = datetime.fromisoformat(json.loads(path.read_text(encoding="utf-8"))["at"])
+            if last.tzinfo is None:
+                raise ValueError("naive instant")
         except (OSError, ValueError, KeyError, TypeError):
-            last = _utc_now()  # unreadable: count it as just now, never as long ago
+            # Unreadable: the file's own write time, never "long ago".  Not
+            # "now" either: re-read at every run, that denied LinkedIn forever.
+            try:
+                last = datetime.fromtimestamp(path.lstat().st_mtime, timezone.utc)
+            except OSError:
+                last = _utc_now()
         due = last + timedelta(minutes=minutes)
         if _utc_now() < due:
             raise FlowDeferred(
@@ -303,7 +332,16 @@ class LinkedInSession:
                 page.locator("#password").fill("")
             raise BlockedHuman("linkedin_challenge", "LinkedIn asks for a security check during sign-in", "detect")
         if page.locator(_CODE_INPUT).count():
-            self._failed(page, "the verification code was not accepted")
+            # A mistyped or stale code says nothing about the credentials: it
+            # never counts towards linkedin_login_failed, and the next run
+            # asks for a new code.
+            with contextlib.suppress(Exception):
+                page.locator("#password").fill("")
+            raise BlockedHuman(
+                "linkedin_login_code_missing",
+                "LinkedIn did not accept the verification code; a new run asks for a new one",
+                "detect",
+            )
         if not self.signed_in(page):
             self._failed(page, "LinkedIn did not accept the sign-in")
         self._reset_failures()
@@ -483,16 +521,17 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
     _SUBMIT_BUTTON = "button[aria-label='Submit application']"
     _FOLLOW = "input[type=checkbox][id*='follow-company']"
     _ERRORS = (".artdeco-inline-feedback--error", "[role=alert]")
-    # Contact fields of the dialog by their label; the email and the phone
-    # country arrive filled from the account and are kept as they are.
+    # Contact fields of the dialog by their label, to the profile_facts fact
+    # they hold; the email and the phone country arrive filled from the
+    # account and are kept as they are.
     _CORE_LABELS = {
-        "first name": (("first_name",),),
-        "last name": (("last_name",),),
-        "mobile phone number": (("contacts", "phone"),),
-        "phone": (("contacts", "phone"),),
-        "email address": (("contacts", "email"), ("email",)),
-        "email": (("contacts", "email"), ("email",)),
-        "city": (("location",),),
+        "first name": "first name",
+        "last name": "last name",
+        "mobile phone number": "phone",
+        "phone": "phone",
+        "email address": "email",
+        "email": "email",
+        "city": "location",
     }
 
     def __init__(self, profile: Mapping[str, Any], cv_path: Path):
@@ -501,6 +540,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         self.step_saved: Callable[[int], None] | None = None
         self.cv_attached = False
         self.job_url = ""
+        self.dry_run = False
 
     def attach(self, flow) -> None:
         self.session = LinkedInSession(
@@ -511,6 +551,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             code_timeout_s=flow.login_code_timeout_s,
         )
         self.job_url = flow.url
+        self.dry_run = getattr(flow, "_mode", "") == "dry_run"
 
         def saved(step: int, _flow=flow) -> None:
             checkpoint = getattr(_flow, "_live_checkpoint", None)
@@ -525,16 +566,24 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
     def form_present(self, page) -> bool:
         return page.locator(self.MODAL).count() > 0
 
+    @staticmethod
+    def _company_addresses(page, links) -> set[str]:
+        """The addresses of these links that, LinkedIn's redirect unwrapped, leave LinkedIn."""
+        targets = set()
+        for index in range(links.count()):
+            href = links.nth(index).get_attribute("href") or ""
+            if href.strip():
+                targets.add(offsite_target(href, page.url))
+        return {target for target in targets if not linkedin_host(target)}
+
     def _offsite(self, page) -> str | None:
-        links = page.locator(_OFFSITE_LINK)
-        if not links.count():
-            links = page.get_by_role("link", name=_OFFSITE_LABEL)
-        hrefs = {links.nth(i).get_attribute("href") or "" for i in range(links.count())}
-        hrefs.discard("")
-        if len(hrefs) > 1:
+        targets = self._company_addresses(page, page.locator(_OFFSITE_LINK))
+        if not targets:
+            targets = self._company_addresses(page, page.get_by_role("link", name=_OFFSITE_LABEL))
+        if len(targets) > 1:
             raise BlockedHuman("linkedin_apply_ambiguous", "The vacancy names more than one company application address", "detect")
-        if hrefs:
-            return offsite_target(hrefs.pop(), page.url)
+        if targets:
+            return targets.pop()
         buttons = page.get_by_role("button", name=_OFFSITE_LABEL)
         visible = [buttons.nth(i) for i in range(buttons.count()) if buttons.nth(i).is_visible()]
         if len(visible) == 1:
@@ -558,8 +607,11 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         return found
 
     def apply_control_present(self, page) -> bool:
-        return bool(self._easy_apply(page)) or page.locator(_OFFSITE_LINK).count() > 0 or bool(
-            page.get_by_role("button", name=_OFFSITE_LABEL).count()
+        return (
+            bool(self._easy_apply(page))
+            or page.locator(_OFFSITE_LINK).count() > 0
+            or page.locator(_GUEST_APPLY).count() > 0
+            or bool(page.get_by_role("button", name=_OFFSITE_LABEL).count())
         )
 
     def open_form(self, page) -> None:
@@ -586,6 +638,13 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue  # a reload with the saved session is enough
             if self.session.challenge(page):
                 raise BlockedHuman("linkedin_challenge", "LinkedIn shows a security check on the vacancy", "detect")
+            if self.dry_run:
+                # A dry run only looks: no sign-in with the user's account, and
+                # never a verification code asked on Telegram.
+                raise FlowDeferred(
+                    "linkedin_dry_run_signed_out",
+                    "A dry run does not sign in to LinkedIn; without a saved session it stops here",
+                )
             # Before the account does anything: the pause between applications.
             self.session.assert_interval()
             self.session.login(page)
@@ -657,20 +716,57 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue
             label = self._label(entry)
             key = self._field_key(entry)
-            paths = self._CORE_LABELS.get(label.casefold())
-            if paths:
-                present, value = self._core_value(key, label, paths)
-                if present:
-                    self._fill_answer(entry, label, value, "fill")
-                    continue
-                if self._required(entry):
-                    raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required Easy Apply field needs profile data: {_safe_label(label)}",
-                        "fill",
-                    )
+            fact = self._CORE_LABELS.get(label.casefold())
+            if fact:
+                self._core_entry(page, entry, label, key, fact)
                 continue
             self._answer_entry(page, entry, label, key)
+
+    @staticmethod
+    def _core_choice(entry) -> bool:
+        """A select, a choice or a typeahead: its value is one of the page's options, never profile text."""
+        return bool(entry.locator("select, input[type=radio], input[type=checkbox], [role=combobox]").count())
+
+    def _core_request(self, page, entry, label: str) -> BlockedHuman:
+        if self._core_choice(entry):
+            request = GreenhouseRecipe._answer_request(page, entry, label)
+            if request is None:
+                return _core_fact_missing("Easy Apply", label, "fill")
+            return BlockedHuman(
+                "required_answer_missing",
+                f"Required Easy Apply choice needs one of the page's options: {_safe_label(label)}",
+                "fill",
+                answer_request=request,
+            )
+        control_type = entry.locator(LeverRecipe._CONTROLS).first.get_attribute("type") or "text"
+        return _core_fact_missing("Easy Apply", label, "fill", control_type)
+
+    def _core_entry(self, page, entry, label: str, key: str, fact: str) -> None:
+        """The profile_facts rule: the profile under its aliases, a saved answer, then a question.
+
+        Never a hard stop for a fact the CLOSER can work out (CL-08), and never
+        a name split or joined in code: the CLOSER saves "first name" from
+        `name`, with its basis.  A choice (a city picked from the page's list)
+        takes only a saved exact option: profile text is not an option.
+        """
+        value = None if self._core_choice(entry) else profile_value(self.profile, fact)
+        present = value is not None
+        if present:
+            self.answer_sources[_normalise_label(label) or fact] = "profile"
+        else:
+            present, value = self._answer_for(label, key)
+        if not present:
+            if not self._required(entry):
+                return
+            raise self._core_request(page, entry, label)
+        from apply_flow import _inferred_answer_refused
+
+        try:
+            self._fill_answer(entry, label, value, "fill")
+        except BlockedHuman as refused:
+            raise _inferred_answer_refused(
+                self, refused, lambda: self._core_request(page, entry, label).answer_request
+            ) from None
 
     def _answer_entry(self, page, entry, label: str, key: str) -> None:
         present, answer = self._answer_for(label, key)
