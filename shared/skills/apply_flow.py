@@ -2690,9 +2690,15 @@ def linkedin_job_url(url: str) -> str:
     """
     if not is_linkedin_job(url):
         return url
-    path = urllib.parse.urlsplit(str(url).strip()).path
-    found = re.fullmatch(r"/jobs/view/(?:[^/]*-)?(\d{6,})/?", path)
-    return f"https://www.linkedin.com/jobs/view/{found.group(1)}/" if found else url
+    parts = urllib.parse.urlsplit(str(url).strip())
+    found = re.fullmatch(r"/jobs/view/(?:[^/]*-)?(\d{6,})/?", parts.path)
+    if found:
+        return f"https://www.linkedin.com/jobs/view/{found.group(1)}/"
+    # A vacancy selected inside a list (/jobs/collections/…, /jobs/search/…).
+    current = urllib.parse.parse_qs(parts.query).get("currentJobId", [])
+    if len(current) == 1 and re.fullmatch(r"\d{6,}", current[0]):
+        return f"https://www.linkedin.com/jobs/view/{current[0]}/"
+    return url
 
 
 def _optional_module(name: str):
