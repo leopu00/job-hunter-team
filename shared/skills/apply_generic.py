@@ -503,6 +503,11 @@ def contact_application_topic(form: Mapping[str, Any]) -> tuple[Mapping[str, Any
         return None
     if "email" not in {field[0] for q in questions if (field := core_field(q))}:
         return None
+    if contact_message_id(form) is None:
+        # Without the one field that carries the letter the contact form is not
+        # the application: nothing would say who applies and why (review of
+        # fb4d15b76, HQ-FULLSTACK-2: two unnamed notes boxes went out empty).
+        return None
     found = []
     for question in questions:
         if question.get("type") not in {"listbox", "select", "radio"}:

@@ -333,6 +333,22 @@ def test_the_contact_page_mailto_never_becomes_a_second_channel(browser, cv_path
     assert (checkpoint["channel"], checkpoint["mailto_href"]) == ("contact_form", "")
 
 
+def test_a_contact_form_without_a_letter_field_is_never_the_application(browser, cv_path, tmp_path):
+    no_letter = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
+        '<label for="message">Message</label><textarea id="message" required placeholder="How can we help?"></textarea>',
+        '<label for="notes">Notes</label><textarea id="notes"></textarea>'
+        '<label for="other">Other notes</label><textarea id="other"></textarea>',
+    ).replace("message: document.getElementById('message').value", "message: ''")
+    careers = CAREERS.format(roles=ROLE.format(title="AI Engineer"))
+    page = site(browser, {"/careers": careers, "/contact": no_letter})
+    page.goto(f"{BASE}/careers")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
+    assert page.evaluate("window.submitCount") == 0
+
+
 def test_only_the_message_of_a_contact_form_is_the_letter(browser, cv_path, tmp_path):
     extra = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
         '<label for="message">',
@@ -433,3 +449,31 @@ def test_an_application_form_on_the_page_wins_over_an_address_in_the_text(browse
 
     assert result.reason != "email_instruction"
     assert saved(tmp_path)["platform"] == "generic"
+
+
+def test_a_letter_answered_on_the_dashboard_is_kept_for_its_position_only(tmp_path, cv_path):
+    # A second vacancy of the same company never reuses a letter that names another one (review m3).
+    import sqlite3
+
+    import _db
+    import application_answers as aa
+
+    db = tmp_path / "jobs.db"
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        for pid in (91, 92):
+            conn.execute(
+                "INSERT INTO positions(id, title, company, url, status) VALUES (?, 'Fixture Role', 'Fixture Co', ?, 'ready')",
+                (pid, f"https://jobs.example.com/{pid}"),
+            )
+    flow = build_flow(tmp_path, cv_path, f"{BASE}/careers")
+    flow.db_path = db
+    request = {"payload": {"key": "message", "label": "Message", "field_type": "textarea", "options": [],
+                           "purpose": "contact_form_application"}}
+
+    flow._save_application_answer("message", request, LETTER)
+
+    with sqlite3.connect(db) as conn:
+        assert aa.load_answers(conn, 91).get("message") == LETTER
+        assert aa.load_answers(conn, 92).get("message") is None

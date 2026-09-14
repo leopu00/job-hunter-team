@@ -4215,7 +4215,10 @@ class ApplicationFlow:
                 options=list(payload.get("options") or []),
                 channel="reply",
                 message_id=int(str(request.get("message_id") or 0)) or None,
-                scope=application_answers.answer_scope(conn, field_type, self.position_id),
+                # A contact-form letter names its vacancy: scope position, not company.
+                scope=application_answers.answer_scope(
+                    conn, field_type, self.position_id, purpose=str(payload.get("purpose") or "")
+                ),
             )
             conn.commit()
             stored = application_answers.load_answers(conn, self.position_id)
