@@ -316,3 +316,25 @@ def test_a_dry_run_reserves_nothing(page, tmp_path, monkeypatch, cv_path):
 
     assert result.status == "dry_run"
     assert _reservations(home) == []
+
+
+def test_a_submit_marker_that_cannot_be_saved_gives_the_slot_back_without_clicking(
+    page, tmp_path, monkeypatch, cv_path
+):
+    home = _home(tmp_path, monkeypatch, max_per_day=1)
+    page.set_content(ashby_form())
+    real_save = apply_flow.FlowCheckpoint.save
+
+    def failing_submit_save(self, path):
+        if self.submit_started:
+            raise OSError("synthetic disk full")
+        return real_save(self, path)
+
+    monkeypatch.setattr(apply_flow.FlowCheckpoint, "save", failing_submit_save)
+
+    result = _browser_flow(home, cv_path, 41).run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert page.evaluate("window.submitCount") == 0
+    assert _reservations(home) == [(41, "browser", "released")]
+    assert json.loads((home / "checkpoint-41.json").read_text())["submit_started"] is False

@@ -2223,6 +2223,21 @@ class ApplicationFlow:
         stopped = instant(checkpoint.updated_at)
         return bool(authorised and stopped and authorised > stopped)
 
+    def _release_cap_slot(self, slot: Any) -> None:
+        """Give back a reserved slot whose click certainly did not happen."""
+        context = getattr(slot, "context", None)
+        token = context.get("token") if isinstance(context, Mapping) else None
+        if not token:
+            return
+        try:
+            from apply_gate import release_daily_slot
+        except ImportError:  # pragma: no cover - package import
+            from shared.skills.apply_gate import release_daily_slot
+        try:
+            release_daily_slot(str(token), db_path=str(self.db_path) if self.db_path else None)
+        except Exception as exc:
+            LOG.error("cap slot release failed: %s", type(exc).__name__)
+
     def _stop_screenshot_prefix(self) -> str:
         return f"{self.checkpoint_path.stem}.stop-"
 
@@ -2972,7 +2987,14 @@ class ApplicationFlow:
                 checkpoint.state = "submit"
                 checkpoint.submit_started = True
                 checkpoint.submit_started_at = _utc_now()
-                checkpoint.save(self.checkpoint_path)
+                try:
+                    checkpoint.save(self.checkpoint_path)
+                except Exception:
+                    # No durable submit marker, so no click: the slot goes back.
+                    checkpoint.submit_started = False
+                    checkpoint.submit_started_at = ""
+                    self._release_cap_slot(slot)
+                    raise
                 recipe.submit(active_page)
                 confirmation = self._wait_for_confirmation(active_page, detection.platform)
                 if not confirmation:
