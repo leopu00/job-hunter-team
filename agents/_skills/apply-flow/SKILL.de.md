@@ -56,6 +56,7 @@ Eine JSON-Zeile auf stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: ausgefüllt, vor dem Button gestoppt, nichts gesendet | nächste Position |
 | `denied` | 1 | das Tor hat abgelehnt (Zustimmung aus, Flag widerrufen, schon gesendet) | nächste Position; nie neu versuchen |
 | `blocked_human` | 3 | ein Mensch wird gebraucht; der User wurde schon benachrichtigt | nächste Position; nie neu versuchen |
+| `blocked_human` wartet auf Antworten (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | kein endgültiger Stopp: der User wurde einmal gefragt, die Queue hält die Position (`essential_answers_pending` / `checkpoint_blocked_human`), bis die Antworten in `jobs.db` sind | nächste Position; beim `[BRIDGE INFO]`, dass der User geantwortet hat, die Queue neu lesen: die Position steht wieder in `positions` |
 | `email_channel` | 4 | das Bewerbungs-Element ist ein `mailto:`-Link, kein Formular; der Checkpoint enthält `channel: email` und den rohen `mailto_href` | führe für diese Position `email_application.py send` aus, wie die Skill `email-application-flow` es sagt: sie liest diesen Checkpoint; fülle nie ein Webformular aus und schreibe die E-Mail nie von Hand |
 | `error` | 2 | Profil oder CV unlesbar, falsche Argumente | stopp: `[BLOCKED]` an den Capitano |
 

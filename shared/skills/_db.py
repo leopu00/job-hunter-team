@@ -901,6 +901,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_applications_rejection_reason(conn)
     _migrate_email_application_attempts(conn)
     _migrate_application_answers(conn)
+    _migrate_closer_wakes(conn)
 
 
 def _migrate_application_answers(conn: sqlite3.Connection) -> None:
@@ -928,6 +929,26 @@ def _migrate_application_answers(conn: sqlite3.Connection) -> None:
             channel TEXT NOT NULL,
             source_message_id INTEGER,
             answered_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )
+        """
+    )
+
+
+def _migrate_closer_wakes(conn: sqlite3.Connection) -> None:
+    """One row per wake-up sent to the CLOSER after the user answered. [JHT-CLOSER-ANSWERS]
+
+    `wake_key` names what was answered (the position and its last answered
+    question, or the last essential fact), so several answers arriving
+    together wake the CLOSER once, and a replayed answer never wakes it again.
+    Local only; additive and idempotent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closer_wakes (
+            wake_key TEXT PRIMARY KEY,
+            position_id INTEGER,
+            delivered INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         )
         """

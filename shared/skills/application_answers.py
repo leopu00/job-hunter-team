@@ -626,6 +626,137 @@ def ensure_essentials(
     }
 
 
+# ── Waking the CLOSER once the user has answered ─────────────────────────────
+
+
+CLOSER_SESSION_PREFIX = "CLOSER-"
+
+
+@dataclass(frozen=True)
+class Wake:
+    key: str
+    position_id: int | None
+    reason: str  # answers_complete · essentials_complete
+
+
+def pending_wakes(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> list[Wake]:
+    """What the user's answers have unblocked since the last wake-up.
+
+    - a position whose CLOSER form questions are all answered (none open);
+    - the essential facts, once every one that was asked is known.
+
+    The key names the last answered question, so several answers arriving
+    together make one wake-up, and a later question answered later makes a
+    new one. Channel-blind: a dashboard reply and a Telegram reply land on the
+    same question rows, so there is one path for both.
+    """
+    if not _table_exists(conn, "pending_user_messages"):
+        return []
+    wakes: list[Wake] = []
+    rows = conn.execute(
+        "SELECT related_position_id, "
+        "SUM(CASE WHEN user_reply IS NULL THEN 1 ELSE 0 END), "
+        "MAX(CASE WHEN user_reply IS NOT NULL THEN id END) "
+        "FROM pending_user_messages "
+        "WHERE agent = 'closer' AND kind = 'question' AND source_action = ? "
+        "AND related_position_id IS NOT NULL AND source_id NOT LIKE 'closer-essential:%' "
+        "GROUP BY related_position_id",
+        (SOURCE_ACTION,),
+    ).fetchall()
+    for position_id, still_open, last_answered in rows:
+        if still_open == 0 and last_answered is not None:
+            wakes.append(Wake(f"answers:{int(position_id)}:{int(last_answered)}", int(position_id), "answers_complete"))
+    essential = conn.execute(
+        "SELECT MAX(CASE WHEN user_reply IS NOT NULL THEN id END), COUNT(*) FROM pending_user_messages "
+        "WHERE source_id LIKE 'closer-essential:%'"
+    ).fetchone()
+    if essential and essential[1] and essential[0] is not None:
+        if check_essentials(conn, profile)["status"] == "complete":
+            wakes.append(Wake(f"essentials:{int(essential[0])}", None, "essentials_complete"))
+    if not wakes or not _table_exists(conn, "closer_wakes"):
+        return wakes
+    done = {row[0] for row in conn.execute("SELECT wake_key FROM closer_wakes")}
+    return [wake for wake in wakes if wake.key not in done]
+
+
+def _closer_sessions() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [name for name in result.stdout.split() if name.startswith(CLOSER_SESSION_PREFIX)]
+
+
+def _tmux_send(session: str, text: str) -> bool:
+    try:
+        return subprocess.run(
+            ["jht-tmux-send", session, text], capture_output=True, text=True, timeout=20, check=False
+        ).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def wake_message(wake: Wake) -> str:
+    if wake.reason == "essentials_complete":
+        what = "the user answered the essential application facts"
+    else:
+        what = f"the user answered the CLOSER questions for position #{wake.position_id}"
+    return (
+        f"[BRIDGE INFO] {what}; the answers are saved in jobs.db. "
+        "Re-read the queue (apply_gate.py queue) and continue: what was waiting for these answers can run now."
+    )
+
+
+def wake_closer(
+    conn: sqlite3.Connection,
+    profile: Mapping[str, Any],
+    *,
+    sessions: Callable[[], list[str]] | None = None,
+    sender: Callable[[str, str], bool] | None = None,
+    queue: Callable[[sqlite3.Connection], Mapping[str, Any]] | None = None,
+) -> list[Wake]:
+    """Wake a live CLOSER once per unblocked position; claim the key first.
+
+    The key is committed BEFORE the message: two bridges, or a replay, cannot
+    both send it. If no CLOSER is alive nothing is sent — the queue already
+    shows the position ready, which is what the Capitano's spawn rule reads.
+    """
+    import _db
+
+    _db._migrate_closer_wakes(conn)
+    sent: list[Wake] = []
+    wakes = pending_wakes(conn, profile)
+    ready: set[int] = set()
+    if wakes:
+        # Only what can actually run now is announced: answers to a position
+        # that has since been sent or withdrawn claim their key in silence.
+        current = (queue or (lambda c: apply_gate.application_queue(conn=c)))(conn)
+        if current.get("ready"):
+            ready = {int(item["position_id"]) for item in current.get("positions") or []}
+    for wake in wakes:
+        claimed = conn.execute(
+            "INSERT OR IGNORE INTO closer_wakes (wake_key, position_id) VALUES (?, ?)",
+            (wake.key, wake.position_id),
+        ).rowcount
+        conn.commit()
+        if claimed != 1:
+            continue
+        if not ready or (wake.position_id is not None and wake.position_id not in ready):
+            continue
+        live = (sessions or _closer_sessions)()
+        delivered = False
+        for session in live:
+            delivered = (sender or _tmux_send)(session, wake_message(wake)) or delivered
+        if delivered:
+            conn.execute("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", (wake.key,))
+            conn.commit()
+            sent.append(wake)
+    return sent
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 

@@ -80,6 +80,7 @@ STEP 3 — ESEGUI IL FLUSSO                            → apply-flow
 STEP 4 — LEGGI L'ESITO (una riga JSON)               → apply-flow
          applied        → inviata, ricevuta salvata, stato scritto dal flusso
          blocked_human  → il flusso ha già avvisato l'utente: vai avanti
+                          (attendere risposte non è uno stop definitivo: CL-05)
          denied         → il cancello ha detto no: vai avanti, mai aggirarlo
          dry_run        → giro diagnostico, non è partito niente: vai avanti
          email_channel  → il controllo Apply è un link mailto: → email-application-flow
@@ -96,6 +97,8 @@ STEP 6 — USCITA
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Niente loop in idle: il Capitano ti rispawna quando la coda
          ha qualcosa da inviare.
+         Un [BRIDGE INFO] che dice che l'utente ha risposto ti
+         riporta allo STEP 1.
 ```
 
 ---
@@ -104,13 +107,13 @@ STEP 6 — USCITA
 
 **CL-04 — Una posizione per iterazione, sempre dalla coda.** La coda è l'unica fonte di lavoro. Rileggila a ogni iterazione invece di tenerti una lista: un utente può aver revocato un flag un minuto fa, e un flag revocato deve fermarti.
 
-**CL-05 — Un flusso fermo resta fermo.** Una posizione il cui flusso è finito in `blocked_human` esce dalla coda finché l'utente non interviene (la coda la elenca sotto `held` con `checkpoint_blocked_human`). Se pensi che il blocco fosse spurio, non la rilanci lo stesso: dillo al Capitano, la decisione di riprovare spetta all'utente.
+**CL-05 — Uno stop che chiede una scelta dell'utente resta fermo; un'attesa di risposte no.** Definitivi sono solo i `blocked_human` che nominano qualcosa che solo l'utente può fare o decidere: captcha o due fattori, login, offerta chiusa, una pagina che nessuna ricetta conosce. Quelle posizioni escono dalla coda finché l'utente non interviene (la coda le elenca sotto `held` con `checkpoint_blocked_human`). Se pensi che un blocco così fosse spurio, non la rilanci lo stesso: dillo al Capitano, la decisione di riprovare spetta all'utente. `essential_facts_missing` e le richieste di risposta (`required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) NON sono definitivi: le domande sono partite, la coda tiene la posizione (`essential_answers_pending` o `checkpoint_blocked_human`) solo finché l'utente risponde, poi la rimette in `positions`. Quando un `[BRIDGE INFO]` dice che l'utente ha risposto, torna allo STEP 1 ed esegui ciò che la coda ti dà.
 
 **CL-06 — Il tetto giornaliero è un muro.** `applications.auto_apply.max_per_day` lo applica la coda (`daily_cap_reached`). Non cerchi un modo per aggirarlo e non chiedi un'eccezione al Capitano.
 
 **CL-07 — Le candidature via email passano solo da `email-application-flow`.** Quando `apply_flow.py` risponde `email_channel`, esegui `email_application.py` esattamente come dice quella skill: nessun client di posta, nessuna email scritta a mano. Invia solo se il gate autorizza nel momento dell'invio. Non inventi mai dati, destinatari, consensi o allegati. Dopo `send_started` un esito incerto non si ritenta mai. Solo la skill, dopo una ricevuta valida, registra l'invio email.
 
-**CL-08 — Le domande all'utente passano da `jht-notify-user`; le risposte si leggono da `jobs.db`.** Non scrivi mai a mano una domanda all'utente e non aspetti mai una risposta in chat. `apply_flow.py` chiede una volta ogni dato essenziale e ogni domanda del form senza risposta, prima su Telegram, e la risposta dell'utente, su Telegram o in dashboard, si salva in `jobs.db` (`application_answers`). `essential_facts_missing` vuol dire che le domande sono già partite: passa oltre e non chiedere mai di nuovo. Una sessione nuova legge le risposte salvate e non chiede mai ciò che c'è già.
+**CL-08 — Le domande all'utente passano da `jht-notify-user`; le risposte si leggono da `jobs.db`.** Non scrivi mai a mano una domanda all'utente e non aspetti mai una risposta in chat. `apply_flow.py` chiede una volta ogni dato essenziale e ogni domanda del form senza risposta, prima su Telegram, e la risposta dell'utente, su Telegram o in dashboard, si salva in `jobs.db` (`application_answers`). `essential_facts_missing` vuol dire che le domande sono già partite: passa oltre, non chiedere mai di nuovo e non considerare chiusa la posizione (CL-05). Una sessione nuova legge le risposte salvate e non chiede mai ciò che c'è già.
 
 **VIETATO — scrivere tu lo stato di invio.** Non esegui mai `db_update.py application` con `--applied-at` o `--applied-via`, e non cambi mai `apply_requested`: gli unici che scrivono `applied` sono `apply_flow.py` e `email_application.py`, dopo la ricevuta, e l'unico che scrive l'autorizzazione è l'utente. Non esegui mai `apply_flow.py` su una posizione che non è in `positions` dell'ultima lettura della coda.
 

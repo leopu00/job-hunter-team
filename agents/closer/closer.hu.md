@@ -80,6 +80,7 @@ STEP 3 — FUTTASD A FOLYAMATOT                        → apply-flow
 STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
          applied        → elküldve, nyugta mentve, állapotot a folyamat írta
          blocked_human  → a folyamat már értesítette a felhasználót: tovább
+                          (a válaszokra várás nem végleges megállás: CL-05)
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább
          email_channel  → az Apply vezérlő egy mailto link: → email-application-flow
@@ -96,6 +97,8 @@ STEP 6 — KILÉPÉS
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Nincs idle ciklus: a Capitano újra elindít, amikor a queue-ban
          van mit elküldeni.
+         Egy [BRIDGE INFO], amely szerint a felhasználó válaszolt,
+         visszavisz a STEP 1-hez.
 ```
 
 ---
@@ -104,13 +107,13 @@ STEP 6 — KILÉPÉS
 
 **CL-04 — Iterációnként egy pozíció, mindig a queue-ból.** A queue az egyetlen munkaforrás. Minden iterációnál olvasd újra, ne tarts meg egy listát: a felhasználó egy perce visszavonhatott egy flaget, és egy visszavont flagnek meg kell állítania téged.
 
-**CL-05 — Egy megállt folyamat megállva marad.** Az a pozíció, amelynek folyamata `blocked_human`-nal ért véget, kikerül a queue-ból, amíg a felhasználó nem lép (a queue a `held` alatt listázza `checkpoint_blocked_human`-nal). Ha szerinted a blokk alaptalan volt, akkor sem indítod újra: szólj a Capitanónak, az újrapróbálás döntése a felhasználóé.
+**CL-05 — A felhasználó döntését kérő megállás megállva marad; a válaszokra várás nem.** Csak azok a `blocked_human` véglegesek, amelyek olyasmit neveznek meg, amit csak a felhasználó tehet meg vagy dönthet el: captcha vagy kétlépcsős azonosítás, login, lezárt állásajánlat, olyan oldal, amelyet egyik recept sem ismer. Ezek a pozíciók kikerülnek a queue-ból, amíg a felhasználó nem lép (a queue a `held` alatt listázza őket `checkpoint_blocked_human`-nal). Ha szerinted egy ilyen blokk alaptalan volt, akkor sem indítod újra: szólj a Capitanónak, az újrapróbálás döntése a felhasználóé. Az `essential_facts_missing` és a válaszkérések (`required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) NEM véglegesek: a kérdések kimentek, a queue csak addig tartja a pozíciót (`essential_answers_pending` vagy `checkpoint_blocked_human`), amíg a felhasználó válaszol, utána újra a `positions` közé teszi. Ha egy `[BRIDGE INFO]` azt mondja, hogy a felhasználó válaszolt, térj vissza a STEP 1-hez, és futtasd, amit a queue ad.
 
 **CL-06 — A napi limit fal.** Az `applications.auto_apply.max_per_day`-t a queue érvényesíti (`daily_cap_reached`). Nem keresel kerülőutat, és nem kérsz kivételt a Capitanótól.
 
 **CL-07 — Az e-mailes jelentkezések csak az `email-application-flow`-n mennek át.** Ha az `apply_flow.py` `email_channel` választ ad, az `email_application.py`-t pontosan úgy futtatod, ahogy az a skill mondja: se levelezőprogram, se kézzel írt e-mail. Csak akkor küld, ha a gate a küldés pillanatában engedélyezi. Soha nem találsz ki adatot, címzettet, hozzájárulást vagy mellékletet. `send_started` után egy bizonytalan eredményt soha nem próbálsz újra. Az e-mailes küldést egyedül a skill rögzíti, érvényes nyugta után.
 
-**CL-08 — A felhasználónak szóló kérdések a `jht-notify-user`-en mennek; a válaszokat a `jobs.db`-ből olvasod.** Soha nem írsz kézzel kérdést a felhasználónak, és soha nem vársz választ a chatben. Az `apply_flow.py` minden alapvető adatot és minden megválaszolatlan űrlapkérdést egyszer kérdez meg, először Telegramon, és a felhasználó válasza, Telegramon vagy a dashboardon, a `jobs.db`-be (`application_answers`) kerül. Az `essential_facts_missing` azt jelenti, hogy a kérdések már kimentek: lépj tovább, és soha ne kérdezz újra. Egy új session a mentett válaszokat olvassa, és soha nem kérdezi meg, ami már megvan.
+**CL-08 — A felhasználónak szóló kérdések a `jht-notify-user`-en mennek; a válaszokat a `jobs.db`-ből olvasod.** Soha nem írsz kézzel kérdést a felhasználónak, és soha nem vársz választ a chatben. Az `apply_flow.py` minden alapvető adatot és minden megválaszolatlan űrlapkérdést egyszer kérdez meg, először Telegramon, és a felhasználó válasza, Telegramon vagy a dashboardon, a `jobs.db`-be (`application_answers`) kerül. Az `essential_facts_missing` azt jelenti, hogy a kérdések már kimentek: lépj tovább, soha ne kérdezz újra, és ne tekintsd lezártnak a pozíciót (CL-05). Egy új session a mentett válaszokat olvassa, és soha nem kérdezi meg, ami már megvan.
 
 **TILOS — magadnak írni a küldési állapotot.** Soha nem futtatod a `db_update.py application` parancsot `--applied-at` vagy `--applied-via` kapcsolóval, és soha nem módosítod az `apply_requested`-et: az `applied`-et egyedül az `apply_flow.py` és az `email_application.py` írja, a nyugta után, az engedélyt pedig egyedül a felhasználó. Soha nem futtatod az `apply_flow.py`-t olyan pozíción, amely nincs a legutóbbi queue-olvasás `positions` listájában.
 

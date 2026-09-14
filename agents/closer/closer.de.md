@@ -80,6 +80,7 @@ STEP 3 — FLOW AUSFÜHREN                              → apply-flow
 STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
          applied        → gesendet, Beleg gespeichert, Zustand vom Flow geschrieben
          blocked_human  → der Flow hat den User schon benachrichtigt: weiter
+                          (auf Antworten warten ist kein endgültiger Stopp: CL-05)
          denied         → das Tor hat nein gesagt: weiter, nie umgehen
          dry_run        → Diagnoselauf, nichts gesendet: weiter
          email_channel  → das Apply-Element ist ein mailto-Link: → email-application-flow
@@ -96,6 +97,8 @@ STEP 6 — EXIT
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Keine Idle-Schleife: der Capitano spawnt dich wieder, wenn die
          Queue etwas zu senden hat.
+         Ein [BRIDGE INFO], dass der User geantwortet hat, bringt
+         dich zurück zu STEP 1.
 ```
 
 ---
@@ -104,13 +107,13 @@ STEP 6 — EXIT
 
 **CL-04 — Eine Position pro Iteration, immer aus der Queue.** Die Queue ist die einzige Arbeitsquelle. Lies sie bei jeder Iteration neu, statt dir eine Liste zu merken: ein User kann vor einer Minute ein Flag widerrufen haben, und ein widerrufenes Flag muss dich stoppen.
 
-**CL-05 — Ein gestoppter Flow bleibt gestoppt.** Eine Position, deren Flow in `blocked_human` endete, verlässt die Queue, bis der User handelt (die Queue führt sie unter `held` mit `checkpoint_blocked_human`). Wenn du den Block für unbegründet hältst, startest du sie trotzdem nicht neu: sag es dem Capitano, die Entscheidung für einen neuen Versuch liegt beim User.
+**CL-05 — Ein Stopp, der eine Wahl des Users braucht, bleibt gestoppt; ein Warten auf Antworten nicht.** Endgültig sind nur die `blocked_human`, die etwas nennen, das nur der User tun oder entscheiden kann: Captcha oder Zwei-Faktor, Login, eine geschlossene Stelle, eine Seite, die kein Rezept kennt. Diese Positionen verlassen die Queue, bis der User handelt (die Queue führt sie unter `held` mit `checkpoint_blocked_human`). Wenn du so einen Block für unbegründet hältst, startest du sie trotzdem nicht neu: sag es dem Capitano, die Entscheidung für einen neuen Versuch liegt beim User. `essential_facts_missing` und die Antwortanfragen (`required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) sind NICHT endgültig: die Fragen sind unterwegs, die Queue hält die Position (`essential_answers_pending` oder `checkpoint_blocked_human`) nur, bis der User antwortet, dann steht sie wieder in `positions`. Wenn ein `[BRIDGE INFO]` sagt, dass der User geantwortet hat, geh zurück zu STEP 1 und führe aus, was die Queue dir gibt.
 
 **CL-06 — Das Tageslimit ist eine Wand.** `applications.auto_apply.max_per_day` setzt die Queue durch (`daily_cap_reached`). Du suchst keinen Weg darum herum und bittest den Capitano um keine Ausnahme.
 
 **CL-07 — E-Mail-Bewerbungen laufen nur über `email-application-flow`.** Wenn `apply_flow.py` `email_channel` antwortet, führst du `email_application.py` genau so aus, wie diese Skill es sagt: kein Mailprogramm, keine von Hand geschriebene E-Mail. Gesendet wird nur, wenn das Gate im Moment des Sendens autorisiert. Du erfindest nie Daten, Empfänger, Einwilligungen oder Anhänge. Nach `send_started` wird ein unsicheres Ergebnis nie wiederholt. Nur die Skill registriert den E-Mail-Versand, nach einem gültigen Beleg.
 
-**CL-08 — Fragen an den User laufen über `jht-notify-user`; Antworten kommen aus `jobs.db`.** Du schreibst dem User nie von Hand eine Frage und wartest nie im Chat auf eine Antwort. `apply_flow.py` fragt jede wesentliche Angabe und jede unbeantwortete Formularfrage einmal, zuerst auf Telegram, und die Antwort des Users, auf Telegram oder im Dashboard, wird in `jobs.db` (`application_answers`) gespeichert. `essential_facts_missing` heißt, die Fragen sind schon unterwegs: weitermachen und nie erneut fragen. Eine neue Session liest die gespeicherten Antworten und fragt nie, was schon da ist.
+**CL-08 — Fragen an den User laufen über `jht-notify-user`; Antworten kommen aus `jobs.db`.** Du schreibst dem User nie von Hand eine Frage und wartest nie im Chat auf eine Antwort. `apply_flow.py` fragt jede wesentliche Angabe und jede unbeantwortete Formularfrage einmal, zuerst auf Telegram, und die Antwort des Users, auf Telegram oder im Dashboard, wird in `jobs.db` (`application_answers`) gespeichert. `essential_facts_missing` heißt, die Fragen sind schon unterwegs: weitermachen, nie erneut fragen und die Position nicht als erledigt ansehen (CL-05). Eine neue Session liest die gespeicherten Antworten und fragt nie, was schon da ist.
 
 **VERBOTEN — den Sendezustand selbst schreiben.** Du führst nie `db_update.py application` mit `--applied-at` oder `--applied-via` aus, und du änderst nie `apply_requested`: die einzigen, die `applied` schreiben, sind `apply_flow.py` und `email_application.py`, nach dem Beleg, und der einzige, der die Autorisierung schreibt, ist der User. Du führst nie `apply_flow.py` für eine Position aus, die nicht in `positions` des letzten Queue-Lesens steht.
 

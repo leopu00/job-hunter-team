@@ -495,6 +495,40 @@ def _answer_feedback(outcome) -> None:
         log(f"closer answer feedback not sent: {type(e).__name__}")
 
 
+def wake_closer_after_answers(db_path: Path | None = None) -> None:
+    """Sveglia il CLOSER vivo quando le risposte dell'utente sbloccano qualcosa.
+
+    Stessa funzione per le risposte arrivate da Telegram e da dashboard: le une
+    e le altre finiscono sulle righe delle domande, e la chiave di sveglia e'
+    in jobs.db, quindi una sola sveglia per posizione anche con tre bridge.
+    Best-effort: senza sveglia la posizione e' comunque pronta in coda e la
+    regola di spawn del Capitano la vede.
+    """
+    if application_answers is None or BOT_ROLE != CLOSER_QUESTION_BOT:
+        return
+    target = db_path or JOBS_DB_PATH
+    if not target.exists():
+        return
+    try:
+        profile = {}
+        profile_path = JHT_HOME / "profile" / "candidate_profile.yml"
+        try:
+            import yaml
+
+            loaded = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+            profile = loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            profile = {}
+        db = sqlite3.connect(target, timeout=5)
+        try:
+            for wake in application_answers.wake_closer(db, profile):
+                log(f"closer woken: {wake.reason} key={wake.key}")
+        finally:
+            db.close()
+    except Exception as e:
+        log(f"closer wake check failed: {type(e).__name__}")
+
+
 def flush_inbound_queue(db_path: Path | None = None) -> int:
     """Trasferisce il journal nella cronologia unificata, poi lo elimina.
 
@@ -553,6 +587,8 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
 
     for outcome in resolutions:
         _answer_feedback(outcome)
+    if any(outcome.status == "resolved" for outcome in resolutions):
+        wake_closer_after_answers(target)
 
     for path, _rec in records:
         try:
@@ -997,6 +1033,9 @@ def main() -> None:
             # Riduce la latenza normale: il journal appena scritto entra nella
             # cronologia senza aspettare i 30s del long-poll successivo.
             flush_inbound_queue()
+            # Anche le risposte date dalla dashboard: nessun evento le annuncia
+            # al bridge, quindi le si guarda a ogni giro (una query leggera).
+            wake_closer_after_answers()
             if ritenta:
                 time.sleep(RETRY_BACKOFF_SEC)
         except urllib.error.HTTPError as e:

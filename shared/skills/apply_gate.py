@@ -707,6 +707,32 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     return f"checkpoint_{state}"
 
 
+def _essentials_hold(conn: sqlite3.Connection, jht_home: Path | None) -> str:
+    """`essential_answers_pending` while an essential fact was asked and is still unknown.
+
+    Without it a position waiting for the user's answers would stay
+    `queue_ready`: the CLOSER would run the flow again at every iteration and
+    the Capitano would keep spawning it for nothing. Not asked yet is not a
+    hold — the flow has to run once to ask. Once the answers exist the hold
+    lifts by itself and the CLOSER is woken (`application_answers.wake_closer`).
+    """
+    try:
+        import application_answers
+        import yaml
+    except ImportError:
+        return ""
+    try:
+        path = (jht_home or _jht_home()) / "profile" / "candidate_profile.yml"
+        try:
+            profile = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            profile = None
+        report = application_answers.check_essentials(conn, profile if isinstance(profile, dict) else {})
+    except (sqlite3.Error, ValueError):
+        return ""
+    return "essential_answers_pending" if report["already_asked"] else ""
+
+
 def email_state_path(position_id: int, jht_home: Path | None = None) -> Path:
     return (jht_home or _jht_home()).joinpath(*EMAIL_STATE_SUBDIR, f"{int(position_id)}.json")
 
@@ -904,6 +930,7 @@ def application_queue(
             return out
 
         positions, held = [], []
+        essentials_hold = _essentials_hold(conn, jht_home)
         for pid, url, asked_at, cv_pdf in rows:
             verdict = position_verdict(pid, conn=conn)
             if not verdict.allowed:
@@ -916,8 +943,10 @@ def application_queue(
             if cv is None:
                 held.append({"position_id": pid, "reason": "cv_pdf_missing"})
                 continue
-            hold = _checkpoint_hold(pid, asked_at, jht_home) or _email_hold(
-                conn, pid, asked_at, jht_home
+            hold = (
+                _checkpoint_hold(pid, asked_at, jht_home)
+                or _email_hold(conn, pid, asked_at, jht_home)
+                or essentials_hold
             )
             if hold:
                 held.append({"position_id": pid, "reason": hold})

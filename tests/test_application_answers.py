@@ -428,3 +428,196 @@ def test_off_hours_a_form_answer_request_still_reaches_telegram(db, tmp_path):
     )
     assert done.returncode == 0 and "via=telegram" in done.stdout, done.stdout + done.stderr
     assert sent.exists()
+
+
+# ── waking the CLOSER after the answers (seen live on 14/09) ─────────────────
+
+
+def _ready_box(db, tmp_path, monkeypatch):
+    """Consent on, CVs on disk: the real queue can say `queue_ready`."""
+    (tmp_path / "jht.config.json").write_text(json.dumps(
+        {"applications": {"auto_apply": {"enabled": True, "mode": "authorised", "max_per_day": 5}}}
+    ))
+    (tmp_path / "profile").mkdir(exist_ok=True)
+    (tmp_path / "profile" / "candidate_profile.yml").write_text("name: Test Candidate\n", encoding="utf-8")
+    with sqlite3.connect(db) as conn:
+        for pid in (7, 8):
+            cv = tmp_path / f"cv-{pid}.pdf"
+            cv.write_bytes(b"%PDF-1.4 fixture")
+            conn.execute("INSERT INTO applications (position_id, cv_pdf_path) VALUES (?, ?)", (pid, str(cv)))
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_DB", str(db))
+    monkeypatch.setattr(apply_gate, "_jht_home", lambda: tmp_path, raising=False)
+
+
+def _answer(db, qid, reply):
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE pending_user_messages SET user_reply = ?, user_reply_at = '2026-09-14' WHERE id = ?",
+                     (reply, qid))
+
+
+def _wake(db, profile=None, sessions=("CLOSER-1",), ready=(7, 8)):
+    sent = []
+    with sqlite3.connect(db) as conn:
+        woken = aa.wake_closer(
+            conn, profile or FULL_PROFILE,
+            sessions=lambda: list(sessions),
+            sender=lambda session, text: sent.append((session, text)) or True,
+            queue=lambda _c: {"ready": bool(ready), "positions": [{"position_id": p} for p in ready]},
+        )
+    return woken, sent
+
+
+def test_the_last_answer_wakes_the_closer_once_and_an_intermediate_one_does_not(db):
+    first, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    second, _, _ = ask(db, 7, "start date", "Start date?", field_type="text", options=())
+    _answer(db, first, "one month")
+    assert _wake(db) == ([], [])
+
+    _answer(db, second, "in May")
+    woken, sent = _wake(db)
+    assert [w.reason for w in woken] == ["answers_complete"]
+    assert len(sent) == 1 and sent[0][0] == "CLOSER-1"
+    assert sent[0][1].startswith("[BRIDGE INFO]") and "#7" in sent[0][1] and "@" not in sent[0][1]
+    # Checked again (next poll, a second bridge, a replay): nothing more.
+    assert _wake(db) == ([], [])
+
+
+def test_answers_arriving_together_make_a_single_wake(db):
+    ids = [ask(db, 7, f"q{i}", f"Q{i}?", field_type="text", options=())[0] for i in range(3)]
+    for qid in ids:
+        _answer(db, qid, "fixture")
+    woken, sent = _wake(db)
+    assert len(woken) == 1 and len(sent) == 1
+
+
+def test_completed_essentials_wake_the_closer(db):
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
+            "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, 'closer-essential:notice_period', ?, ?, 'telegram')",
+            (aa.SOURCE_ACTION, json.dumps({"version": 1, "position_id": 7, "key": "notice period",
+                                           "label": "Notice?", "field_type": "text", "options": []})),
+        )
+        qid = conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
+    profile = {k: v for k, v in FULL_PROFILE.items() if k != "notice_period"}
+    assert _wake(db, profile) == ([], [])  # still open: nothing to wake for
+
+    _answer(db, qid, "two months")
+    woken, sent = _wake(db, profile)
+    assert [w.reason for w in woken] == ["essentials_complete"] and len(sent) == 1
+    assert _wake(db, profile) == ([], [])
+
+
+def test_without_a_live_closer_nothing_is_sent_and_the_queue_shows_the_position(db, tmp_path, monkeypatch):
+    _ready_box(db, tmp_path, monkeypatch)
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
+            "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, 'closer-essential:notice_period', ?, ?, 'telegram')",
+            (aa.SOURCE_ACTION, json.dumps({"version": 1, "position_id": 7, "key": "notice period",
+                                           "label": "Notice?", "field_type": "text", "options": []})),
+        )
+        qid = conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
+    profile_yaml = "\n".join(
+        ["name: Test Candidate", "availability: in one month", "work_authorization: EU", "sponsorship: false",
+         "salary_expectations: 50000 EUR", "relocation: true", "contacts:", "  phone: '+1 555 0100'"]
+    )
+    (tmp_path / "profile" / "candidate_profile.yml").write_text(profile_yaml, encoding="utf-8")
+
+    # Waiting for the answer: held, so neither the CLOSER nor the Capitano loops on it.
+    waiting = apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)
+    assert not waiting["ready"]
+    assert {h["reason"] for h in waiting["held"]} == {"essential_answers_pending"}
+
+    _answer(db, qid, "two months")
+    ready = apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)
+    assert ready["ready"] and {p["position_id"] for p in ready["positions"]} == {7, 8}
+
+    woken, sent = _wake(db, {**FULL_PROFILE}, sessions=())
+    assert (woken, sent) == ([], [])
+    assert row(db, "SELECT wake_key, delivered FROM closer_wakes") == [(f"essentials:{qid}", 0)]
+
+
+def test_a_position_that_is_not_ready_is_not_announced(db):
+    qid, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    _answer(db, qid, "one month")
+    assert _wake(db, ready=(8,)) == ([], [])
+
+
+def test_a_telegram_answer_wakes_the_closer_through_the_bridge(db, bridge, tmp_path, monkeypatch):
+    _ready_box(db, tmp_path, monkeypatch)
+    sent = []
+    monkeypatch.setattr(aa, "_closer_sessions", lambda: ["CLOSER-1"])
+    monkeypatch.setattr(aa, "_tmux_send", lambda session, text: sent.append((session, text)) or True)
+    mod = bridge()
+    monkeypatch.setattr(mod, "application_answers", aa)
+    qid, body, _ = ask(db, 7, "which work model can you accept", "Which work model can you accept?")
+    (tmp_path / "profile" / "candidate_profile.yml").write_text(
+        "name: Test Candidate\navailability: now\nnotice_period: none\nwork_authorization: EU\n"
+        "sponsorship: false\nsalary_expectations: 50000 EUR\nrelocation: true\ncontacts:\n  phone: '+1 555 0100'\n",
+        encoding="utf-8",
+    )
+    telegram(mod, db, 20, "Hybrid", reply_to=body)
+    assert [s[0] for s in sent] == ["CLOSER-1"]
+    # The main loop checks again on every poll: no second wake.
+    mod.wake_closer_after_answers(db)
+    telegram(mod, db, 21, "Hybrid", reply_to=body)
+    assert len(sent) == 1
+
+
+def _essential_question(db, key):
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
+            "source_payload, delivered_via) VALUES ('closer', 'q', 'question', 7, ?, ?, ?, 'telegram')",
+            (f"closer-essential:{key}", aa.SOURCE_ACTION,
+             json.dumps({"version": 1, "position_id": 7, "key": key.replace("_", " "),
+                         "label": key, "field_type": "text", "options": []})),
+        )
+        return conn.execute("SELECT MAX(id) FROM pending_user_messages").fetchone()[0]
+
+
+def test_one_essential_answered_out_of_two_does_not_wake(db):
+    notice = _essential_question(db, "notice_period")
+    _essential_question(db, "relocation")
+    _answer(db, notice, "two months")
+    profile = {k: v for k, v in FULL_PROFILE.items() if k not in ("notice_period", "relocation")}
+    assert _wake(db, profile) == ([], [])
+
+
+def test_a_later_question_answered_later_wakes_again(db):
+    first, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    _answer(db, first, "one month")
+    assert len(_wake(db)[1]) == 1
+    second, _, _ = ask(db, 7, "start date", "Start date?", field_type="text", options=())
+    assert _wake(db) == ([], [])
+    _answer(db, second, "in May")
+    assert len(_wake(db)[1]) == 1
+
+
+def test_a_woken_key_is_no_longer_pending(db):
+    qid, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    _answer(db, qid, "one month")
+    assert len(_wake(db)[1]) == 1
+    with sqlite3.connect(db) as conn:
+        assert aa.pending_wakes(conn, FULL_PROFILE) == []
+
+
+def test_two_bridges_checking_together_send_one_wake(db):
+    qid, _, _ = ask(db, 7, "notice period", "Notice period?", field_type="text", options=())
+    _answer(db, qid, "one month")
+    sent = []
+
+    def other_bridge_claims_first(conn):
+        # The other bridge read the same pending wake and claimed it meanwhile.
+        with sqlite3.connect(db) as other:
+            for wake in aa.pending_wakes(other, FULL_PROFILE):
+                other.execute("INSERT INTO closer_wakes (wake_key, position_id) VALUES (?, ?)",
+                              (wake.key, wake.position_id))
+        return {"ready": True, "positions": [{"position_id": 7}]}
+
+    with sqlite3.connect(db) as conn:
+        woken = aa.wake_closer(conn, FULL_PROFILE, sessions=lambda: ["CLOSER-1"],
+                               sender=lambda s, t: sent.append(s) or True, queue=other_bridge_claims_first)
+    assert (woken, sent) == ([], [])

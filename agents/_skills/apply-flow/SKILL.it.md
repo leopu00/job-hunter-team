@@ -55,6 +55,7 @@ Una riga JSON su stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: compilata, fermata prima del bottone, niente inviato | posizione successiva |
 | `denied` | 1 | il cancello ha rifiutato (consenso spento, flag revocato, già inviata) | posizione successiva; mai ritentare |
 | `blocked_human` | 3 | serve una persona; l'utente è già stato avvisato | posizione successiva; mai ritentare |
+| `blocked_human` in attesa di risposte (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | non è uno stop definitivo: all'utente è stato chiesto una volta, la coda tiene la posizione (`essential_answers_pending` / `checkpoint_blocked_human`) finché le risposte sono in `jobs.db` | posizione successiva; al `[BRIDGE INFO]` che dice che l'utente ha risposto, rileggi la coda: la posizione è di nuovo in `positions` |
 | `email_channel` | 4 | il controllo di candidatura è un link `mailto:`, non un form; il checkpoint contiene `channel: email` e il `mailto_href` grezzo | esegui `email_application.py send` per questa posizione come dice la skill `email-application-flow`: legge questo checkpoint; non compilare mai un form web e non scrivere l'email a mano |
 | `error` | 2 | profilo o CV illeggibile, argomenti sbagliati | fermati: `[BLOCKED]` al Capitano |
 
