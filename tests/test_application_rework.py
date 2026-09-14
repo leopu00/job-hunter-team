@@ -309,3 +309,19 @@ def test_the_automatic_request_never_raises(box, monkeypatch):
     out = application_rework.request_cv_rework(1833, jht_home=home, db_path=str(home / "no-dir" / "jobs.db"))
 
     assert out == {"status": "not_needed", "reason": "cv_rework_unavailable"}
+
+
+def test_the_automatic_request_never_replaces_a_pending_cover_letter(box, monkeypatch):
+    conn, home = box
+    _layout(monkeypatch, BAD)
+    conn.execute("UPDATE positions SET write_requested = 1, write_request_kind = 'cover_letter' WHERE id = 1833")
+    conn.commit()
+    import application_rework
+
+    automatic = application_rework.request_cv_rework(1833, jht_home=home, db_path=str(home / "jobs.db"))
+    kept = conn.execute("SELECT write_requested, write_request_kind FROM positions WHERE id = 1833").fetchone()
+    manual = application_rework.request_cv_rework(1833, jht_home=home, db_path=str(home / "jobs.db"), manual=True)
+
+    assert automatic == {"status": "not_needed", "reason": "write_request_pending"}
+    assert tuple(kept) == (1, "cover_letter")
+    assert manual == {"status": "requested", "reason": "cv_pdf_layout_bad"}

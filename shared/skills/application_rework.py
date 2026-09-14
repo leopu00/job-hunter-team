@@ -154,6 +154,12 @@ def request_cv_rework(
             if flag and flag[0] == 1 and flag[1] == "cv":
                 conn.execute("ROLLBACK")
                 return {"status": "already_requested", "reason": verdict["reason"]}
+            if flag and flag[0] == 1 and not manual:
+                # The flag has one kind: an automatic request never replaces
+                # the cover letter the user is waiting for.  It asks again on
+                # a later queue read, once the Scrittore has cleared the flag.
+                conn.execute("ROLLBACK")
+                return {"status": "not_needed", "reason": "write_request_pending"}
             conn.execute(
                 "UPDATE positions "
                 "   SET write_requested = 1, "
