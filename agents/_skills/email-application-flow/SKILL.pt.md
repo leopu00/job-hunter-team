@@ -55,7 +55,7 @@ Uma linha JSON: `state`, `reason`, `detail`, mais os dados.
 | `sent` | 0 | aceite pelo servidor, recibo guardado, candidatura registada | posição seguinte |
 | `draft_ready` | 0 | dry run: rascunho e anexos válidos, nada saiu | posição seguinte |
 | `denied` | 1 | o gate recusou (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | posição seguinte; nunca repetir |
-| `blocked_human` | 1 | é precisa uma pessoa; o utilizador foi avisado | posição seguinte; nunca repetir |
+| `blocked_human` | 1 | é precisa uma pessoa; a paragem está no resumo da volta | posição seguinte; nunca repetir |
 | `send_outcome_unknown` | 3 | o email pode ter saído | posição seguinte; nunca repetir |
 | `receipt_incomplete` | 3 | aceite, mas o recibo ou o registo está incompleto; com alguns destinatários recusados a carta provavelmente chegou | posição seguinte; nunca repetir |
 | `error` | 2 | base de dados, perfil ou checkpoint ilegíveis | paragem: `[BLOCKED]` ao Capitano |
@@ -79,7 +79,7 @@ Uma linha JSON: `state`, `reason`, `detail`, mais os dados.
 
 O que fazes, sempre igual:
 
-1. **Nada nessa posição.** O comando já avisou o utilizador uma vez.
+1. **Nada nessa posição.** O comando pôs a paragem no resumo da volta (`closer_notices.py flush` no STEP 6).
 2. **Não a repitas.** A queue retém-na (`email_blocked_human`,
    `email_send_outcome_unknown`, ...) até o utilizador agir.
 3. **Passa à posição seguinte** da queue.

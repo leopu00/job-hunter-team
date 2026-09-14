@@ -198,6 +198,12 @@ def profile(**extra) -> dict:
     return value
 
 
+def pending_stops(home: Path) -> list[dict]:
+    """The stops waiting for the round's summary (closer_notices), in this test's JHT_HOME."""
+    path = home / ".cache" / "apply-flow" / "notices.json"
+    return json.loads(path.read_text())["pending"] if path.exists() else []
+
+
 def build_flow(
     tmp_path: Path,
     cv_path: Path,
@@ -380,6 +386,7 @@ def test_blank_browser_page_is_never_confirmation(page):
 def test_recovery_navigation_exception_becomes_notified_human_block(
     page, tmp_path: Path, cv_path: Path, monkeypatch
 ):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     checkpoint = FlowCheckpoint.new(41, ASHBY_URL)
     checkpoint.state = "submit"
     checkpoint.submit_started = True
@@ -397,8 +404,9 @@ def test_recovery_navigation_exception_becomes_notified_human_block(
 
     assert result.status == "blocked_human"
     assert result.reason == "submit_outcome_unknown"
-    assert len(notifications) == 1
-    assert notifications[0]["position_id"] == 41
+    # Never a message of its own: the stop waits for the round's summary.
+    assert notifications == []
+    assert [(stop["position_id"], stop["reason"]) for stop in pending_stops(tmp_path)] == [(41, "submit_outcome_unknown")]
 
 
 def test_gate_is_checked_again_immediately_before_submit(
@@ -1025,7 +1033,8 @@ def _read_checkpoint(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "checkpoint.json").read_text(encoding="utf-8"))
 
 
-def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, cv_path: Path):
+def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     page.set_content(
         "<html><body><h1>Senior Engineer</h1><p>This job is no longer available.</p>"
         "<form><input id='_systemfield_name'></form></body></html>"
@@ -1043,10 +1052,11 @@ def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, c
     assert checkpoint["completed_steps"] == []
     assert checkpoint["submit_started"] is False
     assert checkpoint["blocked_reason"] == "vacancy_closed"
-    assert len(notifications) == 1
-    # Employer text stays out of the checkpoint and the notification.
+    assert notifications == []
+    assert [stop["reason"] for stop in pending_stops(tmp_path)] == ["vacancy_closed"]
+    # Employer text stays out of the checkpoint and the summary queue.
     assert "no longer available" not in json.dumps(checkpoint)
-    assert "no longer available" not in json.dumps(notifications)
+    assert "no longer available" not in json.dumps(pending_stops(tmp_path))
 
 
 def _serve(page, body: str) -> None:
@@ -1173,6 +1183,7 @@ def test_an_apply_control_that_opens_nothing_is_not_called_closed(page, tmp_path
 
 
 def test_a_closed_vacancy_is_not_retried_blindly(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     page.set_content("<html><body><p>Applications are closed.</p></body></html>")
     notifications: list[dict] = []
     assert build_flow(tmp_path, cv_path, notifications=notifications).run(
@@ -1186,7 +1197,7 @@ def test_a_closed_vacancy_is_not_retried_blindly(page, tmp_path: Path, cv_path: 
 
     assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
     assert opened == []
-    assert len(notifications) == 1
+    assert notifications == [] and len(pending_stops(tmp_path)) == 1
 
 
 @pytest.mark.parametrize(("minutes", "reopened"), [(-5, False), (5, True)])
@@ -1276,7 +1287,8 @@ def test_a_new_stop_replaces_the_previous_screenshot(page, tmp_path: Path, cv_pa
     assert sorted(p.name for p in tmp_path.glob("checkpoint.stop-*")) == [second.name]
 
 
-def test_a_failed_screenshot_never_breaks_the_stop(page, tmp_path: Path, cv_path: Path):
+def test_a_failed_screenshot_never_breaks_the_stop(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     class NoScreenshot:
         def __init__(self, inner):
             self._inner = inner
@@ -1296,7 +1308,7 @@ def test_a_failed_screenshot_never_breaks_the_stop(page, tmp_path: Path, cv_path
 
     assert (result.status, result.reason) == ("blocked_human", "captcha")
     assert _read_checkpoint(tmp_path)["stop_screenshot"] == ""
-    assert len(notifications) == 1
+    assert notifications == [] and [stop["reason"] for stop in pending_stops(tmp_path)] == ["captcha"]
     assert [p.name for p in tmp_path.iterdir() if ".stop-" in p.name] == []
 
 
@@ -1708,7 +1720,8 @@ def _write_png(_cv: Path, target: Path) -> None:
     target.write_bytes(b"\x89PNG\r\n\x1a\nsynthetic page one")
 
 
-def test_a_cv_with_a_bad_layout_stops_before_the_page_and_notifies(page, tmp_path: Path, cv_path: Path):
+def test_a_cv_with_a_bad_layout_stops_before_the_page_and_notifies(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     page.set_content(ashby_form())
     notifications: list[dict] = []
     checked: list[Path] = []
@@ -1728,7 +1741,7 @@ def test_a_cv_with_a_bad_layout_stops_before_the_page_and_notifies(page, tmp_pat
     assert checkpoint["blocked_detail"].endswith(": narrow_text")
     assert Path(checkpoint["cv_preview"]).name == "checkpoint.cv-page1.png"
     assert Path(checkpoint["cv_preview"]).read_bytes().startswith(b"\x89PNG")
-    assert len(notifications) == 1 and "answer_request" not in notifications[0]
+    assert notifications == [] and [stop["reason"] for stop in pending_stops(tmp_path)] == ["cv_pdf_layout_bad"]
     assert result.pending_question is None
 
 
@@ -1848,3 +1861,33 @@ def test_the_real_layout_check_on_an_unreadable_pdf_is_unavailable(
     result = flow.run(page=page, navigate=False)
 
     assert (result.status, result.reason) == ("blocked_human", "cv_pdf_check_unavailable")
+
+
+def test_three_stops_in_one_round_reach_the_user_as_one_message(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    """Live 14/09: eight positions stopped, eight Telegram alerts. One round, one summary."""
+    import closer_notices
+
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    notifications: list[dict] = []
+    stops = (
+        (41, "<html><body><p>This job is no longer available.</p></body></html>", "vacancy_closed"),
+        (42, ashby_form(captcha=True), "captcha"),
+        (43, "<html><body><h1>Careers</h1><p>Nothing to apply to here.</p></body></html>", "ashby_form_missing"),
+    )
+    for position_id, html, reason in stops:
+        home = tmp_path / str(position_id)
+        home.mkdir()
+        page.set_content(html)
+        flow = build_flow(home, cv_path, notifications=notifications)
+        flow.position_id = position_id
+        assert flow.run(page=page, navigate=False).reason == reason
+
+    assert notifications == []
+    sent: list[dict] = []
+    result = closer_notices.flush(notifier=lambda **kwargs: sent.append(kwargs) or "1")
+
+    assert (result["status"], result["count"]) == ("sent", 3)
+    assert len(sent) == 1
+    for position_id, _html, _reason in stops:
+        assert f"#{position_id}" in sent[0]["message"] or str(position_id) in sent[0]["message"]
+    assert closer_notices.flush(notifier=lambda **kwargs: sent.append(kwargs))["status"] == "empty"
