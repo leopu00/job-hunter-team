@@ -89,10 +89,8 @@ __all__ = [
 # ATS nuova senza spedire davvero: non è il percorso dell'utente.
 AUTO_APPLY_MODES = ("authorised", "dry_run")
 
-# Tetto giornaliero di default. Lo applica `application_queue` (la coda si
-# chiude quando il CLOSER ha già spedito `max_per_day` candidature oggi), e il
-# valore deve avere un default sano perché un config a metà non autorizzi un
-# numero indefinito di invii.
+# Tetto giornaliero. Se configurato lo applicano la coda e la prenotazione
+# (`daily_cap_reached` quando il CLOSER ha già spedito `max_per_day` oggi).
 # Nessun tetto per default (ordine dell'operatore, 2026-09-14: «non ci deve
 # essere un massimo»). Un intero positivo in config resta un tetto, se l'utente
 # lo vuole; assente o null = nessun tetto.
