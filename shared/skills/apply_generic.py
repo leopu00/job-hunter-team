@@ -67,6 +67,11 @@ except ImportError:  # pragma: no cover - package import
     )
 
 try:
+    import cookie_consent
+except ImportError:  # pragma: no cover - package import
+    from shared.skills import cookie_consent  # type: ignore[no-redef]
+
+try:
     import location_choice
 except ImportError:  # pragma: no cover - package import
     from shared.skills import location_choice  # type: ignore[no-redef]
@@ -83,6 +88,8 @@ PLATFORM = "generic"
 _APPLY_WORDS = (
     r"apply|application|applying|submit (?:your |my )?(?:application|cv|resume)|send (?:your |my )?(?:application|cv)"
     r"|bewerb\w*|candidat\w*|candidatur\w*|postul\w*|solicitud|inscri\w* (?:à|a) l'offre"
+    # Spanish and Portuguese "APLICAR" (1843, 14/09); the pattern is case-insensitive.
+    r"|aplicar|aplica|aplique|aplicar ahora|aplicar agora"
     r"|jelentkez\w*|pályáz\w*"
 )
 try:
@@ -124,6 +131,14 @@ _APPLICATION_TOPIC = re.compile(
     re.I,
 )
 CONTACT_APPLICATION_PURPOSE = "contact_form_application"
+# Controls that name an application without starting one (1944, 14/09: "Manage
+# your application" next to "Apply").
+_NOT_AN_APPLY_CONTROL = re.compile(
+    r"\b(?:manage|track|view|check)\s+(?:your\s+|my\s+)?applications?\b|application status|my applications?\b"
+    r"|withdraw|sign\s*in|log\s*in|mis aplicaciones|mis candidaturas|le mie candidature|meine bewerbungen"
+    r"|mes candidatures|minhas candidaturas|jelentkezéseim",
+    re.I,
+)
 _SEARCH_WORDS = re.compile(r"\bsearch\b|suche|cerca|recherche|buscar|pesquisar|keres", re.I)
 _ACCOUNT_WORDS = re.compile(
     r"create (?:an |your )?account|sign up|register|registrier\w*|konto erstellen|crea(?:re)? (?:un )?account"
@@ -700,8 +715,56 @@ class GenericRecipe:
                     continue
                 if href.casefold().startswith("mailto:"):
                     continue  # the flow's email channel owns these
+                try:
+                    name = control.evaluate("el => (el.getAttribute('aria-label') || '') + ' ' + (el.innerText || '')")
+                except Exception:
+                    name = ""
+                if _NOT_AN_APPLY_CONTROL.search(str(name)):
+                    continue  # "Manage your application", "Sign in": not the Apply entry point (1944)
                 found.append(control)
         return found
+
+    def _position_target(self, page, targets: Mapping[str, Any]) -> str | None:
+        """Of several Apply links, the one that leads to THIS vacancy (1944, 14/09).
+
+        A link scores for each identifier of the vacancy it carries (a number
+        of four or more digits in the vacancy address, or the page's "Job ID"
+        / "Req" / "Número de empleo"), and when its label names the vacancy
+        title.  One link with the best score > 0 wins; otherwise no guess.
+        """
+        try:
+            facts = page.evaluate(
+                "() => ({title: (document.querySelector('h1') || {}).innerText || '',"
+                " text: (document.body && document.body.innerText || '').slice(0, 20000)})"
+            )
+        except Exception:
+            return None
+        identifiers = set(re.findall(r"(?<!\d)\d{4,}(?!\d)", urllib.parse.urlsplit(self.application_url).path))
+        identifiers |= set(
+            re.findall(
+                r"(?:job\s*id|req(?:uisition)?\s*(?:id|number|no\.?)?|job\s*(?:number|no\.?)|número de empleo|id offerta|stellen-?id)"
+                r"\s*[:#]?\s*([A-Za-z]?\d{3,})",
+                str(facts.get("text") or ""),
+                re.I,
+            )
+        )
+        title = _normalise_label(str(facts.get("title") or ""))
+        scores: dict[str, int] = {}
+        for target, control in targets.items():
+            if target.startswith("button:"):
+                continue
+            path = urllib.parse.urlsplit(target).path
+            score = sum(1 for token in identifiers if re.search(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])", path))
+            try:
+                name = control.evaluate("el => (el.getAttribute('aria-label') || '') + ' ' + (el.innerText || '')")
+            except Exception:
+                name = ""
+            if title and title in _normalise_label(str(name)):
+                score += 1
+            scores[target] = score
+        best = max(scores.values(), default=0)
+        winners = [target for target, score in scores.items() if score == best]
+        return winners[0] if best > 0 and len(winners) == 1 else None
 
     def apply_control_present(self, page) -> bool:
         return bool(self._apply_controls(page))
@@ -770,6 +833,8 @@ class GenericRecipe:
 
     def open_form(self, page) -> None:
         self.application_url = self.application_url or page.url
+        # A cookie banner over the page (1843, 1944): refused, never accepted.
+        cookie_consent.dismiss(page)
         if self.form_present(page):
             self._form(page, "detect")
             return
@@ -781,12 +846,16 @@ class GenericRecipe:
             targets.setdefault(resolved.split("#")[0] if resolved else f"button:{len(targets)}", control)
         if not targets:
             self._stop_without_form(page, inspect_page(page), "detect")
-        if len(targets) > 1 and len({k for k in targets if not k.startswith("button:")}) != 1:
-            raise BlockedHuman(
-                "application_form_ambiguous",
-                f"{len(targets)} different Apply controls lead to different places",
-                "detect",
-            )
+        links = [k for k in targets if not k.startswith("button:")]
+        if len(targets) > 1 and len(links) != 1:
+            chosen = self._position_target(page, targets) if len(links) > 1 else None
+            if chosen is None:
+                raise BlockedHuman(
+                    "application_form_ambiguous",
+                    f"{len(targets)} different Apply controls lead to different places",
+                    "detect",
+                )
+            targets = {chosen: targets[chosen]}
         target, control = next(iter(targets.items()))
         self.via_apply = True
         if not target.startswith("button:"):
@@ -799,6 +868,7 @@ class GenericRecipe:
             page.goto(checked, wait_until="domcontentloaded", timeout=30_000)
         else:
             control.click(timeout=10_000)
+        cookie_consent.dismiss(page)  # the form's page can bring its own banner
         deadline = self.FORM_WAIT_MS
         while True:
             if not same_site(page.url, self.application_url) and page.url != "about:blank":
