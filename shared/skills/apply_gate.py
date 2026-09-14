@@ -644,6 +644,7 @@ CHECKPOINT_SUBDIR = (".cache", "apply-flow")
 
 # Stati del checkpoint che tengono la posizione fuori dalla coda.
 HELD_CHECKPOINT_STATES = ("blocked_human", "dry_run")
+RETRY_LATER_STATE = "retry_later"
 
 # ── The email channel (`email_application.py`) ───────────────────────────────
 #
@@ -704,6 +705,14 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     if not isinstance(data, dict):
         return "checkpoint_unreadable"
     state = data.get("state")
+    if state == RETRY_LATER_STATE:
+        # A page that answered 5xx or timed out (page_failure): the flow tries
+        # again after retry_after by itself, whatever the authorisation. An
+        # unreadable instant never holds a position for ever.
+        from datetime import datetime, timezone
+
+        after = _parse_instant(data.get("retry_after"))
+        return "checkpoint_retry_later" if after and datetime.now(timezone.utc) < after else ""
     if state not in HELD_CHECKPOINT_STATES:
         return ""
     if data.get("blocked_reason") in CV_LAYOUT_REASONS:
