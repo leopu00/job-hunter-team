@@ -1726,18 +1726,24 @@ class GreenhouseRecipe:
                 )
             control = matches.first
             label = self._control_label(scope, control)
-            present, value = self._core_value(control_id, label, paths)
             required = self._control_required(control)
+            if control.get_attribute("role") == "combobox" or control.evaluate("e => e.tagName") == "SELECT":
+                # A core choice (country, location...): the page's options are
+                # the only valid answers. 1967 (14/09) stopped on "Country*"
+                # and the CLOSER asked the user, though the profile says where
+                # they live. Only an exact saved option fills it; otherwise it
+                # is a question with the exact options, and the CLOSER picks
+                # the one the profile supports (CL-08).
+                self._fill_core_choice(page, control, control_id, label, required)
+                continue
+            present, value = self._core_value(control_id, label, paths)
             if not present:
                 if required:
                     raise _core_fact_missing(
                         "Greenhouse", label, "fill", (control.get_attribute("type") or "text").casefold()
                     )
                 continue
-            if control.get_attribute("role") == "combobox":
-                self._fill_answer(page, control.locator("xpath=ancestor::*[contains(@class, 'field-wrapper') or self::fieldset][1]"), label, value)
-            else:
-                self._fill_scalar(control, label, value, "fill")
+            self._fill_scalar(control, label, value, "fill")
 
         entries = self._entries(page)
         for index in range(entries.count()):
@@ -1751,6 +1757,36 @@ class GreenhouseRecipe:
                 self._fill_answer(page, entry, label, value)
             elif self._required(entry):
                 raise _core_fact_missing("Greenhouse", label, "fill")
+
+    def _fill_core_choice(self, page, control, control_id: str, label: str, required: bool) -> None:
+        entry = control.locator(
+            "xpath=ancestor::*[contains(@class, 'field-wrapper') or self::fieldset][1]"
+        )
+        if not entry.count():
+            raise BlockedHuman(
+                "unknown_required_control",
+                f"Greenhouse core choice has no recognised container: {_safe_label(label)}",
+                "fill",
+            )
+        present, value = self._answer_for(label, control_id)
+        if not present:
+            if not required:
+                return
+            request = self._answer_request(page, entry.first, label)
+            if request is None:
+                raise _core_fact_missing("Greenhouse", label, "fill")
+            raise BlockedHuman(
+                "required_answer_missing",
+                f"Required Greenhouse choice needs one of the page's options: {_safe_label(label)}",
+                "fill",
+                answer_request=request,
+            )
+        try:
+            self._fill_answer(page, entry.first, label, value)
+        except BlockedHuman as refused:
+            raise _inferred_answer_refused(
+                self, refused, lambda: self._answer_request(page, entry.first, label)
+            ) from None
 
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
