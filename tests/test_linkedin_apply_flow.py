@@ -124,8 +124,17 @@ SIGNED_IN_OFFSITE_CONTROLS = (
 
 
 def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, question: bool = True,
-             reject_upload: bool = False, guest_offsite: bool = False, question_html: str | None = None) -> str:
+             reject_upload: bool = False, guest_offsite: bool = False, question_html: str | None = None,
+             modern_nav: bool = False, closed: bool = False) -> str:
     nav = '<nav id="global-nav">Home</nav>' if signed_in else '<a href="/login">Sign in</a>'
+    if signed_in and modern_nav:
+        # LinkedIn's 2026 top bar, as the box saw it on 14/09: no #global-nav.
+        nav = ('<header><a href="https://www.linkedin.com/feed/">Home</a>'
+               '<a href="https://www.linkedin.com/mynetwork/grow/">La mia rete</a>'
+               '<a href="https://www.linkedin.com/messaging/thread/new/">Messaggistica</a></header>')
+    if closed:
+        return (f"<html><body>{nav}<h1>Test Role</h1><p>Promossa da recruiter</p>"
+                "<p>Not currently accepting applications</p></body></html>")
     if guest_offsite:
         controls = SIGNED_IN_OFFSITE_CONTROLS if signed_in else GUEST_OFFSITE_CONTROLS
         return f"<html><body>{nav}<h1>Test Role</h1>{controls}</body></html>"
@@ -191,6 +200,8 @@ class Site:
     guest_offsite: bool = False
     wrong_code: bool = False
     question_html: str | None = None
+    modern_nav: bool = False
+    closed: bool = False
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -202,7 +213,8 @@ class Site:
             if url.startswith(JOB):
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
                                 reject_upload=self.reject_upload, guest_offsite=self.guest_offsite,
-                                question_html=self.question_html)
+                                question_html=self.question_html, modern_nav=self.modern_nav,
+                                closed=self.closed)
             elif url.startswith("https://www.linkedin.com/login"):
                 body = (
                     "<html><body><h1>Let's do a quick security check</h1></body></html>"

@@ -124,6 +124,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # bookworm dipende da `nodejs` e `libnode` di Debian, un secondo Node
       # accanto a quello dell'immagine; il client VNC vive nell'app desktop.
       xvfb x11vnc python3-websockify \
+      # LinkedIn sign-in BY HAND (linkedin_apply.py login --interactive): the
+      # user signs in once, with Google, in a browser a person uses. Not
+      # Playwright's Chrome for Testing: its "only for automated testing" build
+      # left Google's sign-in popup (accounts.google.com/gsi/select) blank in
+      # three live attempts (14/09). Debian's chromium draws it, and openbox
+      # gives the popup a window to live in. Checked by the manual_login_browser
+      # gate below.
+      chromium openbox \
       # CV PDF (skill cv-structure): pandoc -> HTML -> wkhtmltopdf. Were never
       # baked: they came from an agent's `sudo apt-get` inside a running
       # container, so every recreate lost them in silence and the Writer found
@@ -228,6 +236,16 @@ RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     fi; \
     kill "$xvfb_pid"; rm -f /tmp/.X98-lock /tmp/.X11-unix/X98; \
     [ "$rc" -eq 0 ] || { echo "BUILD GATE FAILED: headed chromium cannot open on Xvfb — see .launcher/live-screen.sh" >&2; exit 1; }
+
+# Same gate for the manual LinkedIn sign-in: the system Chromium (never Chrome
+# for Testing) must start and render a page, and a window manager must exist.
+# Skipped only on an emulated build, like the headed gate above.
+RUN if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
+      echo "MANUAL_LOGIN_BROWSER_SKIPPED: emulated $TARGETARCH build on $BUILDARCH"; \
+    else \
+      python3 shared/skills/tool_health.py --only manual_login_browser \
+      || { echo "BUILD GATE FAILED: no system Chromium or window manager for the manual LinkedIn sign-in — see shared/skills/linkedin_apply.py" >&2; exit 1; }; \
+    fi
 
 RUN for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \
