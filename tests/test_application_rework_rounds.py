@@ -104,9 +104,39 @@ def test_a_request_switched_off_is_not_switched_on_again_for_the_same_pdf(box):
     conn.commit()
 
     again = auto(home, notices)
+    later = auto(home, notices)
 
-    assert again == {"status": "not_needed", "reason": "cv_rework_already_tried"}
+    # Not switched on again, and not held in silence: the user hears it once.
+    assert again == later == {"status": "not_needed", "reason": "cv_rework_exhausted"}
     assert flag(conn) == (0, None)
+    assert len(notices) == 1
+
+
+def test_a_scrittore_that_gives_up_on_the_same_pdf_ends_in_one_notice_and_the_exhausted_hold(box, monkeypatch):
+    conn, home, notices = box
+    monkeypatch.setattr(rework, "_notify_exhausted", lambda pid, sha: notices.append(pid))
+    assert _queue(conn, home)["cv_rework"][0]["status"] == "requested"
+    conn.execute("UPDATE positions SET write_requested = 0, write_request_kind = NULL WHERE id = ?", (PID,))
+    conn.commit()  # cleared, with no new PDF
+
+    first, second = _queue(conn, home), _queue(conn, home)
+
+    assert first["held"] == second["held"] == [{"position_id": PID, "reason": "cv_rework_exhausted"}]
+    assert notices == [PID]
+
+
+def test_a_request_the_user_made_after_the_notice_is_worth_a_new_one(box):
+    conn, home, notices = box
+    for name in ("b", "c"):
+        auto(home, notices)
+        scrittore_done(conn, home, name)
+    assert auto(home, notices)["reason"] == "cv_rework_exhausted" and len(notices) == 1
+
+    assert auto(home, notices, manual=True)["status"] == "requested"
+    scrittore_done(conn, home, "d")  # the user's CV fails too
+    assert auto(home, notices)["reason"] == "cv_rework_exhausted"
+    assert auto(home, notices)["reason"] == "cv_rework_exhausted"
+    assert len(notices) == 2
 
 
 def test_a_cover_letter_request_is_kept(box):
@@ -412,6 +442,30 @@ def test_a_sent_application_keeps_its_cv(box, started):
     assert _cv_pdf(conn) == before
 
 
+def test_without_application_rework_a_cv_is_still_recorded_and_a_sent_one_still_refused(box):
+    conn, home, _notices = box
+    code = (
+        "import sys\n"
+        "sys.modules['application_rework'] = None\n"
+        "import db_update\n"
+        "sys.argv = ['db_update.py', 'application', sys.argv[1], '--cv-pdf-path', sys.argv[2]]\n"
+        "db_update.main()\n"
+    )
+    env = {**os.environ, "JHT_HOME": str(home), "JHT_DB": str(home / "jobs.db"), "PYTHONPATH": str(SKILLS)}
+    run = lambda path: subprocess.run([sys.executable, "-c", code, str(PID), path],  # noqa: E731
+                                      capture_output=True, text=True, env=env, timeout=60)
+
+    done = run("/synthetic/normal.pdf")
+    assert done.returncode == 0, done.stderr
+    assert _cv_pdf(conn) == "/synthetic/normal.pdf"
+
+    conn.execute("UPDATE applications SET applied = 1, applied_via = 'agent_closer' WHERE position_id = ?", (PID,))
+    conn.commit()
+    refused = run("/synthetic/after-send.pdf")
+    assert refused.returncode == 1 and "CV UPDATE REJECTED" in refused.stderr
+    assert _cv_pdf(conn) == "/synthetic/normal.pdf"
+
+
 def test_a_send_that_lands_between_the_check_and_the_write_still_wins(box, monkeypatch):
     conn, home, _notices = box
     conn.execute("UPDATE applications SET applied = 1, applied_via = 'agent_closer' WHERE position_id = ?", (PID,))
@@ -429,3 +483,20 @@ def test_a_send_that_lands_between_the_check_and_the_write_still_wins(box, monke
 
     assert done.returncode == 1 and "CV UPDATE REJECTED" in done.stderr
     assert _cv_pdf(conn) == before
+
+
+def test_a_verdict_never_outlives_the_check_that_gave_it(box, monkeypatch):
+    # Seen merging to master: each test's stub is a new lambda, and CPython
+    # reuses the id of a freed one, so a key on id() handed a later test the
+    # verdict of an earlier stub for the same placeholder bytes.
+    import gc
+
+    _conn, home, _notices = box
+    pdf = home / "cv" / "1833-a.pdf"
+    monkeypatch.setattr(pdf_layout_check, "analyze", pdf_layout_check.analyze)  # restored after the test
+    for _ in range(200):
+        for report, verdict in ((BAD, "cv_pdf_layout_bad"), (GOOD, "")):
+            pdf_layout_check.analyze = lambda _p, _r=report, **_: _r
+            assert apply_gate.cv_layout_hold(pdf) == verdict
+            pdf_layout_check.analyze = None
+            gc.collect()

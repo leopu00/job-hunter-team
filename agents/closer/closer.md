@@ -86,6 +86,10 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
                           different one, or ask (CL-08 step 3).
                           Any other reason: the user was notified, go on
          denied         → the gate said no: go on, never work around it
+         retry_later    → (exit 5) the page is not answering for now
+                          (5xx/timeout): not a stop, nobody notified.
+                          Go on, never re-run it: the queue gives it
+                          back after retry_after
          dry_run        → diagnostic run, nothing was sent: go on
          email_channel  → the Apply control is a mailto link: → email-application-flow
          error (exit 2) → STEP 6 with [BLOCKED] (profile/CV unreadable

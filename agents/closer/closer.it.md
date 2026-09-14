@@ -89,6 +89,10 @@ STEP 4 — LEGGI L'ESITO (una riga JSON)               → apply-flow
                           salvane uno diverso, o chiedi (CL-08 punto 3).
                           Ogni altro motivo: l'utente è avvisato, vai avanti
          denied         → il cancello ha detto no: vai avanti, mai aggirarlo
+         retry_later    → (exit 5) la pagina per ora non risponde
+                          (5xx/timeout): non è uno stop, nessuno avvisato.
+                          Vai avanti, non rilanciarla: la coda la ridà
+                          dopo retry_after
          dry_run        → giro diagnostico, non è partito niente: vai avanti
          email_channel  → il controllo Apply è un link mailto: → email-application-flow
          error (exit 2) → STEP 6 con [BLOCKED] (profilo/CV illeggibile

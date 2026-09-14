@@ -89,6 +89,10 @@ STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
                           enregistres-en une autre, ou demande (CL-08, 3).
                           Toute autre raison : l'utilisateur est prévenu, continue
          denied         → la porte a dit non : continue, ne la contourne jamais
+         retry_later    → (exit 5) la page ne répond pas pour l'instant
+                          (5xx/timeout) : pas un stop, personne n'est averti.
+                          Continue, ne la relance pas : la file la rend
+                          après retry_after
          dry_run        → passe de diagnostic, rien n'est parti : continue
          email_channel  → le contrôle Apply est un lien mailto : → email-application-flow
          error (exit 2) → STEP 6 avec [BLOCKED] (profil/CV illisible

@@ -821,9 +821,15 @@ def update_application(args):
     # that lands in between; the browser checkpoint is a file, read here.
     guards_sent_cv = bool((args.cv_pdf_path or args.cv_path) and not marks_applied)
     if guards_sent_cv:
-        from application_rework import sent_blocker
+        try:
+            from application_rework import sent_blocker
 
-        blocker = sent_blocker(conn, args.position_id)
+            blocker = sent_blocker(conn, args.position_id)
+        except ImportError as err:
+            # The Scrittore's normal CVs must still be recorded: the UPDATE
+            # predicate below keeps refusing a sent application or email send.
+            print(f"⚠️  sent-CV check unavailable ({type(err).__name__}): SQL guard only", file=sys.stderr)
+            blocker = ""
         if blocker:
             print(
                 f"⚠️  CV UPDATE REJECTED ({blocker}): this application was sent "

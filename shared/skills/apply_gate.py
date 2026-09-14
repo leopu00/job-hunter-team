@@ -759,7 +759,9 @@ def cv_layout_hold(cv: Path) -> str:
             from shared.skills.pdf_layout_check import CheckError, analyze
         except ImportError:
             return "cv_pdf_check_unavailable"
-    key = (digest, id(analyze))
+    # The check itself, not its id(): the key keeps it alive, so a freed
+    # stub's id reused by a new function can never hand over its verdict.
+    key = (digest, analyze)
     if key in _LAYOUT_VERDICTS:
         return _LAYOUT_VERDICTS[key]
     try:
@@ -778,7 +780,7 @@ def cv_layout_hold(cv: Path) -> str:
     return verdict
 
 
-_LAYOUT_VERDICTS: dict[tuple[str, int], str] = {}
+_LAYOUT_VERDICTS: dict[tuple[str, Any], str] = {}
 
 
 CV_LAYOUT_REASONS = ("cv_pdf_layout_bad", "cv_pdf_check_unavailable")

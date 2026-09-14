@@ -168,8 +168,12 @@ def _ensure_ledger(conn: sqlite3.Connection) -> None:
         " claimed_by TEXT,"
         " claimed_request_at TEXT,"
         " claimed_at TEXT,"
-        " exhausted_notified_at TEXT)"
+        " exhausted_notified_at TEXT,"
+        " notified_request_at TEXT)"
     )
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({LEDGER_TABLE})")}
+    if "notified_request_at" not in columns:
+        conn.execute(f"ALTER TABLE {LEDGER_TABLE} ADD COLUMN notified_request_at TEXT")
 
 
 def _ledger(conn: sqlite3.Connection, position_id: int) -> dict[str, Any]:
@@ -320,14 +324,17 @@ def _decide(
     ).fetchone()[0]
     sha = _file_sha(apply_gate._resolve_file(cv_value, jht_home))
     ledger = _ledger(conn, position_id)
-    if int(ledger.get("rounds") or 0) >= MAX_AUTO_ROUNDS:
-        if ledger.get("exhausted_notified_at"):
+    # Over the rounds, or this very PDF was already sent back once and came
+    # back unchanged (the Scrittore gave up, or the request was switched off):
+    # no new request, and the user hears it once. A request the user made
+    # since that notice makes the next failure worth a notice again.
+    if int(ledger.get("rounds") or 0) >= MAX_AUTO_ROUNDS or ledger.get("last_cv_sha") == sha:
+        requested = conn.execute(
+            "SELECT write_requested_at FROM positions WHERE id = ?", (int(position_id),)
+        ).fetchone()
+        if ledger.get("exhausted_notified_at") and ledger.get("notified_request_at") == (requested[0] if requested else None):
             return {"status": "not_needed", "reason": "cv_rework_exhausted"}, sha, reason
         return _EXHAUST, sha, reason
-    if ledger.get("last_cv_sha") == sha:
-        # This very PDF was already sent back once: the Scrittore (or the
-        # user) turned the request off, and it stays off.
-        return {"status": "not_needed", "reason": "cv_rework_already_tried"}, sha, reason
     return None, sha, reason
 
 
@@ -348,7 +355,7 @@ def request_cv_rework(
     Returns {"status": requested · already_requested · not_needed,
     "reason": ...}; never raises — the queue calling it must keep answering.
     The automatic request (`manual=False`) asks once per CV file and at most
-    `MAX_AUTO_ROUNDS` times (`cv_rework_already_tried`, `cv_rework_exhausted`).
+    `MAX_AUTO_ROUNDS` times; past either, `cv_rework_exhausted` with one notice.
     """
     notify_sha = ""
     try:
@@ -370,9 +377,12 @@ def request_cv_rework(
         try:
             early, sha, reason = _decide(conn, position_id, manual=manual, jht_home=jht_home)
             if early is _EXHAUST:
+                _ensure_ledger(conn)
                 conn.execute(
-                    f"UPDATE {LEDGER_TABLE} SET exhausted_notified_at = ? WHERE position_id = ?",
-                    (datetime.now(timezone.utc).isoformat(), int(position_id)),
+                    f"UPDATE {LEDGER_TABLE} SET exhausted_notified_at = ?, "
+                    "notified_request_at = (SELECT write_requested_at FROM positions WHERE id = ?) "
+                    "WHERE position_id = ?",
+                    (datetime.now(timezone.utc).isoformat(), int(position_id), int(position_id)),
                 )
                 conn.execute("COMMIT")
                 notify_sha = sha
