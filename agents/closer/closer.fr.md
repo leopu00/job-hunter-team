@@ -100,6 +100,9 @@ STEP 5 — PAUSE                                       → throttle
          le plafond quotidien et les positions retenues sont toujours à jour.
 
 STEP 6 — SORTIE
+         D'abord le récapitulatif de la tournée des sites qu'il ne sait pas gérer :
+         python3 /app/shared/skills/closer_notices.py flush
+         un seul message pour toutes, jamais un par poste.
          Une ligne au Capitano, puis ferme le tour :
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          Pas de boucle en idle : le Capitano te respawne quand la queue

@@ -2,7 +2,7 @@
 ---
 name: apply-flow
 description: Wie der CLOSER eine autorisierte Bewerbung mit `apply_flow.py` ausführt — die Zustandsmaschine mit Checkpoints (detect, fill, upload_cv, screening, review, submit), der Pflichtbeleg, ohne den `applied` nie geschrieben wird, und was bei jedem Ergebnis zu tun ist, allen voran `blocked_human`. Nutze sie für jede aus der Queue genommene Position. Gehört dem CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — eine Bewerbung, ein Beleg, kein blinder Neuversuch
@@ -84,6 +84,9 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 | `receipt_screenshot_failed` | die Bestätigung war sichtbar, aber ihr Screenshot konnte nicht gespeichert werden |
 | `submit_outcome_unknown` | ein früherer Lauf hat das Absenden begonnen und keinen Beleg hinterlassen |
 | `applied_record_failed` | der Beleg existiert, aber der Zustand konnte nicht aufgezeichnet werden — die Bewerbung ist höchstwahrscheinlich raus |
+| `login_required` / `account_creation` | die Seite verlangt vor der Bewerbung eine Anmeldung oder ein neues Konto: der CLOSER meldet sich nie an und legt nie Konten an |
+| `generic_form_missing` / `generic_form_unrecognised` / `application_form_embedded` / `application_redirect_untrusted` | eine Unternehmensseite: kein Bewerbungsformular, ein Formular, das das generische Rezept nicht eindeutig findet, ein von einem anderen Host eingebettetes Formular (das detail nennt ihn) oder ein Bewerben-Button, der zu einer Seite ohne Rezept führt |
+| `cover_letter_required` / `pre_submit_screenshot_failed` | das Formular verlangt eine Anschreiben-Datei · das ausgefüllte Formular konnte vor dem Klick nicht fotografiert werden |
 
 Was du bei jedem anderen Grund tust (die fehlenden Antworten stehen oben):
 
@@ -96,6 +99,27 @@ Was du bei jedem anderen Grund tust (die fehlenden Antworten stehen oben):
 Eine blockierte Position neu zu versuchen ist genau der blinde Versuch, den dieses
 Design verhindern soll: bei einem Captcha verbrennt er das Konto des Users, bei
 einem unbekannten Ergebnis schickt er einen zweiten Brief an denselben Recruiter.
+
+## Karriereseiten von Unternehmen — das generische Rezept
+
+Wenn kein ATS erkannt wird und die Seite kein `mailto:`-Kanal ist, nutzt der
+Ablauf `apply_generic.py` auf der Seite des Unternehmens: Es findet das EINE
+Bewerbungsformular (ein Lebenslauf-Upload, oder Name und E-Mail mit einem
+Bewerben-Button — auch hinter einem Bewerben-Button oder auf einer verlinkten
+Seite derselben Website), füllt die Felder anhand ihrer Beschriftungen (Profil
+für Name, E-Mail, Telefon, Links; gespeicherte Antworten für die Fragen) und
+berührt nie ein Newsletter-, Kontakt-, Such- oder Anmeldeformular. Das
+ausgefüllte Formular wird vor dem Klick fotografiert; ohne erkennbare Bestätigung
+(Text oder URL) ist das Ergebnis `submit_outcome_unknown`, nie ein zweiter Klick.
+Ein Bewerben-Button, der zu einem bekannten ATS führt, übergibt die Stelle an
+dieses Rezept.
+
+**Eine Zusammenfassung pro Runde.** Stopps, die an der Website liegen
+(`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
+`application_form_embedded`), werden nicht einzeln gemeldet: Sie warten auf die
+Zusammenfassung, die du in STEP 6 mit
+`python3 /app/shared/skills/closer_notices.py flush` sendest. Jede Meldung
+erreicht die Person in der Sprache ihres Profils.
 
 ## Eine Bewerbung danach prüfen
 

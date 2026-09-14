@@ -97,6 +97,9 @@ STEP 5 — PAUSE                                       → throttle
          daily cap and the held positions are always current.
 
 STEP 6 — EXIT
+         First the round's summary of the sites it could not handle:
+         python3 /app/shared/skills/closer_notices.py flush
+         one message for all of them, never one per position.
          One line to the Capitano, then end the turn:
          [@closer-1 -> @capitano] [REPORT] CLOSER queue <reason>, exiting
          No idle loop: the Capitano spawns you again when the queue
