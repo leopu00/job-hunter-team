@@ -130,6 +130,8 @@ def test_company_site_subdomains_are_the_same_site():
         url = "https://jobs.example.com/apply"
 
     apply_flow.ApplicationFlow._assert_recipe_page(Page(), "generic", "fill", application_url="https://example.com/careers/7")
+    # Sibling subdomains of one company are one site, as for the recipe.
+    apply_flow.ApplicationFlow._assert_recipe_page(Page(), "generic", "fill", application_url="https://careers.example.com/7")
     with pytest.raises(apply_flow.BlockedHuman):
         apply_flow.ApplicationFlow._assert_recipe_page(Page(), "generic", "fill", application_url="https://example.org/careers/7")
     Page.url = "http://jobs.example.com/apply"
