@@ -101,9 +101,34 @@ QUESTION = (
 )
 
 
+# The public page of an offsite vacancy, signed out, as LinkedIn serves it:
+# the Apply button opens a sign-in dialog, and the only links carrying the
+# "apply-link-offsite" tracking name are that dialog's Join and Dismiss.  The
+# company address appears only signed in, behind a button opening a new tab.
+GUEST_OFFSITE_CONTROLS = (
+    '<button class="sign-up-modal__outlet top-card-layout__cta--primary" '
+    'data-tracking-control-name="public_jobs_contextual-sign-in-modal_ssr-ui-lib-outlet-button" '
+    'data-modal="job-details-topcard-apply-modal">Apply</button>'
+    '<div class="contextual-sign-in-modal">'
+    '<button data-tracking-control-name="public_jobs_apply-link-offsite_contextual-sign-in-modal_modal_dismiss" '
+    'aria-label="Dismiss"></button>'
+    '<a class="contextual-sign-in-modal__join-link" '
+    'data-tracking-control-name="public_jobs_apply-link-offsite_contextual-sign-in-modal_join-link" '
+    'href="https://www.linkedin.com/signup/cold-join?source=jobs_registration&amp;session_redirect='
+    'https%3A%2F%2Fes.linkedin.com%2Fjobs%2Fview%2F4000000001">Join now</a></div>'
+)
+SIGNED_IN_OFFSITE_CONTROLS = (
+    '<button class="jobs-apply-button" aria-label="Apply to Test Role on company website" '
+    f"onclick=\"window.open('{LEVER_APPLY}', '_blank')\">Apply</button>"
+)
+
+
 def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, question: bool = True,
-             reject_upload: bool = False) -> str:
+             reject_upload: bool = False, guest_offsite: bool = False) -> str:
     nav = '<nav id="global-nav">Home</nav>' if signed_in else '<a href="/login">Sign in</a>'
+    if guest_offsite:
+        controls = SIGNED_IN_OFFSITE_CONTROLS if signed_in else GUEST_OFFSITE_CONTROLS
+        return f"<html><body>{nav}<h1>Test Role</h1>{controls}</body></html>"
     if offsite:
         target = quote(LEVER_APPLY, safe="")
         control = (
@@ -162,6 +187,8 @@ class Site:
     two_factor: bool = False
     challenge: bool = False
     reject_upload: bool = False
+    guest_offsite: bool = False
+    wrong_code: bool = False
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -172,7 +199,7 @@ class Site:
             signed_in = "li_at=synthetic" in (request.all_headers().get("cookie") or "")
             if url.startswith(JOB):
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
-                                reject_upload=self.reject_upload)
+                                reject_upload=self.reject_upload, guest_offsite=self.guest_offsite)
             elif url.startswith("https://www.linkedin.com/login"):
                 body = (
                     "<html><body><h1>Let's do a quick security check</h1></body></html>"
@@ -180,7 +207,7 @@ class Site:
                     else LOGIN_PAGE.replace("__TWO_FACTOR__", "true" if self.two_factor else "false")
                 )
             elif url.startswith("https://www.linkedin.com/checkpoint/challenge/"):
-                body = CODE_PAGE
+                body = CODE_PAGE.replace(CODE, "never-this-code") if self.wrong_code else CODE_PAGE
             elif url.startswith("https://www.linkedin.com/feed/"):
                 body = '<html><body><nav id="global-nav">Home</nav></body></html>'
             elif url == LEVER_APPLY:
@@ -190,7 +217,9 @@ class Site:
                 return
             route.fulfill(status=200, content_type="text/html", body=body)
 
-        page.route("**/*", handler)
+        # The context, not the page: a tab the company-site button opens is
+        # answered here too and never reaches the network.
+        page.context.route("**/*", handler)
 
     def logins(self) -> int:
         return sum(url.startswith("https://www.linkedin.com/login") for url in self.requests)
@@ -653,3 +682,87 @@ def test_two_different_company_addresses_are_ambiguous(page, cv_path: Path):
         recipe._offsite(page)
 
     assert stop.value.reason == "linkedin_apply_ambiguous"
+
+
+# ── the public page as LinkedIn serves it (shapes read on real vacancies) ────
+
+
+def test_signed_out_offsite_signs_in_and_hands_over_to_the_company_site(page, home: Path, cv_path: Path):
+    write_credentials(home)
+    recorded: list = []
+    site = Site(guest_offsite=True)
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    saved = checkpoint(home)
+    assert (saved["url"], saved["handoff_url"], saved["platform"]) == (JOB, LEVER_APPLY, "lever")
+    assert site.logins() == 1
+    assert not any("/signup" in url for url in site.requests)
+    assert len(recorded) == 1
+
+
+def test_the_sign_in_dialog_links_are_never_a_company_address(page, cv_path: Path):
+    page.set_content(f"<html><body>{GUEST_OFFSITE_CONTROLS}</body></html>")
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._offsite(page) is None
+    assert recipe.apply_control_present(page)
+
+
+def test_signed_out_easy_apply_counts_as_an_apply_control(page, cv_path: Path):
+    page.set_content(
+        '<html><body><button class="apply-button" data-tracking-control-name="public_jobs_apply-link-onsite">'
+        "Apply</button></body></html>"
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._offsite(page) is None
+    assert recipe.apply_control_present(page)
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    (
+        ("https://es.linkedin.com/jobs/view/1", True),
+        ("https://www.linkedin.com/signup/cold-join", True),
+        ("https://linkedin.com/jobs/view/1", True),
+        ("https://jobs.lever.co/x/1/apply", False),
+        ("https://linkedin.com.example.invalid/jobs/view/1", False),
+        ("https://notlinkedin.com/jobs/view/1", False),
+    ),
+)
+def test_linkedin_host_includes_the_country_pages_and_nothing_else(url: str, expected: bool):
+    assert linkedin_apply.linkedin_host(url) is expected
+
+
+def test_a_country_page_redirect_is_unwrapped_too():
+    wrapped = "https://es.linkedin.com/jobs/view/externalApply/1?url=" + quote("https://jobs.lever.co/x/1/apply", safe="")
+    assert linkedin_apply.offsite_target(wrapped, JOB) == "https://jobs.lever.co/x/1/apply"
+
+
+def test_an_unreadable_pause_file_counts_from_its_write_time_not_forever(home: Path):
+    session = linkedin_apply.LinkedInSession(jht_home=home, db_path=home / "jobs.db", position_id=71)
+    marker = home / ".cache" / "linkedin" / "last-apply.json"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("{not json")
+
+    with pytest.raises(apply_flow.FlowDeferred) as fresh:
+        session.assert_interval()
+    assert fresh.value.reason == "linkedin_throttled"
+
+    long_ago = time.time() - 3600
+    os.utime(marker, (long_ago, long_ago))
+    session.assert_interval()  # an hour old: the 20-minute pause is over
+
+
+def test_a_rejected_code_is_not_a_failed_sign_in(page, home: Path, cv_path: Path):
+    write_credentials(home)
+
+    result = run(
+        build_flow(home, cv_path, code_notifier=telegram_bridge(home)), page, Site(two_factor=True, wrong_code=True)
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "linkedin_login_code_missing")
+    assert not (home / ".cache" / "linkedin" / "login-failures.json").exists()
+    assert [row[0] for row in login_rows(home)] == ["[used]"]

@@ -69,7 +69,17 @@ LOGIN_CODE_SOURCE_ACTION = "closer_login_code"
 MAX_MODAL_STEPS = 12
 
 _SIGNED_IN = "#global-nav, nav.global-nav"
+# On the public page, signed out, this tracking name is also carried by the
+# "Join now" and "Dismiss" controls of the sign-in dialog the Apply button
+# opens: the company address is not on that page at all.  Only a link whose
+# address, unwrapped, leaves LinkedIn is a company application link.
 _OFFSITE_LINK = "a[data-tracking-control-name*='apply-link-offsite']"
+# The signed-out Apply controls: Easy Apply ("onsite") and the button that
+# opens the sign-in dialog of an offsite vacancy.  Neither says "Easy Apply".
+_GUEST_APPLY = (
+    "[data-tracking-control-name='public_jobs_apply-link-onsite'], "
+    "[data-modal='job-details-topcard-apply-modal']"
+)
 _OFFSITE_LABEL = re.compile(r"(apply|candidat\w*|bewerb\w*|postul\w*|solicit\w*).{0,40}(company|website|sito|site|web)", re.I)
 _EASY_APPLY_LABEL = re.compile(r"easy apply|candidatura semplificata|einfach bewerben|candidature simplifiée|solicitud sencilla|candidatura simplificada", re.I)
 _CHALLENGE_TEXT = ("security verification", "quick security check", "let's do a quick security check", "verify you are human")
@@ -151,11 +161,20 @@ def save_session(context, jht_home: Path) -> None:
     _write_private_json(_home_path(jht_home, SESSION_DIR) / "storage-state.json", {"cookies": state.get("cookies", [])})
 
 
+def linkedin_host(url: str) -> bool:
+    """linkedin.com or one of its subdomains (www, the country pages such as es.linkedin.com)."""
+    try:
+        host = (urllib.parse.urlsplit(str(url or "").strip()).hostname or "").casefold().rstrip(".")
+    except ValueError:
+        return False
+    return host in LINKEDIN_HOSTS or host.endswith(".linkedin.com")
+
+
 def offsite_target(href: str, base: str) -> str:
     """The company address behind an "apply on company website" link (LinkedIn's redirect unwrapped)."""
     absolute = urllib.parse.urljoin(base, str(href or "").strip())
     parsed = urllib.parse.urlsplit(absolute)
-    if (parsed.hostname or "").casefold() in LINKEDIN_HOSTS:
+    if linkedin_host(absolute):
         wrapped = urllib.parse.parse_qs(parsed.query).get("url", [])
         if len(wrapped) == 1:
             return wrapped[0].strip()
@@ -214,8 +233,15 @@ class LinkedInSession:
             return
         try:
             last = datetime.fromisoformat(json.loads(path.read_text(encoding="utf-8"))["at"])
+            if last.tzinfo is None:
+                raise ValueError("naive instant")
         except (OSError, ValueError, KeyError, TypeError):
-            last = _utc_now()  # unreadable: count it as just now, never as long ago
+            # Unreadable: the file's own write time, never "long ago".  Not
+            # "now" either: re-read at every run, that denied LinkedIn forever.
+            try:
+                last = datetime.fromtimestamp(path.lstat().st_mtime, timezone.utc)
+            except OSError:
+                last = _utc_now()
         due = last + timedelta(minutes=minutes)
         if _utc_now() < due:
             raise FlowDeferred(
@@ -303,7 +329,16 @@ class LinkedInSession:
                 page.locator("#password").fill("")
             raise BlockedHuman("linkedin_challenge", "LinkedIn asks for a security check during sign-in", "detect")
         if page.locator(_CODE_INPUT).count():
-            self._failed(page, "the verification code was not accepted")
+            # A mistyped or stale code says nothing about the credentials: it
+            # never counts towards linkedin_login_failed, and the next run
+            # asks for a new code.
+            with contextlib.suppress(Exception):
+                page.locator("#password").fill("")
+            raise BlockedHuman(
+                "linkedin_login_code_missing",
+                "LinkedIn did not accept the verification code; a new run asks for a new one",
+                "detect",
+            )
         if not self.signed_in(page):
             self._failed(page, "LinkedIn did not accept the sign-in")
         self._reset_failures()
@@ -525,16 +560,24 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
     def form_present(self, page) -> bool:
         return page.locator(self.MODAL).count() > 0
 
+    @staticmethod
+    def _company_addresses(page, links) -> set[str]:
+        """The addresses of these links that, LinkedIn's redirect unwrapped, leave LinkedIn."""
+        targets = set()
+        for index in range(links.count()):
+            href = links.nth(index).get_attribute("href") or ""
+            if href.strip():
+                targets.add(offsite_target(href, page.url))
+        return {target for target in targets if not linkedin_host(target)}
+
     def _offsite(self, page) -> str | None:
-        links = page.locator(_OFFSITE_LINK)
-        if not links.count():
-            links = page.get_by_role("link", name=_OFFSITE_LABEL)
-        hrefs = {links.nth(i).get_attribute("href") or "" for i in range(links.count())}
-        hrefs.discard("")
-        if len(hrefs) > 1:
+        targets = self._company_addresses(page, page.locator(_OFFSITE_LINK))
+        if not targets:
+            targets = self._company_addresses(page, page.get_by_role("link", name=_OFFSITE_LABEL))
+        if len(targets) > 1:
             raise BlockedHuman("linkedin_apply_ambiguous", "The vacancy names more than one company application address", "detect")
-        if hrefs:
-            return offsite_target(hrefs.pop(), page.url)
+        if targets:
+            return targets.pop()
         buttons = page.get_by_role("button", name=_OFFSITE_LABEL)
         visible = [buttons.nth(i) for i in range(buttons.count()) if buttons.nth(i).is_visible()]
         if len(visible) == 1:
@@ -558,8 +601,11 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         return found
 
     def apply_control_present(self, page) -> bool:
-        return bool(self._easy_apply(page)) or page.locator(_OFFSITE_LINK).count() > 0 or bool(
-            page.get_by_role("button", name=_OFFSITE_LABEL).count()
+        return (
+            bool(self._easy_apply(page))
+            or page.locator(_OFFSITE_LINK).count() > 0
+            or page.locator(_GUEST_APPLY).count() > 0
+            or bool(page.get_by_role("button", name=_OFFSITE_LABEL).count())
         )
 
     def open_form(self, page) -> None:

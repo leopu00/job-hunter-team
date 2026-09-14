@@ -79,7 +79,7 @@ The flow stops on anything it cannot do with certainty:
 | `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | the LinkedIn vacancy or its Easy Apply dialog is not the one the recipe knows |
 | `linkedin_credentials_missing` | `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) is missing, not a regular 0600 file of this user, or empty: the user creates it with the credentials script. Never ask for the password in a chat |
 | `linkedin_login_failed` | LinkedIn refused the sign-in twice: nothing is tried again until the user writes new credentials |
-| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | the LinkedIn verification code was asked on Telegram and did not arrive in time (or the request did not reach Telegram): a new run asks for a new code |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | the LinkedIn verification code was asked on Telegram and did not arrive in time (or the request did not reach Telegram, or LinkedIn did not accept the code — this never counts as a failed sign-in): a new run asks for a new code |
 | `linkedin_challenge` | LinkedIn shows a captcha or security check: the user solves it on the live screen, then authorises the position again |
 | `linkedin_redirect_untrusted` / `application_redirect_untrusted` | the LinkedIn page left `www.linkedin.com`, or the company address it gives is not an HTTPS page outside LinkedIn (or a second handoff) |
 | `linkedin_follow_not_cleared` | the "follow the company" box could not be cleared before Submit: nothing is sent |
