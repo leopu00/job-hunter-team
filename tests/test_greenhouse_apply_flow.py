@@ -929,3 +929,68 @@ def test_greenhouse_core_choice_whose_options_cannot_be_read_is_never_a_text_que
     assert (result.status, result.reason) == ("blocked_human", "unknown_required_control")
     assert result.pending_question is None
     assert page.evaluate("window.submitCount") == 0
+
+
+def late_uploader(init_ms: int | None, *, reject: str = "") -> str:
+    """Greenhouse's current uploader: a hidden input whose widget starts after load.
+
+    Before the widget exists a chosen file raises the real script error under
+    Resume/CV; once it exists the field shows the filename (or `reject`).
+    """
+    ready = f"setTimeout(() => {{ window.uploader = {{ uploadFile: () => true }}; }}, {init_ms});" if init_ms is not None else ""
+    outcome = (
+        f"field.querySelector('.uploader-error').textContent = {reject!r};"
+        if reject
+        else "field.innerHTML = '<label>Resume/CV*</label><div class=\"file-upload__filename\"><p>' + event.target.files[0].name + '</p>'"
+        " + '<button type=\"button\" aria-label=\"Remove file\">Remove</button></div>';"
+    )
+    script = f"""
+        {ready}
+        document.querySelector('#resume').addEventListener('change', event => {{
+          const field = event.target.closest('.field-wrapper');
+          if (!field.querySelector('.uploader-error')) {{
+            const note = document.createElement('p');
+            note.className = 'uploader-error field-error';
+            note.setAttribute('role', 'alert');
+            field.appendChild(note);
+          }}
+          if (!window.uploader) {{
+            field.querySelector('.uploader-error').textContent = "Cannot read properties of undefined (reading 'uploadFile')";
+            return;
+          }}
+          {outcome}
+        }});
+        window.submitCount = 0;"""
+    return greenhouse_form().replace("window.submitCount = 0;", script, 1)
+
+
+def test_greenhouse_uploader_that_starts_late_gets_one_more_try(page, tmp_path: Path, cv_path: Path):
+    # 1967 (patch 23): the file went in before the widget started.
+    page.set_content(late_uploader(1200))
+    recorded: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, recorded=recorded).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    assert len(recorded) == 1
+
+
+def test_greenhouse_uploader_that_never_starts_is_not_a_rejected_file(page, tmp_path: Path, cv_path: Path):
+    page.set_content(late_uploader(None))
+    notifications: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, notifications=notifications).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "upload_widget_unavailable")
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_greenhouse_file_the_page_refuses_is_upload_rejected_at_once(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    page.set_content(late_uploader(0, reject="File type not supported"))
+    monkeypatch.setattr(GreenhouseRecipe, "UPLOAD_SETTLE_MS", 60_000)  # a retry would time the test out
+    started = __import__("time").monotonic()
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "upload_rejected")
+    assert __import__("time").monotonic() - started < 30

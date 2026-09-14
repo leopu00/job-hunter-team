@@ -2175,66 +2175,87 @@ class GreenhouseRecipe:
                 self, refused, lambda: self._answer_request(page, entry.first, label)
             ) from None
 
+    # A script error of the uploader itself, not a verdict on the file. 1967
+    # (patch 23): "Cannot read properties of undefined (reading 'uploadFile')"
+    # under Resume/CV, the widget not yet initialised when the file was set.
+    _UPLOADER_SCRIPT_ERROR = re.compile(
+        r"cannot read propert|reading '|is not a function|is not defined|undefined|typeerror|referenceerror",
+        re.I,
+    )
+    _RESUME_INPUT = "#resume, input[name='resume'], input[name='job_application[resume]']"
+    UPLOAD_SETTLE_MS = 2_000
+
+    def _settle_uploader(self, page) -> None:
+        with contextlib.suppress(Exception):
+            page.wait_for_load_state("networkidle", timeout=10_000)
+        page.wait_for_timeout(self.UPLOAD_SETTLE_MS)
+
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
             raise BlockedHuman("cv_missing", "The selected CV file is missing or empty", "upload_cv")
         form = page.locator(self.FORM)
-        resume = form.locator("#resume, input[name='resume'], input[name='job_application[resume]']")
-        if resume.count() != 1 or (resume.first.get_attribute("type") or "").casefold() != "file":
-            raise BlockedHuman(
-                "resume_field_missing",
-                "Greenhouse resume upload field was not found unambiguously",
-                "upload_cv",
-            )
-        resume.first.set_input_files(str(self.cv_path))
-        page.wait_for_timeout(100)
+        # The uploader's scripts load after the form: set the file once the page is quiet.
+        with contextlib.suppress(Exception):
+            page.wait_for_load_state("networkidle", timeout=10_000)
+        for attempt in (1, 2):
+            resume = form.locator(self._RESUME_INPUT)
+            if resume.count() != 1 or (resume.first.get_attribute("type") or "").casefold() != "file":
+                raise BlockedHuman(
+                    "resume_field_missing",
+                    "Greenhouse resume upload field was not found unambiguously",
+                    "upload_cv",
+                )
+            if attempt == 2:
+                # The same file set again fires no change event: clear it first.
+                resume.first.set_input_files([])
+            # On the real input, never through the Attach button's file dialog.
+            resume.first.set_input_files(str(self.cv_path))
+            page.wait_for_timeout(300)
+            error = self._upload_outcome(page, form)
+            if not error:
+                return
+            if not self._UPLOADER_SCRIPT_ERROR.search(error):
+                raise BlockedHuman("upload_rejected", "Greenhouse reported a CV upload error", "upload_cv")
+            if attempt == 1:
+                # The widget was not ready: one more time, after the page settles.
+                LOG.warning("[apply-flow] Greenhouse uploader not ready; one retry after settle")
+                self._settle_uploader(page)
+        raise BlockedHuman(
+            "upload_widget_unavailable",
+            "Greenhouse's upload widget failed to start (a script error, not a rejected file)",
+            "upload_cv",
+        )
+
+    def _upload_outcome(self, page, form) -> str:
+        """"" when the CV is attached; otherwise the error text the field shows ("?" if none)."""
+        retained = form.locator(self._RESUME_INPUT)
         # Current Greenhouse replaces the file input with an exact filename
         # and a Remove file button after accepting the upload.  Older forms
         # retain the input.  Verify either observable effect; the vanished
         # input by itself is not proof of acceptance.
-        retained = form.locator(
-            "#resume, input[name='resume'], input[name='job_application[resume]']"
-        )
-        upload_scope = None
         if retained.count() == 1:
-            if retained.first.evaluate("element => element.files.length") != 1:
-                raise BlockedHuman(
-                    "upload_rejected",
-                    "Greenhouse did not retain the selected CV",
-                    "upload_cv",
-                )
-            upload_scope = retained.first.locator(
+            scope = retained.first.locator(
                 "xpath=ancestor::*[contains(@class, 'field-wrapper') or contains(@class, 'field')][1]"
             )
-        else:
-            filename = form.get_by_text(self.cv_path.name, exact=True)
-            try:
-                filename.first.wait_for(state="visible", timeout=5_000)
-            except Exception as exc:
-                raise BlockedHuman(
-                    "upload_rejected",
-                    "Greenhouse did not show the selected CV filename",
-                    "upload_cv",
-                ) from exc
-            if filename.count() != 1:
-                raise BlockedHuman(
-                    "upload_rejected",
-                    "Greenhouse did not show the selected CV filename",
-                    "upload_cv",
-                )
-            upload_scope = filename.first.locator(
-                "xpath=ancestor::*[contains(@class, 'field-wrapper') or contains(@class, 'field')][1]"
-            )
-            if not upload_scope.count() or "resume" not in _normalise_label(
-                upload_scope.first.inner_text()
-            ):
-                raise BlockedHuman(
-                    "upload_rejected",
-                    "Greenhouse showed the filename outside the resume field",
-                    "upload_cv",
-                )
-        if upload_scope.count() and self._visible_error_text(upload_scope.first):
-            raise BlockedHuman("upload_rejected", "Greenhouse reported a CV upload error", "upload_cv")
+            error = self._visible_error_text(scope.first) if scope.count() else ""
+            if error:
+                return error
+            if retained.first.evaluate("element => element.files.length") == 1:
+                return ""
+            return "Greenhouse did not retain the selected CV"
+        filename = form.get_by_text(self.cv_path.name, exact=True)
+        try:
+            filename.first.wait_for(state="visible", timeout=5_000)
+        except Exception:
+            return "Greenhouse did not show the selected CV filename"
+        if filename.count() != 1:
+            return "Greenhouse did not show the selected CV filename"
+        scope = filename.first.locator(
+            "xpath=ancestor::*[contains(@class, 'field-wrapper') or contains(@class, 'field')][1]"
+        )
+        if not scope.count() or "resume" not in _normalise_label(scope.first.inner_text()):
+            return "Greenhouse showed the filename outside the resume field"
+        return self._visible_error_text(scope.first)
 
     @staticmethod
     def _answer_request(page, entry, label: str) -> dict[str, Any] | None:
