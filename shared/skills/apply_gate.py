@@ -710,6 +710,9 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
 def _essentials_hold(conn: sqlite3.Connection, jht_home: Path | None) -> str:
     """`essential_answers_pending` while an essential fact was asked and is still unknown.
 
+    Global but never permanent: a question left unanswered for a day stops
+    holding (`application_answers.ESSENTIAL_QUESTION_TTL`).
+
     Without it a position waiting for the user's answers would stay
     `queue_ready`: the CLOSER would run the flow again at every iteration and
     the Capitano would keep spawning it for nothing. Not asked yet is not a
@@ -725,7 +728,10 @@ def _essentials_hold(conn: sqlite3.Connection, jht_home: Path | None) -> str:
         path = (jht_home or _jht_home()) / "profile" / "candidate_profile.yml"
         try:
             profile = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except FileNotFoundError:
+            profile = None
+        except Exception as err:  # noqa: BLE001 — a broken profile never breaks the queue
+            print(f"[apply-gate] profile unreadable for the essentials hold: {type(err).__name__}", file=sys.stderr)
             profile = None
         report = application_answers.check_essentials(conn, profile if isinstance(profile, dict) else {})
     except (sqlite3.Error, ValueError):

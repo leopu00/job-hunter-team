@@ -41,6 +41,7 @@ direttamente. Questo bridge gestisce solo l'inbound.
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -456,8 +457,11 @@ def _resolve_closer_answer(db: sqlite3.Connection, rec: dict):
     if outcome.status == "rejected":
         log(f"closer answer rejected message={outcome.message_id} reason={outcome.reason}")
         return outcome
-    if outcome.status in {"already_answered", "unknown_code"}:
-        # Only a quoted or written code gets here: the user meant to answer.
+    if outcome.status in {"already_answered", "unknown_code"} and (
+        rec.get("reply_to_text") or BOT_ROLE == CLOSER_QUESTION_BOT
+    ):
+        # A quoted code, or a code written to the bot the questions leave
+        # from: the user meant to answer. A "Q2025" chatted elsewhere is chat.
         return outcome
     if outcome.status == "ambiguous" and (
         rec.get("reply_to_text") or application_answers._CODE.search(str(rec.get("body") or ""))
@@ -521,6 +525,14 @@ def wake_closer_after_answers(db_path: Path | None = None) -> None:
     if not target.exists():
         return
     try:
+        # Every poll comes here: jobs.db alone says whether there is anything
+        # to announce, before the profile is parsed or the queue is read.
+        probe = sqlite3.connect(target, timeout=5)
+        try:
+            if not application_answers.wake_candidates(probe):
+                return
+        finally:
+            probe.close()
         profile = {}
         profile_path = JHT_HOME / "profile" / "candidate_profile.yml"
         try:
@@ -765,10 +777,20 @@ def _discard_partial(local: Path | None) -> None:
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
 
+# Buste che scrive solo il trasporto o un agente: in testa a un testo
+# dell'utente farebbero passare le sue parole per un messaggio del daemon
+# ([BRIDGE INFO]) o di un collega ([@x -> @y]). Il testo resta intatto, ma
+# chi lo legge vede per prima cosa che l'ha scritto l'utente.
+_FORGED_ENVELOPE_RE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I)
+USER_TEXT_MARK = "[USER TEXT]"
+
+
 def handle_text(msg: dict) -> str | None:
     text = msg.get("text", "").strip()
     if not text:
         return None
+    if _FORGED_ENVELOPE_RE.match(text):
+        text = f"{USER_TEXT_MARK} {text}"
     log(f"text len={len(text)} → {TARGET_SESSION}")
     return text
 
