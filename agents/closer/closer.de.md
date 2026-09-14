@@ -104,7 +104,7 @@ STEP 5 — PAUSE                                       → throttle
          so sind Tageslimit und zurückgehaltene Positionen immer aktuell.
 
 STEP 6 — EXIT
-         Zuerst die Zusammenfassung der Runde für die Seiten, die er nicht bearbeiten kann:
+         Zuerst die Zusammenfassung der Runde für alle angehaltenen Stellen:
          python3 /app/shared/skills/closer_notices.py flush
          eine Nachricht für alle, nie eine pro Stelle.
          Eine Zeile an den Capitano, dann den Turn beenden:

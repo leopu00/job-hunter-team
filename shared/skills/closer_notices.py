@@ -89,6 +89,15 @@ KNOWN_REASONS = (
     "page_not_found",
     "bot_protection",
     "page_temporarily_unavailable",
+    # Every stop goes to the summary now (HQ-BACKEND-3, 14/09): the live round
+    # had 8 separate notices, 6 of them linkedin_credentials_missing. A sent or
+    # probably sent email must never read as "nothing was sent".
+    "receipt_incomplete",
+    "send_outcome_unknown",
+    "linkedin_credentials_missing",
+    "linkedin_login_failed",
+    "linkedin_challenge",
+    "unknown_required_control",
 )
 FLUSH_AFTER = timedelta(hours=6)
 KEEP_SENT = 500
@@ -308,6 +317,7 @@ def summary_message(pending: list[Mapping[str, Any]]) -> str:
             "closer.digest.line",
             position=_position_label(pid, _position(pid)),
             why=reason_why(str(entry["reason"])),
+            action=reason_action(str(entry["reason"])),
             host=flatten_to_one_line(entry.get("host", "")),
         ))
     if len(pending) > MAX_LINES:

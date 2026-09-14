@@ -232,6 +232,34 @@ def test_summary_is_capped(home):
     assert "3" in message.splitlines()[notices.MAX_LINES + 1]
 
 
+@pytest.mark.parametrize("lang", LANGS)
+def test_every_summary_line_says_what_to_do(home, lang):
+    # 14/09 live: 6 of 8 stops were linkedin_credentials_missing; the "why"
+    # alone left the user without the one thing to do (create the sign-in).
+    _set_lang(home, lang)
+    catalog = _catalog(lang)
+    message = notices.summary_message([{"position_id": 1817, "reason": "linkedin_credentials_missing", "host": ""}])
+    assert catalog["closer.reason.linkedin_credentials_missing.why"] in message
+    assert catalog["closer.reason.linkedin_credentials_missing.action"] in message
+
+
+@pytest.mark.parametrize("lang", LANGS)
+@pytest.mark.parametrize("reason", ["submit_outcome_unknown", "receipt_incomplete", "send_outcome_unknown"])
+def test_a_sent_or_maybe_sent_application_never_reads_as_nothing_sent(home, lang, reason):
+    # Every stop now reaches the summary (HQ-BACKEND-3), email ones included:
+    # the old footer "Nothing was sent for these" read them the wrong way round.
+    _set_lang(home, lang)
+    catalog = _catalog(lang)
+    assert catalog[f"closer.reason.{reason}.why"] != catalog["closer.reason.default.why"]
+    message = notices.summary_message([{"position_id": 1817, "reason": reason, "host": ""}])
+    english = _catalog("en")
+    for old in ("Nothing was sent", "non è stato inviato nulla", "nichts gesendet", "Rien n'a été envoyé",
+                "No se ha enviado nada", "Nada foi enviado", "semmi nem lett elküldve"):
+        assert old.casefold() not in message.casefold()
+    assert catalog[f"closer.reason.{reason}.why"] in message
+    assert english["closer.digest.line"].count("{action}") == 1
+
+
 def test_cli_pending_lists_the_queue(home, capsys):
     notices.defer(1817, "ats_unsupported", "https://a.example.com/x")
     assert notices.main(["pending"]) == 0
