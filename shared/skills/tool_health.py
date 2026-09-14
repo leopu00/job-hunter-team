@@ -126,10 +126,51 @@ def check_linkedin_check():
     return "UNKNOWN", "linkedin_check --batch rc=%d: %s" % (rc, out.strip()[:120])
 
 
+def check_cv_pdf_render():
+    """Render VERO del CV come lo fa lo SCRITTORE (skill cv-structure):
+    `pandoc input.md -o out.pdf --pdf-engine=wkhtmltopdf`. OK solo se esce un
+    file PDF non vuoto. Uno dei due binari assente = BROKEN: senza, il CV non si
+    impagina e la skill non ha alternative accettabili (pdf_gen.py rifiuta i CV).
+
+    Si lavora in una directory temporanea anche come cwd: pandoc scrive l'HTML
+    intermedio nella directory CORRENTE, e da una cwd non scrivibile fallisce
+    con "openTempFile: permission denied" — un falso BROKEN che parlerebbe di
+    chi ha lanciato il check, non dei binari."""
+    import tempfile
+    missing = [b for b in ("pandoc", "wkhtmltopdf") if not shutil.which(b)]
+    if missing:
+        return "BROKEN", "missing binaries: %s (CV PDFs cannot be produced)" % ", ".join(missing)
+    with tempfile.TemporaryDirectory(prefix="jht-cv-gate-") as tmp:
+        md = os.path.join(tmp, "cv.md")
+        pdf = os.path.join(tmp, "cv.pdf")
+        with open(md, "w", encoding="utf-8") as fh:
+            fh.write("# JHT CV render check\n\n**Role** — àèìòù €\n\n- one\n- two\n")
+        try:
+            p = subprocess.run(
+                ["pandoc", md, "-o", pdf, "--pdf-engine=wkhtmltopdf",
+                 "--metadata", "title=JHT CV render check"],
+                capture_output=True, text=True, timeout=60, cwd=tmp,
+            )
+        except subprocess.TimeoutExpired:
+            return "BROKEN", "pandoc render timed out after 60s"
+        except (OSError, ValueError) as e:
+            return "BROKEN", "unable to run pandoc: %s" % e
+        size = os.path.getsize(pdf) if os.path.exists(pdf) else 0
+        head = b""
+        if size:
+            with open(pdf, "rb") as fh:
+                head = fh.read(4)
+        if p.returncode == 0 and size > 0 and head == b"%PDF":
+            return "OK", "pandoc + wkhtmltopdf rendered a %d-byte PDF" % size
+        tail = (p.stdout + p.stderr).strip()[-200:]
+        return "BROKEN", "render failed (rc=%d, pdf=%d bytes): %s" % (p.returncode, size, tail)
+
+
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
 CHECKS = {
     "playwright_browser": check_playwright_browser,
     "linkedin_check": check_linkedin_check,
+    "cv_pdf_render": check_cv_pdf_render,
 }
 
 
