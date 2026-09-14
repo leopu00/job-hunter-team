@@ -94,6 +94,10 @@ LINKEDIN_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
 _LINKEDIN_COUNTRY_HOST = re.compile(r"^[a-z]{2}\.linkedin\.com$")
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
 EMAIL_CHANNEL_STATE = "email_channel"
+# A company contact form is the application channel (1800): no file field, so
+# no CV upload step and no CV in the receipt.
+CONTACT_FORM_CHANNEL = "contact_form"
+RECEIPT_CHANNELS = frozenset({"web_form", CONTACT_FORM_CHANNEL})
 RETRY_LATER_EXIT = 5
 
 # Collect every control that would hand the application to a mail client: an
@@ -663,6 +667,11 @@ class Receipt:
     # sha256 of the CV file handed to the form, as the email receipt records
     # its attachment: which document the employer received.
     cv_sha256: str = ""
+    # How the application went: an application form (web_form), or a company
+    # contact form that takes no file (contact_form, 1800).  `attachments` names
+    # every document sent, by role and sha256: empty means no CV went out.
+    channel: str = "web_form"
+    attachments: list[dict[str, str]] = field(default_factory=list)
 
     def is_valid(self) -> bool:
         try:
@@ -681,18 +690,37 @@ class Receipt:
             "captured_at": self.captured_at,
             "answer_sources": dict(self.answer_sources),
             "cv_sha256": self.cv_sha256,
+            "channel": self.channel,
+            "attachments": [dict(item) for item in self.attachments],
         }
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Receipt":
         sha = str(value.get("cv_sha256", ""))
+        sha = sha if re.fullmatch(r"[0-9a-f]{64}", sha) else ""
+        channel = value.get("channel")
+        channel = channel if channel in RECEIPT_CHANNELS else "web_form"
+        raw_attachments = value.get("attachments")
+        if isinstance(raw_attachments, list):
+            attachments = [
+                {"role": str(item["role"]), "sha256": str(item["sha256"])}
+                for item in raw_attachments
+                if isinstance(item, Mapping)
+                and isinstance(item.get("role"), str)
+                and re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", "")))
+            ]
+        else:
+            # A receipt written before the field: the CV hash was the attachment.
+            attachments = [{"role": "cv", "sha256": sha}] if sha else []
         return cls(
             Path(str(value.get("screenshot_path", ""))),
             str(value.get("confirmation_url", "")),
             str(value.get("confirmation_text", "")),
             str(value.get("captured_at", "")) or _utc_now(),
             _answer_sources(value.get("answer_sources")),
-            sha if re.fullmatch(r"[0-9a-f]{64}", sha) else "",
+            sha,
+            channel,
+            attachments,
         )
 
 
@@ -780,7 +808,9 @@ class FlowCheckpoint:
             raw.get("answer_request"), dict
         ):
             raise FlowError("checkpoint has an invalid answer request")
-        if raw.get("channel", "") not in {"", "email"} or not isinstance(raw.get("mailto_href", ""), str):
+        if raw.get("channel", "") not in {"", "email", CONTACT_FORM_CHANNEL} or not isinstance(
+            raw.get("mailto_href", ""), str
+        ):
             raise FlowError("checkpoint has an invalid application channel")
         if raw.get("state") == EMAIL_CHANNEL_STATE and not (
             raw.get("channel") == "email" and str(raw.get("mailto_href", "")).lower().startswith("mailto:")
@@ -4091,6 +4121,14 @@ class ApplicationFlow:
             )
         return receipt
 
+    @staticmethod
+    def _receipt_documents(checkpoint: FlowCheckpoint) -> dict[str, Any]:
+        """What the receipt says was sent: the channel and every document, nothing more."""
+        if checkpoint.channel == CONTACT_FORM_CHANNEL:
+            return {"cv_sha256": "", "channel": CONTACT_FORM_CHANNEL, "attachments": []}
+        documents = [{"role": "cv", "sha256": checkpoint.cv_sha256}] if checkpoint.cv_sha256 else []
+        return {"cv_sha256": checkpoint.cv_sha256, "channel": "web_form", "attachments": documents}
+
     def _record(self, checkpoint: FlowCheckpoint, receipt: Receipt) -> FlowResult:
         if not receipt.is_valid():
             return self._block(
@@ -4683,7 +4721,7 @@ class ApplicationFlow:
                         receipt = replace(
                             self._capture_receipt(active_page, confirmation),
                             answer_sources=dict(checkpoint.answer_sources),
-                            cv_sha256=checkpoint.cv_sha256,
+                            **self._receipt_documents(checkpoint),
                         )
                         checkpoint.receipt = receipt.to_dict()
                         checkpoint.save(self.checkpoint_path)
@@ -4740,9 +4778,13 @@ class ApplicationFlow:
                     if waiting_facts is not None:
                         return waiting_facts
                 checkpoint.complete_step("detect", "fill")
+                # A contact form takes no file: no upload step, no CV hash, and
+                # the receipt says no CV went out (1800, 14/09).
+                without_cv = getattr(recipe, "application_channel", "") == CONTACT_FORM_CHANNEL
+                checkpoint.channel = CONTACT_FORM_CHANNEL if without_cv else ""
                 # The bytes the recipe is about to upload (a multi-step form
                 # uploads while it fills), for the receipt.
-                checkpoint.cv_sha256 = _file_sha256(self.cv_path)
+                checkpoint.cv_sha256 = "" if without_cv else _file_sha256(self.cv_path)
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
@@ -4754,19 +4796,20 @@ class ApplicationFlow:
                     allow_injected_blank=injected_blank,
                     application_url=self.url,
                 )
-                checkpoint.complete_step("fill", "upload_cv")
+                checkpoint.complete_step("fill", "screening" if without_cv else "upload_cv")
                 checkpoint.save(self.checkpoint_path)
 
-                recipe.upload_cv(active_page)
-                self._assert_recipe_page(
-                    active_page,
-                    detection.platform,
-                    "upload_cv",
-                    allow_injected_blank=injected_blank,
-                    application_url=self.url,
-                )
-                checkpoint.complete_step("upload_cv", "screening")
-                checkpoint.save(self.checkpoint_path)
+                if not without_cv:
+                    recipe.upload_cv(active_page)
+                    self._assert_recipe_page(
+                        active_page,
+                        detection.platform,
+                        "upload_cv",
+                        allow_injected_blank=injected_blank,
+                        application_url=self.url,
+                    )
+                    checkpoint.complete_step("upload_cv", "screening")
+                    checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_screening(active_page)
                 checkpoint.answer_sources = dict(recipe.answer_sources)
@@ -4869,7 +4912,7 @@ class ApplicationFlow:
                 receipt = replace(
                     self._capture_receipt(active_page, confirmation),
                     answer_sources=dict(checkpoint.answer_sources),
-                    cv_sha256=checkpoint.cv_sha256,
+                    **self._receipt_documents(checkpoint),
                 )
                 checkpoint.receipt = receipt.to_dict()
                 checkpoint.save(self.checkpoint_path)

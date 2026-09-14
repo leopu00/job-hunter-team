@@ -305,19 +305,62 @@ def test_observe_reads_the_status_of_a_page_someone_else_opened(page):
     assert (result.kind, result.status) == (pf.NOT_FOUND, 410)
 
 
-def test_settle_waits_for_a_proof_of_work_check_to_clear_by_itself(page):
-    def handler(route):
-        passed = "passed=1" in (route.request.headers.get("cookie") or "")
-        if passed:
-            route.fulfill(status=200, content_type="text/html", body=VACANCY)
-        else:
-            route.fulfill(status=403, content_type="text/html", body=SELF_CLEARING)
+class ScriptedPage:
+    """A page whose every look is scripted: no browser, no real waiting.
 
-    page.route("https://careers.example.com/**", handler)
-    first = pf.visit(page, URL)
+    Each entry is (status, html) for one observe(); status "raise" makes the
+    status read fail, as an evaluate does while the page is reloading.
+    """
+
+    def __init__(self, looks):
+        self.looks = list(looks)
+        self.current = self.looks.pop(0)
+        self.url = URL
+        self.waits = 0
+
+    def wait_for_timeout(self, _ms):
+        self.waits += 1
+        if self.looks:
+            self.current = self.looks.pop(0)
+
+    def evaluate(self, _script):
+        status, _html = self.current
+        if status == "raise":
+            raise RuntimeError("Execution context was destroyed")
+        return status
+
+    def content(self):
+        return self.current[1]
+
+
+def test_settle_waits_for_a_proof_of_work_check_to_clear_by_itself():
+    page = ScriptedPage([(403, SELF_CLEARING), (403, SELF_CLEARING), (200, VACANCY)])
+    first = pf.observe(page)
     assert (first.kind, first.status) == (pf.BOT_PROTECTION, 403)
-    settled = pf.settle(page, first, wait_ms=6_000, poll_ms=250)
+
+    settled = pf.settle(page, first, wait_ms=5_000, poll_ms=250)
+
     assert (settled.kind, settled.status) == (pf.OK, 200)
+    assert page.waits == 2
+
+
+@pytest.mark.parametrize("mid_reload", ["raise", None], ids=["status-read-fails", "status-not-yet-there"])
+def test_settle_never_stops_on_a_reloading_page_without_its_status(mid_reload):
+    # CI run 34881349729: ('ok', None) — the new document's content was read
+    # before its status.  The next look has the status.
+    page = ScriptedPage([(403, SELF_CLEARING), (mid_reload, VACANCY), (200, VACANCY)])
+    first = pf.observe(page)
+
+    settled = pf.settle(page, first, wait_ms=5_000, poll_ms=250)
+
+    assert (settled.kind, settled.status) == (pf.OK, 200)
+
+
+def test_settle_gives_up_when_the_time_is_up():
+    page = ScriptedPage([(403, SELF_CLEARING)] * 10)
+    settled = pf.settle(page, pf.observe(page), wait_ms=1_000, poll_ms=250)
+    assert settled.kind == pf.BOT_PROTECTION
+    assert page.waits == 4
 
 
 def test_settle_does_not_wait_on_a_bare_403():
@@ -333,10 +376,3 @@ def test_settle_does_not_wait_on_a_bare_403():
     page = Page()
     assert pf.settle(page, bare, wait_ms=5_000, poll_ms=100) is bare
     assert page.waits == 0
-
-
-def test_settle_gives_up_on_a_wall_that_stays(page):
-    _answer(page, 403, CHALLENGE)
-    first = pf.visit(page, URL)
-    settled = pf.settle(page, first, wait_ms=1_000, poll_ms=250)
-    assert settled.kind == pf.BOT_PROTECTION

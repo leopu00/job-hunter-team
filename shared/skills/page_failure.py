@@ -279,16 +279,26 @@ def settle(
     """Wait, without touching the page, for a bot check to clear by itself.
 
     Only a page that shows a challenge can clear: a bare 403 or 429 is
-    answered at once.
+    answered at once.  A cleared check reloads the page: caught in the middle
+    of that reload, the new document can show its content before its status
+    (flaky CI run 34881349729: ok with no status).  So after a challenge a page
+    is settled only with a status, or when the time is up.
     """
+    if not (access.kind == BOT_PROTECTION and access.challenge):
+        return access
     waited = 0
-    while access.kind == BOT_PROTECTION and access.challenge and waited < wait_ms:
+    while waited < wait_ms:
         try:
             page.wait_for_timeout(poll_ms)
         except Exception:
             return access
         waited += poll_ms
         access = observe(page)
+        if access.kind == BOT_PROTECTION and access.challenge:
+            continue
+        if access.status is None and access.kind == OK:
+            continue  # mid-reload: the next look reads the status
+        return access
     return access
 
 
