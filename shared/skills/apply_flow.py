@@ -3095,9 +3095,12 @@ class ApplicationFlow:
         message = self._notification_message(blocked)
         self._save_stop(checkpoint, previous_screenshot)
         notices = _optional_module("closer_notices")
-        if notices is not None and blocked.reason in getattr(notices, "DIGEST_REASONS", ()):
-            # A stop of the site, not of the application: one summary per
-            # round (closer_notices flush), not a message per position.
+        if notices is not None:
+            # Every stop joins the round's summary (closer_notices flush at the
+            # end of the CLOSER's round): one message, never one per position.
+            # Live 14/09: eight positions, eight Telegram alerts, because only
+            # the site stops (DIGEST_REASONS) were deferred.  A form question
+            # never gets here; it is sent only by the CLOSER's explicit ask.
             try:
                 notices.defer(self.position_id, blocked.reason, self.url)
                 return FlowResult("blocked_human", checkpoint.state, blocked.reason)

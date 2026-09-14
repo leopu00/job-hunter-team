@@ -57,7 +57,7 @@ Eine JSON-Zeile: `state`, `reason`, `detail` plus Daten.
 | `sent` | 0 | vom Server angenommen, Beleg gespeichert, Bewerbung registriert | nächste Position |
 | `draft_ready` | 0 | Dry Run: Entwurf und Anhänge gültig, nichts gesendet | nächste Position |
 | `denied` | 1 | das Gate hat abgelehnt (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | nächste Position; nie wiederholen |
-| `blocked_human` | 1 | ein Mensch wird gebraucht; der User wurde benachrichtigt | nächste Position; nie wiederholen |
+| `blocked_human` | 1 | ein Mensch wird gebraucht; der Stopp steht in der Zusammenfassung der Runde | nächste Position; nie wiederholen |
 | `send_outcome_unknown` | 3 | die E-Mail ist möglicherweise rausgegangen | nächste Position; nie wiederholen |
 | `receipt_incomplete` | 3 | angenommen, aber Beleg oder Registrierung unvollständig; wurden nur einzelne Empfänger abgelehnt, ist der Brief wahrscheinlich angekommen | nächste Position; nie wiederholen |
 | `error` | 2 | Datenbank, Profil oder Checkpoint nicht lesbar | Stopp: `[BLOCKED]` an den Capitano |
@@ -81,7 +81,7 @@ Eine JSON-Zeile: `state`, `reason`, `detail` plus Daten.
 
 Was du tust, immer gleich:
 
-1. **Nichts an dieser Position.** Der Befehl hat den User bereits einmal benachrichtigt.
+1. **Nichts an dieser Position.** Der Befehl hat den Stopp in die Zusammenfassung der Runde gelegt (`closer_notices.py flush` in STEP 6).
 2. **Nicht wiederholen.** Die Queue hält sie zurück (`email_blocked_human`,
    `email_send_outcome_unknown`, ...), bis der User handelt.
 3. **Weiter zur nächsten Position** der Queue.

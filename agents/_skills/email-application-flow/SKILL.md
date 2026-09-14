@@ -54,7 +54,7 @@ One JSON line: `state`, `reason`, `detail`, plus data.
 | `sent` | 0 | accepted by the server, receipt stored, application recorded | next position |
 | `draft_ready` | 0 | dry run: draft and attachments valid, nothing sent | next position |
 | `denied` | 1 | the gate refused (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | next position; never retry |
-| `blocked_human` | 1 | a human is needed; the user has been notified | next position; never retry |
+| `blocked_human` | 1 | a human is needed; the stop is in the round's summary | next position; never retry |
 | `send_outcome_unknown` | 3 | the email may have gone out | next position; never retry |
 | `receipt_incomplete` | 3 | accepted, but the receipt or the record is incomplete; with some recipients refused the letter has probably arrived | next position; never retry |
 | `error` | 2 | database, profile or checkpoint unreadable | stop: `[BLOCKED]` to the Capitano |
@@ -78,7 +78,7 @@ One JSON line: `state`, `reason`, `detail`, plus data.
 
 What you do, always the same:
 
-1. **Nothing on that position.** The command already notified the user once.
+1. **Nothing on that position.** The command put the stop in the round's summary (`closer_notices.py flush` at STEP 6).
 2. **Do not retry it.** The queue holds it (`email_blocked_human`,
    `email_send_outcome_unknown`, ...) until the user acts.
 3. **Move to the next position** of the queue.
