@@ -87,6 +87,11 @@ STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
                           answer_not_accepted MIT `pending_question`:
                           das Formular lehnte deinen Wert zweimal ab:
                           speichere einen anderen oder frage (CL-08, 3).
+                          `purpose: contact_form_application`: die Message eines
+                          Kontaktformulars, zu dem Apply geführt hat: schreibe einen
+                          kurzen Brief für DIESE Stelle, der sagt, dass der CV auf
+                          Anfrage verfügbar ist; save --purpose
+                          contact_form_application (gilt nur für diese Position).
                           Jeder andere Grund: der User ist benachrichtigt, weiter
          denied         → das Tor hat nein gesagt: weiter, nie umgehen
          retry_later    → (exit 5) die Seite antwortet gerade nicht
@@ -94,7 +99,8 @@ STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
                           Weiter, nie neu starten: die Queue gibt sie
                           nach retry_after zurück
          dry_run        → Diagnoselauf, nichts gesendet: weiter
-         email_channel  → das Apply-Element ist ein mailto-Link: → email-application-flow
+         email_channel  → ein mailto-Link (mailto_application) oder eine Adresse
+                          im Seitentext (email_instruction): → email-application-flow
          error (exit 2) → STEP 6 mit [BLOCKED] (Profil/CV unlesbar
                           ist kein Problem einer einzelnen Position)
 

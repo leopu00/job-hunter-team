@@ -191,6 +191,11 @@ def test_prompt_del_closer_intestazione_e_invarianti(lang):
     step4 = text[text.index("STEP 4"):text.index("STEP 5")]
     retry = step4[step4.index("retry_later"):step4.index("dry_run")]
     assert "exit 5" in retry and "retry_after" in retry and "5xx" in retry, lang
+    # A contact form's Message is a letter for THIS vacancy, saved per position;
+    # an address written in the page is the email channel too.
+    assert "--purpose contact_form_application" in " ".join(step4.split()), lang
+    email = step4[step4.index("email_channel"):step4.index("error (exit 2)")]
+    assert "email_instruction" in email and "mailto_application" in email and "email-application-flow" in email, lang
 
 
 def test_la_coda_e_il_flusso_usano_lo_stesso_checkpoint(tmp_path, monkeypatch):

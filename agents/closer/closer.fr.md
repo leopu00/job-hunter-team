@@ -87,6 +87,11 @@ STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
                           answer_not_accepted AVEC `pending_question` :
                           le formulaire a refusé ta valeur deux fois :
                           enregistres-en une autre, ou demande (CL-08, 3).
+                          `purpose: contact_form_application` : le Message d'un
+                          formulaire de contact vers lequel l'Apply a mené : écris
+                          une courte lettre pour CETTE offre disant que le CV est
+                          disponible sur demande ; save --purpose
+                          contact_form_application (propre à cette position).
                           Toute autre raison : l'utilisateur est prévenu, continue
          denied         → la porte a dit non : continue, ne la contourne jamais
          retry_later    → (exit 5) la page ne répond pas pour l'instant
@@ -94,7 +99,8 @@ STEP 4 — LIS LE RÉSULTAT (une ligne JSON)            → apply-flow
                           Continue, ne la relance pas : la file la rend
                           après retry_after
          dry_run        → passe de diagnostic, rien n'est parti : continue
-         email_channel  → le contrôle Apply est un lien mailto : → email-application-flow
+         email_channel  → un lien mailto (mailto_application) ou une adresse
+                          écrite dans la page (email_instruction) : → email-application-flow
          error (exit 2) → STEP 6 avec [BLOCKED] (profil/CV illisible
                           n'est pas un problème d'une seule position)
 
