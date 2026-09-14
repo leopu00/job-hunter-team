@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import apply_generic  # noqa: E402
 from apply_flow import ApplicationFlow  # noqa: E402
-from apply_generic import contact_application_topic  # noqa: E402
+from apply_generic import contact_application_topic, contact_message_id  # noqa: E402
 from test_apply_generic import BASE  # noqa: E402
 
 CHECKPOINT = Path(".cache") / "apply-flow" / "91.json"
@@ -331,6 +331,24 @@ def test_the_contact_page_mailto_never_becomes_a_second_channel(browser, cv_path
 
     checkpoint = saved(tmp_path)
     assert (checkpoint["channel"], checkpoint["mailto_href"]) == ("contact_form", "")
+
+
+def test_only_the_message_of_a_contact_form_is_the_letter(browser, cv_path, tmp_path):
+    extra = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
+        '<label for="message">',
+        '<label for="company">Company details (optional)</label><textarea id="company"></textarea><label for="message">',
+    )
+    careers = CAREERS.format(roles=ROLE.format(title="AI Engineer"))
+    page = site(browser, {"/careers": careers, "/contact": extra})
+    page.goto(f"{BASE}/careers")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+
+    question = result.pending_question
+    assert (question["label"], question["purpose"]) == ("Message", "contact_form_application")
+    assert contact_message_id(
+        {"questions": [{"id": "a", "type": "textarea", "label": "Notes"}, {"id": "b", "type": "textarea", "label": "Notes 2"}]}
+    ) is None
 
 
 @pytest.mark.parametrize(
