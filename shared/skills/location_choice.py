@@ -72,6 +72,56 @@ def pick(wanted: str, suggestions: Iterable[str]) -> str | None:
     return same[0] if len(same) == 1 else None
 
 
+# A profile "location" that names no place to search for (1888 after patch 21,
+# 14/09: a "…wide" work preference typed into Lever's geocoder returned two
+# villages called Wide). Whole words only, seven languages.
+_NOT_A_PLACE = frozenset(
+    "remote remotely worldwide wide anywhere global globally international internationally hybrid "
+    "flexible relocation relocate nationwide countrywide online distributed telecommute homeoffice "
+    "remoto remota ovunque mondo mondiale qualsiasi ibrido "
+    "weltweit überall ueberall mobil hybrid "
+    "télétravail teletravail partout monde mondial hybride distance "
+    "cualquier mundial híbrido hibrido teletrabajo "
+    "qualquer mundial híbrido teletrabalho "
+    "távmunka tavmunka bárhol barhol világszerte vilagszerte hibrid".split()
+)
+
+SEARCH_KEY = "location search"
+SEARCH_LABEL = "Location search"
+
+
+def _words(text: str) -> list[str]:
+    return [word for word in _flat(text).split() if word]
+
+
+def searchable(text: str) -> bool:
+    """Does `text` name a place a geocoder can look up (a city, a country)?"""
+    words = _words(text)
+    return bool(words) and any(ch.isalpha() for ch in "".join(words)) and not any(
+        word in _NOT_A_PLACE for word in words
+    )
+
+
+def related(wanted: str, suggestions: Iterable[str]) -> list[str]:
+    """The suggestions that share a word with the searched place.
+
+    A geocoder answers something for anything: "Wide, Aceh, Indonesia" for a
+    work preference is not an option the CLOSER should be offered. A word in
+    common, or four letters in common at the start ("Milano" for "Milan",
+    "Italia" for "Italy"), keeps a suggestion.
+    """
+    stems = [word for word in _words(wanted) if len(word) >= 3 and word not in _NOT_A_PLACE]
+
+    def near(word: str, stem: str) -> bool:
+        return word == stem or (len(word) >= 4 and len(stem) >= 4 and word[:4] == stem[:4])
+
+    return [
+        option
+        for option in suggestions
+        if any(near(word, stem) for word in _words(option) for stem in stems)
+    ]
+
+
 def queries(wanted: str) -> list[str]:
     """What to type: the whole value, then its city alone."""
     whole = " ".join(str(wanted or "").split())

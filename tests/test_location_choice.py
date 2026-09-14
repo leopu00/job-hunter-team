@@ -51,3 +51,31 @@ def test_queries_type_the_whole_value_then_the_city():
     assert lc.queries("Milan, Italy") == ["Milan, Italy", "Milan"]
     assert lc.queries("Milan") == ["Milan"]
     assert lc.queries("  ") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "place"),
+    [
+        ("Milan, Italy", True), ("Milano", True), ("São Paulo", True),
+        ("Remote worldwide", False), ("Europe-wide", False), ("Remote", False), ("Anywhere", False),
+        ("Da remoto, ovunque", False), ("Weltweit", False), ("Télétravail", False), ("Bárhol", False),
+        ("", False), ("123", False),
+    ],
+)
+def test_searchable_only_for_a_place(text, place):
+    assert lc.searchable(text) is place
+
+
+def test_related_keeps_only_suggestions_near_the_place():
+    assert lc.related("Remote worldwide", ["Wide, Aceh, Indonesia"]) == []
+    assert lc.related("Milan", ["Milano, Lombardia, Italia", "Wide, Aceh, Indonesia"]) == ["Milano, Lombardia, Italia"]
+    assert lc.related("Rome, Italy", ["Roma, Lazio, Italia", "Rome, Georgia, United States", "Wide, Aceh, Indonesia"]) == [
+        "Roma, Lazio, Italia", "Rome, Georgia, United States"
+    ]
+
+
+@pytest.mark.parametrize("suffix", ["", ".it", ".de", ".fr", ".es", ".pt", ".hu"])
+def test_the_closer_skill_says_what_a_location_search_is(suffix):
+    skill = (ROOT / "agents" / "_skills" / "apply-flow" / f"SKILL{suffix}.md").read_text(encoding="utf-8")
+    row = next(line for line in skill.splitlines() if f"`{lc.SEARCH_KEY}`" in line)
+    assert "--basis profile" in row and "cv" in row

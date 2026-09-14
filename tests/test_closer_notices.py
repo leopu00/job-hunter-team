@@ -18,6 +18,7 @@ were about to send six more. This suite holds:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -125,19 +126,19 @@ def test_every_known_reason_has_why_and_action_in_english():
         assert catalog.get(f"closer.reason.{reason}.action"), reason
 
 
-def test_digest_reasons_are_explained():
-    assert notices.DIGEST_REASONS <= set(notices.KNOWN_REASONS)
+SITE_REASONS = (
+    "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
+    "page_not_found", "bot_protection", "page_temporarily_unavailable",
+    "generic_form_missing",  # 2071, 1798: the recipe's own reason, no longer wrapped as ats_unsupported
+)
 
 
-def test_site_and_page_stops_go_to_the_summary():
-    # 14/09: every stop sent its own Telegram message. The page failures of D2
-    # join the summary; a temporary failure is never a stop at all.
-    assert {
-        "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
-        "page_not_found", "bot_protection", "page_temporarily_unavailable",
-        "generic_form_missing",  # 2071, 1798: the recipe's own reason, no longer wrapped as ats_unsupported
-    } <= notices.DIGEST_REASONS
-    assert "retry_later" not in notices.DIGEST_REASONS
+def test_site_and_page_stops_are_explained_and_a_retry_is_not_a_stop():
+    # Every stop joins the summary now (the flow no longer filters); the site
+    # and page stops keep their own words, a temporary failure is never a stop.
+    assert set(SITE_REASONS) <= set(notices.KNOWN_REASONS)
+    assert "retry_later" not in notices.KNOWN_REASONS
+    assert not hasattr(notices, "DIGEST_REASONS")
 
 
 @pytest.mark.parametrize("lang", LANGS)
@@ -160,8 +161,8 @@ class Recorder:
         self.calls: list[dict] = []
         self.fail = fail
 
-    def __call__(self, *, message: str, source_id: str):
-        self.calls.append({"message": message, "source_id": source_id})
+    def __call__(self, *, message: str, source_id: str, payload: dict):
+        self.calls.append({"message": message, "source_id": source_id, "payload": payload})
         if self.fail:
             raise RuntimeError("telegram down")
         return "1"
@@ -196,6 +197,83 @@ def test_the_same_stop_is_not_a_second_line_until_authorised_again(home):
     notices.defer(1817, "ats_unsupported", "https://a.example.com")
     assert notices.flush(sent)["count"] == 1
     assert len(sent.calls) == 2
+
+
+def test_a_position_is_one_line_the_latest_stop(home):
+    # Patch 20 (14/09): 2071 and 1798 were listed twice, once per authorisation.
+    sent = Recorder()
+    notices.defer(1817, "ats_unsupported", "https://a.example.com")
+    with sqlite3.connect(home / "jobs.db") as conn:
+        conn.execute("UPDATE positions SET apply_requested_at = '2026-09-15T08:00:00Z' WHERE id = 1817")
+    notices.defer(1817, "bot_protection", "https://a.example.com")
+    notices.defer(1845, "ats_unsupported", "https://b.example.com")
+    assert [e["position_id"] for e in notices._read_state(notices._state_path())["pending"]] == [1817, 1845]
+    assert notices.flush(sent)["count"] == 2
+    message = sent.calls[0]["message"]
+    assert message.count("#1817") == 1
+    assert notices.reason_why("bot_protection") in message
+    assert notices.reason_why("ats_unsupported") in message  # 1845's line
+    assert sent.calls[0]["payload"] == {"position_ids": [1817, 1845]}
+
+
+def test_a_queue_written_before_the_dedupe_still_sends_one_line_per_position(home):
+    sent = Recorder()
+    state = home / ".cache" / "apply-flow" / "notices.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"version": 1, "sent": [], "pending": [
+        {"key": "1817:ats_unsupported:a", "position_id": 1817, "reason": "ats_unsupported", "host": "", "at": "2026-09-14T10:00:00+00:00"},
+        {"key": "1817:ats_unsupported:b", "position_id": 1817, "reason": "ats_unsupported", "host": "", "at": "2026-09-14T11:00:00+00:00"},
+    ]}), encoding="utf-8")
+    assert notices.flush(sent) == {"status": "sent", "count": 1, "source_id": sent.calls[0]["source_id"]}
+    assert sent.calls[0]["message"].count("#1817") == 1
+    saved = json.loads(state.read_text())
+    assert saved["pending"] == [] and saved["sent"] == ["1817:ats_unsupported:a", "1817:ats_unsupported:b"]
+
+
+def test_the_real_notify_tool_accepts_the_summary(home, tmp_path, monkeypatch):
+    # Patch 20 (14/09): jht-notify-user refused a source id without its action
+    # and payload (exit 1), and every flush failed behind a fake notifier.
+    db_path = tmp_path / "box-jobs.db"  # the real schema, as on the box
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.executemany(
+            "INSERT INTO positions(id, title, company, url, status, apply_requested, apply_requested_at, "
+            "apply_requested_by) VALUES (?, ?, 'Example Corp', ?, 'ready', 1, '2026-09-14T08:00:00.000Z', 'user_web')",
+            [(1817, "Synthetic Data Engineer", "https://jobs.example.com/1817"),
+             (1845, "Synthetic ML Engineer", "https://jobs.example.com/1845")],
+        )
+        conn.commit()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "jht-notify-user").symlink_to(ROOT / "agents" / "_tools" / "jht-notify-user")
+    telegram = tmp_path / "telegram.txt"
+    stub = bin_dir / "jht-telegram-send"
+    stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" >> "{telegram}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("JHT_DB", str(db_path))
+    monkeypatch.delenv("JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY", raising=False)
+    notices.defer(1817, "linkedin_credentials_missing", "https://www.linkedin.com/jobs/view/1")
+    notices.defer(1845, "ats_unsupported", "https://b.example.com")
+
+    result = notices.flush()
+
+    assert result["status"] == "sent", result
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT agent, kind, body, source_id, source_action, source_payload, delivered_via "
+            "FROM pending_user_messages"
+        ).fetchall()
+    assert len(rows) == 1
+    agent, kind, body, source_id, action, payload, via = rows[0]
+    assert (agent, kind, source_id, action, via) == ("closer", "digest", result["source_id"], "closer_digest", "telegram")
+    assert json.loads(payload) == {"position_ids": [1817, 1845]}
+    assert "#1817" in body and "#1845" in body
+    assert "#1817" in telegram.read_text(encoding="utf-8")
+    assert notices._read_state(notices._state_path())["pending"] == []
+    # The same queue again is not a second row: the source id is idempotent.
+    assert notices.flush()["status"] == "empty"
 
 
 def test_a_failed_send_keeps_the_stops_and_reuses_the_source_id(home):
@@ -233,6 +311,34 @@ def test_summary_is_capped(home):
     assert "3" in message.splitlines()[notices.MAX_LINES + 1]
 
 
+@pytest.mark.parametrize("lang", LANGS)
+def test_every_summary_line_says_what_to_do(home, lang):
+    # 14/09 live: 6 of 8 stops were linkedin_credentials_missing; the "why"
+    # alone left the user without the one thing to do (create the sign-in).
+    _set_lang(home, lang)
+    catalog = _catalog(lang)
+    message = notices.summary_message([{"position_id": 1817, "reason": "linkedin_credentials_missing", "host": ""}])
+    assert catalog["closer.reason.linkedin_credentials_missing.why"] in message
+    assert catalog["closer.reason.linkedin_credentials_missing.action"] in message
+
+
+@pytest.mark.parametrize("lang", LANGS)
+@pytest.mark.parametrize("reason", ["submit_outcome_unknown", "receipt_incomplete", "send_outcome_unknown"])
+def test_a_sent_or_maybe_sent_application_never_reads_as_nothing_sent(home, lang, reason):
+    # Every stop now reaches the summary (HQ-BACKEND-3), email ones included:
+    # the old footer "Nothing was sent for these" read them the wrong way round.
+    _set_lang(home, lang)
+    catalog = _catalog(lang)
+    assert catalog[f"closer.reason.{reason}.why"] != catalog["closer.reason.default.why"]
+    message = notices.summary_message([{"position_id": 1817, "reason": reason, "host": ""}])
+    english = _catalog("en")
+    for old in ("Nothing was sent", "non è stato inviato nulla", "nichts gesendet", "Rien n'a été envoyé",
+                "No se ha enviado nada", "Nada foi enviado", "semmi nem lett elküldve"):
+        assert old.casefold() not in message.casefold()
+    assert catalog[f"closer.reason.{reason}.why"] in message
+    assert english["closer.digest.line"].count("{action}") == 1
+
+
 def test_cli_pending_lists_the_queue(home, capsys):
     notices.defer(1817, "ats_unsupported", "https://a.example.com/x")
     assert notices.main(["pending"]) == 0
@@ -264,7 +370,7 @@ def test_closer_flushes_the_summary_when_its_round_ends(lang):
     assert step6.index("closer_notices.py flush") < step6.index("[REPORT]")
     skill = (ROOT / "agents" / "_skills" / "apply-flow" / f"SKILL{suffix}.md").read_text(encoding="utf-8")
     assert "Bash(python3 /app/shared/skills/closer_notices.py *)" in skill.split("---")[1]
-    for reason in sorted(notices.DIGEST_REASONS):
+    for reason in SITE_REASONS:
         assert f"`{reason}`" in skill
 
 
