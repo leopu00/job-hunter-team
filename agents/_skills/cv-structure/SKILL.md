@@ -147,15 +147,18 @@ Default: **don't write one**. Token + time saved. Write it ONLY if the JD explic
 
 Length: 250-400 words. Path: `$JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<Company>.{md,pdf}`.
 
-**PDF title: "Cover Letter", NEVER "CV".** The cover letter is its own document — generate it with its own title metadata. Do NOT reuse the CV pandoc command (which hardcodes `--metadata title="CV …"`): that is exactly the bug that shipped 31 beta-3 cover letters whose document title read **"CV betaD"**.
+**PDF title: "Cover Letter", NEVER "CV".** The cover letter is its own document — generate it with its own title metadata. Do NOT reuse the CV pandoc command (which hardcodes `--metadata pagetitle="CV …"`): that is exactly the bug that shipped 31 beta-3 cover letters whose document title read **"CV betaD"**.
 
 ```bash
 pandoc "$COVER_MD" -o "$COVER_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="Cover Letter $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="Cover Letter $CANDIDATO"
 ```
 
-The `# <Nome Cognome>` heading at the top of the cover-letter markdown is the candidate's name (not "CV") — keep it, and let the title metadata above say "Cover Letter".
+The `# <Nome Cognome>` heading at the top of the cover-letter markdown is the candidate's name (not "CV") — keep it, and let the pagetitle above say "Cover Letter". Same base CSS and margins as the CV: without them the letter is squeezed into the same 36em column.
 
 ```markdown
 Opening (direct, NOT "I am writing to express my interest"):
@@ -190,6 +193,16 @@ Decisione tecnica 2026-05-18 dopo indagine "CV estetica semplificata":
 - ❌ **NON usare `pdf_gen.py` (fpdf2)** per CV: è solo fallback
   minimalista 80% casi semplici. Per CV user-facing produce layout
   spartano 1 pagina, niente CSS, niente spacing fine.
+- ⚠️ **Layout: base CSS + real margins + visual gate** (2026-09-14, a CV
+  attached with its text squeezed into the middle of the sheet). pandoc's HTML
+  template caps the body at `max-width: 36em`, centred with 50px padding, and
+  wkhtmltopdf ignores `@page` margins: a 9.3pt `<style>` came out as a ~41%
+  column and still passed the size + Producer gate. So the render command
+  ALWAYS loads `/app/shared/skills/pdf_layout_base.css` (`-c … --self-contained`)
+  and passes the margins to wkhtmltopdf (`-V margin-*`). In the `.md` `<style>`
+  never set `max-width`, `margin: auto` or body padding, and do not rely on
+  `@page`. `pdf_layout_check.py` then measures the result: text ≥ 75% of the
+  usable width on every page, 1–2 pages, no nearly empty page, fonts embedded.
 
 The historical anti-pattern: generate the PDF straight into
 `$JHT_USER_DIR/cv/`, then run `db_update.py application --cv-pdf-path
@@ -212,19 +225,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Senza, in caso di skill obsoleta (typst che non c'è, pandoc 3.x che
 # manca, …) lo Scrittore eseguiva il comando, fallba, improvvisava
 # fallback random → CV brutti del 2026-05-18 mattina.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT preflight: wkhtmltopdf non disponibile."
-  echo "  Engine alternativi accettabili: weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  NEVER fallback a pdf_gen.py / fpdf2 per CV (output brutto)."
   echo "  Riportare il problema al Capitano via [REPORT] e ABORT."
   exit 2
 fi
 
 # 1. Render via pandoc → html → wkhtmltopdf (engine vincente, 32 KB / 2 pag).
-#    --metadata title=... evita il warning di wkhtmltopdf "no title element".
+#    Base CSS resets pandoc's 36em column; -V margin-*: wkhtmltopdf ignores @page.
+#    pagetitle (not title) sets <title> without printing a "CV …" header.
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── GATE POST-RENDER: size + Producer ─────────────────────────────────
 # DUE check obbligatori. NESSUNO dei due è opzionale.
@@ -265,6 +281,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) layout: size and Producer prove the engine, not where the text sits.
+# pdf_layout_check.py measures it (≥75% of the usable width on every page, 1-2
+# pages, no nearly empty page, fonts embedded). Exit 1 or 2: ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: layout bad (pdf_layout_check.py) — fix the .md and re-render."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Atomic move + UPDATE in sequence; rollback se UPDATE fallisce
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -280,6 +305,7 @@ Exit codes:
 - `2` → preflight FAIL (engine non disponibile) — segnala al Capitano
 - `3` → post-render FAIL (size < 20 KB, output minimalista) — engine sbagliato
 - `4` → post-render FAIL (Producer != Qt) — engine sbagliato
+- `5` → post-render FAIL (layout, `reasons` from `pdf_layout_check.py`) — fix the `.md` and re-render: `narrow_text` → remove any width/margin/padding rule on body from the `<style>`; `near_empty_page` → tighten or cut so the last page fills or disappears; `too_many_pages` → cut. After 2 failed renders report to the Capitano. A CV that fails the gate never reaches critic-loop.
 - `1` → DB UPDATE FAIL (rollback file)
 
 Il Dottore via `cv-disk-audit` healthcheck (bug #18) ricollega eventuali
@@ -321,7 +347,7 @@ esac
 - ❌ Apologising for missing degree / years — signals weakness.
 - ❌ Same CV across multiple JDs — score gate punishes generic CVs.
 - ❌ Cover letter when not asked — wasted tokens, longer review cycle, no value.
-- ❌ Cover letter whose PDF title reads "CV …" — reused the CV pandoc command; use `--metadata title="Cover Letter $CANDIDATO"`.
+- ❌ Cover letter whose PDF title reads "CV …" — reused the CV pandoc command; use `--metadata pagetitle="Cover Letter $CANDIDATO"`.
 - ❌ Same fact repeated across sections (languages in Header **and** About **and** Skills) — pick one place.
 - ❌ Dev-style CV on a non-tech profile ("Technical Skills: Python, Go"; cold metric-only bullets) — wrong register, kills the warmth that sells hospitality/sales/care candidates.
 - ❌ Rebuilding only from `candidate_profile.yml` without reading the original CV — produces cold, interchangeable output.
