@@ -192,6 +192,8 @@ class Access:
     verdict: Verdict
     status: int | None
     final_url: str
+    # The challenge fingerprint in the page, "" when none (a bare 403).
+    challenge: str = ""
 
     @property
     def kind(self) -> str:
@@ -253,8 +255,8 @@ def observe(page: Any, *, response: Any = None, error: BaseException | None = No
             if wall
             else Verdict(OK, "status_unknown")
         )
-        return Access(verdict, None, final_url)
-    return Access(classify(status, html), status, final_url)
+        return Access(verdict, None, final_url, wall)
+    return Access(classify(status, html), status, final_url, challenge_evidence(html))
 
 
 def visit(page: Any, url: str, *, timeout_ms: int = NAVIGATION_TIMEOUT_MS) -> Access:
@@ -273,9 +275,13 @@ def settle(
     wait_ms: int = CHALLENGE_WAIT_MS,
     poll_ms: int = CHALLENGE_POLL_MS,
 ) -> Access:
-    """Wait, without touching the page, for a bot check to clear by itself."""
+    """Wait, without touching the page, for a bot check to clear by itself.
+
+    Only a page that shows a challenge can clear: a bare 403 or 429 is
+    answered at once.
+    """
     waited = 0
-    while access.kind == BOT_PROTECTION and waited < wait_ms:
+    while access.kind == BOT_PROTECTION and access.challenge and waited < wait_ms:
         try:
             page.wait_for_timeout(poll_ms)
         except Exception:
@@ -346,8 +352,6 @@ def decide(
             "",
         )
     return Decision(RETRY_LATER, detail=access.verdict.evidence), history, retry_after
-
-
 
 
 def retry_pending(checkpoint: Mapping[str, Any], now: datetime | None = None) -> bool:

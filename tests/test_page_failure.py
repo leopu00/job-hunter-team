@@ -311,6 +311,21 @@ def test_settle_waits_for_a_proof_of_work_check_to_clear_by_itself(page):
     assert (settled.kind, settled.status) == (pf.OK, 200)
 
 
+def test_settle_does_not_wait_on_a_bare_403():
+    # A Forbidden or a geoblock with no challenge on the page does not clear by waiting.
+    class Page:
+        url = URL
+        waits = 0
+
+        def wait_for_timeout(self, _ms):
+            self.waits += 1
+
+    bare = pf.Access(pf.Verdict(pf.BOT_PROTECTION, "http_403"), 403, URL)
+    page = Page()
+    assert pf.settle(page, bare, wait_ms=5_000, poll_ms=100) is bare
+    assert page.waits == 0
+
+
 def test_settle_gives_up_on_a_wall_that_stays(page):
     _answer(page, 403, CHALLENGE)
     first = pf.visit(page, URL)
