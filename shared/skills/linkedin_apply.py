@@ -100,7 +100,23 @@ _GUEST_APPLY = (
     "[data-modal='job-details-topcard-apply-modal']"
 )
 _OFFSITE_LABEL = re.compile(r"(apply|candidat\w*|bewerb\w*|postul\w*|solicit\w*).{0,40}(company|website|sito|site|web)", re.I)
-_EASY_APPLY_LABEL = re.compile(r"easy apply|candidatura semplificata|einfach bewerben|candidature simplifiée|solicitud sencilla|candidatura simplificada", re.I)
+# Easy Apply in LinkedIn's languages (other languages: by structure, below).  Live 14/09: the Italian button reads
+# "Candidatura semplice", and the recipe knew only "semplificata" — 1842 and 1866
+# stopped as linkedin_apply_control_missing with the button on screen.
+_EASY_APPLY_LABEL = re.compile(
+    r"easy apply|candidatura semplice|candidatura semplificata|einfach bewerben|candidature simplifi[ée]e"
+    r"|solicitud sencilla|candidatura simplificada|eenvoudig solliciteren|kolay başvuru",
+    re.I,
+)
+# The same control by its structure, whatever the language: the Apply button's
+# vendor id and class, and the Easy Apply flow link of the 2026 layout.  The
+# class also dresses the offsite "Apply" (it opens the company site in a new
+# tab, with an external-link icon): such a control is never Easy Apply.
+_EASY_APPLY_STRUCTURE = (
+    "#jobs-apply-button-id, button.jobs-apply-button, a.jobs-apply-button, "
+    "[data-live-test-job-apply-button], a[href*='openSDUIApplyFlow=true']"
+)
+_EXTERNAL_ICON = "[data-test-icon*='link-external'], use[href*='link-external'], svg[data-test-icon*='external']"
 _CHALLENGE_TEXT = ("security verification", "quick security check", "let's do a quick security check", "verify you are human")
 _CODE_INPUT = "input[name=pin], input#input__email_verification_pin, input#input__phone_verification_pin"
 
@@ -883,11 +899,40 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 "detect",
             )
 
+    @staticmethod
+    def _control_signature(control) -> tuple[str, str, str]:
+        return (
+            " ".join((control.get_attribute("aria-label") or "").split()).casefold(),
+            " ".join((control.inner_text() or "").split()).casefold(),
+            (control.get_attribute("href") or "").split("?")[0],
+        )
+
     def _easy_apply(self, page) -> list:
-        found = []
-        for role in ("button", "link"):
-            matches = page.get_by_role(role, name=_EASY_APPLY_LABEL)
-            found.extend(matches.nth(i) for i in range(matches.count()) if matches.nth(i).is_visible())
+        """The visible Easy Apply controls: by label in LinkedIn's languages, or by structure.
+
+        One union, so an element found both ways counts once.  The same
+        control drawn twice (the top card and the sticky bar) is one control.
+        """
+        union = (
+            page.locator(_EASY_APPLY_STRUCTURE)
+            .or_(page.get_by_role("button", name=_EASY_APPLY_LABEL))
+            .or_(page.get_by_role("link", name=_EASY_APPLY_LABEL))
+        )
+        found, signatures = [], set()
+        for index in range(union.count()):
+            control = union.nth(index)
+            if not control.is_visible():
+                continue
+            label = f"{control.get_attribute('aria-label') or ''} {control.inner_text() or ''}"
+            if control.locator(_EXTERNAL_ICON).count() or (
+                _OFFSITE_LABEL.search(label) and not _EASY_APPLY_LABEL.search(label)
+            ):
+                continue  # the offsite Apply dressed like Easy Apply
+            signature = self._control_signature(control)
+            if signature in signatures:
+                continue
+            signatures.add(signature)
+            found.append(control)
         return found
 
     def apply_control_present(self, page) -> bool:
