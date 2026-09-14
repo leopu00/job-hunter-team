@@ -559,6 +559,8 @@ def test_core_fields_by_label_in_several_languages():
         ("LinkedIn profile URL", "linkedin"), ("GitHub", "github"), ("Portfolio website", "website"),
         ("Full name", "full name"), ("Name *", "full name"), ("Nome completo", "full name"),
         ("First name", "first name"), ("Vorname", "first name"), ("Cognome", "last name"),
+        ("Current location *", "location"), ("City", "location"), ("Città di residenza", "location"),
+        ("Wohnort", "location"), ("Ciudad de residencia", "location"), ("Location (City)", "location"),
     ],
 )
 def test_labels_that_are_the_fact(label, fact):
@@ -569,7 +571,8 @@ def test_labels_that_are_the_fact(label, fact):
     "label",
     ["Referee email", "Emergency contact phone", "How did you hear about us? (LinkedIn, Indeed, other)",
      "Website where you found this job", "Manager's phone number", "Recruiter name", "Current company website",
-     "Email of a reference", "Your name as it appears on your passport and visa documents"],
+     "Email of a reference", "Your name as it appears on your passport and visa documents",
+     "Preferred job location", "Are you willing to relocate to this city?", "Country of residence"],
 )
 def test_labels_about_something_else_are_questions(label):
     assert core_field({"type": "text", "label": label}) is None
@@ -654,3 +657,73 @@ def test_submit_selector_sees_the_application_form_not_a_footer_form(browser, cv
     assert page.locator(GenericRecipe.SUBMIT).count() >= 1  # a reloaded form reads as still there
     page.goto(f"{BASE}/thanks")
     assert page.locator(GenericRecipe.SUBMIT).count() == 0  # the footer newsletter does not hide the receipt
+
+
+# ── location with suggestions (1888, 14/09) ──────────────────────────────────
+
+LOCATION_COMBO = f"""
+<html><head><title>Data Engineer — Example Co</title></head><body>
+<main>
+  <h2>Apply for this position</h2>
+  <form class="application">
+    <label for="em">Email *</label><input id="em" type="email" name="email" required>
+    <label for="cv">Upload your CV *</label><input id="cv" type="file" name="cv" required>
+    <label id="city-label" for="city">City *</label>
+    <div class="combo">
+      <span class="chosen"></span>
+      <input id="city" name="city" role="combobox" aria-autocomplete="list" aria-controls="city-list"
+             aria-labelledby="city-label" aria-required="true">
+      <ul id="city-list" role="listbox" hidden></ul>
+    </div>
+    <button type="submit">Submit application</button>
+  </form>
+</main>
+<script>
+(() => {{
+  const places = {{"lyon": ["Lyon, Auvergne-Rhône-Alpes, France", "Lyons, Colorado, United States"]}};
+  const input = document.querySelector('#city'), list = document.querySelector('#city-list');
+  let timer;
+  input.addEventListener('input', () => {{
+    clearTimeout(timer);
+    timer = setTimeout(() => {{
+      list.innerHTML = '';
+      (places[input.value.trim().toLowerCase()] || []).forEach(name => {{
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option'); li.textContent = name;
+        li.addEventListener('click', () => {{
+          document.querySelector('.chosen').textContent = name; input.value = ''; list.hidden = true;
+        }});
+        list.appendChild(li);
+      }});
+      list.hidden = !list.children.length;
+    }}, 200);
+  }});
+}})();
+</script>
+{CONFIRM_SCRIPT.replace("CONFIRM", "void 0;")}
+</body></html>
+"""
+
+
+def test_a_company_location_combobox_takes_the_suggestion_of_the_same_city_and_country(browser, cv_path):
+    page = _site_page(browser, {"/jobs/9": LOCATION_COMBO})
+    page.goto(f"{BASE}/jobs/9")
+    recipe = _recipe(cv_path, {**PROFILE, "location": "Lyon, France"})
+    recipe.open_form(page)
+    recipe.fill_core(page)
+    assert page.locator(".chosen").inner_text() == "Lyon, Auvergne-Rhône-Alpes, France"
+    assert recipe.answer_sources["city"] == "profile"
+
+
+def test_a_company_location_combobox_without_a_certain_match_is_a_question(browser, cv_path):
+    page = _site_page(browser, {"/jobs/9": LOCATION_COMBO})
+    page.goto(f"{BASE}/jobs/9")
+    recipe = _recipe(cv_path, {**PROFILE, "location": "Lyon"})
+    recipe.open_form(page)
+    stop = _blocked(lambda: recipe.fill_core(page))
+    assert stop.reason == "required_answer_missing"
+    assert stop.answer_request == {
+        "key": "city", "label": "City", "field_type": "select",
+        "options": ["Lyon, Auvergne-Rhône-Alpes, France", "Lyons, Colorado, United States"],
+    }
+    assert page.locator(".chosen").inner_text() == "" and page.locator("#city").input_value() == ""

@@ -51,6 +51,7 @@ try:
         BlockedHuman,
         _exact_form_text,
         _inferred_answer_refused,
+        _fill_suggested_location,
         _normalise_label,
         _safe_label,
     )
@@ -60,6 +61,7 @@ except ImportError:  # pragma: no cover - package import
         BlockedHuman,
         _exact_form_text,
         _inferred_answer_refused,
+        _fill_suggested_location,
         _normalise_label,
         _safe_label,
     )
@@ -208,6 +210,13 @@ _CORE_FIELDS: tuple[tuple[str, re.Pattern[str], tuple[tuple[str, ...], ...]], ..
     ("email", re.compile(r"e ?mail|email|correo(?: electrónico)?|courriel|mail", re.I), (("contacts", "email"), ("email",))),
     ("phone", re.compile(r"(?:mobile |cell |contact )?(?:phone|telephone)|mobile|tel|telefon(?:nummer)?|handy(?:nummer)?|telefono|cellulare|téléphone|portable|teléfono|móvil|telefone|telemóvel|celular|telefonszám|mobil", re.I),
      (("contacts", "phone"), ("phone",))),
+    # 1888 (14/09): where the candidate lives. A job's location or a
+    # relocation question is not this; the whole label must be the fact.
+    ("location", re.compile(r"(?:current |home )?(?:location|city)(?: city)?|city of residence|place of residence|residence"
+                            r"|wohnort|aktueller wohnort|stadt|città|città residenza|luogo residenza|residenza"
+                            r"|ville|ville résidence|lieu résidence|localisation|ciudad|ciudad residencia|localidad"
+                            r"|cidade|cidade residência|localização|város|lakóhely|település", re.I),
+     (("location",),)),
     ("linkedin", re.compile(r"linkedin", re.I), (("contacts", "linkedin"),)),
     ("github", re.compile(r"github", re.I), (("contacts", "github"),)),
     ("website", re.compile(r"(?:personal |portfolio )?(?:website|web site|homepage|portfolio|site)|sito web|sito|webseite|site web|sitio web|weboldal", re.I),
@@ -325,11 +334,15 @@ _INSPECT_JS = r"""
       if (q.type === 'file') answered = el.files && el.files.length > 0;
       else if (q.type === 'checkbox' || q.type === 'radio') answered = el.checked;
       else answered = clean(el.value) !== '';
+      // A field that keeps only one of its own suggestions (location_choice).
+      const suggest = el.getAttribute('role') === 'combobox'
+        || ['list', 'both'].includes((el.getAttribute('aria-autocomplete') || '').toLowerCase());
       described.push({
         id, type: q.type === 'radio' ? 'radio' : q.type, label, name: el.name || el.id || '',
         options: q.type === 'checkbox' ? ['Yes', 'No'] : options,
         required: el.required || el.getAttribute('aria-required') === 'true' || starred,
         answered, accept: el.getAttribute('accept') || '', autocomplete: el.getAttribute('autocomplete') || '',
+        suggest, listbox: suggest ? (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '') : '',
       });
     }
     // Custom listboxes: a button that opens a role=listbox.  Their options are
@@ -885,6 +898,9 @@ class GenericRecipe:
                 continue
             key, _paths = field
             label = self._label(question)
+            if key == "location" and question.get("suggest"):
+                self._fill_location_choice(page, form, question, label)
+                continue
             # profile_facts rule: the profile under its aliases, then a saved
             # answer, then a question the CLOSER works out (CL-08). Never a
             # hard stop for a fact the profile can give, never a split name.
@@ -916,6 +932,42 @@ class GenericRecipe:
                 raise _inferred_answer_refused(
                     self, refused, lambda q=question: core_answer_request(self._label(q), str(q.get("type") or "text"))
                 ) from None
+
+    def _fill_location_choice(self, page, form, question: Mapping[str, Any], label: str) -> None:
+        control = self._control(form, question).first
+
+        def options():
+            # The listbox the control names; else the page's open listbox.
+            listbox = control.get_attribute("aria-controls") or control.get_attribute("aria-owns") or question.get("listbox")
+            if listbox:
+                return page.locator(f"[id='{listbox}'] [role=option]")
+            return page.locator("[role=listbox] [role=option]")
+
+        def accepted(text: str) -> bool:
+            if " ".join(control.input_value().split()) == text:
+                return True
+            # A react-style select shows the choice next to an emptied input.
+            return bool(control.evaluate(
+                "(el, text) => { let box = el.parentElement;"
+                " for (let i = 0; i < 3 && box; i++, box = box.parentElement)"
+                "   if (Array.from(box.querySelectorAll('*')).some(n => !n.closest('[role=listbox]')"
+                "       && n.children.length === 0 && n.textContent.trim() === text)) return true;"
+                " return false; }",
+                text,
+            ))
+
+        _fill_suggested_location(
+            self,
+            page,
+            platform="company site",
+            control=control,
+            options=options,
+            accepted=accepted,
+            label=label,
+            field_key=str(question.get("name") or "location"),
+            required=bool(question.get("required")),
+            step="fill",
+        )
 
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:

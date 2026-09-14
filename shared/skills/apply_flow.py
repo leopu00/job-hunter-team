@@ -66,6 +66,10 @@ try:
     import page_failure
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import page_failure
+try:
+    import location_choice
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import location_choice
 
 
 LOG = logging.getLogger("jht.apply_flow")
@@ -384,6 +388,93 @@ def _core_fact_missing(platform: str, label: str, step: str, control_type: str =
     return BlockedHuman(
         "required_answer_missing",
         f"Required {platform} field needs a fact the profile does not state: {_safe_label(label)}",
+        step,
+        answer_request=request,
+    )
+
+
+def _fill_suggested_location(
+    recipe: Any,
+    page: Any,
+    *,
+    platform: str,
+    control: Any,
+    options: Callable[[], Any],
+    accepted: Callable[[str], bool],
+    label: str,
+    field_key: str,
+    required: bool,
+    step: str,
+) -> None:
+    """A location field that keeps only one of its own suggestions (location_choice).
+
+    1888 (14/09): Lever "Current location" stopped with unknown_required_control
+    though the profile says where the candidate lives. The saved answer, else
+    the profile's location, is typed; a suggestion is clicked only when it is
+    certainly that place; otherwise the suggestions are the question's exact
+    options, for the CLOSER to choose (CL-08).
+    """
+    present, saved = recipe._answer_for(label, field_key)
+    source_key = _normalise_label(label) or _normalise_label(field_key)
+    if present and (isinstance(saved, bool) or not isinstance(saved, (str, int, float))):
+        raise _inferred_answer_refused(
+            recipe,
+            BlockedHuman("answer_type_unknown", f"{platform} location needs one suggestion as text: {_safe_label(label)}", step),
+            lambda: None,
+        )
+    wanted = str(saved).strip() if present else (profile_facts.profile_value(recipe.profile, "location") or "")
+    if not wanted:
+        if required:
+            raise _core_fact_missing(platform, label, step)
+        return
+    if not present:
+        recipe.answer_sources[source_key] = "profile"
+    seen: list[str] = []
+    for query in location_choice.queries(wanted):
+        found = location_choice.suggestions(page, control, options, query)
+        seen = seen or found
+        choice = location_choice.pick(wanted, found)
+        if not choice:
+            continue
+        if location_choice.click_option(options(), choice):
+            page.wait_for_timeout(200)
+            if accepted(choice):
+                return
+        location_choice.dismiss(page, control)
+        raise _inferred_answer_refused(
+            recipe,
+            BlockedHuman("answer_not_accepted", f"{platform} did not keep the chosen location for: {_safe_label(label)}", step),
+            lambda: None,
+        )
+    location_choice.dismiss(page, control)
+    if not present:
+        recipe.answer_sources.pop(source_key, None)
+    if not required:
+        return
+    exact_label = _exact_form_text(label)
+    choices = [text for text in (_exact_form_text(option, maximum=500) for option in seen) if text]
+    request = (
+        {"key": _normalise_label(exact_label), "label": exact_label, "field_type": "select", "options": choices}
+        if exact_label and _normalise_label(exact_label) and choices
+        else None
+    )
+    if request is None:
+        raise BlockedHuman(
+            "unknown_required_control",
+            f"{platform} location shows no suggestions to choose from: {_safe_label(label)}",
+            step,
+        )
+    if present:
+        # A saved answer no suggestion matches: the CLOSER's own is asked
+        # again with the options; a user's stays a human stop.
+        raise _inferred_answer_refused(
+            recipe,
+            BlockedHuman("answer_option_unknown", f"No {platform} location suggestion matches the saved answer for: {_safe_label(label)}", step),
+            lambda: request,
+        )
+    raise BlockedHuman(
+        "required_answer_missing",
+        f"Required {platform} location needs one of the page's suggestions: {_safe_label(label)}",
         step,
         answer_request=request,
     )
@@ -1840,11 +1931,34 @@ class GreenhouseRecipe:
             paths = self._CORE_LABELS.get(_normalise_label(label))
             if not paths or self._is_answered(entry):
                 continue
+            combo = entry.locator("input[role=combobox]")
+            if paths == (("location",),) and combo.count() == 1:
+                # "Location (City)": a react-select fed by a geocoder, empty
+                # until typed into (location_choice).
+                self._fill_location_choice(page, entry, combo.first, label, self._required(entry))
+                continue
             present, value = self._core_value(self._field_key(entry), label, paths)
             if present:
                 self._fill_answer(page, entry, label, value)
             elif self._required(entry):
                 raise _core_fact_missing("Greenhouse", label, "fill")
+
+    def _fill_location_choice(self, page, entry, control, label: str, required: bool) -> None:
+        _fill_suggested_location(
+            self,
+            page,
+            platform="Greenhouse",
+            control=control,
+            options=lambda scope=entry: scope.locator("[role=option]"),
+            accepted=lambda text, scope=entry: any(
+                " ".join(value.split()) == text
+                for value in scope.locator(".select__single-value").all_inner_texts()
+            ),
+            label=label,
+            field_key=control.get_attribute("id") or "location",
+            required=required,
+            step="fill",
+        )
 
     def _fill_core_choice(self, page, control, control_id: str, label: str, required: bool) -> None:
         entry = control.locator(
@@ -1856,13 +1970,22 @@ class GreenhouseRecipe:
                 f"Greenhouse core choice has no recognised container: {_safe_label(label)}",
                 "fill",
             )
+        if control_id == "location" and control.get_attribute("role") == "combobox":
+            self._fill_location_choice(page, entry.first, control, label, required)
+            return
         present, value = self._answer_for(label, control_id)
         if not present:
             if not required:
                 return
             request = self._answer_request(page, entry.first, label)
             if request is None:
-                raise _core_fact_missing("Greenhouse", label, "fill")
+                # A text answer never fills a choice: asking for one would only
+                # come back as the same question (1967, 15:19Z).
+                raise BlockedHuman(
+                    "unknown_required_control",
+                    f"Greenhouse choice options not readable: {_safe_label(label)}",
+                    "fill",
+                )
             raise BlockedHuman(
                 "required_answer_missing",
                 f"Required Greenhouse choice needs one of the page's options: {_safe_label(label)}",
@@ -2447,13 +2570,22 @@ class LeverRecipe:
             label = self._label(entry)
             if name == "location" and entry.locator("input[type=hidden]").count():
                 # An autocomplete: the typed text is not the value Lever keeps
-                # (a hidden field is), so filling it proves nothing.
-                if self._required(entry):
-                    raise BlockedHuman(
-                        "unknown_required_control",
-                        f"Lever location must be chosen from its suggestions: {_safe_label(label or name)}",
-                        "fill",
-                    )
+                # (the hidden selectedLocation a clicked suggestion fills is).
+                control = entry.locator("input[name=location]").first
+                hidden = entry.locator("input[type=hidden]").first
+                _fill_suggested_location(
+                    self,
+                    page,
+                    platform="Lever",
+                    control=control,
+                    options=lambda scope=entry: scope.locator(".dropdown-location"),
+                    accepted=lambda text, c=control, h=hidden: bool(h.input_value().strip())
+                    and " ".join(c.input_value().split()) == text,
+                    label=label or name,
+                    field_key=name,
+                    required=self._required(entry),
+                    step="fill",
+                )
                 continue
             present, value = self._core_value(name, label, paths)
             if not present:
