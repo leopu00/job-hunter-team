@@ -296,6 +296,39 @@ def test_a_headed_try_after_a_handoff_starts_again_from_the_queue_url(home: Path
     assert launches == [True, False]
 
 
+def test_a_headed_try_starts_from_the_queue_url_whatever_the_run_rewrote(
+    tmp_path: Path, cv_path: Path, monkeypatch
+):
+    # A run may open the vacancy on another address than the checkpoint's (a
+    # LinkedIn country page opened on www, a handoff): the headed rerun must
+    # load the checkpoint of the queue's address, not stop as checkpoint_invalid.
+    playwright = pytest.importorskip("playwright.sync_api")
+    real_load = FlowCheckpoint.load.__func__
+    opened = ASHBY_URL + "?opened-elsewhere=1"
+
+    def load_then_rewrite(cls, path, position_id, url):
+        loaded = real_load(cls, path, position_id, url)
+        flow.url = opened
+        return loaded
+
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(headless=True)
+        hidden, visible = browser.new_page(), browser.new_page()
+        serve(hidden, 403, CHALLENGE)
+        serve(visible, 403, CHALLENGE)
+        flow = build_flow(tmp_path, cv_path)
+        flow.headed_available = lambda: True
+        launches = managed(flow, monkeypatch, {True: hidden, False: visible})
+        monkeypatch.setattr(FlowCheckpoint, "load", classmethod(load_then_rewrite))
+
+        result = flow.run(page=None)
+        browser.close()
+
+    assert (result.status, result.reason) == ("blocked_human", "bot_protection")
+    assert launches == [True, False]
+    assert read(tmp_path)["url"] == ASHBY_URL
+
+
 # --- temporary ------------------------------------------------------------------
 
 

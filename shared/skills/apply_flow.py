@@ -3862,6 +3862,9 @@ class ApplicationFlow:
         return None
 
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
+        # The address that names the checkpoint, before this run moves self.url
+        # (a LinkedIn page opened on www, a handoff): a headed rerun needs it.
+        queue_url = self.url
         try:
             checkpoint = FlowCheckpoint.load(
                 self.checkpoint_path, self.position_id, self.url
@@ -3937,7 +3940,6 @@ class ApplicationFlow:
                 return self._record(checkpoint, receipt)
 
         managed = self._page_managed = page is None
-        requested_url = self.url
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
         headed_retry = False
         with manager as active_page:
@@ -4175,7 +4177,7 @@ class ApplicationFlow:
         # An anti-bot wall seen before any form work: the headless browser is
         # closed; the page is opened once more, headed.
         self._headed_retry_used = True
-        self.url = requested_url  # a handoff moved it; the checkpoint names the queue's URL
+        self.url = queue_url
         previous_headless, self.headless = self.headless, False
         try:
             return self.run(page=None, navigate=navigate)
