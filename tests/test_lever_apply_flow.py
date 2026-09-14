@@ -646,6 +646,7 @@ def lever_location_form(
       input.addEventListener('keydown', () => {
         clearTimeout(timer);
         timer = setTimeout(() => {
+          window.searches = (window.searches || 0) + 1;
           results.innerHTML = '';
           found = places[input.value.trim().toLowerCase()] || [];
           found.forEach((name, index) => {
@@ -754,9 +755,17 @@ def test_lever_location_that_shows_no_suggestions_is_never_left_typed(page, tmp_
     result = flow.run(page=page, navigate=False)
 
     if required:
-        assert result.reason == "unknown_required_control"
+        # Nothing for the profile's place: the CLOSER is asked what to search.
+        assert result.reason == "required_answer_missing"
+        assert result.pending_question["key"] == "location search"
         assert page.evaluate("window.submitCount") == 0
         assert page.locator("input[name=location]").input_value() == ""
+        # Its own search shows nothing either: a widget that never answers.
+        open_at(page, APPLY, lever_location_form(script=False))
+        searched = profile(location="Test City, Test Country", application_answers={"location search": "Test City"})
+        result = build_flow(tmp_path, cv_path, candidate=searched).run(page=page, navigate=False)
+        assert result.reason == "unknown_required_control"
+        assert page.evaluate("window.submitCount") == 0
     else:
         assert result.status == "applied", result
         assert page.evaluate("window.sentLocation") == ["", ""]
@@ -769,7 +778,51 @@ def test_lever_location_missing_from_the_profile_is_a_question(page, tmp_path: P
     result = flow.run(page=page, navigate=False)
 
     assert result.reason == "required_answer_missing"
-    assert result.pending_question["key"] == "current location"
+    question = result.pending_question
+    assert (question["key"], question["label"], question["field_type"], question["options"]) == (
+        "location search", "Location search", "text", []
+    )
+    assert question["scope"] == "global"  # where the candidate lives is not a per-company answer
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_lever_location_that_is_not_a_place_is_never_typed(page, tmp_path: Path, cv_path: Path):
+    # 1888 after patch 21 (14/09): a "…wide" work preference typed into the
+    # geocoder offered two villages called Wide, and the CLOSER asked the user.
+    open_at(page, APPLY, lever_location_form())
+    notifications: list[dict] = []
+    candidate = profile(location="Remote worldwide")
+    flow = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["key"] == "location search"
+    assert result.pending_question["options"] == []
+    assert page.evaluate("window.searches || 0") == 0  # the geocoder never saw the preference
+    assert page.evaluate("window.submitCount") == 0
+    assert notifications == []
+
+    # The CLOSER reads the city of residence in the CV (basis cv) and saves it.
+    open_at(page, APPLY, lever_location_form())
+    _sent_location(page)
+    worked_out = {**candidate, "application_answers": {"location search": "Milan, Italy"}}
+    result = build_flow(tmp_path, cv_path, candidate=worked_out, notifications=notifications).run(page=page, navigate=False)
+    assert result.status == "applied", result
+    assert page.evaluate("window.sentLocation")[0] == "Milan, Lombardy, Italy"
+    assert notifications == []
+
+
+def test_lever_suggestions_that_share_nothing_with_the_place_are_never_options(page, tmp_path: Path, cv_path: Path):
+    unrelated = {"milan, italy": ["Wide, Aceh, Indonesia", "Wide, Papua, Indonesia"], "milan": ["Wide, Aceh, Indonesia"]}
+    open_at(page, APPLY, lever_location_form(places=unrelated))
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Milan, Italy"))
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "location search"
+    assert "Indonesia" not in json.dumps(result.pending_question)
     assert page.evaluate("window.submitCount") == 0
 
 

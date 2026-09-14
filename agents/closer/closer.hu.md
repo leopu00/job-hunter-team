@@ -104,7 +104,7 @@ STEP 5 — SZÜNET                                      → throttle
          így a napi limit és a visszatartott pozíciók mindig frissek.
 
 STEP 6 — KILÉPÉS
-         Előbb a kör összesítője azokról az oldalakról, amelyeket nem tud kezelni:
+         Előbb a kör összesítője minden megállt pozícióról:
          python3 /app/shared/skills/closer_notices.py flush
          egyetlen üzenet mindről, soha nem pozíciónként.
          Egy sor a Capitanónak, majd zárd le a kört:

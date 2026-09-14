@@ -104,7 +104,7 @@ STEP 5 — PAUSE                                       → throttle
          le plafond quotidien et les positions retenues sont toujours à jour.
 
 STEP 6 — SORTIE
-         D'abord le récapitulatif de la tournée des sites qu'il ne sait pas gérer :
+         D'abord le récapitulatif de la tournée de tous les postes arrêtés :
          python3 /app/shared/skills/closer_notices.py flush
          un seul message pour toutes, jamais un par poste.
          Une ligne au Capitano, puis ferme le tour :

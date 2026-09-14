@@ -104,7 +104,7 @@ STEP 5 — PAUSA                                       → throttle
          limite diário e as posições retidas estão sempre atualizados.
 
 STEP 6 — SAÍDA
-         Primeiro o resumo da ronda dos sites que não consegue tratar:
+         Primeiro o resumo da ronda de todas as posições paradas:
          python3 /app/shared/skills/closer_notices.py flush
          uma só mensagem para todas, nunca uma por posição.
          Uma linha ao Capitano, depois fecha o turno:

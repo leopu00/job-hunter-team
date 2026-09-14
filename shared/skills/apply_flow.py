@@ -416,31 +416,61 @@ def _fill_suggested_location(
     """A location field that keeps only one of its own suggestions (location_choice).
 
     1888 (14/09): Lever "Current location" stopped with unknown_required_control
-    though the profile says where the candidate lives. The saved answer, else
-    the profile's location, is typed; a suggestion is clicked only when it is
-    certainly that place; otherwise the suggestions are the question's exact
-    options, for the CLOSER to choose (CL-08).
+    though the profile says where the candidate lives. A place is typed; a
+    suggestion is clicked only when it is certainly that place; otherwise the
+    suggestions near it are the question's exact options, for the CLOSER to
+    choose (CL-08). Suggestions that share nothing with the place are never
+    options: the CLOSER is asked what to search for instead.
     """
-    present, saved = recipe._answer_for(label, field_key)
     source_key = _normalise_label(label) or _normalise_label(field_key)
-    if present and (isinstance(saved, bool) or not isinstance(saved, (str, int, float))):
-        raise _inferred_answer_refused(
-            recipe,
-            BlockedHuman("answer_type_unknown", f"{platform} location needs one suggestion as text: {_safe_label(label)}", step),
-            lambda: None,
-        )
-    wanted = str(saved).strip() if present else (profile_facts.profile_value(recipe.profile, "location") or "")
+    search_request = {
+        "key": location_choice.SEARCH_KEY,
+        "label": location_choice.SEARCH_LABEL,
+        "field_type": "text",
+        "options": [],
+    }
+
+    def text_answer(present: bool, value: Any) -> str:
+        if present and (isinstance(value, bool) or not isinstance(value, (str, int, float))):
+            raise _inferred_answer_refused(
+                recipe,
+                BlockedHuman("answer_type_unknown", f"{platform} location needs text: {_safe_label(label)}", step),
+                lambda: None,
+            )
+        return str(value).strip() if present else ""
+
+    # What to type, in order: the suggestion the CLOSER chose for this field;
+    # the place it worked out to search for ("location search", CL-08, from
+    # the profile or the CV); the profile's location, only when it names a
+    # place (1888 after patch 21: a "…wide" work preference found two villages).
+    chosen_present, chosen = recipe._answer_for(label, field_key)
+    wanted, origin = text_answer(chosen_present, chosen), "chosen"
     if not wanted:
-        if required:
-            raise _core_fact_missing(platform, label, step)
-        return
-    if not present:
-        recipe.answer_sources[source_key] = "profile"
+        search_present, search = recipe._answer_for(location_choice.SEARCH_LABEL, location_choice.SEARCH_KEY)
+        wanted, origin = text_answer(search_present, search), "search"
+    if not wanted:
+        profile_location = profile_facts.profile_value(recipe.profile, "location") or ""
+        if location_choice.searchable(profile_location):
+            wanted, origin = profile_location, "profile"
+            recipe.answer_sources[source_key] = "profile"
+    if not wanted:
+        if not required:
+            return
+        raise BlockedHuman(
+            "required_answer_missing",
+            f"{platform} location needs a place to search for: {_safe_label(label)}",
+            step,
+            answer_request=search_request,
+        )
+
     seen: list[str] = []
+    answered = False
     for query in location_choice.queries(wanted):
         found = location_choice.suggestions(page, control, options, query)
-        seen = seen or found
-        choice = location_choice.pick(wanted, found)
+        answered = answered or bool(found)
+        near = location_choice.related(wanted, found)
+        seen = seen or near
+        choice = location_choice.pick(wanted, near)
         if not choice:
             continue
         if location_choice.click_option(options(), choice):
@@ -454,36 +484,48 @@ def _fill_suggested_location(
             lambda: None,
         )
     location_choice.dismiss(page, control)
-    if not present:
+    if origin == "profile":
         recipe.answer_sources.pop(source_key, None)
     if not required:
         return
     exact_label = _exact_form_text(label)
     choices = [text for text in (_exact_form_text(option, maximum=500) for option in seen) if text]
-    request = (
-        {"key": _normalise_label(exact_label), "label": exact_label, "field_type": "select", "options": choices}
-        if exact_label and _normalise_label(exact_label) and choices
-        else None
-    )
-    if request is None:
+    if choices and exact_label and _normalise_label(exact_label):
+        request = {"key": _normalise_label(exact_label), "label": exact_label, "field_type": "select", "options": choices}
+        if origin == "chosen":
+            # A chosen suggestion the page no longer offers: the CLOSER's own
+            # choice is asked again with the options; a user's stays a stop.
+            raise _inferred_answer_refused(
+                recipe,
+                BlockedHuman("answer_option_unknown", f"No {platform} location suggestion matches the saved answer for: {_safe_label(label)}", step),
+                lambda: request,
+            )
+        raise BlockedHuman(
+            "required_answer_missing",
+            f"Required {platform} location needs one of the page's suggestions: {_safe_label(label)}",
+            step,
+            answer_request=request,
+        )
+    if origin == "profile":
+        # Nothing near the profile's place: the CLOSER works out what to search.
+        raise BlockedHuman(
+            "required_answer_missing",
+            f"{platform} location found nothing near the profile's place: {_safe_label(label)}",
+            step,
+            answer_request=search_request,
+        )
+    if not answered:
         raise BlockedHuman(
             "unknown_required_control",
             f"{platform} location shows no suggestions to choose from: {_safe_label(label)}",
             step,
         )
-    if present:
-        # A saved answer no suggestion matches: the CLOSER's own is asked
-        # again with the options; a user's stays a human stop.
-        raise _inferred_answer_refused(
-            recipe,
-            BlockedHuman("answer_option_unknown", f"No {platform} location suggestion matches the saved answer for: {_safe_label(label)}", step),
-            lambda: request,
-        )
-    raise BlockedHuman(
-        "required_answer_missing",
-        f"Required {platform} location needs one of the page's suggestions: {_safe_label(label)}",
-        step,
-        answer_request=request,
+    # The CLOSER's own search found nothing near it either: asked again, and
+    # after the refusal cap only its explicit ask reaches the user.
+    raise _inferred_answer_refused(
+        recipe,
+        BlockedHuman("answer_option_unknown", f"No {platform} location suggestion is near the searched place: {_safe_label(label)}", step),
+        lambda: search_request,
     )
 
 

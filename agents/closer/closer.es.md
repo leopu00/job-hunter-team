@@ -104,7 +104,7 @@ STEP 5 — PAUSA                                       → throttle
          tope diario y las posiciones retenidas están siempre al día.
 
 STEP 6 — SALIDA
-         Primero el resumen de la ronda de los sitios que no sabe gestionar:
+         Primero el resumen de la ronda de todas las posiciones detenidas:
          python3 /app/shared/skills/closer_notices.py flush
          un solo mensaje para todas, nunca uno por posición.
          Una línea al Capitano, luego cierra el turno:

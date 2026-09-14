@@ -12,9 +12,9 @@ readable.
    language of the profile (`shared/i18n.py`: i18n-prefs.json → JHT_LANG →
    host.env), saying why and what the user can do. The technical reason and
    detail stay at the end, in brackets, for support.
-2. `defer(position_id, reason, url)` — for the stops that are a property of
-   the site rather than of the application (DIGEST_REASONS): nothing is sent
-   now, the stop joins the pending list. `flush()` sends ONE message for all
+2. `defer(position_id, reason, url)` — every stop that is not a form question
+   (HQ-BACKEND-3, 14/09): nothing is sent now, the stop joins the pending
+   list, one line per position (the latest stop wins). `flush()` sends ONE message for all
    of them; the CLOSER runs `closer_notices.py flush` when it ends its round.
    If a stop waits longer than FLUSH_AFTER (the CLOSER died before the end of
    its round), the next `defer` flushes by itself.
@@ -25,9 +25,15 @@ readable.
    first blank line is read by web/lib/application-answer-request.ts and by
    the Telegram reply matcher. Only what follows the blank line is localized.
 
-State: $JHT_HOME/.cache/apply-flow/notices.json, written atomically. One entry
-per position + reason + authorisation instant: a rerun of the same stop is not
-a second line, a stop after the user authorised the position again is.
+State: $JHT_HOME/.cache/apply-flow/notices.json, written atomically. A key per
+position + reason + authorisation instant: a rerun of the same stop is not a
+second line, a stop after the user authorised the position again is — and it
+replaces that position's older pending line (patch 20, 14/09: 2071 and 1798
+were listed twice, once per authorisation).
+
+The message goes through agents/_tools/jht-notify-user, which accepts a
+source id only with its action and payload (source metadata incomplete →
+exit 1): patch 20 flushed nothing for that, behind a test with a fake notifier.
 """
 
 from __future__ import annotations
@@ -58,14 +64,6 @@ try:
 except ImportError:  # pragma: no cover - package import
     from shared.skills.external_content import flatten_to_one_line
 
-DIGEST_REASONS = frozenset({
-    "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
-    # A company page with nothing to apply with: a stop of the site, not of the application.
-    "generic_form_missing",
-    # page_failure: a gone page, an anti-bot wall, a page down three times in a day.
-    # A temporary failure below that is never a stop, so it never reaches here.
-    "page_not_found", "bot_protection", "page_temporarily_unavailable",
-})
 # Reasons with their own why/action text. Any other reason gets the default.
 KNOWN_REASONS = (
     "ats_unsupported",
@@ -91,8 +89,18 @@ KNOWN_REASONS = (
     "page_not_found",
     "bot_protection",
     "page_temporarily_unavailable",
+    # Every stop goes to the summary now (HQ-BACKEND-3, 14/09): the live round
+    # had 8 separate notices, 6 of them linkedin_credentials_missing. A sent or
+    # probably sent email must never read as "nothing was sent".
+    "receipt_incomplete",
+    "send_outcome_unknown",
+    "linkedin_credentials_missing",
+    "linkedin_login_failed",
+    "linkedin_challenge",
+    "unknown_required_control",
 )
 FLUSH_AFTER = timedelta(hours=6)
+SOURCE_ACTION = "closer_digest"
 KEEP_SENT = 500
 MAX_LINES = 25
 
@@ -273,6 +281,21 @@ def _entry_key(position_id: int, reason: str, authorised_at: str) -> str:
     return f"{int(position_id)}:{reason}:{authorised_at}"
 
 
+def _entry_position(entry: Mapping[str, Any]) -> int | None:
+    try:
+        return int(entry.get("position_id"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_per_position(pending: list[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The last pending entry of each position, in queue order."""
+    last: dict[Any, int] = {}
+    for index, entry in enumerate(pending):
+        last[_entry_position(entry)] = index
+    return [entry for index, entry in enumerate(pending) if last[_entry_position(entry)] == index]
+
+
 def defer(position_id: int, reason: str, url: str) -> None:
     """Queue a site stop for the round's summary instead of notifying now."""
     path = _state_path()
@@ -281,6 +304,10 @@ def defer(position_id: int, reason: str, url: str) -> None:
     key = _entry_key(position_id, reason, facts["apply_requested_at"])
     known = {entry.get("key") for entry in state["pending"]} | set(state["sent"])
     if key not in known:
+        # One line per position: a newer stop replaces the older pending one.
+        state["pending"] = [
+            entry for entry in state["pending"] if _entry_position(entry) != int(position_id)
+        ]
         try:
             host = (urllib.parse.urlsplit(str(url)).hostname or "").casefold()
         except ValueError:
@@ -310,6 +337,7 @@ def summary_message(pending: list[Mapping[str, Any]]) -> str:
             "closer.digest.line",
             position=_position_label(pid, _position(pid)),
             why=reason_why(str(entry["reason"])),
+            action=reason_action(str(entry["reason"])),
             host=flatten_to_one_line(entry.get("host", "")),
         ))
     if len(pending) > MAX_LINES:
@@ -319,7 +347,7 @@ def summary_message(pending: list[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _default_notifier(*, message: str, source_id: str) -> str:
+def _default_notifier(*, message: str, source_id: str, payload: Mapping[str, Any]) -> str:
     candidates = [
         shutil.which("jht-notify-user"),
         "/app/agents/_tools/jht-notify-user",
@@ -328,7 +356,12 @@ def _default_notifier(*, message: str, source_id: str) -> str:
     executable = next((value for value in candidates if value and Path(value).is_file()), None)
     if not executable:
         raise RuntimeError("jht-notify-user is unavailable")
-    command = [executable, "--agent", "closer", "--kind", "digest", "--source-id", source_id]
+    command = [
+        executable, "--agent", "closer", "--kind", "digest",
+        "--source-id", source_id,
+        "--source-action", SOURCE_ACTION,
+        "--source-payload", json.dumps(dict(payload), sort_keys=True),
+    ]
     if os.environ.get("JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY") == "1":
         command.append("--no-telegram")
     command.append(message)
@@ -342,14 +375,17 @@ def flush(notifier: Callable[..., Any] | None = None) -> dict[str, Any]:
     """Send the pending site stops as one message. Returns {status, count}."""
     path = _state_path()
     state = _read_state(path)
-    pending = list(state["pending"])
-    if not pending:
+    queued = list(state["pending"])
+    if not queued:
         return {"status": "empty", "count": 0}
-    keys = [str(entry.get("key")) for entry in pending]
+    # Every queued key is settled by this message, the replaced lines too.
+    keys = [str(entry.get("key")) for entry in queued]
+    pending = _latest_per_position(queued)
     source_id = "closer-digest:" + hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()[:24]
     message = summary_message(pending)
+    payload = {"position_ids": [_entry_position(entry) for entry in pending]}
     try:
-        (notifier or _default_notifier)(message=message, source_id=source_id)
+        (notifier or _default_notifier)(message=message, source_id=source_id, payload=payload)
     except Exception as exc:
         # Kept pending: the next flush tries again with the same source id, so
         # a message that did reach the database is not duplicated.
