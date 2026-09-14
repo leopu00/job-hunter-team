@@ -153,9 +153,9 @@ def test_a_mode_sconosciuto_chiude(tmp_path):
     assert v.reason == "consent_mode_unknown"
 
 
-@pytest.mark.parametrize("cap", [0, -1, True, "3", 1.5, None])
+@pytest.mark.parametrize("cap", [0, -1, True, False, "3", "abc", 1.5, [], {}])
 def test_a_tetto_non_valido_chiude(tmp_path, cap):
-    """Un tetto assente o assurdo non è un tetto.
+    """Un tetto assurdo chiude: assente o null è «nessun tetto», tutto il resto non si indovina.
 
     `True` è nel parametro apposta: in Python è un `int` e passerebbe un
     `isinstance` scritto senza pensarci, autorizzando UNA candidatura al giorno
@@ -464,7 +464,7 @@ def test_il_launcher_rifiuta_anche_senza_il_modulo(tmp_path):
 # già fermato? Quello è il giro a vuoto (Capitano che rispawna a ogni tick) e il
 # tentativo cieco (CLOSER che rilancia un captcha) insieme.
 
-from apply_gate import application_queue, checkpoint_path  # noqa: E402
+from apply_gate import application_queue, checkpoint_path, daily_cap_verdict  # noqa: E402
 
 
 def make_queue_db(tmp_path: Path, positions=(), applications=()) -> str:
@@ -812,3 +812,58 @@ def test_una_preview_che_fallisce_non_cambia_la_trattenuta(tmp_path, layout_chec
     layout_check_on.setattr(pdf_layout_check, "render_preview", render)
     db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
     assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
+
+
+
+# ── tetto opzionale (ordine dell'operatore 2026-09-14: «non ci deve essere un massimo») ──
+
+
+def _applied_by_closer(db, pids, cv):
+    c = sqlite3.connect(db)
+    for pid in pids:
+        c.execute("INSERT INTO positions (id, status, url, apply_requested, apply_requested_at, apply_requested_by) "
+                  "VALUES (?, 'applied', ?, 1, ?, 'user_web')", (pid, URL, ASKED))
+        c.execute("INSERT INTO applications (position_id, cv_pdf_path, applied, applied_via, applied_at) "
+                  "VALUES (?, ?, 1, 'agent_closer', datetime('now', 'localtime'))", (pid, cv))
+    c.commit()
+    c.close()
+
+
+@pytest.mark.parametrize("auto", [{"enabled": True}, {"enabled": True, "max_per_day": None}])
+def test_senza_tetto_la_coda_non_si_chiude_mai_per_il_numero(tmp_path, auto):
+    cv = cv_file(tmp_path)
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": auto}}
+    v = consent_verdict(path=write_config(tmp_path, cfg))
+    assert v.allowed and v.context["max_per_day"] is None
+    db = make_queue_db(tmp_path, [authorised(1)], [(1, cv, 0, None, None)])
+    _applied_by_closer(db, range(100, 140), cv)  # 40 already sent today
+    q = queue(tmp_path, db, cfg)
+    assert q["ready"], q
+    assert (q["max_per_day"], q["remaining_today"], q["sent_today"]) == (None, None, 40)
+    cap = daily_cap_verdict(config_path=write_config(tmp_path, cfg), db_path=db)
+    assert cap.allowed and (cap.context["max_per_day"], cap.context["remaining_today"]) == (None, None)
+
+
+def test_un_tetto_configurato_resta_un_muro(tmp_path):
+    cv = cv_file(tmp_path)
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": 5}}}
+    db = make_queue_db(tmp_path, [authorised(1)], [(1, cv, 0, None, None)])
+    _applied_by_closer(db, range(100, 104), cv)
+    q = queue(tmp_path, db, cfg)
+    assert q["ready"] and (q["max_per_day"], q["remaining_today"]) == (5, 1)
+    _applied_by_closer(db, [104], cv)
+    q = queue(tmp_path, db, cfg)
+    assert (q["ready"], q["reason"], q["remaining_today"]) == (False, "daily_cap_reached", 0)
+    assert not daily_cap_verdict(config_path=write_config(tmp_path, cfg), db_path=db).allowed
+
+
+def test_tetto_non_valido_chiude_anche_coda_e_prenotazione(tmp_path):
+    import apply_gate
+
+    cv = cv_file(tmp_path)
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": "abc"}}}
+    db = make_queue_db(tmp_path, [authorised(1)], [(1, cv, 0, None, None)])
+    q = queue(tmp_path, db, cfg)
+    assert (q["ready"], q["reason"], q["positions"]) == (False, "consent_cap_invalid", [])
+    slot = apply_gate.reserve_daily_slot(1, "email", config_path=write_config(tmp_path, cfg), db_path=db)
+    assert (slot.allowed, slot.reason) == (False, "consent_cap_invalid")
