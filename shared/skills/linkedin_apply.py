@@ -56,11 +56,12 @@ from apply_flow import (  # noqa: E402
     GreenhouseRecipe,
     LeverRecipe,
     PlatformHandoff,
+    _core_fact_missing,
     _normalise_label,
     _resolve_db_path,
     _safe_label,
 )
-from profile_facts import core_answer_request, profile_value  # noqa: E402
+from profile_facts import profile_value  # noqa: E402
 
 LOGIN_URL = "https://www.linkedin.com/login"
 CREDENTIALS_FILE = ("credentials", "linkedin.json")
@@ -721,21 +722,34 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue
             self._answer_entry(page, entry, label, key)
 
-    def _core_request(self, page, entry, label: str) -> dict[str, Any] | None:
-        control = entry.locator(LeverRecipe._CONTROLS).first
-        if entry.locator("input:not([type=radio]):not([type=checkbox])").count():
-            return core_answer_request(label, control.get_attribute("type") or "text")
-        # A select or a choice keeps its exact options.
-        return GreenhouseRecipe._answer_request(page, entry, label)
+    @staticmethod
+    def _core_choice(entry) -> bool:
+        """A select, a choice or a typeahead: its value is one of the page's options, never profile text."""
+        return bool(entry.locator("select, input[type=radio], input[type=checkbox], [role=combobox]").count())
+
+    def _core_request(self, page, entry, label: str) -> BlockedHuman:
+        if self._core_choice(entry):
+            request = GreenhouseRecipe._answer_request(page, entry, label)
+            if request is None:
+                return _core_fact_missing("Easy Apply", label, "fill")
+            return BlockedHuman(
+                "required_answer_missing",
+                f"Required Easy Apply choice needs one of the page's options: {_safe_label(label)}",
+                "fill",
+                answer_request=request,
+            )
+        control_type = entry.locator(LeverRecipe._CONTROLS).first.get_attribute("type") or "text"
+        return _core_fact_missing("Easy Apply", label, "fill", control_type)
 
     def _core_entry(self, page, entry, label: str, key: str, fact: str) -> None:
         """The profile_facts rule: the profile under its aliases, a saved answer, then a question.
 
         Never a hard stop for a fact the CLOSER can work out (CL-08), and never
         a name split or joined in code: the CLOSER saves "first name" from
-        `name`, with its basis.
+        `name`, with its basis.  A choice (a city picked from the page's list)
+        takes only a saved exact option: profile text is not an option.
         """
-        value = profile_value(self.profile, fact)
+        value = None if self._core_choice(entry) else profile_value(self.profile, fact)
         present = value is not None
         if present:
             self.answer_sources[_normalise_label(label) or fact] = "profile"
@@ -744,25 +758,15 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         if not present:
             if not self._required(entry):
                 return
-            request = self._core_request(page, entry, label)
-            if request is None:
-                raise BlockedHuman(
-                    "unknown_required_control",
-                    f"Required Easy Apply field has no usable label: {_safe_label(fact)}",
-                    "fill",
-                )
-            raise BlockedHuman(
-                "required_answer_missing",
-                f"Required Easy Apply field needs a fact the profile does not state: {_safe_label(label)}",
-                "fill",
-                answer_request=request,
-            )
+            raise self._core_request(page, entry, label)
         from apply_flow import _inferred_answer_refused
 
         try:
             self._fill_answer(entry, label, value, "fill")
         except BlockedHuman as refused:
-            raise _inferred_answer_refused(self, refused, lambda: self._core_request(page, entry, label)) from None
+            raise _inferred_answer_refused(
+                self, refused, lambda: self._core_request(page, entry, label).answer_request
+            ) from None
 
     def _answer_entry(self, page, entry, label: str, key: str) -> None:
         present, answer = self._answer_for(label, key)

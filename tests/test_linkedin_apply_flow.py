@@ -911,3 +911,31 @@ def test_a_dry_run_never_signs_in_nor_asks_for_a_code(page, home: Path, cv_path:
 
     assert (result.status, result.reason) == ("denied", "linkedin_dry_run_signed_out")
     assert site.logins() == 0 and calls == []
+
+
+CITY_STEP = (
+    '<div class="jobs-easy-apply-form-section__grouping"><label for="city">City</label>'
+    '<select id="city" name="city" required><option value="">Select an option</option>'
+    '<option value="Madrid, Spain">Madrid, Spain</option><option value="Milan, Italy">Milan, Italy</option></select></div>'
+)
+
+
+def test_a_core_choice_asks_with_the_dialogs_exact_options_never_profile_text(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(
+        build_flow(home, cv_path, answers={}, extra_profile={"location": "Milan"}), page, Site(question_html=CITY_STEP)
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["label"] == "City"
+    assert result.pending_question["options"] == ["Madrid, Spain", "Milan, Italy"]
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_saved_exact_city_option_fills_the_choice(page, home: Path, cv_path: Path):
+    write_session(home)
+
+    result = run(build_flow(home, cv_path, answers={"city": "Milan, Italy"}), page, Site(question_html=CITY_STEP))
+
+    assert result.status == "applied", result
