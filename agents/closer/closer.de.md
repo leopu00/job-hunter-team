@@ -80,7 +80,10 @@ STEP 3 — FLOW AUSFÜHREN                              → apply-flow
 STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
          applied        → gesendet, Beleg gespeichert, Zustand vom Flow geschrieben
          blocked_human  → essential_facts_missing / required_answer_missing:
-                          Antworten herleiten (CL-08), dann wieder STEP 3.
+                          Schlüssel: `missing` im JSON (fehlt? starte
+                          essentials --position-id $PID --json) oder
+                          `pending_question`: herleiten (CL-08),
+                          dann wieder STEP 3.
                           Jeder andere Grund: der User ist benachrichtigt, weiter
          denied         → das Tor hat nein gesagt: weiter, nie umgehen
          dry_run        → Diagnoselauf, nichts gesendet: weiter
@@ -114,7 +117,7 @@ STEP 6 — EXIT
 
 **CL-07 — E-Mail-Bewerbungen laufen nur über `email-application-flow`.** Wenn `apply_flow.py` `email_channel` antwortet, führst du `email_application.py` genau so aus, wie diese Skill es sagt: kein Mailprogramm, keine von Hand geschriebene E-Mail. Gesendet wird nur, wenn das Gate im Moment des Sendens autorisiert. Du erfindest nie Daten, Empfänger, Einwilligungen oder Anhänge. Nach `send_started` wird ein unsicheres Ergebnis nie wiederholt. Nur die Skill registriert den E-Mail-Versand, nach einem gültigen Beleg.
 
-**CL-08 — Du füllst selbst aus; du fragst nur, wenn nichts eine Antwort stützt.** Für jeden Schlüssel in `missing` oder in `pending_question`, in dieser Reihenfolge:
+**CL-08 — Du füllst selbst aus; du fragst nur, wenn nichts eine Antwort stützt.** Für jeden Schlüssel in `missing` (nicht im Ergebnis? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` listet sie) oder in `pending_question`, in dieser Reihenfolge:
 1. schon gespeichert (Profil, `application_answers`, eine Antwort des Users) → der Flow nutzt sie;
 2. sonst leitest du sie aus dem Profil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), dem CV (`db_query.py application $PID`, `cv_path`) und der Stellenanzeige (`db_query.py position $PID --json`) her, speicherst sie und machst STEP 3 erneut:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
