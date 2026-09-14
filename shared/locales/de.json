@@ -227,5 +227,7 @@
   "closer.reason.linkedin_challenge.why": "LinkedIn verlangt eine Sicherheitsprüfung, die der CLOSER nicht löst.",
   "closer.reason.linkedin_challenge.action": "Melde dich einmal selbst bei LinkedIn an und gib die Stelle dann wieder frei, oder bewirb dich von Hand.",
   "closer.reason.unknown_required_control.why": "Das Formular hat ein Pflichtfeld, das der CLOSER nicht sicher ausfüllen kann.",
-  "closer.reason.unknown_required_control.action": "Öffne die Stelle und bewirb dich von Hand."
+  "closer.reason.unknown_required_control.action": "Öffne die Stelle und bewirb dich von Hand.",
+  "closer.reason.linkedin_session_expired.why": "Deine von Hand erstellte LinkedIn-Sitzung ist abgelaufen, oder LinkedIn akzeptiert sie nicht mehr.",
+  "closer.reason.linkedin_session_expired.action": "Melde dich im Browser des CLOSER erneut von Hand bei LinkedIn an und gib die Stelle dann wieder frei."
 }

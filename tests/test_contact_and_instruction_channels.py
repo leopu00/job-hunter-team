@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import apply_generic  # noqa: E402
 from apply_flow import ApplicationFlow  # noqa: E402
-from apply_generic import contact_application_topic  # noqa: E402
+from apply_generic import contact_application_topic, contact_message_id  # noqa: E402
 from test_apply_generic import BASE  # noqa: E402
 
 CHECKPOINT = Path(".cache") / "apply-flow" / "91.json"
@@ -222,6 +222,64 @@ def test_with_the_letter_the_contact_form_is_sent_once_with_the_application_subj
     receipt = recorded[0]["receipt"]
     assert "Message sent" in receipt.confirmation_text
     assert Path(saved(tmp_path)["pre_submit_screenshot"]).is_file()
+    # The receipt tells the truth (1800, patch 22): no file field, no CV sent.
+    assert (receipt.channel, receipt.attachments, receipt.cv_sha256) == ("contact_form", [], "")
+    checkpoint = saved(tmp_path)
+    assert checkpoint["channel"] == "contact_form"
+    assert "upload_cv" not in checkpoint["completed_steps"]
+    assert (checkpoint["cv_sha256"], checkpoint["receipt"]["attachments"]) == ("", [])
+    assert checkpoint["receipt"]["channel"] == "contact_form"
+
+
+def test_the_contact_channel_survives_the_rerun_after_the_letter_is_saved(browser, cv_path, tmp_path):
+    page = orbit(browser)
+    first = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+    assert first.reason == "required_answer_missing"
+    assert saved(tmp_path)["channel"] == "contact_form"
+
+    page.goto(f"{BASE}/careers")
+    recorded: list = []
+    again = build_flow(tmp_path, cv_path, f"{BASE}/careers", answers={"Message": LETTER}, recorded=recorded).run(
+        page=page, navigate=False
+    )
+
+    assert again.status == "applied", again
+    assert recorded[0]["receipt"].attachments == []
+
+
+def test_an_application_form_receipt_names_the_cv_it_sent(browser, cv_path, tmp_path, monkeypatch):
+    import hashlib
+
+    from test_apply_generic import CLASSIC, PROFILE as GENERIC_PROFILE
+
+    monkeypatch.setitem(globals(), "PROFILE", GENERIC_PROFILE)
+    page = site(browser, {"/jobs/7": CLASSIC})
+    page.goto(f"{BASE}/jobs/7")
+    recorded: list = []
+
+    result = build_flow(
+        tmp_path, cv_path, f"{BASE}/jobs/7", answers=GENERIC_PROFILE["application_answers"], recorded=recorded
+    ).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    expected = hashlib.sha256(cv_path.read_bytes()).hexdigest()
+    checkpoint = saved(tmp_path)
+    assert (checkpoint["channel"], checkpoint["cv_sha256"]) == ("", expected)
+    assert "upload_cv" in checkpoint["completed_steps"]
+    receipt = recorded[0]["receipt"]
+    assert (receipt.channel, receipt.attachments) == ("web_form", [{"role": "cv", "sha256": expected}])
+
+
+def test_an_old_receipt_without_the_fields_reads_its_cv_as_the_attachment(tmp_path):
+    from apply_flow import Receipt
+
+    sha = "b" * 64
+    old = Receipt.from_dict({"screenshot_path": "x.png", "confirmation_text": "ok", "cv_sha256": sha})
+    assert (old.channel, old.attachments) == ("web_form", [{"role": "cv", "sha256": sha}])
+    forged = Receipt.from_dict({"screenshot_path": "x.png", "channel": "fax", "attachments": [{"role": "cv", "sha256": "zz"}]})
+    assert (forged.channel, forged.attachments) == ("web_form", [])
+    contact = Receipt(Path("x.png"), confirmation_text="ok", channel="contact_form")
+    assert Receipt.from_dict(contact.to_dict()).to_dict() == contact.to_dict()
 
 
 def test_a_contact_form_without_an_application_topic_is_never_the_application(browser, cv_path, tmp_path):
@@ -271,7 +329,42 @@ def test_the_contact_page_mailto_never_becomes_a_second_channel(browser, cv_path
 
     build_flow(tmp_path, cv_path, f"{BASE}/careers", answers={"Message": LETTER}).run(page=page, navigate=False)
 
-    assert saved(tmp_path)["channel"] == ""
+    checkpoint = saved(tmp_path)
+    assert (checkpoint["channel"], checkpoint["mailto_href"]) == ("contact_form", "")
+
+
+def test_a_contact_form_without_a_letter_field_is_never_the_application(browser, cv_path, tmp_path):
+    no_letter = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
+        '<label for="message">Message</label><textarea id="message" required placeholder="How can we help?"></textarea>',
+        '<label for="notes">Notes</label><textarea id="notes"></textarea>'
+        '<label for="other">Other notes</label><textarea id="other"></textarea>',
+    ).replace("message: document.getElementById('message').value", "message: ''")
+    careers = CAREERS.format(roles=ROLE.format(title="AI Engineer"))
+    page = site(browser, {"/careers": careers, "/contact": no_letter})
+    page.goto(f"{BASE}/careers")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "generic_form_missing")
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_only_the_message_of_a_contact_form_is_the_letter(browser, cv_path, tmp_path):
+    extra = CONTACT.replace("__OPTIONS__", WITH_APPLICATION).replace(
+        '<label for="message">',
+        '<label for="company">Company details (optional)</label><textarea id="company"></textarea><label for="message">',
+    )
+    careers = CAREERS.format(roles=ROLE.format(title="AI Engineer"))
+    page = site(browser, {"/careers": careers, "/contact": extra})
+    page.goto(f"{BASE}/careers")
+
+    result = build_flow(tmp_path, cv_path, f"{BASE}/careers").run(page=page, navigate=False)
+
+    question = result.pending_question
+    assert (question["label"], question["purpose"]) == ("Message", "contact_form_application")
+    assert contact_message_id(
+        {"questions": [{"id": "a", "type": "textarea", "label": "Notes"}, {"id": "b", "type": "textarea", "label": "Notes 2"}]}
+    ) is None
 
 
 @pytest.mark.parametrize(
@@ -356,3 +449,31 @@ def test_an_application_form_on_the_page_wins_over_an_address_in_the_text(browse
 
     assert result.reason != "email_instruction"
     assert saved(tmp_path)["platform"] == "generic"
+
+
+def test_a_letter_answered_on_the_dashboard_is_kept_for_its_position_only(tmp_path, cv_path):
+    # A second vacancy of the same company never reuses a letter that names another one (review m3).
+    import sqlite3
+
+    import _db
+    import application_answers as aa
+
+    db = tmp_path / "jobs.db"
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        for pid in (91, 92):
+            conn.execute(
+                "INSERT INTO positions(id, title, company, url, status) VALUES (?, 'Fixture Role', 'Fixture Co', ?, 'ready')",
+                (pid, f"https://jobs.example.com/{pid}"),
+            )
+    flow = build_flow(tmp_path, cv_path, f"{BASE}/careers")
+    flow.db_path = db
+    request = {"payload": {"key": "message", "label": "Message", "field_type": "textarea", "options": [],
+                           "purpose": "contact_form_application"}}
+
+    flow._save_application_answer("message", request, LETTER)
+
+    with sqlite3.connect(db) as conn:
+        assert aa.load_answers(conn, 91).get("message") == LETTER
+        assert aa.load_answers(conn, 92).get("message") is None

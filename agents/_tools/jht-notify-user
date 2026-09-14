@@ -307,7 +307,11 @@ def main() -> int:
     # a login verification code expires in minutes.
     # Held, it was consumed on the web and never reached Telegram: its source
     # id counted it as asked, so no later round delivered it (13/09).
-    off_hours = args.source_action not in ("closer_application_answer", "closer_login_code") and _is_off_hours()
+    # The CLOSER's round summary is the outcome of those same applications:
+    # held for working hours it stayed on the web (14/09, after patch 21).
+    off_hours = args.source_action not in (
+        "closer_application_answer", "closer_login_code", "closer_digest"
+    ) and _is_off_hours()
     should_deliver = created or args.existing_id is not None
     if should_deliver and (
         not args.no_telegram

@@ -67,6 +67,11 @@ except ImportError:  # pragma: no cover - package import
     )
 
 try:
+    import location_choice
+except ImportError:  # pragma: no cover - package import
+    from shared.skills import location_choice  # type: ignore[no-redef]
+
+try:
     from profile_facts import core_answer_request, profile_value
 except ImportError:  # pragma: no cover - package import
     from shared.skills.profile_facts import core_answer_request, profile_value  # type: ignore[no-redef]
@@ -498,6 +503,11 @@ def contact_application_topic(form: Mapping[str, Any]) -> tuple[Mapping[str, Any
         return None
     if "email" not in {field[0] for q in questions if (field := core_field(q))}:
         return None
+    if contact_message_id(form) is None:
+        # Without the one field that carries the letter the contact form is not
+        # the application: nothing would say who applies and why (review of
+        # fb4d15b76, HQ-FULLSTACK-2: two unnamed notes boxes went out empty).
+        return None
     found = []
     for question in questions:
         if question.get("type") not in {"listbox", "select", "radio"}:
@@ -511,6 +521,25 @@ def contact_application_topic(form: Mapping[str, Any]) -> tuple[Mapping[str, Any
         ]
         found.extend((question, option) for option in matches)
     return found[0] if len(found) == 1 else None
+
+
+_MESSAGE_LABEL = re.compile(
+    r"message|how can we help|your inquiry|nachricht|messaggio|votre message|mensaje|mensagem|üzenet",
+    re.I,
+)
+
+
+def contact_message_id(form: Mapping[str, Any]) -> str | None:
+    """The one textarea of a contact form that carries the letter.
+
+    The only textarea; with several, the one labelled as the message.  Any
+    other textarea is an ordinary question (review m2, HQ-FULLSTACK-2).
+    """
+    areas = [q for q in form.get("questions") or [] if q.get("type") == "textarea"]
+    if len(areas) == 1:
+        return str(areas[0].get("id"))
+    named = [q for q in areas if _MESSAGE_LABEL.search(f"{q.get('label', '')} {q.get('name', '')}")]
+    return str(named[0].get("id")) if len(named) == 1 else None
 
 
 def guard_public_url(url: str) -> str:
@@ -581,6 +610,9 @@ class GenericRecipe:
         # The vacancy's Apply control was followed: only then may a contact
         # form with an application topic be the application form (1800).
         self.via_apply = False
+        # web_form, or contact_form once the chosen form is a contact form: the
+        # flow then skips the CV upload and the receipt says no CV was sent.
+        self.application_channel = "web_form"
         # Seam for tests: synthetic pages live on hosts that do not resolve.
         self.url_guard = guard_public_url
 
@@ -620,7 +652,13 @@ class GenericRecipe:
         """Open each custom listbox of a form once, store its options, close it.
 
         A click on a form's own drop-down toggle: nothing is chosen, typed or sent.
+        A toggle whose click would submit its form (a <button> without
+        type="button") is never clicked: its options stay unknown.
         """
+        page.locator("form button[aria-haspopup=listbox]:not([data-jht-options])").evaluate_all(
+            f"els => els.filter(el => !({location_choice.NEVER_SUBMITS_JS})(el))"
+            ".forEach(el => el.setAttribute('data-jht-options', '[]'))"
+        )
         for _ in range(limit):
             box = page.locator("form button[aria-haspopup=listbox]:not([data-jht-options])").first
             if not box.count():
@@ -705,6 +743,7 @@ class GenericRecipe:
         if not forms:
             self._stop_without_form(page, snapshot, step)
         form = forms[0]
+        self.application_channel = "contact_form" if self._contact_topic(form) else "web_form"
         return page.locator(f"[data-jht-form='{form['index']}']").first, form
 
     def _handoff_or_refuse(self, target: str, step: str) -> None:
@@ -850,6 +889,8 @@ class GenericRecipe:
             if isinstance(answer, bool) or not isinstance(answer, (str, int, float)):
                 raise BlockedHuman("answer_type_unknown", f"Choice question needs an exact option label: {_safe_label(label)}", step)
             wanted = _normalise_label(str(answer))
+            if not location_choice.never_submits(control):
+                raise BlockedHuman("unknown_required_control", f"The choice would submit the form if clicked: {_safe_label(label)}", step)
             if control.get_attribute("aria-expanded") != "true":
                 control.click(timeout=5_000)
                 page.wait_for_timeout(300)
@@ -865,6 +906,10 @@ class GenericRecipe:
                 with contextlib.suppress(Exception):
                     page.keyboard.press("Escape")
                 raise BlockedHuman("answer_option_unknown", f"No exact option matches the saved answer for: {_safe_label(label)}", step)
+            if not location_choice.never_submits(matching[0]):
+                with contextlib.suppress(Exception):
+                    page.keyboard.press("Escape")
+                raise BlockedHuman("unknown_required_control", f"The option would submit the form if clicked: {_safe_label(label)}", step)
             matching[0].click(timeout=5_000)
             page.wait_for_timeout(200)
             if _normalise_label(control.inner_text() or "") != wanted:
@@ -1000,6 +1045,7 @@ class GenericRecipe:
             raise BlockedHuman(challenge, f"The site requires human intervention ({challenge})", "screening")
         form, described = self._form(page, "screening")
         topic = self._contact_topic(described)
+        letter_id = contact_message_id(described) if topic is not None else None
         for question in described["questions"]:
             if question.get("answered") or core_field(question) or _is_cv_upload(question):
                 continue
@@ -1016,10 +1062,11 @@ class GenericRecipe:
                 self._fill(page, form, question, topic[1], "screening")
                 continue
             present, answer = self._answer_for(label, str(question.get("name") or ""))
+            is_letter = topic is not None and question.get("id") == letter_id
             if not present:
-                if question.get("required") or (topic is not None and question.get("type") == "textarea"):
+                if question.get("required") or is_letter:
                     request = self._answer_request(question)
-                    if request is not None and topic is not None and question.get("type") == "textarea":
+                    if request is not None and is_letter:
                         # The message IS the application: the CLOSER writes a short
                         # letter for this vacancy that says the CV is available on request.
                         request["purpose"] = CONTACT_APPLICATION_PURPOSE

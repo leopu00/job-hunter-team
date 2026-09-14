@@ -227,5 +227,7 @@
   "closer.reason.linkedin_challenge.why": "O LinkedIn pediu uma verificação de segurança que o CLOSER não resolve.",
   "closer.reason.linkedin_challenge.action": "Inicia sessão tu mesmo uma vez no LinkedIn e depois volta a autorizar a posição, ou candidata-te à mão.",
   "closer.reason.unknown_required_control.why": "O formulário tem um campo obrigatório que o CLOSER não consegue preencher em segurança.",
-  "closer.reason.unknown_required_control.action": "Abre a vaga e candidata-te à mão."
+  "closer.reason.unknown_required_control.action": "Abre a vaga e candidata-te à mão.",
+  "closer.reason.linkedin_session_expired.why": "A tua sessão do LinkedIn iniciada à mão expirou, ou o LinkedIn já não a aceita.",
+  "closer.reason.linkedin_session_expired.action": "Volta a iniciar sessão à mão no LinkedIn no navegador do CLOSER e depois volta a autorizar a posição."
 }

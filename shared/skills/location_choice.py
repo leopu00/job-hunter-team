@@ -174,12 +174,32 @@ def suggestions(
     return last
 
 
+# True when a click on the element cannot send its form. A <button> inside a
+# form with no type (or type submit/reset) IS the form's submit: a drop-down
+# toggle or an option written that way would send the application before the
+# gate, the cap and submit_started (review of c45133af9, 14/09: a contact form
+# went out empty from a listbox click).
+NEVER_SUBMITS_JS = (
+    "el => el.tagName !== 'BUTTON' || !el.form"
+    " || (el.getAttribute('type') || '').trim().toLowerCase() === 'button'"
+)
+
+
+def never_submits(element: Any) -> bool:
+    try:
+        return bool(element.evaluate(NEVER_SUBMITS_JS))
+    except Exception:
+        return False
+
+
 def click_option(options: Any, text: str) -> bool:
-    """Click the visible suggestion whose text is exactly `text`."""
+    """Click the visible suggestion whose text is exactly `text`, never a submit."""
     count = min(options.count(), _MAX_OPTIONS)
     for index in range(count):
         option = options.nth(index)
         if option.is_visible() and " ".join(str(option.inner_text() or "").split()) == text:
+            if not never_submits(option):
+                return False
             option.click()
             return True
     return False

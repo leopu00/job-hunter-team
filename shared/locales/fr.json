@@ -227,5 +227,7 @@
   "closer.reason.linkedin_challenge.why": "LinkedIn demande une vérification de sécurité que le CLOSER ne résout pas.",
   "closer.reason.linkedin_challenge.action": "Connecte-toi toi-même une fois à LinkedIn, puis autorise à nouveau le poste, ou postule à la main.",
   "closer.reason.unknown_required_control.why": "Le formulaire a un champ obligatoire que le CLOSER ne peut pas remplir en toute sécurité.",
-  "closer.reason.unknown_required_control.action": "Ouvre l'offre et postule à la main."
+  "closer.reason.unknown_required_control.action": "Ouvre l'offre et postule à la main.",
+  "closer.reason.linkedin_session_expired.why": "Ta session LinkedIn ouverte à la main a expiré, ou LinkedIn ne l'accepte plus.",
+  "closer.reason.linkedin_session_expired.action": "Reconnecte-toi à la main à LinkedIn dans le navigateur du CLOSER, puis autorise à nouveau le poste."
 }
