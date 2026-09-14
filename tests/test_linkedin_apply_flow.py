@@ -653,3 +653,21 @@ def test_two_different_company_addresses_are_ambiguous(page, cv_path: Path):
         recipe._offsite(page)
 
     assert stop.value.reason == "linkedin_apply_ambiguous"
+
+
+def test_recovery_receipt_keeps_the_digest_of_the_cv_sent_before(page, home: Path, cv_path: Path):
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "lever"
+    saved.handoff_url = LEVER_APPLY
+    saved.state = "submit"
+    saved.submit_started = True
+    saved.cv_sha256 = "a" * 64
+    saved.save(home / ".cache" / "apply-flow" / "71.json")
+    confirmation = '<html><body><div class="application-confirmation"><h3>Application submitted!</h3></div></body></html>'
+    page.route(LEVER_APPLY, lambda route: route.fulfill(status=200, content_type="text/html", body=confirmation))
+    recorded: list = []
+
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].cv_sha256 == "a" * 64
