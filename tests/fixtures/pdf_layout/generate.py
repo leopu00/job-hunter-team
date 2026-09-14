@@ -21,13 +21,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CSS = ROOT / "shared" / "skills" / "pdf_layout_base.css"
-NAMES = ("narrow", "good", "spill", "three_pages")
+NAMES = ("narrow", "good", "spill", "three_pages", "small_font")
 
 # The <style> a Writer typically puts in the .md: small type and @page margins
 # that wkhtmltopdf ignores. It is exactly what shipped the narrow CV.
 STYLE = """<style>
 @page { size: A4; margin: 11mm 15mm; }
-body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 9.3pt; line-height: 1.35; color: #222; }
+body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: BODY_PTpt; line-height: 1.35; color: #222; }
 h1 { font-size: 20pt; margin: 0 0 2pt; }
 h2 { font-size: 11.5pt; border-bottom: 1px solid #999; margin: 10pt 0 4pt; }
 h3 { font-size: 10pt; margin: 6pt 0 1pt; }
@@ -42,14 +42,14 @@ BULLETS = (
 )
 
 
-def cv_markdown(jobs: int) -> str:
+def cv_markdown(jobs: int, body_pt: float = 9.3) -> str:
     blocks = [
         f"### Senior Example Engineer — Acme Widgets {i}\n*2015 – 2020 · Sample City*\n\n"
         + "\n".join(f"- {b}" for b in BULLETS)
         for i in range(1, jobs + 1)
     ]
     return (
-        f"{STYLE}\n\n# Jane Example\nExample Engineer · jane@example.invalid · Sample City\n\n"
+        f"{STYLE.replace('BODY_PT', str(body_pt))}\n\n# Jane Example\nExample Engineer · jane@example.invalid · Sample City\n\n"
         "## Profile\nFictional candidate used only to test PDF layout. This paragraph is long enough "
         "to wrap across the full width of the page so the measured text column reflects the real "
         "usable width of an A4 sheet in the renderer.\n\n## Experience\n\n"
@@ -78,20 +78,22 @@ def render_legacy(md: Path, pdf: Path) -> None:
     )
 
 
-def render_all(out: Path, css: Path = DEFAULT_CSS, jobs: tuple[int, int, int] = (5, 10, 24)) -> dict[str, Path]:
-    """narrow (legacy command), good, spill (a few lines on page 2), three_pages."""
+def render_all(out: Path, css: Path = DEFAULT_CSS, jobs: tuple[int, int, int] = (3, 4, 12)) -> dict[str, Path]:
+    """narrow (legacy command), good, spill (a few lines on page 2), three_pages,
+    small_font (the fixed command on a 7pt body: full width, unreadable)."""
     good, spill, long = jobs
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        def md(count: int) -> Path:
-            path = Path(tmp) / f"example_{count}.md"
-            path.write_text(cv_markdown(count), encoding="utf-8")
+        def md(count: int, body_pt: float = 9.3) -> Path:
+            path = Path(tmp) / f"example_{count}_{body_pt}.md"
+            path.write_text(cv_markdown(count, body_pt), encoding="utf-8")
             return path
 
         render_legacy(md(good), out / "narrow.pdf")
         render_fixed(md(good), out / "good.pdf", css)
         render_fixed(md(spill), out / "spill.pdf", css)
         render_fixed(md(long), out / "three_pages.pdf", css)
+        render_fixed(md(good, body_pt=7), out / "small_font.pdf", css)
     return {name: out / f"{name}.pdf" for name in NAMES}
 
 
@@ -99,7 +101,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--css", type=Path, default=DEFAULT_CSS)
-    parser.add_argument("--jobs", type=int, nargs=3, default=(5, 10, 24), metavar=("GOOD", "SPILL", "LONG"))
+    parser.add_argument("--jobs", type=int, nargs=3, default=(3, 4, 12), metavar=("GOOD", "SPILL", "LONG"))
     args = parser.parse_args()
     for name, path in render_all(args.out, args.css, tuple(args.jobs)).items():
         print(name, path)

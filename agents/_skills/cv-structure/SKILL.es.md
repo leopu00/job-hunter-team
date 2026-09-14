@@ -165,7 +165,7 @@ Decisión técnica 2026-05-18 tras investigación "estética CV simplificada":
   En el `<style>` del `.md` nunca `max-width`, `margin: auto` ni padding en el
   body, y no confíes en `@page`. Después `pdf_layout_check.py` mide el resultado:
   texto ≥ 75% del ancho útil en cada página, 1–2 páginas, ninguna página casi
-  vacía, fuentes incrustadas.
+  vacía, fuentes incrustadas, cuerpo impreso ≥ 9.5pt.
 
 El anti-patrón histórico: generar el PDF directamente en `$JHT_USER_DIR/cv/`, luego ejecutar `db_update.py application --cv-pdf-path ...` por separado. Si el Sentinel mató al Writer entre los dos pasos (EMERGENCIA freeze 2026-05-17 04:43), el PDF quedó en disco pero la DB tenía `cv_pdf_path=NULL`. Sisal 7.5/10 PASS se convirtió en *"CV por escribir"* en el dashboard del usuario — oportunidad top invisible.
 
@@ -240,7 +240,7 @@ esac
 
 # Check C) layout: tamaño y Producer prueban el motor, no dónde queda el texto.
 # pdf_layout_check.py lo mide (≥75% del ancho útil en cada página, 1-2 páginas,
-# ninguna página casi vacía, fuentes incrustadas). Exit 1 o 2: ABORT.
+# ninguna página casi vacía, fuentes incrustadas, cuerpo ≥ 9.5pt). Exit 1 o 2: ABORT.
 if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
   echo "[cv-structure] ABORT post-render: layout incorrecto (pdf_layout_check.py) — corrige el .md y vuelve a renderizar."
   rm -f "$TMP_PDF"
@@ -262,7 +262,7 @@ Códigos de salida:
 - `2` → preflight FALLO (motor no disponible) — señalar al Capitano
 - `3` → post-render FALLO (tamaño < 20 KB, salida minimalista) — motor equivocado
 - `4` → post-render FALLO (Producer != Qt) — motor equivocado
-- `5` → post-render FALLO (layout, `reasons` de `pdf_layout_check.py`) — corrige el `.md` y vuelve a renderizar: `narrow_text` → quita del `<style>` toda regla de ancho/margen/padding en el body; `near_empty_page` → ajusta o recorta hasta que la última página se llene o desaparezca; `too_many_pages` → recorta. Tras 2 renders fallidos avisa al Capitano. Un CV que no pasa el gate nunca llega al critic-loop.
+- `5` → post-render FALLO (layout, `reasons` de `pdf_layout_check.py`) — corrige el `.md` y vuelve a renderizar: `narrow_text` → quita del `<style>` toda regla de ancho/margen/padding en el body; `near_empty_page` → ajusta o recorta hasta que la última página se llene o desaparezca; `too_many_pages` → recorta; `small_body_font` → sube el `font-size` del body en el `<style>` a ≥ 9.5pt (el CSS base ya compensa el encogimiento de Qt: un punto CSS imprime aproximadamente un punto). Tras 2 renders fallidos avisa al Capitano. Un CV que no pasa el gate nunca llega al critic-loop.
 - `1` → DB UPDATE FALLO (rollback de archivo)
 
 El Dottore vía `cv-disk-audit` healthcheck (bug #18) reconecta eventuales huérfanos disco↔DB; además ahora señala también los CVs con Producer no-Qt como "motor equivocado — regenerar".

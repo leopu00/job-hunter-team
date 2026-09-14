@@ -151,7 +151,7 @@ def check_cv_pdf_render():
         sys.path.remove(skills)
     bullet = ("- Synthetic health-check line that wraps across the whole usable width of the page "
               "so the gate can measure the text column of the real renderer.")
-    body = "\n".join("## Section %d\n\n%s\n" % (i, "\n".join([bullet] * 4)) for i in range(1, 7))
+    body = "\n".join("## Section %d\n\n%s\n" % (i, "\n".join([bullet] * 4)) for i in range(1, 5))  # one page, well filled
     with tempfile.TemporaryDirectory() as tmp:
         md = os.path.join(tmp, "health.md")
         pdf = os.path.join(tmp, "health.pdf")
@@ -175,7 +175,8 @@ def check_cv_pdf_render():
     if not report["ok"]:
         widths = [p["width_ratio"] for p in report["per_page"]]
         return "BROKEN", "rendered CV fails the layout gate: %s (width %s)" % (",".join(report["reasons"]), widths)
-    return "OK", "CV render ok (width %s of the usable page)" % report["per_page"][0]["width_ratio"]
+    return "OK", "CV render ok (width %s of the usable page, body font %spt)" % (
+        report["per_page"][0]["width_ratio"], report["body_font_pt"])
 
 
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
