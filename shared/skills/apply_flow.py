@@ -38,7 +38,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
@@ -340,12 +340,29 @@ class BlockedHuman(FlowError):
         self.answer_request = dict(answer_request) if answer_request else None
 
 
+ANSWER_ORIGINS = ("user", "profile", "agent_inferred")
+
+
+def _answer_sources(value: Any) -> dict[str, str]:
+    """A clean key → origin map; anything else in it is dropped, never trusted."""
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        str(key): str(origin)
+        for key, origin in value.items()
+        if isinstance(key, str) and key and origin in ANSWER_ORIGINS
+    }
+
+
 @dataclass(frozen=True)
 class Receipt:
     screenshot_path: Path
     confirmation_url: str = ""
     confirmation_text: str = ""
     captured_at: str = field(default_factory=_utc_now)
+    # Where each saved answer used in the form came from: key → user / profile /
+    # agent_inferred.  Keys and origins only, never a value.
+    answer_sources: dict[str, str] = field(default_factory=dict)
 
     def is_valid(self) -> bool:
         try:
@@ -362,6 +379,7 @@ class Receipt:
             "confirmation_url": self.confirmation_url,
             "confirmation_text": self.confirmation_text,
             "captured_at": self.captured_at,
+            "answer_sources": dict(self.answer_sources),
         }
 
     @classmethod
@@ -371,6 +389,7 @@ class Receipt:
             str(value.get("confirmation_url", "")),
             str(value.get("confirmation_text", "")),
             str(value.get("captured_at", "")) or _utc_now(),
+            _answer_sources(value.get("answer_sources")),
         )
 
 
@@ -395,6 +414,8 @@ class FlowCheckpoint:
     # The page as it looked when the flow last stopped (blocked, denied or an
     # error), saved next to the checkpoint.  Empty when no page was open.
     stop_screenshot: str = ""
+    # Key → user / profile / agent_inferred for every saved answer the form used.
+    answer_sources: dict[str, str] = field(default_factory=dict)
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -442,6 +463,9 @@ class FlowCheckpoint:
             raise FlowError("checkpoint email channel has no mailto target")
         if not isinstance(raw.get("stop_screenshot", ""), str):
             raise FlowError("checkpoint has an invalid stop screenshot")
+        if not isinstance(raw.get("answer_sources", {}), dict):
+            raise FlowError("checkpoint has invalid answer sources")
+        raw = {**raw, "answer_sources": _answer_sources(raw.get("answer_sources", {}))}
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -497,14 +521,23 @@ class FlowResult:
     state: str
     reason: str = ""
     receipt: Receipt | None = None
+    # What the CLOSER has to work out before a rerun: the essential facts
+    # still unknown, or the one form question the flow stopped on.
+    missing: tuple[str, ...] = ()
+    pending_question: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "status": self.status,
             "state": self.state,
             "reason": self.reason,
             "receipt": self.receipt.to_dict() if self.receipt else None,
         }
+        if self.missing:
+            out["missing"] = list(self.missing)
+        if self.pending_question:
+            out["pending_question"] = dict(self.pending_question)
+        return out
 
 
 @dataclass(frozen=True)
@@ -753,6 +786,9 @@ class AshbyRecipe:
         self.profile = profile
         self.cv_path = cv_path
         self.answers = self._answer_index(profile.get("application_answers"))
+        # Set by the flow: key → origin of each saved answer; unknown means the profile.
+        self.answer_origins: Mapping[str, str] = {}
+        self.answer_sources: dict[str, str] = {}
 
     @staticmethod
     def _answer_index(value: Any) -> dict[str, Any]:
@@ -925,6 +961,7 @@ class AshbyRecipe:
             if control_type in {"file", "radio", "checkbox"}:
                 continue
             control.fill(str(value))
+            self.answer_sources[key or _normalise_label(field_path)] = "profile"
 
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
@@ -951,6 +988,7 @@ class AshbyRecipe:
                 keys.append(_normalise_label(semantic))
         for key in keys:
             if key in self.answers:
+                self.answer_sources[key] = self.answer_origins.get(key, "profile")
                 return True, self.answers[key]
         return False, None
 
@@ -1286,6 +1324,8 @@ class GreenhouseRecipe:
         self.profile = profile
         self.cv_path = cv_path
         self.answers = AshbyRecipe._answer_index(profile.get("application_answers"))
+        self.answer_origins: Mapping[str, str] = {}
+        self.answer_sources: dict[str, str] = {}
 
     @staticmethod
     def _profile_value(profile: Mapping[str, Any], path: tuple[str, ...]) -> str | None:
@@ -1382,6 +1422,7 @@ class GreenhouseRecipe:
                 keys.append(_normalise_label(semantic))
         for key in keys:
             if key in self.answers:
+                self.answer_sources[key] = self.answer_origins.get(key, "profile")
                 return True, self.answers[key]
         return False, None
 
@@ -1394,6 +1435,7 @@ class GreenhouseRecipe:
         for path in paths:
             value = self._profile_value(self.profile, path)
             if value is not None:
+                self.answer_sources[_normalise_label(label) or _normalise_label(control_id)] = "profile"
                 return True, value
         return False, None
 
@@ -2062,6 +2104,7 @@ class ApplicationFlow:
             "source_id": f"closer-answer:{self.position_id}:{identity}",
             "message_id": "",
             "notification_attempted": False,
+            "asked": False,
             "payload": payload,
         }
 
@@ -2132,53 +2175,78 @@ class ApplicationFlow:
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
         previous_screenshot = self._capture_stop_screenshot(checkpoint, blocked.reason, page)
-        if dry_run and blocked.answer_request:
-            # A dry run never asks the user anything: the stop lives only in the
-            # checkpoint, with no durable request and no notification.  The
-            # first authorised run reaches the same field and asks then.
-            self._save_stop(checkpoint, previous_screenshot)
-            return FlowResult("blocked_human", checkpoint.state, blocked.reason)
-        legacy_message = ""
         if blocked.answer_request:
+            # A form question never goes to the user on its own: the CLOSER works
+            # the answer out from the profile, the CV and the vacancy, saves it
+            # and reruns.  Only its explicit `ask` sends the question
+            # (`ask_pending_question`).  In a dry run as in an authorised run.
             candidate = self._answer_request_record(blocked)
             current = checkpoint.answer_request
             if not current or current.get("source_id") != candidate["source_id"]:
                 checkpoint.answer_request = candidate
-            source_id = str(checkpoint.answer_request["source_id"])
-            message = self._notification_message(blocked, source_id)
-            legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
-        else:
-            message = self._notification_message(blocked)
+            self._save_stop(checkpoint, previous_screenshot)
+            return FlowResult(
+                "blocked_human",
+                checkpoint.state,
+                blocked.reason,
+                pending_question=self._pending_question(checkpoint.answer_request),
+            )
+        message = self._notification_message(blocked)
         self._save_stop(checkpoint, previous_screenshot)
-        if blocked.answer_request:
-            persisted = False
-            try:
-                # The request itself does not depend on Telegram or on the
-                # notifier executable: it is committed and reread first.
-                self._persist_answer_request(checkpoint, message, legacy_message)
-                persisted = True
-            except Exception as exc:
-                LOG.error("durable answer request failed: %s", type(exc).__name__)
-            try:
-                if persisted:
-                    self._notify_answer_request_once(checkpoint, message)
-                else:
-                    # Compatibility for injected notifiers in callers without
-                    # a configured jobs.db. Production still fails closed and
-                    # cannot claim the dashboard request exists.
-                    self.notifier(
-                        position_id=self.position_id,
-                        message=message,
-                        answer_request=checkpoint.answer_request,
-                    )
-            except Exception as exc:
-                LOG.error("blocked_human notification failed: %s", type(exc).__name__)
-        else:
-            try:
-                self.notifier(position_id=self.position_id, message=message)
-            except Exception as exc:
-                LOG.error("blocked_human notification failed: %s", type(exc).__name__)
+        try:
+            self.notifier(position_id=self.position_id, message=message)
+        except Exception as exc:
+            LOG.error("blocked_human notification failed: %s", type(exc).__name__)
         return FlowResult("blocked_human", checkpoint.state, blocked.reason)
+
+    @staticmethod
+    def _request_asked(request: Mapping[str, Any]) -> bool:
+        # A checkpoint written before `asked` existed was asked when it has a row.
+        return bool(request.get("asked")) or bool(str(request.get("message_id") or "").strip())
+
+    @classmethod
+    def _pending_question(cls, request: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        """The form question for the CLOSER: what to work out, and how to save it."""
+        payload = request.get("payload") if isinstance(request, Mapping) else None
+        if not isinstance(payload, Mapping):
+            return None
+        key = str(payload.get("key", ""))
+        field_type = str(payload.get("field_type", ""))
+        return {
+            "key": key,
+            "label": str(payload.get("label", "")),
+            "field_type": field_type,
+            "options": [str(option) for option in payload.get("options") or []],
+            "scope": "company" if field_type == "textarea" or key == "salary expectations" else "global",
+            "asked": cls._request_asked(request),
+        }
+
+    def ask_pending(self, checkpoint: FlowCheckpoint) -> dict[str, str]:
+        """Send the stopped form question to the user: a durable row, then one notification."""
+        request = checkpoint.answer_request
+        if not request or not isinstance(request.get("payload"), Mapping):
+            return {"status": "not_pending", "source_id": ""}
+        source_id = str(request.get("source_id", ""))
+        if self._request_asked(request):
+            return {"status": "already_asked", "source_id": source_id}
+        blocked = BlockedHuman(
+            "required_answer_missing",
+            checkpoint.blocked_detail,
+            checkpoint.resume_state or "screening",
+            answer_request=request["payload"],
+        )
+        message = self._notification_message(blocked, source_id)
+        legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
+        # The request itself does not depend on Telegram or on the notifier
+        # executable: it is committed and reread first, then marked asked.
+        self._persist_answer_request(checkpoint, message, legacy_message)
+        request["asked"] = True
+        checkpoint.save(self.checkpoint_path)
+        try:
+            self._notify_answer_request_once(checkpoint, message)
+        except Exception as exc:
+            LOG.error("answer request notification failed: %s", type(exc).__name__)
+        return {"status": "asked", "source_id": source_id}
 
     def _email_channel(self, checkpoint: FlowCheckpoint, page) -> FlowResult | None:
         href = mailto_application_href(page)
@@ -2355,7 +2423,9 @@ class ApplicationFlow:
                 "Application platform is unknown, conflicting, or has no safe recipe",
                 "detect",
             )
-        return recipe(self._profile_with_saved_answers(), self.cv_path)
+        built = recipe(self._profile_with_saved_answers(), self.cv_path)
+        built.answer_origins = dict(getattr(self, "answer_origins", {}))
+        return built
 
     def _log_dry_run_essentials(self) -> None:
         try:
@@ -2369,9 +2439,15 @@ class ApplicationFlow:
             LOG.warning("dry run: %d essential facts unknown, not asked", len(missing))
 
     def _profile_with_saved_answers(self) -> dict[str, Any]:
-        """The profile with every remembered answer; the database wins over the YAML."""
+        """The profile with every remembered answer; the database wins over the YAML.
+
+        Also records where each answer comes from (`self.answer_origins`): the
+        database says user or agent_inferred; an answer only in the profile is
+        the profile.
+        """
         merged = dict(self.profile)
         answers = AshbyRecipe._answer_index(self.profile.get("application_answers"))
+        origins: dict[str, str] = {}
         try:
             db = _resolve_db_path(self.db_path)
         except FlowError:
@@ -2384,7 +2460,11 @@ class ApplicationFlow:
                     application_answers.import_profile_answers(conn, self.profile)
                     conn.commit()
                 answers.update(application_answers.load_answers(conn, self.position_id))
+                resolve = getattr(application_answers, "answer_origins", None)
+                if callable(resolve):
+                    origins = _answer_sources(resolve(conn, self.position_id))
         merged["application_answers"] = answers
+        self.answer_origins = origins
         return merged
 
     @staticmethod
@@ -2666,6 +2746,16 @@ class ApplicationFlow:
         request = checkpoint.answer_request
         if not request:
             return None
+        if not self._request_asked(request):
+            if self._answer_saved_for(request):
+                # The CLOSER worked it out and saved it: the question is closed.
+                return self._close_answer_request(checkpoint)
+            return FlowResult(
+                "blocked_human",
+                checkpoint.state,
+                checkpoint.blocked_reason or "required_answer_missing",
+                pending_question=self._pending_question(request),
+            )
         try:
             blocked = BlockedHuman(
                 "required_answer_missing",
@@ -2687,7 +2777,15 @@ class ApplicationFlow:
                     (message_id, self.position_id, request.get("source_id")),
                 ).fetchone()
             if not row or row[0] is None or row[1] is None:
-                return FlowResult("blocked_human", checkpoint.state, checkpoint.blocked_reason)
+                if self._answer_saved_for(request):
+                    # Asked, then saved another way (the CLOSER, or a Telegram answer).
+                    return self._close_answer_request(checkpoint)
+                return FlowResult(
+                    "blocked_human",
+                    checkpoint.state,
+                    checkpoint.blocked_reason,
+                    pending_question=self._pending_question(request),
+                )
             answer = self._decode_answer_reply(request, str(row[0]))
             payload = request.get("payload")
             key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
@@ -2716,6 +2814,21 @@ class ApplicationFlow:
                     checkpoint.resume_state or "screening",
                 ),
             )
+        return self._close_answer_request(checkpoint)
+
+    def _answer_saved_for(self, request: Mapping[str, Any]) -> bool:
+        payload = request.get("payload")
+        key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
+        if not key:
+            return False
+        try:
+            answers = self._profile_with_saved_answers().get("application_answers") or {}
+        except Exception as exc:
+            LOG.error("saved answers unreadable: %s", type(exc).__name__)
+            return False
+        return key in answers
+
+    def _close_answer_request(self, checkpoint: FlowCheckpoint) -> None:
         checkpoint.answer_request = None
         checkpoint.state = checkpoint.resume_state or "screening"
         checkpoint.blocked_reason = ""
@@ -2791,7 +2904,12 @@ class ApplicationFlow:
                 LOG.error("essential facts check failed: %s", type(exc).__name__)
                 return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
             if missing:
-                return FlowResult("blocked_human", checkpoint.state, "essential_facts_missing")
+                return FlowResult(
+                    "blocked_human",
+                    checkpoint.state,
+                    "essential_facts_missing",
+                    missing=tuple(str(key) for key in missing),
+                )
 
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
@@ -2825,7 +2943,10 @@ class ApplicationFlow:
                         active_page, self.url, recovery_platform
                     )
                     if confirmation:
-                        receipt = self._capture_receipt(active_page, confirmation)
+                        receipt = replace(
+                            self._capture_receipt(active_page, confirmation),
+                            answer_sources=dict(checkpoint.answer_sources),
+                        )
                         checkpoint.receipt = receipt.to_dict()
                         checkpoint.save(self.checkpoint_path)
                         return self._record(checkpoint, receipt)
@@ -2901,6 +3022,7 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_core(active_page)
+                checkpoint.answer_sources = dict(recipe.answer_sources)
                 self._assert_recipe_page(
                     active_page,
                     detection.platform,
@@ -2921,6 +3043,7 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
 
                 recipe.fill_screening(active_page)
+                checkpoint.answer_sources = dict(recipe.answer_sources)
                 self._assert_recipe_page(
                     active_page,
                     detection.platform,
@@ -3003,7 +3126,10 @@ class ApplicationFlow:
                         "Submit was clicked once but no confirmation URL or text appeared",
                         "submit",
                     )
-                receipt = self._capture_receipt(active_page, confirmation)
+                receipt = replace(
+                    self._capture_receipt(active_page, confirmation),
+                    answer_sources=dict(checkpoint.answer_sources),
+                )
                 checkpoint.receipt = receipt.to_dict()
                 checkpoint.save(self.checkpoint_path)
                 return self._record(checkpoint, receipt)
@@ -3036,6 +3162,53 @@ def _load_profile(path: Path) -> Mapping[str, Any]:
     return value
 
 
+def ask_pending_question(
+    position_id: int,
+    key: str | None = None,
+    *,
+    db_path: str | Path | None = None,
+    checkpoint_path: str | Path | None = None,
+    notifier: Callable[..., str] | None = None,
+) -> dict[str, str]:
+    """The CLOSER's explicit ask: send the form question its flow stopped on.
+
+    The flow never asks by itself.  When the CLOSER finds no basis for an
+    answer in the profile, the CV or the vacancy, this creates the durable
+    dashboard row and notifies the user once (Telegram first).  `key` must be
+    the pending question's key when given.  Returns `{status, source_id}` with
+    status asked · already_asked · not_pending; raises FlowError when the
+    checkpoint cannot be read or the row cannot be verified.
+    """
+    pid = int(position_id)
+    jht_home = Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
+    path = Path(checkpoint_path) if checkpoint_path else jht_home / ".cache" / "apply-flow" / f"{pid}.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"status": "not_pending", "source_id": ""}
+    except (OSError, ValueError) as exc:
+        raise FlowError(f"checkpoint cannot be read: {type(exc).__name__}") from exc
+    url = raw.get("url") if isinstance(raw, dict) else None
+    if not isinstance(url, str) or not url:
+        raise FlowError("checkpoint has no application url")
+    checkpoint = FlowCheckpoint.load(path, pid, url)
+    request = checkpoint.answer_request
+    payload = request.get("payload") if isinstance(request, Mapping) else None
+    pending_key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
+    if not pending_key or (key is not None and _normalise_label(key) != pending_key):
+        return {"status": "not_pending", "source_id": ""}
+    flow = ApplicationFlow(
+        position_id=pid,
+        url=url,
+        profile={},
+        cv_path=Path(os.devnull),
+        checkpoint_path=path,
+        db_path=db_path,
+        notifier=notifier,
+    )
+    return flow.ask_pending(checkpoint)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--position-id", type=int, required=True)
@@ -3053,7 +3226,23 @@ def main(argv: list[str] | None = None) -> int:
         "--headless", dest="headless", action="store_true", help="Force a hidden browser."
     )
     parser.set_defaults(headless=None)
+    parser.add_argument(
+        "--ask",
+        action="store_true",
+        help="Send the form question this position stopped on to the user (the CLOSER found no basis).",
+    )
     args = parser.parse_args(argv)
+
+    if args.ask:
+        try:
+            asked = ask_pending_question(
+                args.position_id, db_path=args.db, checkpoint_path=args.checkpoint
+            )
+        except (FlowError, ValueError, sqlite3.Error) as exc:
+            print(json.dumps({"status": "error", "reason": type(exc).__name__}))
+            return 2
+        print(json.dumps(asked, sort_keys=True))
+        return 0 if asked["status"] == "asked" else 3
 
     try:
         flow = ApplicationFlow(
