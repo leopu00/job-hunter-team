@@ -62,7 +62,7 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin"})
+SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin", "generic"})
 GREENHOUSE_HOSTS = frozenset(
     {
         "job-boards.greenhouse.io",
@@ -2549,10 +2549,26 @@ def is_linkedin_job(url: str) -> bool:
     )
 
 
+def _optional_module(name: str):
+    """A sibling skill module imported only when needed; None when it is absent."""
+    import importlib
+
+    for qualified in (name, f"shared.skills.{name}"):
+        try:
+            return importlib.import_module(qualified)
+        except ImportError:
+            continue
+    return None
+
+
 def _recipe_class(platform: str):
     if platform == "linkedin":
         module = _linkedin_module()
         return module.LinkedInEasyApplyRecipe if module is not None else None
+    if platform == "generic":
+        # A company's own careers form (HQ-FULLSTACK-2's apply_generic).
+        module = _optional_module("apply_generic")
+        return module.GenericRecipe if module is not None else None
     return {"ashby": AshbyRecipe, "greenhouse": GreenhouseRecipe, "lever": LeverRecipe}.get(platform)
 
 
@@ -2683,10 +2699,18 @@ class ApplicationFlow:
                 f"has no saved answer. {blocked.detail} Please add the exact answer to "
                 "application_answers and resume this application."
             )
-        return (
+        default = (
             "CLOSER stopped before any blind retry. "
             f"Reason: {blocked.reason}. {blocked.detail} Human review is required."
         )
+        notices = _optional_module("closer_notices")
+        if notices is None:
+            return default
+        try:
+            # In the user's language; the technical detail stays in brackets.
+            return notices.stop_message(blocked.reason, blocked.detail, self.position_id, default=default) or default
+        except Exception:
+            return default
 
     def _answer_request_record(self, blocked: BlockedHuman) -> dict[str, Any]:
         payload = {
@@ -2805,6 +2829,15 @@ class ApplicationFlow:
             )
         message = self._notification_message(blocked)
         self._save_stop(checkpoint, previous_screenshot)
+        notices = _optional_module("closer_notices")
+        if notices is not None and blocked.reason in getattr(notices, "DIGEST_REASONS", ()):
+            # A stop of the site, not of the application: one summary per
+            # round (closer_notices flush), not a message per position.
+            try:
+                notices.defer(self.position_id, blocked.reason, self.url)
+                return FlowResult("blocked_human", checkpoint.state, blocked.reason)
+            except Exception as exc:
+                LOG.error("stop summary unavailable, notifying now: %s", type(exc).__name__)
         try:
             self.notifier(position_id=self.position_id, message=message)
         except Exception as exc:
@@ -3142,11 +3175,30 @@ class ApplicationFlow:
 
     @staticmethod
     def _assert_recipe_page(
-        page, platform: str, step: str, *, allow_injected_blank: bool = False
+        page, platform: str, step: str, *, allow_injected_blank: bool = False, application_url: str = ""
     ) -> None:
-        if platform not in {"greenhouse", "lever", "linkedin"}:
+        if platform not in {"greenhouse", "lever", "linkedin", "generic"}:
             return
         if allow_injected_blank and page.url == "about:blank":
+            return
+        if platform == "generic":
+            # A company form stays on the company's site: the same host or a
+            # subdomain relation (careers.example.com ↔ example.com).
+            try:
+                page_host = (urllib.parse.urlsplit(page.url).hostname or "").casefold()
+                own_host = (urllib.parse.urlsplit(application_url).hostname or "").casefold()
+                secure = urllib.parse.urlsplit(page.url).scheme == "https"
+            except ValueError:
+                page_host, own_host, secure = "", "", False
+            same_site = bool(page_host and own_host) and (
+                page_host == own_host or page_host.endswith("." + own_host) or own_host.endswith("." + page_host)
+            )
+            if not (secure and same_site):
+                raise BlockedHuman(
+                    "application_redirect_untrusted",
+                    "The company application page left the company's site during the flow",
+                    step,
+                )
             return
         if platform == "linkedin":
             if not ApplicationFlow._page_url_on_hosts(page.url, LINKEDIN_HOSTS):
@@ -3260,6 +3312,7 @@ class ApplicationFlow:
         if platform == "lever":
             # Lever lands a submitted application on <posting>/thanks.
             confirmation_url_markers += ("/thanks",)
+        confirmation_url_markers += tuple(getattr(recipe, "CONFIRMATION_URL_MARKERS", ()))
         final_route = f"{final.path}?{final.query}".casefold()
         if (
             ApplicationFlow._same_confirmation_origin(
@@ -3546,6 +3599,15 @@ class ApplicationFlow:
             email = self._email_channel(checkpoint, page)
             if email is not None:
                 return email
+            generic = _recipe_class("generic") if detection.platform == "unknown" and not detection.conflict else None
+            if generic is not None:
+                # No ATS named the page and nothing contradicts that: a company
+                # form, if the page has one.  A known ATS without a recipe
+                # (Workday, SmartRecruiters…) never gets here: it stays unsupported.
+                probe = generic()
+                if probe.form_present(page) or probe.apply_control_present(page):
+                    detection = replace(detection, platform="generic")
+        if detection.platform not in SUPPORTED_PLATFORMS:
             if not self._generic_application_controls(page):
                 self._assert_no_closed_notice(page)
             reason = "ats_conflict" if detection.conflict else "ats_unsupported"
@@ -3569,9 +3631,9 @@ class ApplicationFlow:
                 # localised board, a slow render): only a notice is.
                 self._assert_no_closed_notice(page)
         injected_blank = not navigate and page.url == "about:blank"
-        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank)
+        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
         recipe.open_form(page)
-        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank)
+        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
         # Confirm the rendered form too.  URL-only detection is not
         # enough to interact when a block/error page owns that URL.
         if callable(getattr(recipe, "dom_match", None)):
@@ -3790,6 +3852,7 @@ class ApplicationFlow:
                     detection.platform,
                     "fill",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("fill", "upload_cv")
                 checkpoint.save(self.checkpoint_path)
@@ -3800,6 +3863,7 @@ class ApplicationFlow:
                     detection.platform,
                     "upload_cv",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("upload_cv", "screening")
                 checkpoint.save(self.checkpoint_path)
@@ -3811,6 +3875,7 @@ class ApplicationFlow:
                     detection.platform,
                     "screening",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("screening", "review")
                 checkpoint.save(self.checkpoint_path)
@@ -3826,6 +3891,7 @@ class ApplicationFlow:
                     detection.platform,
                     "review",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("review", "submit")
                 checkpoint.save(self.checkpoint_path)
