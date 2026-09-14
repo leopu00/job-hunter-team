@@ -767,6 +767,13 @@ class FlowCheckpoint:
     # is open, no code typed) · code_entered (typed and confirmed once).  The
     # code itself is never saved.
     verification: str = ""
+    # When and on what the flow saw that code screen: the proof, written as it
+    # happens, that the submit stopped before the site took the application.
+    verification_seen_at: str = ""
+    verification_evidence: str = ""
+    # Submits retired because their code screen was lost before any code was
+    # typed, each after a newer authorisation of the user.
+    retired_submits: list[dict[str, str]] = field(default_factory=list)
     # The vacancy page as the browser last opened it: HTTP status and
     # scheme://host/path (no query).  None / "" before any navigation.
     http_status: int | None = None
@@ -847,6 +854,16 @@ class FlowCheckpoint:
             raise FlowError("checkpoint has an invalid CV digest")
         if raw.get("verification", "") not in {"", "code_required", "code_entered"}:
             raise FlowError("checkpoint has an invalid verification state")
+        if not isinstance(raw.get("verification_seen_at", ""), str) or not isinstance(
+            raw.get("verification_evidence", ""), str
+        ):
+            raise FlowError("checkpoint has an invalid verification record")
+        retired = raw.get("retired_submits", [])
+        if not isinstance(retired, list) or any(
+            not isinstance(item, dict) or any(not isinstance(value, str) for value in item.values())
+            for item in retired
+        ):
+            raise FlowError("checkpoint has invalid retired submits")
         step = raw.get("modal_step", 0)
         if isinstance(step, bool) or not isinstance(step, int) or step < 0:
             raise FlowError("checkpoint has an invalid form step")
@@ -4552,6 +4569,53 @@ class ApplicationFlow:
             notifier=self.code_notifier,
         )
 
+    def _retire_lost_verification(self, checkpoint: FlowCheckpoint, gate: Any, *, new_page: bool) -> bool:
+        """One new, complete submit for an application the site never took.
+
+        1967 (patch 26): Submit stopped on Greenhouse's code screen, the browser
+        was gone, and every later run stopped on submit_outcome_unknown, though
+        Greenhouse registers nothing without the code.  Retired only when all
+        hold: the code screen was recorded when it was seen (code_required,
+        with when and how), no code was typed, there is no receipt, this run
+        opens a new page (the screen cannot be there), and the user authorised
+        the position again after the stop.  The run then starts over and
+        submits at most once, like any run.  A checkpoint without the record
+        (a stop before it existed) keeps its stop: a screenshot proves nothing
+        the flow can read.
+        """
+        if not (
+            checkpoint.submit_started
+            and checkpoint.verification == "code_required"
+            and checkpoint.verification_seen_at
+            and not checkpoint.receipt
+            and new_page
+            and self._reauthorised_since(checkpoint, gate)
+        ):
+            return False
+        checkpoint.retired_submits.append(
+            {
+                "submit_started_at": checkpoint.submit_started_at,
+                "verification_seen_at": checkpoint.verification_seen_at,
+                "verification_evidence": checkpoint.verification_evidence,
+                "retired_at": _utc_now(),
+            }
+        )
+        checkpoint.submit_started = False
+        checkpoint.submit_started_at = ""
+        checkpoint.verification = ""
+        checkpoint.verification_seen_at = ""
+        checkpoint.verification_evidence = ""
+        checkpoint.completed_steps = []
+        checkpoint.modal_step = 0
+        checkpoint.pre_submit_screenshot = ""
+        checkpoint.state = "detect"
+        checkpoint.blocked_reason = ""
+        checkpoint.blocked_detail = ""
+        checkpoint.resume_state = ""
+        checkpoint.save(self.checkpoint_path)
+        LOG.warning("[apply-flow] submit retired: its verification code screen was lost before any code was typed")
+        return True
+
     def _finish_with_code(self, checkpoint: FlowCheckpoint, recipe, page, platform: str) -> tuple[str, str]:
         """Type the site's one-time code and confirm ONCE: the last step of the same submit.
 
@@ -4561,6 +4625,9 @@ class ApplicationFlow:
         import verification_code
 
         checkpoint.verification = "code_required"
+        if not checkpoint.verification_seen_at:
+            checkpoint.verification_seen_at = _utc_now()
+            checkpoint.verification_evidence = f"{platform} security code screen after submit"
         checkpoint.save(self.checkpoint_path)
         try:
             code = self._verification_code(checkpoint, recipe)
@@ -4805,6 +4872,8 @@ class ApplicationFlow:
             ) else None
             self._supersede_request_rows(self._request_schema(checkpoint.answer_request)[0])
             self._close_answer_request(checkpoint)
+
+        self._retire_lost_verification(checkpoint, first_gate, new_page=page is None or navigate)
 
         fresh = (
             checkpoint.state == "detect"
