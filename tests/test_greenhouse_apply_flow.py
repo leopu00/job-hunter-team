@@ -239,7 +239,7 @@ def test_greenhouse_uses_only_an_exact_saved_screening_answer(
     assert result.status == "applied"
 
 
-def test_greenhouse_missing_required_answer_blocks_and_notifies(
+def test_greenhouse_missing_required_answer_blocks_silently(
     page, tmp_path: Path, cv_path: Path
 ):
     question = "State the exact certification you hold"
@@ -253,7 +253,8 @@ def test_greenhouse_missing_required_answer_blocks_and_notifies(
     assert result.reason == "required_answer_missing"
     assert page.locator("#question_1001").input_value() == ""
     assert page.evaluate("window.submitCount") == 0
-    assert question in notifications[0]["message"]
+    assert notifications == []
+    assert result.pending_question["label"].startswith(question)
 
 
 def test_greenhouse_security_code_blocks_before_submit(
@@ -473,7 +474,8 @@ def test_greenhouse_missing_select_exposes_exact_type_and_options(
 
     assert result.status == "blocked_human"
     assert result.reason == "required_answer_missing"
-    request = notifications[0]["answer_request"]["payload"]
+    assert notifications == []
+    request = result.pending_question
     # The required marker is text in this fixture (not aria-hidden), so it is
     # part of the exact accessible label shown to the user.
     assert request["label"] == question + "*"

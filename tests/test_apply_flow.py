@@ -269,7 +269,7 @@ def test_dry_run_stops_at_review_and_never_clicks_submit(
     assert recorded == []
 
 
-def test_missing_required_answer_blocks_and_notifies_without_guessing(
+def test_missing_required_answer_blocks_silently_with_the_question_for_the_closer(
     page, tmp_path: Path, cv_path: Path
 ):
     question = "Why are you interested in working here?"
@@ -290,9 +290,16 @@ def test_missing_required_answer_blocks_and_notifies_without_guessing(
     assert page.locator("#question-1").input_value() == ""
     assert page.evaluate("window.submitCount") == 0
     assert recorded == []
-    assert notifications[0]["position_id"] == 41
-    assert question in notifications[0]["message"]
-    assert "Test Candidate" not in notifications[0]["message"]
+    # No basis check happens here: the CLOSER works the answer out, or asks.
+    assert notifications == []
+    assert result.to_dict()["pending_question"] == {
+        "key": "why are you interested in working here",
+        "label": question,
+        "field_type": "textarea",
+        "options": [],
+        "scope": "company",
+        "asked": False,
+    }
     checkpoint_text = (tmp_path / "checkpoint.json").read_text()
     assert "Test Candidate" not in checkpoint_text
     assert "candidate@example.invalid" not in checkpoint_text
@@ -617,6 +624,16 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
     assert first.reason == "required_answer_missing"
     assert page.evaluate("window.submitCount") == 0
     with sqlite3.connect(db_path) as observed:
+        assert observed.execute(
+            "SELECT COUNT(*) FROM pending_user_messages WHERE related_position_id = 41"
+        ).fetchone()[0] == 0
+    # The CLOSER found no basis and asks explicitly.
+    asked = apply_flow_module.ask_pending_question(41, db_path=db_path, checkpoint_path=checkpoint_path)
+    assert asked["status"] == "asked"
+    assert apply_flow_module.ask_pending_question(
+        41, db_path=db_path, checkpoint_path=checkpoint_path
+    )["status"] == "already_asked"
+    with sqlite3.connect(db_path) as observed:
         request = observed.execute(
             "SELECT id, body, source_id, source_action, source_payload, user_reply "
             "FROM pending_user_messages WHERE related_position_id = 41"
@@ -726,7 +743,9 @@ def test_dashboard_choice_must_match_an_offered_option_exactly():
         ApplicationFlow._decode_answer_reply(request, "Mostly remote")
 
 
-def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path):
+def test_an_explicit_ask_keeps_the_durable_request_when_the_notifier_fails(
+    page, tmp_path: Path, cv_path: Path
+):
     db_path = tmp_path / "jobs.db"
     import _db
 
@@ -744,35 +763,17 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
     def failed_notifier(**_kwargs):
         raise RuntimeError("fixture notifier unavailable")
 
-    flow = ApplicationFlow(
-        essentials_checker=lambda **_kwargs: [],
-        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
-        position_id=41,
-        url=ASHBY_URL,
-        profile=profile(),
-        cv_path=cv_path,
-        checkpoint_path=tmp_path / "checkpoint.json",
-        db_path=db_path,
+    page.set_content(ashby_form(question="Fixture question?"))
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+    assert flow.run(page=page, navigate=False).reason == "required_answer_missing"
+
+    asked = apply_flow_module.ask_pending_question(
+        41, "Fixture question?", db_path=db_path, checkpoint_path=tmp_path / "checkpoint.json",
         notifier=failed_notifier,
-        gate_checker=lambda **_kwargs: GateVerdict(True),
-    )
-    checkpoint = FlowCheckpoint.new(41, ASHBY_URL)
-    result = flow._block(
-        checkpoint,
-        BlockedHuman(
-            "required_answer_missing",
-            "fixture missing answer",
-            "screening",
-            answer_request={
-                "key": "fixture question",
-                "label": "Fixture question?",
-                "field_type": "textarea",
-                "options": [],
-            },
-        ),
     )
 
-    assert result.status == "blocked_human"
+    assert asked["status"] == "asked"
     with sqlite3.connect(db_path) as observed:
         row = observed.execute(
             "SELECT body, source_action FROM pending_user_messages "
@@ -781,6 +782,9 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
     assert row is not None
     assert "Question: Fixture question?" in row[0]
     assert row[1] == "closer_application_answer"
+    assert apply_flow_module.ask_pending_question(
+        41, "another question", db_path=db_path, checkpoint_path=tmp_path / "checkpoint.json"
+    )["status"] == "not_pending"
 
 
 def _answers_db(tmp_path: Path) -> Path:
@@ -799,21 +803,11 @@ def _answers_db(tmp_path: Path) -> Path:
     return db_path
 
 
-def test_a_dry_run_never_asks_a_form_question_and_the_authorised_run_does(
+def test_a_form_question_never_goes_to_the_user_by_itself_in_any_mode(
     page, tmp_path: Path, cv_path: Path
 ):
     db_path = _answers_db(tmp_path)
     notifications: list[dict] = []
-
-    def flow_in(mode: str) -> ApplicationFlow:
-        flow = build_flow(
-            tmp_path,
-            cv_path,
-            verdicts=[GateVerdict(True, context={"mode": mode, "max_per_day": 3})],
-            notifications=notifications,
-        )
-        flow.db_path = db_path
-        return flow
 
     def requests() -> list:
         with contextlib.closing(sqlite3.connect(db_path)) as conn:
@@ -821,24 +815,104 @@ def test_a_dry_run_never_asks_a_form_question_and_the_authorised_run_does(
                 "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
             ).fetchall()
 
-    page.set_content(ashby_form(question="Why do you want to join us?"))
-    dry = flow_in("dry_run").run(page=page, navigate=False)
+    for mode in ("dry_run", "authorised"):
+        page.set_content(ashby_form(question="Why do you want to join us?"))
+        flow = build_flow(
+            tmp_path,
+            cv_path,
+            verdicts=[GateVerdict(True, context={"mode": mode, "max_per_day": 3})],
+            notifications=notifications,
+        )
+        flow.db_path = db_path
+        result = flow.run(page=page, navigate=False)
 
-    assert (dry.status, dry.reason) == ("blocked_human", "required_answer_missing")
-    checkpoint = _read_checkpoint(tmp_path)
-    assert checkpoint["blocked_reason"] == "required_answer_missing"
-    assert checkpoint["answer_request"] is None
+        assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+        assert result.pending_question["key"] == "why do you want to join us"
+        request = _read_checkpoint(tmp_path)["answer_request"]
+        assert (request["asked"], request["message_id"]) == (False, "")
+        assert notifications == []
+        assert requests() == []
+        assert page.evaluate("window.submitCount") == 0
+
+
+def test_an_answer_the_closer_saves_completes_the_flow_without_asking(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    import application_answers
+
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+    question = "Why do you want to join us?"
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path, notifications=notifications)
+        built.db_path = db_path
+        return built
+
+    page.set_content(ashby_form(question=question))
+    assert flow().run(page=page, navigate=False).reason == "required_answer_missing"
+
+    # What `application_answers.py save --basis vacancy --position-id 41` writes.
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        application_answers.save_answer(
+            conn,
+            key="why do you want to join us",
+            label=question,
+            answer="Synthetic motivation written from the vacancy.",
+            field_type="textarea",
+            channel="agent_inferred",
+            scope=application_answers.answer_scope(conn, "textarea", 41),
+        )
+        conn.commit()
+
+    page.set_content(ashby_form(question=question))
+    resumed = flow().run(page=page, navigate=False)
+
+    assert resumed.status == "applied"
+    assert page.evaluate("window.submitCount") == 1
     assert notifications == []
-    assert requests() == []
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["answer_request"] is None
+    assert checkpoint["answer_sources"] == {
+        "name": "profile",
+        "email": "profile",
+        "why do you want to join us": "agent_inferred",
+    }
+    assert resumed.receipt.answer_sources == checkpoint["answer_sources"]
+    assert "Synthetic motivation" not in json.dumps(checkpoint)
 
-    page.set_content(ashby_form(question="Why do you want to join us?"))
-    authorised = flow_in("authorised").run(page=page, navigate=False)
 
-    assert (authorised.status, authorised.reason) == ("blocked_human", "required_answer_missing")
-    assert requests() == [("closer_application_answer",)]
+def test_the_explicit_ask_sends_the_question_once(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+    page.set_content(ashby_form(question="Do you hold a synthetic licence?"))
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+    flow.db_path = db_path
+    assert flow.run(page=page, navigate=False).reason == "required_answer_missing"
+
+    asked = apply_flow_module.ask_pending_question(
+        41, db_path=db_path, checkpoint_path=tmp_path / "checkpoint.json",
+        notifier=lambda **kwargs: notifications.append(kwargs) or "1",
+    )
+    again = apply_flow_module.ask_pending_question(
+        41, db_path=db_path, checkpoint_path=tmp_path / "checkpoint.json",
+        notifier=lambda **kwargs: notifications.append(kwargs) or "1",
+    )
+
+    assert (asked["status"], again["status"]) == ("asked", "already_asked")
     assert len(notifications) == 1
-    assert notifications[0]["answer_request"]["payload"]["label"] == "Why do you want to join us?"
-    assert page.evaluate("window.submitCount") == 0
+    assert "Question: Do you hold a synthetic licence?" in notifications[0]["message"]
+    assert _read_checkpoint(tmp_path)["answer_request"]["asked"] is True
+
+
+def test_the_ask_command_without_a_pending_question_asks_nothing(tmp_path: Path, cv_path: Path, capsys):
+    code = apply_flow_module.main([
+        "--position-id", "41", "--url", ASHBY_URL, "--profile", str(tmp_path / "none.yml"),
+        "--cv", str(cv_path), "--checkpoint", str(tmp_path / "checkpoint.json"), "--ask",
+    ])
+
+    assert code == 3
+    assert json.loads(capsys.readouterr().out) == {"source_id": "", "status": "not_pending"}
 
 
 # ── A vacancy that is no longer open ────────────────────────────────────────
@@ -1238,3 +1312,199 @@ def test_a_tampered_screenshot_path_is_never_deleted(page, tmp_path: Path, cv_pa
 
     _assert_stop_screenshot(tmp_path, "captcha")
     assert target.read_bytes() == b"not ours"
+
+
+def test_missing_essential_facts_are_listed_for_the_closer_without_asking(tmp_path: Path, cv_path: Path):
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+    flow.essentials_checker = lambda **_kwargs: ["sponsorship", "salary expectations"]
+
+    result = flow.run(page=object(), navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "essential_facts_missing")
+    assert result.to_dict()["missing"] == ["sponsorship", "salary expectations"]
+    assert notifications == []
+
+
+def test_answer_sources_keep_only_known_origins_and_never_values():
+    receipt = Receipt.from_dict({
+        "screenshot_path": "/tmp/none.png",
+        "confirmation_text": "Thank you",
+        "answer_sources": {"phone": "user", "motivation": "agent_inferred", "salary": "Synthetic 50000 EUR", 3: "user"},
+    })
+    assert receipt.answer_sources == {"phone": "user", "motivation": "agent_inferred"}
+    assert receipt.to_dict()["answer_sources"] == {"phone": "user", "motivation": "agent_inferred"}
+
+
+def _cli(tmp_path: Path, *args: str) -> tuple[int, dict]:
+    import os
+    import subprocess
+
+    env = {
+        **os.environ,
+        "JHT_HOME": str(tmp_path),
+        "JHT_DB": str(tmp_path / "jobs.db"),
+        "JHT_APPLY_FLOW_NO_EXTERNAL_NOTIFY": "1",
+    }
+    done = subprocess.run(
+        [sys.executable, str(SKILLS / "application_answers.py"), *args, "--json"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    return done.returncode, json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def test_end_to_end_the_closer_saves_with_the_cli_and_the_flow_completes(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    question = "Why do you want to join us?"
+    notifications: list[dict] = []
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path, notifications=notifications)
+        built.db_path = db_path
+        return built
+
+    page.set_content(ashby_form(question=question))
+    stop = flow().run(page=page, navigate=False).to_dict()
+    pending = stop["pending_question"]
+
+    code, saved = _cli(
+        tmp_path, "save", "--key", pending["key"], "--label", pending["label"],
+        "--value", "Synthetic motivation written from the vacancy.",
+        "--field-type", pending["field_type"], "--basis", "vacancy", "--position-id", "41", "--db", str(db_path),
+    )
+    assert code == 0, saved
+
+    page.set_content(ashby_form(question=question))
+    resumed = flow().run(page=page, navigate=False)
+
+    assert resumed.status == "applied"
+    assert notifications == []
+    assert resumed.receipt.answer_sources["why do you want to join us"] == "agent_inferred"
+
+
+def test_end_to_end_the_closer_asks_with_the_cli_when_it_has_no_basis(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    checkpoint_path = tmp_path / ".cache" / "apply-flow" / "41.json"
+    page.set_content(ashby_form(question="Do you hold a synthetic licence?"))
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+    flow.checkpoint_path = checkpoint_path
+    pending = flow.run(page=page, navigate=False).pending_question
+
+    code, asked = _cli(tmp_path, "ask", "--position-id", "41", "--key", pending["key"], "--db", str(db_path))
+
+    assert code == 0, asked
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
+        ).fetchall() == [("closer_application_answer",)]
+    assert json.loads(checkpoint_path.read_text())["answer_request"]["asked"] is True
+
+
+WORK_MODEL = "Which work model can you accept?"
+
+
+def _radio_form() -> str:
+    field = f"""
+      <div class="ashby-application-form-field-entry" data-field-path="question-work-model">
+        <label class="required-marker ashby-application-form-question-title">{WORK_MODEL}</label>
+        <input id="remote" name="question-work-model" type="radio" required>
+        <label for="remote">Remote</label>
+        <input id="hybrid" name="question-work-model" type="radio" required>
+        <label for="hybrid">Hybrid</label>
+      </div>
+    """
+    return ashby_form().replace(
+        '<button class="ashby-application-form-submit-button"',
+        field + '<button class="ashby-application-form-submit-button"',
+    )
+
+
+def _save_inferred(db_path: Path, key: str, value, field_type: str = "radio", channel: str = "agent_inferred"):
+    import application_answers
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        application_answers.save_answer(
+            conn, key=key, label=key, answer=value, field_type=field_type, channel=channel, basis="judgement"
+        ) if channel == "agent_inferred" else application_answers.save_answer(
+            conn, key=key, label=key, answer=value, field_type=field_type, channel=channel
+        )
+        conn.commit()
+
+
+def test_a_saved_answer_that_is_not_an_exact_option_keeps_the_question_open(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path)
+        built.db_path = db_path
+        return built
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    first = flow().run(page=page, navigate=False)
+    assert first.reason == "required_answer_missing"
+    # Saved with a type the question does not have: an empty textarea answer is no answer.
+    _save_inferred(db_path, "why do you want to join us", "   ", field_type="text")
+
+    rerun = flow().run(page=page, navigate=False)
+
+    assert (rerun.status, rerun.reason) == ("blocked_human", "required_answer_missing")
+    assert rerun.pending_question["key"] == "why do you want to join us"
+    assert _read_checkpoint(tmp_path)["answer_request"] is not None
+
+
+def test_a_worked_out_option_the_form_refuses_becomes_the_question_again(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+    # An older worked-out answer whose wording is not one of this form's options.
+    _save_inferred(db_path, "which work model can you accept", "Remote-first")
+    page.set_content(_radio_form())
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+    flow.db_path = db_path
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["options"] == ["Remote", "Hybrid"]
+    assert notifications == []
+    assert page.evaluate("window.submitCount") == 0
+
+    # The CLOSER corrects itself with an exact option, and the flow completes.
+    _save_inferred(db_path, "which work model can you accept", "Remote")
+    page.set_content(_radio_form())
+    again = build_flow(tmp_path, cv_path, notifications=notifications)
+    again.db_path = db_path
+    assert again.run(page=page, navigate=False).status == "applied"
+
+
+def test_a_user_option_the_form_refuses_stays_a_human_stop(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    _save_inferred(db_path, "which work model can you accept", "Remote-first", channel="telegram")
+    page.set_content(_radio_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason != "required_answer_missing"
+    assert result.pending_question is None
+
+
+def test_a_worked_out_value_outside_the_options_does_not_reopen_the_browser(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    db_path = _answers_db(tmp_path)
+    page.set_content(_radio_form())
+    first = build_flow(tmp_path, cv_path)
+    first.db_path = db_path
+    assert first.run(page=page, navigate=False).reason == "required_answer_missing"
+    _save_inferred(db_path, "which work model can you accept", "Remote-first")
+
+    rerun = build_flow(tmp_path, cv_path)
+    rerun.db_path = db_path
+    monkeypatch.setattr(rerun, "_managed_page", lambda: pytest.fail("browser reopened for an answer that cannot fit"))
+    result = rerun.run(page=None)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["options"] == ["Remote", "Hybrid"]
