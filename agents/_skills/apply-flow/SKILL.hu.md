@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Adj ennek a parancsnak legalább **10 perces** időkorlátot: a LinkedIn-bejelentkezés akár 5 percig is várhat a böngészőben az ellenőrző kódra, amelyet a felhasználó Telegramon küld, és a várakozás közben leállított parancs hagyja lejárni a kódkérést.
+
 A `PID`, `URL` és `CV` az `apply_gate.py queue` legutóbbi olvasásából jön (skill
 `apply-authorization`), soha nem a memóriából.
 
@@ -82,9 +84,9 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `linkedin_login_failed` | a LinkedIn kétszer elutasította a bejelentkezést: nincs új próbálkozás, amíg a felhasználó új hitelesítő adatokat nem ír |
 | `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | a LinkedIn ellenőrző kódját Telegramon kértük, és nem érkezett meg időben (vagy a kérés nem jutott el Telegramra, vagy a LinkedIn nem fogadta el a kódot — ez sosem számít sikertelen bejelentkezésnek): egy új kör új kódot kér |
 | `linkedin_challenge` | a LinkedIn captchát vagy biztonsági ellenőrzést mutat: a felhasználó megoldja az élő képernyőn, majd újra engedélyezi a pozíciót |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a LinkedIn-oldal elhagyta a `www.linkedin.com`-ot, vagy a megadott céges cím nem LinkedInen kívüli HTTPS-oldal (vagy második átadás) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a LinkedIn-oldal elhagyta a LinkedInt (`www.linkedin.com` vagy egy országoldal, pl. `es.linkedin.com`), vagy a megadott céges cím nem LinkedInen kívüli HTTPS-oldal (vagy második átadás) |
 | `linkedin_follow_not_cleared` | a „cég követése” jelölőnégyzetet nem sikerült Submit előtt kikapcsolni: semmi nem megy el |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **elutasítva, nem blokkolva**: a LinkedIn-jelentkezések között szünet van (`linkedin_min_interval_minutes`, alapértelmezés 20), a bejelentkezés egyszer nem sikerült és a következő kör még egyszer próbálja, vagy ez a beállítás nem egész percszám. A sor magától újrapróbálja |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **elutasítva, nem blokkolva**: a LinkedIn-jelentkezések között szünet van (`linkedin_min_interval_minutes`, alapértelmezés 20), a bejelentkezés egyszer nem sikerült és a következő kör még egyszer próbálja, vagy ez a beállítás nem egész percszám. A sor magától újrapróbálja Egy próbafuttatás sosem jelentkezik be: mentett LinkedIn-munkamenet nélkül `linkedin_dry_run_signed_out` elutasítást kap. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | két különböző mailto jelentkezési cím, vagy a jelentkezési űrlap, a mezői vagy a küldés gombja nem köthető egyetlen űrlaphoz (hírlevél, lábléc és demó űrlap soha nem része) |
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |

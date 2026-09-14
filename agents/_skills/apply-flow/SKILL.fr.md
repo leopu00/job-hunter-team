@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Donne à cette commande un délai d'au moins **10 minutes** : une connexion LinkedIn peut attendre dans le navigateur jusqu'à 5 minutes le code de vérification que l'utilisateur envoie sur Telegram, et une commande tuée pendant l'attente laisse expirer la demande de code.
+
 `PID`, `URL` et `CV` viennent de la dernière lecture de `apply_gate.py queue`
 (skill `apply-authorization`), jamais de la mémoire.
 
@@ -82,9 +84,9 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `linkedin_login_failed` | LinkedIn a refusé la connexion deux fois : aucun nouvel essai tant que l'utilisateur n'écrit pas de nouveaux identifiants |
 | `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | le code de vérification LinkedIn demandé sur Telegram n'est pas arrivé à temps (ou la demande n'a pas atteint Telegram, ou LinkedIn n'a pas accepté le code — cela ne compte jamais comme une connexion échouée) : un nouveau tour demande un nouveau code |
 | `linkedin_challenge` | LinkedIn affiche un captcha ou un contrôle de sécurité : l'utilisateur le résout sur l'écran en direct, puis autorise à nouveau la position |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | la page LinkedIn a quitté `www.linkedin.com`, ou l'adresse de l'entreprise qu'elle donne n'est pas une page HTTPS hors de LinkedIn (ou c'est un second passage) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | la page LinkedIn a quitté LinkedIn (`www.linkedin.com` ou une page de pays comme `es.linkedin.com`), ou l'adresse de l'entreprise qu'elle donne n'est pas une page HTTPS hors de LinkedIn (ou c'est un second passage) |
 | `linkedin_follow_not_cleared` | la case « suivre l'entreprise » n'a pas pu être décochée avant Submit : rien n'est envoyé |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **refusé, pas bloqué** : les candidatures LinkedIn sont espacées (`linkedin_min_interval_minutes`, 20 par défaut), la connexion a échoué une fois et le prochain tour réessaie une fois, ou ce réglage n'est pas un nombre entier de minutes. La file réessaie d'elle-même |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **refusé, pas bloqué** : les candidatures LinkedIn sont espacées (`linkedin_min_interval_minutes`, 20 par défaut), la connexion a échoué une fois et le prochain tour réessaie une fois, ou ce réglage n'est pas un nombre entier de minutes. La file réessaie d'elle-même Un dry run ne se connecte jamais : sans session LinkedIn enregistrée, il est refusé comme `linkedin_dry_run_signed_out`. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | deux adresses mailto de candidature différentes, ou le formulaire de candidature, ses champs ou son bouton d'envoi ne tiennent pas dans un seul formulaire (newsletter, pied de page et formulaires de démo n'en font jamais partie) |
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |

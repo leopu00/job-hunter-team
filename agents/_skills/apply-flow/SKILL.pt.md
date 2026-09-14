@@ -15,6 +15,8 @@ python3 /app/shared/skills/apply_flow.py \
   --cv "$CV"
 ```
 
+Dá a este comando um tempo limite de pelo menos **10 minutos**: um início de sessão no LinkedIn pode esperar no navegador até 5 minutos pelo código de verificação que o utilizador envia no Telegram, e um comando morto enquanto espera deixa expirar o pedido do código.
+
 `PID`, `URL` e `CV` vêm da última leitura de `apply_gate.py queue` (skill
 `apply-authorization`), nunca da memória.
 
@@ -82,9 +84,9 @@ O fluxo para em tudo o que não consegue fazer com certeza:
 | `linkedin_login_failed` | o LinkedIn recusou o início de sessão duas vezes: nenhuma nova tentativa até o utilizador escrever credenciais novas |
 | `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | o código de verificação do LinkedIn foi pedido no Telegram e não chegou a tempo (ou o pedido não chegou ao Telegram, ou o LinkedIn não aceitou o código — nunca conta como um login falhado): uma nova volta pede um código novo |
 | `linkedin_challenge` | o LinkedIn mostra um captcha ou uma verificação de segurança: o utilizador resolve-a no ecrã ao vivo e volta a autorizar a posição |
-| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a página do LinkedIn saiu de `www.linkedin.com`, ou o endereço da empresa que indica não é uma página HTTPS fora do LinkedIn (ou é uma segunda passagem) |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a página do LinkedIn saiu do LinkedIn (`www.linkedin.com` ou uma página de país como `es.linkedin.com`), ou o endereço da empresa que indica não é uma página HTTPS fora do LinkedIn (ou é uma segunda passagem) |
 | `linkedin_follow_not_cleared` | não foi possível desmarcar a caixa «seguir a empresa» antes de Submit: nada é enviado |
-| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **negado, não bloqueado**: as candidaturas no LinkedIn são espaçadas (`linkedin_min_interval_minutes`, por omissão 20), o início de sessão falhou uma vez e a próxima volta tenta mais uma vez, ou essa definição não é um número inteiro de minutos. A fila tenta de novo sozinha |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` / `linkedin_dry_run_signed_out` | **negado, não bloqueado**: as candidaturas no LinkedIn são espaçadas (`linkedin_min_interval_minutes`, por omissão 20), o início de sessão falhou uma vez e a próxima volta tenta mais uma vez, ou essa definição não é um número inteiro de minutos. A fila tenta de novo sozinha Um dry run nunca inicia sessão: sem uma sessão do LinkedIn guardada é negado como `linkedin_dry_run_signed_out`. |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | dois endereços mailto de candidatura diferentes, ou o formulário de candidatura, os seus campos ou o seu botão de envio não cabem num único formulário (newsletter, rodapé e formulários de demo nunca fazem parte) |
 | `form_error` / `field_invalid` / `submit_unavailable` | o formulário assinala um erro, o formato de um campo é recusado, ou o botão de envio falta ou está desativado |
 | `url_refused` / `checkpoint_invalid` | o URL da candidatura não passou o controlo de endereços públicos, ou o checkpoint guardado não se lê |

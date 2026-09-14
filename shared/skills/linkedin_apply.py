@@ -539,6 +539,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         self.step_saved: Callable[[int], None] | None = None
         self.cv_attached = False
         self.job_url = ""
+        self.dry_run = False
 
     def attach(self, flow) -> None:
         self.session = LinkedInSession(
@@ -549,6 +550,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             code_timeout_s=flow.login_code_timeout_s,
         )
         self.job_url = flow.url
+        self.dry_run = getattr(flow, "_mode", "") == "dry_run"
 
         def saved(step: int, _flow=flow) -> None:
             checkpoint = getattr(_flow, "_live_checkpoint", None)
@@ -635,6 +637,13 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue  # a reload with the saved session is enough
             if self.session.challenge(page):
                 raise BlockedHuman("linkedin_challenge", "LinkedIn shows a security check on the vacancy", "detect")
+            if self.dry_run:
+                # A dry run only looks: no sign-in with the user's account, and
+                # never a verification code asked on Telegram.
+                raise FlowDeferred(
+                    "linkedin_dry_run_signed_out",
+                    "A dry run does not sign in to LinkedIn; without a saved session it stops here",
+                )
             # Before the account does anything: the pause between applications.
             self.session.assert_interval()
             self.session.login(page)

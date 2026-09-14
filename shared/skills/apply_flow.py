@@ -74,6 +74,8 @@ GREENHOUSE_HOSTS = frozenset(
 # never proves a submit made on the other.
 LEVER_HOSTS = frozenset({"jobs.lever.co", "jobs.eu.lever.co"})
 LINKEDIN_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
+# The country pages the Scout's links also use (es.linkedin.com, nl.linkedin.com).
+_LINKEDIN_COUNTRY_HOST = re.compile(r"^[a-z]{2}\.linkedin\.com$")
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
 EMAIL_CHANNEL_STATE = "email_channel"
 
@@ -2536,17 +2538,44 @@ def _linkedin_module():
     return linkedin_apply
 
 
+def linkedin_vacancy_host(host: str) -> bool:
+    """www.linkedin.com, linkedin.com or a two-letter country page such as es.linkedin.com."""
+    host = str(host or "").casefold().rstrip(".")
+    return host in LINKEDIN_HOSTS or bool(_LINKEDIN_COUNTRY_HOST.match(host))
+
+
+def _any_linkedin_host(host: str) -> bool:
+    host = str(host or "").casefold().rstrip(".")
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
+
+
 def is_linkedin_job(url: str) -> bool:
-    """A LinkedIn vacancy page (`/jobs/…`) over HTTPS."""
+    """A LinkedIn vacancy page (`/jobs/…`) over HTTPS, on www or a country page."""
     try:
         parsed = urllib.parse.urlsplit(str(url or "").strip())
+        port = parsed.port
     except ValueError:
         return False
     return (
         parsed.scheme == "https"
-        and (parsed.hostname or "").casefold() in LINKEDIN_HOSTS
+        and port in {None, 443}
+        and linkedin_vacancy_host(parsed.hostname or "")
         and parsed.path.startswith("/jobs/")
     )
+
+
+def linkedin_job_url(url: str) -> str:
+    """The address the flow opens for a LinkedIn vacancy: https://www.linkedin.com/jobs/view/<id>/.
+
+    A country page (es.linkedin.com) or a slug with the id at its end is the
+    same vacancy; www is where the sign-in, the session cookies and the
+    English controls the recipe knows live.  Anything else is returned as it is.
+    """
+    if not is_linkedin_job(url):
+        return url
+    path = urllib.parse.urlsplit(str(url).strip()).path
+    found = re.fullmatch(r"/jobs/view/(?:[^/]*-)?(\d{6,})/?", path)
+    return f"https://www.linkedin.com/jobs/view/{found.group(1)}/" if found else url
 
 
 def _optional_module(name: str):
@@ -3201,10 +3230,17 @@ class ApplicationFlow:
                 )
             return
         if platform == "linkedin":
-            if not ApplicationFlow._page_url_on_hosts(page.url, LINKEDIN_HOSTS):
+            try:
+                parsed = urllib.parse.urlsplit(page.url)
+                trusted = parsed.scheme == "https" and parsed.port in {None, 443} and linkedin_vacancy_host(
+                    parsed.hostname or ""
+                )
+            except ValueError:
+                trusted = False
+            if not trusted:
                 raise BlockedHuman(
                     "linkedin_redirect_untrusted",
-                    "The LinkedIn page left www.linkedin.com during the flow",
+                    "The LinkedIn page left LinkedIn during the flow",
                     step,
                 )
             return
@@ -3615,6 +3651,29 @@ class ApplicationFlow:
             )
         return None
 
+    def _linkedin_pause(self, checkpoint: FlowCheckpoint) -> FlowResult | None:
+        """The pause between LinkedIn applications, before any browser opens.
+
+        Inside the recipe alone, a throttled run still opened LinkedIn with the
+        account at every turn of the queue, only to be told to wait.  The
+        checkpoint is not touched: nothing happened to the application.  A run
+        after submit_started is recovery, never throttled (its own click just
+        started the pause).
+        """
+        if checkpoint.submit_started or not is_linkedin_job(self.url):
+            return None
+        module = _linkedin_module()
+        if module is None:
+            return None
+        try:
+            module.LinkedInSession(
+                jht_home=self._jht_home(), db_path=self.db_path, position_id=self.position_id
+            ).assert_interval()
+        except FlowDeferred as deferred:
+            LOG.warning("[apply-flow] DENY %s", deferred.reason)
+            return FlowResult("denied", checkpoint.state, deferred.reason)
+        return None
+
     def _jht_home(self) -> Path:
         return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
@@ -3690,7 +3749,7 @@ class ApplicationFlow:
         host = (parsed.hostname or "").casefold()
         if count > 1:
             allowed, why = False, "a second handoff in one run (handoff_loop)"
-        elif parsed.scheme != "https" or not host or host in LINKEDIN_HOSTS:
+        elif parsed.scheme != "https" or not host or _any_linkedin_host(host):
             allowed, why = False, "the handed-over address is not an HTTPS page outside the board"
         elif checkpoint.platform == "linkedin":
             # A board's "apply on company website": any public site, whose
@@ -3716,6 +3775,9 @@ class ApplicationFlow:
             )
             # A multi-step recipe saves its step on the checkpoint of this run.
             self._live_checkpoint = checkpoint
+            # The checkpoint keeps the queue's address; a LinkedIn vacancy is
+            # opened on www (see linkedin_job_url).
+            self.url = linkedin_job_url(self.url)
         except FlowError as exc:
             checkpoint = FlowCheckpoint.new(self.position_id, self.url)
             return self._block(
@@ -3737,6 +3799,8 @@ class ApplicationFlow:
                 checkpoint,
                 _DeniedVerdict("gate_mode_unknown", "gate returned no recognised application mode"),
             )
+        # A recipe that works with the user's account reads it (no sign-in in a dry run).
+        self._mode = mode
 
         if checkpoint.state == EMAIL_CHANNEL_STATE:
             # Detection already handed this position to the email channel; a
@@ -3776,6 +3840,12 @@ class ApplicationFlow:
             if receipt.is_valid():
                 return self._record(checkpoint, receipt)
 
+        # After the answers and the CV, right before the browser: a pending
+        # question stays visible to the CLOSER during the pause.
+        throttled = self._linkedin_pause(checkpoint)
+        if throttled is not None:
+            return throttled
+
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
         with manager as active_page:
             if checkpoint.submit_started:
@@ -3789,6 +3859,11 @@ class ApplicationFlow:
                     if checkpoint.handoff_url:
                         # The click happened on the site the board handed over to.
                         self.url = checkpoint.handoff_url
+                    elif is_linkedin_job(self.url):
+                        # Easy Apply's outcome shows only to the signed-in account.
+                        module = _linkedin_module()
+                        if module is not None:
+                            module.restore_session(active_page.context, self._jht_home())
                     if navigate:
                         self._navigate(active_page)
                     recovery_platform = checkpoint.platform or detect_ats(self.url).platform

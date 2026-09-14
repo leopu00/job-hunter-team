@@ -282,7 +282,8 @@ def write_session(home: Path) -> None:
 
 
 def build_flow(home: Path, cv_path: Path, *, answers: dict | None = None, recorded: list | None = None,
-               code_notifier=None, code_timeout: float = 5.0, extra_profile: dict | None = None) -> ApplicationFlow:
+               code_notifier=None, code_timeout: float = 5.0, extra_profile: dict | None = None,
+               url: str = JOB, gate: GateVerdict | None = None) -> ApplicationFlow:
     recorded = recorded if recorded is not None else []
     candidate = {"name": "Test Candidate", "contacts": {"email": EMAIL, "phone": "+10000000000"}}
     candidate.update(extra_profile or {})
@@ -292,13 +293,13 @@ def build_flow(home: Path, cv_path: Path, *, answers: dict | None = None, record
         cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         cv_checker=lambda _path: {"ok": True, "reasons": []},
         position_id=71,
-        url=JOB,
+        url=url,
         profile=candidate,
         cv_path=cv_path,
         checkpoint_path=home / ".cache" / "apply-flow" / "71.json",
         receipt_dir=home / "receipts",
         db_path=home / "jobs.db",
-        gate_checker=lambda **_kwargs: GateVerdict(),
+        gate_checker=lambda **_kwargs: gate or GateVerdict(),
         notifier=lambda **_kwargs: "notification-1",
         applied_recorder=lambda **kwargs: recorded.append(kwargs),
         code_notifier=code_notifier,
@@ -817,3 +818,96 @@ def test_a_first_name_under_a_profile_alias_comes_from_the_profile(page, home: P
 
     assert result.status == "applied", result
     assert recorded[0]["receipt"].answer_sources.get("first name") == "profile"
+
+
+# ── the flow around the recipe: country pages, pause, dry run, recovery ─────
+
+COUNTRY_JOB = "https://es.linkedin.com/jobs/view/test-role-at-example-4000000001"
+
+
+@pytest.mark.parametrize(
+    "url, job, opened",
+    (
+        (COUNTRY_JOB, True, JOB),
+        ("https://www.linkedin.com/jobs/view/4000000001", True, JOB),
+        ("https://linkedin.com/jobs/view/4000000001/?trk=public_jobs", True, JOB),
+        ("https://www.linkedin.com/jobs/search/?keywords=x", True, "https://www.linkedin.com/jobs/search/?keywords=x"),
+        ("https://es.linkedin.com.example.invalid/jobs/view/4000000001", False, None),
+        ("https://a.b.linkedin.com/jobs/view/4000000001", False, None),
+        ("https://www.linkedin.com:8443/jobs/view/4000000001", False, None),
+        ("http://es.linkedin.com/jobs/view/4000000001", False, None),
+    ),
+)
+def test_a_country_page_is_the_same_vacancy_opened_on_www(url: str, job: bool, opened):
+    assert apply_flow.is_linkedin_job(url) is job
+    assert apply_flow.linkedin_job_url(url) == (opened or url)
+
+
+def test_a_vacancy_queued_with_its_country_page_applies_and_keeps_the_queue_address(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+    site = Site()
+
+    result = run(build_flow(home, cv_path, recorded=recorded, url=COUNTRY_JOB), page, site)
+
+    assert result.status == "applied", result
+    assert checkpoint(home)["url"] == COUNTRY_JOB
+    assert not any("es.linkedin.com" in url for url in site.requests)
+
+
+def test_a_handoff_to_a_linkedin_country_page_is_refused(home: Path, cv_path: Path):
+    flow = build_flow(home, cv_path)
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "linkedin"
+
+    with pytest.raises(apply_flow.BlockedHuman) as stop:
+        flow._follow_handoff(saved, page=None, handoff=PlatformHandoff("https://es.linkedin.com/signup"), count=1)
+
+    assert stop.value.reason == "application_redirect_untrusted"
+
+
+def test_the_pause_denies_before_linkedin_is_opened_and_leaves_the_checkpoint_alone(page, home: Path, cv_path: Path):
+    write_session(home)
+    linkedin_apply._write_private_json(home / ".cache" / "linkedin" / "last-apply.json", {"at": linkedin_apply._utc_now().isoformat()})
+    site = Site()
+
+    result = run(build_flow(home, cv_path), page, site)
+
+    assert (result.status, result.reason) == ("denied", "linkedin_throttled")
+    assert site.requests == []
+    assert not (home / ".cache" / "apply-flow" / "71.json").exists()
+
+
+def test_recovery_is_never_throttled_and_reads_the_outcome_signed_in(page, home: Path, cv_path: Path):
+    write_session(home)
+    linkedin_apply._write_private_json(home / ".cache" / "linkedin" / "last-apply.json", {"at": linkedin_apply._utc_now().isoformat()})
+    saved = FlowCheckpoint.new(71, JOB)
+    saved.platform = "linkedin"
+    saved.state = "submit"
+    saved.submit_started = True
+    saved.save(home / ".cache" / "apply-flow" / "71.json")
+
+    def job(route):
+        signed_in = "li_at=synthetic" in (route.request.all_headers().get("cookie") or "")
+        sent = '<div role="alert">Your application was sent to Example!</div>' if signed_in else ""
+        route.fulfill(status=200, content_type="text/html", body=f"<html><body><h1>Test Role</h1>{sent}</body></html>")
+
+    page.context.route(JOB + "**", job)
+    recorded: list = []
+
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert len(recorded) == 1
+
+
+def test_a_dry_run_never_signs_in_nor_asks_for_a_code(page, home: Path, cv_path: Path):
+    write_credentials(home)
+    calls: list = []
+    site = Site(two_factor=True)
+    dry = GateVerdict(context={"mode": "dry_run"})
+
+    result = run(build_flow(home, cv_path, code_notifier=telegram_bridge(home, calls=calls), gate=dry), page, site)
+
+    assert (result.status, result.reason) == ("denied", "linkedin_dry_run_signed_out")
+    assert site.logins() == 0 and calls == []
