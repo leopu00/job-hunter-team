@@ -181,6 +181,42 @@ experience_years: 5
 
 
 @pytest.fixture(scope="session", autouse=True)
+def placeholder_pdfs_pass_the_layout_check_in_subprocesses():
+    """The same pass for CLIs the suite spawns: a sitecustomize in the test tree."""
+    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "pdf_layout_pass")
+    previous = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = fixture + (os.pathsep + previous if previous else "")
+    yield
+    if previous is None:
+        os.environ.pop("PYTHONPATH", None)
+    else:
+        os.environ["PYTHONPATH"] = previous
+
+
+@pytest.fixture(autouse=True)
+def placeholder_pdfs_pass_the_layout_check(request, monkeypatch):
+    """The suite attaches placeholder PDFs that poppler cannot measure.
+
+    Production has no switch for the CV layout check (`apply_gate.cv_layout_hold`):
+    here the check itself is replaced in-process with a pass. Tests of the check
+    use the real functions (`pdf_layout_check.REAL_ANALYZE` in their module, or
+    their own stub); `test_pdf_layout_check.py` is left untouched.
+    """
+    if request.node.module.__name__.endswith("test_pdf_layout_check"):
+        yield
+        return
+    import sys
+
+    skills = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shared", "skills")
+    if skills not in sys.path:
+        sys.path.insert(0, skills)
+    import pdf_layout_check
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", lambda _path, **_kw: {"ok": True, "reasons": []})
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
 def isolated_jht_home():
     if os.environ.get("JHT_TESTS_KEEP_HOME") == "1":
         # Via di fuga per chi vuole deliberatamente girare contro la propria

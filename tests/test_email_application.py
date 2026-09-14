@@ -84,6 +84,11 @@ def _reset_fake():
 @pytest.fixture()
 def box(tmp_path, monkeypatch):
     _reset_fake()
+    # The placeholder CV cannot be measured, and the send guard has no test
+    # shortcut: the layout check itself is stubbed; its own test replaces it.
+    import pdf_layout_check
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": True, "reasons": []})
     home = tmp_path
     monkeypatch.setenv("JHT_HOME", str(home))
     monkeypatch.setenv("JHT_DB", str(home / "jobs.db"))
@@ -618,3 +623,86 @@ def test_the_smtp_transport_keeps_the_numeric_reply_to_the_letter():
     with pytest.raises(ea.smtplib.SMTPDataError):
         transport.send(message, "sender@example.com", ["jobs@example.com"])
     assert transport.last_reply_code == 554
+
+
+@pytest.mark.parametrize(
+    "analyze_result, reason",
+    [({"ok": False, "reasons": ["narrow_text"]}, "cv_pdf_layout_bad"), (None, "cv_pdf_check_unavailable")],
+)
+def test_a_cv_that_fails_the_layout_check_is_never_attached(box, monkeypatch, analyze_result, reason):
+    import pdf_layout_check
+
+
+    def analyze(_path):
+        if analyze_result is None:
+            raise pdf_layout_check.CheckError("pdftotext not found")
+        return analyze_result
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", analyze)
+    monkeypatch.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("blocked_human", reason)
+    # The same preview file as the browser flow and the queue, only for a bad layout.
+    expected = str(apply_gate.cv_preview_path(1, box)) if reason == "cv_pdf_layout_bad" else ""
+    assert out.data["cv_preview"] == expected
+    assert FakeTransport.sends == []
+    assert sql(box, "SELECT COUNT(*) FROM email_application_attempts WHERE state IN ('send_started', 'sent')") == [(0,)]
+    assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
+
+
+# ── cross-review (HQ-BACKEND-2): C1 and C2 ──────────────────────────────────
+
+
+def test_a_regenerated_cv_is_not_held_by_the_email_stop_of_the_old_one(box, monkeypatch):
+    import pdf_layout_check
+
+    cv = box / "cv.pdf"
+    monkeypatch.setattr(
+        pdf_layout_check, "analyze", lambda path: {"ok": b"full width" in Path(path).read_bytes(), "reasons": []}
+    )
+    monkeypatch.setattr(pdf_layout_check, "render_preview", lambda pdf, png: png.write_bytes(b"png") and png)
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("blocked_human", "cv_pdf_layout_bad")
+    q = apply_gate.application_queue(config_path=box / "jht.config.json", db_path=str(box / "jobs.db"), jht_home=box)
+    assert {"position_id": 1, "reason": "cv_pdf_layout_bad"} in q["held"]
+
+    cv.write_bytes(b"%PDF-1.4 full width")  # the Scrittore renders it again
+    q = apply_gate.application_queue(config_path=box / "jht.config.json", db_path=str(box / "jobs.db"), jht_home=box)
+    assert [p["position_id"] for p in q["positions"]] == [1], q["held"]
+
+
+def test_another_email_stop_still_holds_the_position(box, monkeypatch):
+    import pdf_layout_check
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": True, "reasons": []})
+    path = apply_gate.email_state_path(1, box)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"state": "blocked_human", "reason": "recipient_refused",
+                                "updated_at": "2026-09-14T10:00:00+00:00"}))
+    q = apply_gate.application_queue(config_path=box / "jht.config.json", db_path=str(box / "jobs.db"), jht_home=box)
+    assert {"position_id": 1, "reason": "email_blocked_human"} in q["held"]
+
+
+@pytest.mark.parametrize("env", [{}, {"JHT_TEST_SKIP_PDF_LAYOUT": "1"}, {"JHT_SKIP_PDF_LAYOUT": "1", "CI": "1"}])
+def test_no_environment_switches_the_cv_guard_off_before_a_real_send(box, monkeypatch, env):
+    import pdf_layout_check
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", lambda _path: {"ok": False, "reasons": ["narrow_text"]})
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    out = flow(box).send()
+    assert FakeTransport.sends == [], f"a CV that fails the layout check was sent ({out.state})"
+    assert (out.state, out.reason) == ("blocked_human", "cv_pdf_layout_bad")
+    q = apply_gate.application_queue(config_path=box / "jht.config.json", db_path=str(box / "jobs.db"), jht_home=box)
+    assert {"position_id": 1, "reason": "cv_pdf_layout_bad"} in q["held"]
+
+
+def test_the_cv_guard_reads_no_environment_variable():
+    root = Path(__file__).resolve().parent.parent / "shared" / "skills"
+    import ast
+
+    for name in ("apply_gate.py", "email_application.py"):
+        tree = ast.parse((root / name).read_text(encoding="utf-8"))
+        for fn in ast.walk(tree):
+            if isinstance(fn, ast.FunctionDef) and fn.name in {"cv_layout_hold", "refresh_cv_preview"}:
+                assert "environ" not in ast.unparse(fn), f"{name}:{fn.name} reads the environment"
