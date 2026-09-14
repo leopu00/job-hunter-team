@@ -87,6 +87,11 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
                           answer_not_accepted ÉS `pending_question`:
                           az űrlap kétszer elutasította az értékedet:
                           ments másikat, vagy kérdezz (CL-08, 3. lépés).
+                          `purpose: contact_form_application`: egy kapcsolati űrlap
+                          Message mezője, ahová az Apply vezetett: írj rövid levelet
+                          ERRE az állásra, hogy a CV kérésre elérhető; save
+                          --purpose contact_form_application (csak ehhez a
+                          pozícióhoz tartozik).
                           Minden más ok: a felhasználó értesült, tovább
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
          retry_later    → (exit 5) az oldal most nem válaszol
@@ -94,7 +99,8 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
                           Tovább, ne indítsd újra: a sor retry_after
                           után visszaadja
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább
-         email_channel  → az Apply vezérlő egy mailto link: → email-application-flow
+         email_channel  → egy mailto link (mailto_application) vagy az oldal
+                          szövegében írt cím (email_instruction): → email-application-flow
          error (exit 2) → STEP 6 [BLOCKED]-del (olvashatatlan profil/CV
                           nem egyetlen pozíció problémája)
 

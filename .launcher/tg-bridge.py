@@ -1010,11 +1010,23 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
 
 
 _CODE_DIGITS_RE = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d){3,}(?![A-Za-z0-9])")
+# An eight-character code (Greenhouse's alnum8), a space or dash tolerated.
+_CODE_ALNUM8_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9](?:[ -]?[A-Za-z0-9]){7}(?![A-Za-z0-9])")
+
+
+def _mask_alnum8(match):
+    token = re.sub(r"[ -]", "", match.group(0))
+    if token.isalpha() and (token.islower() or token.istitle()):
+        return match.group(0)  # an ordinary word keeps the dead letter readable
+    return "[code]"
 
 
 def _mask_code_digits(text):
-    """A group of 4+ digits may be a verification code: never written to disk raw."""
-    return _CODE_DIGITS_RE.sub("[digits]", text) if isinstance(text, str) else text
+    """A group of 4+ digits or an 8-character token may be a verification code:
+    never written to disk raw. Ordinary words ("qualcosa") stay."""
+    if not isinstance(text, str):
+        return text
+    return _CODE_ALNUM8_RE.sub(_mask_alnum8, _CODE_DIGITS_RE.sub("[digits]", text))
 
 
 def _mask_update_digits(u: dict) -> dict:

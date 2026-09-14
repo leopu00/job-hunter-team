@@ -67,6 +67,9 @@ INFERENCE_BASES = ("profile", "cv", "vacancy", "judgement")
 # What the CLOSER works out per company: a motivation is written for one
 # company, a salary expectation is judged against one position.
 COMPANY_SCOPED_KEYS = frozenset({"salary expectations"})
+# The Message of a company contact form the vacancy's Apply led to: a letter
+# that names THIS vacancy, so it belongs to the position, never the company.
+CONTACT_LETTER_PURPOSE = "contact_form_application"
 TEXT_FIELD_TYPES = frozenset({"textarea", "text", "email", "tel", "url", "number", "date"})
 # Only these may be answered by a bare message: the exact-option rule filters
 # out ordinary chat. A free-text question needs a reply or its code.
@@ -192,14 +195,28 @@ def position_company(conn: sqlite3.Connection, position_id: int | None) -> str:
     return company or normalise_label(f"position {position_id}")
 
 
+def position_scope(position_id: int) -> str:
+    """The scope of an answer that belongs to one position only."""
+    return normalise_label(f"jht position {int(position_id)}")
+
+
 def answer_scope(
-    conn: sqlite3.Connection, field_type: str, position_id: int | None, *, essential: bool = False
+    conn: sqlite3.Connection,
+    field_type: str,
+    position_id: int | None,
+    *,
+    essential: bool = False,
+    purpose: str = "",
 ) -> str:
     """Facts are global; a textarea (motivation, "why us", cover) belongs to one company.
 
     A motivation written for one company must never be pasted into another
-    company's form: there the question is asked again.
+    company's form: there the question is asked again. A contact-form letter
+    (`purpose` contact_form_application) names its vacancy: it belongs to the
+    position, so a second vacancy of the same company gets its own.
     """
+    if purpose == CONTACT_LETTER_PURPOSE and position_id is not None and not essential:
+        return position_scope(position_id)
     if field_type != "textarea" or essential:
         return ""
     return position_company(conn, position_id)
@@ -214,8 +231,10 @@ def _read_entries(conn: sqlite3.Connection, position_id: int | None) -> dict[str
     if not _table_exists(conn, "application_answers"):
         return {}
     company = position_company(conn, position_id) if position_id is not None else ""
+    own = position_scope(position_id) if position_id is not None else ""
     entries: dict[str, tuple[Any, str]] = {}
     scoped: dict[str, tuple[Any, str]] = {}
+    positioned: dict[str, tuple[Any, str]] = {}
     essential_keys = {fact.key for fact in ESSENTIAL_FACTS}
     for key, answer_json, field_type, channel in conn.execute(
         "SELECT key, answer_json, field_type, channel FROM application_answers"
@@ -231,13 +250,16 @@ def _read_entries(conn: sqlite3.Connection, position_id: int | None) -> dict[str
                 # was is unknown, so it is never pasted into anyone's form.
                 continue
             entries[base] = (value, str(channel))
+        elif own and scope == own:
+            positioned[base] = (value, str(channel))
         elif company and scope == company:
             scoped[base] = (value, str(channel))
-    for base, entry in scoped.items():
-        current = entries.get(base)
-        if current and entry[1] == INFERRED_CHANNEL and current[1] != INFERRED_CHANNEL:
-            continue
-        entries[base] = entry
+    for layer in (scoped, positioned):  # the position's own answer wins last
+        for base, entry in layer.items():
+            current = entries.get(base)
+            if current and entry[1] == INFERRED_CHANNEL and current[1] != INFERRED_CHANNEL:
+                continue
+            entries[base] = entry
     return entries
 
 
@@ -317,8 +339,14 @@ def save_inferred(
     basis: str,
     position_id: int | None = None,
     label: str = "",
+    purpose: str = "",
 ) -> dict[str, Any]:
-    """An answer the CLOSER worked out from profile, CV or vacancy, checked like a user's reply."""
+    """An answer the CLOSER worked out from profile, CV or vacancy, checked like a user's reply.
+
+    `purpose` comes from the flow's `pending_question`; when not given, the
+    position's checkpoint question with the same key supplies it, so a
+    contact-form letter is kept per position even if the flag is forgotten.
+    """
     canonical = normalise_label(key)
     if not canonical:
         raise InferenceRejected("key_empty")
@@ -335,10 +363,16 @@ def save_inferred(
     except AnswerRejected as exc:
         raise InferenceRejected(exc.reason) from None
     essential = canonical in {fact.key for fact in ESSENTIAL_FACTS}
+    if not purpose and position_id is not None:
+        purpose = _checkpoint_purpose(position_id, canonical)
+    position_scoped = purpose == CONTACT_LETTER_PURPOSE and not essential
     company_scoped = canonical in COMPANY_SCOPED_KEYS or (field_type == "textarea" and not essential)
-    if company_scoped and position_id is None:
+    if (company_scoped or position_scoped) and position_id is None:
         raise InferenceRejected("position_id_required")
-    scope = position_company(conn, position_id) if company_scoped else ""
+    if position_scoped:
+        scope = position_scope(position_id)
+    else:
+        scope = position_company(conn, position_id) if company_scoped else ""
     ensure_table(conn)
     saved = save_answer(
         conn,
@@ -353,7 +387,21 @@ def save_inferred(
     )
     conn.commit()
     return {"status": "saved" if saved else "user_answer_kept", "key": canonical,
-            "scope": "company" if scope else "global", "basis": basis}
+            "scope": "position" if position_scoped else ("company" if scope else "global"), "basis": basis}
+
+
+def _checkpoint_purpose(position_id: int, key: str) -> str:
+    """The purpose of the flow's open question with this key, or ""."""
+    try:
+        data = json.loads(apply_gate.checkpoint_path(int(position_id)).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return ""
+    request = data.get("answer_request") if isinstance(data, dict) else None
+    payload = request.get("payload") if isinstance(request, dict) else None
+    if not isinstance(payload, dict) or normalise_label(str(payload.get("key") or "")) != key:
+        return ""
+    purpose = payload.get("purpose")
+    return purpose if isinstance(purpose, str) else ""
 
 
 def import_profile_answers(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> int:
@@ -440,7 +488,8 @@ def harvest_replies(conn: sqlite3.Connection) -> int:
             continue
         key = normalise_label(payload["key"])
         scope = answer_scope(
-            conn, field_type, position_id, essential=str(source_id).startswith("closer-essential:")
+            conn, field_type, position_id, essential=str(source_id).startswith("closer-essential:"),
+            purpose=str(payload.get("purpose") or ""),
         )
         existing = conn.execute(
             "SELECT source_message_id FROM application_answers WHERE key = ?",
@@ -507,7 +556,11 @@ LOGIN_CODE_MASK = "[verification code]"
 LOGIN_CODE_RECENT = timedelta(hours=1)
 _LOGIN_GROUP = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d)*(?![A-Za-z0-9])")
 _LOGIN_WHOLE = re.compile(r"\s*\d(?:[ -]?\d)*\s*")
-
+# `code_format: alnum8` (Greenhouse's emailed code): exactly eight letters or
+# digits, case kept, a space or dash between characters tolerated.
+ALNUM8 = "alnum8"
+_ALNUM8_WHOLE = re.compile(r"\s*[A-Za-z0-9](?:[ -]?[A-Za-z0-9]){7}\s*")
+_ALNUM8_TOKEN = re.compile(r"[A-Za-z0-9]{8}")
 
 @dataclass(frozen=True)
 class LoginCodeOutcome:
@@ -526,8 +579,37 @@ def _login_digits(text: str) -> list[str]:
     return [group for group in groups if 4 <= len(group) <= 8]
 
 
-def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str, bool]]:
-    """Recent login code requests: (id, source_id, open)."""
+def _word_like(token: str) -> bool:
+    """An ordinary word ("received", "Perfetto"), not a code someone typed."""
+    return token.isalpha() and (token.islower() or token.istitle())
+
+
+def _alnum8_codes(text: str, *, alone: bool) -> list[str]:
+    """Eight-character codes in `text`. A message that is only the code is taken
+    even when it reads like a word if `alone` (a reply to the request)."""
+    text = str(text)
+    if _ALNUM8_WHOLE.fullmatch(text):
+        code = re.sub(r"[\s-]", "", text)
+        return [code] if alone or not _word_like(code) else []
+    tokens = (token.strip(".,;:!?()[]{}\"'").replace("-", "") for token in text.split())
+    return [t for t in tokens if _ALNUM8_TOKEN.fullmatch(t) and not _word_like(t)]
+
+
+def _codes_in(text: str, code_format: str, *, alone: bool) -> list[str]:
+    return _alnum8_codes(text, alone=alone) if code_format == ALNUM8 else _login_digits(text)
+
+
+def _whole_code(text: str, code_format: str) -> str | None:
+    """The code when the message is nothing but a code of this format."""
+    if code_format == ALNUM8:
+        codes = _alnum8_codes(text, alone=False) if _ALNUM8_WHOLE.fullmatch(str(text)) else []
+    else:
+        codes = _login_digits(text) if _LOGIN_WHOLE.fullmatch(str(text)) else []
+    return codes[0] if len(codes) == 1 else None
+
+
+def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str, bool, str]]:
+    """Recent login code requests: (id, source_id, open, code_format)."""
     columns = {column[1] for column in conn.execute("PRAGMA table_info(pending_user_messages)")}
     if not {"source_id", "source_action", "source_payload"} <= columns:
         return []  # a legacy table has no login request
@@ -541,12 +623,13 @@ def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str,
             payload = json.loads(payload_text or "")
             expires = apply_gate._parse_instant(payload.get("expires_at")) if isinstance(payload, dict) else None
         except ValueError:
-            expires = None
+            payload, expires = None, None
+        code_format = ALNUM8 if isinstance(payload, dict) and payload.get("code_format") == ALNUM8 else "digits"
         at = apply_gate._parse_instant(created)
         if at is not None and now - at > LOGIN_CODE_RECENT and (expires is None or expires < now - LOGIN_CODE_RECENT):
             continue
         is_open = reply is None and expires is not None and now < expires
-        rows.append((int(row_id), str(source_id), is_open))
+        rows.append((int(row_id), str(source_id), is_open, code_format))
     return rows
 
 
@@ -562,17 +645,22 @@ def _login_target(conn: sqlite3.Connection, text: str, reply_to_text: str | None
     quoted = {code.upper() for code in _CODE.findall(f"{reply_to_text or ''}\n{text}")}
     named = [row for row in rows if answer_code(row[1]) in quoted]
     if named:
-        digits = _login_digits(_CODE.sub(" ", str(text)))
-        return named[-1], (digits[0] if len(digits) == 1 else None), True, bool(digits)
-    if not direct or not _LOGIN_WHOLE.fullmatch(str(text)):
+        # Addressed to the request: masked whatever it holds (a code split in
+        # halves, a half-typed one), taken only with exactly one code.
+        row = named[-1]
+        codes = _codes_in(_CODE.sub(" ", str(text)), row[3], alone=True)
+        return row, (codes[0] if len(codes) == 1 else None), True, True
+    if not direct:
         return None, None, False, False
-    digits = _login_digits(text)
-    if len(digits) != 1:
+    matches = [(row, code) for row in rows if (code := _whole_code(str(text), row[3]))]
+    if not matches:
         return None, None, False, False
-    open_rows = [row for row in rows if row[2]]
-    if len(open_rows) == 1:
-        return open_rows[0], digits[0], False, True
-    return (rows[-1] if not open_rows else None), digits[0], False, True
+    open_matches = [match for match in matches if match[0][2]]
+    if len(open_matches) == 1:
+        return open_matches[0][0], open_matches[0][1], False, True
+    if not open_matches:
+        return matches[-1][0], matches[-1][1], False, True
+    return None, open_matches[0][1], False, True
 
 
 def login_code_candidate(conn: sqlite3.Connection, *, text: str, reply_to_text: str | None, direct: bool) -> bool:
@@ -597,7 +685,7 @@ def resolve_login_code(
     row, digits, named, _recent = _login_target(conn, text, reply_to_text, direct, now)
     if row is None or not digits:
         return LoginCodeOutcome("ambiguous")
-    row_id, source_id, is_open = row
+    row_id, source_id, is_open, _format = row
     if not named and _open_requests(conn):
         return LoginCodeOutcome("ambiguous", source_id)
     if not is_open:
@@ -778,7 +866,8 @@ def resolve_telegram_reply(
         options=options,
         channel="telegram",
         message_id=message_id,
-        scope=answer_scope(conn, field_type, position_id, essential=essential),
+        scope=answer_scope(conn, field_type, position_id, essential=essential,
+                           purpose=str(payload.get("purpose") or "")),
     )
     reason = "position_withdrawn" if withdrawn and not essential else ""
     return Resolution("resolved", reason, message_id, position_id, body)
@@ -1337,6 +1426,7 @@ def main(argv: list[str] | None = None) -> int:
     save.add_argument("--basis", required=True, choices=INFERENCE_BASES)
     save.add_argument("--position-id", type=int)
     save.add_argument("--label", default="")
+    save.add_argument("--purpose", default="", help="the pending_question's purpose, when it has one")
     lst = sub.add_parser("list", help="the remembered answers (keys, channels and bases only)")
     for p in (ess, ask, save, lst):
         p.add_argument("--json", action="store_true")
@@ -1365,6 +1455,7 @@ def main(argv: list[str] | None = None) -> int:
                     out = save_inferred(
                         conn, key=args.key, value=args.value, field_type=args.field_type,
                         options=args.options, basis=args.basis, position_id=args.position_id, label=args.label,
+                        purpose=args.purpose,
                     )
                     code = 0 if out["status"] == "saved" else 3
                 except InferenceRejected as exc:

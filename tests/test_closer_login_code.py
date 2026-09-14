@@ -340,3 +340,98 @@ def test_off_hours_a_login_code_request_still_reaches_telegram(db, tmp_path):
     )
     assert done.returncode == 0 and "via=telegram" in done.stdout, done.stdout + done.stderr
     assert sent.exists()
+
+
+# ── Greenhouse's emailed code: eight letters or digits (code_format alnum8) ──
+
+ALNUM = "aB3dE9xZ"
+
+
+def alnum_request(db, *, minutes=5, ns=10):
+    source_id = f"closer-login-code:greenhouse:{ns}"
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {"version": 1, "service": "greenhouse", "position_id": 7, "expires_at": expires, "code_format": "alnum8"}
+    body = f"Greenhouse sent a code to your email.\nCode request: {aa.answer_code(source_id)}"
+    with sqlite3.connect(db) as conn:
+        cur = conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, "
+            "source_action, source_payload, delivered_via) VALUES ('closer', ?, 'alert', 7, ?, ?, ?, 'telegram')",
+            (body, source_id, aa.LOGIN_CODE_ACTION, json.dumps(payload)),
+        )
+        return cur.lastrowid, body, source_id
+
+
+@pytest.mark.parametrize("text", [ALNUM, "aB3d E9xZ", "aB3d-E9xZ", "the code is aB3dE9xZ, thanks",
+                                  "received: aB3dE9xZ", "code aB3d-E9xZ please"])
+def test_an_alnum8_code_in_a_reply_is_handed_over_with_its_case(db, bridge, tmp_path, text):
+    mod = bridge()
+    row_id, body, source_id = alnum_request(db)
+
+    telegram(mod, db, 1, text, reply_to=body)
+
+    assert json.loads(code_file(tmp_path, source_id).read_text())["code"] == ALNUM
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (row_id,)) == [("[received]",)]
+    assert chat_bodies(db) == [aa.LOGIN_CODE_MASK]
+
+
+def test_an_alnum8_code_direct_and_by_its_request_code(db, bridge, tmp_path):
+    mod = bridge()
+    _row_id, _body, source_id = alnum_request(db)
+    telegram(mod, db, 1, ALNUM)
+    assert json.loads(code_file(tmp_path, source_id).read_text())["code"] == ALNUM
+
+    code_file(tmp_path, source_id).unlink()
+    _row_id, _body, second = alnum_request(db, ns=11)
+    other = bridge("capitano")
+    telegram(other, db, 2, f"{aa.answer_code(second)} ZZ12YY34")
+    assert json.loads(code_file(tmp_path, second).read_text())["code"] == "ZZ12YY34"
+
+
+@pytest.mark.parametrize("text", ["Perfetto", "received", "see you tomorrow", "ok grazie mille"])
+def test_a_direct_word_is_chat_not_an_alnum8_code(db, bridge, tmp_path, text):
+    mod = bridge()
+    row_id, _body, source_id = alnum_request(db)
+
+    telegram(mod, db, 1, text)
+
+    assert not code_file(tmp_path, source_id).exists()
+    assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (row_id,)) == [(None,)]
+    assert chat_bodies(db) == [text] and mod.feedback == []
+
+
+def test_a_reply_with_two_alnum8_codes_or_half_a_code_is_masked_and_not_taken(db, bridge, tmp_path):
+    mod = bridge()
+    row_id, body, source_id = alnum_request(db)
+
+    telegram(mod, db, 1, "aB3dE9xZ or QQ11WW22", reply_to=body)
+    telegram(mod, db, 2, "it starts with aB3d", reply_to=body)
+
+    assert not code_file(tmp_path, source_id).exists()
+    assert statuses(mod) == ["ambiguous", "ambiguous"]
+    assert chat_bodies(db) == [aa.LOGIN_CODE_MASK, aa.LOGIN_CODE_MASK]
+
+
+def test_a_digits_request_still_refuses_letters(db, bridge, tmp_path):
+    mod = bridge()
+    _row_id, body, source_id = login_request(db)
+    telegram(mod, db, 1, ALNUM, reply_to=body)
+    assert not code_file(tmp_path, source_id).exists() and statuses(mod) == ["ambiguous"]
+
+
+def test_an_eight_digit_code_with_both_kinds_open_is_not_guessed(db, bridge, tmp_path):
+    mod = bridge()
+    _a, _b, linkedin = login_request(db)
+    _c, _d, greenhouse = alnum_request(db)
+
+    telegram(mod, db, 1, "12345678")
+
+    assert not code_file(tmp_path, linkedin).exists() and not code_file(tmp_path, greenhouse).exists()
+    assert statuses(mod) == ["ambiguous"] and chat_bodies(db) == [aa.LOGIN_CODE_MASK]
+
+
+def test_the_dead_letter_masks_an_alnum8_code(db, bridge):
+    mod = bridge()
+    update = {"update_id": 3, "message": {"chat": {"id": 999}, "date": 1, "text": "qualcosa code aB3d-E9xZ"}}
+    mod.dead_letter(update, RuntimeError("boom"), 3)
+    written = mod.DEADLETTER_PATH.read_text()
+    assert "aB3d" not in written and "qualcosa" in written
