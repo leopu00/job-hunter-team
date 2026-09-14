@@ -212,3 +212,119 @@ def test_cancel_senza_autorizzazione_non_scrive(box):
 def test_cancel_dopo_l_invio_e_rifiutato(box):
     code, out = run(box, "cancel", 3)
     assert code == 1 and out["reason"] == "already_submitted"
+
+
+# ── Un flag nuovo sveglia il CLOSER vivo (ordine del 2026-09-14: flag delle 12:58Z mai visti) ──
+
+def _answers_module():
+    # Resolved per test: another suite may drop the module from sys.modules
+    # ("a new process"), and apply_request imports whatever is there now.
+    import importlib
+
+    return importlib.import_module("application_answers")
+
+
+@pytest.fixture()
+def live(box, monkeypatch):
+    aa = _answers_module()
+    home, env = box
+    monkeypatch.setenv("JHT_HOME", str(home))
+    monkeypatch.setenv("JHT_DB", str(home / "jobs.db"))
+    monkeypatch.setattr(apply_gate, "_jht_home", lambda: home, raising=False)
+    state = {"sessions": ["CLOSER-1"], "sent": []}
+    monkeypatch.setattr(aa, "_closer_sessions", lambda: list(state["sessions"]))
+    monkeypatch.setattr(aa, "_tmux_send", lambda session, text: state["sent"].append((session, text)) or True)
+    return state
+
+
+def _poll(box):
+    """What the Telegram bridge does on every poll."""
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    try:
+        return _answers_module().wake_closer(conn, {})
+    finally:
+        conn.close()
+
+
+def _set_flag(box, pid, at, by="user_web"):
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    conn.execute(
+        "UPDATE positions SET apply_requested = 1, apply_requested_at = ?, apply_requested_by = ? WHERE id = ?",
+        (at, by, pid),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _now_iso(**delta):
+    from datetime import datetime, timedelta, timezone
+
+    return (datetime.now(timezone.utc) - timedelta(**delta)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def test_una_request_sveglia_il_closer_vivo_una_volta_sola(box, live):
+    import apply_request
+
+    out, code = apply_request.toggle(1, True)
+    assert code == 0 and out["closer_woken"] is True
+    assert len(live["sent"]) == 1
+    session, text = live["sent"][0]
+    assert session == "CLOSER-1" and text.startswith("[BRIDGE INFO] the user authorised position #1")
+    assert "apply_gate.py queue" in text
+    # The bridge poll finds it already announced: no second message.
+    assert _poll(box) == [] and len(live["sent"]) == 1
+    # A new authorisation is a new wake.
+    apply_request.toggle(1, False)
+    apply_request.toggle(1, True)
+    assert len(live["sent"]) == 2
+
+
+def test_senza_closer_vivo_niente_claim_e_il_poll_lo_sveglia_dopo(box, live):
+    import apply_request
+
+    live["sessions"] = []
+    out, _ = apply_request.toggle(1, True)
+    assert out["closer_woken"] is False and live["sent"] == []
+    live["sessions"] = ["CLOSER-1"]
+    woken = _poll(box)
+    assert [w.reason for w in woken] == ["position_authorised"] and len(live["sent"]) == 1
+
+
+def test_un_flag_dal_web_o_dal_cloud_sveglia_al_poll_del_bridge(box, live):
+    _set_flag(box, 1, _now_iso(minutes=1), by="user_web")
+    assert [w.key for w in _poll(box)][0].startswith("authorised:1:")
+    assert len(live["sent"]) == 1
+
+
+def test_con_la_coda_non_pronta_non_si_sveglia_e_non_si_brucia_la_sveglia(box, live):
+    home, _ = box
+    (home / "jht.config.json").write_text(json.dumps({"applications": {"auto_apply": {"enabled": False}}}))
+    _set_flag(box, 1, _now_iso(minutes=1))
+    assert _poll(box) == [] and live["sent"] == []
+    (home / "jht.config.json").write_text(json.dumps(CONSENT))
+    assert len(_poll(box)) == 1 and len(live["sent"]) == 1
+
+
+def test_un_flag_vecchio_o_non_dell_utente_non_sveglia(box, live):
+    _set_flag(box, 1, _now_iso(hours=25))
+    assert _poll(box) == [] and live["sent"] == []
+    _set_flag(box, 1, _now_iso(minutes=1), by="agent_closer")
+    assert _poll(box) == [] and live["sent"] == []
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    assert conn.execute("SELECT COUNT(*) FROM closer_wakes").fetchone() == (0,)
+    conn.close()
+
+
+def test_piu_flag_insieme_fanno_un_messaggio_solo(box, live):
+    home, _ = box
+    conn = sqlite3.connect(home / "jobs.db")
+    for pid in (5, 6):
+        conn.execute("INSERT INTO positions (id, title, company, url, status) VALUES (?, 'r', 'c', ?, 'ready')",
+                     (pid, f"https://jobs.ashbyhq.com/x/{pid}"))
+        conn.execute("INSERT INTO applications (position_id, cv_pdf_path) VALUES (?, ?)", (pid, str(home / "cv.pdf")))
+    conn.commit()
+    conn.close()
+    for pid in (1, 5, 6):
+        _set_flag(box, pid, _now_iso(minutes=1))
+    assert len(_poll(box)) == 3
+    assert len(live["sent"]) == 1 and "#1, #5, #6" in live["sent"][0][1]

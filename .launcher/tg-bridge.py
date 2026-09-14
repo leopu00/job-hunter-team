@@ -379,7 +379,7 @@ def _reply_to_text(msg: dict) -> str | None:
 
 
 def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
-                         *, edited: bool = False) -> bool:
+                         *, edited: bool = False, login_text: str | None = None) -> bool:
     """Journal atomico PRIMA dell'offset; update_id e' la chiave di dedup.
 
     Un file per update evita rewrite non atomiche della coda. Se il processo
@@ -405,6 +405,10 @@ def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
         # risposta trova la SUA domanda quando ce n'e' piu' d'una aperta.
         "reply_to_text": _reply_to_text(msg),
     }
+    if login_text is not None:
+        # A verification code: `body` is the mask the chat keeps, the text
+        # lives only in this 0600 journal until the flush hands it over.
+        record["login_text"] = str(login_text)
     try:
         _atomic_json(path, record)
     except Exception as e:
@@ -474,6 +478,58 @@ def _resolve_closer_answer(db: sqlite3.Connection, rec: dict):
     return None
 
 
+def _login_code_masked(msg: dict) -> bool:
+    """Is this text a LinkedIn verification code? Then it never reaches the chat.
+
+    Read only, before the journal: the ASSISTENTE and the chat history (pushed
+    to the cloud) must never see the digits. No jobs.db, no login request.
+    """
+    if application_answers is None or not JOBS_DB_PATH.exists():
+        return False
+    db = sqlite3.connect(f"file:{JOBS_DB_PATH}?mode=ro", uri=True, timeout=5)
+    try:
+        return application_answers.login_code_candidate(
+            db,
+            text=str(msg.get("text") or ""),
+            reply_to_text=_reply_to_text(msg),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+        )
+    finally:
+        db.close()
+
+
+def _resolve_login_code(db: sqlite3.Connection, rec: dict):
+    """Hand a masked verification code to the flow waiting for it; the outcome for the user."""
+    if application_answers is None:
+        return None
+    db.execute("SAVEPOINT closer_login_code")
+    try:
+        outcome = application_answers.resolve_login_code(
+            db,
+            text=str(rec.get("login_text") or ""),
+            reply_to_text=rec.get("reply_to_text"),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+            jht_home=JHT_HOME,
+        )
+    except Exception as e:
+        db.execute("ROLLBACK TO closer_login_code")
+        db.execute("RELEASE closer_login_code")
+        log(f"closer login code failed: {type(e).__name__}")
+        return application_answers.LoginCodeOutcome("failed")
+    db.execute("RELEASE closer_login_code")
+    log(f"closer login code {outcome.status}")
+    return outcome
+
+
+_LOGIN_FEEDBACK = {
+    "received": "Verification code received. CLOSER is signing in with it.",
+    "expired": "That verification code request has expired. CLOSER will ask again.",
+    "closed": "That verification code request is already closed. CLOSER will ask again if it still needs one.",
+    "ambiguous": "This message was not used as a verification code. Reply to the code request message with the code.",
+    "failed": "The verification code could not be handed over. CLOSER will ask again.",
+}
+
+
 _REJECTION_TEXT = {
     "closer_answer_not_exact_option": "it must be one of the listed choices, written exactly as shown",
     "closer_answer_empty": "the answer is empty",
@@ -483,6 +539,8 @@ _REJECTION_TEXT = {
 
 
 def _answer_feedback_text(outcome) -> str:
+    if application_answers is not None and isinstance(outcome, application_answers.LoginCodeOutcome):
+        return _LOGIN_FEEDBACK.get(outcome.status, _LOGIN_FEEDBACK["failed"])
     if outcome.status == "resolved" and outcome.reason == "position_withdrawn":
         return (
             "Answer saved. That application is withdrawn, so CLOSER will not send it: "
@@ -601,7 +659,11 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
                 )).rowcount
                 # Solo la prima volta: un replay del journal trova la riga gia'
                 # scritta e non deve risolvere (o rifiutare) una seconda volta.
-                if inserted == 1 and not rec.get("edited"):
+                if inserted == 1 and "login_text" in rec:
+                    outcome = _resolve_login_code(db, rec) if not rec.get("edited") else None
+                    if outcome is not None:
+                        resolutions.append(outcome)
+                elif inserted == 1 and not rec.get("edited"):
                     outcome = _resolve_closer_answer(db, rec)
                     if outcome is not None:
                         resolutions.append(outcome)
@@ -924,7 +986,12 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
         log(f"uid={uid} /start ack (no forward)")
         return
     body = None
-    if "text" in m:
+    login_text = None
+    if "text" in m and _login_code_masked(m):
+        login_text = str(m.get("text") or "")
+        body = application_answers.LOGIN_CODE_MASK
+        log(f"uid={uid} verification code masked")
+    elif "text" in m:
         body = handle_text(m)
     elif "document" in m:
         body = handle_document(token, m)
@@ -939,7 +1006,32 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
         # storico gia' consegnato e non puo' collidere col messaggio originale.
         if edited:
             body = f"[TG-EDITED] {body}"
-        enqueue_inbound_turn(uid, m, body, edited=edited)
+        enqueue_inbound_turn(uid, m, body, edited=edited, login_text=login_text)
+
+
+_CODE_DIGITS_RE = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d){3,}(?![A-Za-z0-9])")
+
+
+def _mask_code_digits(text):
+    """A group of 4+ digits may be a verification code: never written to disk raw."""
+    return _CODE_DIGITS_RE.sub("[digits]", text) if isinstance(text, str) else text
+
+
+def _mask_update_digits(u: dict) -> dict:
+    """The dead letter keeps the update, not a code it may carry (the DB may be why it failed)."""
+    masked = json.loads(json.dumps(u, default=str))
+    for key in ("message", "edited_message"):
+        m = masked.get(key)
+        if not isinstance(m, dict):
+            continue
+        for field in ("text", "caption"):
+            m[field] = _mask_code_digits(m.get(field)) if field in m else None
+            if m[field] is None:
+                m.pop(field)
+        replied = m.get("reply_to_message")
+        if isinstance(replied, dict) and "text" in replied:
+            replied["text"] = _mask_code_digits(replied["text"])
+    return masked
 
 
 def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
@@ -956,8 +1048,8 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
         "role": BOT_ROLE,
         "update_id": uid,
         "attempts": attempts,
-        "error": reason,
-        "update": u,
+        "error": _mask_code_digits(reason),
+        "update": _mask_update_digits(u),
     }
     try:
         DEADLETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -982,7 +1074,7 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
         uid,
         m,
         f"[TG-UNDELIVERED] "
-        f"update_id={uid} attempts={attempts} error={reason} file={DEADLETTER_PATH} — "
+        f"update_id={uid} attempts={attempts} error={_mask_code_digits(reason)} file={DEADLETTER_PATH} — "
         f"a user message was not delivered: notify the user and ask them to send it again.",
     )
 

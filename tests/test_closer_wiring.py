@@ -186,6 +186,11 @@ def test_prompt_del_closer_intestazione_e_invarianti(lang):
         assert text.index(f"**{rule}") < text.index("apply_gate.py queue"), (lang, rule)
     assert "applied_via = agent_closer" in text
     assert "apply_gate.py queue" in text and "apply_flow.py" in text
+    # A page down for now (exit 5) is not a stop and is never re-run: the queue
+    # gives it back after retry_after (checkpoint_retry_later).
+    step4 = text[text.index("STEP 4"):text.index("STEP 5")]
+    retry = step4[step4.index("retry_later"):step4.index("dry_run")]
+    assert "exit 5" in retry and "retry_after" in retry and "5xx" in retry, lang
 
 
 def test_la_coda_e_il_flusso_usano_lo_stesso_checkpoint(tmp_path, monkeypatch):
@@ -228,6 +233,11 @@ def test_il_capitano_spawna_il_closer_solo_se_la_coda_e_aperta(lang):
     # correggere» (C-05) e il Capitano rispawna a ogni tick.
     assert rule.count("`0`") >= 2
     assert "C-05" in rule
+    # A live CLOSER that exited on an empty queue is idle, not working: seen
+    # live on 2026-09-14, new flags waited until a manual kickoff. The rule
+    # must wake it on its exit report, with the queue re-read.
+    assert "[REPORT] CLOSER queue <reason>, exiting" in rule, f"{path.name}: nessuna sveglia per un CLOSER vivo e fermo"
+    assert 'jht-tmux-send CLOSER-1 "[@capitano -> @closer-1] [MSG] queue_ready: re-read the queue (STEP 1)"' in rule
 
 
 def test_la_coda_che_il_capitano_legge_resta_chiusa_senza_niente_da_inviare(tmp_path):

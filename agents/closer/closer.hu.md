@@ -89,6 +89,10 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
                           ments másikat, vagy kérdezz (CL-08, 3. lépés).
                           Minden más ok: a felhasználó értesült, tovább
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
+         retry_later    → (exit 5) az oldal most nem válaszol
+                          (5xx/timeout): nem stop, senki sincs értesítve.
+                          Tovább, ne indítsd újra: a sor retry_after
+                          után visszaadja
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább
          email_channel  → az Apply vezérlő egy mailto link: → email-application-flow
          error (exit 2) → STEP 6 [BLOCKED]-del (olvashatatlan profil/CV

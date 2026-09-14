@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - La puerta se comprueba al arrancar **y** justo antes del clic. Un flag revocado
   mientras se rellenaba el formulario detiene el envío.
-- Hoy dos recetas completas: **Ashby** y **Greenhouse** (solo sus tres hosts públicos, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, por HTTPS; la página se vuelve a comprobar tras cada paso). Cualquier otra plataforma se bloquea para una persona.
+- Hoy tres recetas completas: **Ashby**, **Greenhouse** (solo sus tres hosts públicos, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, por HTTPS; la página se vuelve a comprobar tras cada paso) y **Lever** (solo `jobs.lever.co` y `jobs.eu.lever.co`, por HTTPS, comprobados de la misma forma). Cualquier otra plataforma se bloquea para una persona.
 
 ## El recibo
 
@@ -74,8 +74,9 @@ El flujo se detiene ante cualquier cosa que no pueda hacer con certeza:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | el CV no se puede adjuntar |
 | `cv_pdf_layout_bad` | el PDF del CV no pasó el control visual (`pdf_layout_check.py`: texto apretado en una columna estrecha, una página casi vacía, más de 2 páginas, fuentes no incrustadas, cuerpo de texto demasiado pequeño): no se adjuntó ni se envió nada. El Escritor debe volver a generarlo; nunca lo adjuntes a mano. La vista previa de la página 1 se guarda junto al checkpoint: mírala |
 | `cv_pdf_check_unavailable` | el PDF del CV no se pudo medir (poppler ausente en el contenedor, archivo ilegible): no se adjuntó ni se envió nada — un CV sin medir no es un pass. El remedio está en el contenedor, no en el Escritor: avisa al Capitano |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | todavía no hay receta para esta página, o el formulario no es el que la receta conoce |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | todavía no hay receta para esta página, o el formulario no es el que la receta conoce |
 | `greenhouse_redirect_untrusted` | durante el flujo la página de Greenhouse salió de sus tres hosts de confianza |
+| `lever_redirect_untrusted` | durante el flujo la página de Lever salió de `jobs.lever.co` / `jobs.eu.lever.co` |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | dos direcciones mailto de candidatura distintas, o el formulario de candidatura, sus campos o su botón de envío no están en un único formulario (newsletter, pie de página y formularios de demo nunca forman parte) |
 | `form_error` / `field_invalid` / `submit_unavailable` | el formulario señala un error, se rechaza el formato de un campo, o el botón de envío falta o está deshabilitado |
 | `url_refused` / `checkpoint_invalid` | la URL de la candidatura no pasó el control de direcciones públicas, o el checkpoint guardado es ilegible |

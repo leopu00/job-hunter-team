@@ -57,6 +57,7 @@ Uso come CLI (gate da shell)::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -89,10 +90,8 @@ __all__ = [
 # ATS nuova senza spedire davvero: non è il percorso dell'utente.
 AUTO_APPLY_MODES = ("authorised", "dry_run")
 
-# Tetto giornaliero di default. Lo applica `application_queue` (la coda si
-# chiude quando il CLOSER ha già spedito `max_per_day` candidature oggi), e il
-# valore deve avere un default sano perché un config a metà non autorizzi un
-# numero indefinito di invii.
+# Tetto giornaliero. Se configurato lo applicano la coda e la prenotazione
+# (`daily_cap_reached` quando il CLOSER ha già spedito `max_per_day` oggi).
 # Nessun tetto per default (ordine dell'operatore, 2026-09-14: «non ci deve
 # essere un massimo»). Un intero positivo in config resta un tetto, se l'utente
 # lo vuole; assente o null = nessun tetto.
@@ -645,6 +644,7 @@ CHECKPOINT_SUBDIR = (".cache", "apply-flow")
 
 # Stati del checkpoint che tengono la posizione fuori dalla coda.
 HELD_CHECKPOINT_STATES = ("blocked_human", "dry_run")
+RETRY_LATER_STATE = "retry_later"
 
 # ── The email channel (`email_application.py`) ───────────────────────────────
 #
@@ -705,6 +705,14 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     if not isinstance(data, dict):
         return "checkpoint_unreadable"
     state = data.get("state")
+    if state == RETRY_LATER_STATE:
+        # A page that answered 5xx or timed out (page_failure): the flow tries
+        # again after retry_after by itself, whatever the authorisation. An
+        # unreadable instant never holds a position for ever.
+        from datetime import datetime, timezone
+
+        after = _parse_instant(data.get("retry_after"))
+        return "checkpoint_retry_later" if after and datetime.now(timezone.utc) < after else ""
     if state not in HELD_CHECKPOINT_STATES:
         return ""
     if data.get("blocked_reason") in CV_LAYOUT_REASONS:
@@ -734,10 +742,16 @@ def cv_layout_hold(cv: Path) -> str:
     `cv_pdf_layout_bad` when the visual check fails (narrow column, near-empty
     page, too many pages, fonts not embedded); `cv_pdf_check_unavailable` when
     it cannot be measured (poppler missing, unreadable file): an unmeasured CV
-    is not a pass. Computed from the file every time, never cached: a CV the
-    Scrittore renders again lifts the hold by itself, and no stale verdict can
-    wave a new file through.
+    is not a pass. A measured verdict is remembered by the file's CONTENT
+    (sha256) and the check that gave it, never by name or mtime: a CV the
+    Scrittore renders again is measured again and lifts the hold by itself,
+    and no stale verdict can wave a new file through. The bridge polls the
+    queue every few seconds; poppler runs once per PDF, not once per poll.
     """
+    try:
+        digest = hashlib.sha256(Path(cv).read_bytes()).hexdigest()
+    except OSError:
+        return "cv_pdf_check_unavailable"
     try:
         from pdf_layout_check import CheckError, analyze
     except ImportError:
@@ -745,6 +759,11 @@ def cv_layout_hold(cv: Path) -> str:
             from shared.skills.pdf_layout_check import CheckError, analyze
         except ImportError:
             return "cv_pdf_check_unavailable"
+    # The check itself, not its id(): the key keeps it alive, so a freed
+    # stub's id reused by a new function can never hand over its verdict.
+    key = (digest, analyze)
+    if key in _LAYOUT_VERDICTS:
+        return _LAYOUT_VERDICTS[key]
     try:
         report = analyze(Path(cv))
     except CheckError:
@@ -754,7 +773,14 @@ def cv_layout_hold(cv: Path) -> str:
         return "cv_pdf_check_unavailable"
     if not isinstance(report, dict):
         return "cv_pdf_check_unavailable"  # no report is no measurement
-    return "" if report.get("ok") is True else "cv_pdf_layout_bad"
+    verdict = "" if report.get("ok") is True else "cv_pdf_layout_bad"
+    if len(_LAYOUT_VERDICTS) >= 256:
+        _LAYOUT_VERDICTS.clear()
+    _LAYOUT_VERDICTS[key] = verdict  # unavailable is never remembered: poppler may come back
+    return verdict
+
+
+_LAYOUT_VERDICTS: dict[tuple[str, Any], str] = {}
 
 
 CV_LAYOUT_REASONS = ("cv_pdf_layout_bad", "cv_pdf_check_unavailable")
@@ -1096,6 +1122,37 @@ def _cap_value(consent: Verdict) -> int | None:
     return None if value is None else int(value)
 
 
+def _request_cv_rework(position_id: int, conn: sqlite3.Connection, jht_home: Path | None) -> dict[str, str]:
+    """Ask the Scrittore for this CV again (HQ-BACKEND-2's `application_rework`), once.
+
+    Idempotent there (`already_requested`), never raising here: a queue read
+    must keep answering whatever the request does. The request opens its own
+    write connection on the same database file as the queue.
+    """
+    try:
+        try:
+            from application_rework import request_cv_rework
+        except ImportError:
+            from shared.skills.application_rework import request_cv_rework
+    except ImportError:
+        return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+    if conn.in_transaction:
+        # The request takes the write lock on its own connection: under the
+        # caller's open write it would wait out the busy timeout (69 s seen).
+        # The next queue read outside a transaction asks.
+        return {"status": "not_needed", "reason": "cv_rework_deferred"}
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        path = str(row[2]) if row and row[2] else ""
+        if not path:
+            return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+        result = request_cv_rework(int(position_id), jht_home=jht_home, db_path=path, manual=False)
+        return {"status": str(result.get("status", "not_needed")), "reason": str(result.get("reason", ""))}
+    except Exception as err:  # noqa: BLE001 — the hold stands whatever happens here
+        print(f"[apply-gate] CV rework request failed: {type(err).__name__}", file=sys.stderr)
+        return {"status": "not_needed", "reason": "cv_rework_unavailable"}
+
+
 def _resolve_file(value: Any, jht_home: Path | None) -> Path | None:
     if not value or not str(value).strip():
         return None
@@ -1164,7 +1221,7 @@ def application_queue(
             out.update(reason="queue_unreadable", detail=f"cannot read the application queue: {err}")
             return out
 
-        positions, held = [], []
+        positions, held, cv_rework = [], [], []
         essentials_hold = _essentials_hold(conn, jht_home)
         for pid, url, asked_at, cv_pdf in rows:
             verdict = position_verdict(pid, conn=conn)
@@ -1182,6 +1239,14 @@ def application_queue(
             if layout:
                 if layout == "cv_pdf_layout_bad":
                     refresh_cv_preview(pid, cv, jht_home)
+                    # The Scrittore renders it again without the user asking
+                    # (never on cv_pdf_check_unavailable: that remedy is the box),
+                    # and never for a position its checkpoint holds anyway.
+                    if not _checkpoint_hold(pid, asked_at, jht_home):
+                        rework = {"position_id": pid, **_request_cv_rework(pid, conn, jht_home)}
+                        cv_rework.append(rework)
+                        if rework["reason"] == "cv_rework_exhausted":
+                            layout = "cv_rework_exhausted"
                 held.append({"position_id": pid, "reason": layout})
                 continue
             hold = (
@@ -1199,6 +1264,8 @@ def application_queue(
 
     remaining = _remaining_today(out["max_per_day"], sent_today)
     out.update(sent_today=sent_today, remaining_today=remaining, positions=positions, held=held)
+    if cv_rework:
+        out["cv_rework"] = cv_rework
     if not positions:
         out.update(reason="queue_empty", detail="no authorised position can be taken now")
     elif remaining is not None and remaining <= 0:

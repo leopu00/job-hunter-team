@@ -62,7 +62,7 @@ def _platform_for_host(host: str) -> str | None:
         return "greenhouse"
     if host == "jobs.ashbyhq.com":
         return "ashby"
-    if host == "jobs.lever.co":
+    if host in {"jobs.lever.co", "jobs.eu.lever.co"}:
         return "lever"
     if host == "jobs.smartrecruiters.com":
         return "smartrecruiters"
@@ -102,6 +102,10 @@ _DOM_MARKERS: dict[str, tuple[re.Pattern[str], ...]] = {
     "lever": (
         re.compile(r"class=[\"'][^\"']*application-form[^\"']*lever", re.I),
         re.compile(r"lever-job-application", re.I),
+        # The hosted posting and apply pages: Lever's template submit button
+        # class and the resume input id, both vendor names.
+        re.compile(r"class=[\"'][^\"']*\btemplate-btn-submit\b", re.I),
+        re.compile(r"id=[\"']resume-upload-input[\"']", re.I),
     ),
     "smartrecruiters": (
         re.compile(r"smartrecruiters-(?:job|application)", re.I),

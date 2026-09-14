@@ -43,6 +43,7 @@ Exit codes: 0 complete / listed · 3 missing (waiting for the user) · 2 error.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -494,6 +495,141 @@ def _open_requests(conn: sqlite3.Connection) -> list[tuple]:
     ).fetchall()
 
 
+# ── The LinkedIn verification code (HQ-BACKEND-2's linkedin_apply) ───────────
+#
+# Not an answer to a form: never saved, never an authorisation. The code never
+# touches jobs.db either — pending_user_messages is pushed to the cloud on every
+# tick — so it goes to a local 0600 file the flow reads and deletes; the row
+# only says '[received]'. The chat history and the ASSISTENTE see a mask.
+
+LOGIN_CODE_ACTION = "closer_login_code"
+LOGIN_CODE_MASK = "[verification code]"
+LOGIN_CODE_RECENT = timedelta(hours=1)
+_LOGIN_GROUP = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d)*(?![A-Za-z0-9])")
+_LOGIN_WHOLE = re.compile(r"\s*\d(?:[ -]?\d)*\s*")
+
+
+@dataclass(frozen=True)
+class LoginCodeOutcome:
+    status: str  # received · expired · closed · ambiguous
+    source_id: str = ""
+
+
+def login_code_path(source_id: str, jht_home: Path | None = None) -> Path:
+    home = jht_home or Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
+    digest = hashlib.sha256(str(source_id).encode("utf-8")).hexdigest()[:32]
+    return home / ".cache" / "apply-flow" / "login-code" / f"{digest}.json"
+
+
+def _login_digits(text: str) -> list[str]:
+    groups = [re.sub(r"\D", "", group) for group in _LOGIN_GROUP.findall(str(text))]
+    return [group for group in groups if 4 <= len(group) <= 8]
+
+
+def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str, bool]]:
+    """Recent login code requests: (id, source_id, open)."""
+    columns = {column[1] for column in conn.execute("PRAGMA table_info(pending_user_messages)")}
+    if not {"source_id", "source_action", "source_payload"} <= columns:
+        return []  # a legacy table has no login request
+    rows = []
+    for row_id, source_id, payload_text, reply, created in conn.execute(
+        "SELECT id, source_id, source_payload, user_reply, created_at FROM pending_user_messages "
+        "WHERE agent = 'closer' AND source_action = ? AND source_id IS NOT NULL ORDER BY id",
+        (LOGIN_CODE_ACTION,),
+    ):
+        try:
+            payload = json.loads(payload_text or "")
+            expires = apply_gate._parse_instant(payload.get("expires_at")) if isinstance(payload, dict) else None
+        except ValueError:
+            expires = None
+        at = apply_gate._parse_instant(created)
+        if at is not None and now - at > LOGIN_CODE_RECENT and (expires is None or expires < now - LOGIN_CODE_RECENT):
+            continue
+        is_open = reply is None and expires is not None and now < expires
+        rows.append((int(row_id), str(source_id), is_open))
+    return rows
+
+
+def _login_target(conn: sqlite3.Connection, text: str, reply_to_text: str | None, direct: bool, now: datetime):
+    """(row or None, digits or None, named, recent): which login request this message is for.
+
+    `recent` says the message looks like a code while a login request is about:
+    such a message is masked even when it cannot be matched.
+    """
+    rows = _login_rows(conn, now)
+    if not rows:
+        return None, None, False, False
+    quoted = {code.upper() for code in _CODE.findall(f"{reply_to_text or ''}\n{text}")}
+    named = [row for row in rows if answer_code(row[1]) in quoted]
+    if named:
+        digits = _login_digits(_CODE.sub(" ", str(text)))
+        return named[-1], (digits[0] if len(digits) == 1 else None), True, bool(digits)
+    if not direct or not _LOGIN_WHOLE.fullmatch(str(text)):
+        return None, None, False, False
+    digits = _login_digits(text)
+    if len(digits) != 1:
+        return None, None, False, False
+    open_rows = [row for row in rows if row[2]]
+    if len(open_rows) == 1:
+        return open_rows[0], digits[0], False, True
+    return (rows[-1] if not open_rows else None), digits[0], False, True
+
+
+def login_code_candidate(conn: sqlite3.Connection, *, text: str, reply_to_text: str | None, direct: bool) -> bool:
+    """Must this message be masked as a verification code? Read only; decided before it is journaled."""
+    return _login_target(conn, text, reply_to_text, direct, datetime.now(timezone.utc))[3]
+
+
+def resolve_login_code(
+    conn: sqlite3.Connection,
+    *,
+    text: str,
+    reply_to_text: str | None,
+    direct: bool,
+    jht_home: Path | None = None,
+) -> LoginCodeOutcome:
+    """Hand the code to the flow waiting for it: a 0600 file, and '[received]' on the row.
+
+    The caller commits. A direct message is the code only when it is nothing but
+    the code, one login request is open and no form question is.
+    """
+    now = datetime.now(timezone.utc)
+    row, digits, named, _recent = _login_target(conn, text, reply_to_text, direct, now)
+    if row is None or not digits:
+        return LoginCodeOutcome("ambiguous")
+    row_id, source_id, is_open = row
+    if not named and _open_requests(conn):
+        return LoginCodeOutcome("ambiguous", source_id)
+    if not is_open:
+        reply = conn.execute("SELECT user_reply FROM pending_user_messages WHERE id = ?", (row_id,)).fetchone()
+        return LoginCodeOutcome("closed" if reply and reply[0] is not None and reply[0] != "[expired]" else "expired", source_id)
+    path = login_code_path(source_id, jht_home)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump({"source_id": source_id, "code": digits, "received_at": now.isoformat()}, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
+    changed = conn.execute(
+        "UPDATE pending_user_messages SET user_reply = '[received]', user_reply_at = ? "
+        "WHERE id = ? AND user_reply IS NULL",
+        (now.strftime("%Y-%m-%d %H:%M:%S"), row_id),
+    ).rowcount
+    if changed != 1:
+        with contextlib.suppress(OSError):
+            path.unlink()
+        return LoginCodeOutcome("closed", source_id)
+    return LoginCodeOutcome("received", source_id)
+
+
 def _question_line(body: str) -> str:
     for line in str(body).splitlines():
         if line.startswith("Question: "):
@@ -927,7 +1063,10 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     """Answers not yet announced, from jobs.db alone: the cheap check of every poll.
 
     - a position still authorised whose CLOSER form questions are all answered;
-    - the essential facts, once one of them has a new answer.
+    - the essential facts, once one of them has a new answer;
+    - a position the user has just authorised (in the last
+      `AUTHORISATION_WAKE_WINDOW`), keyed by its authorisation instant: the
+      CLI, the web page and the cloud pull all land on the same row.
 
     The key names the last answered question, so several answers arriving
     together make one wake-up, and a later question answered later makes a
@@ -935,9 +1074,11 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     authorises it again its answers become one. Channel-blind: a dashboard
     reply and a Telegram reply land on the same question rows.
     """
-    if not _table_exists(conn, "pending_user_messages") or not _table_exists(conn, "positions"):
+    if not _table_exists(conn, "positions"):
         return []
-    wakes: list[Wake] = []
+    wakes: list[Wake] = _authorisation_candidates(conn)
+    if not _table_exists(conn, "pending_user_messages"):
+        return _not_yet_woken(conn, wakes)
     rows = conn.execute(
         "SELECT q.related_position_id, "
         "SUM(CASE WHEN q.user_reply IS NULL THEN 1 ELSE 0 END), "
@@ -958,6 +1099,30 @@ def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
     ).fetchone()
     if essential and essential[0] is not None:
         wakes.append(Wake(f"essentials:{int(essential[0])}", None, "essentials_complete"))
+    return _not_yet_woken(conn, wakes)
+
+
+# A flag older than this is not "new": a position held for days (a CV to
+# render again, a checkpoint stop) does not keep the poll reading the queue.
+# Once its hold lifts, the ready queue is what the Capitano's rule sees.
+AUTHORISATION_WAKE_WINDOW = timedelta(hours=24)
+
+
+def _authorisation_candidates(conn: sqlite3.Connection) -> list[Wake]:
+    now = datetime.now(timezone.utc)
+    wakes = []
+    for position_id, requested_at in conn.execute(
+        "SELECT id, apply_requested_at FROM positions WHERE apply_requested = 1 AND status = ?",
+        (apply_gate.AUTHORISABLE_STATUS,),
+    ):
+        at = apply_gate._parse_instant(requested_at)
+        if at is None or not (timedelta(0) <= now - at < AUTHORISATION_WAKE_WINDOW):
+            continue
+        wakes.append(Wake(f"authorised:{int(position_id)}:{str(requested_at).strip()}", int(position_id), "position_authorised"))
+    return wakes
+
+
+def _not_yet_woken(conn: sqlite3.Connection, wakes: list[Wake]) -> list[Wake]:
     if not wakes or not _table_exists(conn, "closer_wakes"):
         return wakes
     done = {row[0] for row in conn.execute("SELECT wake_key FROM closer_wakes")}
@@ -999,6 +1164,11 @@ def _tmux_send(session: str, text: str) -> bool:
 def wake_message(wake: Wake) -> str:
     if wake.reason == "essentials_complete":
         what = "the user answered the essential application facts"
+    elif wake.reason == "position_authorised":
+        return (
+            f"[BRIDGE INFO] the user authorised position #{wake.position_id}. "
+            "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
+        )
     else:
         what = f"the user answered the CLOSER questions for position #{wake.position_id}"
     return (
@@ -1037,6 +1207,7 @@ def wake_closer(
     live = (sessions or _closer_sessions)()
     if not live:
         return sent
+    claimed_wakes: list[Wake] = []
     for wake in wakes:
         if wake.position_id is not None and wake.position_id not in ready:
             continue
@@ -1045,16 +1216,53 @@ def wake_closer(
             (wake.key, wake.position_id),
         ).rowcount
         conn.commit()
-        if claimed != 1:
+        if claimed == 1:
+            claimed_wakes.append(wake)
+    # Several flags set together make ONE message: the CLOSER re-reads the
+    # whole queue anyway, one message per flag would only queue turns.
+    # A Telegram answer also re-authorises its position: that flag rides on
+    # the answers message instead of waking the CLOSER a second time.
+    batches = [[wake] for wake in claimed_wakes if wake.reason != "position_authorised"]
+    by_position = {batch[0].position_id: batch for batch in batches if batch[0].position_id is not None}
+    authorised = []
+    for wake in claimed_wakes:
+        if wake.reason != "position_authorised":
             continue
+        if wake.position_id in by_position:
+            by_position[wake.position_id].append(wake)
+        else:
+            authorised.append(wake)
+    if authorised:
+        batches.append(authorised)
+    for batch in batches:
+        if batch[0].reason != "position_authorised" or len(batch) == 1:
+            text = wake_message(batch[0])
+        else:
+            text = authorisations_message(batch)
         delivered = False
         for session in live:
-            delivered = (sender or _tmux_send)(session, wake_message(wake)) or delivered
+            delivered = (sender or _tmux_send)(session, text) or delivered
         if delivered:
-            conn.execute("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", (wake.key,))
+            conn.executemany("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", [(w.key,) for w in batch])
             conn.commit()
-            sent.append(wake)
+            sent.extend(batch)
+        else:
+            # Not one CLOSER took the message: give the claim back, so the
+            # next poll wakes it instead of the key standing for a wake that
+            # never happened.
+            conn.executemany(
+                "DELETE FROM closer_wakes WHERE wake_key = ? AND delivered = 0", [(w.key,) for w in batch]
+            )
+            conn.commit()
     return sent
+
+
+def authorisations_message(wakes: Sequence[Wake]) -> str:
+    ids = ", ".join(f"#{wake.position_id}" for wake in wakes)
+    return (
+        f"[BRIDGE INFO] the user authorised positions {ids}. "
+        "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
+    )
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

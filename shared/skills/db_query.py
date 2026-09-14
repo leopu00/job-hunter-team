@@ -1067,10 +1067,10 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # Una sola coda Writer-on-demand, con intent esplicito: il tipo legacy
         # NULL equivale a `cv`; `cover_letter` riusa la stessa FIFO ma richiede
         # una application esistente. Nessuna seconda corsia da sincronizzare.
-        rows = conn.execute("""
+        queued = [dict(r) for r in conn.execute("""
             SELECT p.id, p.title, p.company, s.total_score,
                    COALESCE(p.write_request_kind, 'cv') AS request_kind,
-                   COUNT(*) OVER () AS _total
+                   p.write_requested_at AS _requested_at
             FROM positions p
             JOIN scores s ON s.position_id = p.id
             LEFT JOIN applications a ON a.position_id = p.id
@@ -1083,10 +1083,44 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                 OR
                 (p.write_request_kind = 'cover_letter' AND a.id IS NOT NULL)
               )
-            ORDER BY p.write_requested_at ASC, s.total_score DESC
-            LIMIT ?
-        """, (lim,)).fetchall()
-        label = "Positions with a user-requested CV or cover letter"
+        """).fetchall()]
+        # [JHT-CV-REWORK] A CV request on an application that was never sent
+        # whose PDF fails the layout check: the Scrittore does the PDF again
+        # (`request_kind=cv_rework`). A request the box cannot confirm (the CV
+        # passes now, the application went out) stays out of the queue.
+        try:
+            import application_rework
+        except Exception as err:  # noqa: BLE001 — CVs and cover letters still flow
+            print(f"[db-query] CV rework unavailable: {type(err).__name__}", file=sys.stderr)
+            application_rework = None
+        me = os.environ.get('JHT_AGENT_NAME') or os.environ.get('JHT_AGENT_ID') or 'scrittore'
+        for candidate in [] if application_rework is None else conn.execute("""
+            SELECT p.id, p.title, p.company, s.total_score,
+                   'cv_rework' AS request_kind,
+                   p.write_requested_at AS _requested_at
+            FROM positions p
+            JOIN scores s ON s.position_id = p.id
+            JOIN applications a ON a.position_id = p.id
+            WHERE p.write_requested = 1
+              AND COALESCE(p.write_request_kind, 'cv') = 'cv'
+              AND COALESCE(a.applied, 0) != 1
+              AND p.status IN ('scored', 'ready')
+        """).fetchall():
+            pid = candidate['id']
+            # A flag the queue turned on keeps the automatic rule (an
+            # unmeasurable CV is not the Scrittore's); a rework another
+            # Scrittore claimed is its own.
+            manual = not application_rework.automatic_flag(conn, pid)
+            if application_rework.claimed_elsewhere(conn, pid, me):
+                continue
+            if application_rework.rework_verdict(conn, pid, manual=manual)['allowed']:
+                queued.append(dict(candidate))
+        queued.sort(key=lambda r: (r['_requested_at'] or '', -(r['total_score'] or 0)))
+        rows = [
+            {**{k: v for k, v in r.items() if k != '_requested_at'}, '_total': len(queued)}
+            for r in (queued if lim < 0 else queued[:lim])
+        ]
+        label = "Positions with a user-requested CV, CV rework or cover letter"
 
     elif role == 'critico':
         rows = conn.execute("""
