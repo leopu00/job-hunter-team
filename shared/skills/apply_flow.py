@@ -43,6 +43,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
+if __name__ == "__main__":
+    # Run as a script, this module is `__main__`.  The recipes that live in
+    # their own modules (`linkedin_apply`) import it as `apply_flow`: without
+    # this line they would get a second copy whose BlockedHuman the flow
+    # below never catches.
+    sys.modules.setdefault("apply_flow", sys.modules[__name__])
+
 try:
     from ats_detect import detect_ats
 except ImportError:  # pragma: no cover - package-style import outside the CLI
@@ -59,7 +66,7 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever"})
+SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin", "generic"})
 GREENHOUSE_HOSTS = frozenset(
     {
         "job-boards.greenhouse.io",
@@ -70,6 +77,7 @@ GREENHOUSE_HOSTS = frozenset(
 # Lever's US and EU public boards.  Separate instances: a confirmation on one
 # never proves a submit made on the other.
 LEVER_HOSTS = frozenset({"jobs.lever.co", "jobs.eu.lever.co"})
+LINKEDIN_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
 STEP_ORDER = ("detect", "fill", "upload_cv", "screening", "review", "submit")
 EMAIL_CHANNEL_STATE = "email_channel"
 
@@ -394,6 +402,29 @@ class BlockedHuman(FlowError):
         self.answer_request = dict(answer_request) if answer_request else None
 
 
+class FlowDeferred(FlowError):
+    """Not now, and not a person's problem: the run is denied and the queue retries later."""
+
+    def __init__(self, reason: str, detail: str):
+        super().__init__(detail)
+        self.reason = reason
+        self.detail = detail
+
+
+class PlatformHandoff(FlowError):
+    """The application continues on another site (a company ATS behind a board).
+
+    Raised by a recipe that found the real application address.  The flow
+    follows it once, with the recipe of the destination, after the same
+    public-address guard as any application URL.
+    """
+
+    def __init__(self, url: str, detail: str = ""):
+        super().__init__(detail or "the application continues on another site")
+        self.url = str(url)
+        self.detail = detail
+
+
 ANSWER_ORIGINS = ("user", "profile", "agent_inferred")
 _REFUSED_ANSWER_REASONS = frozenset(
     {"answer_option_unknown", "answer_type_unknown", "answer_not_accepted"}
@@ -535,6 +566,13 @@ class FlowCheckpoint:
     answer_refusals: dict[str, dict[str, Any]] = field(default_factory=dict)
     # Page 1 of the CV PDF as rendered when the layout check stopped the flow.
     cv_preview: str = ""
+    # The application address a board handed the flow to (LinkedIn → company
+    # ATS).  `url` stays the address the queue asked for.
+    handoff_url: str = ""
+    # The form as it was right before the submit click, when a recipe saves it.
+    pre_submit_screenshot: str = ""
+    # The last step a multi-step form (LinkedIn Easy Apply) reached.
+    modal_step: int = 0
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -596,6 +634,13 @@ class FlowCheckpoint:
             raise FlowError("checkpoint has invalid answer refusals")
         if not isinstance(raw.get("cv_preview", ""), str):
             raise FlowError("checkpoint has an invalid CV preview")
+        if not isinstance(raw.get("handoff_url", ""), str) or not isinstance(
+            raw.get("pre_submit_screenshot", ""), str
+        ):
+            raise FlowError("checkpoint has an invalid handoff or pre-submit screenshot")
+        step = raw.get("modal_step", 0)
+        if isinstance(step, bool) or not isinstance(step, int) or step < 0:
+            raise FlowError("checkpoint has an invalid form step")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -2185,6 +2230,7 @@ class LeverRecipe:
     """
 
     PLATFORM = "lever"
+    VENDOR = "Lever"
     FORM = "form:has(li.application-question)"
     FIELD_ENTRY = "li.application-question"
     SUBMIT = "form:has(li.application-question) button[type=submit]"
@@ -2380,7 +2426,7 @@ class LeverRecipe:
     def fill_screening(self, page) -> None:
         challenge = self._challenge_reason(page)
         if challenge:
-            raise BlockedHuman(challenge, f"Lever requires human intervention ({challenge})", "screening")
+            raise BlockedHuman(challenge, f"{self.VENDOR} requires human intervention ({challenge})", "screening")
         entries = self._form(page, "screening").locator(self.FIELD_ENTRY)
         for index in range(entries.count()):
             entry = entries.nth(index)
@@ -2395,12 +2441,12 @@ class LeverRecipe:
                     if request is None:
                         raise BlockedHuman(
                             "unknown_required_control",
-                            f"Lever required question cannot be represented exactly: {_safe_label(label)}",
+                            f"{self.VENDOR} required question cannot be represented exactly: {_safe_label(label)}",
                             "screening",
                         )
                     raise BlockedHuman(
                         "required_answer_missing",
-                        f"Required Lever question needs an answer: {_safe_label(label)}",
+                        f"Required {self.VENDOR} question needs an answer: {_safe_label(label)}",
                         "screening",
                         answer_request=request,
                     )
@@ -2410,7 +2456,7 @@ class LeverRecipe:
                 if not self._is_answered(entry):
                     raise BlockedHuman(
                         "answer_not_accepted",
-                        f"Lever did not retain the answer for: {_safe_label(label)}",
+                        f"{self.VENDOR} did not retain the answer for: {_safe_label(label)}",
                         "screening",
                     )
             except BlockedHuman as refused:
@@ -2443,7 +2489,7 @@ class LeverRecipe:
             if len(matched) != 1:
                 raise BlockedHuman(
                     "answer_option_unknown",
-                    f"No single Lever option matches the saved answer for: {_safe_label(label)}",
+                    f"No single {self.VENDOR} option matches the saved answer for: {_safe_label(label)}",
                     step,
                 )
             next(iter(matched.values())).check()
@@ -2460,14 +2506,14 @@ class LeverRecipe:
             ):
                 raise BlockedHuman(
                     "answer_type_unknown",
-                    f"Lever checkbox question needs explicit option labels: {_safe_label(label)}",
+                    f"{self.VENDOR} checkbox question needs explicit option labels: {_safe_label(label)}",
                     step,
                 )
             matched = self._option_matches(checkboxes, values)
             if not matched:
                 raise BlockedHuman(
                     "answer_option_unknown",
-                    f"Lever checkbox options do not exactly match the saved answer for: {_safe_label(label)}",
+                    f"{self.VENDOR} checkbox options do not exactly match the saved answer for: {_safe_label(label)}",
                     step,
                 )
             for checkbox in matched.values():
@@ -2483,7 +2529,7 @@ class LeverRecipe:
             except Exception as exc:
                 raise BlockedHuman(
                     "answer_option_unknown",
-                    f"Lever select has no option matching the saved answer for: {_safe_label(label)}",
+                    f"{self.VENDOR} select has no option matching the saved answer for: {_safe_label(label)}",
                     step,
                 ) from exc
             return
@@ -2494,7 +2540,7 @@ class LeverRecipe:
             return
         raise BlockedHuman(
             "unknown_required_control",
-            f"Lever field type is not supported safely: {_safe_label(label)}",
+            f"{self.VENDOR} field type is not supported safely: {_safe_label(label)}",
             step,
         )
 
@@ -2567,6 +2613,54 @@ class LeverRecipe:
         self._form(page, "submit").locator("button[type=submit]").click(timeout=10_000)
 
 
+def _linkedin_module():
+    """`linkedin_apply`, imported only for a LinkedIn position; None when it is absent."""
+    try:
+        import linkedin_apply
+    except ImportError:
+        try:
+            from shared.skills import linkedin_apply
+        except ImportError:
+            return None
+    return linkedin_apply
+
+
+def is_linkedin_job(url: str) -> bool:
+    """A LinkedIn vacancy page (`/jobs/…`) over HTTPS."""
+    try:
+        parsed = urllib.parse.urlsplit(str(url or "").strip())
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and (parsed.hostname or "").casefold() in LINKEDIN_HOSTS
+        and parsed.path.startswith("/jobs/")
+    )
+
+
+def _optional_module(name: str):
+    """A sibling skill module imported only when needed; None when it is absent."""
+    import importlib
+
+    for qualified in (name, f"shared.skills.{name}"):
+        try:
+            return importlib.import_module(qualified)
+        except ImportError:
+            continue
+    return None
+
+
+def _recipe_class(platform: str):
+    if platform == "linkedin":
+        module = _linkedin_module()
+        return module.LinkedInEasyApplyRecipe if module is not None else None
+    if platform == "generic":
+        # A company's own careers form (HQ-FULLSTACK-2's apply_generic).
+        module = _optional_module("apply_generic")
+        return module.GenericRecipe if module is not None else None
+    return {"ashby": AshbyRecipe, "greenhouse": GreenhouseRecipe, "lever": LeverRecipe}.get(platform)
+
+
 class ApplicationFlow:
     def __init__(
         self,
@@ -2586,6 +2680,8 @@ class ApplicationFlow:
         cap_reserver: Callable[..., Any] | None = None,
         cv_checker: Callable[[Path], Mapping[str, Any]] | None = None,
         cv_previewer: Callable[[Path, Path], None] | None = None,
+        code_notifier: Callable[..., str] | None = None,
+        login_code_timeout_s: float = 300.0,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
     ):
@@ -2611,6 +2707,10 @@ class ApplicationFlow:
         self.cap_reserver = cap_reserver or _default_cap_reserver
         self.cv_checker = cv_checker or _default_cv_checker
         self.cv_previewer = cv_previewer or _default_cv_previewer
+        # LinkedIn's login code request; None = the module's own jht-notify-user call.
+        self.code_notifier = code_notifier
+        self.login_code_timeout_s = float(login_code_timeout_s)
+        self.jht_home = jht_home
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
 
@@ -2688,10 +2788,18 @@ class ApplicationFlow:
                 f"has no saved answer. {blocked.detail} Please add the exact answer to "
                 "application_answers and resume this application."
             )
-        return (
+        default = (
             "CLOSER stopped before any blind retry. "
             f"Reason: {blocked.reason}. {blocked.detail} Human review is required."
         )
+        notices = _optional_module("closer_notices")
+        if notices is None:
+            return default
+        try:
+            # In the user's language; the technical detail stays in brackets.
+            return notices.stop_message(blocked.reason, blocked.detail, self.position_id, default=default) or default
+        except Exception:
+            return default
 
     def _answer_request_record(self, blocked: BlockedHuman) -> dict[str, Any]:
         payload = {
@@ -2810,6 +2918,15 @@ class ApplicationFlow:
             )
         message = self._notification_message(blocked)
         self._save_stop(checkpoint, previous_screenshot)
+        notices = _optional_module("closer_notices")
+        if notices is not None and blocked.reason in getattr(notices, "DIGEST_REASONS", ()):
+            # A stop of the site, not of the application: one summary per
+            # round (closer_notices flush), not a message per position.
+            try:
+                notices.defer(self.position_id, blocked.reason, self.url)
+                return FlowResult("blocked_human", checkpoint.state, blocked.reason)
+            except Exception as exc:
+                LOG.error("stop summary unavailable, notifying now: %s", type(exc).__name__)
         try:
             self.notifier(position_id=self.position_id, message=message)
         except Exception as exc:
@@ -3073,12 +3190,7 @@ class ApplicationFlow:
             )
 
     def _recipe(self, platform: str):
-        recipes = {
-            "ashby": AshbyRecipe,
-            "greenhouse": GreenhouseRecipe,
-            "lever": LeverRecipe,
-        }
-        recipe = recipes.get(platform)
+        recipe = _recipe_class(platform)
         if recipe is None:
             raise BlockedHuman(
                 "ats_unsupported",
@@ -3087,6 +3199,10 @@ class ApplicationFlow:
             )
         built = recipe(self._profile_with_saved_answers(), self.cv_path)
         built.answer_origins = dict(getattr(self, "answer_origins", {}))
+        if callable(getattr(built, "attach", None)):
+            # A recipe that works with the user's account needs the flow's
+            # home, database and notifier (LinkedIn's session and login code).
+            built.attach(self)
         return built
 
     def _log_dry_run_essentials(self) -> None:
@@ -3148,11 +3264,34 @@ class ApplicationFlow:
 
     @staticmethod
     def _assert_recipe_page(
-        page, platform: str, step: str, *, allow_injected_blank: bool = False
+        page, platform: str, step: str, *, allow_injected_blank: bool = False, application_url: str = ""
     ) -> None:
-        if platform not in {"greenhouse", "lever"}:
+        if platform not in {"greenhouse", "lever", "linkedin", "generic"}:
             return
         if allow_injected_blank and page.url == "about:blank":
+            return
+        if platform == "generic":
+            # A company form stays on the company's site: the recipe's own rule
+            # (sibling subdomains of one company, tenants of a shared suffix apart).
+            module = _optional_module("apply_generic")
+            try:
+                secure = urllib.parse.urlsplit(page.url).scheme == "https"
+            except ValueError:
+                secure = False
+            if not (secure and module is not None and module.same_site(page.url, application_url)):
+                raise BlockedHuman(
+                    "application_redirect_untrusted",
+                    "The company application page left the company's site during the flow",
+                    step,
+                )
+            return
+        if platform == "linkedin":
+            if not ApplicationFlow._page_url_on_hosts(page.url, LINKEDIN_HOSTS):
+                raise BlockedHuman(
+                    "linkedin_redirect_untrusted",
+                    "The LinkedIn page left www.linkedin.com during the flow",
+                    step,
+                )
             return
         if platform == "lever":
             if not ApplicationFlow._page_url_on_hosts(page.url, LEVER_HOSTS):
@@ -3208,15 +3347,11 @@ class ApplicationFlow:
         pre_submit: bool = False,
     ) -> tuple[str, str] | None:
         platform = platform or detect_ats(application_url).platform
-        recipe = {
-            "ashby": AshbyRecipe,
-            "greenhouse": GreenhouseRecipe,
-            "lever": LeverRecipe,
-        }.get(platform)
+        recipe = _recipe_class(platform)
         if recipe is None:
             return None
-        success = page.locator(recipe.SUCCESS)
-        if success.count() and success.first.is_visible():
+        success = page.locator(recipe.SUCCESS) if recipe.SUCCESS else None
+        if success is not None and success.count() and success.first.is_visible():
             text = " ".join(success.first.inner_text().split())[:1000]
             if text:
                 return "", text
@@ -3231,7 +3366,7 @@ class ApplicationFlow:
             "we have received your application",
             "your application has been submitted",
             "your application is on its way",
-        )
+        ) + tuple(getattr(recipe, "CONFIRMATION_MARKERS", ()))
         lower = visible.casefold()
         submit_present = page.locator(recipe.SUBMIT).count() > 0
         for marker in markers:
@@ -3262,6 +3397,7 @@ class ApplicationFlow:
         if platform == "lever":
             # Lever lands a submitted application on <posting>/thanks.
             confirmation_url_markers += ("/thanks",)
+        confirmation_url_markers += tuple(getattr(recipe, "CONFIRMATION_URL_MARKERS", ()))
         final_route = f"{final.path}?{final.query}".casefold()
         if (
             ApplicationFlow._same_confirmation_origin(
@@ -3275,11 +3411,7 @@ class ApplicationFlow:
         return None
 
     def _wait_for_confirmation(self, page, platform: str) -> tuple[str, str] | None:
-        recipe = {
-            "ashby": AshbyRecipe,
-            "greenhouse": GreenhouseRecipe,
-            "lever": LeverRecipe,
-        }[platform]
+        recipe = _recipe_class(platform)
         deadline = time.monotonic() + self.confirmation_timeout_ms / 1000
         while True:
             found = self._confirmation(page, self.url, platform)
@@ -3539,11 +3671,136 @@ class ApplicationFlow:
         checkpoint.save(self.checkpoint_path)
         return None
 
+    def _essentials_stop(self, checkpoint: FlowCheckpoint, mode: str) -> FlowResult | None:
+        """The facts almost every form asks for, before the first fill of a position.
+
+        Each missing one is asked once, on Telegram first, and nothing is saved
+        in the checkpoint: the position is not held, it waits until the
+        answers exist.
+        """
+        try:
+            if mode == "dry_run":
+                # A dry run only looks: it never sends the user a question
+                # and never stops on a fact it would have asked.
+                self._log_dry_run_essentials()
+                missing = []
+            else:
+                missing = self.essentials_checker(
+                    profile=self.profile, position_id=self.position_id, db_path=self.db_path
+                )
+        except Exception as exc:
+            LOG.error("essential facts check failed: %s", type(exc).__name__)
+            return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
+        if missing:
+            return FlowResult(
+                "blocked_human",
+                checkpoint.state,
+                "essential_facts_missing",
+                missing=tuple(str(key) for key in missing),
+            )
+        return None
+
+    def _jht_home(self) -> Path:
+        return Path(self.jht_home) if self.jht_home else Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
+
+    def _open_application(self, checkpoint: FlowCheckpoint, page, *, navigate: bool):
+        """Detect the platform and open its form: (detection, recipe, injected_blank) or a FlowResult."""
+        if is_linkedin_job(self.url):
+            detection = replace(detect_ats(self.url), platform="linkedin")
+        else:
+            detection = detect_ats(self.url, page.content())
+        if detection.platform not in SUPPORTED_PLATFORMS:
+            email = self._email_channel(checkpoint, page)
+            if email is not None:
+                return email
+            generic = _recipe_class("generic") if detection.platform == "unknown" and not detection.conflict else None
+            if generic is not None:
+                # No ATS named the page and nothing contradicts that: a company
+                # form, if the page has one.  A known ATS without a recipe
+                # (Workday, SmartRecruiters…) never gets here: it stays unsupported.
+                probe = generic()
+                if probe.form_present(page) or probe.apply_control_present(page):
+                    detection = replace(detection, platform="generic")
+        if detection.platform not in SUPPORTED_PLATFORMS:
+            if not self._generic_application_controls(page):
+                self._assert_no_closed_notice(page)
+            reason = "ats_conflict" if detection.conflict else "ats_unsupported"
+            raise BlockedHuman(
+                reason,
+                "Application platform is unknown, conflicting, or has no safe recipe",
+                "detect",
+            )
+        checkpoint.platform = detection.platform
+        recipe = self._recipe(detection.platform)
+        # Before any click: an Apply control that opens a mail client is
+        # the application channel.  Clicking it would open nothing in
+        # the browser and read as a missing form.  A recognised form on
+        # the page still wins over an "email us" link next to it.
+        if not recipe.form_present(page):
+            email = self._email_channel(checkpoint, page)
+            if email is not None:
+                return email
+            if not recipe.apply_control_present(page):
+                # No Apply control found is not a closed vacancy (a
+                # localised board, a slow render): only a notice is.
+                self._assert_no_closed_notice(page)
+        injected_blank = not navigate and page.url == "about:blank"
+        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
+        recipe.open_form(page)
+        self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
+        # Confirm the rendered form too.  URL-only detection is not
+        # enough to interact when a block/error page owns that URL.
+        if callable(getattr(recipe, "dom_match", None)):
+            recognised = bool(recipe.dom_match(page))
+        else:
+            rendered = detect_ats(self.url, page.content())
+            recognised = rendered.platform == detection.platform and rendered.dom_match
+        if not recognised:
+            raise BlockedHuman(
+                f"{detection.platform}_dom_unrecognised",
+                f"URL is {detection.platform} but the rendered application form is not recognised",
+                "detect",
+            )
+        return detection, recipe, injected_blank
+
+    def _follow_handoff(
+        self, checkpoint: FlowCheckpoint, page, handoff: PlatformHandoff, count: int
+    ) -> None:
+        """Go on to the site a recipe handed over to, once, or stop."""
+        target = handoff.url.strip()
+        try:
+            parsed = urllib.parse.urlsplit(target)
+        except ValueError:
+            parsed = urllib.parse.SplitResult("", "", "", "", "")
+        host = (parsed.hostname or "").casefold()
+        if count > 1:
+            allowed, why = False, "a second handoff in one run (handoff_loop)"
+        elif parsed.scheme != "https" or not host or host in LINKEDIN_HOSTS:
+            allowed, why = False, "the handed-over address is not an HTTPS page outside the board"
+        elif checkpoint.platform == "linkedin":
+            # A board's "apply on company website": any public site, whose
+            # recipe detection picks (a known ATS or the company form).
+            allowed, why = True, ""
+        else:
+            platform = detect_ats(target).platform
+            allowed = platform in SUPPORTED_PLATFORMS and platform not in {"generic", "linkedin"}
+            why = "" if allowed else "the handed-over address is not a platform with a recipe"
+        if not allowed:
+            raise BlockedHuman("application_redirect_untrusted", f"Handoff refused: {why}", "detect")
+        checkpoint.handoff_url = target
+        checkpoint.platform = ""
+        checkpoint.save(self.checkpoint_path)
+        self.url = target
+        self._navigate(page)
+        self._assert_not_redirected_away(page, navigated=True)
+
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
         try:
             checkpoint = FlowCheckpoint.load(
                 self.checkpoint_path, self.position_id, self.url
             )
+            # A multi-step recipe saves its step on the checkpoint of this run.
+            self._live_checkpoint = checkpoint
         except FlowError as exc:
             checkpoint = FlowCheckpoint.new(self.position_id, self.url)
             return self._block(
@@ -3587,32 +3844,6 @@ class ApplicationFlow:
             and not checkpoint.submit_started
             and not checkpoint.answer_request
         )
-        if fresh:
-            # Before the first run of a position: the facts almost every form
-            # asks for. Each missing one is asked once, on Telegram first, and
-            # nothing is saved in the checkpoint — the position is not held,
-            # it simply waits until the answers exist.
-            try:
-                if mode == "dry_run":
-                    # A dry run only looks: it never sends the user a question
-                    # and never stops on a fact it would have asked.
-                    self._log_dry_run_essentials()
-                    missing = []
-                else:
-                    missing = self.essentials_checker(
-                        profile=self.profile, position_id=self.position_id, db_path=self.db_path
-                    )
-            except Exception as exc:
-                LOG.error("essential facts check failed: %s", type(exc).__name__)
-                return FlowResult("blocked_human", checkpoint.state, "essential_facts_unavailable")
-            if missing:
-                return FlowResult(
-                    "blocked_human",
-                    checkpoint.state,
-                    "essential_facts_missing",
-                    missing=tuple(str(key) for key in missing),
-                )
-
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
             return waiting
@@ -3640,6 +3871,9 @@ class ApplicationFlow:
                     # Reloading will normally show the form again even when
                     # the remote submit succeeded.  Blocking in that case is
                     # intentional: uncertainty cannot authorise a second click.
+                    if checkpoint.handoff_url:
+                        # The click happened on the site the board handed over to.
+                        self.url = checkpoint.handoff_url
                     if navigate:
                         self._navigate(active_page)
                     recovery_platform = checkpoint.platform or detect_ats(self.url).platform
@@ -3675,59 +3909,34 @@ class ApplicationFlow:
                 )
 
             try:
+                if is_linkedin_job(self.url):
+                    # The saved session goes in before the first request, so the
+                    # vacancy page already shows the signed-in apply controls.
+                    module = _linkedin_module()
+                    if module is not None:
+                        module.restore_session(active_page.context, self._jht_home())
                 if navigate:
                     self._navigate(active_page)
                 self._assert_not_redirected_away(active_page, navigated=navigate)
-                detection = detect_ats(self.url, active_page.content())
-                if detection.platform not in SUPPORTED_PLATFORMS:
-                    email = self._email_channel(checkpoint, active_page)
-                    if email is not None:
-                        return email
-                    if not self._generic_application_controls(active_page):
-                        self._assert_no_closed_notice(active_page)
-                    reason = "ats_conflict" if detection.conflict else "ats_unsupported"
-                    raise BlockedHuman(
-                        reason,
-                        "Application platform is unknown, conflicting, or has no safe recipe",
-                        "detect",
-                    )
-                checkpoint.platform = detection.platform
-                recipe = self._recipe(detection.platform)
-                # Before any click: an Apply control that opens a mail client is
-                # the application channel.  Clicking it would open nothing in
-                # the browser and read as a missing form.  A recognised form on
-                # the page still wins over an "email us" link next to it.
-                if not recipe.form_present(active_page):
-                    email = self._email_channel(checkpoint, active_page)
-                    if email is not None:
-                        return email
-                    if not recipe.apply_control_present(active_page):
-                        # No Apply control found is not a closed vacancy (a
-                        # localised board, a slow render): only a notice is.
-                        self._assert_no_closed_notice(active_page)
-                injected_blank = not navigate and active_page.url == "about:blank"
-                self._assert_recipe_page(
-                    active_page,
-                    detection.platform,
-                    "detect",
-                    allow_injected_blank=injected_blank,
-                )
-                recipe.open_form(active_page)
-                self._assert_recipe_page(
-                    active_page,
-                    detection.platform,
-                    "detect",
-                    allow_injected_blank=injected_blank,
-                )
-                # Confirm the rendered form too.  URL-only detection is not
-                # enough to interact when a block/error page owns that URL.
-                rendered = detect_ats(self.url, active_page.content())
-                if rendered.platform != detection.platform or not rendered.dom_match:
-                    raise BlockedHuman(
-                        f"{detection.platform}_dom_unrecognised",
-                        f"URL is {detection.platform} but the rendered application form is not recognised",
-                        "detect",
-                    )
+                handoffs = 0
+                while True:
+                    try:
+                        opened = self._open_application(checkpoint, active_page, navigate=navigate)
+                        break
+                    except PlatformHandoff as handoff:
+                        handoffs += 1
+                        self._follow_handoff(checkpoint, active_page, handoff, handoffs)
+                        navigate = True
+                if isinstance(opened, FlowResult):
+                    return opened
+                detection, recipe, injected_blank = opened
+                if fresh:
+                    # Only now that the page is an application the flow can
+                    # really send (a recipe opened its form; not unsupported,
+                    # closed or email) are the essential facts worked out.
+                    waiting_facts = self._essentials_stop(checkpoint, mode)
+                    if waiting_facts is not None:
+                        return waiting_facts
                 checkpoint.complete_step("detect", "fill")
                 checkpoint.save(self.checkpoint_path)
 
@@ -3738,6 +3947,7 @@ class ApplicationFlow:
                     detection.platform,
                     "fill",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("fill", "upload_cv")
                 checkpoint.save(self.checkpoint_path)
@@ -3748,6 +3958,7 @@ class ApplicationFlow:
                     detection.platform,
                     "upload_cv",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("upload_cv", "screening")
                 checkpoint.save(self.checkpoint_path)
@@ -3759,16 +3970,23 @@ class ApplicationFlow:
                     detection.platform,
                     "screening",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("screening", "review")
                 checkpoint.save(self.checkpoint_path)
 
+                recipe.pre_submit_screenshot_path = str(
+                    self.checkpoint_path.parent / f"{self.position_id}-pre-submit-{time.time_ns()}.png"
+                )
                 recipe.review(active_page)
+                if Path(recipe.pre_submit_screenshot_path).is_file():
+                    checkpoint.pre_submit_screenshot = recipe.pre_submit_screenshot_path
                 self._assert_recipe_page(
                     active_page,
                     detection.platform,
                     "review",
                     allow_injected_blank=injected_blank,
+                    application_url=self.url,
                 )
                 checkpoint.complete_step("review", "submit")
                 checkpoint.save(self.checkpoint_path)
@@ -3830,6 +4048,13 @@ class ApplicationFlow:
                     raise
                 recipe.submit(active_page)
                 confirmation = self._wait_for_confirmation(active_page, detection.platform)
+                if not confirmation and detection.platform == "generic":
+                    # A company site has no known confirmation: the outcome is unknown.
+                    raise BlockedHuman(
+                        "submit_outcome_unknown",
+                        "Submit was clicked once on a company site and no confirmation was recognised",
+                        "submit",
+                    )
                 if not confirmation:
                     raise BlockedHuman(
                         "receipt_missing",
@@ -3845,6 +4070,8 @@ class ApplicationFlow:
                 return self._record(checkpoint, receipt)
             except BlockedHuman as blocked:
                 return self._block(checkpoint, blocked, page=active_page, dry_run=mode == "dry_run")
+            except FlowDeferred as deferred:
+                return self._deny(checkpoint, _DeniedVerdict(deferred.reason, deferred.detail), page=active_page)
             except Exception as exc:
                 step = checkpoint.state if checkpoint.state in STEP_ORDER else "review"
                 return self._block(

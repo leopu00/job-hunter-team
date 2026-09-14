@@ -32,7 +32,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - The gate is checked at start **and** immediately before the click. A flag
   revoked while the form was being filled stops the submission.
-- Three complete recipes today: **Ashby**, **Greenhouse** (only its three public hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, over HTTPS; the page is re-checked after every step) and **Lever** (only `jobs.lever.co` and `jobs.eu.lever.co`, over HTTPS, re-checked the same way). Any other platform blocks for a human.
+- Three complete recipes today: **Ashby**, **Greenhouse** (only its three public hosts, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, over HTTPS; the page is re-checked after every step) and **Lever** (only `jobs.lever.co` and `jobs.eu.lever.co`, over HTTPS, re-checked the same way). LinkedIn: "apply on company website" continues on that site with its recipe; Easy Apply signs in with the user's account (session kept, verification code on Telegram) and walks the dialog. Any other platform blocks for a human.
 
 ## The receipt
 
@@ -73,9 +73,17 @@ The flow stops on anything it cannot do with certainty:
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | the CV cannot be attached |
 | `cv_pdf_layout_bad` | the CV PDF failed the visual check (`pdf_layout_check.py`: text squeezed into a narrow column, a nearly empty page, more than 2 pages, fonts not embedded, body font too small): nothing was attached and nothing was sent. The Writer must render it again; never attach it by hand. The preview of page 1 is saved next to the checkpoint: look at it |
 | `cv_pdf_check_unavailable` | the CV PDF could not be measured (poppler missing in the container, file unreadable): nothing was attached and nothing was sent — an unmeasured CV is not a pass. The remedy is on the box, not the Writer: report it to the Capitano |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | no recipe for this page yet, or the form is not the one the recipe knows |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` / `generic_dom_unrecognised` | no recipe for this page yet, or the form is not the one the recipe knows |
 | `greenhouse_redirect_untrusted` | the Greenhouse page left its three trusted hosts during the flow |
 | `lever_redirect_untrusted` | the Lever page left `jobs.lever.co` / `jobs.eu.lever.co` during the flow |
+| `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | the LinkedIn vacancy or its Easy Apply dialog is not the one the recipe knows |
+| `linkedin_credentials_missing` | `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) is missing, not a regular 0600 file of this user, or empty: the user creates it with the credentials script. Never ask for the password in a chat |
+| `linkedin_login_failed` | LinkedIn refused the sign-in twice: nothing is tried again until the user writes new credentials |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | the LinkedIn verification code was asked on Telegram and did not arrive in time (or the request did not reach Telegram): a new run asks for a new code |
+| `linkedin_challenge` | LinkedIn shows a captcha or security check: the user solves it on the live screen, then authorises the position again |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | the LinkedIn page left `www.linkedin.com`, or the company address it gives is not an HTTPS page outside LinkedIn (or a second handoff) |
+| `linkedin_follow_not_cleared` | the "follow the company" box could not be cleared before Submit: nothing is sent |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **denied, not blocked**: LinkedIn applications are spaced out (`linkedin_min_interval_minutes`, default 20), the sign-in failed once and the next run tries once more, or that setting is not a whole number of minutes. The queue retries by itself |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | two different mailto application addresses, or the application form, its fields or its submit button cannot be pinned to one single form (newsletter, footer, demo forms are never part of it) |
 | `form_error` / `field_invalid` / `submit_unavailable` | the form reports an error, a field format is rejected, or the submit button is missing or disabled |
 | `url_refused` / `checkpoint_invalid` | the application URL failed the public-address guard, or the saved checkpoint is unreadable |

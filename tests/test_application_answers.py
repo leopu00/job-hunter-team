@@ -417,21 +417,35 @@ def test_each_missing_essential_is_asked_once_and_an_answer_closes_it(db, bridge
     assert third["status"] == "complete" and len(asked) == 1
 
 
-def test_apply_flow_waits_for_essentials_without_holding_or_opening_the_browser(db, tmp_path, monkeypatch):
+def test_apply_flow_waits_for_essentials_without_holding_the_position(db, tmp_path):
+    # The facts are worked out only once the page is an application the flow
+    # can send (see test_apply_flow: never for an unsupported or closed page),
+    # and waiting for them still holds nothing.
     import apply_flow
+    from test_apply_flow import ASHBY_URL, ashby_form
 
+    playwright = pytest.importorskip("playwright.sync_api")
+    cv = tmp_path / "cv.pdf"
+    cv.write_bytes(b"%PDF-1.4 synthetic")
     flow = apply_flow.ApplicationFlow(
         position_id=7,
-        url="https://jobs.ashbyhq.com/fixture/1",
+        url=ASHBY_URL,
         profile={"name": "Test Candidate"},
-        cv_path=tmp_path / "cv.pdf",
+        cv_path=cv,
         checkpoint_path=tmp_path / "checkpoint.json",
         db_path=db,
         gate_checker=lambda **_: type("V", (), {"allowed": True, "context": {"mode": "authorised"}})(),
         essentials_checker=lambda **_: ["notice period"],
+        cv_checker=lambda _path: {"ok": True, "reasons": []},
     )
-    monkeypatch.setattr(flow, "_managed_page", lambda: pytest.fail("browser opened before the essentials"))
-    result = flow.run()
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.set_content(ashby_form())
+            result = flow.run(page=page, navigate=False)
+        finally:
+            browser.close()
     assert (result.status, result.reason) == ("blocked_human", "essential_facts_missing")
     assert not (tmp_path / "checkpoint.json").exists()
 
@@ -756,25 +770,32 @@ def test_two_bridges_checking_together_send_one_wake(db):
 # ── cross-review decisions (N1 · M4 in apply_flow) ───────────────────────────
 
 
-def test_a_dry_run_never_asks_the_user_for_essentials(db, tmp_path, monkeypatch, caplog):
+def test_a_dry_run_never_asks_the_user_for_essentials(db, tmp_path, caplog):
     import apply_flow
+    from test_apply_flow import ASHBY_URL, ashby_form
 
+    playwright = pytest.importorskip("playwright.sync_api")
     asked = []
+    cv = tmp_path / "cv.pdf"
+    cv.write_bytes(b"%PDF-1.4 synthetic")
     flow = apply_flow.ApplicationFlow(
-        position_id=7, url="https://jobs.ashbyhq.com/fixture/1", profile={"name": "Test Candidate"},
-        cv_path=tmp_path / "cv.pdf", checkpoint_path=tmp_path / "checkpoint.json", db_path=db,
+        position_id=7, url=ASHBY_URL, profile={"name": "Test Candidate"},
+        cv_path=cv, checkpoint_path=tmp_path / "checkpoint.json", db_path=db,
         gate_checker=lambda **_: type("V", (), {"allowed": True, "context": {"mode": "dry_run"}})(),
         essentials_checker=lambda **kw: asked.append(kw) or ["phone"],
-        notifier=lambda **kw: asked.append(kw) or "1",
+        # The synthetic form's own stop (no email in this profile) is not an essential fact.
+        notifier=lambda **kw: "1",
+        cv_checker=lambda _path: {"ok": True, "reasons": []},
     )
-
-    class Opened(Exception):
-        pass
-
-    monkeypatch.setattr(flow, "_managed_page", lambda: (_ for _ in ()).throw(Opened()))
     before = row(db, "SELECT COUNT(*) FROM pending_user_messages")
-    with pytest.raises(Opened):
-        flow.run()  # the diagnostic run goes on to the page
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.set_content(ashby_form())
+            flow.run(page=page, navigate=False)  # the diagnostic run goes on to the form
+        finally:
+            browser.close()
     assert asked == []
     assert row(db, "SELECT COUNT(*) FROM pending_user_messages") == before
     assert "7 essential facts unknown, not asked" in caplog.text
