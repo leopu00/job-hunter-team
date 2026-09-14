@@ -171,7 +171,7 @@ Decisione tecnica 2026-05-18 dopo indagine "CV estetica semplificata":
   Nello `<style>` del `.md` mai `max-width`, `margin: auto` o padding sul body,
   e non contare su `@page`. Poi `pdf_layout_check.py` misura il risultato: testo
   ≥ 75% della larghezza utile su ogni pagina, 1–2 pagine, nessuna pagina quasi
-  vuota, font incorporati.
+  vuota, font incorporati, corpo stampato ≥ 9.5pt.
 
 L'anti-pattern storico: generare il PDF direttamente in
 `$JHT_USER_DIR/cv/`, poi eseguire `db_update.py application --cv-pdf-path
@@ -252,7 +252,7 @@ esac
 
 # Check C) layout: dimensione e Producer provano l'engine, non dove sta il testo.
 # pdf_layout_check.py lo misura (≥75% della larghezza utile su ogni pagina, 1-2
-# pagine, nessuna pagina quasi vuota, font incorporati). Exit 1 o 2: ABORT.
+# pagine, nessuna pagina quasi vuota, font incorporati, corpo ≥ 9.5pt). Exit 1 o 2: ABORT.
 if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
   echo "[cv-structure] ABORT post-render: layout sbagliato (pdf_layout_check.py) — correggi il .md e rigenera."
   rm -f "$TMP_PDF"
@@ -274,7 +274,7 @@ Codici di uscita:
 - `2` → preflight FAIL (engine non disponibile) — segnala al Capitano
 - `3` → post-render FAIL (dimensione < 20 KB, output minimalista) — engine sbagliato
 - `4` → post-render FAIL (Producer != Qt) — engine sbagliato
-- `5` → post-render FAIL (layout, `reasons` da `pdf_layout_check.py`) — correggi il `.md` e rigenera: `narrow_text` → togli dallo `<style>` ogni regola di larghezza/margine/padding sul body; `near_empty_page` → stringi o taglia finché l'ultima pagina si riempie o sparisce; `too_many_pages` → taglia. Dopo 2 render falliti segnala al Capitano. Un CV che non passa il gate non arriva mai al critic-loop.
+- `5` → post-render FAIL (layout, `reasons` da `pdf_layout_check.py`) — correggi il `.md` e rigenera: `narrow_text` → togli dallo `<style>` ogni regola di larghezza/margine/padding sul body; `near_empty_page` → stringi o taglia finché l'ultima pagina si riempie o sparisce; `too_many_pages` → taglia; `small_body_font` → alza il `font-size` del body nello `<style>` a ≥ 9.5pt (il CSS base compensa già lo shrinking di Qt: un punto CSS stampa circa un punto). Dopo 2 render falliti segnala al Capitano. Un CV che non passa il gate non arriva mai al critic-loop.
 - `1` → DB UPDATE FAIL (rollback file)
 
 Il Dottore via `cv-disk-audit` healthcheck (bug #18) ricollega eventuali

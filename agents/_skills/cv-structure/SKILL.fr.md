@@ -165,7 +165,7 @@ Décision technique 2026-05-18 après investigation "CV esthétique simplifiée"
   Dans le `<style>` du `.md`, jamais de `max-width`, `margin: auto` ni de
   padding sur le body, et ne pas compter sur `@page`. Ensuite
   `pdf_layout_check.py` mesure le résultat : texte ≥ 75% de la largeur utile sur
-  chaque page, 1–2 pages, aucune page presque vide, polices incorporées.
+  chaque page, 1–2 pages, aucune page presque vide, polices incorporées, corps imprimé ≥ 9.5pt.
 
 L'anti-pattern historique : générer le PDF directement dans `$JHT_USER_DIR/cv/`, puis exécuter `db_update.py application --cv-pdf-path ...` séparément. Si la Sentinella tuait le Scrittore entre les deux étapes (EMERGENZA freeze 2026-05-17 04:43), le PDF restait sur disque mais la DB avait `cv_pdf_path=NULL`. Sisal 7.5/10 PASS était devenu *"CV à écrire"* sur le tableau de bord de l'utilisateur — opportunité top invisible.
 
@@ -239,7 +239,7 @@ esac
 
 # Check C) mise en page : taille et Producer prouvent le moteur, pas où est le texte.
 # pdf_layout_check.py la mesure (≥75% de la largeur utile sur chaque page, 1-2
-# pages, aucune page presque vide, polices incorporées). Exit 1 ou 2 : ABORT.
+# pages, aucune page presque vide, polices incorporées, corps ≥ 9.5pt). Exit 1 ou 2 : ABORT.
 if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
   echo "[cv-structure] ABORT post-render: mise en page incorrecte (pdf_layout_check.py) — corriger le .md et relancer le rendu."
   rm -f "$TMP_PDF"
@@ -261,7 +261,7 @@ Codes de sortie :
 - `2` → échec preflight (moteur non disponible) — signaler au Capitano
 - `3` → échec post-rendu (taille < 20 Ko, sortie minimaliste) — moteur incorrect
 - `4` → échec post-rendu (Producer != Qt) — moteur incorrect
-- `5` → échec post-rendu (mise en page, `reasons` de `pdf_layout_check.py`) — corriger le `.md` et relancer le rendu : `narrow_text` → retirer du `<style>` toute règle de largeur/marge/padding sur le body ; `near_empty_page` → resserrer ou couper jusqu'à ce que la dernière page se remplisse ou disparaisse ; `too_many_pages` → couper. Après 2 rendus en échec, signaler au Capitano. Un CV qui échoue au gate n'arrive jamais au critic-loop.
+- `5` → échec post-rendu (mise en page, `reasons` de `pdf_layout_check.py`) — corriger le `.md` et relancer le rendu : `narrow_text` → retirer du `<style>` toute règle de largeur/marge/padding sur le body ; `near_empty_page` → resserrer ou couper jusqu'à ce que la dernière page se remplisse ou disparaisse ; `too_many_pages` → couper; `small_body_font` → augmenter le `font-size` du body dans le `<style>` à ≥ 9.5pt (le CSS de base compense déjà le rétrécissement de Qt : un point CSS s'imprime environ comme un point). Après 2 rendus en échec, signaler au Capitano. Un CV qui échoue au gate n'arrive jamais au critic-loop.
 - `1` → échec UPDATE DB (rollback fichier)
 
 Le Dottore via le healthcheck `cv-disk-audit` (bug #18) raccorde les éventuels orphelins disque↔DB ; en plus, il signale désormais aussi les CV avec Producer non-Qt comme "moteur incorrect — à régénérer".

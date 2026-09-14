@@ -171,7 +171,7 @@ Technische Entscheidung 2026-05-18 nach Untersuchung "CV-Ästhetik vereinfacht":
   (`-V margin-*`). Im `<style>` der `.md` niemals `max-width`, `margin: auto`
   oder Padding am body, und nicht auf `@page` verlassen. Danach misst
   `pdf_layout_check.py` das Ergebnis: Text ≥ 75% der nutzbaren Breite auf jeder
-  Seite, 1–2 Seiten, keine fast leere Seite, Schriften eingebettet.
+  Seite, 1–2 Seiten, keine fast leere Seite, Schriften eingebettet, Fließtext gedruckt ≥ 9.5pt.
 
 Das historische Anti-Pattern: PDF direkt in
 `$JHT_USER_DIR/cv/` generieren, dann `db_update.py application --cv-pdf-path
@@ -252,7 +252,7 @@ esac
 
 # Check C) Layout: Größe und Producer beweisen die Engine, nicht wo der Text steht.
 # pdf_layout_check.py misst es (≥75% der nutzbaren Breite auf jeder Seite, 1-2
-# Seiten, keine fast leere Seite, Schriften eingebettet). Exit 1 oder 2: ABORT.
+# Seiten, keine fast leere Seite, Schriften eingebettet, Fließtext ≥ 9.5pt). Exit 1 oder 2: ABORT.
 if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
   echo "[cv-structure] ABORT post-render: Layout fehlerhaft (pdf_layout_check.py) — .md korrigieren und neu rendern."
   rm -f "$TMP_PDF"
@@ -274,7 +274,7 @@ Exit-Codes:
 - `2` → Preflight FAIL (Engine nicht verfügbar) — dem Capitano melden
 - `3` → Post-Render FAIL (Größe < 20 KB, minimalistischer Output) — falsche Engine
 - `4` → Post-Render FAIL (Producer != Qt) — falsche Engine
-- `5` → Post-Render FAIL (Layout, `reasons` aus `pdf_layout_check.py`) — `.md` korrigieren und neu rendern: `narrow_text` → jede Breiten-/Rand-/Padding-Regel am body aus dem `<style>` entfernen; `near_empty_page` → straffen oder kürzen, bis die letzte Seite voll ist oder verschwindet; `too_many_pages` → kürzen. Nach 2 fehlgeschlagenen Renderings dem Capitano melden. Ein CV, der das Gate nicht besteht, erreicht nie den critic-loop.
+- `5` → Post-Render FAIL (Layout, `reasons` aus `pdf_layout_check.py`) — `.md` korrigieren und neu rendern: `narrow_text` → jede Breiten-/Rand-/Padding-Regel am body aus dem `<style>` entfernen; `near_empty_page` → straffen oder kürzen, bis die letzte Seite voll ist oder verschwindet; `too_many_pages` → kürzen; `small_body_font` → `font-size` des body im `<style>` auf ≥ 9.5pt erhöhen (das Basis-CSS gleicht das Schrumpfen von Qt schon aus: ein CSS-Punkt druckt etwa als ein Punkt). Nach 2 fehlgeschlagenen Renderings dem Capitano melden. Ein CV, der das Gate nicht besteht, erreicht nie den critic-loop.
 - `1` → DB UPDATE FAIL (Datei-Rollback)
 
 Der Dottore erkennt via `cv-disk-audit` Healthcheck (Bug #18) eventuelle

@@ -8,10 +8,13 @@ was in the container: they had never been in the image.
 
 This suite holds:
 
+  0. the body font prints at ≥ 9.5pt: an unpatched Qt shrank a 9.3pt body to
+     6.92pt, and the base CSS zoom undoes it (measured again with pypdf);
   1. pdf_layout_check.py on PDFs printed by the REAL engine, rendered at test
      time by tests/fixtures/pdf_layout/generate.py (PDFs never enter the repo): the legacy
      command → narrow_text; the fixed command → OK; a spill onto page 2 →
-     near_empty_page; three pages → too_many_pages; fonts not embedded →
+     near_empty_page; three pages → too_many_pages; a 7pt body →
+     small_body_font; fonts not embedded →
      fonts_not_embedded; unmeasurable → exit 2, never a pass;
   2. one render command everywhere: the cv-structure skill (7 languages), the
      SCRITTORE prompt, the fixture generator and the tool_health build gate
@@ -86,11 +89,12 @@ def _localized(directory: Path, stem: str, lang: str) -> Path:
     return directory / (f"{stem}.md" if lang == "en" else f"{stem}.{lang}.md")
 
 
-def _base14_pdf(path: Path, *, lines: int = 40, chars: int = 110) -> Path:
-    """A full-width text page in Helvetica, which is never embedded."""
+def _base14_pdf(path: Path, *, lines: int = 38, chars: int = 72) -> Path:
+    """A full-width text page in Helvetica, which is never embedded. 13pt: poppler's
+    Helvetica boxes are shorter than DejaVu's, so it reads as ~10.3pt."""
     text = "Synthetic line of a fictional CV used only to test the embedded font check "
     content = "".join(
-        f"BT /F1 9 Tf 42.5 {800 - i * 14} Td ({(text * 3)[:chars]}) Tj ET\n" for i in range(lines)
+        f"BT /F1 13 Tf 42.5 {800 - i * 19} Td ({(text * 3)[:chars]}) Tj ET\n" for i in range(lines)
     ).encode()
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -117,7 +121,7 @@ def _base14_pdf(path: Path, *, lines: int = 40, chars: int = 110) -> Path:
 
 
 @needs_engine
-@pytest.mark.parametrize("name", ["narrow", "good", "spill", "three_pages"])
+@pytest.mark.parametrize("name", ["narrow", "good", "spill", "three_pages", "small_font"])
 def test_fixtures_are_printed_by_the_real_engine(pdfs, name):
     info = subprocess.run(["pdfinfo", str(pdfs[name])], capture_output=True, text=True).stdout
     assert "Qt 5." in info and "wkhtmltopdf" in info, info
@@ -128,6 +132,7 @@ def test_legacy_command_is_red_narrow_text(pdfs):
     report = check.analyze(pdfs["narrow"])
     assert not report["ok"]
     assert "narrow_text" in report["reasons"]
+    assert "small_body_font" in report["reasons"]
     assert all(p["width_ratio"] < 0.55 for p in report["per_page"] if p["width_ratio"] is not None)
 
 
@@ -137,6 +142,7 @@ def test_fixed_command_is_green_and_full_width(pdfs):
     assert report["ok"], report
     assert report["reasons"] == []
     assert report["per_page"][0]["width_ratio"] >= 0.9
+    assert report["body_font_pt"] >= 9.5
     assert report["fonts"] and all(f["embedded"] for f in report["fonts"])
 
 
@@ -151,6 +157,50 @@ def test_a_spill_onto_page_two_is_red_near_empty_page(pdfs):
 def test_three_pages_is_red_too_many_pages(pdfs):
     report = check.analyze(pdfs["three_pages"])
     assert report["reasons"] == ["too_many_pages"], report
+
+
+@needs_engine
+def test_a_small_body_font_is_red_even_at_full_width(pdfs):
+    report = check.analyze(pdfs["small_font"])
+    assert report["reasons"] == ["small_body_font"], report
+    assert report["per_page"][0]["width_ratio"] >= 0.9
+    assert report["body_font_pt"] < 8
+
+
+def _printed_body_pt(pdf: Path) -> float:
+    """The size the PDF really sets for most words, from the text matrix (pypdf)."""
+    from pypdf import PdfReader
+
+    counts: dict[float, int] = {}
+
+    def visit(text, cm, tm, _font, size):
+        if text.strip():
+            scale = (tm[0] ** 2 + tm[1] ** 2) ** 0.5 * (cm[0] ** 2 + cm[1] ** 2) ** 0.5
+            key = round(size * scale, 2)
+            counts[key] = counts.get(key, 0) + len(text.split())
+
+    for page in PdfReader(str(pdf)).pages:
+        page.extract_text(visitor_text=visit)
+    return max(counts, key=counts.get)
+
+
+@needs_engine
+@pytest.mark.parametrize("name", ["narrow", "good", "small_font"])
+def test_bbox_estimate_matches_the_printed_size(pdfs, name):
+    # The gate reads word boxes; the PDF's own text matrix says the truth.
+    assert abs(check.analyze(pdfs[name])["body_font_pt"] - _printed_body_pt(pdfs[name])) <= 0.6
+
+
+@needs_engine
+def test_base_css_undoes_the_qt_shrink(pdfs, tmp_path):
+    # Same markdown (9.3pt body), same command, base CSS without the zoom.
+    unzoomed = tmp_path / "unzoomed.css"
+    unzoomed.write_text(re.sub(r"html \{ zoom:[^}]*\}", "", CSS.read_text(encoding="utf-8")), encoding="utf-8")
+    md = tmp_path / "example.md"
+    md.write_text(generator.cv_markdown(3), encoding="utf-8")
+    generator.render_fixed(md, tmp_path / "unzoomed.pdf", unzoomed)
+    assert _printed_body_pt(tmp_path / "unzoomed.pdf") < 7.5
+    assert _printed_body_pt(pdfs["good"]) >= 9.5
 
 
 @needs_poppler
@@ -185,6 +235,16 @@ def test_cli_exit_codes_and_json(pdfs, tmp_path):
     assert "narrow_text" in json.loads(bad.stdout)["reasons"]
     human = _cli(str(pdfs["narrow"]))
     assert human.returncode == 1 and "LAYOUT BAD" in human.stdout
+
+
+@needs_engine
+def test_cli_body_font_threshold(pdfs):
+    strict = _cli(str(pdfs["small_font"]), "--json")
+    assert strict.returncode == 1
+    assert json.loads(strict.stdout)["reasons"] == ["small_body_font"]
+    assert "body font" in _cli(str(pdfs["small_font"])).stdout
+    lenient = _cli(str(pdfs["small_font"]), "--json", "--min-body-font-pt", "7")
+    assert lenient.returncode == 0, lenient.stdout
 
 
 @needs_engine
@@ -236,6 +296,8 @@ def test_cv_structure_render_command(lang):
     assert "--pdf-engine=weasyprint" not in text, f"{lang}: weasyprint fails the Producer gate"
     assert 'python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"' in text
     assert "exit 5" in text and "`5`" in text
+    exit5 = next(line for line in text.splitlines() if line.startswith("- `5`"))
+    assert "`small_body_font`" in exit5 and "9.5pt" in exit5, f"{lang}: no remedy for a small body font"
     # The gate sits after the render and before the atomic move.
     assert start < text.index("pdf_layout_check.py \"$TMP_PDF\"") < text.index('mv "$TMP_PDF" "$FINAL_PDF"')
 
@@ -255,6 +317,7 @@ def test_scrittore_prompt_cites_the_command_and_the_gate(lang):
     rule = next(line for line in text.splitlines() if line.startswith("**S-05"))
     assert "-c /app/shared/skills/pdf_layout_base.css --self-contained" in rule
     assert "pdf_layout_check.py" in rule and "--preview" in rule
+    assert "9.5pt" in rule, f"{lang}: S-05 does not ask for a readable body font"
     assert '--metadata title="' not in rule
 
 
@@ -296,6 +359,8 @@ def test_base_css_resets_the_pandoc_column():
     assert re.search(r"max-width:\s*none", body)
     assert re.search(r"margin:\s*0", body)
     assert re.search(r"padding:\s*0", body)
+    zoom = re.search(r"html \{ zoom:\s*([\d.]+);", css)
+    assert zoom and float(zoom.group(1)) >= 1.344, "the zoom must undo the ~0.744 Qt shrink"
 
 
 # ── 3. toolchain in the image, loud when missing ────────────────────────────
