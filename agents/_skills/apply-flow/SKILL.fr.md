@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - La porte est vérifiée au démarrage **et** juste avant le clic. Un flag révoqué
   pendant le remplissage du formulaire arrête l'envoi.
-- Aujourd'hui deux recettes complètes : **Ashby** et **Greenhouse** (uniquement ses trois hosts publics, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, en HTTPS ; la page est revérifiée après chaque étape). Toute autre plateforme bloque pour un humain.
+- Aujourd'hui trois recettes complètes : **Ashby**, **Greenhouse** (uniquement ses trois hosts publics, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, en HTTPS ; la page est revérifiée après chaque étape) et **Lever** (uniquement `jobs.lever.co` et `jobs.eu.lever.co`, en HTTPS, revérifiés de la même façon). Toute autre plateforme bloque pour un humain.
 
 ## Le reçu
 
@@ -74,8 +74,9 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | le CV ne peut pas être joint |
 | `cv_pdf_layout_bad` | le PDF du CV n'a pas passé le contrôle visuel (`pdf_layout_check.py` : texte tassé dans une colonne étroite, une page presque vide, plus de 2 pages, polices non incorporées, corps de texte trop petit) : rien n'a été joint ni envoyé. Le Rédacteur doit le régénérer ; ne jamais le joindre à la main. L'aperçu de la page 1 est enregistré à côté du checkpoint : regarde-le |
 | `cv_pdf_check_unavailable` | le PDF du CV n'a pas pu être mesuré (poppler absent du conteneur, fichier illisible) : rien n'a été joint ni envoyé — un CV non mesuré n'est pas un pass. Le remède est dans le conteneur, pas chez le Rédacteur : signale-le au Capitano |
-| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` | pas encore de recette pour cette page, ou le formulaire n'est pas celui que la recette connaît |
+| `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | pas encore de recette pour cette page, ou le formulaire n'est pas celui que la recette connaît |
 | `greenhouse_redirect_untrusted` | pendant le flux la page Greenhouse est sortie de ses trois hosts de confiance |
+| `lever_redirect_untrusted` | pendant le flux la page Lever est sortie de `jobs.lever.co` / `jobs.eu.lever.co` |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | deux adresses mailto de candidature différentes, ou le formulaire de candidature, ses champs ou son bouton d'envoi ne tiennent pas dans un seul formulaire (newsletter, pied de page et formulaires de démo n'en font jamais partie) |
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |
