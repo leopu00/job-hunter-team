@@ -103,32 +103,29 @@ Ha bizonytalan vagy, kuldj **sima szoveget** (flag nelkul). A felhasznalo tokele
 | 4 | HTTP nem-200 | Halozati zavar vagy Telegram kimaradas. Probald ujra egyszer 5s mulva. Ha meg mindig sikertelen, naplozd es menj tovabb. |
 | 5 | `ok: false` a Bot API-tol | Altalaban ervenytelen chat_id vagy a felhasznalo blokkolta a botot. Ne probald ujra — mentsd a valasz torzset a scratch konyvtaradba es ertesits a web csatornan. |
 
-## Perzisztens valasz-billentyuzet (F-1.B, task #50)
+## Nincs válasz-billentyűzet — a parancsok a ☰ menüben vannak
 
-A 3 felhasznalo fele nezo bot (assistente / capitano / mentor) csatolhat egy
-2 oszlopos perzisztens valasz-billentyuzetet a `--keyboard <role>` kapcsoloval. A billentyuzet
-lathatoan marad a felhasznalo Telegram kliensjeben az uzenetek kozott, amig te
-kifejezetten el nem tavolitod (mi nem tesszuk, szandekoson — mindig lathato marad, hogy
-a nem-technikai felhasznalok lassak az interakcio lehetoseget).
+Ne csatolj billentyűzetet. A 6 gombos állandó billentyűzet a felhasználó telefonján
+eltakarta a chat felét, ezért a három felhasználói bot (assistente / capitano /
+mentor) a parancsait csak a bot ☰ menüjében mutatja (`setMyCommands`, lásd lent).
+Egyszerű üzeneteket küldj:
 
 ```bash
-# Assistente — 📊 Budget · 📈 Pipeline · 🗺️ Mappa · ⭐ Top CV · 📅 Reset · ❓ Help
-jht-telegram-send --from assistente --keyboard assistente "Pipeline: 15 CV pronti per apply, ..."
-
-# Capitano — 📈 Pipeline · 📊 Budget · 👥 Team · ⭐ Ready · 🛠 Triage · ❓ Help
-jht-telegram-send --from capitano --keyboard capitano "..."
-
-# Mentor — 📋 Digest · 🔁 Patterns · ⭐ Top · 💰 Salary · ❓ Help
-jht-telegram-send --from mentor --keyboard mentor "..."
+jht-telegram-send --from assistente "Pipeline: 15 CV kész a jelentkezésre, ..."
 ```
 
-Amikor a felhasznalo megnyom egy gombot, a bot a gomb szoveget kapja meg normal
-szoveges uzetnetkent (pl. `📊 Budget` megnyomasa → a tmux `📊 Budget`-ot kap
-TG uzenet torzskent). Az agens egyenertekuleg kezeli egy slash parancskent
-(pl. `/budget`) es eloallitja a diagramot / statuszjelenteset.
+A `--keyboard <role>` továbbra is elfogadott, hogy a régi hívók ne törjenek el, de
+semmit nem csatol: eltávolítja azt a billentyűzetet, amit egy telefon még mutathat.
+Minden bot az első üzenetével egyszer magától is eltávolítja a régi billentyűzetet.
 
-A billentyuzet csak egy hosszu kuldes **utolso** daraboltuuzeneten jelenik meg,
-igy a 4096+ karakteres kimenetek nem villogtatjak a billentyuzetet a szal kozepen.
+A menüből választott parancs normál üzenetként érkezik hozzád (`/budget`,
+`/top_cv`, …): úgy válaszolj rá, ahogy a régi gomb szövegére válaszoltál:
+
+```text
+Assistente — /budget · /budget_prev · /budget_week · /pipeline · /candles · /mappa · /mappa_it · /top_cv · /reset · /stato · /help
+Capitano   — /pipeline · /budget · /team · /ready · /triage · /help
+Mentor     — /digest · /patterns · /top · /salary · /help
+```
 
 ## Slash parancsok menu (F-1.A, task #50)
 

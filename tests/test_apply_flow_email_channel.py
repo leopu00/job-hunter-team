@@ -87,6 +87,7 @@ def build_flow(tmp_path: Path, cv_path: Path, url: str, notifications=None, reco
     recorded = recorded if recorded is not None else []
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=77,
         url=url,
         profile={
@@ -271,7 +272,10 @@ def test_newsletter_page_without_application_form_fills_nothing(page, tmp_path: 
     result = build_flow(tmp_path, cv_path, url).run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason in {"ats_unsupported", "ashby_form_missing", "greenhouse_form_missing"}
+    # The page says applications are closed.  On a known ATS without its form
+    # that is the reason; a page no recipe knows carries a (newsletter) form,
+    # so the notice proves nothing there.
+    assert result.reason == ("ats_unsupported" if url == CAREERS_URL else "vacancy_closed")
     checkpoint = _checkpoint(tmp_path)
     assert checkpoint["completed_steps"] == []
     assert checkpoint["submit_started"] is False

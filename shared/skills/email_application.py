@@ -1214,11 +1214,27 @@ class EmailApplication:
             gate = self._gate()
             if gate.get("mode") != "authorised":
                 raise _denied("gate_mode_changed", "the apply mode is no longer authorised; nothing was sent")
-            self._mark_send_started(draft["idempotency_key"])
+            # The cap, atomically: a run racing for the last slot waits for this
+            # commit and is refused. From here the slot counts for the day.
+            slot = apply_gate.reserve_daily_slot(
+                self.position_id, "email", config_path=self.config_path, db_path=str(self.db_path)
+            )
+            if not slot.allowed:
+                context = {k: v for k, v in slot.context.items() if k in ("max_per_day", "sent_today", "remaining_today")}
+                raise _denied(slot.reason, slot.detail, gate_reason=slot.reason, **context)
+            token = str(slot.context["token"])
+            try:
+                self._mark_send_started(draft["idempotency_key"])
+            except BaseException:
+                # No marker, no send: the slot goes back.
+                apply_gate.release_daily_slot(token, db_path=str(self.db_path))
+                raise
             try:
                 refused = transport.send(message, settings.from_address, draft["recipients"])
             except RecipientsRefused as exc:
                 self._update_attempt(draft["idempotency_key"], state="error", error_class="recipients_refused")
+                # Refused before DATA: certainly nothing reached anyone.
+                apply_gate.release_daily_slot(token, db_path=str(self.db_path))
                 raise _blocked("recipient_refused", "the mail server refused the recipients; nothing was sent") from exc
             except Exception as exc:
                 self._update_attempt(

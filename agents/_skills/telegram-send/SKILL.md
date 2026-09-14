@@ -102,32 +102,29 @@ If you're unsure, send **plain text** (no flag). The user gets a perfectly reada
 | 4 | HTTP non-200 | Network blip or Telegram outage. Retry once after 5s. If still failing, log and move on. |
 | 5 | `ok: false` from Bot API | Usually invalid chat_id or bot blocked by user. Don't retry — capture the response body in your scratch dir and notify on web channel. |
 
-## Reply keyboard persistente (F-1.B, task #50)
+## No reply keyboard — commands live in the ☰ menu
 
-The 3 user-facing bots (assistente / capitano / mentor) can attach a
-2-col persistent reply keyboard with `--keyboard <role>`. The keyboard
-stays visible in the user's Telegram client across messages until you
-explicitly remove it (we don't, by design — keep it always there so
-non-tech users see the affordance).
+Do not attach keyboards. The persistent 6-button keyboard covered half of the
+chat on the user's phone, so the three user-facing bots (assistente / capitano /
+mentor) expose their commands only in the bot's ☰ menu (`setMyCommands`, see
+below). Send plain messages:
 
 ```bash
-# Assistente — 📊 Budget · 📈 Pipeline · 🗺️ Mappa · ⭐ Top CV · 📅 Reset · ❓ Help
-jht-telegram-send --from assistente --keyboard assistente "Pipeline: 15 CV pronti per apply, ..."
-
-# Capitano — 📈 Pipeline · 📊 Budget · 👥 Team · ⭐ Ready · 🛠 Triage · ❓ Help
-jht-telegram-send --from capitano --keyboard capitano "..."
-
-# Mentor — 📋 Digest · 🔁 Patterns · ⭐ Top · 💰 Salary · ❓ Help
-jht-telegram-send --from mentor --keyboard mentor "..."
+jht-telegram-send --from assistente "Pipeline: 15 CVs ready to apply, ..."
 ```
 
-When the user taps a button, the bot receives the button text as a
-normal text message (e.g. tap `📊 Budget` → tmux gets `📊 Budget` as
-TG message body). The agent treats it equivalently to a slash command
-(e.g. `/budget`) and produces the chart / status.
+`--keyboard <role>` is still accepted so old callers do not break, but it
+attaches nothing: it removes the keyboard a phone may still show. Every bot also
+removes the old keyboard once by itself, on its first message.
 
-Keyboard appears only on the **last** chunked message of a long send
-so 4096+ char outputs don't flicker the keyboard mid-thread.
+A command chosen from the menu reaches you as a normal message (`/budget`,
+`/top_cv`, …); answer it as you answered the old button text:
+
+```text
+Assistente — /budget · /budget_prev · /budget_week · /pipeline · /candles · /mappa · /mappa_it · /top_cv · /reset · /stato · /help
+Capitano   — /pipeline · /budget · /team · /ready · /triage · /help
+Mentor     — /digest · /patterns · /top · /salary · /help
+```
 
 ## Slash commands menu (F-1.A, task #50)
 

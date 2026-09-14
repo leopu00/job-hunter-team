@@ -124,6 +124,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # bookworm dipende da `nodejs` e `libnode` di Debian, un secondo Node
       # accanto a quello dell'immagine; il client VNC vive nell'app desktop.
       xvfb x11vnc python3-websockify \
+      # CV PDF (skill cv-structure): pandoc -> HTML -> wkhtmltopdf. Were never
+      # baked: they came from an agent's `sudo apt-get` inside a running
+      # container, so every recreate lost them in silence and the Writer found
+      # only weasyprint. Checked by the cv_pdf_render build gate below.
+      pandoc wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -192,6 +197,13 @@ RUN find /app/agents/_tools -type f -exec sed -i 's/\r$//' {} + \
 # exits 1 on any BROKEN tool. "Never again a silent libatk."
 RUN python3 shared/skills/tool_health.py --only playwright_browser \
     || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
+
+# Same gate for the CV PDF: render a synthetic CV with the cv-structure command
+# (pandoc + wkhtmltopdf + pdf_layout_base.css) and measure it with pdf_layout_check.py.
+# A missing binary, or a layout back to a narrow centred column, fails the
+# BUILD instead of the first CV a CLOSER attaches.
+RUN python3 shared/skills/tool_health.py --only cv_pdf_render \
+    || { echo "BUILD GATE FAILED: CV PDF toolchain broken (pandoc/wkhtmltopdf/poppler) or the render is not full width — see shared/skills/tool_health.py" >&2; exit 1; }
 
 # Same gate for the live screen: the headed build (apply_flow.py --headful)
 # must open a window on a real X display. A missing full Chromium or a broken

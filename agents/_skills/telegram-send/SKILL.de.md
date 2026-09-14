@@ -103,32 +103,30 @@ Wenn du unsicher bist, sende **Klartext** (ohne Flag). Der Benutzer erhaelt eine
 | 4 | HTTP nicht-200 | Netzwerkproblem oder Telegram-Ausfall. Einmal nach 5s erneut versuchen. Wenn immer noch fehlschlagend, loggen und weitermachen. |
 | 5 | `ok: false` von der Bot-API | Normalerweise ungueltige chat_id oder Bot vom Benutzer blockiert. Nicht erneut versuchen — den Response-Body in deinem Scratch-Verzeichnis speichern und auf dem Web-Kanal benachrichtigen. |
 
-## Persistente Antwort-Tastatur (F-1.B, task #50)
+## Keine Antwort-Tastatur — die Befehle stehen im ☰-Menü
 
-Die 3 benutzerseitigen Bots (assistente / capitano / mentor) koennen eine
-2-spaltige persistente Antwort-Tastatur mit `--keyboard <role>` anfuegen. Die Tastatur
-bleibt im Telegram-Client des Benutzers ueber Nachrichten hinweg sichtbar, bis du
-sie explizit entfernst (das tun wir bewusst nicht — sie bleibt immer sichtbar, damit
-nicht-technische Benutzer die Interaktionsmoeglichkeit sehen).
+Hänge keine Tastaturen an. Die persistente Tastatur mit 6 Buttons verdeckte auf dem
+Handy des Users den halben Chat, deshalb zeigen die drei userseitigen Bots
+(assistente / capitano / mentor) ihre Befehle nur im ☰-Menü des Bots
+(`setMyCommands`, siehe unten). Sende einfache Nachrichten:
 
 ```bash
-# Assistente — 📊 Budget · 📈 Pipeline · 🗺️ Mappa · ⭐ Top CV · 📅 Reset · ❓ Help
-jht-telegram-send --from assistente --keyboard assistente "Pipeline: 15 CV pronti per apply, ..."
-
-# Capitano — 📈 Pipeline · 📊 Budget · 👥 Team · ⭐ Ready · 🛠 Triage · ❓ Help
-jht-telegram-send --from capitano --keyboard capitano "..."
-
-# Mentor — 📋 Digest · 🔁 Patterns · ⭐ Top · 💰 Salary · ❓ Help
-jht-telegram-send --from mentor --keyboard mentor "..."
+jht-telegram-send --from assistente "Pipeline: 15 CVs bereit zum Bewerben, ..."
 ```
 
-Wenn der Benutzer auf eine Schaltflaeche tippt, empfaengt der Bot den Schaltflaechentext als
-normale Textnachricht (z.B. Tippen auf `📊 Budget` → tmux erhaelt `📊 Budget` als
-TG-Nachrichtentext). Der Agent behandelt es gleichwertig wie einen Slash-Befehl
-(z.B. `/budget`) und erstellt das Diagramm / den Status.
+`--keyboard <role>` wird weiter akzeptiert, damit alte Aufrufer nicht brechen,
+hängt aber nichts an: es entfernt die Tastatur, die ein Handy noch zeigen könnte.
+Jeder Bot entfernt die alte Tastatur außerdem einmal selbst, bei seiner ersten
+Nachricht.
 
-Die Tastatur erscheint nur bei der **letzten** geteilten Nachricht einer langen Sendung,
-damit 4096+ Zeichen Ausgaben die Tastatur nicht mitten im Thread aufblitzen lassen.
+Ein im Menü gewählter Befehl kommt als normale Nachricht bei dir an (`/budget`,
+`/top_cv`, …): beantworte ihn so, wie du den Text des alten Buttons beantwortet hast:
+
+```text
+Assistente — /budget · /budget_prev · /budget_week · /pipeline · /candles · /mappa · /mappa_it · /top_cv · /reset · /stato · /help
+Capitano   — /pipeline · /budget · /team · /ready · /triage · /help
+Mentor     — /digest · /patterns · /top · /salary · /help
+```
 
 ## Slash-Befehle-Menue (F-1.A, task #50)
 

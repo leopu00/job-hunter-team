@@ -902,6 +902,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_email_application_attempts(conn)
     _migrate_application_answers(conn)
     _migrate_closer_wakes(conn)
+    _migrate_apply_cap_reservations(conn)
 
 
 def _migrate_application_answers(conn: sqlite3.Connection) -> None:
@@ -938,6 +939,37 @@ def _migrate_application_answers(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(application_answers)")}
     if "basis" not in columns:
         conn.execute("ALTER TABLE application_answers ADD COLUMN basis TEXT NOT NULL DEFAULT ''")
+
+
+def _migrate_apply_cap_reservations(conn: sqlite3.Connection) -> None:
+    """One slot of today's automated-application cap, taken just before a send. [JHT-CLOSER-CAP]
+
+    `apply_gate.reserve_daily_slot` counts today's sends and inserts the row in
+    ONE `BEGIN IMMEDIATE` transaction, then the channel (email or browser)
+    performs the irreversible send. Two runs with one slot left cannot both
+    pass: the second waits for the first commit and counts it. A reservation
+    whose outcome is unknown keeps counting (`reserved`); only a send that
+    certainly did not happen marks it `released`.
+
+    Local only: the web does not read it. Additive and idempotent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS apply_cap_reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            channel TEXT NOT NULL CHECK (channel IN ('email', 'browser')),
+            token TEXT NOT NULL UNIQUE,
+            state TEXT NOT NULL DEFAULT 'reserved' CHECK (state IN ('reserved', 'released')),
+            reserved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            released_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_apply_cap_reservations_day "
+        "ON apply_cap_reservations(state, reserved_at)"
+    )
 
 
 def _migrate_closer_wakes(conn: sqlite3.Connection) -> None:

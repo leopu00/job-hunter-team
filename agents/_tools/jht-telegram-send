@@ -59,9 +59,12 @@ while [ $# -gt 0 ]; do
     --from)
       role="${2:-}"; shift 2 ;;
     --keyboard)
-      # F-1.B: allega reply keyboard persistente. Valore = ruolo
-      # (assistente|capitano|mentor) — definisce il layout dei bottoni.
-      # Se vuoto/role mismatch, ignorato silenziosamente.
+      # Accettato per compatibilità con prompt e script vecchi, ma non allega
+      # più nessuna tastiera: i comandi stanno nel menu ☰ del bot
+      # (setMyCommands in tg-bridge.py). La tastiera persistente a sei bottoni
+      # copriva metà della chat sul telefono (ordine dell'operatore,
+      # 2026-09-13). Il flag ora chiede a Telegram di TOGLIERE quella già
+      # mostrata. Il valore (ruolo) resta solo nel log degli invii.
       keyboard_role="${2:-}"; shift 2 ;;
     --photo)
       # F-1.D bug #16: invia foto via sendPhoto. Il `<text>` posizionale
@@ -201,6 +204,13 @@ if [ -n "$photo_path" ]; then
     echo "jht-telegram-send: --photo file non trovato: $photo_path" >&2
     exit 1
   fi
+  # Stessa regola del testo: niente tastiera, e una sola rimozione di quella
+  # vecchia (vedi REMOVE_KEYBOARD_JSON più sotto per il perché).
+  photo_marker="$jht_home/state/telegram-keyboard-removed-${role}-${chat_id//[^0-9-]/_}"
+  photo_markup_args=()
+  if [ -n "$keyboard_role" ] || [ ! -e "$photo_marker" ]; then
+    photo_markup_args=( -F 'reply_markup={"remove_keyboard":true}' )
+  fi
   # Caption massima Telegram = 1024 chars. Tronchiamo se necessario.
   caption="${text:0:1000}"
   resp=$(mktemp)
@@ -210,6 +220,7 @@ if [ -n "$photo_path" ]; then
     -F "photo=@${photo_path}" \
     -F "caption=$caption" \
     ${parse_mode:+-F "parse_mode=$parse_mode"} \
+    "${photo_markup_args[@]}" \
     "https://api.telegram.org/bot${token}/sendPhoto" || echo "000")
   body=$(cat "$resp"); rm -f "$resp"
   if [ "$http_code" != "200" ]; then
@@ -224,6 +235,9 @@ if [ -n "$photo_path" ]; then
     exit 5
   fi
   _log_outgoing "photo" "true" "$http_code" "${#caption}" 1
+  if [ "${#photo_markup_args[@]}" -gt 0 ]; then
+    mkdir -p "$(dirname "$photo_marker")" 2>/dev/null && : > "$photo_marker" 2>/dev/null || true
+  fi
   echo "jht-telegram-send: photo ok ($(wc -c < "$photo_path") B, caption ${#caption} chars, chat $chat_id)"
   exit 0
 fi
@@ -234,25 +248,15 @@ fi
 # UTF-8 sarebbe Python; per ora awk + cut byte-safe.
 MAX_LEN=4000
 
-# F-1.B: layout reply-keyboard per ruolo. Compatto 2-cols, emoji-prefixed
-# così i bottoni sono leggibili anche su mobile in light theme.
-keyboard_json_for() {
-  case "$1" in
-    assistente) cat <<'EOF'
-{"keyboard":[[{"text":"📊 Budget"},{"text":"📈 Pipeline"}],[{"text":"🗺️ Mappa"},{"text":"⭐ Top CV"}],[{"text":"📅 Reset"},{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
-EOF
-      ;;
-    capitano) cat <<'EOF'
-{"keyboard":[[{"text":"📈 Pipeline"},{"text":"📊 Budget"}],[{"text":"👥 Team"},{"text":"⭐ Ready"}],[{"text":"🛠 Triage"},{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
-EOF
-      ;;
-    mentor) cat <<'EOF'
-{"keyboard":[[{"text":"📋 Digest"},{"text":"🔁 Patterns"}],[{"text":"⭐ Top"},{"text":"💰 Salary"}],[{"text":"❓ Help"}]],"is_persistent":true,"resize_keyboard":true}
-EOF
-      ;;
-    *) echo "" ;;
-  esac
-}
+# ── Niente tastiere persistenti ────────────────────────────────────────
+# Una reply keyboard resta sul telefono finché un messaggio non la toglie
+# esplicitamente: smettere di mandarla non basta. `remove_keyboard` parte
+# (a) su ogni invio con il vecchio `--keyboard`, (b) una sola volta per
+# bot e chat, al primo invio riuscito dopo questo cambio, anche senza flag:
+# i prompt aggiornati e auto_report.py non passano più `--keyboard`, e senza
+# (b) la tastiera già presente sui telefoni non sparirebbe mai. Il marker
+# vive in $JHT_HOME/state e si scrive solo dopo un HTTP 200 con ok:true.
+REMOVE_KEYBOARD_JSON='{"remove_keyboard":true}'
 
 send_one() {
   local body="$1"
@@ -272,11 +276,8 @@ send_one() {
   if [ -n "$parse_mode" ]; then
     args+=( --data-urlencode "parse_mode=$parse_mode" )
   fi
-  # F-1.B: keyboard solo nell'ultimo chunk (Telegram mostra il reply_markup
-  # dell'ULTIMO message del thread). Decideremo nel caller quale chunk è
-  # l'ultimo via la variabile `is_last_chunk`. Per ora il send_one allega
-  # SEMPRE se KEYBOARD_JSON è settata (caller responsabile di settarla
-  # solo per l'ultimo chunk).
+  # reply_markup solo sull'ultimo chunk: il caller imposta KEYBOARD_JSON
+  # soltanto lì.
   if [ -n "${KEYBOARD_JSON:-}" ]; then
     args+=( --data-urlencode "reply_markup=$KEYBOARD_JSON" )
   fi
@@ -310,14 +311,16 @@ except Exception:
   return 0
 }
 
-# Risolvi il JSON della keyboard una volta sola fuori dal loop chunks.
+# Il chat_id finisce in un nome di file: solo cifre e il segno meno dei gruppi.
+keyboard_marker="$jht_home/state/telegram-keyboard-removed-${role}-${chat_id//[^0-9-]/_}"
 keyboard_json_resolved=""
-if [ -n "$keyboard_role" ]; then
-  keyboard_json_resolved="$(keyboard_json_for "$keyboard_role" | tr -d '\n')"
-  if [ -z "$keyboard_json_resolved" ]; then
-    echo "jht-telegram-send: --keyboard '$keyboard_role' sconosciuto, ignorato" >&2
-  fi
+if [ -n "$keyboard_role" ] || [ ! -e "$keyboard_marker" ]; then
+  keyboard_json_resolved="$REMOVE_KEYBOARD_JSON"
 fi
+_mark_keyboard_removed() {
+  mkdir -p "$(dirname "$keyboard_marker")" 2>/dev/null || return 0
+  : > "$keyboard_marker" 2>/dev/null || true
+}
 
 # Split semplice su newline rispettando MAX_LEN. Conta gli chunks per
 # decidere quale è l'ultimo (la reply_markup va solo lì, altrimenti il
@@ -347,6 +350,7 @@ _total=${#_chunks[@]}
 for _i in "${!_chunks[@]}"; do
   if [ "$((_i + 1))" -eq "$_total" ] && [ -n "$keyboard_json_resolved" ]; then
     KEYBOARD_JSON="$keyboard_json_resolved" send_one "${_chunks[$_i]}" || exit $?
+    _mark_keyboard_removed
   else
     send_one "${_chunks[$_i]}" || exit $?
   fi

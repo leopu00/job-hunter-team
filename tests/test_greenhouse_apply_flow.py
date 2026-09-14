@@ -149,6 +149,7 @@ def build_flow(
 
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=52,
         url=url,
         profile=candidate or profile(),
