@@ -84,13 +84,14 @@ function render(index) {
     render(index + 1);
   }));
 }
-document.querySelector('.jobs-apply-button').addEventListener('click', () => {
+document.querySelectorAll('.jobs-apply-button, [data-easy-apply-fixture]').forEach(control => control.addEventListener('click', () => {
   const dialog = document.createElement('div');
   dialog.setAttribute('role', 'dialog');
   dialog.className = 'jobs-easy-apply-modal';
+  if (document.querySelector('[role=dialog]')) return;
   document.body.appendChild(dialog);
   render(0);
-});
+}));
 </script>
 """
 
@@ -125,7 +126,7 @@ SIGNED_IN_OFFSITE_CONTROLS = (
 
 def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, question: bool = True,
              reject_upload: bool = False, guest_offsite: bool = False, question_html: str | None = None,
-             modern_nav: bool = False, closed: bool = False) -> str:
+             modern_nav: bool = False, closed: bool = False, easy_button: str | None = None) -> str:
     nav = '<nav id="global-nav">Home</nav>' if signed_in else '<a href="/login">Sign in</a>'
     if signed_in and modern_nav:
         # LinkedIn's 2026 top bar, as the box saw it on 14/09: no #global-nav.
@@ -153,8 +154,9 @@ def job_page(signed_in: bool, *, offsite: bool = False, easy: bool = True, quest
     )
     return (
         f"<html><body>{nav}<h1>Test Role</h1>"
-        '<button class="jobs-apply-button" aria-label="Easy Apply to Test Role">Easy Apply</button>'
-        f"{script}</body></html>"
+        + (easy_button if easy_button is not None
+           else '<button class="jobs-apply-button" aria-label="Easy Apply to Test Role">Easy Apply</button>')
+        + f"{script}</body></html>"
     )
 
 
@@ -202,6 +204,7 @@ class Site:
     question_html: str | None = None
     modern_nav: bool = False
     closed: bool = False
+    easy_button: str | None = None
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -214,7 +217,7 @@ class Site:
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
                                 reject_upload=self.reject_upload, guest_offsite=self.guest_offsite,
                                 question_html=self.question_html, modern_nav=self.modern_nav,
-                                closed=self.closed)
+                                closed=self.closed, easy_button=self.easy_button)
             elif url.startswith("https://www.linkedin.com/login"):
                 body = (
                     "<html><body><h1>Let's do a quick security check</h1></body></html>"
@@ -988,3 +991,43 @@ def test_recovery_receipt_keeps_the_digest_of_the_cv_sent_before(page, home: Pat
 
     assert result.status == "applied", result
     assert recorded[0]["receipt"].cv_sha256 == "a" * 64
+
+
+# ── live 14/09: "Candidatura semplice" on screen, linkedin_apply_control_missing ──
+
+
+@pytest.mark.parametrize(
+    "button",
+    (
+        # The Italian button as it reads on the box, no vendor class (2026 layout).
+        '<button data-easy-apply-fixture aria-label="Candidatura semplice a IA Engineer presso Example">'
+        "Candidatura semplice</button>",
+        '<a href="#" role="button" data-easy-apply-fixture>Candidatura semplice</a>',
+        # A language the labels do not know: the structure alone.
+        '<a href="https://www.linkedin.com/jobs/view/4000000001/apply/?openSDUIApplyFlow=true" '
+        'data-easy-apply-fixture onclick="event.preventDefault()">Łatwe aplikowanie</a>',
+        # The same button twice (top card and sticky bar) is one control.
+        '<button class="jobs-apply-button">Einfach bewerben</button>'
+        '<button class="jobs-apply-button">Einfach bewerben</button>',
+    ),
+)
+def test_easy_apply_is_recognised_by_its_real_labels_and_its_structure(page, home: Path, cv_path: Path, button: str):
+    write_session(home)
+    recorded: list = []
+    site = Site(easy_button=button)
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    assert site.logins() == 0 and len(recorded) == 1
+
+
+def test_an_apply_button_to_the_company_site_is_never_taken_for_easy_apply(page, cv_path: Path):
+    page.set_content(
+        '<html><body><nav id="global-nav">Home</nav>'
+        '<button class="jobs-apply-button" aria-label="Candidati">Candidati'
+        '<svg data-test-icon="link-external-small"></svg></button></body></html>'
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+
+    assert recipe._easy_apply(page) == []
