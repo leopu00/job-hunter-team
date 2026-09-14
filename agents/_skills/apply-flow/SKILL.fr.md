@@ -56,7 +56,7 @@ Une ligne JSON sur stdout : `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run` : remplie, arrêtée avant le bouton, rien envoyé | position suivante |
 | `denied` | 1 | la porte a refusé (consentement désactivé, flag révoqué, déjà envoyée) | position suivante ; jamais de nouvelle tentative |
 | `blocked_human` | 3 | un humain est nécessaire ; l'utilisateur a déjà été prévenu | position suivante ; jamais de nouvelle tentative |
-| `blocked_human` en attente de réponses (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | pas un arrêt définitif : l'utilisateur a été interrogé une fois, la queue retient la position (`essential_answers_pending` / `checkpoint_blocked_human`) jusqu'à ce que les réponses soient dans `jobs.db`, un jour par question au plus (posée deux fois au plus, puis le flux continue) | position suivante ; au `[BRIDGE INFO]` qui dit que l'utilisateur a répondu, relis la queue : la position est de nouveau dans `positions` |
+| `blocked_human` réponses manquantes (`essential_facts_missing` avec `missing`, `required_answer_missing` avec `pending_question`) | 3 | pas un arrêt et rien n'a été demandé : il manque des réponses au flux | déduis chacune du profil, du CV et de l'offre et enregistre-la (`application_answers.py save … --basis …`), puis relance le flux ; seulement sans aucune base `application_answers.py ask --position-id $PID --key K` (prompt du CLOSER, CL-08). Une question que tu as posée retient la position jusqu'à ce que l'utilisateur réponde, un jour par question au plus |
 | `email_channel` | 4 | le contrôle de candidature est un lien `mailto:`, pas un formulaire ; le checkpoint contient `channel: email` et le `mailto_href` brut | lance `email_application.py send` pour cette position comme le dit la skill `email-application-flow` : elle lit ce checkpoint ; ne remplis jamais de formulaire web et n'écris jamais l'e-mail à la main |
 | `error` | 2 | profil ou CV illisible, mauvais arguments | arrête-toi : `[BLOCKED]` au Capitano |
 
@@ -66,8 +66,8 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 
 | `reason` (exemples) | Cause typique |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un champ obligatoire n'a pas de réponse enregistrée — la question a été posée une fois à l'utilisateur (d'abord sur Telegram, aussi dans le dashboard) ; la réponse est enregistrée dans `jobs.db` et le flux reprend au checkpoint |
-| `essential_facts_missing` / `essential_facts_unavailable` | avant le premier run d'une position, il manque une donnée que presque tout formulaire demande (date de début, préavis, autorisation de travail, sponsorship, salaire, mobilité, téléphone) ; chacune a été demandée une fois et rien n'est retenu : la position repart dès que les réponses existent |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | un champ obligatoire n'a pas de réponse enregistrée ; `pending_question` le nomme (clé, libellé, type, options, scope). Rien ne part vers l'utilisateur tant que tu ne lances pas `ask` ; une réponse enregistrée fait reprendre le flux au checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | avant le premier run d'une position, il manque une donnée que presque tout formulaire demande (date de début, préavis, autorisation de travail, sponsorship, salaire, mobilité, téléphone) ; `missing` liste les clés. Rien n'a été demandé et rien n'est retenu |
 | `captcha` / `two_factor` | le site veut vérifier qu'il y a un humain |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | un champ que la recette ne sait pas remplir avec une réponse enregistrée |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | le CV ne peut pas être joint |
@@ -82,7 +82,7 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `submit_outcome_unknown` | un passage précédent a lancé l'envoi et n'a laissé aucun reçu |
 | `applied_record_failed` | le reçu existe mais l'état n'a pas pu être enregistré — la candidature est très probablement partie |
 
-Ce que tu fais, toujours pareil :
+Ce que tu fais pour toute autre raison (les réponses manquantes sont plus haut) :
 
 1. **Rien sur cette position.** Le flux a déjà écrit le checkpoint et prévenu
    l'utilisateur via `jht-notify-user`. Ne le préviens pas une deuxième fois.

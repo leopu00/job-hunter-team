@@ -56,7 +56,7 @@ Egy JSON sor a stdout-on: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: kitöltve, a gomb előtt megállt, semmi nem ment ki | következő pozíció |
 | `denied` | 1 | a kapu elutasította (hozzájárulás kikapcsolva, flag visszavonva, már elküldve) | következő pozíció; soha ne próbáld újra |
 | `blocked_human` | 3 | ember kell; a felhasználó már értesítést kapott | következő pozíció; soha ne próbáld újra |
-| `blocked_human` válaszokra vár (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | nem végleges megállás: a felhasználót egyszer megkérdezték, a queue tartja a pozíciót (`essential_answers_pending` / `checkpoint_blocked_human`), amíg a válaszok a `jobs.db`-ben vannak, kérdésenként legfeljebb egy napig (legfeljebb kétszer kérdezve, utána a folyamat továbbmegy) | következő pozíció; a `[BRIDGE INFO]`-ra, amely szerint a felhasználó válaszolt, olvasd újra a queue-t: a pozíció újra a `positions` között van |
+| `blocked_human` hiányzó válaszok (`essential_facts_missing` a `missing`-gel, `required_answer_missing` a `pending_question`-nel) | 3 | nem megállás, és semmit nem kérdeztek: a folyamatnak hiányoznak válaszok | mindegyiket következtesd ki a profilból, a CV-ből és a hirdetésből, és mentsd (`application_answers.py save … --basis …`), aztán futtasd újra a folyamatot; csak ha semmilyen alap nincs, `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). Egy általad feltett kérdés tartja a pozíciót, amíg a felhasználó válaszol, kérdésenként legfeljebb egy napig |
 | `email_channel` | 4 | a jelentkezési elem egy `mailto:` link, nem űrlap; a checkpoint tartalmazza a `channel: email` értéket és a nyers `mailto_href`-et | ennél a pozíciónál futtasd az `email_application.py send` parancsot az `email-application-flow` skill szerint: ez a checkpointot olvassa; soha ne tölts ki webes űrlapot, és ne írd kézzel az e-mailt |
 | `error` | 2 | olvashatatlan profil vagy CV, hibás argumentumok | állj meg: `[BLOCKED]` a Capitanónak |
 
@@ -66,8 +66,8 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 
 | `reason` (példák) | Tipikus ok |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza — a felhasználót egyszer megkérdezték (először Telegramon, a dashboardon is); a válasz a `jobs.db`-be kerül, és a folyamat a checkpointtól folytatódik |
-| `essential_facts_missing` / `essential_facts_unavailable` | egy pozíció első futása előtt hiányzik egy adat, amit szinte minden űrlap kér (kezdési dátum, felmondási idő, munkavállalási engedély, sponsorship, bér, költözés, telefon); mindegyiket egyszer megkérdezték, és semmi sincs visszatartva: a pozíció újra fut, amint a válaszok megvannak |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | egy kötelező mezőnek nincs mentett válasza; a `pending_question` megnevezi (kulcs, címke, típus, opciók, scope). A felhasználóhoz semmi nem megy, amíg nem futtatod az `ask`-ot; egy mentett válasz a checkpointtól folytatja a folyamatot |
+| `essential_facts_missing` / `essential_facts_unavailable` | egy pozíció első futása előtt hiányzik egy adat, amit szinte minden űrlap kér (kezdési dátum, felmondási idő, munkavállalási engedély, sponsorship, bér, költözés, telefon); a `missing` felsorolja a kulcsokat. Semmit nem kérdeztek és semmi sincs visszatartva |
 | `captcha` / `two_factor` | az oldal ellenőrizni akarja, hogy ember van-e ott |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | egy mező, amelyet a recept nem tud mentett válasszal kitölteni |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | a CV nem csatolható |
@@ -82,7 +82,7 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `submit_outcome_unknown` | egy korábbi futás elindította a beküldést és nem hagyott nyugtát |
 | `applied_record_failed` | a nyugta létezik, de az állapotot nem sikerült rögzíteni — a jelentkezés szinte biztosan kiment |
 
-Mit teszel, mindig ugyanazt:
+Mit teszel minden más oknál (a hiányzó válaszok fent vannak):
 
 1. **Semmit azzal a pozícióval.** A folyamat már megírta a checkpointot és a
    `jht-notify-user`-rel értesítette a felhasználót. Ne értesítsd újra.

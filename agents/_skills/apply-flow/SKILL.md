@@ -55,7 +55,7 @@ One JSON line on stdout: `status`, `state`, `reason`, `receipt`.
 | `dry_run` | 0 | `mode: dry_run`: filled, stopped before the button, nothing sent | next position |
 | `denied` | 1 | the gate refused (consent off, flag revoked, already sent) | next position; never retry |
 | `blocked_human` | 3 | a human is needed; the user has already been notified | next position; never retry |
-| `blocked_human` waiting for answers (`essential_facts_missing`, `required_answer_missing`, `required_profile_field_missing`, `required_field_unanswered`) | 3 | not a final stop: the user was asked once, the queue holds the position (`essential_answers_pending` / `checkpoint_blocked_human`) until the answers are in `jobs.db`, a day per question at most (asked twice at most, then the flow goes on) | next position; on the `[BRIDGE INFO]` that says the user answered, re-read the queue: the position is back in `positions` |
+| `blocked_human` missing answers (`essential_facts_missing` with `missing`, `required_answer_missing` with `pending_question`) | 3 | not a stop and nothing was asked: the flow needs answers it does not have | work each one out from profile, CV and vacancy and save it (`application_answers.py save … --basis …`), then run the flow again; only with no basis `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). A question you asked holds the position until the user answers, a day per question at most |
 | `email_channel` | 4 | the application control is a `mailto:` link, not a form; the checkpoint holds `channel: email` and the raw `mailto_href` | run `email_application.py send` for this position as the `email-application-flow` skill says: it reads this checkpoint; never fill a web form or write the email by hand |
 | `error` | 2 | profile or CV unreadable, bad arguments | stop: `[BLOCKED]` to the Capitano |
 
@@ -65,8 +65,8 @@ The flow stops on anything it cannot do with certainty:
 
 | `reason` (examples) | Typical cause |
 |---|---|
-| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | a required field has no saved answer — the user was asked once (Telegram first, dashboard too); the reply is saved in `jobs.db` and the flow resumes from the checkpoint |
-| `essential_facts_missing` / `essential_facts_unavailable` | before the first run of a position, a fact almost every form asks for is unknown (start date, notice period, work authorisation, sponsorship, salary, relocation, phone); each one was asked once and nothing is held: the position runs again once the answers exist |
+| `required_answer_missing` / `required_profile_field_missing` / `required_field_unanswered` | a required field has no saved answer; `pending_question` names it (key, label, type, options, scope). Nothing is sent to the user until you run `ask`; a saved answer resumes the flow from the checkpoint |
+| `essential_facts_missing` / `essential_facts_unavailable` | before the first run of a position, a fact almost every form asks for is unknown (start date, notice period, work authorisation, sponsorship, salary, relocation, phone); `missing` lists the keys. Nothing was asked and nothing is held |
 | `captcha` / `two_factor` | the site wants to verify a human |
 | `unknown_required_control` / `answer_type_unknown` / `answer_option_unknown` / `answer_not_accepted` | a field the recipe cannot fill with a saved answer |
 | `upload_rejected` / `resume_field_missing` / `cv_missing` | the CV cannot be attached |
@@ -81,7 +81,7 @@ The flow stops on anything it cannot do with certainty:
 | `submit_outcome_unknown` | a previous run started submit and left no receipt |
 | `applied_record_failed` | the receipt exists but the state could not be recorded — the application most likely went out |
 
-What you do, always the same:
+What you do for every other reason (the missing answers are above):
 
 1. **Nothing on that position.** The flow already wrote the checkpoint and
    notified the user through `jht-notify-user`. Do not notify them again.
