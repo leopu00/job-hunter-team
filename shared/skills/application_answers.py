@@ -51,7 +51,7 @@ import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -205,13 +205,20 @@ def _read_answers(conn: sqlite3.Connection, position_id: int | None) -> dict[str
     company = position_company(conn, position_id) if position_id is not None else ""
     answers: dict[str, Any] = {}
     scoped: dict[str, Any] = {}
-    for key, answer_json in conn.execute("SELECT key, answer_json FROM application_answers").fetchall():
+    essential_keys = {fact.key for fact in ESSENTIAL_FACTS}
+    for key, answer_json, field_type, channel in conn.execute(
+        "SELECT key, answer_json, field_type, channel FROM application_answers"
+    ).fetchall():
         try:
             value = json.loads(answer_json)
         except (TypeError, ValueError):
             continue
         base, sep, scope = str(key).partition(_SCOPE_SEP)
         if not sep:
+            if field_type == "textarea" and channel != "profile_yaml" and base not in essential_keys:
+                # Saved before answers were kept per company: whose company it
+                # was is unknown, so it is never pasted into anyone's form.
+                continue
             answers[base] = value
         elif company and scope == company:
             scoped[base] = value
@@ -405,19 +412,23 @@ def _question_line(body: str) -> str:
     return ""
 
 
-def _closed_codes(conn: sqlite3.Connection) -> set[str]:
+def _closed_codes(conn: sqlite3.Connection, codes: set[str]) -> set[str]:
+    """Which of `codes` belong to an answered question. Read only when a code was written."""
+    if not codes:
+        return set()
     return {
-        answer_code(source_id)
+        code
         for (source_id,) in conn.execute(
             "SELECT source_id FROM pending_user_messages "
             "WHERE agent = 'closer' AND kind = 'question' AND source_action = ? AND user_reply IS NOT NULL",
             (SOURCE_ACTION,),
         )
+        if (code := answer_code(source_id)) in codes
     }
 
 
-def _code_miss(codes: set[str], closed: set[str]) -> str:
-    return "already_answered" if codes & closed else "unknown_code"
+def _code_miss(conn: sqlite3.Connection, codes: set[str]) -> str:
+    return "already_answered" if _closed_codes(conn, codes) else "unknown_code"
 
 
 def _field_type(payload_text: Any) -> str:
@@ -428,7 +439,7 @@ def _field_type(payload_text: Any) -> str:
 
 
 def _pick_target(
-    open_rows: list[tuple], closed: set[str], text: str, reply_to_text: str | None, *, direct: bool
+    conn: sqlite3.Connection, open_rows: list[tuple], text: str, reply_to_text: str | None, *, direct: bool
 ):
     """(row, answer text, why not, how it was matched: reply · code · direct)."""
     by_code: dict[str, list[tuple]] = {}
@@ -443,7 +454,7 @@ def _pick_target(
             matched = [r for c in codes for r in by_code.get(c, [])]
             if len(matched) == 1:
                 return matched[0], text, "", "reply"
-            return None, text, "ambiguous" if matched else _code_miss(codes, closed), "reply"
+            return None, text, "ambiguous" if matched else _code_miss(conn, codes), "reply"
         # A question sent before codes existed: its whole Question line identifies it.
         lines = {line.strip() for line in reply_to_text.splitlines()}
         matched = [r for r in open_rows if _question_line(r[1]) and _question_line(r[1]).strip() in lines]
@@ -458,7 +469,7 @@ def _pick_target(
         if len(matched) == 1:
             remainder = (text[: found.start()] + text[found.end():]).strip(" \t:-—\n")
             return matched[0], remainder, "", "code"
-        return None, text, "ambiguous" if matched else _code_miss({code}, closed), "code"
+        return None, text, "ambiguous" if matched else _code_miss(conn, {code}), "code"
 
     if (
         direct
@@ -486,10 +497,9 @@ def resolve_telegram_reply(
     if not isinstance(text, str) or not text.strip():
         return Resolution("not_an_answer")
     open_rows = _open_requests(conn)
-    closed = _closed_codes(conn)
-    if not open_rows and not closed:
+    if not open_rows and not (_CODE.search(text) or (reply_to_text and _CODE.search(reply_to_text))):
         return Resolution("not_an_answer")
-    row, answer_text, why, via = _pick_target(open_rows, closed, text, reply_to_text, direct=direct)
+    row, answer_text, why, via = _pick_target(conn, open_rows, text, reply_to_text, direct=direct)
     if row is None:
         return Resolution(why)
     message_id, body, source_id, payload_text, position_id = row[0], row[1], row[2], row[3], int(row[4])
@@ -611,11 +621,45 @@ def missing_essentials(answers: Mapping[str, Any], profile: Mapping[str, Any]) -
     return missing
 
 
-def essential_source_id(fact: EssentialFact) -> str:
-    return "closer-essential:" + fact.key.replace(" ", "_")
+# An essential question that stays unanswered stops holding the queue after a
+# day, is asked once more, and after the second day the flow goes on without
+# it: a form that really needs the fact asks for it on its own position.
+ESSENTIAL_QUESTION_TTL = timedelta(hours=24)
+ESSENTIAL_ROUNDS = 2
 
 
-def essential_message(fact: EssentialFact) -> str:
+def essential_source_id(fact: EssentialFact, round_no: int = 1) -> str:
+    base = "closer-essential:" + fact.key.replace(" ", "_")
+    return base if round_no == 1 else f"{base}:{round_no}"
+
+
+def _essential_state(conn: sqlite3.Connection, fact: EssentialFact, now: datetime) -> tuple[str, int]:
+    """For a fact still unknown: unasked · waiting · expired · given_up, and a round.
+
+    `expired` carries the round to ask next. A creation time that cannot be
+    read counts as expired: a question must never hold the queue for ever.
+    """
+    if not _table_exists(conn, "pending_user_messages"):
+        return "unasked", 1
+    ids = [essential_source_id(fact, n) for n in range(1, ESSENTIAL_ROUNDS + 1)]
+    created = dict(conn.execute(
+        f"SELECT source_id, MIN(created_at) FROM pending_user_messages "
+        f"WHERE source_id IN ({','.join('?' * len(ids))}) GROUP BY source_id",
+        ids,
+    ).fetchall())
+    asked = [n for n, sid in enumerate(ids, start=1) if sid in created]
+    if not asked:
+        return "unasked", 1
+    latest = max(asked)
+    at = apply_gate._parse_instant(created[ids[latest - 1]])
+    if at is not None and now - at < ESSENTIAL_QUESTION_TTL:
+        return "waiting", latest
+    if latest < ESSENTIAL_ROUNDS:
+        return "expired", latest + 1
+    return "given_up", latest
+
+
+def essential_message(fact: EssentialFact, round_no: int = 1) -> str:
     """Same structured head as a form request, so the dashboard can answer it too."""
     options = "".join(f"\n- {value}" for value in fact.options)
     options_text = f"\nOptions:{options}" if options else ""
@@ -626,7 +670,7 @@ def essential_message(fact: EssentialFact) -> str:
         f"{options_text}\n\n"
         "This is an essential fact almost every application form asks for. It is saved once "
         "and never asked again.\n"
-        f"{telegram_hint(essential_source_id(fact))}"
+        f"{telegram_hint(essential_source_id(fact, round_no))}"
     )
 
 
@@ -667,13 +711,12 @@ def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> di
     """
     answers = _profile_answers(profile)
     answers.update(_read_answers(conn, None))
-    asked: set[str] = set()
+    now = datetime.now(timezone.utc)
     if _table_exists(conn, "pending_user_messages"):
-        for source_id, payload_text, reply in conn.execute(
-            "SELECT source_id, source_payload, user_reply FROM pending_user_messages "
+        for payload_text, reply in conn.execute(
+            "SELECT source_payload, user_reply FROM pending_user_messages "
             "WHERE source_id LIKE 'closer-essential:%'"
         ):
-            asked.add(str(source_id))
             if reply is None:
                 continue
             try:
@@ -684,10 +727,14 @@ def check_essentials(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> di
                 continue
             answers.setdefault(normalise_label(payload["key"]), decode_reply(field_type, reply))
     missing = missing_essentials(answers, profile)
+    states = {fact.key: _essential_state(conn, fact, now)[0] for fact in missing}
     return {
         "status": "complete" if not missing else "missing",
         "missing": [fact.key for fact in missing],
-        "already_asked": [fact.key for fact in missing if essential_source_id(fact) in asked],
+        # Asked and still inside its day: only these hold the queue.
+        "already_asked": [key for key, state in states.items() if state == "waiting"],
+        "expired": [key for key, state in states.items() if state == "expired"],
+        "given_up": [key for key, state in states.items() if state == "given_up"],
     }
 
 
@@ -698,19 +745,25 @@ def ensure_essentials(
     *,
     notifier: Callable[..., str] | None = None,
 ) -> dict[str, Any]:
-    """Ask each missing essential fact once; report what is still missing."""
+    """Ask each missing essential fact (twice at most); report what still blocks.
+
+    `missing` lists only what the flow must wait for: a fact asked just now or
+    still inside its day. A fact asked twice and never answered is `given_up`:
+    the flow goes on, and a form that needs it asks on its own position.
+    """
     harvest_replies(conn)
     answers = answers_with_profile(conn, profile)
-    missing = missing_essentials(answers, profile)
+    now = datetime.now(timezone.utc)
     asked: list[str] = []
     waiting: list[str] = []
-    for fact in missing:
-        source_id = essential_source_id(fact)
-        existing = conn.execute(
-            "SELECT id FROM pending_user_messages WHERE source_id = ?", (source_id,)
-        ).fetchone()
-        if existing:
+    given_up: list[str] = []
+    for fact in missing_essentials(answers, profile):
+        state, round_no = _essential_state(conn, fact, now)
+        if state == "waiting":
             waiting.append(fact.key)
+            continue
+        if state == "given_up":
+            given_up.append(fact.key)
             continue
         payload = {
             "version": 1,
@@ -722,17 +775,19 @@ def ensure_essentials(
         }
         (notifier or _default_notifier)(
             position_id=int(position_id),
-            message=essential_message(fact),
-            source_id=source_id,
+            message=essential_message(fact, round_no),
+            source_id=essential_source_id(fact, round_no),
             payload=payload,
         )
         asked.append(fact.key)
     conn.commit()
+    blocking = asked + waiting
     return {
-        "status": "complete" if not missing else "waiting",
-        "missing": [fact.key for fact in missing],
+        "status": "complete" if not blocking else "waiting",
+        "missing": blocking,
         "asked": asked,
         "already_asked": waiting,
+        "given_up": given_up,
     }
 
 
@@ -749,44 +804,57 @@ class Wake:
     reason: str  # answers_complete · essentials_complete
 
 
-def pending_wakes(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> list[Wake]:
-    """What the user's answers have unblocked since the last wake-up.
+def wake_candidates(conn: sqlite3.Connection) -> list[Wake]:
+    """Answers not yet announced, from jobs.db alone: the cheap check of every poll.
 
-    - a position whose CLOSER form questions are all answered (none open);
-    - the essential facts, once every one that was asked is known.
+    - a position still authorised whose CLOSER form questions are all answered;
+    - the essential facts, once one of them has a new answer.
 
     The key names the last answered question, so several answers arriving
     together make one wake-up, and a later question answered later makes a
-    new one. Channel-blind: a dashboard reply and a Telegram reply land on the
-    same question rows, so there is one path for both.
+    new one. A withdrawn or sent position is not a candidate; if the user
+    authorises it again its answers become one. Channel-blind: a dashboard
+    reply and a Telegram reply land on the same question rows.
     """
-    if not _table_exists(conn, "pending_user_messages"):
+    if not _table_exists(conn, "pending_user_messages") or not _table_exists(conn, "positions"):
         return []
     wakes: list[Wake] = []
     rows = conn.execute(
-        "SELECT related_position_id, "
-        "SUM(CASE WHEN user_reply IS NULL THEN 1 ELSE 0 END), "
-        "MAX(CASE WHEN user_reply IS NOT NULL THEN id END) "
-        "FROM pending_user_messages "
-        "WHERE agent = 'closer' AND kind = 'question' AND source_action = ? "
-        "AND related_position_id IS NOT NULL AND source_id NOT LIKE 'closer-essential:%' "
-        "GROUP BY related_position_id",
-        (SOURCE_ACTION,),
+        "SELECT q.related_position_id, "
+        "SUM(CASE WHEN q.user_reply IS NULL THEN 1 ELSE 0 END), "
+        "MAX(CASE WHEN q.user_reply IS NOT NULL THEN q.id END) "
+        "FROM pending_user_messages q JOIN positions p ON p.id = q.related_position_id "
+        "WHERE q.agent = 'closer' AND q.kind = 'question' AND q.source_action = ? "
+        "AND q.source_id NOT LIKE 'closer-essential:%' "
+        "AND p.apply_requested = 1 AND p.status = ? "
+        "GROUP BY q.related_position_id",
+        (SOURCE_ACTION, apply_gate.AUTHORISABLE_STATUS),
     ).fetchall()
     for position_id, still_open, last_answered in rows:
         if still_open == 0 and last_answered is not None:
             wakes.append(Wake(f"answers:{int(position_id)}:{int(last_answered)}", int(position_id), "answers_complete"))
     essential = conn.execute(
-        "SELECT MAX(CASE WHEN user_reply IS NOT NULL THEN id END), COUNT(*) FROM pending_user_messages "
-        "WHERE source_id LIKE 'closer-essential:%'"
+        "SELECT MAX(id) FROM pending_user_messages "
+        "WHERE source_id LIKE 'closer-essential:%' AND user_reply IS NOT NULL"
     ).fetchone()
-    if essential and essential[1] and essential[0] is not None:
-        if check_essentials(conn, profile)["status"] == "complete":
-            wakes.append(Wake(f"essentials:{int(essential[0])}", None, "essentials_complete"))
+    if essential and essential[0] is not None:
+        wakes.append(Wake(f"essentials:{int(essential[0])}", None, "essentials_complete"))
     if not wakes or not _table_exists(conn, "closer_wakes"):
         return wakes
     done = {row[0] for row in conn.execute("SELECT wake_key FROM closer_wakes")}
     return [wake for wake in wakes if wake.key not in done]
+
+
+def pending_wakes(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> list[Wake]:
+    """The candidates the user's answers have really unblocked.
+
+    The essentials wake waits until no essential question is still inside its
+    day: an answer to one fact while another is pending unblocks nothing.
+    """
+    wakes = wake_candidates(conn)
+    if any(wake.position_id is None for wake in wakes) and check_essentials(conn, profile)["already_asked"]:
+        wakes = [wake for wake in wakes if wake.position_id is not None]
+    return wakes
 
 
 def _closer_sessions() -> list[str]:
@@ -830,23 +898,29 @@ def wake_closer(
 ) -> list[Wake]:
     """Wake a live CLOSER once per unblocked position; claim the key first.
 
-    The key is committed BEFORE the message: two bridges, or a replay, cannot
-    both send it. If no CLOSER is alive nothing is sent — the queue already
-    shows the position ready, which is what the Capitano's spawn rule reads.
+    Only a wake that really goes out is claimed: while the queue is not ready
+    (daily cap, a hold that lifts later) or no CLOSER is alive, the wake stays
+    pending and the next poll tries again — with no CLOSER the ready queue is
+    what the Capitano's spawn rule reads. The key is committed BEFORE the
+    message: two bridges, or a replay, cannot both send it.
     """
     import _db
 
     _db._migrate_closer_wakes(conn)
     sent: list[Wake] = []
     wakes = pending_wakes(conn, profile)
-    ready: set[int] = set()
-    if wakes:
-        # Only what can actually run now is announced: answers to a position
-        # that has since been sent or withdrawn claim their key in silence.
-        current = (queue or (lambda c: apply_gate.application_queue(conn=c)))(conn)
-        if current.get("ready"):
-            ready = {int(item["position_id"]) for item in current.get("positions") or []}
+    if not wakes:
+        return sent
+    current = (queue or (lambda c: apply_gate.application_queue(conn=c)))(conn)
+    if not current.get("ready"):
+        return sent
+    ready = {int(item["position_id"]) for item in current.get("positions") or []}
+    live = (sessions or _closer_sessions)()
+    if not live:
+        return sent
     for wake in wakes:
+        if wake.position_id is not None and wake.position_id not in ready:
+            continue
         claimed = conn.execute(
             "INSERT OR IGNORE INTO closer_wakes (wake_key, position_id) VALUES (?, ?)",
             (wake.key, wake.position_id),
@@ -854,9 +928,6 @@ def wake_closer(
         conn.commit()
         if claimed != 1:
             continue
-        if not ready or (wake.position_id is not None and wake.position_id not in ready):
-            continue
-        live = (sessions or _closer_sessions)()
         delivered = False
         for session in live:
             delivered = (sender or _tmux_send)(session, wake_message(wake)) or delivered
