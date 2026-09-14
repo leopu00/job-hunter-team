@@ -786,9 +786,10 @@ class EmailApplication:
 
     def _facts(self, profile: Mapping[str, Any], position: sqlite3.Row, mailto: Mailto) -> dict[str, str]:
         # jobs.db first: an answer the user gave on Telegram or on the dashboard
-        # lives there, and the YAML answers are imported into it once.
+        # lives there. Read only: inspect and the draft write nothing; the YAML
+        # answers are imported when the letter is really sent.
         with contextlib.closing(self._connect()) as conn:
-            answers: dict[str, Any] = application_answers.answers_with_profile(conn, profile)
+            answers: dict[str, Any] = application_answers.read_answers(conn, profile, self.position_id)
 
         haystack = "\n".join(
             str(v) for v in (mailto.subject, mailto.body, position["jd_text"], position["requirements"]) if v
@@ -1158,6 +1159,16 @@ class EmailApplication:
         ):
             raise RuntimeError("db_update returned success but the applied transition is absent")
 
+    def _import_profile_answers(self) -> None:
+        """Best effort: the letter already holds the answers, this only remembers them."""
+        try:
+            profile = self._profile()
+            with contextlib.closing(self._connect()) as conn:
+                application_answers.import_profile_answers(conn, profile)
+                conn.commit()
+        except (_Stop, sqlite3.Error, OSError, ValueError):
+            pass
+
     def _send(self, dry_run: bool) -> Outcome:
         previous = self._existing_send()
         if previous is not None:
@@ -1172,6 +1183,7 @@ class EmailApplication:
                 {**public, "dry_run": True},
             )
         settings: TransportSettings = ctx["settings"]
+        self._import_profile_answers()
         message = self._message(draft, settings, ctx["identity"])
         transport = self.transports[settings.kind](settings, ctx["password"])
         try:

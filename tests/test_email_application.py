@@ -551,3 +551,18 @@ def test_the_attempt_register_is_idempotent_and_unique(box):
             "recipients_json, body_sha256, attachments_json) VALUES (1, 'k', 'draft_ready', 'm', '[]', 'h', '[]')"
         )
     conn.close()
+
+
+def test_the_draft_reads_answers_without_writing_them(box):
+    set_jd(box, JD + " Tell us your earliest start date.")
+    profile = box / "profile" / "candidate_profile.yml"
+    profile.write_text(profile.read_text() + "application_answers:\n  start date: 1 November 2026\n")
+    sql(box, "CREATE TABLE IF NOT EXISTS application_answers (key TEXT PRIMARY KEY, label TEXT NOT NULL, "
+             "answer_json TEXT NOT NULL, field_type TEXT NOT NULL, options_json TEXT NOT NULL DEFAULT '[]', "
+             "channel TEXT NOT NULL, source_message_id INTEGER, answered_at TEXT NOT NULL, created_at TEXT)")
+    out = flow(box).draft()
+    assert "Availability: 1 November 2026" in out.data["body"]
+    assert flow(box).inspect().state
+    assert sql(box, "SELECT COUNT(*) FROM application_answers") == [(0,)]
+    flow(box).send()
+    assert sql(box, "SELECT key, channel FROM application_answers") == [("start date", "profile_yaml")]
