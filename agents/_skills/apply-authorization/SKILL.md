@@ -29,7 +29,7 @@ Exit `0` only when something can go out now; exit `1` otherwise. The JSON:
 | `ready` | `true` = at least one position can be taken now |
 | `reason` | stable token, see below |
 | `mode` | `authorised` (sends) or `dry_run` (diagnostic, fills and stops before the button) |
-| `max_per_day` / `sent_today` / `remaining_today` | the daily cap of applications sent by the CLOSER |
+| `max_per_day` / `sent_today` / `remaining_today` | sent today by the CLOSER, and the daily cap if the user set one (null = no cap, nothing is refused for the number) |
 | `positions` | what you may take, in authorisation order: `position_id`, `url`, `cv_pdf_path` |
 | `held` | authorised positions that must NOT be taken now, each with its `reason` |
 
@@ -45,7 +45,7 @@ only when the command exits `0`.
 | `consent_mode_unknown` / `consent_cap_invalid` | the block exists but a value is not recognised | nothing: the gate refuses rather than guessing |
 | `db_unavailable` / `queue_unreadable` | the local database cannot be read | report `[BLOCKED]` to the Capitano |
 | `queue_empty` | no authorised position can be taken | exit |
-| `daily_cap_reached` | the CLOSER already sent `max_per_day` today | exit; the queue reopens tomorrow |
+| `daily_cap_reached` | the user set `max_per_day` and the CLOSER already sent that many today (never without a cap) | exit; the queue reopens tomorrow |
 
 ## Why a position is held (`held[].reason`)
 

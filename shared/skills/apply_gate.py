@@ -93,7 +93,10 @@ AUTO_APPLY_MODES = ("authorised", "dry_run")
 # chiude quando il CLOSER ha già spedito `max_per_day` candidature oggi), e il
 # valore deve avere un default sano perché un config a metà non autorizzi un
 # numero indefinito di invii.
-DEFAULT_MAX_PER_DAY = 3
+# Nessun tetto per default (ordine dell'operatore, 2026-09-14: «non ci deve
+# essere un massimo»). Un intero positivo in config resta un tetto, se l'utente
+# lo vuole; assente o null = nessun tetto.
+DEFAULT_MAX_PER_DAY = None
 
 # ── La regola di chi può chiedere cosa: UN file, letto da due linguaggi ──────
 #
@@ -290,15 +293,17 @@ def consent_verdict(config: dict | None = None, path: Path | None = None) -> Ver
         )
 
     max_per_day = auto.get("max_per_day", DEFAULT_MAX_PER_DAY)
-    # `True` è un `int` in Python e passerebbe l'isinstance: un config con
-    # `max_per_day: true` autorizzerebbe UNA candidatura al giorno per un
-    # errore di battitura, che è un modo silenzioso di sbagliare.
-    if isinstance(max_per_day, bool) or not isinstance(max_per_day, int) or max_per_day < 1:
+    # Assente o null = nessun tetto. Tutto il resto deve essere un intero
+    # positivo: `True` è un `int` in Python e passerebbe l'isinstance, e una
+    # stringa, uno 0 o un negativo non dicono cosa voleva l'utente. Chiuso.
+    if max_per_day is not None and (
+        isinstance(max_per_day, bool) or not isinstance(max_per_day, int) or max_per_day < 1
+    ):
         return Verdict(
             False,
             "consent_cap_invalid",
-            "`applications.auto_apply.max_per_day` is not a positive integer: "
-            "an unbounded cap is not a cap",
+            "`applications.auto_apply.max_per_day` is neither absent/null (no cap) nor a positive integer: "
+            "refusing rather than guessing the cap",
             {"max_per_day": repr(max_per_day)},
         )
 
@@ -962,7 +967,7 @@ def reserve_daily_slot(
         pid = int(position_id)
     except (TypeError, ValueError):
         return Verdict(False, "position_id_invalid", "position id is not an integer")
-    max_per_day = int(consent.context.get("max_per_day"))
+    max_per_day = _cap_value(consent)
     token = os.urandom(16).hex()
     try:
         from _db import _migrate_apply_cap_reservations  # type: ignore
@@ -978,11 +983,13 @@ def reserve_daily_slot(
             context = {
                 "max_per_day": max_per_day,
                 "sent_today": sent_today,
-                "remaining_today": max(0, max_per_day - sent_today),
+                "remaining_today": _remaining_today(max_per_day, sent_today),
                 "position_id": pid,
                 "channel": channel,
             }
-            if sent_today >= max_per_day:
+            # Without a cap the reservation still counts the send and guards
+            # against duplicates; it just never refuses.
+            if max_per_day is not None and sent_today >= max_per_day:
                 conn.execute("ROLLBACK")
                 return Verdict(
                     False,
@@ -1050,7 +1057,7 @@ def daily_cap_verdict(
             f"the automated channel list cannot be read: {AUTOMATED_RULE_ERROR}",
             {"path": str(RULE_PATH)},
         )
-    max_per_day = int(consent.context.get("max_per_day"))
+    max_per_day = _cap_value(consent)
     own_conn = conn is None
     if own_conn:
         try:
@@ -1065,9 +1072,9 @@ def daily_cap_verdict(
     finally:
         if own_conn and conn is not None:
             conn.close()
-    remaining = max(0, max_per_day - sent_today)
+    remaining = _remaining_today(max_per_day, sent_today)
     context = {"max_per_day": max_per_day, "sent_today": sent_today, "remaining_today": remaining}
-    if remaining <= 0:
+    if remaining is not None and remaining <= 0:
         return Verdict(
             False,
             "daily_cap_reached",
@@ -1075,6 +1082,18 @@ def daily_cap_verdict(
             context,
         )
     return Verdict(True, "cap_available", "the daily cap leaves room for one more send", context)
+
+
+def _remaining_today(max_per_day: int | None, sent_today: int) -> int | None:
+    """Slots left today, or `None` when there is no cap."""
+    if max_per_day is None:
+        return None
+    return max(0, int(max_per_day) - int(sent_today))
+
+
+def _cap_value(consent: Verdict) -> int | None:
+    value = consent.context.get("max_per_day")
+    return None if value is None else int(value)
 
 
 def _resolve_file(value: Any, jht_home: Path | None) -> Path | None:
@@ -1178,11 +1197,11 @@ def application_queue(
         if own_conn and conn is not None:
             conn.close()
 
-    remaining = max(0, int(out["max_per_day"]) - int(sent_today))
+    remaining = _remaining_today(out["max_per_day"], sent_today)
     out.update(sent_today=sent_today, remaining_today=remaining, positions=positions, held=held)
     if not positions:
         out.update(reason="queue_empty", detail="no authorised position can be taken now")
-    elif remaining <= 0:
+    elif remaining is not None and remaining <= 0:
         out.update(
             reason="daily_cap_reached",
             detail="the daily cap of automated applications is reached; the queue waits for tomorrow",

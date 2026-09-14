@@ -175,9 +175,11 @@ export const TeamSettingsSchema = z.object({
 // due casi ha davanti quando spiega il rifiuto.
 export const AutoApplySchema = z.object({
   enabled: z.boolean(),
-  // Tre al giorno: il ritmo umano di chi si candida sul serio, e il tetto che
-  // governa il rischio ToS meglio di qualunque stealth (design § 9).
-  max_per_day: z.number().int().min(1).max(50).default(3),
+  // Nessun tetto per default (ordine dell'operatore, 2026-09-14): assente o
+  // null = nessun tetto. Un intero positivo resta un tetto, se l'utente lo
+  // vuole. Nessun default qui: scriverne uno rimetterebbe un tetto che
+  // l'utente non ha chiesto.
+  max_per_day: z.number().int().min(1).nullable().optional(),
   // `authorised` è la consegna: posizione flaggata = candidatura inviata.
   // `dry_run` è diagnostica per collaudare una ricetta ATS senza spedire.
   mode: z.enum(["authorised", "dry_run"]).default("authorised"),

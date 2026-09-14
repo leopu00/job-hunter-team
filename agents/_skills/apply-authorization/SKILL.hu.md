@@ -30,7 +30,7 @@ Exit `0` csak akkor, ha most kimehet valami; különben exit `1`. A JSON:
 | `ready` | `true` = legalább egy pozíció most felvehető |
 | `reason` | stabil token, lásd lent |
 | `mode` | `authorised` (küld) vagy `dry_run` (diagnosztika, kitölt és a gomb előtt megáll) |
-| `max_per_day` / `sent_today` / `remaining_today` | a CLOSER által küldött jelentkezések napi limitje |
+| `max_per_day` / `sent_today` / `remaining_today` | a CLOSER által ma küldöttek, és a napi limit, ha a felhasználó beállított egyet (null = nincs limit, szám miatt semmit nem utasítunk el) |
 | `positions` | amit felvehetsz, engedélyezési sorrendben: `position_id`, `url`, `cv_pdf_path` |
 | `held` | engedélyezett pozíciók, amelyeket most NEM szabad felvenni, mindegyik a saját `reason`-jével |
 
@@ -46,7 +46,7 @@ CLOSER-t, ha a parancs `0`-val lép ki.
 | `consent_mode_unknown` / `consent_cap_invalid` | a blokk létezik, de egy értéket nem ismer fel | semmi: a kapu elutasít, nem találgat |
 | `db_unavailable` / `queue_unreadable` | a helyi adatbázis nem olvasható | `[BLOCKED]` a Capitanónak |
 | `queue_empty` | egyetlen engedélyezett pozíció sem vehető fel | lépj ki |
-| `daily_cap_reached` | a CLOSER ma már elküldött `max_per_day` darabot | lépj ki; a queue holnap újranyílik |
+| `daily_cap_reached` | a felhasználó beállította a `max_per_day`-t, és a CLOSER ma már ennyit elküldött (limit nélkül soha) | lépj ki; a queue holnap újranyílik |
 
 ## Miért van visszatartva egy pozíció (`held[].reason`)
 
