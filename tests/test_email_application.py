@@ -274,15 +274,32 @@ def test_draft_is_deterministic_and_invents_nothing(box):
     assert sql(box, "SELECT COUNT(*), state FROM email_application_attempts") == [(1, "draft_ready")]
 
 
-def test_missing_required_fact_stops_with_zero_send(box):
+def test_missing_required_fact_stops_with_zero_send(box, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(box))
     set_jd(box, JD + " Please state your notice period in the email.")
     notes = []
     out = flow(box, notes=notes).send()
     assert (out.state, out.reason, out.data["fact"]) == ("blocked_human", "required_fact_missing", "availability")
     assert FakeTransport.instances == [] and FakeTransport.sends == []
-    assert len(notes) == 1
+    # Not a message of its own: the stop waits for the round's summary, once.
+    assert notes == [] and out.data["notified"] is True
     flow(box, notes=notes).send()
-    assert len(notes) == 1, "the same stop is notified once"
+    pending = json.loads((box / ".cache" / "apply-flow" / "notices.json").read_text())["pending"]
+    assert notes == [] and [(p["position_id"], p["reason"]) for p in pending] == [(1, "required_fact_missing")]
+
+
+def test_an_email_stop_notifies_directly_only_when_the_summary_is_unavailable(box, monkeypatch):
+    import closer_notices
+
+    def broken(*_args, **_kwargs):
+        raise OSError("summary queue unwritable")
+
+    monkeypatch.setattr(closer_notices, "defer", broken)
+    set_jd(box, JD + " Please state your notice period in the email.")
+    notes = []
+    out = flow(box, notes=notes).send()
+    assert out.reason == "required_fact_missing"
+    assert len(notes) == 1
 
 
 def test_a_stated_fact_is_used_verbatim(box):
@@ -452,13 +469,17 @@ def test_recorder_failure_is_receipt_incomplete_then_reconciled_without_sending(
     assert sql(box, "SELECT applied_via FROM applications WHERE position_id = 1") == [("agent_closer_email",)]
 
 
-def test_partial_refusal_is_receipt_incomplete(box):
+def test_partial_refusal_is_receipt_incomplete(box, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(box))
     FakeTransport.refused = {"Team@example.com": (550, b"no")}
     notes = []
     out = flow(box, notes=notes).send()
     assert out.state == "receipt_incomplete" and out.data["refused"] == ["Team@example.com"]
-    # The To was accepted: the user must not read this as "nothing went out".
-    assert len(notes) == 1 and "probably reached the recruiter" in notes[0]["message"]
+    # The To was accepted: the detail still says so, and the round's summary
+    # names the reason (closer_notices words it: "nothing went out" is false).
+    assert "probably reached the recruiter" in out.detail
+    pending = json.loads((box / ".cache" / "apply-flow" / "notices.json").read_text())["pending"]
+    assert notes == [] and [p["reason"] for p in pending] == ["receipt_incomplete"]
     assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
 
 

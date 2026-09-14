@@ -56,7 +56,7 @@ Una riga JSON: `state`, `reason`, `detail`, più i dati.
 | `sent` | 0 | accettata dal server, ricevuta salvata, candidatura registrata | posizione successiva |
 | `draft_ready` | 0 | dry run: bozza e allegati validi, non è partito niente | posizione successiva |
 | `denied` | 1 | il gate ha rifiutato (`flag_revoked`, `gate_mode_changed`, `daily_cap_reached`, `duplicate_attempt`) | posizione successiva; mai ritentare |
-| `blocked_human` | 1 | serve una persona; l'utente è stato avvisato | posizione successiva; mai ritentare |
+| `blocked_human` | 1 | serve una persona; lo stop è nel riepilogo del giro | posizione successiva; mai ritentare |
 | `send_outcome_unknown` | 3 | l'email potrebbe essere partita | posizione successiva; mai ritentare |
 | `receipt_incomplete` | 3 | accettata, ma la ricevuta o la registrazione è incompleta; con alcuni destinatari rifiutati la lettera è probabilmente arrivata | posizione successiva; mai ritentare |
 | `error` | 2 | database, profilo o checkpoint illeggibili | stop: `[BLOCKED]` al Capitano |
@@ -80,7 +80,7 @@ Una riga JSON: `state`, `reason`, `detail`, più i dati.
 
 Cosa fai, sempre uguale:
 
-1. **Niente su quella posizione.** Il comando ha già avvisato l'utente una volta.
+1. **Niente su quella posizione.** Il comando ha messo lo stop nel riepilogo del giro (`closer_notices.py flush` allo STEP 6).
 2. **Non ritentarla.** La coda la trattiene (`email_blocked_human`,
    `email_send_outcome_unknown`, ...) finché l'utente non agisce.
 3. **Passa alla posizione successiva** della coda.
