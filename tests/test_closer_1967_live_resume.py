@@ -132,3 +132,183 @@ def test_the_queue_releases_the_box_checkpoint_for_the_newer_authorisation(tmp_p
     assert apply_gate._checkpoint_hold(1967, AUTHORISED_AT, tmp_path) == ""
     assert apply_gate._checkpoint_hold(1967, "2026-09-14 15:18:36.164", tmp_path) == ""
     assert apply_gate._checkpoint_hold(1967, "2026-09-14T14:00:00.000Z", tmp_path) == "checkpoint_blocked_human"
+
+
+def _box(tmp_path: Path, *, acknowledged: bool) -> Path:
+    db = tmp_path / "jobs.db"
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    _db.ensure_schema(conn)
+    conn.execute(
+        "INSERT INTO positions (id, title, company, url, status, apply_requested, apply_requested_at, apply_requested_by) "
+        "VALUES (1967, 'Synthetic role', 'Synthetic company', ?, 'ready', 1, ?, 'user_local')",
+        (URL, "2026-09-14T16:05:46.000Z"),
+    )
+    conn.execute(
+        "INSERT INTO pending_user_messages (id, agent, body, kind, related_position_id, source_id, source_action, "
+        "source_payload, delivered_via, acknowledged_at) VALUES (1221, 'closer', 'masked', 'question', 1967, ?, "
+        "'closer_application_answer', ?, 'telegram', ?)",
+        (
+            BOX_CHECKPOINT["answer_request"]["source_id"],
+            json.dumps(BOX_CHECKPOINT["answer_request"]["payload"], sort_keys=True),
+            "2026-09-14 14:43:54" if acknowledged else None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    saved = dict(BOX_CHECKPOINT, updated_at="2026-09-14T15:19:07+00:00")
+    (tmp_path / "checkpoint.json").write_text(json.dumps(saved))
+    return db
+
+
+TEXT_COUNTRY = """
+      <div class="field-wrapper">
+        <label for="country">Country<span aria-hidden="true">*</span></label>
+        <input id="country" aria-required="true" required>
+      </div>"""
+
+
+@pytest.mark.parametrize("acknowledged", (True, False))
+def test_patch_20_a_closed_question_of_the_same_shape_is_never_brought_back_as_asked(page, tmp_path, cv_path, acknowledged):
+    # Patch 20: the page still gave Country as text with no options; the old
+    # request came back "asked" though its row was closed, and nobody could answer.
+    db = _box(tmp_path, acknowledged=acknowledged)
+    html = greenhouse_form().replace(
+        '<div class="field-wrapper">\n            <label for="resume">',
+        TEXT_COUNTRY + '\n          <div class="field-wrapper">\n            <label for="resume">',
+    )
+    page.set_content(html)
+    flow = build_flow(tmp_path, cv_path, candidate=profile(first_name="Test", last_name="Candidate"),
+                      verdicts=[GateVerdict(context={"mode": "authorised", "at": "2026-09-14T16:05:46.000Z"})])
+    flow.position_id = 1967
+    flow.url = URL
+    flow.db_path = db
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.reason == "required_answer_missing", result
+    # A closed row: a new question the CLOSER works out. An open one: the same, still asked.
+    assert result.pending_question["asked"] is (not acknowledged)
+
+
+# ── patch 20: "Country*" is the phone's dialling code (DOM read on the box) ──
+
+PHONE_FIELDSET = """
+      <fieldset class="phone-input">
+        <legend>Phone</legend>
+        <ul class="iti__country-list" role="listbox" hidden>
+          <li class="iti__country" role="option">Italy (Italia) +39</li>
+          <li class="iti__country" role="option">Canada +1</li>
+        </ul>
+        <div class="select"><div class="select__container">
+          <label id="country-label" for="country" class="label select__label">Country<span aria-hidden="true">*</span></label>
+          <div class="select-shell"><div class="select__control"><div class="select__value-container">
+            <input id="country" class="select__input" type="text" role="combobox" aria-autocomplete="list"
+                   aria-haspopup="true" aria-required="true" aria-expanded="false">
+            <input required aria-hidden="true" tabindex="-1" class="requiredInput" value="">
+          </div></div></div>
+        </div></div>
+        <div class="field-wrapper">
+          <label for="phone">Phone<span aria-hidden="true">*</span></label>
+          <input id="phone" type="tel" aria-required="true" required>
+        </div>
+      </fieldset>
+      <script>
+      (() => {
+        const input = document.querySelector('#country');
+        const names = ["United States +1", "Canada +1", "Puerto Rico +1 787", "Italy +39", "San Marino +378", "Spain +34"];
+        input.addEventListener('click', () => setTimeout(() => {
+          if (document.querySelector('#react-select-country-listbox')) return;
+          const menu = document.createElement('div');
+          menu.className = 'select__menu';
+          menu.innerHTML = '<div class="select__menu-list" role="listbox" id="react-select-country-listbox">'
+            + names.map((n, i) => `<div role="option" class="select__option" id="react-select-country-option-${i}">${n}</div>`).join('')
+            + '</div>';
+          input.closest('.select__container').appendChild(menu);
+          input.setAttribute('aria-controls', 'react-select-country-listbox');
+          input.setAttribute('aria-expanded', 'true');
+          menu.querySelectorAll('[role=option]').forEach(option => option.addEventListener('click', () => {
+            const value = document.createElement('div');
+            value.className = 'select__single-value';
+            value.textContent = option.textContent;
+            input.parentElement.prepend(value);
+            document.querySelector('.requiredInput').value = option.textContent;
+            menu.remove();
+          }));
+        }, 600));
+      })();
+      </script>"""
+
+
+def phone_page() -> str:
+    return greenhouse_form().replace(
+        '<div class="field-wrapper">\n            <label for="resume">',
+        PHONE_FIELDSET + '\n          <div class="field-wrapper">\n            <label for="resume">',
+    )
+
+
+def phone_flow(tmp_path, cv_path, contacts: dict, *, extra: dict | None = None, recorded: list | None = None):
+    candidate = profile(first_name="Test", last_name="Candidate", contacts={"email": "candidate@example.invalid", **contacts}, **(extra or {}))
+    return build_flow(tmp_path, cv_path, candidate=candidate, recorded=recorded)
+
+
+@pytest.mark.parametrize(
+    ("phone", "extra", "expected"),
+    (
+        ("+39 333 0000000", {}, "Italy +39"),
+        ("0039 333 0000000", {}, "Italy +39"),
+        ("+378 0549 000000", {}, "San Marino +378"),
+        ("+1 555 0100", {"location": "Toronto, Canada"}, "Canada +1"),
+        ("+1 787 555 0100", {}, "Puerto Rico +1 787"),
+    ),
+)
+def test_the_phone_country_is_chosen_from_the_profiles_dialling_code(page, tmp_path, cv_path, phone, extra, expected):
+    page.set_content(phone_page())
+    recorded: list = []
+
+    result = phone_flow(tmp_path, cv_path, {"phone": phone}, extra=extra, recorded=recorded).run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    assert recorded and recorded[0]["receipt"].answer_sources.get("phone country") == "profile"
+
+
+def test_a_shared_dialling_code_the_profile_cannot_place_is_a_question_with_those_options(page, tmp_path, cv_path):
+    page.set_content(phone_page())
+
+    result = phone_flow(tmp_path, cv_path, {"phone": "+1 555 0100"}).run(page=page, navigate=False)
+
+    assert result.reason == "required_answer_missing", result
+    assert result.pending_question["key"] == "phone country"
+    assert (result.pending_question["field_type"], result.pending_question["options"]) == ("select", ["United States +1", "Canada +1"])
+    assert result.pending_question["asked"] is False
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_a_saved_phone_country_option_fills_the_field(page, tmp_path, cv_path):
+    page.set_content(phone_page())
+    candidate_answers = {"phone country": "United States +1"}
+    flow = phone_flow(tmp_path, cv_path, {"phone": "+1 555 0100"}, extra={"application_answers": candidate_answers})
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+
+
+def test_the_box_1967_after_patch_20_applies_with_the_dialling_code(page, tmp_path, cv_path):
+    db = _box(tmp_path, acknowledged=True)
+    page.set_content(phone_page())
+    recorded: list = []
+    flow = phone_flow(tmp_path, cv_path, {"phone": "+39 333 0000000"}, recorded=recorded)
+    flow.gate_checker = lambda **_kwargs: GateVerdict(context={"mode": "authorised", "at": "2026-09-14T16:05:46.000Z"})
+    flow.position_id = 1967
+    flow.url = URL
+    flow.db_path = db
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "applied", result
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT source_action FROM pending_user_messages WHERE id = 1221").fetchone()[0] == "closer_application_answer_superseded"
+    finally:
+        conn.close()
