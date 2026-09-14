@@ -8,7 +8,7 @@ reason hid three situations with three different remedies:
   not_found       404/410 — the page is gone. The flow calls it vacancy_closed
                   only when the vacancy-closed evidence agrees; otherwise
                   page_not_found.
-  bot_protection  401/403/429, or a challenge page (Cloudflare "Just a moment",
+  bot_protection  401/403/429/999, or a challenge page (Cloudflare "Just a moment",
                   DataDome, PerimeterX, Incapsula, Sucuri, Akamai), even behind
                   a 200 — one try in a visible browser, then a human stop. The
                   CLOSER never solves a challenge.
@@ -59,7 +59,8 @@ _CHALLENGE_MARKERS = tuple(
         r"are you a robot\??",
     )
 )
-_BOT_STATUSES = frozenset({401, 403, 429})
+# 999: LinkedIn's answer to a client it refuses — a wall, not a server fault.
+_BOT_STATUSES = frozenset({401, 403, 429, 999})
 _GONE_STATUSES = frozenset({404, 410})
 
 

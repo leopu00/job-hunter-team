@@ -40,6 +40,7 @@ CAREERS_WITH_RECAPTCHA = """<html><head><title>Apply — Example</title></head><
         (403, "<html><body>Forbidden</body></html>", pf.BOT_PROTECTION),
         (401, "", pf.BOT_PROTECTION),
         (429, "", pf.BOT_PROTECTION),
+        (999, "", pf.BOT_PROTECTION),  # LinkedIn refusing an automated client: never retried as a blip
         (503, CLOUDFLARE, pf.BOT_PROTECTION),  # a challenge behind a 5xx is a wall, not a blip
         (200, CLOUDFLARE, pf.BOT_PROTECTION),
         (200, DATADOME, pf.BOT_PROTECTION),
