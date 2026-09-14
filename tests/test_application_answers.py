@@ -337,7 +337,8 @@ def test_after_a_restart_the_answer_is_still_there_and_nothing_is_asked(db, brid
         profile = {"contacts": {"phone": "+1 555 0100"}}
         fresh.save_answer(conn, key="availability", label="Start?", answer="now", field_type="text", channel="telegram")
         asked = []
-        out = fresh.ensure_essentials(conn, profile, 7, notifier=lambda **kw: asked.append(kw) or "1")
+        out = fresh.ensure_essentials(conn, profile, 7, ask=ALL_ESSENTIALS,
+                                      notifier=lambda **kw: asked.append(kw) or "1")
     assert "notice period" not in out["missing"] and "availability" not in out["missing"]
     assert {kw["source_id"] for kw in asked} == {
         "closer-essential:work_authorization", "closer-essential:sponsorship",
@@ -368,6 +369,8 @@ def test_a_dashboard_reply_is_harvested_into_the_table(db):
 # ── essential facts before the first application ─────────────────────────────
 
 
+ALL_ESSENTIALS = [fact.key for fact in aa.ESSENTIAL_FACTS]
+
 FULL_PROFILE = {
     "availability": "in one month", "notice_period": "one month",
     "work_authorization": "EU", "sponsorship": False, "salary_expectations": "50000 EUR",
@@ -397,8 +400,8 @@ def test_each_missing_essential_is_asked_once_and_an_answer_closes_it(db, bridge
 
     profile = {k: v for k, v in FULL_PROFILE.items() if k != "notice_period"}
     with sqlite3.connect(db) as conn:
-        first = aa.ensure_essentials(conn, profile, 7, notifier=notifier)
-        second = aa.ensure_essentials(conn, profile, 8, notifier=notifier)
+        first = aa.ensure_essentials(conn, profile, 7, ask=["notice period"], notifier=notifier)
+        second = aa.ensure_essentials(conn, profile, 8, ask=["notice period"], notifier=notifier)
     assert first["asked"] == ["notice period"] and second["asked"] == []
     assert second["already_asked"] == ["notice period"] and len(asked) == 1
     assert "Field type: text" in asked[0]["message"]
@@ -406,7 +409,7 @@ def test_each_missing_essential_is_asked_once_and_an_answer_closes_it(db, bridge
     mod = bridge()
     telegram(mod, db, 12, "three months")  # a free-text fact: a bare message is chat
     with sqlite3.connect(db) as conn:
-        assert aa.ensure_essentials(conn, profile, 8, notifier=notifier)["status"] == "waiting"
+        assert aa.ensure_essentials(conn, profile, 8, notifier=notifier)["status"] == "missing"
     telegram(mod, db, 13, "three months", reply_to=asked[0]["message"])
     with sqlite3.connect(db) as conn:
         third = aa.ensure_essentials(conn, profile, 8, notifier=notifier)
@@ -474,7 +477,10 @@ def test_the_essentials_check_writes_nothing_and_only_ask_creates_questions(db, 
 
     asked = []
     with sqlite3.connect(db) as conn:
-        aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7, notifier=lambda **kw: asked.append(kw) or "1")
+        silent = aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7, notifier=lambda **kw: asked.append(kw) or "1")
+        assert asked == [] and len(silent["missing"]) == 7
+        aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7, ask=ALL_ESSENTIALS,
+                             notifier=lambda **kw: asked.append(kw) or "1")
     assert len(asked) == 7
 
 
@@ -510,7 +516,7 @@ def test_off_hours_a_closer_question_still_reaches_telegram(db, tmp_path, monkey
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     with sqlite3.connect(db) as conn:
-        out = aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7)
+        out = aa.ensure_essentials(conn, {"name": "Test Candidate"}, 7, ask=ALL_ESSENTIALS)
     assert len(out["asked"]) == 7
     assert row(db, "SELECT COUNT(*) FROM pending_user_messages WHERE source_id LIKE 'closer-essential:%' "
                    "AND delivered_via = 'telegram'") == [(7,)]
@@ -918,8 +924,8 @@ def test_an_unanswered_essential_holds_for_a_day_only_then_is_asked_once_more(db
 
     asked = []
     with sqlite3.connect(db) as conn:
-        first = aa.ensure_essentials(conn, NO_NOTICE, 7, notifier=_writing_notifier(db, asked))
-        again = aa.ensure_essentials(conn, NO_NOTICE, 8, notifier=_writing_notifier(db, asked))
+        first = aa.ensure_essentials(conn, NO_NOTICE, 7, ask=["notice period"], notifier=_writing_notifier(db, asked))
+        again = aa.ensure_essentials(conn, NO_NOTICE, 8, ask=["notice period"], notifier=_writing_notifier(db, asked))
     assert [kw["source_id"] for kw in asked] == ["closer-essential:notice_period:2"]
     assert aa.answer_code("closer-essential:notice_period:2") in asked[0]["message"]
     assert first["asked"] == ["notice period"] and again["already_asked"] == ["notice period"]
@@ -934,7 +940,7 @@ def test_after_the_second_day_nothing_is_asked_and_the_queue_runs(db, tmp_path, 
     _asked_essential(db, "notice_period", hours=25, round_no=2)
     asked = []
     with sqlite3.connect(db) as conn:
-        out = aa.ensure_essentials(conn, NO_NOTICE, 7, notifier=lambda **kw: asked.append(kw) or "1")
+        out = aa.ensure_essentials(conn, NO_NOTICE, 7, ask=["notice period"], notifier=lambda **kw: asked.append(kw) or "1")
     assert asked == [] and out["status"] == "complete" and out["given_up"] == ["notice period"]
     assert apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)["ready"]
 
@@ -1075,3 +1081,223 @@ def test_answered_questions_are_read_only_when_a_code_was_written(db):
         statements.clear()
         assert aa.resolve_telegram_reply(conn, text="Hybrid", reply_to_text=body).status == "already_answered"
         assert [q for q in statements if "user_reply IS NOT NULL" in q]
+
+
+# ── the CLOSER works answers out and asks only without a basis ───────────────
+#
+# Operator, 14/09: the profile and the CV hold what the essential questions
+# ask; the CLOSER must fill in by itself and stop only when nothing supports
+# an answer. Python never asks on its own any more: it reports the unknown
+# keys, the CLOSER saves what it can infer (agent_inferred + basis), and only
+# an explicit `ask` reaches Telegram.
+
+
+EU_PROFILE = {"name": "Test Candidate", "citizenship": "Italian (EU)", "location": "Milan, Italy",
+              "availability": "in one month", "notice_period": "one month", "contacts": {"phone": "+1 555 0100"}}
+
+
+def _cli(db, tmp_path, *args, notifier_log=None):
+    import os
+    import subprocess
+
+    env = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(tmp_path)}
+    if notifier_log is not None:
+        stub = tmp_path / "notify-stub"
+        stub.write_text(f'#!/bin/sh\necho "$@" >> "{notifier_log}"\necho 101\n', encoding="utf-8")
+        stub.chmod(0o755)
+        env["JHT_NOTIFY_USER_BIN"] = str(stub)
+    else:
+        env["JHT_NOTIFY_USER_BIN"] = str(tmp_path / "no-notifier")
+    profile = tmp_path / "cli-profile.yml"
+    if not profile.exists():
+        profile.write_text("name: Test Candidate\n", encoding="utf-8")
+    done = subprocess.run([sys.executable, str(SKILL), *args, "--db", str(db), "--profile", str(profile)],
+                          capture_output=True, text=True, env=env)
+    return done.returncode, json.loads(done.stdout)
+
+
+def test_unknown_essentials_are_reported_never_asked_and_hold_nothing(db, tmp_path, monkeypatch):
+    _ready_box(db, tmp_path, monkeypatch)
+    asked = []
+    with sqlite3.connect(db) as conn:
+        out = aa.ensure_essentials(conn, EU_PROFILE, 7, notifier=lambda **kw: asked.append(kw) or "1")
+    assert asked == [] and row(db, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
+    assert out["status"] == "missing"
+    assert out["missing"] == ["work authorization", "sponsorship", "salary expectations", "relocation"]
+    assert apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)["ready"]
+
+
+def test_inferred_answers_complete_the_essentials_without_a_question(db, tmp_path):
+    import apply_flow
+
+    for args in (
+        ("--key", "work authorization", "--value", "EU citizen: no permit needed in the EU",
+         "--field-type", "textarea", "--basis", "profile"),
+        ("--key", "sponsorship", "--value", "No", "--field-type", "radio", "--options", "Yes", "No", "--basis", "profile"),
+        ("--key", "relocation", "--value", "Yes", "--field-type", "radio", "--options", "Yes", "No", "--basis", "cv"),
+        ("--key", "salary expectations", "--value", "55000 EUR", "--field-type", "text",
+         "--basis", "judgement", "--position-id", "7"),
+    ):
+        code, out = _cli(db, tmp_path, "save", *args)
+        assert (code, out["status"]) == (0, "saved"), out
+    notified = []
+    with sqlite3.connect(db) as conn:
+        out = aa.ensure_essentials(conn, EU_PROFILE, 7, notifier=lambda **kw: notified.append(kw) or "1")
+        other = aa.check_essentials(conn, EU_PROFILE, 8)
+    assert (out["status"], out["missing"], notified) == ("complete", [], [])
+    assert apply_flow._default_essentials_checker(profile=EU_PROFILE, position_id=7, db_path=db) == []
+    assert row(db, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
+    assert other["missing"] == []  # same company in the fixture: the judged salary applies
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE positions SET company = 'Other Fixture Ltd' WHERE id = 8")
+        assert aa.check_essentials(conn, EU_PROFILE, 8)["missing"] == ["salary expectations"]
+        assert aa.answer_origins(conn, 7) == {
+            "work authorization": "agent_inferred", "sponsorship": "agent_inferred",
+            "relocation": "agent_inferred", "salary expectations": "agent_inferred",
+        }
+
+
+@pytest.mark.parametrize(("args", "reason"), [
+    (("--key", "sponsorship", "--value", "no", "--field-type", "radio", "--options", "Yes", "No", "--basis", "profile"),
+     "closer_answer_not_exact_option"),
+    (("--key", "willing to travel", "--value", "Maybe", "--field-type", "checkbox", "--basis", "cv"),
+     "closer_answer_not_exact_option"),
+    (("--key", "notice period", "--value", "   ", "--field-type", "text", "--basis", "cv"), "closer_answer_empty"),
+    (("--key", "why us", "--value", "Fixture motivation", "--field-type", "textarea", "--basis", "vacancy"),
+     "position_id_required"),
+    (("--key", "salary expectations", "--value", "55000 EUR", "--field-type", "text", "--basis", "judgement"),
+     "position_id_required"),
+    (("--key", "phone", "--value", "+1", "--field-type", "select", "--basis", "cv"), "closer_answer_not_exact_option"),
+    (("--key", "phone", "--value", "+1", "--field-type", "slider", "--basis", "cv"), "closer_answer_payload_invalid"),
+])
+def test_an_inferred_answer_is_checked_like_a_reply(db, tmp_path, args, reason):
+    code, out = _cli(db, tmp_path, "save", *args)
+    assert (code, out["status"], out["reason"]) == (1, "rejected", reason)
+    assert row(db, "SELECT COUNT(*) FROM application_answers") == [(0,)]
+
+
+def test_an_unknown_basis_is_refused(db, tmp_path):
+    import subprocess
+
+    done = subprocess.run([sys.executable, str(SKILL), "save", "--key", "phone", "--value", "+1 555 0100",
+                           "--field-type", "tel", "--basis", "guess", "--db", str(db)], capture_output=True, text=True)
+    assert done.returncode == 2 and row(db, "SELECT COUNT(*) FROM application_answers") == [(0,)]
+
+
+def test_an_inferred_answer_never_replaces_the_users_and_the_user_always_replaces_it(db, tmp_path):
+    with sqlite3.connect(db) as conn:
+        aa.save_answer(conn, key="relocation", label="Relocate?", answer="No", field_type="radio",
+                       options=["Yes", "No"], channel="telegram")
+    code, out = _cli(db, tmp_path, "save", "--key", "relocation", "--value", "Yes", "--field-type", "radio",
+                     "--options", "Yes", "No", "--basis", "cv")
+    assert (code, out["status"]) == (3, "user_answer_kept")
+    assert row(db, "SELECT answer_json, channel FROM application_answers WHERE key = 'relocation'") == [('"No"', "telegram")]
+
+    code, _ = _cli(db, tmp_path, "save", "--key", "phone", "--value", "+1 555 0100", "--field-type", "tel", "--basis", "cv")
+    assert code == 0
+    with sqlite3.connect(db) as conn:
+        assert aa.save_answer(conn, key="phone", label="Phone?", answer="+1 555 0199", field_type="tel", channel="reply")
+        assert aa.load_answers(conn)["phone"] == "+1 555 0199"
+        assert aa.answer_origins(conn)["phone"] == "user"
+        # The profile file also beats what the CLOSER inferred.
+        aa.save_inferred(conn, key="how did you hear", value="Job board", field_type="text", basis="judgement")
+        assert aa.import_profile_answers(conn, {"application_answers": {"How did you hear": "Referral"}}) == 1
+        assert aa.import_profile_answers(conn, {"application_answers": {"Relocation": "Yes"}}) == 0
+        answers, origins = aa.load_answers(conn), aa.answer_origins(conn)
+    assert (answers["how did you hear"], origins["how did you hear"]) == ("Referral", "profile")
+    assert answers["relocation"] == "No"
+
+
+def test_a_company_inference_never_beats_a_global_user_answer(db, tmp_path):
+    with sqlite3.connect(db) as conn:
+        aa.save_answer(conn, key="salary expectations", label="Salary?", answer="60000 EUR",
+                       field_type="text", channel="telegram")
+        assert aa.save_inferred(conn, key="salary expectations", value="45000 EUR", field_type="text",
+                                basis="judgement", position_id=7)["status"] == "saved"
+        assert aa.load_answers(conn, 7)["salary expectations"] == "60000 EUR"
+        assert aa.answer_origins(conn, 7)["salary expectations"] == "user"
+        # A company answer given by the user still wins over a global inference.
+        aa.save_inferred(conn, key="years of go", value="3", field_type="number", basis="cv")
+        aa.save_answer(conn, key="years of go", label="Go?", answer="5", field_type="number",
+                       channel="reply", scope=aa.position_company(conn, 7))
+        assert aa.load_answers(conn, 7)["years of go"] == "5"
+
+
+def test_list_shows_channel_and_basis_never_values(db, tmp_path):
+    _cli(db, tmp_path, "save", "--key", "why us", "--value", "Fixture motivation", "--field-type", "textarea",
+         "--basis", "vacancy", "--position-id", "7")
+    code, out = _cli(db, tmp_path, "list")
+    assert code == 0 and out["answers"] == [{
+        "key": "why us @ fixture co", "field_type": "textarea", "channel": "agent_inferred",
+        "basis": "vacancy", "answered_at": out["answers"][0]["answered_at"],
+    }]
+    assert "Fixture motivation" not in json.dumps(out)
+
+
+def test_only_an_explicit_ask_sends_an_essential_question(db, tmp_path):
+    log = tmp_path / "notified.txt"
+    code, out = _cli(db, tmp_path, "essentials", "--position-id", "7", "--json", notifier_log=log)
+    assert code == 3 and len(out["missing"]) == 7 and not log.exists()
+
+    code, out = _cli(db, tmp_path, "ask", "--position-id", "7", "--key", "notice_period", notifier_log=log)
+    assert (code, out) == (0, {"status": "asked", "key": "notice period", "kind": "essential"})
+    assert log.read_text().count("closer-essential:notice_period") == 1
+    assert "closer-essential:sponsorship" not in log.read_text()
+
+    code, out = _cli(db, tmp_path, "essentials", "--position-id", "7", "--ask", "phone", "--ask", "relocation",
+                     notifier_log=log)
+    assert sorted(out["asked"]) == ["phone", "relocation"] and code == 3
+    assert log.read_text().count("--source-id") == 3
+
+
+def test_ask_for_a_known_fact_sends_nothing(db, tmp_path):
+    log = tmp_path / "notified.txt"
+    _cli(db, tmp_path, "save", "--key", "phone", "--value", "+1 555 0100", "--field-type", "tel", "--basis", "cv")
+    code, out = _cli(db, tmp_path, "ask", "--position-id", "7", "--key", "phone", notifier_log=log)
+    assert (code, out["status"]) == (3, "not_missing") and not log.exists()
+
+
+def test_ask_for_a_form_question_goes_through_the_flow_checkpoint(db, tmp_path, monkeypatch, capsys):
+    import apply_flow
+
+    calls = []
+
+    def ask_pending_question(position_id, key, **kwargs):
+        calls.append((position_id, key))
+        return {"status": "asked", "source_id": "closer-answer:fixture"}
+
+    monkeypatch.setattr(apply_flow, "ask_pending_question", ask_pending_question, raising=False)
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    assert aa.main(["ask", "--position-id", "7", "--key", "Why do you want to join us?", "--db", str(db)]) == 0
+    assert json.loads(capsys.readouterr().out) == {"kind": "form", "key": "why do you want to join us", "status": "asked"}
+    assert calls == [(7, "why do you want to join us")]
+
+    monkeypatch.setattr(apply_flow, "ask_pending_question", lambda *a, **k: {"status": "not_pending"}, raising=False)
+    assert aa.main(["ask", "--position-id", "7", "--key", "cover note", "--db", str(db)]) == 3
+
+
+def test_the_basis_column_is_added_to_an_existing_table(tmp_path):
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute("CREATE TABLE application_answers (key TEXT PRIMARY KEY CHECK (key <> ''), label TEXT NOT NULL, "
+                     "answer_json TEXT NOT NULL, field_type TEXT NOT NULL, options_json TEXT NOT NULL DEFAULT '[]', "
+                     "channel TEXT NOT NULL, source_message_id INTEGER, answered_at TEXT NOT NULL, created_at TEXT)")
+        conn.execute("INSERT INTO application_answers (key, label, answer_json, field_type, channel, answered_at) "
+                     "VALUES ('phone', 'Phone?', '\"+1 555 0100\"', 'tel', 'telegram', '2026-09-13')")
+        _db._migrate_application_answers(conn)
+        _db._migrate_application_answers(conn)
+        assert conn.execute("SELECT key, basis FROM application_answers").fetchall() == [("phone", "")]
+
+
+def test_save_inferred_refuses_an_unknown_basis_on_its_own(db):
+    with sqlite3.connect(db) as conn, pytest.raises(aa.InferenceRejected, match="basis_invalid"):
+        aa.save_inferred(conn, key="phone", value="+1 555 0100", field_type="tel", basis="guess")
+
+
+def test_a_later_user_answer_replaces_an_earlier_user_answer(db):
+    with sqlite3.connect(db) as conn:
+        aa.save_answer(conn, key="notice period", label="Notice?", answer="one month", field_type="text", channel="telegram")
+        assert aa.save_answer(conn, key="notice period", label="Notice?", answer="two months", field_type="text",
+                              channel="reply")
+        assert aa.load_answers(conn)["notice period"] == "two months"
