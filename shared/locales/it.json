@@ -141,6 +141,8 @@
   "bot_commands.assistente.candles": "3 candle inizio/mezzo/fine ultima finestra",
   "bot_commands.assistente.mappa": "Mappa posizioni Europa",
   "bot_commands.assistente.mappa_it": "Mappa posizioni Italia",
+  "bot_commands.assistente.top_cv": "CV con il punteggio più alto, pronti da inviare",
+  "bot_commands.assistente.reset": "Quando si azzera la finestra d'uso del provider",
   "bot_commands.assistente.stato": "Stato rapido team (testuale)",
   "bot_commands.assistente.help": "Lista comandi disponibili",
   "bot_commands.capitano.pipeline": "Stato pipeline + bottleneck attuale",

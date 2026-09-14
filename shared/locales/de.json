@@ -141,6 +141,8 @@
   "bot_commands.assistente.candles": "3 Candles: Anfang/Mitte/Ende des letzten Fensters",
   "bot_commands.assistente.mappa": "Stellen-Karte Europa",
   "bot_commands.assistente.mappa_it": "Stellen-Karte Italien",
+  "bot_commands.assistente.top_cv": "Bestbewertete CVs, bereit zum Senden",
+  "bot_commands.assistente.reset": "Wann das Nutzungsfenster des Providers zurückgesetzt wird",
   "bot_commands.assistente.stato": "Schneller Team-Status (Text)",
   "bot_commands.assistente.help": "Liste der verfügbaren Befehle",
   "bot_commands.capitano.pipeline": "Pipeline-Status + aktueller Engpass",

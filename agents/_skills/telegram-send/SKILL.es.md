@@ -103,32 +103,29 @@ Si no estás seguro, envía **texto plano** (sin flag). El usuario recibe un men
 | 4 | HTTP no-200 | Problema de red o caída de Telegram. Reintenta una vez después de 5s. Si sigue fallando, registra en log y continúa. |
 | 5 | `ok: false` de la API Bot | Normalmente chat_id inválido o bot bloqueado por el usuario. No reintentar — guarda el cuerpo de la respuesta en tu directorio scratch y notifica por el canal web. |
 
-## Teclado de respuesta persistente (F-1.B, task #50)
+## Sin teclado de respuesta — los comandos están en el menú ☰
 
-Los 3 bots orientados al usuario (assistente / capitano / mentor) pueden adjuntar un
-teclado de respuesta persistente de 2 columnas con `--keyboard <role>`. El teclado
-permanece visible en el cliente Telegram del usuario entre mensajes hasta que lo
-elimines explícitamente (no lo hacemos, por diseño — lo mantenemos siempre visible
-para que los usuarios menos técnicos vean la affordance).
+No adjuntes teclados. El teclado persistente de 6 botones tapaba media conversación
+en el teléfono del usuario, así que los tres bots de cara al usuario (assistente /
+capitano / mentor) muestran sus comandos solo en el menú ☰ del bot
+(`setMyCommands`, ver abajo). Envía mensajes simples:
 
 ```bash
-# Assistente — 📊 Budget · 📈 Pipeline · 🗺️ Mappa · ⭐ Top CV · 📅 Reset · ❓ Help
-jht-telegram-send --from assistente --keyboard assistente "Pipeline: 15 CV pronti per apply, ..."
-
-# Capitano — 📈 Pipeline · 📊 Budget · 👥 Team · ⭐ Ready · 🛠 Triage · ❓ Help
-jht-telegram-send --from capitano --keyboard capitano "..."
-
-# Mentor — 📋 Digest · 🔁 Patterns · ⭐ Top · 💰 Salary · ❓ Help
-jht-telegram-send --from mentor --keyboard mentor "..."
+jht-telegram-send --from assistente "Pipeline: 15 CV listos para aplicar, ..."
 ```
 
-Cuando el usuario toca un botón, el bot recibe el texto del botón como un
-mensaje de texto normal (ej. toca `📊 Budget` → tmux recibe `📊 Budget` como
-cuerpo del mensaje TG). El agente lo trata de forma equivalente a un comando slash
-(ej. `/budget`) y produce el gráfico / estado.
+`--keyboard <role>` se sigue aceptando para no romper a los llamadores antiguos,
+pero no adjunta nada: quita el teclado que un teléfono aún pueda mostrar. Cada bot
+quita además el teclado antiguo una vez por sí mismo, en su primer mensaje.
 
-El teclado aparece solo en el **último** mensaje fragmentado de un envío largo,
-así las salidas de más de 4096 caracteres no hacen parpadear el teclado a mitad del hilo.
+Un comando elegido en el menú te llega como un mensaje normal (`/budget`,
+`/top_cv`, …): respóndelo como respondías al texto del antiguo botón:
+
+```text
+Assistente — /budget · /budget_prev · /budget_week · /pipeline · /candles · /mappa · /mappa_it · /top_cv · /reset · /stato · /help
+Capitano   — /pipeline · /budget · /team · /ready · /triage · /help
+Mentor     — /digest · /patterns · /top · /salary · /help
+```
 
 ## Menú de comandos slash (F-1.A, task #50)
 

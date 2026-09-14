@@ -141,6 +141,8 @@
   "bot_commands.assistente.candles": "3 velas: inicio/medio/fin de la última ventana",
   "bot_commands.assistente.mappa": "Mapa de posiciones Europa",
   "bot_commands.assistente.mappa_it": "Mapa de posiciones Italia",
+  "bot_commands.assistente.top_cv": "CV con mejor puntuación, listos para enviar",
+  "bot_commands.assistente.reset": "Cuándo se reinicia la ventana de uso del proveedor",
   "bot_commands.assistente.stato": "Estado rápido del equipo (texto)",
   "bot_commands.assistente.help": "Lista de comandos disponibles",
   "bot_commands.capitano.pipeline": "Estado del pipeline + cuello de botella actual",
