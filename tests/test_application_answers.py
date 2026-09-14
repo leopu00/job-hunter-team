@@ -1381,3 +1381,86 @@ def test_the_explicit_ask_marks_its_question_and_that_one_holds_the_queue(db, tm
     queue = apply_gate.application_queue(db_path=str(db), jht_home=tmp_path)
     assert not queue["ready"]
     assert {h["reason"] for h in queue["held"]} == {"essential_answers_pending"}
+
+
+# ── a contact-form letter belongs to its position, never the company (B1 m3) ──
+
+LETTER = "Dear team, I am writing about the Fixture Role vacancy; my CV is available on request."
+
+
+def _letter_question(db, pid, via="telegram"):
+    """A contact form's Message the flow turned into a question (purpose contact_form_application)."""
+    source_id = f"closer-answer:{pid}:contactletter"
+    payload = {"version": 1, "position_id": pid, "key": "message", "label": "Message",
+               "field_type": "textarea", "options": [], "purpose": aa.CONTACT_LETTER_PURPOSE}
+    body = "CLOSER needs one required application answer before it can continue.\nQuestion: Message\n" \
+           "Field type: textarea\n\n" + aa.telegram_hint(source_id)
+    with sqlite3.connect(db) as conn:
+        cur = conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, "
+            "source_action, source_payload, delivered_via) VALUES ('closer', ?, 'question', ?, ?, ?, ?, ?)",
+            (body, pid, source_id, aa.SOURCE_ACTION, json.dumps(payload), via),
+        )
+        return cur.lastrowid, body
+
+
+def _seen_by(db, pid):
+    with sqlite3.connect(db) as conn:
+        return aa.load_answers(conn, pid).get("message")
+
+
+def test_a_contact_letter_the_closer_writes_is_kept_for_its_position_only(db):
+    with sqlite3.connect(db) as conn:
+        out = aa.save_inferred(conn, key="Message", value=LETTER, field_type="textarea", basis="vacancy",
+                               position_id=7, purpose=aa.CONTACT_LETTER_PURPOSE)
+    assert out["scope"] == "position"
+    assert _seen_by(db, 7) == LETTER
+    assert _seen_by(db, 8) is None  # same company, another vacancy: its own letter
+
+
+def test_without_the_flag_the_checkpoint_question_supplies_the_purpose(db, tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    path = apply_gate.checkpoint_path(7, tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"state": "blocked_human", "answer_request": {"payload": {
+        "key": "message", "label": "Message", "field_type": "textarea", "purpose": aa.CONTACT_LETTER_PURPOSE}}}))
+
+    code = aa.main(["save", "--db", str(db), "--key", "Message", "--value", LETTER, "--field-type", "textarea",
+                    "--basis", "vacancy", "--position-id", "7", "--profile", str(tmp_path / "none.yml")])
+
+    assert code == 0
+    assert _seen_by(db, 7) == LETTER and _seen_by(db, 8) is None
+
+
+def test_a_motivation_without_the_purpose_still_belongs_to_the_company(db):
+    with sqlite3.connect(db) as conn:
+        out = aa.save_inferred(conn, key="Why us", value="Your product.", field_type="textarea",
+                               basis="vacancy", position_id=7)
+        assert out["scope"] == "company"
+        assert aa.load_answers(conn, 8).get("why us") == "Your product."
+
+
+def test_a_contact_letter_the_user_sends_on_telegram_is_kept_for_its_position(db, bridge):
+    mod = bridge()
+    _qid, body = _letter_question(db, 7)
+    telegram(mod, db, 1, LETTER, reply_to=body)
+    assert [o.status for o in mod.feedback] == ["resolved"]
+    assert _seen_by(db, 7) == LETTER and _seen_by(db, 8) is None
+
+
+def test_a_contact_letter_answered_on_the_dashboard_is_kept_for_its_position(db):
+    qid, _body = _letter_question(db, 7, via="web")
+    _answer(db, qid, LETTER)
+    with sqlite3.connect(db) as conn:
+        assert aa.harvest_replies(conn) == 1
+    assert _seen_by(db, 7) == LETTER and _seen_by(db, 8) is None
+
+
+def test_the_positions_own_letter_wins_over_a_company_one(db):
+    with sqlite3.connect(db) as conn:
+        aa.save_inferred(conn, key="Message", value="A company-wide note.", field_type="textarea",
+                         basis="vacancy", position_id=8)
+        aa.save_inferred(conn, key="Message", value=LETTER, field_type="textarea", basis="vacancy",
+                         position_id=7, purpose=aa.CONTACT_LETTER_PURPOSE)
+    assert _seen_by(db, 7) == LETTER
+    assert _seen_by(db, 8) == "A company-wide note."

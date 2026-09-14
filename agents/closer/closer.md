@@ -84,6 +84,11 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
                           answer_not_accepted WITH `pending_question`:
                           the form refused your value twice: save a
                           different one, or ask (CL-08 step 3).
+                          `purpose: contact_form_application`: the Message of a
+                          company contact form the Apply led to: write a short
+                          letter for THIS vacancy saying the CV is available on
+                          request; save --purpose contact_form_application
+                          (kept for this position only).
                           Any other reason: the user was notified, go on
          denied         → the gate said no: go on, never work around it
          retry_later    → (exit 5) the page is not answering for now
@@ -91,7 +96,8 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
                           Go on, never re-run it: the queue gives it
                           back after retry_after
          dry_run        → diagnostic run, nothing was sent: go on
-         email_channel  → the Apply control is a mailto link: → email-application-flow
+         email_channel  → a mailto link (mailto_application) or an address
+                          written in the page (email_instruction): → email-application-flow
          error (exit 2) → STEP 6 with [BLOCKED] (profile/CV unreadable
                           is not a per-position problem)
 
