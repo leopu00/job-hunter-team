@@ -213,3 +213,9 @@ def test_the_same_shape_keeps_the_asked_request(page, box):
     assert after["source_id"] == before["source_id"] and after["asked"] is True
     assert rows(db) == [(before["source_id"], "closer_application_answer", None)]
     assert again.pending_question["asked"] is True
+    conn = sqlite3.connect(db)
+    try:
+        # Brought back as it was: still waiting, not marked seen by the supersede.
+        assert conn.execute("SELECT acknowledged_at FROM pending_user_messages").fetchone()[0] is None
+    finally:
+        conn.close()
