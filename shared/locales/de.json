@@ -209,5 +209,11 @@
   "closer.reason.browser_uncertainty.why": "Der Browser hat mitten in der Bewerbung angehalten.",
   "closer.reason.browser_uncertainty.action": "Öffne die Stelle und prüfe, was gesendet wurde, bevor du sie erneut freigibst.",
   "closer.reason.url_refused.why": "Der Link der Stelle zeigt auf eine Adresse, die der CLOSER nicht öffnet.",
-  "closer.reason.url_refused.action": "Prüfe den Link."
+  "closer.reason.url_refused.action": "Prüfe den Link.",
+  "closer.reason.page_not_found.why": "Die Seite der Stelle existiert nicht mehr (die Website meldet, dass sie nicht gefunden wird).",
+  "closer.reason.page_not_found.action": "Nichts zu tun, außer du findest die Stelle wieder: dann gib sie erneut frei.",
+  "closer.reason.bot_protection.why": "Die Website blockiert automatische Besuche mit einer Anti-Bot-Prüfung.",
+  "closer.reason.bot_protection.action": "Bewirb dich von Hand: Der CLOSER umgeht diese Prüfungen nie.",
+  "closer.reason.page_temporarily_unavailable.why": "Die Website hat an einem Tag dreimal nicht geantwortet.",
+  "closer.reason.page_temporarily_unavailable.action": "Versuche den Link später; wenn er funktioniert, gib die Stelle erneut frei."
 }

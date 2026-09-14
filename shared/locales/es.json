@@ -209,5 +209,11 @@
   "closer.reason.browser_uncertainty.why": "El navegador se detuvo en mitad de la candidatura.",
   "closer.reason.browser_uncertainty.action": "Abre la oferta y comprueba qué se envió antes de volver a autorizarla.",
   "closer.reason.url_refused.why": "El enlace de la oferta apunta a una dirección que el CLOSER se niega a abrir.",
-  "closer.reason.url_refused.action": "Revisa el enlace."
+  "closer.reason.url_refused.action": "Revisa el enlace.",
+  "closer.reason.page_not_found.why": "La página de la oferta ya no existe (el sitio responde que no la encuentra).",
+  "closer.reason.page_not_found.action": "No hay nada que hacer salvo que vuelvas a encontrar la oferta: entonces vuelve a autorizarla.",
+  "closer.reason.bot_protection.why": "El sitio bloquea las visitas automáticas con un control anti-bot.",
+  "closer.reason.bot_protection.action": "Postúlate a mano: el CLOSER nunca supera estos controles.",
+  "closer.reason.page_temporarily_unavailable.why": "El sitio no respondió tres veces en un día.",
+  "closer.reason.page_temporarily_unavailable.action": "Prueba el enlace más tarde; cuando funcione, vuelve a autorizarla."
 }

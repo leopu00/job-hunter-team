@@ -210,5 +210,11 @@
   "closer.reason.browser_uncertainty.why": "A böngésző a jelentkezés közepén megállt.",
   "closer.reason.browser_uncertainty.action": "Nyisd meg az állást, és nézd meg, mi lett elküldve, mielőtt újra engedélyezed.",
   "closer.reason.url_refused.why": "Az állás linkje olyan címre mutat, amelyet a CLOSER nem hajlandó megnyitni.",
-  "closer.reason.url_refused.action": "Ellenőrizd a linket."
+  "closer.reason.url_refused.action": "Ellenőrizd a linket.",
+  "closer.reason.page_not_found.why": "Az állás oldala már nem létezik (az oldal azt válaszolja, hogy nem található).",
+  "closer.reason.page_not_found.action": "Nincs teendő, hacsak újra meg nem találod az állást: akkor engedélyezd újra.",
+  "closer.reason.bot_protection.why": "Az oldal bot elleni ellenőrzéssel blokkolja az automatikus látogatásokat.",
+  "closer.reason.bot_protection.action": "Jelentkezz kézzel: a CLOSER soha nem kerüli meg ezeket az ellenőrzéseket.",
+  "closer.reason.page_temporarily_unavailable.why": "Az oldal egy nap alatt háromszor nem válaszolt.",
+  "closer.reason.page_temporarily_unavailable.action": "Próbáld később a linket; ha működik, engedélyezd újra."
 }

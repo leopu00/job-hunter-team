@@ -239,5 +239,11 @@
   "closer.reason.browser_uncertainty.why": "The browser stopped in the middle of the application.",
   "closer.reason.browser_uncertainty.action": "Open the vacancy and check what was sent before authorising it again.",
   "closer.reason.url_refused.why": "The vacancy link points to an address the CLOSER refuses to open.",
-  "closer.reason.url_refused.action": "Check the link."
+  "closer.reason.url_refused.action": "Check the link.",
+  "closer.reason.page_not_found.why": "The vacancy page no longer exists (the site answers that it is not found).",
+  "closer.reason.page_not_found.action": "Nothing to do unless you find the vacancy again: then authorise it again.",
+  "closer.reason.bot_protection.why": "The site blocks automated visits with an anti-bot check.",
+  "closer.reason.bot_protection.action": "Apply by hand: the CLOSER never gets past these checks.",
+  "closer.reason.page_temporarily_unavailable.why": "The site did not answer three times in a day.",
+  "closer.reason.page_temporarily_unavailable.action": "Try the link later; authorise it again when it works."
 }

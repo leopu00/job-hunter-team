@@ -29,7 +29,7 @@ detail names it) · application_form_ambiguous · generic_form_missing ·
 generic_form_unrecognised · application_redirect_untrusted ·
 cover_letter_required · pre_submit_screenshot_failed · and the answer stops
 shared with the other recipes (required_answer_missing with an
-answer_request, required_profile_field_missing, answer_option_unknown,
+answer_request — also for a core field the profile lacks, answer_option_unknown,
 answer_type_unknown, answer_not_accepted, unknown_required_control, cv_missing,
 resume_field_missing, upload_rejected, form_error, field_invalid,
 submit_unavailable). A question without a saved answer never goes to the user
@@ -62,6 +62,11 @@ except ImportError:  # pragma: no cover - package import
         _normalise_label,
         _safe_label,
     )
+
+try:
+    from profile_facts import core_answer_request, profile_value
+except ImportError:  # pragma: no cover - package import
+    from shared.skills.profile_facts import core_answer_request, profile_value  # type: ignore[no-redef]
 
 PLATFORM = "generic"
 
@@ -654,25 +659,39 @@ class GenericRecipe:
             field = core_field(question)
             if not field or question.get("answered"):
                 continue
-            key, paths = field
+            key, _paths = field
             label = self._label(question)
-            present, value = self._answer_for(label, key)
-            if not present:
-                for path in paths:
-                    value = self._profile_value(self.profile, path)
-                    if value is not None:
-                        present = True
-                        self.answer_sources[_normalise_label(label) or key] = "profile"
-                        break
+            # profile_facts rule: the profile under its aliases, then a saved
+            # answer, then a question the CLOSER works out (CL-08). Never a
+            # hard stop for a fact the profile can give, never a split name.
+            value = profile_value(self.profile, key)
+            present = value is not None
+            if present:
+                self.answer_sources[_normalise_label(label) or key] = "profile"
+            else:
+                present, value = self._answer_for(label, key)
             if not present:
                 if question.get("required"):
+                    request = core_answer_request(label, str(question.get("type") or "text"))
+                    if request is None:
+                        raise BlockedHuman(
+                            "unknown_required_control",
+                            f"Required core field has no usable label: {_safe_label(key)}",
+                            "fill",
+                        )
                     raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required field needs profile data: {_safe_label(label)}",
+                        "required_answer_missing",
+                        f"Required field needs a fact the profile does not state: {_safe_label(label)}",
                         "fill",
+                        answer_request=request,
                     )
                 continue
-            self._fill(page, form, question, value, "fill")
+            try:
+                self._fill(page, form, question, value, "fill")
+            except BlockedHuman as refused:
+                raise _inferred_answer_refused(
+                    self, refused, lambda q=question: core_answer_request(self._label(q), str(q.get("type") or "text"))
+                ) from None
 
     def upload_cv(self, page) -> None:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:

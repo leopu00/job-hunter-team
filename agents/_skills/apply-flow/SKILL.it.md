@@ -79,6 +79,7 @@ Il flusso si ferma su qualunque cosa non possa fare con certezza:
 | `form_error` / `field_invalid` / `submit_unavailable` | il form segnala un errore, il formato di un campo è rifiutato, o il bottone di invio manca o è disabilitato |
 | `url_refused` / `checkpoint_invalid` | l'URL della candidatura non ha passato il controllo sugli indirizzi pubblici, o il checkpoint salvato non si legge |
 | `page_unavailable` / `browser_uncertainty` | la pagina o il browser hanno ceduto a metà flusso |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | la pagina dell'offerta non c'è più (404/410 senza prove di offerta chiusa), un controllo anti-bot ha fermato il browser (dopo un tentativo in un browser visibile), o il sito non ha risposto tre volte in un giorno. Un singolo 5xx o timeout NON è uno stop: il checkpoint dice `retry_later`, la coda ridà la posizione più tardi da sola e nessuno viene avvisato. Il checkpoint tiene `http_status` e `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | l'invio è stato cliccato ma la conferma non è certa |
 | `receipt_screenshot_failed` | la conferma era visibile ma il suo screenshot non si è potuto salvare |
 | `submit_outcome_unknown` | un giro precedente ha avviato l'invio e non ha lasciato ricevuta |
@@ -113,7 +114,7 @@ click; senza una conferma riconoscibile (testo o URL) l'esito è
 un ATS noto passa la posizione a quella ricetta.
 
 **Un riepilogo per giro.** Gli stop che dipendono dal sito (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`) non vengono
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) non vengono
 notificati uno per uno: aspettano il riepilogo che mandi allo STEP 6 con
 `python3 /app/shared/skills/closer_notices.py flush`. Ogni avviso arriva
 all'utente nella lingua del suo profilo.

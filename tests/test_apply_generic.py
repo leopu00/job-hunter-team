@@ -268,15 +268,43 @@ def test_unanswered_required_radio_becomes_a_pending_question(browser, cv_path):
     }
 
 
-def test_missing_required_profile_fact_stops_before_screening(browser, cv_path):
+def test_a_core_fact_the_profile_lacks_becomes_a_question_then_fills(browser, cv_path):
+    # 1967 (14/09): the profile had only `name`; a hard stop on First Name.
+    only_name = {"name": "Jane Example", "contacts": PROFILE["contacts"],
+                 "application_answers": PROFILE["application_answers"]}
     page = _site_page(browser, {"/jobs/7": CLASSIC})
     page.goto(f"{BASE}/jobs/7")
-    profile = {k: v for k, v in PROFILE.items() if k != "last_name"}
-    recipe = _recipe(cv_path, profile)
+    recipe = _recipe(cv_path, only_name)
     recipe.open_form(page)
     stop = _blocked(lambda: recipe.fill_core(page))
-    assert stop.reason == "required_profile_field_missing"
-    assert page.locator("#ln").input_value() == ""
+    assert stop.reason == "required_answer_missing"
+    assert stop.answer_request == {"key": "first name", "label": "First name", "field_type": "text", "options": []}
+    assert page.locator("#fn").input_value() == ""
+    # The CLOSER works it out from `name` (CL-08) and saves it; the rerun fills.
+    saved = {**only_name, "application_answers": {**only_name["application_answers"], "first name": "Jane"}}
+    page.goto(f"{BASE}/jobs/7")
+    recipe = _recipe(cv_path, saved)
+    recipe.open_form(page)
+    stop = _blocked(lambda: recipe.fill_core(page))
+    assert stop.answer_request["key"] == "last name"
+    assert page.locator("#fn").input_value() == "Jane"
+    saved["application_answers"]["last name"] = "Example"
+    page.goto(f"{BASE}/jobs/7")
+    recipe = _recipe(cv_path, saved)
+    recipe.open_form(page)
+    recipe.fill_core(page)
+    assert (page.locator("#fn").input_value(), page.locator("#ln").input_value()) == ("Jane", "Example")
+    assert recipe.answer_sources["first name"] == "profile"
+
+
+def test_profile_aliases_win_over_a_question(browser, cv_path):
+    aliased = {"given_name": "Jana", "family_name": "Beispiel", "contacts": PROFILE["contacts"]}
+    page = _site_page(browser, {"/jobs/7": CLASSIC})
+    page.goto(f"{BASE}/jobs/7")
+    recipe = _recipe(cv_path, aliased)
+    recipe.open_form(page)
+    recipe.fill_core(page)
+    assert (page.locator("#fn").input_value(), page.locator("#ln").input_value()) == ("Jana", "Beispiel")
 
 
 def _to_screening(browser, cv_path, answers, origins=None):

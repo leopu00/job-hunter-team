@@ -209,5 +209,11 @@
   "closer.reason.browser_uncertainty.why": "O navegador parou a meio da candidatura.",
   "closer.reason.browser_uncertainty.action": "Abre a vaga e verifica o que foi enviado antes de a voltares a autorizar.",
   "closer.reason.url_refused.why": "O link da vaga aponta para um endereço que o CLOSER se recusa a abrir.",
-  "closer.reason.url_refused.action": "Verifica o link."
+  "closer.reason.url_refused.action": "Verifica o link.",
+  "closer.reason.page_not_found.why": "A página da vaga já não existe (o site responde que não a encontra).",
+  "closer.reason.page_not_found.action": "Nada a fazer, a menos que voltes a encontrar a vaga: nesse caso volta a autorizá-la.",
+  "closer.reason.bot_protection.why": "O site bloqueia visitas automáticas com um controlo anti-bot.",
+  "closer.reason.bot_protection.action": "Candidata-te à mão: o CLOSER nunca passa estes controlos.",
+  "closer.reason.page_temporarily_unavailable.why": "O site não respondeu três vezes num dia.",
+  "closer.reason.page_temporarily_unavailable.action": "Tenta o link mais tarde; quando funcionar, volta a autorizá-la."
 }

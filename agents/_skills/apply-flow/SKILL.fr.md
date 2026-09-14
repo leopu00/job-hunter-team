@@ -80,6 +80,7 @@ Le flux s'arrête sur tout ce qu'il ne peut pas faire avec certitude :
 | `form_error` / `field_invalid` / `submit_unavailable` | le formulaire signale une erreur, le format d'un champ est refusé, ou le bouton d'envoi manque ou est désactivé |
 | `url_refused` / `checkpoint_invalid` | l'URL de la candidature n'a pas passé le contrôle des adresses publiques, ou le checkpoint enregistré est illisible |
 | `page_unavailable` / `browser_uncertainty` | la page ou le navigateur a lâché en plein flux |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | la page de l'offre n'existe plus (404/410 sans preuve d'offre fermée), un contrôle anti-bot a arrêté le navigateur (après un essai dans un navigateur visible), ou le site n'a pas répondu trois fois en une journée. Un seul 5xx ou timeout N'EST PAS un arrêt : le checkpoint indique `retry_later`, la file rend le poste plus tard d'elle-même et personne n'est averti. Le checkpoint garde `http_status` et `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | l'envoi a été cliqué mais la confirmation n'est pas certaine |
 | `receipt_screenshot_failed` | la confirmation était visible mais sa capture n'a pas pu être enregistrée |
 | `submit_outcome_unknown` | un passage précédent a lancé l'envoi et n'a laissé aucun reçu |
@@ -114,7 +115,7 @@ formulaire rempli est photographié avant le clic ; sans confirmation reconnue
 Un bouton Postuler qui mène à un ATS connu confie le poste à cette recette.
 
 **Un récapitulatif par tournée.** Les arrêts propres au site (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`) ne sont pas
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) ne sont pas
 notifiés un par un : ils attendent le récapitulatif que tu envoies au STEP 6 avec
 `python3 /app/shared/skills/closer_notices.py flush`. Chaque avis arrive à
 l'utilisateur dans la langue de son profil.

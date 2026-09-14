@@ -80,6 +80,7 @@ Der Flow stoppt bei allem, was er nicht mit Sicherheit tun kann:
 | `form_error` / `field_invalid` / `submit_unavailable` | das Formular meldet einen Fehler, ein Feldformat wird abgelehnt, oder der Absende-Button fehlt oder ist deaktiviert |
 | `url_refused` / `checkpoint_invalid` | die Bewerbungs-URL hat die Prüfung auf öffentliche Adressen nicht bestanden, oder der gespeicherte Checkpoint ist unlesbar |
 | `page_unavailable` / `browser_uncertainty` | die Seite oder der Browser ist mitten im Flow ausgefallen |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | die Seite der Stelle ist weg (404/410 ohne Beleg für eine geschlossene Stelle), eine Anti-Bot-Prüfung hat den Browser gestoppt (nach einem Versuch in einem sichtbaren Browser), oder die Website hat an einem Tag dreimal nicht geantwortet. Ein einzelner 5xx oder Timeout ist KEIN Stopp: der Checkpoint sagt `retry_later`, die Warteschlange gibt die Stelle später von selbst zurück, und niemand wird benachrichtigt. Der Checkpoint behält `http_status` und `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | Absenden wurde geklickt, aber die Bestätigung ist nicht sicher |
 | `receipt_screenshot_failed` | die Bestätigung war sichtbar, aber ihr Screenshot konnte nicht gespeichert werden |
 | `submit_outcome_unknown` | ein früherer Lauf hat das Absenden begonnen und keinen Beleg hinterlassen |
@@ -116,7 +117,7 @@ dieses Rezept.
 
 **Eine Zusammenfassung pro Runde.** Stopps, die an der Website liegen
 (`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
-`application_form_embedded`), werden nicht einzeln gemeldet: Sie warten auf die
+`application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`), werden nicht einzeln gemeldet: Sie warten auf die
 Zusammenfassung, die du in STEP 6 mit
 `python3 /app/shared/skills/closer_notices.py flush` sendest. Jede Meldung
 erreicht die Person in der Sprache ihres Profils.

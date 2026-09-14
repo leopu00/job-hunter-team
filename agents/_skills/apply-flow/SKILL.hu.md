@@ -80,6 +80,7 @@ A folyamat megáll mindennél, amit nem tud biztosan elvégezni:
 | `form_error` / `field_invalid` / `submit_unavailable` | az űrlap hibát jelez, egy mező formátumát elutasítja, vagy a beküldés gomb hiányzik vagy le van tiltva |
 | `url_refused` / `checkpoint_invalid` | a jelentkezési URL nem ment át a nyilvános címek ellenőrzésén, vagy a mentett checkpoint olvashatatlan |
 | `page_unavailable` / `browser_uncertainty` | az oldal vagy a böngésző a folyamat közepén hibázott |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | az állás oldala már nincs meg (404/410 lezárt állásra utaló bizonyíték nélkül), bot elleni ellenőrzés állította meg a böngészőt (egy látható böngészős próbálkozás után), vagy az oldal egy nap alatt háromszor nem válaszolt. Egyetlen 5xx vagy időtúllépés NEM leállás: a checkpoint `retry_later`, a sor később magától visszaadja a pozíciót, és senki nem kap értesítést. A checkpoint megőrzi a `http_status` és `final_url` értéket |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | a beküldésre rákattintott, de a megerősítés nem biztos |
 | `receipt_screenshot_failed` | a megerősítés látható volt, de a képernyőképét nem sikerült menteni |
 | `submit_outcome_unknown` | egy korábbi futás elindította a beküldést és nem hagyott nyugtát |
@@ -114,7 +115,7 @@ az eredmény `submit_outcome_unknown`, soha nincs második kattintás. Egy ismer
 ATS-re vezető Jelentkezés gomb az adott receptnek adja át a pozíciót.
 
 **Körönként egy összesítő.** Az oldal miatti leállások (`ats_unsupported`,
-`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`) nem egyenként
+`ats_conflict`, `linkedin_easy_apply`, `application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) nem egyenként
 mennek ki: a STEP 6-ban a `python3 /app/shared/skills/closer_notices.py flush`
 paranccsal küldött összesítőre várnak. Minden értesítés a felhasználó profiljának
 nyelvén érkezik.

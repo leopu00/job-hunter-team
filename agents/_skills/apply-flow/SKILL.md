@@ -79,6 +79,7 @@ The flow stops on anything it cannot do with certainty:
 | `form_error` / `field_invalid` / `submit_unavailable` | the form reports an error, a field format is rejected, or the submit button is missing or disabled |
 | `url_refused` / `checkpoint_invalid` | the application URL failed the public-address guard, or the saved checkpoint is unreadable |
 | `page_unavailable` / `browser_uncertainty` | the page or the browser failed mid-flow |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | the vacancy page is gone (404/410 with no closed-vacancy evidence), an anti-bot wall stopped the browser (after one try in a visible browser), or the site did not answer three times in a day. A single 5xx or timeout is NOT a stop: the checkpoint says `retry_later`, the queue gives the position back later by itself, and nobody is notified. The checkpoint keeps `http_status` and `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | submit was clicked but the confirmation is not certain |
 | `receipt_screenshot_failed` | the confirmation was visible but its screenshot could not be saved |
 | `submit_outcome_unknown` | a previous run started submit and left no receipt |
@@ -113,7 +114,7 @@ control that leads to a known ATS hands the position to that recipe.
 
 **One summary per round.** Stops that are a property of the site
 (`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
-`application_form_embedded`) are not notified one by one: they wait for the
+`application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) are not notified one by one: they wait for the
 summary you send at STEP 6 with `python3 /app/shared/skills/closer_notices.py flush`.
 Every notice reaches the user in the language of their profile.
 

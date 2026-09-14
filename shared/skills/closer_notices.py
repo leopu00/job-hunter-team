@@ -53,7 +53,12 @@ if str(SHARED) not in sys.path:
 
 import i18n  # noqa: E402
 
-DIGEST_REASONS = frozenset({"ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded"})
+DIGEST_REASONS = frozenset({
+    "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
+    # page_failure: a gone page, an anti-bot wall, a page down three times in a day.
+    # A temporary failure below that is never a stop, so it never reaches here.
+    "page_not_found", "bot_protection", "page_temporarily_unavailable",
+})
 # Reasons with their own why/action text. Any other reason gets the default.
 KNOWN_REASONS = (
     "ats_unsupported",
@@ -76,6 +81,9 @@ KNOWN_REASONS = (
     "page_unavailable",
     "browser_uncertainty",
     "url_refused",
+    "page_not_found",
+    "bot_protection",
+    "page_temporarily_unavailable",
 )
 FLUSH_AFTER = timedelta(hours=6)
 KEEP_SENT = 500

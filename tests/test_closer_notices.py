@@ -117,6 +117,16 @@ def test_digest_reasons_are_explained():
     assert notices.DIGEST_REASONS <= set(notices.KNOWN_REASONS)
 
 
+def test_site_and_page_stops_go_to_the_summary():
+    # 14/09: every stop sent its own Telegram message. The page failures of D2
+    # join the summary; a temporary failure is never a stop at all.
+    assert {
+        "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
+        "page_not_found", "bot_protection", "page_temporarily_unavailable",
+    } <= notices.DIGEST_REASONS
+    assert "retry_later" not in notices.DIGEST_REASONS
+
+
 @pytest.mark.parametrize("lang", LANGS)
 def test_every_closer_string_exists_in_every_language_with_the_same_placeholders(lang):
     english, catalog = _catalog("en"), _catalog(lang)

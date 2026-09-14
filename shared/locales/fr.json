@@ -209,5 +209,11 @@
   "closer.reason.browser_uncertainty.why": "Le navigateur s'est arrêté au milieu de la candidature.",
   "closer.reason.browser_uncertainty.action": "Ouvre l'offre et vérifie ce qui a été envoyé avant de l'autoriser à nouveau.",
   "closer.reason.url_refused.why": "Le lien de l'offre pointe vers une adresse que le CLOSER refuse d'ouvrir.",
-  "closer.reason.url_refused.action": "Vérifie le lien."
+  "closer.reason.url_refused.action": "Vérifie le lien.",
+  "closer.reason.page_not_found.why": "La page de l'offre n'existe plus (le site répond qu'elle est introuvable).",
+  "closer.reason.page_not_found.action": "Rien à faire, sauf si tu retrouves l'offre : alors autorise-la à nouveau.",
+  "closer.reason.bot_protection.why": "Le site bloque les visites automatiques avec un contrôle anti-bot.",
+  "closer.reason.bot_protection.action": "Postule à la main : le CLOSER ne passe jamais ces contrôles.",
+  "closer.reason.page_temporarily_unavailable.why": "Le site n'a pas répondu trois fois en une journée.",
+  "closer.reason.page_temporarily_unavailable.action": "Réessaie le lien plus tard ; quand il fonctionne, autorise-la à nouveau."
 }

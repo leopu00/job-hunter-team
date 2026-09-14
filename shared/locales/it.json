@@ -209,5 +209,11 @@
   "closer.reason.browser_uncertainty.why": "Il browser si è fermato a metà della candidatura.",
   "closer.reason.browser_uncertainty.action": "Apri l'offerta e controlla cosa è stato inviato prima di autorizzarla di nuovo.",
   "closer.reason.url_refused.why": "Il link dell'offerta punta a un indirizzo che il CLOSER si rifiuta di aprire.",
-  "closer.reason.url_refused.action": "Controlla il link."
+  "closer.reason.url_refused.action": "Controlla il link.",
+  "closer.reason.page_not_found.why": "La pagina dell'offerta non esiste più (il sito risponde che non la trova).",
+  "closer.reason.page_not_found.action": "Nulla da fare, a meno che tu ritrovi l'offerta: allora autorizzala di nuovo.",
+  "closer.reason.bot_protection.why": "Il sito blocca le visite automatiche con un controllo anti-bot.",
+  "closer.reason.bot_protection.action": "Candidati a mano: il CLOSER non supera mai questi controlli.",
+  "closer.reason.page_temporarily_unavailable.why": "Il sito non ha risposto per tre volte in un giorno.",
+  "closer.reason.page_temporarily_unavailable.action": "Riprova il link più tardi; quando funziona, autorizzala di nuovo."
 }
