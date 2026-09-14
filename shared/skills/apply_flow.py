@@ -63,6 +63,10 @@ try:
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import profile_facts
 try:
+    import apply_vocabulary
+except ImportError:  # pragma: no cover - package-style import outside the CLI
+    from shared.skills import apply_vocabulary
+try:
     import page_failure
 except ImportError:  # pragma: no cover - package-style import outside the CLI
     from shared.skills import page_failure
@@ -136,7 +140,10 @@ _MAILTO_CONTROLS_JS = r"""
 # the footer is a contact, and a contact is not a channel.
 _MAILTO_APPLY_LABEL = re.compile(
     r"\b(apply|application|send\s+(?:us\s+)?(?:your\s+)?(?:cv|resume|application)|"
-    r"candidat\w*|bewerb\w*|postul\w*|solicit\w*|invia\w*\s+(?:il\s+)?cv)\b",
+    r"candidat\w*|bewerb\w*|postul\w*|solicit\w*|invia\w*\s+(?:il\s+)?cv)\b"
+    # Czech, Polish, Slovak, Nordic, Baltic, Balkan, Greek, Cyrillic… (2071:
+    # "Poslat přihlášku"), bounded for Python and for the browser alike.
+    rf"|{apply_vocabulary.MORE_APPLY}",
     re.I,
 )
 
@@ -2038,6 +2045,22 @@ class GreenhouseRecipe:
                 options.append((text, text[: match.start()].strip(), code))
         return listbox, options
 
+    @staticmethod
+    def _phone_country_kept(page, container, chosen: str, code: str) -> bool:
+        """Did the menu keep the option?  1967 (patch 21): the chosen value shows
+        as a flag and "+39" only, never the option's "Italy +39"; and it renders
+        a moment after the click."""
+        deadline = time.monotonic() + 3
+        while True:
+            shown = container.locator(".select__single-value") if container.count() else None
+            if shown is not None and shown.count():
+                text = _exact_form_text(shown.first.inner_text(), maximum=200)
+                if text == chosen or ("+" in text and re.sub(r"\D", "", text) == code):
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            page.wait_for_timeout(200)
+
     def _fill_phone_country(self, page, control, label: str, required: bool) -> None:
         listbox, options = self._phone_country_options(page, control)
         if not options:
@@ -2105,8 +2128,8 @@ class GreenhouseRecipe:
             )
         option.first.click()
         container = control.locator("xpath=ancestor::*[contains(@class, 'select__container')][1]")
-        shown = container.locator(".select__single-value") if container.count() else page.locator("#__none__")
-        if not shown.count() or _exact_form_text(shown.first.inner_text(), maximum=200) != chosen:
+        code = next(item_code for text, _country, item_code in options if text == chosen)
+        if not self._phone_country_kept(page, container, chosen, code):
             raise BlockedHuman(
                 "answer_not_accepted",
                 f"Greenhouse did not keep the phone country: {_safe_label(label)}",
@@ -3268,6 +3291,11 @@ class ApplicationFlow:
             "field_type": str(blocked.answer_request["field_type"]),
             "options": list(blocked.answer_request.get("options") or []),
         }
+        purpose = blocked.answer_request.get("purpose")
+        if isinstance(purpose, str) and purpose:
+            # What the answer is for when the label alone does not say it
+            # (a contact form's Message that is the application letter).
+            payload["purpose"] = purpose
         # The question as the page asks it now: a field that changed type or
         # options is a new request, never the old one's row (1967, 14/09).
         schema = json.dumps([payload["field_type"], payload["options"]], ensure_ascii=False)
@@ -3490,7 +3518,7 @@ class ApplicationFlow:
             "options": [str(option) for option in payload.get("options") or []],
             "scope": "company" if field_type == "textarea" or key == "salary expectations" else "global",
             "asked": cls._request_asked(request),
-        }
+        } | ({"purpose": str(payload["purpose"])} if payload.get("purpose") else {})
 
     def ask_pending(self, checkpoint: FlowCheckpoint) -> dict[str, str]:
         """Send the stopped form question to the user: a durable row, then one notification."""
@@ -3519,8 +3547,20 @@ class ApplicationFlow:
             LOG.error("answer request notification failed: %s", type(exc).__name__)
         return {"status": "asked", "source_id": source_id}
 
-    def _email_channel(self, checkpoint: FlowCheckpoint, page) -> FlowResult | None:
+    def _email_channel(
+        self, checkpoint: FlowCheckpoint, page, *, instructions: bool = False
+    ) -> FlowResult | None:
+        """The mailbox the application goes to: an apply-labelled mailto link, or
+        (`instructions`, only where no application form is on the page) the one
+        address the page's text tells applicants to write to (1798)."""
         href = mailto_application_href(page)
+        reason = "mailto_application"
+        if href is None and instructions:
+            module = _optional_module("apply_instructions")
+            found = module.email_instruction(module.page_text(page)) if module is not None else None
+            if found is not None:
+                href, reason = module.mailto_href(found), "email_instruction"
+                LOG.info("[apply-flow] email channel from the page's application instructions")
         if href is None:
             return None
         checkpoint.channel = "email"
@@ -3530,7 +3570,7 @@ class ApplicationFlow:
         checkpoint.blocked_detail = ""
         checkpoint.resume_state = ""
         checkpoint.save(self.checkpoint_path)
-        return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
+        return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, reason)
 
     def _deny(
         self, checkpoint: FlowCheckpoint, verdict: Any, *, page: Any | None = None
@@ -4302,10 +4342,14 @@ class ApplicationFlow:
         else:
             detection = detect_ats(self.url, page.content())
         if detection.platform not in SUPPORTED_PLATFORMS:
-            email = self._email_channel(checkpoint, page)
+            company_page = not detection.url_match and not detection.conflict
+            # A known ATS host without a recipe has no form the flow can read:
+            # the page's own instructions may still name the mailbox.  A company
+            # page waits for its form first (below).
+            email = self._email_channel(checkpoint, page, instructions=not company_page)
             if email is not None:
                 return email
-            if not detection.url_match and not detection.conflict:
+            if company_page:
                 # The host is no known ATS (a vendor name in the markup is not
                 # the host): the company-form recipe always gets its turn and
                 # says why when it cannot apply.  2071 (14/09): a quick look
@@ -4334,7 +4378,9 @@ class ApplicationFlow:
         # the browser and read as a missing form.  A recognised form on
         # the page still wins over an "email us" link next to it.
         if not recipe.form_present(page):
-            email = self._email_channel(checkpoint, page)
+            # No application form: an apply mailto, then an address the page's
+            # text names ("Send your CV to careers@…"), before any Apply control.
+            email = self._email_channel(checkpoint, page, instructions=True)
             if email is not None:
                 return email
             if not recipe.apply_control_present(page) and not (
@@ -4348,18 +4394,9 @@ class ApplicationFlow:
                 self._assert_no_closed_notice(page)
         injected_blank = not navigate and page.url == "about:blank"
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
-        try:
-            recipe.open_form(page)
-        except BlockedHuman as refused:
-            if detection.platform == "generic" and refused.reason == "generic_form_missing":
-                # The company-form recipe found nothing to apply with either:
-                # the page stays unsupported, with the recipe's own finding.
-                raise BlockedHuman(
-                    "ats_unsupported",
-                    f"No known ATS and no company application form: {refused.detail} (generic_form_missing)",
-                    "detect",
-                ) from None
-            raise
+        # A company page the recipe finds nothing to apply with stops with the
+        # recipe's own reason (generic_form_missing), never a wrapped one.
+        recipe.open_form(page)
         self._assert_recipe_page(page, detection.platform, "detect", allow_injected_blank=injected_blank, application_url=self.url)
         # Confirm the rendered form too.  URL-only detection is not
         # enough to interact when a block/error page owns that URL.

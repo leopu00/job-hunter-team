@@ -209,7 +209,7 @@ def _recipe(cv_path: Path, profile=PROFILE) -> GenericRecipe:
 
 def _run_until_review(recipe: GenericRecipe, page) -> None:
     recipe.open_form(page)
-    assert GenericRecipe.dom_match(page)
+    assert recipe.dom_match(page)
     recipe.fill_core(page)
     recipe.upload_cv(page)
     recipe.fill_screening(page)

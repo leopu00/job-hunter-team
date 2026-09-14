@@ -129,6 +129,7 @@ def test_every_known_reason_has_why_and_action_in_english():
 SITE_REASONS = (
     "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
     "page_not_found", "bot_protection", "page_temporarily_unavailable",
+    "generic_form_missing",  # 2071, 1798: the recipe's own reason, no longer wrapped as ats_unsupported
 )
 
 
