@@ -67,6 +67,11 @@ except ImportError:  # pragma: no cover - package import
     )
 
 try:
+    import location_choice
+except ImportError:  # pragma: no cover - package import
+    from shared.skills import location_choice  # type: ignore[no-redef]
+
+try:
     from profile_facts import core_answer_request, profile_value
 except ImportError:  # pragma: no cover - package import
     from shared.skills.profile_facts import core_answer_request, profile_value  # type: ignore[no-redef]
@@ -620,7 +625,13 @@ class GenericRecipe:
         """Open each custom listbox of a form once, store its options, close it.
 
         A click on a form's own drop-down toggle: nothing is chosen, typed or sent.
+        A toggle whose click would submit its form (a <button> without
+        type="button") is never clicked: its options stay unknown.
         """
+        page.locator("form button[aria-haspopup=listbox]:not([data-jht-options])").evaluate_all(
+            f"els => els.filter(el => !({location_choice.NEVER_SUBMITS_JS})(el))"
+            ".forEach(el => el.setAttribute('data-jht-options', '[]'))"
+        )
         for _ in range(limit):
             box = page.locator("form button[aria-haspopup=listbox]:not([data-jht-options])").first
             if not box.count():
@@ -850,6 +861,8 @@ class GenericRecipe:
             if isinstance(answer, bool) or not isinstance(answer, (str, int, float)):
                 raise BlockedHuman("answer_type_unknown", f"Choice question needs an exact option label: {_safe_label(label)}", step)
             wanted = _normalise_label(str(answer))
+            if not location_choice.never_submits(control):
+                raise BlockedHuman("unknown_required_control", f"The choice would submit the form if clicked: {_safe_label(label)}", step)
             if control.get_attribute("aria-expanded") != "true":
                 control.click(timeout=5_000)
                 page.wait_for_timeout(300)
@@ -865,6 +878,10 @@ class GenericRecipe:
                 with contextlib.suppress(Exception):
                     page.keyboard.press("Escape")
                 raise BlockedHuman("answer_option_unknown", f"No exact option matches the saved answer for: {_safe_label(label)}", step)
+            if not location_choice.never_submits(matching[0]):
+                with contextlib.suppress(Exception):
+                    page.keyboard.press("Escape")
+                raise BlockedHuman("unknown_required_control", f"The option would submit the form if clicked: {_safe_label(label)}", step)
             matching[0].click(timeout=5_000)
             page.wait_for_timeout(200)
             if _normalise_label(control.inner_text() or "") != wanted:
