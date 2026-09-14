@@ -84,6 +84,9 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
                           essentials --position-id $PID --json) vagy
                           `pending_question`: következtesd ki (CL-08),
                           aztán újra STEP 3.
+                          answer_not_accepted ÉS `pending_question`:
+                          az űrlap kétszer elutasította az értékedet:
+                          ments másikat, vagy kérdezz (CL-08, 3. lépés).
                           Minden más ok: a felhasználó értesült, tovább
          denied         → a kapu nemet mondott: tovább, soha ne kerüld meg
          dry_run        → diagnosztikai futás, semmi nem ment ki: tovább

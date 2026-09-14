@@ -81,6 +81,9 @@ STEP 4 — READ THE RESULT (one JSON line)             → apply-flow
                           essentials --position-id $PID --json) or
                           `pending_question`: work them out (CL-08),
                           then STEP 3 again.
+                          answer_not_accepted WITH `pending_question`:
+                          the form refused your value twice: save a
+                          different one, or ask (CL-08 step 3).
                           Any other reason: the user was notified, go on
          denied         → the gate said no: go on, never work around it
          dry_run        → diagnostic run, nothing was sent: go on
