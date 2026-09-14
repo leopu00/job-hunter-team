@@ -780,6 +780,64 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
     assert row[1] == "closer_application_answer"
 
 
+def _answers_db(tmp_path: Path) -> Path:
+    import _db
+
+    db_path = tmp_path / "jobs.db"
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO positions(id, title, company, url, status) "
+            "VALUES (41, 'Fixture Role', 'Fixture Company', ?, 'ready')",
+            (ASHBY_URL,),
+        )
+        conn.commit()
+    return db_path
+
+
+def test_a_dry_run_never_asks_a_form_question_and_the_authorised_run_does(
+    page, tmp_path: Path, cv_path: Path
+):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+
+    def flow_in(mode: str) -> ApplicationFlow:
+        flow = build_flow(
+            tmp_path,
+            cv_path,
+            verdicts=[GateVerdict(True, context={"mode": mode, "max_per_day": 3})],
+            notifications=notifications,
+        )
+        flow.db_path = db_path
+        return flow
+
+    def requests() -> list:
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            return conn.execute(
+                "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
+            ).fetchall()
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    dry = flow_in("dry_run").run(page=page, navigate=False)
+
+    assert (dry.status, dry.reason) == ("blocked_human", "required_answer_missing")
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["blocked_reason"] == "required_answer_missing"
+    assert checkpoint["answer_request"] is None
+    assert notifications == []
+    assert requests() == []
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    authorised = flow_in("authorised").run(page=page, navigate=False)
+
+    assert (authorised.status, authorised.reason) == ("blocked_human", "required_answer_missing")
+    assert requests() == [("closer_application_answer",)]
+    assert len(notifications) == 1
+    assert notifications[0]["answer_request"]["payload"]["label"] == "Why do you want to join us?"
+    assert page.evaluate("window.submitCount") == 0
+
+
 # ── A vacancy that is no longer open ────────────────────────────────────────
 #
 # Seen live on two positions: the page said the vacancy was closed, or its URL

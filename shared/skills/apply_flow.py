@@ -2076,13 +2076,25 @@ class ApplicationFlow:
         )
 
     def _block(
-        self, checkpoint: FlowCheckpoint, blocked: BlockedHuman, *, page: Any | None = None
+        self,
+        checkpoint: FlowCheckpoint,
+        blocked: BlockedHuman,
+        *,
+        page: Any | None = None,
+        dry_run: bool = False,
     ) -> FlowResult:
         checkpoint.state = "blocked_human"
         checkpoint.resume_state = blocked.step
         checkpoint.blocked_reason = blocked.reason
         checkpoint.blocked_detail = blocked.detail
         previous_screenshot = self._capture_stop_screenshot(checkpoint, blocked.reason, page)
+        if dry_run and blocked.answer_request:
+            # A dry run never asks the user anything: the stop lives only in the
+            # checkpoint, with no durable request and no notification.  The
+            # first authorised run reaches the same field and asks then.
+            checkpoint.save(self.checkpoint_path)
+            self._discard_stop_screenshot(checkpoint, previous_screenshot)
+            return FlowResult("blocked_human", checkpoint.state, blocked.reason)
         legacy_message = ""
         if blocked.answer_request:
             candidate = self._answer_request_record(blocked)
@@ -2891,7 +2903,7 @@ class ApplicationFlow:
                 checkpoint.save(self.checkpoint_path)
                 return self._record(checkpoint, receipt)
             except BlockedHuman as blocked:
-                return self._block(checkpoint, blocked, page=active_page)
+                return self._block(checkpoint, blocked, page=active_page, dry_run=mode == "dry_run")
             except Exception as exc:
                 step = checkpoint.state if checkpoint.state in STEP_ORDER else "review"
                 return self._block(
