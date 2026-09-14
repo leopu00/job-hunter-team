@@ -118,8 +118,8 @@ export type AutoApplyMode = "authorised" | "dry_run";
 export interface AutoApplyConfig {
   /** Default `false`. Nessun consenso = il CLOSER non viene nemmeno spawnato. */
   enabled: boolean;
-  /** Tetto giornaliero di candidature inviate. Un tetto assente non è un tetto. */
-  max_per_day: number;
+  /** Tetto giornaliero di candidature inviate, se l'utente ne vuole uno. Assente o null = nessun tetto. */
+  max_per_day?: number | null;
   mode: AutoApplyMode;
 }
 

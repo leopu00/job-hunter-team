@@ -52,7 +52,7 @@ RACE_WINDOW_SECONDS = 0.4
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
 
-def _home(tmp_path: Path, monkeypatch, *, max_per_day: int) -> Path:
+def _home(tmp_path: Path, monkeypatch, *, max_per_day: int | None) -> Path:
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setenv("JHT_DB", str(tmp_path / "jobs.db"))
     (tmp_path / "jht.config.json").write_text(json.dumps(
@@ -338,3 +338,15 @@ def test_a_submit_marker_that_cannot_be_saved_gives_the_slot_back_without_clicki
     assert page.evaluate("window.submitCount") == 0
     assert _reservations(home) == [(41, "browser", "released")]
     assert json.loads((home / "checkpoint-41.json").read_text())["submit_started"] is False
+
+
+
+def test_without_a_cap_every_send_is_reserved_and_counted_and_none_is_refused(tmp_path, monkeypatch):
+    home = _home(tmp_path, monkeypatch, max_per_day=None)
+    db = str(home / "jobs.db")
+    verdicts = [apply_gate.reserve_daily_slot(pid, "browser", db_path=db) for pid in (41, 42, 43)]
+    assert [v.reason for v in verdicts] == ["cap_reserved"] * 3
+    assert [(v.context["max_per_day"], v.context["remaining_today"]) for v in verdicts] == [(None, None)] * 3
+    assert [v.context["sent_today"] for v in verdicts] == [0, 1, 2]  # still counted
+    assert [row[0] for row in _reservations(home)] == [41, 42, 43]
+    assert len({v.context["token"] for v in verdicts}) == 3
