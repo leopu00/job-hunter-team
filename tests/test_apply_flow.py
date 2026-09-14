@@ -215,6 +215,7 @@ def build_flow(
 
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=41,
         url=ASHBY_URL,
         profile=candidate or profile(),
@@ -595,6 +596,7 @@ def test_required_answer_round_trip_resumes_from_dashboard_reply(
     def new_flow() -> ApplicationFlow:
         return ApplicationFlow(
             essentials_checker=lambda **_kwargs: [],
+            cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
             position_id=41,
             url=ASHBY_URL,
             profile=_load_profile(profile_path),
@@ -744,6 +746,7 @@ def test_answer_request_survives_notifier_failure(tmp_path: Path, cv_path: Path)
 
     flow = ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=41,
         url=ASHBY_URL,
         profile=profile(),

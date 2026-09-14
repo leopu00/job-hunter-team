@@ -612,6 +612,21 @@ def _read_only_essentials(
         return list(application_answers.check_essentials(conn, profile)["missing"])
 
 
+def _default_cap_reserver(*, position_id: int, db_path: str | Path | None):
+    """One slot of today's cap, atomically, before the irreversible click."""
+    try:
+        from apply_gate import reserve_daily_slot
+    except ImportError:
+        try:
+            from shared.skills.apply_gate import reserve_daily_slot
+        except ImportError:
+            return _DeniedVerdict("gate_missing", "shared/skills/apply_gate.py is unavailable; submission is closed")
+    try:
+        return reserve_daily_slot(position_id, "browser", db_path=str(db_path) if db_path else None)
+    except Exception as exc:
+        return _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
+
+
 def _resolve_db_path(db_path: str | Path | None) -> Path:
     if db_path:
         return Path(db_path)
@@ -1925,6 +1940,7 @@ class ApplicationFlow:
         notifier: Callable[..., str] | None = None,
         applied_recorder: Callable[..., None] | None = None,
         essentials_checker: Callable[..., list[str]] | None = None,
+        cap_reserver: Callable[..., Any] | None = None,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
     ):
@@ -1947,6 +1963,7 @@ class ApplicationFlow:
         self.notifier = notifier or _default_notifier
         self.applied_recorder = applied_recorder or _default_applied_recorder
         self.essentials_checker = essentials_checker or _default_essentials_checker
+        self.cap_reserver = cap_reserver or _default_cap_reserver
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
 
@@ -2941,6 +2958,16 @@ class ApplicationFlow:
                         ),
                         page=active_page,
                     )
+
+                # The cap, atomically, as the last decision before the click:
+                # another run with the last slot waits for this commit and is
+                # refused.  The slot counts for the day whatever happens next.
+                try:
+                    slot = self.cap_reserver(position_id=self.position_id, db_path=self.db_path)
+                except Exception as exc:
+                    slot = _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
+                if getattr(slot, "allowed", None) is not True:
+                    return self._deny(checkpoint, slot, page=active_page)
 
                 checkpoint.state = "submit"
                 checkpoint.submit_started = True

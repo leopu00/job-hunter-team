@@ -87,6 +87,7 @@ def build_flow(tmp_path: Path, cv_path: Path, url: str, notifications=None, reco
     recorded = recorded if recorded is not None else []
     return ApplicationFlow(
         essentials_checker=lambda **_kwargs: [],
+        cap_reserver=lambda **_kwargs: GateVerdict(True, "cap_reserved"),
         position_id=77,
         url=url,
         profile={

@@ -76,6 +76,8 @@ __all__ = [
     "consent_verdict",
     "daily_cap_verdict",
     "position_verdict",
+    "release_daily_slot",
+    "reserve_daily_slot",
 ]
 
 
@@ -788,33 +790,153 @@ def _email_hold(
     return f"email_{state}"
 
 
-def _sent_today(conn: sqlite3.Connection) -> int:
+CAP_RESERVATIONS_TABLE = "apply_cap_reservations"
+CAP_CHANNELS = ("email", "browser")
+
+
+def _sent_today(conn: sqlite3.Connection, *, except_position: int | None = None) -> int:
     """Automated sends that consume today's cap, browser and email together.
 
-    An email attempt whose outcome is still open counts as sent: it may have
-    reached the recruiter, and a cap that ignores it lets the next run write
-    one more letter than the user allowed.
+    One per position, from three sources: an application recorded as sent by
+    an automated channel; an email attempt whose outcome is still open (it may
+    have reached the recruiter); a cap reservation not released (a send in
+    flight, or one whose outcome was never known). The day rule is the one the
+    cap always had.
+
+    `except_position` leaves one position out: the one about to reserve, which
+    cannot take a second slot for itself.
     """
     if AUTOMATED_RULE_ERROR:
         raise sqlite3.DatabaseError(f"automated channels unreadable: {AUTOMATED_RULE_ERROR}")
     marks = ",".join("?" for _ in AUTOMATED_APPLIED_VIA)
-    sent = conn.execute(
-        f"SELECT COUNT(*) FROM applications WHERE applied = 1 "
+    parts = [
+        f"SELECT position_id FROM applications WHERE applied = 1 "
         f"AND applied_via IN ({marks}) "
-        f"AND date(applied_at) = date('now', 'localtime')",
-        AUTOMATED_APPLIED_VIA,
-    ).fetchone()[0]
+        f"AND date(applied_at) = date('now', 'localtime')"
+    ]
+    params: list[Any] = list(AUTOMATED_APPLIED_VIA)
     if _table_exists(conn, EMAIL_ATTEMPTS_TABLE):
         states = ",".join("?" for _ in EMAIL_UNRESOLVED_STATES)
-        sent += conn.execute(
-            f"SELECT COUNT(DISTINCT e.position_id) FROM {EMAIL_ATTEMPTS_TABLE} e "
+        parts.append(
+            f"SELECT e.position_id FROM {EMAIL_ATTEMPTS_TABLE} e "
             f"LEFT JOIN applications a ON a.position_id = e.position_id "
             f"WHERE e.state IN ({states}) "
             f"AND date(e.send_started_at, 'localtime') = date('now', 'localtime') "
-            f"AND COALESCE(a.applied, 0) != 1",
-            EMAIL_UNRESOLVED_STATES,
-        ).fetchone()[0]
-    return int(sent)
+            f"AND COALESCE(a.applied, 0) != 1"
+        )
+        params.extend(EMAIL_UNRESOLVED_STATES)
+    if _table_exists(conn, CAP_RESERVATIONS_TABLE):
+        parts.append(
+            f"SELECT position_id FROM {CAP_RESERVATIONS_TABLE} "
+            f"WHERE state = 'reserved' "
+            f"AND date(reserved_at, 'localtime') = date('now', 'localtime')"
+        )
+    query = f"SELECT COUNT(*) FROM ({' UNION '.join(parts)})"
+    if except_position is not None:
+        query += " WHERE position_id != ?"
+        params.append(int(except_position))
+    return int(conn.execute(query, params).fetchone()[0])
+
+
+def reserve_daily_slot(
+    position_id: int,
+    channel: str,
+    *,
+    config: dict | None = None,
+    config_path: Path | None = None,
+    db_path: str | None = None,
+) -> Verdict:
+    """Take one slot of today's cap, atomically, just before an irreversible send.
+
+    `BEGIN IMMEDIATE` on jobs.db, today's sends counted (`_sent_today`), the
+    reservation inserted, COMMIT — then, and only then, the caller sends. A
+    second run racing for the last slot waits for this commit and counts it:
+    it gets `daily_cap_reached`. Anything unreadable closes the cap.
+
+    The reservation keeps counting for the rest of the day, whatever happens
+    after it; `release_daily_slot` is only for a send that certainly did not
+    happen. The caller owns the connection: this opens its own and never
+    joins an open transaction.
+    """
+    consent = consent_verdict(config, config_path)
+    if not consent.allowed:
+        return consent
+    if channel not in CAP_CHANNELS:
+        return Verdict(False, "cap_channel_invalid", f"unknown application channel: {channel!r}")
+    if AUTOMATED_RULE_ERROR:
+        return Verdict(
+            False,
+            "rule_unavailable",
+            f"the automated channel list cannot be read: {AUTOMATED_RULE_ERROR}",
+            {"path": str(RULE_PATH)},
+        )
+    try:
+        pid = int(position_id)
+    except (TypeError, ValueError):
+        return Verdict(False, "position_id_invalid", "position id is not an integer")
+    max_per_day = int(consent.context.get("max_per_day"))
+    token = os.urandom(16).hex()
+    try:
+        from _db import _migrate_apply_cap_reservations  # type: ignore
+
+        conn = sqlite3.connect(db_path or _db_path(), timeout=30, isolation_level=None)
+    except Exception as err:  # noqa: BLE001 — no register, no send
+        return Verdict(False, "cap_unreadable", f"cannot open the cap register: {type(err).__name__}")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _migrate_apply_cap_reservations(conn)
+            sent_today = _sent_today(conn, except_position=pid)
+            context = {
+                "max_per_day": max_per_day,
+                "sent_today": sent_today,
+                "remaining_today": max(0, max_per_day - sent_today),
+                "position_id": pid,
+                "channel": channel,
+            }
+            if sent_today >= max_per_day:
+                conn.execute("ROLLBACK")
+                return Verdict(
+                    False,
+                    "daily_cap_reached",
+                    "the daily cap of automated applications is reached; nothing may be sent",
+                    context,
+                )
+            conn.execute(
+                f"INSERT INTO {CAP_RESERVATIONS_TABLE} (position_id, channel, token) VALUES (?, ?, ?)",
+                (pid, channel, token),
+            )
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    except sqlite3.Error as err:
+        return Verdict(False, "cap_unreadable", f"cannot reserve today's slot: {type(err).__name__}")
+    finally:
+        conn.close()
+    return Verdict(True, "cap_reserved", "one slot of today's cap is reserved for this send", {**context, "token": token})
+
+
+def release_daily_slot(token: str, *, db_path: str | None = None) -> bool:
+    """Give back a slot whose send certainly did not happen. Never for an unknown outcome."""
+    if not token:
+        return False
+    try:
+        conn = sqlite3.connect(db_path or _db_path(), timeout=30)
+        try:
+            changed = conn.execute(
+                f"UPDATE {CAP_RESERVATIONS_TABLE} SET state = 'released', "
+                f"released_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') "
+                f"WHERE token = ? AND state = 'reserved'",
+                (str(token),),
+            ).rowcount
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+    return changed == 1
 
 
 def daily_cap_verdict(
