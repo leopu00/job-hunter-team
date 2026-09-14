@@ -362,13 +362,26 @@ def _inferred_answer_refused(recipe: Any, refused: BlockedHuman, request_of: Cal
         request = None
     if not request:
         return refused
+    value = recipe.answers.get(key)
     recipe.answer_sources.pop(key, None)
-    return BlockedHuman(
+    again = BlockedHuman(
         "required_answer_missing",
         f"The worked-out answer does not fit the form ({refused.reason})",
         refused.step,
         answer_request=request,
     )
+    # Which value was refused, as a digest only: the flow counts repeats.
+    again.refused_digest = _value_digest(value)
+    return again
+
+
+# The same worked-out value refused this many times for the same question
+# stops the loop: the question then needs the CLOSER's explicit ask.
+MAX_INFERRED_REFUSALS = 2
+
+
+def _value_digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()[:16]
 
 
 def _answer_fits(payload: Mapping[str, Any], value: Any) -> bool:
@@ -464,6 +477,8 @@ class FlowCheckpoint:
     stop_screenshot: str = ""
     # Key → user / profile / agent_inferred for every saved answer the form used.
     answer_sources: dict[str, str] = field(default_factory=dict)
+    # Question key → {digest, count} of the worked-out value the form refused.
+    answer_refusals: dict[str, dict[str, Any]] = field(default_factory=dict)
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -514,6 +529,15 @@ class FlowCheckpoint:
         if not isinstance(raw.get("answer_sources", {}), dict):
             raise FlowError("checkpoint has invalid answer sources")
         raw = {**raw, "answer_sources": _answer_sources(raw.get("answer_sources", {}))}
+        refusals = raw.get("answer_refusals", {})
+        if not isinstance(refusals, dict) or any(
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("digest"), str)
+            or isinstance(entry.get("count"), bool)
+            or not isinstance(entry.get("count"), int)
+            for entry in refusals.values()
+        ):
+            raise FlowError("checkpoint has invalid answer refusals")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -2242,11 +2266,23 @@ class ApplicationFlow:
             current = checkpoint.answer_request
             if not current or current.get("source_id") != candidate["source_id"]:
                 checkpoint.answer_request = candidate
+            reason = blocked.reason
+            digest = getattr(blocked, "refused_digest", "")
+            if digest:
+                key = str(candidate["payload"]["key"])
+                previous = checkpoint.answer_refusals.get(key) or {}
+                count = int(previous.get("count", 0)) + 1 if previous.get("digest") == digest else 1
+                checkpoint.answer_refusals[key] = {"digest": digest, "count": count}
+                if count >= MAX_INFERRED_REFUSALS:
+                    # The CLOSER saved the same refused value again: no more
+                    # rounds on it.  The question waits for an explicit ask.
+                    reason = "answer_not_accepted"
+                    checkpoint.blocked_reason = reason
             self._save_stop(checkpoint, previous_screenshot)
             return FlowResult(
                 "blocked_human",
                 checkpoint.state,
-                blocked.reason,
+                reason,
                 pending_question=self._pending_question(checkpoint.answer_request),
             )
         message = self._notification_message(blocked)
@@ -2805,7 +2841,7 @@ class ApplicationFlow:
         if not request:
             return None
         if not self._request_asked(request):
-            if self._answer_saved_for(request):
+            if self._answer_saved_for(request) and not self._refused_again(checkpoint, request):
                 # The CLOSER worked it out and saved it: the question is closed.
                 return self._close_answer_request(checkpoint)
             return FlowResult(
@@ -2873,6 +2909,19 @@ class ApplicationFlow:
                 ),
             )
         return self._close_answer_request(checkpoint)
+
+    def _refused_again(self, checkpoint: FlowCheckpoint, request: Mapping[str, Any]) -> bool:
+        """The saved value is the one the form already refused too many times."""
+        payload = request.get("payload")
+        key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
+        entry = checkpoint.answer_refusals.get(key)
+        if not entry or int(entry.get("count", 0)) < MAX_INFERRED_REFUSALS:
+            return False
+        try:
+            answers = self._profile_with_saved_answers().get("application_answers") or {}
+        except Exception:
+            return True
+        return key in answers and _value_digest(answers[key]) == entry.get("digest")
 
     def _answer_saved_for(self, request: Mapping[str, Any]) -> bool:
         """A saved answer for this key that fits the question's type and exact options."""
