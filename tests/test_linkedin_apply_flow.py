@@ -939,3 +939,18 @@ def test_a_saved_exact_city_option_fills_the_choice(page, home: Path, cv_path: P
     result = run(build_flow(home, cv_path, answers={"city": "Milan, Italy"}), page, Site(question_html=CITY_STEP))
 
     assert result.status == "applied", result
+
+
+def test_the_same_flow_run_again_still_finds_the_queue_checkpoint(page, home: Path, cv_path: Path):
+    # A second run of one flow object (the headed retry after a bot wall does
+    # this) opened on www must still read the checkpoint of the country page.
+    write_session(home)
+    flow = build_flow(home, cv_path, answers={}, url=COUNTRY_JOB)
+    site = Site()
+
+    first = run(flow, page, site)
+    second = flow.run(page=page, navigate=True)
+
+    assert first.reason == "required_answer_missing"
+    assert second.reason == "required_answer_missing", second
+    assert checkpoint(home)["url"] == COUNTRY_JOB

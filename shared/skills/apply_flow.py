@@ -3854,17 +3854,21 @@ class ApplicationFlow:
         self._assert_not_redirected_away(page, navigated=True)
 
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
+        # The queue's address names the checkpoint.  self.url is where the
+        # browser goes (www for a LinkedIn country page, the company site after
+        # a handoff): a second run of this same flow must not compare that.
+        queue_url = getattr(self, "_queue_url", "") or self.url
+        self._queue_url = queue_url
         try:
             checkpoint = FlowCheckpoint.load(
-                self.checkpoint_path, self.position_id, self.url
+                self.checkpoint_path, self.position_id, queue_url
             )
             # A multi-step recipe saves its step on the checkpoint of this run.
             self._live_checkpoint = checkpoint
-            # The checkpoint keeps the queue's address; a LinkedIn vacancy is
-            # opened on www (see linkedin_job_url).
-            self.url = linkedin_job_url(self.url)
+            # A LinkedIn vacancy is opened on www (see linkedin_job_url).
+            self.url = linkedin_job_url(queue_url)
         except FlowError as exc:
-            checkpoint = FlowCheckpoint.new(self.position_id, self.url)
+            checkpoint = FlowCheckpoint.new(self.position_id, queue_url)
             return self._block(
                 checkpoint,
                 BlockedHuman("checkpoint_invalid", str(exc), "detect"),
