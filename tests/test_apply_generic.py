@@ -150,7 +150,7 @@ LINK_APPLY = f"""
   <label for="yrs">Wie viele Jahre Erfahrung hast du?</label><input id="yrs" name="yrs" type="number" required>
   <input type="submit" value="Senden">
 </form>
-{CONFIRM_SCRIPT.replace("CONFIRM", "location.href = '/jobs/42/danke';")}
+{CONFIRM_SCRIPT.replace("CONFIRM", "location.href = '/jobs/42/submitted';")}
 </body></html>
 """
 
@@ -363,7 +363,7 @@ def test_apply_link_on_the_same_site_opens_the_form_page(browser, cv_path):
     page = _site_page(browser, {
         "/jobs/42": LINK_JOB,
         "/jobs/42/apply": LINK_APPLY,
-        "/jobs/42/danke": "<html><body><h1>Vielen Dank für Ihre Bewerbung</h1></body></html>",
+        "/jobs/42/submitted": "<html><body><h1>Vielen Dank für Ihre Bewerbung</h1></body></html>",
     })
     page.goto(f"{BASE}/jobs/42")
     recipe = _recipe(cv_path)
@@ -372,7 +372,7 @@ def test_apply_link_on_the_same_site_opens_the_form_page(browser, cv_path):
     assert page.locator("input[name=n]").input_value() == "Jane Example"
     assert page.locator("input[name=yrs]").input_value() == "5"
     recipe.submit(page)
-    page.wait_for_url(f"{BASE}/jobs/42/danke")
+    page.wait_for_url(f"{BASE}/jobs/42/submitted")
     assert GenericRecipe.confirmation_text(page)
     assert page.locator(GenericRecipe.SUBMIT).count() == 0
     assert any(marker in page.url for marker in GenericRecipe.CONFIRMATION_URL_MARKERS)
@@ -522,12 +522,14 @@ def test_pre_submit_screenshot_failure_is_a_stop(browser, cv_path, tmp_path):
     [
         ({"questions": [{"type": "email", "label": "Email"}], "submits": ["Subscribe"], "text": "Newsletter"}, "newsletter"),
         ({"questions": [{"type": "email", "label": "E-Mail"}, {"type": "text", "label": "Name"}], "submits": ["Abonnieren"], "text": "Job-Newsletter"}, "newsletter"),
-        ({"questions": [{"type": "text", "label": "Name"}, {"type": "email", "label": "Email"}, {"type": "select", "label": "Country"}], "submits": ["Subscribe to job alerts"], "text": "Stay in touch", "heading": "Talent community"}, "newsletter"),
+        ({"questions": [{"type": "text", "label": "Name"}, {"type": "email", "label": "Email"}, {"type": "select", "label": "Country"}], "submits": ["Subscribe"], "text": "Our newsletter, once a month", "heading": "Stay in touch"}, "newsletter"),
         ({"questions": [{"type": "email", "label": "Email"}], "submits": ["Go"], "text": ""}, "newsletter"),
         ({"questions": [{"type": "text", "label": "Name"}, {"type": "email", "label": "Email"}, {"type": "textarea", "label": "Your message"}], "submits": ["Send message"], "text": "Contact us"}, "contact"),
         ({"questions": [{"type": "search", "label": "Search jobs"}], "submits": ["Search"], "text": ""}, "search"),
         ({"questions": [{"type": "email", "label": "Email"}, {"type": "password", "label": "Password"}], "submits": ["Log in"], "text": ""}, "login"),
-        ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Send"], "text": ""}, "application"),
+        ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Send application"], "text": ""}, "application"),
+        ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Send"], "text": ""}, "other"),
+        ({"questions": [{"type": "text", "label": "Full name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "CV"}], "submits": ["Apply"], "heading": "Talent pool", "text": ""}, "talent"),
         ({"questions": [{"type": "text", "label": "Nome"}, {"type": "email", "label": "Email"}], "submits": ["Invia candidatura"], "text": ""}, "application"),
         ({"questions": [{"type": "text", "label": "Name"}, {"type": "email", "label": "Email"}, {"type": "file", "label": "Lettre de motivation"}], "submits": ["Envoyer"], "text": ""}, "other"),
     ],
@@ -544,6 +546,38 @@ def test_core_fields_by_label_in_several_languages():
     assert core_field({"type": "text", "label": "E-Mail-Adresse"})[0] == "email"
     assert core_field({"type": "text", "label": "Correo electrónico"})[0] == "email"
     assert core_field({"type": "textarea", "label": "Email"}) is None
+
+
+@pytest.mark.parametrize(
+    ("label", "fact"),
+    [
+        ("Email address *", "email"), ("Your email", "email"), ("E-Mail-Adresse", "email"),
+        ("Indirizzo e-mail", "email"), ("Adresse e-mail", "email"), ("Correo electrónico", "email"),
+        ("Phone number", "phone"), ("Mobile phone", "phone"), ("Telefonnummer", "phone"),
+        ("Numéro de téléphone", "phone"), ("Número de teléfono", "phone"), ("Cellulare", "phone"),
+        ("LinkedIn profile URL", "linkedin"), ("GitHub", "github"), ("Portfolio website", "website"),
+        ("Full name", "full name"), ("Name *", "full name"), ("Nome completo", "full name"),
+        ("First name", "first name"), ("Vorname", "first name"), ("Cognome", "last name"),
+    ],
+)
+def test_labels_that_are_the_fact(label, fact):
+    assert core_field({"type": "text", "label": label})[0] == fact
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["Referee email", "Emergency contact phone", "How did you hear about us? (LinkedIn, Indeed, other)",
+     "Website where you found this job", "Manager's phone number", "Recruiter name", "Current company website",
+     "Email of a reference", "Your name as it appears on your passport and visa documents"],
+)
+def test_labels_about_something_else_are_questions(label):
+    assert core_field({"type": "text", "label": label}) is None
+    assert core_field({"type": "email", "label": label}) is None
+
+
+def test_type_decides_only_without_any_label():
+    assert core_field({"type": "email", "label": "", "name": ""})[0] == "email"
+    assert core_field({"type": "tel", "label": "", "name": ""})[0] == "phone"
 
 
 def test_same_site():
@@ -579,3 +613,43 @@ def test_apply_flow_skill_names_every_generic_stop(lang):
     missing = sorted(r for r in _generic_reasons() if f"`{r}`" not in text)
     assert not missing, f"{lang}: apply-flow does not name {missing}"
     assert "apply_generic.py" in text
+
+
+# ── review R3 (HQ-BACKEND): a confirmation is proved, not read off the page ─
+
+
+class _TextPage:
+    def __init__(self, text):
+        self._text = text
+
+    def locator(self, _selector):
+        page = self
+
+        class _Body:
+            def count(self):
+                return 1
+
+            def inner_text(self):
+                return page._text
+
+        return _Body()
+
+
+def test_a_marker_already_there_before_the_click_is_not_a_confirmation():
+    copy = "Our process. After you apply we reply: thank you for applying, we will be in touch."
+    assert GenericRecipe.confirmation_text(_TextPage(copy), before=copy) == ""
+    assert GenericRecipe.confirmation_text(_TextPage(copy), before="Our process.")
+
+
+def test_url_markers_are_only_words_of_a_finished_submission():
+    common = {"thanks", "danke", "merci", "grazie", "gracias", "obrigado", "koszonjuk", "apply", "jobs", "careers"}
+    assert not common & set(apply_generic.CONFIRMATION_URL_MARKERS)
+
+
+def test_submit_selector_sees_the_application_form_not_a_footer_form(browser, cv_path):
+    thanks = f"<html><body><h1>Thank you for your application!</h1>{NEWSLETTER}</body></html>"
+    page = _site_page(browser, {"/jobs/7": CLASSIC, "/thanks": thanks})
+    page.goto(f"{BASE}/jobs/7")
+    assert page.locator(GenericRecipe.SUBMIT).count() >= 1  # a reloaded form reads as still there
+    page.goto(f"{BASE}/thanks")
+    assert page.locator(GenericRecipe.SUBMIT).count() == 0  # the footer newsletter does not hide the receipt

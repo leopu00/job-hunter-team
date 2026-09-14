@@ -138,30 +138,73 @@ CONFIRMATION_MARKERS = (
     "jelentkezését megkaptuk",
     "sikeres jelentkezés",
 )
-CONFIRMATION_URL_MARKERS = (
-    "confirmation", "confirmed", "success", "submitted", "thank-you", "thank_you", "thanks",
-    "danke", "grazie", "merci", "gracias", "obrigado", "koszonjuk",
+# Only words that name a finished submission: "thanks", "danke", "merci" are
+# ordinary path words on a company site (review R3, HQ-BACKEND). The flow
+# still requires a changed URL and no submit on the page.
+CONFIRMATION_URL_MARKERS = ("confirmation", "confirmed", "success", "submitted", "thank-you", "thank_you")
+# Phrases of a form that is still there: next to one, a marker is page copy
+# (an FAQ saying "thank you for applying"), not a receipt.
+_SUBMIT_PHRASES = re.compile(
+    r"submit (?:your |my )?application|apply now|send application|bewerbung absenden|jetzt bewerben"
+    r"|invia candidatura|candidati ora|envoyer (?:ma |votre )?candidature|postuler maintenant"
+    r"|enviar (?:mi )?candidatura|postularme|enviar candidatura|candidatar-me|jelentkezés elküldése|jelentkezem",
+    re.I,
 )
 
-# Label → profile path.  Order matters: the first match wins.
+# Forms that collect a CV without applying to THIS vacancy (review R1): a talent
+# pool, job alerts, a referral, a spontaneous application. Never the application.
+_NOT_THIS_APPLICATION = re.compile(
+    r"talent (?:pool|community|network)|join our (?:network|community)|job alerts?|stellenalarm|jobalert"
+    r"|refer (?:a )?(?:friend|colleague|someone)|referral|empfehl\w* (?:einen|eine) |segnala un amico|parrain\w*"
+    r"|recomendar (?:a )?(?:un )?amig\w*|indique um amigo|ajánl\w* (?:egy )?ismerős\w*"
+    r"|spontaneous application|unsolicited application|open application|general application"
+    r"|initiativbewerbung|candidatura spontanea|autocandidatura|candidature spontanée|candidatura espontánea"
+    r"|candidatura espontânea|nyílt jelentkezés|keep me in mind|future opportunities",
+    re.I,
+)
+
+# Core fields (review R2): the label has to BE the fact, not mention it.
+# Filler words go, the rest must match one of these whole.
+_LABEL_FILLERS = frozenset(
+    "your you my the a an of for address profile url link page number optional "
+    "tuo tua il la di indirizzo numero facoltativo opzionale "
+    "ihre ihr deine dein adresse nummer optional "
+    "votre ton ta adresse numéro facultatif "
+    "tu su dirección número opcional "
+    "seu sua o endereço número opcional "
+    "a az cím szám opcionális de da do del della di".split()
+)
+
+# Label (normalised, fillers removed) → profile fact. Whole-label matches only.
 _CORE_FIELDS: tuple[tuple[str, re.Pattern[str], tuple[tuple[str, ...], ...]], ...] = (
-    ("first name", re.compile(r"first name|given name|forename|vorname|^nome$|prénom|^nombre$|primeiro nome|keresztnév", re.I),
+    ("first name", re.compile(r"first name|given name|forename|first|vorname|nome|prénom|prenom|nombre|primeiro nome|keresztnév", re.I),
      (("first_name",),)),
-    ("last name", re.compile(r"last name|surname|family name|nachname|cognome|nom de famille|^nom$|apellido|sobrenome|apelido|vezetéknév", re.I),
+    ("last name", re.compile(r"last name|surname|family name|last|nachname|cognome|nom de famille|nom|apellidos?|sobrenome|apelido|vezetéknév", re.I),
      (("last_name",),)),
-    ("full name", re.compile(r"full name|^name$|your name|^vollständiger name$|nome completo|nom complet|nombre completo|teljes név|^név$|^nome e cognome$", re.I),
+    ("full name", re.compile(r"full name|name|vollständiger name|vor und nachname|nome completo|nome e cognome|nom complet|nombre completo|nombre y apellidos|teljes név|név", re.I),
      (("name",),)),
-    ("email", re.compile(r"e[- ]?mail|correo|courriel", re.I), (("contacts", "email"), ("email",))),
-    ("phone", re.compile(r"phone|telephone|mobile|telefon\w*|telefono|téléphone|teléfono|telefone|cellulare|handy", re.I),
+    ("email", re.compile(r"e ?mail|email|correo(?: electrónico)?|courriel|mail", re.I), (("contacts", "email"), ("email",))),
+    ("phone", re.compile(r"(?:mobile |cell |contact )?(?:phone|telephone)|mobile|tel|telefon(?:nummer)?|handy(?:nummer)?|telefono|cellulare|téléphone|portable|teléfono|móvil|telefone|telemóvel|celular|telefonszám|mobil", re.I),
      (("contacts", "phone"), ("phone",))),
     ("linkedin", re.compile(r"linkedin", re.I), (("contacts", "linkedin"),)),
     ("github", re.compile(r"github", re.I), (("contacts", "github"),)),
-    ("website", re.compile(r"website|portfolio|personal (?:site|page)|homepage|sito web|webseite|site web|sitio web|weboldal", re.I),
+    ("website", re.compile(r"(?:personal |portfolio )?(?:website|web site|homepage|portfolio|site)|sito web|sito|webseite|site web|sitio web|weboldal", re.I),
      (("contacts", "website"),)),
 )
 
 _TEXT_TYPES = frozenset({"text", "email", "tel", "url", "number", "date", "search", ""})
 _TWO_PART_SUFFIXES = frozenset({"co.uk", "org.uk", "ac.uk", "com.au", "co.nz", "co.jp", "com.br", "com.mx", "co.za", "com.tr"})
+# Hosting and ATS suffixes shared by unrelated tenants (review R4): acme.github.io
+# and other.github.io are two sites.
+_SHARED_SUFFIXES = frozenset({
+    "github.io", "gitlab.io", "notion.site", "pages.dev", "netlify.app", "vercel.app", "webflow.io",
+    "wixsite.com", "azurewebsites.net", "herokuapp.com", "blogspot.com", "wordpress.com", "squarespace.com",
+    "myshopify.com", "carrd.co", "framer.website", "framer.app", "super.site", "cloudfront.net", "appspot.com",
+    "firebaseapp.com", "web.app", "onrender.com", "fly.dev", "glitch.me", "readthedocs.io", "substack.com",
+    "personio.de", "personio.com", "recruitee.com", "teamtailor.com", "workable.com", "bamboohr.com", "breezy.hr",
+    "jobs.personio.de", "jobs.personio.com", "join.com", "softgarden.io", "smartrecruiters.com", "zohorecruit.com",
+    "jobvite.com", "myworkdayjobs.com", "icims.com", "applytojob.com", "hire.trakstar.com", "pinpointhq.com",
+})
 
 
 # ── the page inspection ─────────────────────────────────────────────────────
@@ -314,17 +357,31 @@ def _is_cover_upload(question: Mapping[str, Any]) -> bool:
     )
 
 
+def _core_words(value: str) -> str:
+    words = [w for w in _normalise_label(str(value).rstrip("*✱ ")).split() if w not in _LABEL_FILLERS]
+    return " ".join(words)
+
+
 def core_field(question: Mapping[str, Any]) -> tuple[str, tuple[tuple[str, ...], ...]] | None:
-    """Which profile fact a text field asks for, from its label (or name)."""
+    """Which profile fact a text field IS, from its label (or name).
+
+    The whole label, fillers removed, must be the fact: "Email address" is the
+    email, "Referee email" and "How did you hear about us? (LinkedIn, …)" are
+    questions about something else and go through the saved answers.
+    """
     if question.get("type") not in _TEXT_TYPES:
         return None
-    for candidate in (question.get("label", ""), question.get("name", "")):
-        label = _normalise_label(str(candidate).rstrip("* "))
-        if not label:
+    label = str(question.get("label") or "")
+    candidates = [label] if label.strip() else [str(question.get("name") or "")]
+    for candidate in candidates:
+        words = _core_words(candidate)
+        if not words:
             continue
         for key, pattern, paths in _CORE_FIELDS:
-            if pattern.search(label):
+            if pattern.fullmatch(words):
                 return key, paths
+        return None
+    # No label and no name at all: the input type is all there is.
     if question.get("type") == "email":
         return "email", (("contacts", "email"), ("email",))
     if question.get("type") == "tel":
@@ -333,7 +390,7 @@ def core_field(question: Mapping[str, Any]) -> tuple[str, tuple[tuple[str, ...],
 
 
 def classify_form(form: Mapping[str, Any]) -> str:
-    """application · login · account · newsletter · contact · search · other."""
+    """application · talent · login · account · newsletter · contact · search · other."""
     questions = list(form.get("questions") or [])
     types = [q.get("type") for q in questions]
     words = " ".join(
@@ -347,9 +404,11 @@ def classify_form(form: Mapping[str, Any]) -> str:
     has_name = bool(cores & {"full name", "first name", "last name"})
     if has_password:
         return "account" if _ACCOUNT_WORDS.search(words) or types.count("password") > 1 else "login"
-    if has_cv:
-        return "application"
+    if _NOT_THIS_APPLICATION.search(words):
+        return "talent"
     applyish = bool(APPLY_LABEL.search(" ".join(form.get("submits") or []) + " " + str(form.get("heading", ""))))
+    if has_cv and applyish:
+        return "application"
     if len(questions) <= 2 and (_NEWSLETTER_WORDS.search(words) or (has_email and not has_name)):
         return "newsletter"
     if _NEWSLETTER_WORDS.search(words) and not applyish:
@@ -358,6 +417,10 @@ def classify_form(form: Mapping[str, Any]) -> str:
         return "search"
     if has_email and has_name and applyish:
         return "application"
+    if has_cv and has_email and not _NEWSLETTER_WORDS.search(words):
+        # A CV, a contact and a neutral "Send": the page context decides, so
+        # the caller sees it but a heading-less form is never enough alone.
+        return "other"
     if _CONTACT_WORDS.search(words) and "textarea" in types:
         return "contact"
     return "other"
@@ -379,6 +442,10 @@ def guard_public_url(url: str) -> str:
 
 def _site(host: str) -> str:
     labels = (host or "").casefold().rstrip(".").removeprefix("www.").split(".")
+    for size in (3, 2):
+        suffix = ".".join(labels[-size:])
+        if len(labels) > size and suffix in _SHARED_SUFFIXES:
+            return ".".join(labels[-(size + 1):])
     if len(labels) >= 3 and ".".join(labels[-2:]) in _TWO_PART_SUFFIXES:
         return ".".join(labels[-3:])
     return ".".join(labels[-2:])
@@ -398,9 +465,14 @@ def same_site(url_a: str, url_b: str) -> bool:
 
 class GenericRecipe:
     PLATFORM = PLATFORM
-    # Any form submit on the page: after a reload it reads as "the form is
-    # still there", the strict side for crash recovery.
-    SUBMIT = "form [type=submit], form button:not([type]), [data-jht-submit]"
+    # "The application form is still there", for the flow's confirmation: a
+    # form with a file upload (the CV), or the button review() pinned. Not
+    # every form: company pages keep a newsletter or search form in the footer
+    # of the thank-you page, and that must not hide the confirmation.
+    SUBMIT = (
+        "form:has(input[type=file]) [type=submit], form:has(input[type=file]) button:not([type]), "
+        "[data-jht-submit]"
+    )
     SUCCESS = ""
     CONFIRMATION_MARKERS = CONFIRMATION_MARKERS
     CONFIRMATION_URL_MARKERS = CONFIRMATION_URL_MARKERS
@@ -817,13 +889,27 @@ class GenericRecipe:
     # ── confirmation, for the flow ──
 
     @staticmethod
-    def confirmation_text(page) -> str:
-        """Visible text that says the application went through, or ""."""
+    def confirmation_text(page, before: str = "") -> str:
+        """Visible text that says the application went through, or "".
+
+        Never while the application form is still on the page, never next to
+        a submit phrase, never a marker that was already there before the
+        click (`before`: the body text review() saw). An FAQ that says "thank
+        you for applying" under the form is page copy, not a receipt (R3).
+        """
         body = page.locator("body")
         visible = " ".join(body.inner_text().split()) if body.count() else ""
         lower = visible.casefold()
+        if _SUBMIT_PHRASES.search(visible):
+            return ""
+        try:
+            if GenericRecipe._application_forms(inspect_page(page)):
+                return ""
+        except Exception:
+            pass  # a page that cannot be inspected: the text rules above decide
+        earlier = (before or "").casefold()
         for marker in CONFIRMATION_MARKERS:
             offset = lower.find(marker)
-            if offset >= 0:
+            if offset >= 0 and marker not in earlier:
                 return visible[offset: offset + 1000]
         return ""

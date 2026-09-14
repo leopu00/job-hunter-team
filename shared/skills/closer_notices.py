@@ -53,6 +53,11 @@ if str(SHARED) not in sys.path:
 
 import i18n  # noqa: E402
 
+try:
+    from external_content import flatten_to_one_line
+except ImportError:  # pragma: no cover - package import
+    from shared.skills.external_content import flatten_to_one_line
+
 DIGEST_REASONS = frozenset({
     "ats_unsupported", "ats_conflict", "linkedin_easy_apply", "application_form_embedded",
     # page_failure: a gone page, an anti-bot wall, a page down three times in a day.
@@ -164,7 +169,8 @@ def _position(position_id: int) -> dict[str, str]:
         return empty
     found = dict(empty)
     for name, value in zip(wanted, row):
-        found[name] = " ".join(str(value or "").split())
+        # Scraped from the vacancy: no bidi overrides or format characters in a notice.
+        found[name] = flatten_to_one_line(value)
     return found
 
 
@@ -188,7 +194,7 @@ def _stop(key: str, reason: str, detail: str, position_id: int, default: str) ->
             why=reason_why(reason),
             action=reason_action(reason),
             reason=reason,
-            detail=" ".join(str(detail or "").split())[:300],
+            detail=flatten_to_one_line(detail)[:300],
         )
     except Exception:
         return default
@@ -302,7 +308,7 @@ def summary_message(pending: list[Mapping[str, Any]]) -> str:
             "closer.digest.line",
             position=_position_label(pid, _position(pid)),
             why=reason_why(str(entry["reason"])),
-            host=entry.get("host", ""),
+            host=flatten_to_one_line(entry.get("host", "")),
         ))
     if len(pending) > MAX_LINES:
         lines.append(text("closer.digest.more", count=len(pending) - MAX_LINES))
