@@ -38,6 +38,7 @@ from here: the flow hands it to the CLOSER as `pending_question` (CL-08).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import urllib.parse
@@ -79,7 +80,12 @@ _APPLY_WORDS = (
     r"|bewerb\w*|candidat\w*|candidatur\w*|postul\w*|solicitud|inscri\w* (?:à|a) l'offre"
     r"|jelentkez\w*|pályáz\w*"
 )
-APPLY_LABEL = re.compile(rf"\b(?:{_APPLY_WORDS})\b", re.I)
+try:
+    from apply_vocabulary import MORE_APPLY
+except ImportError:  # pragma: no cover - package import
+    from shared.skills.apply_vocabulary import MORE_APPLY  # type: ignore[no-redef]
+# The seven languages with \b, and the others bounded for JavaScript too (2071).
+APPLY_LABEL = re.compile(rf"\b(?:{_APPLY_WORDS})\b|{MORE_APPLY}", re.I)
 _CV_WORDS = re.compile(
     r"\b(?:cv|c\.v\.|resume|résumé|curriculum|lebenslauf|önéletrajz|currículo|curr[íi]culum)\b", re.I
 )
@@ -98,6 +104,21 @@ _CONTACT_WORDS = re.compile(
     r"|nous contacter|votre message|cont[aá]ct\w*|mensaje|mensagem|kapcsolat|üzenet",
     re.I,
 )
+# A contact form is the application channel only through its topic choice
+# (1800, 14/09: the vacancy's Apply led to /contact, Subject "Job Application").
+_TOPIC_LABEL = re.compile(
+    r"subject|topic|reason|inquiry|enquiry|regarding|category|request type|type of (?:inquiry|enquiry|request)"
+    r"|betreff|anliegen|thema|oggetto|argomento|motivo|sujet|objet|motif|asunto|tema|assunto|tárgy|téma",
+    re.I,
+)
+_APPLICATION_TOPIC = re.compile(
+    r"job applications?|applications?|apply for a job|careers?|jobs?|job opportunit(?:y|ies)|employment|recruiting"
+    r"|bewerbung(?:en)?|karriere|jobs und karriere|candidatura|candidature|lavora con noi|carriere"
+    r"|emploi|carrières?|recrutement|empleo|trabaja con nosotros|carreras?|vagas?|carreiras?|emprego"
+    r"|állásjelentkezés|állás|karrier|jelentkezés",
+    re.I,
+)
+CONTACT_APPLICATION_PURPOSE = "contact_form_application"
 _SEARCH_WORDS = re.compile(r"\bsearch\b|suche|cerca|recherche|buscar|pesquisar|keres", re.I)
 _ACCOUNT_WORDS = re.compile(
     r"create (?:an |your )?account|sign up|register|registrier\w*|konto erstellen|crea(?:re)? (?:un )?account"
@@ -139,6 +160,12 @@ CONFIRMATION_MARKERS = (
     "köszönjük jelentkezését",
     "jelentkezését megkaptuk",
     "sikeres jelentkezés",
+    # A contact form used as the application channel (1800: "Message sent",
+    # "Thank you for reaching out").  Still only after the click, with the
+    # form gone from the page.
+    "message sent",
+    "thank you for reaching out",
+    "thanks for reaching out",
 )
 # Only words that name a finished submission: "thanks", "danke", "merci" are
 # ordinary path words on a company site (review R3, HQ-BACKEND). The flow
@@ -323,6 +350,23 @@ _INSPECT_JS = r"""
         suggest, listbox: suggest ? (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '') : '',
       });
     }
+    // Custom listboxes: a button that opens a role=listbox.  Their options are
+    // read from the open list, or from what reveal_listboxes stored.
+    for (const el of Array.from(form.querySelectorAll('button[aria-haspopup=listbox], [role=combobox]:not(input)')).filter(rendered)) {
+      const id = `${fi}-${qi++}`;
+      el.setAttribute('data-jht-q', id);
+      let options = [];
+      try { options = JSON.parse(el.getAttribute('data-jht-options') || '[]'); } catch (e) { options = []; }
+      const listId = el.getAttribute('aria-controls');
+      const list = listId ? document.getElementById(listId) : null;
+      if (!options.length && list) options = Array.from(list.querySelectorAll('[role=option]')).map(o => clean(o.innerText)).filter(Boolean);
+      described.push({
+        id, type: 'listbox', label: labelFor(el), name: el.getAttribute('name') || el.id || '',
+        options: Array.isArray(options) ? options.map(clean).filter(Boolean) : [],
+        required: el.getAttribute('aria-required') === 'true', answered: el.getAttribute('data-jht-chosen') === '1',
+        accept: '', autocomplete: '',
+      });
+    }
     const submits = Array.from(form.querySelectorAll('button[type=submit], button:not([type]), input[type=submit]'))
       .filter(rendered).map(b => clean(b.innerText || b.value || b.getAttribute('aria-label')));
     let heading = '';
@@ -439,6 +483,36 @@ def classify_form(form: Mapping[str, Any]) -> str:
     return "other"
 
 
+def contact_application_topic(form: Mapping[str, Any]) -> tuple[Mapping[str, Any], str] | None:
+    """A contact form whose topic choice names applying: (topic question, option).
+
+    Pure.  Needs an email field, a free-text message, no password and no
+    file, and exactly one topic question (Subject, Betreff, Oggetto…) with
+    exactly one application option ("Job Application", "Careers"…).
+    Whether the form may be used at all is the recipe's call: only when the
+    vacancy's Apply control led to it.
+    """
+    questions = list(form.get("questions") or [])
+    types = [q.get("type") for q in questions]
+    if "password" in types or "file" in types or "textarea" not in types:
+        return None
+    if "email" not in {field[0] for q in questions if (field := core_field(q))}:
+        return None
+    found = []
+    for question in questions:
+        if question.get("type") not in {"listbox", "select", "radio"}:
+            continue
+        if not _TOPIC_LABEL.search(f"{question.get('label', '')} {question.get('name', '')}"):
+            continue
+        matches = [
+            str(option)
+            for option in question.get("options") or []
+            if _APPLICATION_TOPIC.fullmatch(" ".join(str(option).replace("&", " ").split()))
+        ]
+        found.extend((question, option) for option in matches)
+    return found[0] if len(found) == 1 else None
+
+
 def guard_public_url(url: str) -> str:
     """The flow's own guard for a page it opens: syntax, then a public address."""
     try:
@@ -504,17 +578,72 @@ class GenericRecipe:
         self.pre_submit_screenshot_path: str | Path | None = None
         self.pre_submit_screenshot = ""
         self.application_url = ""
+        # The vacancy's Apply control was followed: only then may a contact
+        # form with an application topic be the application form (1800).
+        self.via_apply = False
         # Seam for tests: synthetic pages live on hosts that do not resolve.
         self.url_guard = guard_public_url
 
     # ── locating the application form ──
 
     @staticmethod
-    def _application_forms(snapshot: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-        return [f for f in snapshot.get("forms") or [] if f.get("visible") and classify_form(f) == "application"]
+    def _application_forms(snapshot: Mapping[str, Any], *, contact: bool = True) -> list[Mapping[str, Any]]:
+        """Visible application forms.  `contact` also counts a contact form with an
+        application topic: the strict side for "is a form still there" checks."""
+        return [
+            f
+            for f in snapshot.get("forms") or []
+            if f.get("visible")
+            and (
+                classify_form(f) == "application"
+                or (contact and classify_form(f) in {"contact", "other"} and contact_application_topic(f))
+            )
+        ]
+
+    def _forms(self, snapshot: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+        return self._application_forms(snapshot, contact=self.via_apply)
 
     def form_present(self, page) -> bool:
-        return bool(self._application_forms(inspect_page(page)))
+        return bool(self._forms(inspect_page(page)))
+
+    def _contact_topic(self, form: Mapping[str, Any]) -> tuple[Mapping[str, Any], str] | None:
+        """The application topic of the chosen form, when it is a contact form.
+
+        Only a form _forms returned gets here, and _forms admits a contact form
+        only after the vacancy's Apply control (via_apply)."""
+        if classify_form(form) == "application":
+            return None
+        return contact_application_topic(form)
+
+    @staticmethod
+    def reveal_listboxes(page, limit: int = 6) -> None:
+        """Open each custom listbox of a form once, store its options, close it.
+
+        A click on a form's own drop-down toggle: nothing is chosen, typed or sent.
+        """
+        for _ in range(limit):
+            box = page.locator("form button[aria-haspopup=listbox]:not([data-jht-options])").first
+            if not box.count():
+                return
+            options: list[str] = []
+            try:
+                if box.is_visible():
+                    if box.get_attribute("aria-expanded") != "true":
+                        box.click(timeout=5_000)
+                        page.wait_for_timeout(300)
+                    options = box.evaluate(
+                        "el => { const id = el.getAttribute('aria-controls');"
+                        " const list = (id && document.getElementById(id)) || el.parentElement.querySelector('[role=listbox]');"
+                        " return list ? Array.from(list.querySelectorAll('[role=option]')).map(o => (o.innerText || '').replace(/\\s+/g, ' ').trim()).filter(Boolean) : []; }"
+                    )
+                    if box.get_attribute("aria-expanded") == "true":
+                        page.keyboard.press("Escape")
+                        page.wait_for_timeout(150)
+                    if box.get_attribute("aria-expanded") == "true":
+                        box.click(timeout=5_000)
+            except Exception:
+                options = []
+            box.evaluate("(el, values) => el.setAttribute('data-jht-options', JSON.stringify(values))", options[:50])
 
     @staticmethod
     def _apply_controls(page) -> list[Any]:
@@ -539,10 +668,9 @@ class GenericRecipe:
     def apply_control_present(self, page) -> bool:
         return bool(self._apply_controls(page))
 
-    @staticmethod
-    def dom_match(page) -> bool:
+    def dom_match(self, page) -> bool:
         """Exactly one application form on the rendered page."""
-        return len(GenericRecipe._application_forms(inspect_page(page))) == 1
+        return len(self._forms(inspect_page(page))) == 1
 
     def _stop_without_form(self, page, snapshot: Mapping[str, Any], step: str) -> None:
         kinds = [classify_form(f) for f in snapshot.get("forms") or [] if f.get("visible")]
@@ -567,7 +695,7 @@ class GenericRecipe:
     def _form(self, page, step: str):
         """The one application form, stamped; every action stays inside it."""
         snapshot = inspect_page(page)
-        forms = self._application_forms(snapshot)
+        forms = self._forms(snapshot)
         if len(forms) > 1:
             raise BlockedHuman(
                 "application_form_ambiguous",
@@ -621,6 +749,7 @@ class GenericRecipe:
                 "detect",
             )
         target, control = next(iter(targets.items()))
+        self.via_apply = True
         if not target.startswith("button:"):
             if not same_site(target, self.application_url):
                 self._handoff_or_refuse(target, "detect")
@@ -635,6 +764,7 @@ class GenericRecipe:
         while True:
             if not same_site(page.url, self.application_url) and page.url != "about:blank":
                 self._handoff_or_refuse(page.url, "detect")
+            self.reveal_listboxes(page)
             if self.form_present(page):
                 break
             if deadline <= 0:
@@ -673,8 +803,10 @@ class GenericRecipe:
             return None
         kind = question.get("type")
         options = [str(o) for o in question.get("options") or [] if str(o).strip()]
-        if kind in {"radio", "checkboxes", "select"}:
-            return {"key": key, "label": exact, "field_type": kind, "options": options} if options else None
+        if kind in {"radio", "checkboxes", "select", "listbox"}:
+            # A custom listbox is saved and answered like a select.
+            field_type = "select" if kind == "listbox" else kind
+            return {"key": key, "label": exact, "field_type": field_type, "options": options} if options else None
         if kind == "checkbox":
             return {"key": key, "label": exact, "field_type": "checkbox", "options": ["Yes", "No"]}
         if kind == "textarea":
@@ -714,6 +846,31 @@ class GenericRecipe:
                 control.check()
             return
         control = controls.first
+        if kind == "listbox":
+            if isinstance(answer, bool) or not isinstance(answer, (str, int, float)):
+                raise BlockedHuman("answer_type_unknown", f"Choice question needs an exact option label: {_safe_label(label)}", step)
+            wanted = _normalise_label(str(answer))
+            if control.get_attribute("aria-expanded") != "true":
+                control.click(timeout=5_000)
+                page.wait_for_timeout(300)
+            list_id = control.get_attribute("aria-controls") or ""
+            options = (
+                page.locator(f"[id='{list_id}'] [role=option]") if list_id else control.locator("xpath=..").locator("[role=option]")
+            )
+            matching = [
+                options.nth(i) for i in range(options.count())
+                if _normalise_label(options.nth(i).inner_text() or "") == wanted
+            ]
+            if len(matching) != 1:
+                with contextlib.suppress(Exception):
+                    page.keyboard.press("Escape")
+                raise BlockedHuman("answer_option_unknown", f"No exact option matches the saved answer for: {_safe_label(label)}", step)
+            matching[0].click(timeout=5_000)
+            page.wait_for_timeout(200)
+            if _normalise_label(control.inner_text() or "") != wanted:
+                raise BlockedHuman("answer_not_accepted", f"The form did not retain the choice for: {_safe_label(label)}", step)
+            control.evaluate("el => el.setAttribute('data-jht-chosen', '1')")
+            return
         if kind == "checkbox":
             if isinstance(answer, str) and _normalise_label(answer) in {"yes", "no"}:
                 answer = _normalise_label(answer) == "yes"
@@ -821,6 +978,10 @@ class GenericRecipe:
         if not self.cv_path.is_file() or self.cv_path.stat().st_size <= 0:
             raise BlockedHuman("cv_missing", "The selected CV file is missing or empty", "upload_cv")
         form, described = self._form(page, "upload_cv")
+        if self._contact_topic(described) is not None:
+            # A contact form takes no file (decision 14/09): the letter says
+            # the CV is available on request.
+            return
         uploads = [q for q in described["questions"] if _is_cv_upload(q)]
         if not uploads:
             files = [q for q in described["questions"] if q.get("type") == "file" and not _is_cover_upload(q)]
@@ -838,6 +999,7 @@ class GenericRecipe:
         if challenge:
             raise BlockedHuman(challenge, f"The site requires human intervention ({challenge})", "screening")
         form, described = self._form(page, "screening")
+        topic = self._contact_topic(described)
         for question in described["questions"]:
             if question.get("answered") or core_field(question) or _is_cv_upload(question):
                 continue
@@ -848,10 +1010,19 @@ class GenericRecipe:
                         raise BlockedHuman("cover_letter_required", "The form requires a cover letter file", "screening")
                     raise BlockedHuman("unknown_required_control", f"Required file upload is not the CV: {_safe_label(label)}", "screening")
                 continue
+            if topic is not None and question.get("id") == topic[0].get("id"):
+                # The contact form is the application channel: its topic is the
+                # application option, never a question for the CLOSER.
+                self._fill(page, form, question, topic[1], "screening")
+                continue
             present, answer = self._answer_for(label, str(question.get("name") or ""))
             if not present:
-                if question.get("required"):
+                if question.get("required") or (topic is not None and question.get("type") == "textarea"):
                     request = self._answer_request(question)
+                    if request is not None and topic is not None and question.get("type") == "textarea":
+                        # The message IS the application: the CLOSER writes a short
+                        # letter for this vacancy that says the CV is available on request.
+                        request["purpose"] = CONTACT_APPLICATION_PURPOSE
                     if request is None:
                         raise BlockedHuman(
                             "unknown_required_control",
