@@ -227,5 +227,7 @@
   "closer.reason.linkedin_challenge.why": "LinkedIn ha chiesto un controllo di sicurezza che il CLOSER non risolve.",
   "closer.reason.linkedin_challenge.action": "Accedi tu una volta a LinkedIn, poi autorizza di nuovo la posizione, oppure candidati a mano.",
   "closer.reason.unknown_required_control.why": "Il form ha un campo obbligatorio che il CLOSER non può compilare in sicurezza.",
-  "closer.reason.unknown_required_control.action": "Apri l'offerta e candidati a mano."
+  "closer.reason.unknown_required_control.action": "Apri l'offerta e candidati a mano.",
+  "closer.reason.linkedin_session_expired.why": "La sessione LinkedIn fatta a mano è scaduta, o LinkedIn non la accetta più.",
+  "closer.reason.linkedin_session_expired.action": "Rifai il login a mano nel browser del CLOSER, poi autorizza di nuovo la posizione."
 }

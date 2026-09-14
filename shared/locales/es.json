@@ -227,5 +227,7 @@
   "closer.reason.linkedin_challenge.why": "LinkedIn pidió un control de seguridad que el CLOSER no resuelve.",
   "closer.reason.linkedin_challenge.action": "Inicia sesión tú una vez en LinkedIn y luego autoriza de nuevo la posición, o postúlate a mano.",
   "closer.reason.unknown_required_control.why": "El formulario tiene un campo obligatorio que el CLOSER no puede rellenar con seguridad.",
-  "closer.reason.unknown_required_control.action": "Abre la oferta y postúlate a mano."
+  "closer.reason.unknown_required_control.action": "Abre la oferta y postúlate a mano.",
+  "closer.reason.linkedin_session_expired.why": "Tu sesión de LinkedIn iniciada a mano ha caducado, o LinkedIn ya no la acepta.",
+  "closer.reason.linkedin_session_expired.action": "Vuelve a iniciar sesión a mano en LinkedIn en el navegador del CLOSER y luego autoriza de nuevo la posición."
 }
