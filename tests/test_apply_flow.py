@@ -16,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "shared" / "skills"
 sys.path.insert(0, str(SKILLS))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import apply_flow as apply_flow_module  # noqa: E402
 from apply_flow import (  # noqa: E402
@@ -1744,3 +1745,36 @@ def test_without_the_check_module_the_cv_is_not_a_pass(page, tmp_path: Path, cv_
 
     assert result.reason == "cv_pdf_check_unavailable"
     assert page.evaluate("window.submitCount") == 0
+
+
+def test_the_real_layout_check_stops_a_bad_cv_and_renders_page_one(page, tmp_path: Path):
+    layout = pytest.importorskip("test_pdf_layout_check")
+    if not layout.POPPLER and not __import__("os").environ.get("CI"):
+        pytest.skip("poppler-utils not installed")
+    cv = layout._base14_pdf(tmp_path / "synthetic-cv.pdf")
+    page.set_content(ashby_form())
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv, notifications=notifications)
+    flow.cv_checker = apply_flow_module._default_cv_checker
+    flow.cv_previewer = apply_flow_module._default_cv_previewer
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "cv_pdf_layout_bad")
+    checkpoint = _read_checkpoint(tmp_path)
+    assert "fonts_not_embedded" in checkpoint["blocked_detail"]
+    assert Path(checkpoint["cv_preview"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    assert page.evaluate("window.submitCount") == 0
+
+
+def test_the_real_layout_check_on_an_unreadable_pdf_is_unavailable(page, tmp_path: Path, cv_path: Path):
+    layout = pytest.importorskip("test_pdf_layout_check")
+    if not layout.POPPLER and not __import__("os").environ.get("CI"):
+        pytest.skip("poppler-utils not installed")
+    page.set_content(ashby_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.cv_checker = apply_flow_module._default_cv_checker
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "cv_pdf_check_unavailable")
