@@ -9,7 +9,11 @@ result line on stdout. Used by:
   - Capitano (manual override / debug)
 
 Validates (on mode='on'): position exists, status='scored', no
-application yet. Same gating as the web API.
+application yet. Same gating as the web API — with one exception, the CV
+rework [JHT-CV-REWORK]: an application that was never sent, on a `scored`
+or `ready` position, whose CV PDF fails the layout check may have its CV
+done again (`application_rework.rework_verdict`, `"rework": true` in the
+result). A sent application never can.
 
 Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29) + migration V6 in `_db.py`.
 
@@ -69,7 +73,17 @@ def request_cv(position_id: int, mode: str, kind: str = "cv") -> dict:
         (row["write_request_kind"] or "cv")
         if row["write_requested"] else None
     )
-    if mode == "on" and active_kind != kind:
+    rework = None
+    if (
+        mode == "on"
+        and active_kind != kind
+        and kind == "cv"
+        and (row["status"] != "scored" or row["has_application"] == 1)
+    ):
+        from application_rework import rework_verdict
+
+        rework = rework_verdict(conn, position_id, manual=True)
+    if mode == "on" and active_kind != kind and not (rework and rework["allowed"]):
         if kind == "cv" and row["status"] != "scored":
             return fail({
                 "ok": False,
@@ -78,6 +92,7 @@ def request_cv(position_id: int, mode: str, kind: str = "cv") -> dict:
                     f"is allowed only from 'scored'"
                 ),
                 "status_code": "BAD_STATUS",
+                "rework_reason": rework["reason"] if rework else None,
                 "id": row["id"],
                 "title": row["title"],
                 "company": row["company"],
@@ -90,6 +105,7 @@ def request_cv(position_id: int, mode: str, kind: str = "cv") -> dict:
                     f"delivered) for #{position_id}"
                 ),
                 "status_code": "ALREADY_APPLIED",
+                "rework_reason": rework["reason"] if rework else None,
                 "id": row["id"],
                 "title": row["title"],
                 "company": row["company"],
@@ -144,6 +160,7 @@ def request_cv(position_id: int, mode: str, kind: str = "cv") -> dict:
         "previous": row["write_requested"],
         "current": updated["write_requested"],
         "kind": updated["write_request_kind"],
+        "rework": bool(rework and rework["allowed"]),
     }
 
 
