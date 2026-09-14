@@ -127,16 +127,15 @@ _NOUNS_FR = r"(?:offre|poste|annonce|emploi)"
 _NOUNS_ES = r"(?:oferta|vacante|puesto|empleo)"
 _NOUNS_PT = r"(?:vaga|oferta|posição|posicao|emprego)"
 _NOUNS_HU = r"(?:állás\w*|pozíció\w*|hirdetés\w*)"
-_NEAR = r"\b[^.!?\n]{0,60}?"
+_NEAR = r"\b[^.!?,;:\n]{0,40}?"
 _VACANCY_CLOSED_PATTERNS = tuple(
     (lang, re.compile(pattern, re.I))
     for lang, pattern in (
         ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b"),
         ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:is|has been|was) no longer (?:available|open|active|live|online)\b"),
-        ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:has|have) (?:expired|been filled|been closed)\b"),
+        ("en", rf"\b{_NOUNS_EN} (?:has|have) (?:expired|been filled|been closed)\b"),
         ("en", r"\bapplications (?:for this \w+ )?(?:are|have been) (?:now )?closed\b"),
-        ("en", rf"\b{_NOUNS_EN} (?:not found|does not exist|doesn't exist)\b"),
-        ("it", rf"\b{_NOUNS_IT}{_NEAR}\bnon (?:è|e'|risulta) più (?:disponibile|attiv[ao]|apert[ao]|valid[ao])\b"),
+        ("it", rf"\b{_NOUNS_IT}{_NEAR}\bnon (?:è|e'|risulta) più (?:disponibile|attiv[ao]|apert[ao])\b"),
         ("it", r"\bnon (?:accetta|riceve) più candidature\b"),
         ("it", r"\bcandidature (?:sono )?chiuse\b"),
         ("it", r"\b(?:annuncio|offerta|posizione) (?:è )?(?:scadut[ao]|chius[ao])\b"),
@@ -144,7 +143,7 @@ _VACANCY_CLOSED_PATTERNS = tuple(
         ("de", rf"\b{_NOUNS_DE}{_NEAR}\bnicht mehr (?:verfügbar|aktiv|online|offen|ausgeschrieben)\b"),
         ("de", r"\b(?:stelle|position) (?:ist )?(?:bereits )?(?:besetzt|vergeben)\b"),
         ("de", r"\bbewerbungsfrist (?:ist )?abgelaufen\b"),
-        ("de", r"\bkeine bewerbungen mehr\b"),
+        ("de", r"\bkeine (?:weiteren )?bewerbungen mehr (?:an|entgegen)\b"),
         ("fr", rf"\b{_NOUNS_FR}{_NEAR}\bn'est plus (?:disponible|active|ouverte?|en ligne)\b"),
         ("fr", r"\bn'accept(?:e|ons) plus de candidatures\b"),
         ("fr", r"\b(?:poste|offre) (?:a été |est )?(?:pourvue?|expirée?|clôturée?)\b"),
@@ -161,6 +160,19 @@ _VACANCY_CLOSED_PATTERNS = tuple(
 )
 
 
+_NOTICE_CONDITION = re.compile(
+    r"\b(?:until|till|once|when|whenever|after|before|if|unless|as soon as|"
+    r"bis|sobald|wenn|falls|nachdem|finché|fino a quando|quando|una volta che|se|dopo che|"
+    r"jusqu'à ce que|dès que|lorsque|quand|si|hasta que|cuando|una vez que|en cuanto|"
+    r"até que|quando|assim que|amíg|miután|ha)\b",
+    re.I,
+)
+_NOTICE_DATE_AFTER = re.compile(
+    r"\s*(?:on|by|at|from|as of|am|ab|il|entro|dal|le|à partir du|el|a partir del|em|a partir de)\b[^.!?]{0,15}\d",
+    re.I,
+)
+
+
 def vacancy_closed_evidence(text: str) -> str | None:
     """The language of a "this vacancy is closed" notice in the page text, or None.
 
@@ -169,7 +181,14 @@ def vacancy_closed_evidence(text: str) -> str | None:
     """
     clean = " ".join(str(text or "").replace("\u2019", "'").replace("\u00a0", " ").split())
     for lang, pattern in _VACANCY_CLOSED_PATTERNS:
-        if pattern.search(clean):
+        for match in pattern.finditer(clean):
+            sentence_start = max(clean.rfind(mark, 0, match.start()) for mark in ".!?")
+            before = clean[sentence_start + 1 : match.start()]
+            after = clean[match.end() : match.end() + 30]
+            # "open until it has been filled", "closed on 30 September": a
+            # condition or a future date describes an OPEN vacancy.
+            if _NOTICE_CONDITION.search(before) or _NOTICE_DATE_AFTER.match(after):
+                continue
             return lang
     return None
 
@@ -180,9 +199,9 @@ def vacancy_redirected_away(requested_url: str, final_url: str) -> bool:
     A closed posting typically redirects to the company's job list, its
     careers page or its home page ("Book a demo").  The vacancy survives a
     redirect when its identifier (a path segment carrying a digit: a numeric
-    id or a UUID) is still in the final path; without such an identifier, the
-    final path must still start with the requested one.  Scheme, host moves
-    (boards → job-boards) and query strings do not count.
+    id or a UUID) is still in the final path; without such an identifier, only
+    a shorter prefix of the requested path (down to the root) counts as away.
+    Scheme, host moves (boards → job-boards) and query strings do not count.
     """
     try:
         requested = urllib.parse.urlsplit(requested_url)
@@ -196,7 +215,12 @@ def vacancy_redirected_away(requested_url: str, final_url: str) -> bool:
     identifiers = [s for s in requested_segments if any(ch.isdigit() for ch in s)]
     if identifiers:
         return not any(identifier in final_segments for identifier in identifiers)
-    return final_segments[: len(requested_segments)] != requested_segments
+    # No identifier: only a landing on a shorter prefix of the requested path
+    # (the job list, careers or home page) is a redirect away.  A language
+    # prefix or a move to another subdomain proves nothing.
+    return len(final_segments) < len(requested_segments) and (
+        final_segments == requested_segments[: len(final_segments)]
+    )
 
 
 def mailto_application_href(page) -> str | None:
@@ -790,7 +814,7 @@ class AshbyRecipe:
         return page.locator(self.FIELD_ENTRY).count() > 0
 
     def apply_control_present(self, page) -> bool:
-        """The control `open_form` would click; with no form, its absence means no vacancy."""
+        """The control `open_form` would click; only without it can a closed notice count."""
         return page.get_by_text("Apply for this Job", exact=False).count() > 0
 
     def _container(self, page, step: str):
@@ -1411,7 +1435,7 @@ class GreenhouseRecipe:
         return page.locator(self.FORM).count() > 0
 
     def apply_control_present(self, page) -> bool:
-        """The control `open_form` would click; with no form, its absence means no vacancy."""
+        """The control `open_form` would click; only without it can a closed notice count."""
         pattern = re.compile(r"^(apply|apply for this job|click to apply|submit an application)$", re.I)
         return any(page.get_by_role(role, name=pattern).count() for role in ("button", "link"))
 
@@ -2092,8 +2116,7 @@ class ApplicationFlow:
             # A dry run never asks the user anything: the stop lives only in the
             # checkpoint, with no durable request and no notification.  The
             # first authorised run reaches the same field and asks then.
-            checkpoint.save(self.checkpoint_path)
-            self._discard_stop_screenshot(checkpoint, previous_screenshot)
+            self._save_stop(checkpoint, previous_screenshot)
             return FlowResult("blocked_human", checkpoint.state, blocked.reason)
         legacy_message = ""
         if blocked.answer_request:
@@ -2106,8 +2129,7 @@ class ApplicationFlow:
             legacy_message = self._notification_message(blocked, source_id, telegram_hint=False)
         else:
             message = self._notification_message(blocked)
-        checkpoint.save(self.checkpoint_path)
-        self._discard_stop_screenshot(checkpoint, previous_screenshot)
+        self._save_stop(checkpoint, previous_screenshot)
         if blocked.answer_request:
             persisted = False
             try:
@@ -2158,8 +2180,7 @@ class ApplicationFlow:
         checkpoint.blocked_reason = str(getattr(verdict, "reason", "gate_denied"))
         checkpoint.blocked_detail = str(getattr(verdict, "detail", "authorisation denied"))
         previous_screenshot = self._capture_stop_screenshot(checkpoint, checkpoint.blocked_reason, page)
-        checkpoint.save(self.checkpoint_path)
-        self._discard_stop_screenshot(checkpoint, previous_screenshot)
+        self._save_stop(checkpoint, previous_screenshot)
         return FlowResult("denied", checkpoint.state, checkpoint.blocked_reason)
 
     @staticmethod
@@ -2222,6 +2243,17 @@ class ApplicationFlow:
                     temporary.unlink()
         return previous
 
+    def _save_stop(self, checkpoint: FlowCheckpoint, previous_screenshot: str) -> None:
+        """Save the stopped checkpoint; the screenshot it does not name never stays behind."""
+        try:
+            checkpoint.save(self.checkpoint_path)
+        except Exception:
+            # The new screenshot is named by no checkpoint: remove it, keep the old one.
+            orphan, checkpoint.stop_screenshot = checkpoint.stop_screenshot, previous_screenshot
+            self._discard_stop_screenshot(checkpoint, orphan)
+            raise
+        self._discard_stop_screenshot(checkpoint, previous_screenshot)
+
     def _discard_stop_screenshot(self, checkpoint: FlowCheckpoint, previous: str) -> None:
         """Keep one stop screenshot per checkpoint: the one it names."""
         if not previous or previous == checkpoint.stop_screenshot:
@@ -2235,23 +2267,31 @@ class ApplicationFlow:
         with contextlib.suppress(OSError):
             old.unlink()
 
-    def _assert_vacancy_open(self, page, *, navigated: bool) -> None:
-        """Stop before any form work when the vacancy itself is gone."""
+    def _assert_not_redirected_away(self, page, *, navigated: bool) -> None:
+        """Stop before any form work when opening the vacancy landed elsewhere."""
         if navigated and vacancy_redirected_away(self.url, page.url):
             raise BlockedHuman(
                 "vacancy_closed",
                 "The vacancy URL redirected away from the vacancy (job list, careers or home page)",
                 "detect",
             )
+
+    @staticmethod
+    def _assert_no_closed_notice(page) -> None:
+        """Called only where the page has no form, no Apply control and no email channel.
+
+        There a closed notice is positive evidence.  Next to a form it is not:
+        job descriptions say "open until filled" and dates of closing.
+        """
         try:
             text = page.locator("body").inner_text(timeout=5_000)
         except Exception:
-            text = ""
+            return
         language = vacancy_closed_evidence(text)
         if language:
             raise BlockedHuman(
                 "vacancy_closed",
-                f"The page says the vacancy is no longer open (notice language: {language})",
+                f"The page has no application form and says the vacancy is no longer open (notice language: {language})",
                 "detect",
             )
 
@@ -2758,12 +2798,13 @@ class ApplicationFlow:
             try:
                 if navigate:
                     self._navigate(active_page)
-                self._assert_vacancy_open(active_page, navigated=navigate)
+                self._assert_not_redirected_away(active_page, navigated=navigate)
                 detection = detect_ats(self.url, active_page.content())
                 if detection.platform not in SUPPORTED_PLATFORMS:
                     email = self._email_channel(checkpoint, active_page)
                     if email is not None:
                         return email
+                    self._assert_no_closed_notice(active_page)
                     reason = "ats_conflict" if detection.conflict else "ats_unsupported"
                     raise BlockedHuman(
                         reason,
@@ -2781,11 +2822,9 @@ class ApplicationFlow:
                     if email is not None:
                         return email
                     if not recipe.apply_control_present(active_page):
-                        raise BlockedHuman(
-                            "vacancy_closed",
-                            "The vacancy page has no application form, no Apply control and no email channel",
-                            "detect",
-                        )
+                        # No Apply control found is not a closed vacancy (a
+                        # localised board, a slow render): only a notice is.
+                        self._assert_no_closed_notice(active_page)
                 injected_blank = not navigate and active_page.url == "about:blank"
                 self._assert_recipe_page(
                     active_page,

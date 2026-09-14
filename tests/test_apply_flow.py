@@ -874,6 +874,13 @@ def test_closed_vacancy_notice_is_recognised_in_several_languages(language: str,
         "Applications are reviewed on a rolling basis.",
         "Posizione aperta: la selezione è in corso, inviaci la tua candidatura.",
         "Die Stelle ist ab sofort verfügbar.",
+        # Seen in review: open job descriptions that name filling or closing.
+        "This position will remain open until it has been filled.",
+        "We will contact shortlisted candidates once the role has been filled.",
+        "Applications are closed on 30 September 2026, apply soon.",
+        "Job not found? Search all openings.",
+        "Bitte senden Sie keine Bewerbungen mehr per Post, nur online.",
+        "Il ruolo prevede che l'offerta non è più valida oltre 30 giorni dalla firma.",
         "",
     ],
 )
@@ -899,7 +906,12 @@ def test_job_description_wording_is_not_a_closed_notice(text: str):
         ),
         ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/jobs/senior-engineer/", False),
         ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/", True),
-        ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/book-a-demo", True),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://careers.example.invalid/jobs", True),
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/", True),
+        # No identifier and not a shorter prefix: no conclusion.
+        ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/book-a-demo", False),
+        ("https://example.invalid/careers/senior-engineer", "https://example.invalid/en/careers/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer", "https://careers.example.invalid/senior-engineer", False),
         (ASHBY_URL, "chrome-error://chromewebdata/", True),
     ],
 )
@@ -914,9 +926,9 @@ def _read_checkpoint(tmp_path: Path) -> dict:
 
 
 def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, cv_path: Path):
-    # The form is still rendered next to the notice: the notice wins.
     page.set_content(
-        ashby_form().replace("<html><body>", "<html><body><p>This job is no longer available.</p>")
+        "<html><body><h1>Senior Engineer</h1><p>This job is no longer available.</p>"
+        "<form><input id='_systemfield_name'></form></body></html>"
     )
     notifications: list[dict] = []
     recorded: list[dict] = []
@@ -926,7 +938,6 @@ def test_closed_notice_stops_before_any_field_is_touched(page, tmp_path: Path, c
 
     assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
     assert page.eval_on_selector("#_systemfield_name", "element => element.value") == ""
-    assert page.evaluate("window.submitCount") == 0
     assert recorded == []
     checkpoint = _read_checkpoint(tmp_path)
     assert checkpoint["completed_steps"] == []
@@ -974,12 +985,64 @@ def test_a_redirect_that_keeps_the_vacancy_still_applies(
     assert flow.run(page=None).status == "applied"
 
 
-def test_a_vacancy_page_without_form_or_apply_control_is_closed(page, tmp_path: Path, cv_path: Path):
-    page.set_content("<html><body><h1>Senior Engineer</h1><p>We build synthetic things.</p></body></html>")
+def test_no_form_and_no_apply_control_without_a_notice_is_not_called_closed(
+    page, tmp_path: Path, cv_path: Path
+):
+    # A localised board or a slow render: honest, not final.
+    page.set_content("<html><body><h1>Senior Engineer</h1><button>Bewerben</button></body></html>")
 
     result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
 
+    assert (result.status, result.reason) == ("blocked_human", "ashby_form_missing")
+
+
+def test_a_closed_notice_next_to_a_form_is_not_evidence(page, tmp_path: Path, cv_path: Path):
+    page.set_content(
+        ashby_form().replace("<html><body>", "<html><body><p>This job is no longer available.</p>")
+    )
+
+    assert build_flow(tmp_path, cv_path).run(page=page, navigate=False).status == "applied"
+
+
+def test_a_closed_notice_next_to_an_apply_control_is_not_evidence(page, tmp_path: Path, cv_path: Path):
+    page.set_content(
+        "<html><body><p>This job is no longer available.</p><a href='#'>Apply for this Job</a></body></html>"
+    )
+
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ashby_form_missing")
+
+
+def test_a_closed_notice_on_an_unsupported_page_without_email_is_closed(page, tmp_path: Path, cv_path: Path):
+    page.set_content("<html><body><h1>Senior Engineer</h1><p>Esta oferta ya no está disponible.</p></body></html>")
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/senior-engineer"
+    flow.checkpoint_path = tmp_path / "checkpoint.json"
+
+    result = flow.run(page=page, navigate=False)
+
     assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+
+
+def test_a_failed_checkpoint_save_leaves_no_orphan_screenshot(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    page.set_content(ashby_form(captcha=True))
+    flow = build_flow(tmp_path, cv_path)
+    real_save = FlowCheckpoint.save
+
+    def failing_save(self, path):
+        if self.state == "blocked_human":
+            raise OSError("synthetic disk full")
+        return real_save(self, path)
+
+    monkeypatch.setattr(FlowCheckpoint, "save", failing_save)
+
+    with pytest.raises(OSError):
+        flow.run(page=page, navigate=False)
+
+    assert list(tmp_path.glob("checkpoint.stop-*")) == []
 
 
 def test_an_apply_control_that_opens_nothing_is_not_called_closed(page, tmp_path: Path, cv_path: Path):
