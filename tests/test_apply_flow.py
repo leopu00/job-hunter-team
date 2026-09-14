@@ -881,6 +881,8 @@ def test_closed_vacancy_notice_is_recognised_in_several_languages(language: str,
         "Job not found? Search all openings.",
         "Bitte senden Sie keine Bewerbungen mehr per Post, nur online.",
         "Il ruolo prevede che l'offerta non è più valida oltre 30 giorni dalla firma.",
+        "We are no longer accepting applications from recruitment agencies.",
+        "Please note we are no longer accepting applications by email, apply below.",
         "",
     ],
 )
@@ -912,6 +914,8 @@ def test_job_description_wording_is_not_a_closed_notice(text: str):
         ("https://careers.example.invalid/jobs/senior-engineer", "https://www.example.invalid/book-a-demo", False),
         ("https://example.invalid/careers/senior-engineer", "https://example.invalid/en/careers/senior-engineer", False),
         ("https://example.invalid/careers/senior-engineer", "https://careers.example.invalid/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer/apply", "https://example.invalid/careers/senior-engineer", False),
+        ("https://example.invalid/careers/senior-engineer/apply", "https://example.invalid/careers", True),
         (ASHBY_URL, "chrome-error://chromewebdata/", True),
     ],
 )
@@ -1023,6 +1027,22 @@ def test_a_closed_notice_on_an_unsupported_page_without_email_is_closed(page, tm
     result = flow.run(page=page, navigate=False)
 
     assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+
+
+@pytest.mark.parametrize(
+    "control",
+    ["<form action='/submit'><input name='q'></form>", "<a href='/jobs/senior-engineer/apply'>Apply now</a>"],
+)
+def test_a_closed_notice_on_an_unsupported_page_with_a_form_or_apply_is_not_evidence(
+    page, tmp_path: Path, cv_path: Path, control: str
+):
+    page.set_content(f"<html><body><p>Esta oferta ya no está disponible.</p>{control}</body></html>")
+    flow = build_flow(tmp_path, cv_path)
+    flow.url = "https://careers.example.invalid/jobs/senior-engineer"
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "ats_unsupported")
 
 
 def test_a_failed_checkpoint_save_leaves_no_orphan_screenshot(

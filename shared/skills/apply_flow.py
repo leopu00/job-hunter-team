@@ -131,7 +131,7 @@ _NEAR = r"\b[^.!?,;:\n]{0,40}?"
 _VACANCY_CLOSED_PATTERNS = tuple(
     (lang, re.compile(pattern, re.I))
     for lang, pattern in (
-        ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b"),
+        ("en", r"\bno longer (?:accepting|taking|receiving) (?:new )?applications\b(?! (?:from|by|via|through|at|on)\b)"),
         ("en", rf"\b{_NOUNS_EN}{_NEAR}\b(?:is|has been|was) no longer (?:available|open|active|live|online)\b"),
         ("en", rf"\b{_NOUNS_EN} (?:has|have) (?:expired|been filled|been closed)\b"),
         ("en", r"\bapplications (?:for this \w+ )?(?:are|have been) (?:now )?closed\b"),
@@ -212,6 +212,9 @@ def vacancy_redirected_away(requested_url: str, final_url: str) -> bool:
         return True
     requested_segments = [s.casefold() for s in requested.path.split("/") if s]
     final_segments = [s.casefold() for s in final.path.split("/") if s]
+    # ".../senior-engineer/apply" landing on ".../senior-engineer" is the vacancy itself.
+    if requested_segments and requested_segments[-1] in {"apply", "application", "form"}:
+        requested_segments = requested_segments[:-1]
     identifiers = [s for s in requested_segments if any(ch.isdigit() for ch in s)]
     if identifiers:
         return not any(identifier in final_segments for identifier in identifiers)
@@ -2277,6 +2280,19 @@ class ApplicationFlow:
             )
 
     @staticmethod
+    def _generic_application_controls(page) -> bool:
+        """On a page no recipe knows: any form, or a link or button labelled apply."""
+        try:
+            if page.locator("form").count():
+                return True
+            for role in ("button", "link"):
+                if page.get_by_role(role, name=_MAILTO_APPLY_LABEL).count():
+                    return True
+        except Exception:
+            return True  # unsure: a closed notice proves nothing here
+        return False
+
+    @staticmethod
     def _assert_no_closed_notice(page) -> None:
         """Called only where the page has no form, no Apply control and no email channel.
 
@@ -2804,7 +2820,8 @@ class ApplicationFlow:
                     email = self._email_channel(checkpoint, active_page)
                     if email is not None:
                         return email
-                    self._assert_no_closed_notice(active_page)
+                    if not self._generic_application_controls(active_page):
+                        self._assert_no_closed_notice(active_page)
                     reason = "ats_conflict" if detection.conflict else "ats_unsupported"
                     raise BlockedHuman(
                         reason,
