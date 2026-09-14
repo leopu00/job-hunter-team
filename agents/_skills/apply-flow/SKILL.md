@@ -56,6 +56,7 @@ One JSON line on stdout: `status`, `state`, `reason`, `receipt`.
 | `applied` | 0 | sent, receipt stored, state recorded | next position |
 | `dry_run` | 0 | `mode: dry_run`: filled, stopped before the button, nothing sent | next position |
 | `denied` | 1 | the gate refused (consent off, flag revoked, already sent) | next position; never retry |
+| `retry_later` | 5 | the vacancy page did not answer for now (5xx, timeout); not a stop, nobody notified; the checkpoint holds `retry_after` | next position; the queue gives this one back after `retry_after` by itself — never rerun it before |
 | `blocked_human` | 3 | a human is needed; the user has already been notified | next position; never retry |
 | `blocked_human` missing answers (`essential_facts_missing` with `missing`, `required_answer_missing` with `pending_question`) | 3 | not a stop and nothing was asked: the flow needs answers it does not have | work each one out from profile, CV and vacancy and save it (`application_answers.py save … --basis …`), then run the flow again; only with no basis `application_answers.py ask --position-id $PID --key K` (CLOSER prompt, CL-08). A question you asked holds the position until the user answers, a day per question at most |
 | `email_channel` | 4 | the application control is a `mailto:` link, not a form; the checkpoint holds `channel: email` and the raw `mailto_href` | run `email_application.py send` for this position as the `email-application-flow` skill says: it reads this checkpoint; never fill a web form or write the email by hand |
