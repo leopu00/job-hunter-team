@@ -2243,8 +2243,8 @@ class LeverRecipe:
         r"candidatura|aplicar|solicitar|jelentkez\w*)\b[^\n]{0,40}$",
         re.I,
     )
-    # Lever's own field names.  A full name is one field: joined from exact
-    # first and last names when the profile has no full name, never split.
+    # Lever's own field names.  A full name is one field: the profile's own
+    # full name, never joined from first and last names nor split (D1).
     # Current company and "other" links are questions, not profile facts.
     _CORE_NAMES = {
         "name": (("name",),),
@@ -2317,19 +2317,21 @@ class LeverRecipe:
         return GreenhouseRecipe._answer_for(self, label, field_key)
 
     def _core_value(self, name: str, label: str, paths: tuple[tuple[str, ...], ...]) -> tuple[bool, Any]:
-        present, answer = self._answer_for(label, name)
-        if present:
-            return True, answer
+        # profile_facts rule, as for Ashby and Greenhouse: the profile (own
+        # paths, then aliases), then a saved answer.  No first + last join:
+        # "Test" and "Candidate" say nothing about how the person writes the
+        # full name; without one the caller asks for it.
+        value = None
         for path in paths:
             value = AshbyRecipe._profile_value(self.profile, path)
-            if value is None and path == ("name",):
-                first = AshbyRecipe._profile_value(self.profile, ("first_name",))
-                last = AshbyRecipe._profile_value(self.profile, ("last_name",))
-                value = f"{first} {last}" if first and last else None
             if value is not None:
-                self.answer_sources[_normalise_label(label) or _normalise_label(name)] = "profile"
-                return True, value
-        return False, None
+                break
+        if value is None:
+            value = _profile_fact(self.profile, paths)
+        if value is not None:
+            self.answer_sources[_normalise_label(label) or _normalise_label(name)] = "profile"
+            return True, value
+        return self._answer_for(label, name)
 
     def _apply_controls(self, page) -> list:
         found = []
@@ -2397,11 +2399,9 @@ class LeverRecipe:
             present, value = self._core_value(name, label, paths)
             if not present:
                 if self._required(entry):
-                    raise BlockedHuman(
-                        "required_profile_field_missing",
-                        f"Required Lever field needs profile data: {_safe_label(label or name)}",
-                        "fill",
-                    )
+                    control = entry.locator("input, textarea").first
+                    kind = (control.get_attribute("type") or "text").casefold() if control.count() else "text"
+                    raise _core_fact_missing("Lever", label or name, "fill", kind)
                 continue
             self._fill_answer(entry, label or name, value, "fill")
 

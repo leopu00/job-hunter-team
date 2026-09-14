@@ -306,32 +306,65 @@ def test_lever_two_different_apply_links_block(page, tmp_path: Path, cv_path: Pa
     assert page.url == POSTING
 
 
-def test_lever_full_name_joins_exact_first_and_last_names(page, tmp_path: Path, cv_path: Path):
-    open_at(page, APPLY, lever_form(confirmation="none"))
+def test_lever_never_joins_first_and_last_names_into_the_full_name(page, tmp_path: Path, cv_path: Path):
+    # D1 (14/09): how a person writes the full name is not first + " " + last.
+    # Without the profile's own full name it is a question the CLOSER works
+    # out (CL-08), never a join in code.
+    open_at(page, APPLY, lever_form())
+    notifications: list[dict] = []
     candidate = {
         "first_name": "Test",
         "last_name": "Candidate",
         "contacts": {"email": "candidate@example.invalid"},
     }
-    flow = build_flow(tmp_path, cv_path, candidate=candidate)
-
-    flow.run(page=page, navigate=False)
-
-    assert page.locator("input[name=name]").input_value() == "Test Candidate"
-
-
-def test_lever_missing_name_blocks_before_submit(page, tmp_path: Path, cv_path: Path):
-    open_at(page, APPLY, lever_form())
-    notifications: list[dict] = []
-    candidate = {"first_name": "Test", "contacts": {"email": "candidate@example.invalid"}}
     flow = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications)
 
     result = flow.run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason == "required_profile_field_missing"
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "full name"
+    assert result.pending_question["field_type"] == "text"
     assert page.locator("input[name=name]").input_value() == ""
     assert page.evaluate("window.submitCount") == 0
+    assert notifications == []  # a form question never goes to the user by itself
+
+    # The CLOSER saves the full name with its basis; the rerun fills and submits.
+    open_at(page, APPLY, lever_form())
+    page.evaluate(
+        "() => document.getElementById('application-form').addEventListener('submit',"
+        " () => { window.sentName = document.querySelector('input[name=name]').value; }, true)"
+    )
+    worked_out = {**candidate, "application_answers": {"full name": "Test Candidate"}}
+    rerun = build_flow(tmp_path, cv_path, candidate=worked_out, notifications=notifications)
+    result = rerun.run(page=page, navigate=False)
+    assert result.status == "applied", result
+    assert page.evaluate("window.sentName") == "Test Candidate"
+    assert notifications == []
+
+
+def test_lever_full_name_comes_from_a_profile_alias(page, tmp_path: Path, cv_path: Path):
+    open_at(page, APPLY, lever_form(confirmation="none"))
+    candidate = {"full_name": "Test Candidate", "contacts": {"email": "candidate@example.invalid"}}
+
+    build_flow(tmp_path, cv_path, candidate=candidate).run(page=page, navigate=False)
+
+    assert page.locator("input[name=name]").input_value() == "Test Candidate"
+
+
+def test_lever_missing_email_is_an_email_question_before_submit(page, tmp_path: Path, cv_path: Path):
+    open_at(page, APPLY, lever_form())
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, candidate={"name": "Test Candidate"}, notifications=notifications)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason == "required_answer_missing"
+    assert (result.pending_question["key"], result.pending_question["field_type"]) == ("email", "email")
+    assert page.locator("input[name=email]").input_value() == ""
+    assert page.evaluate("window.submitCount") == 0
+    assert notifications == []
 
 
 def test_lever_missing_required_question_stops_silently_with_exact_options(
