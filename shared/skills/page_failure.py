@@ -313,7 +313,9 @@ def decide(
         return Decision(PROCEED), [], ""
     if kind == NOT_FOUND:
         status = access.status if access.status is not None else "unknown"
-        if closed_evidence:
+        # Only a page that is gone (404/410) closes the vacancy with evidence;
+        # a 400 next to a closed notice says nothing about the vacancy.
+        if closed_evidence and access.status in _GONE_STATUSES:
             return (
                 Decision(
                     BLOCK,

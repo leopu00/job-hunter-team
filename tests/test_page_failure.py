@@ -157,6 +157,14 @@ def test_a_gone_page_that_says_it_is_closed_is_vacancy_closed():
     assert "410" in decision.detail
 
 
+def test_a_closed_notice_closes_the_vacancy_only_on_a_gone_page():
+    decision, _, _ = pf.decide(
+        access(pf.NOT_FOUND, 400), headless=True, headed_available=True, headed_retry_used=False,
+        closed_evidence="notice language: en",
+    )
+    assert (decision.action, decision.reason) == (pf.BLOCK, "page_not_found")
+
+
 def test_a_wall_in_a_headless_browser_gets_one_headed_try():
     decision, _, _ = pf.decide(
         access(pf.BOT_PROTECTION, 403), headless=True, headed_available=True, headed_retry_used=False

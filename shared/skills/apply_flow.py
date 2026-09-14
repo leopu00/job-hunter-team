@@ -3915,6 +3915,14 @@ class ApplicationFlow:
                 # A temporary page failure: not before retry_after, no browser.
                 return FlowResult("retry_later", checkpoint.state, "page_retry_later")
             checkpoint.state = "detect"
+        if (
+            checkpoint.state == "blocked_human"
+            and checkpoint.blocked_reason == "page_temporarily_unavailable"
+            and self._reauthorised_since(checkpoint, first_gate)
+        ):
+            # The user authorised the position again after the third failure:
+            # a new series of tries, not a stop at the first 503.
+            checkpoint.transient_failures = []
 
         fresh = (
             checkpoint.state == "detect"
