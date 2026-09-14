@@ -748,6 +748,18 @@ def _essential_state(conn: sqlite3.Connection, fact: EssentialFact, now: datetim
     return "given_up", latest
 
 
+def _asked_explicitly(conn: sqlite3.Connection, fact: EssentialFact, round_no: int) -> bool:
+    row = conn.execute(
+        "SELECT source_payload FROM pending_user_messages WHERE source_id = ? ORDER BY id LIMIT 1",
+        (essential_source_id(fact, round_no),),
+    ).fetchone()
+    try:
+        payload = json.loads((row[0] if row else "") or "")
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and payload.get("explicit") is True
+
+
 def essential_message(fact: EssentialFact, round_no: int = 1) -> str:
     """Same structured head as a form request, so the dashboard can answer it too."""
     options = "".join(f"\n- {value}" for value in fact.options)
@@ -818,14 +830,19 @@ def check_essentials(
                 continue
             answers.setdefault(normalise_label(payload["key"]), decode_reply(field_type, reply))
     missing = missing_essentials(answers, profile)
-    states = {fact.key: _essential_state(conn, fact, now)[0] for fact in missing}
+    states = {fact.key: _essential_state(conn, fact, now) for fact in missing}
     return {
         "status": "complete" if not missing else "missing",
         "missing": [fact.key for fact in missing],
-        # Asked and still inside its day: only these hold the queue.
-        "already_asked": [key for key, state in states.items() if state == "waiting"],
-        "expired": [key for key, state in states.items() if state == "expired"],
-        "given_up": [key for key, state in states.items() if state == "given_up"],
+        # Asked explicitly and still inside its day: only these hold the queue.
+        # A question sent before the CLOSER worked answers out by itself was not
+        # its choice, and must not stop it from working the fact out.
+        "already_asked": [
+            fact.key for fact in missing
+            if states[fact.key][0] == "waiting" and _asked_explicitly(conn, fact, states[fact.key][1])
+        ],
+        "expired": [key for key, (state, _) in states.items() if state == "expired"],
+        "given_up": [key for key, (state, _) in states.items() if state == "given_up"],
     }
 
 
@@ -871,6 +888,8 @@ def ensure_essentials(
             "label": fact.label,
             "field_type": fact.field_type,
             "options": list(fact.options),
+            # Only the CLOSER's explicit ask sends it; the queue holds on this mark.
+            "explicit": True,
         }
         (notifier or _default_notifier)(
             position_id=int(position_id),

@@ -700,6 +700,16 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     state = data.get("state")
     if state not in HELD_CHECKPOINT_STATES:
         return ""
+    request = data.get("answer_request")
+    if (
+        isinstance(request, dict)
+        and request.get("asked") is False
+        and not str(request.get("message_id") or "").strip()
+    ):
+        # A form question the flow stopped on and nobody asked: no answer will
+        # ever wake the CLOSER, so the position stays in the queue for it to
+        # work the answer out (or ask) at its next run.
+        return ""
     held_at = _parse_instant(data.get("updated_at"))
     asked_at = _parse_instant(authorised_at)
     if held_at and asked_at and asked_at > held_at:
