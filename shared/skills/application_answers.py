@@ -556,7 +556,11 @@ LOGIN_CODE_MASK = "[verification code]"
 LOGIN_CODE_RECENT = timedelta(hours=1)
 _LOGIN_GROUP = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d)*(?![A-Za-z0-9])")
 _LOGIN_WHOLE = re.compile(r"\s*\d(?:[ -]?\d)*\s*")
-
+# `code_format: alnum8` (Greenhouse's emailed code): exactly eight letters or
+# digits, case kept, a space or dash between characters tolerated.
+ALNUM8 = "alnum8"
+_ALNUM8_WHOLE = re.compile(r"\s*[A-Za-z0-9](?:[ -]?[A-Za-z0-9]){7}\s*")
+_ALNUM8_TOKEN = re.compile(r"[A-Za-z0-9]{8}")
 
 @dataclass(frozen=True)
 class LoginCodeOutcome:
@@ -575,8 +579,37 @@ def _login_digits(text: str) -> list[str]:
     return [group for group in groups if 4 <= len(group) <= 8]
 
 
-def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str, bool]]:
-    """Recent login code requests: (id, source_id, open)."""
+def _word_like(token: str) -> bool:
+    """An ordinary word ("received", "Perfetto"), not a code someone typed."""
+    return token.isalpha() and (token.islower() or token.istitle())
+
+
+def _alnum8_codes(text: str, *, alone: bool) -> list[str]:
+    """Eight-character codes in `text`. A message that is only the code is taken
+    even when it reads like a word if `alone` (a reply to the request)."""
+    text = str(text)
+    if _ALNUM8_WHOLE.fullmatch(text):
+        code = re.sub(r"[\s-]", "", text)
+        return [code] if alone or not _word_like(code) else []
+    tokens = (token.strip(".,;:!?()[]{}\"'").replace("-", "") for token in text.split())
+    return [t for t in tokens if _ALNUM8_TOKEN.fullmatch(t) and not _word_like(t)]
+
+
+def _codes_in(text: str, code_format: str, *, alone: bool) -> list[str]:
+    return _alnum8_codes(text, alone=alone) if code_format == ALNUM8 else _login_digits(text)
+
+
+def _whole_code(text: str, code_format: str) -> str | None:
+    """The code when the message is nothing but a code of this format."""
+    if code_format == ALNUM8:
+        codes = _alnum8_codes(text, alone=False) if _ALNUM8_WHOLE.fullmatch(str(text)) else []
+    else:
+        codes = _login_digits(text) if _LOGIN_WHOLE.fullmatch(str(text)) else []
+    return codes[0] if len(codes) == 1 else None
+
+
+def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str, bool, str]]:
+    """Recent login code requests: (id, source_id, open, code_format)."""
     columns = {column[1] for column in conn.execute("PRAGMA table_info(pending_user_messages)")}
     if not {"source_id", "source_action", "source_payload"} <= columns:
         return []  # a legacy table has no login request
@@ -590,12 +623,13 @@ def _login_rows(conn: sqlite3.Connection, now: datetime) -> list[tuple[int, str,
             payload = json.loads(payload_text or "")
             expires = apply_gate._parse_instant(payload.get("expires_at")) if isinstance(payload, dict) else None
         except ValueError:
-            expires = None
+            payload, expires = None, None
+        code_format = ALNUM8 if isinstance(payload, dict) and payload.get("code_format") == ALNUM8 else "digits"
         at = apply_gate._parse_instant(created)
         if at is not None and now - at > LOGIN_CODE_RECENT and (expires is None or expires < now - LOGIN_CODE_RECENT):
             continue
         is_open = reply is None and expires is not None and now < expires
-        rows.append((int(row_id), str(source_id), is_open))
+        rows.append((int(row_id), str(source_id), is_open, code_format))
     return rows
 
 
@@ -611,17 +645,22 @@ def _login_target(conn: sqlite3.Connection, text: str, reply_to_text: str | None
     quoted = {code.upper() for code in _CODE.findall(f"{reply_to_text or ''}\n{text}")}
     named = [row for row in rows if answer_code(row[1]) in quoted]
     if named:
-        digits = _login_digits(_CODE.sub(" ", str(text)))
-        return named[-1], (digits[0] if len(digits) == 1 else None), True, bool(digits)
-    if not direct or not _LOGIN_WHOLE.fullmatch(str(text)):
+        # Addressed to the request: masked whatever it holds (a code split in
+        # halves, a half-typed one), taken only with exactly one code.
+        row = named[-1]
+        codes = _codes_in(_CODE.sub(" ", str(text)), row[3], alone=True)
+        return row, (codes[0] if len(codes) == 1 else None), True, True
+    if not direct:
         return None, None, False, False
-    digits = _login_digits(text)
-    if len(digits) != 1:
+    matches = [(row, code) for row in rows if (code := _whole_code(str(text), row[3]))]
+    if not matches:
         return None, None, False, False
-    open_rows = [row for row in rows if row[2]]
-    if len(open_rows) == 1:
-        return open_rows[0], digits[0], False, True
-    return (rows[-1] if not open_rows else None), digits[0], False, True
+    open_matches = [match for match in matches if match[0][2]]
+    if len(open_matches) == 1:
+        return open_matches[0][0], open_matches[0][1], False, True
+    if not open_matches:
+        return matches[-1][0], matches[-1][1], False, True
+    return None, open_matches[0][1], False, True
 
 
 def login_code_candidate(conn: sqlite3.Connection, *, text: str, reply_to_text: str | None, direct: bool) -> bool:
@@ -646,7 +685,7 @@ def resolve_login_code(
     row, digits, named, _recent = _login_target(conn, text, reply_to_text, direct, now)
     if row is None or not digits:
         return LoginCodeOutcome("ambiguous")
-    row_id, source_id, is_open = row
+    row_id, source_id, is_open, _format = row
     if not named and _open_requests(conn):
         return LoginCodeOutcome("ambiguous", source_id)
     if not is_open:
