@@ -312,6 +312,16 @@ def test_summary_is_capped(home):
 
 
 @pytest.mark.parametrize("lang", LANGS)
+def test_an_expired_linkedin_session_has_its_own_words(lang):
+    # 35ddb27f3 (HQ-BACKEND-3): the hand-made session expired; the default text
+    # would not say to sign in again in the CLOSER's browser.
+    catalog = _catalog(lang)
+    assert "linkedin_session_expired" in notices.KNOWN_REASONS
+    for part in ("why", "action"):
+        assert catalog[f"closer.reason.linkedin_session_expired.{part}"] != catalog[f"closer.reason.default.{part}"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
 def test_every_summary_line_says_what_to_do(home, lang):
     # 14/09 live: 6 of 8 stops were linkedin_credentials_missing; the "why"
     # alone left the user without the one thing to do (create the sign-in).

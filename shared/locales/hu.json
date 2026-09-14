@@ -228,5 +228,7 @@
   "closer.reason.linkedin_challenge.why": "A LinkedIn biztonsági ellenőrzést kért, amelyet a CLOSER nem old meg.",
   "closer.reason.linkedin_challenge.action": "Lépj be egyszer magad a LinkedInre, majd engedélyezd újra a pozíciót, vagy jelentkezz kézzel.",
   "closer.reason.unknown_required_control.why": "Az űrlapon van egy kötelező mező, amelyet a CLOSER nem tud biztonságosan kitölteni.",
-  "closer.reason.unknown_required_control.action": "Nyisd meg az állást, és jelentkezz kézzel."
+  "closer.reason.unknown_required_control.action": "Nyisd meg az állást, és jelentkezz kézzel.",
+  "closer.reason.linkedin_session_expired.why": "A kézzel létrehozott LinkedIn-munkameneted lejárt, vagy a LinkedIn már nem fogadja el.",
+  "closer.reason.linkedin_session_expired.action": "Jelentkezz be újra kézzel a LinkedInre a CLOSER böngészőjében, majd engedélyezd újra a pozíciót."
 }

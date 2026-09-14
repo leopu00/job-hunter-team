@@ -97,6 +97,7 @@ KNOWN_REASONS = (
     "linkedin_credentials_missing",
     "linkedin_login_failed",
     "linkedin_challenge",
+    "linkedin_session_expired",
     "unknown_required_control",
 )
 FLUSH_AFTER = timedelta(hours=6)
