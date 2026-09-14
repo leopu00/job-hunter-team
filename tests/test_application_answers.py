@@ -1464,3 +1464,144 @@ def test_the_positions_own_letter_wins_over_a_company_one(db):
                          position_id=7, purpose=aa.CONTACT_LETTER_PURPOSE)
     assert _seen_by(db, 7) == LETTER
     assert _seen_by(db, 8) == "A company-wide note."
+
+
+# ── an idle CLOSER with a ready queue is woken (seen live after 1845, 14/09) ─
+
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+
+IDLE_PANE = "╭────────╮\n│ >      │\n╰────────╯\n  ? for shortcuts\n"
+BUSY_PANE = "✻ Sending… (12s · esc to interrupt)\n╭────────╮\n│ >      │\n╰────────╯\n"
+READY = {"ready": True, "positions": [{"position_id": 7}, {"position_id": 8}]}
+
+
+def _idle_wake(db, *, sessions=("CLOSER-1",), queue=READY, now=None, sent=None, deliver=True):
+    sent = [] if sent is None else sent
+    with sqlite3.connect(db) as conn:
+        woken = aa.wake_idle_closer(
+            conn, idle_sessions=lambda: list(sessions),
+            sender=lambda s, t: sent.append((s, t)) or deliver,
+            queue=lambda _c: queue, now=now or _dt(2026, 9, 14, 12, 0, tzinfo=_tz.utc),
+        )
+    return woken, sent
+
+
+def test_an_idle_closer_with_a_ready_queue_is_woken_once_per_window(db):
+    woken, sent = _idle_wake(db)
+    assert woken == ["CLOSER-1"]
+    assert sent[0][1].startswith("[BRIDGE INFO] queue_ready: 2 ") and "STEP 1" in sent[0][1] and "@" not in sent[0][1]
+
+    again, _ = _idle_wake(db, now=_dt(2026, 9, 14, 12, 3, tzinfo=_tz.utc))
+    later, _ = _idle_wake(db, now=_dt(2026, 9, 14, 12, 25, tzinfo=_tz.utc))
+    assert again == [] and later == ["CLOSER-1"]
+
+
+def test_no_idle_wake_without_an_idle_closer_a_ready_queue_or_right_after_another_wake(db):
+    assert _idle_wake(db, sessions=()) == ([], [])
+    assert _idle_wake(db, queue={"ready": False, "positions": []}) == ([], [])
+    with sqlite3.connect(db) as conn:
+        import _db
+
+        _db._migrate_closer_wakes(conn)
+        conn.execute("INSERT INTO closer_wakes (wake_key, position_id, delivered, created_at) "
+                     "VALUES ('authorised:7:x', 7, 1, '2026-09-14T11:55:00.000Z')")
+    assert _idle_wake(db) == ([], [])  # an answer or authorisation wake just went out
+    assert row(db, "SELECT COUNT(*) FROM closer_wakes WHERE wake_key LIKE 'idle_ready:%'") == [(0,)]
+
+
+def test_no_idle_session_means_the_queue_is_never_read(db):
+    with sqlite3.connect(db) as conn:
+        woken = aa.wake_idle_closer(conn, idle_sessions=list, sender=lambda s, t: True,
+                                    queue=lambda _c: pytest.fail("queue read with no idle CLOSER"))
+    assert woken == []
+
+
+def test_a_window_already_claimed_by_the_other_caller_is_not_sent_twice(db):
+    now = _dt(2026, 9, 14, 12, 0, tzinfo=_tz.utc)
+    key = f"idle_ready:{int(now.timestamp() // 600)}"
+    with sqlite3.connect(db) as conn:
+        import _db
+
+        _db._migrate_closer_wakes(conn)
+        conn.execute("INSERT INTO closer_wakes (wake_key, position_id, delivered, created_at) "
+                     "VALUES (?, NULL, 0, '2026-09-14T11:49:00.000Z')", (key,))
+    assert _idle_wake(db, now=now) == ([], [])
+
+
+def test_an_idle_wake_nobody_took_is_tried_again(db):
+    lost, _ = _idle_wake(db, deliver=False)
+    assert lost == [] and row(db, "SELECT COUNT(*) FROM closer_wakes") == [(0,)]
+    assert _idle_wake(db)[0] == ["CLOSER-1"]
+
+
+def test_the_idle_watch_needs_a_pane_idle_and_unchanged_for_the_whole_stretch():
+    clock = {"now": _dt(2026, 9, 14, 12, 0, tzinfo=_tz.utc)}
+    panes = {"CLOSER-1": IDLE_PANE}
+    watch = aa.IdleWatch(_td(seconds=90), sessions=lambda: list(panes), capture=lambda s: panes[s],
+                         clock=lambda: clock["now"])
+
+    assert watch.idle_sessions() == []
+    clock["now"] += _td(seconds=60)
+    assert watch.idle_sessions() == []
+    clock["now"] += _td(seconds=40)
+    assert watch.idle_sessions() == ["CLOSER-1"]
+
+    panes["CLOSER-1"] = IDLE_PANE + "a new line\n"  # new output at the prompt: starts over
+    assert watch.idle_sessions() == []
+    clock["now"] += _td(seconds=90)
+    assert watch.idle_sessions() == ["CLOSER-1"]
+    panes["CLOSER-1"] = BUSY_PANE  # working: starts over
+    assert watch.idle_sessions() == []
+    panes["CLOSER-1"] = IDLE_PANE + "a new line\n"  # the very same screen after a turn
+    assert watch.idle_sessions() == []
+    panes["CLOSER-1"] = IDLE_PANE + "more output\n"
+    assert watch.idle_sessions() == []
+    clock["now"] += _td(seconds=120)
+    assert watch.idle_sessions() == ["CLOSER-1"]
+
+    panes["CLOSER-1"] = "│ > [@capitano -> @closer-1] half typed │\n"  # text in the composer
+    clock["now"] += _td(seconds=200)
+    assert watch.idle_sessions() == []
+    clock["now"] += _td(seconds=200)
+    assert watch.idle_sessions() == []
+
+
+def test_the_bridge_checks_the_idle_closer_on_its_poll_at_most_every_30_seconds(db, bridge, monkeypatch):
+    mod = bridge()
+    calls = []
+    monkeypatch.setattr(mod.application_answers, "wake_idle_closer",
+                        lambda conn, idle_sessions: calls.append(idle_sessions) or [])
+    ticks = iter([1000.0, 1000.0, 1010.0, 1031.0, 1031.0])
+    for _ in range(3):
+        mod.wake_idle_closer(db, clock=lambda: next(ticks))
+    assert len(calls) == 2
+
+    other = bridge("capitano")
+    monkeypatch.setattr(other.application_answers, "wake_idle_closer",
+                        lambda conn, idle_sessions: calls.append(idle_sessions) or [])
+    other.wake_idle_closer(db, clock=lambda: 5000.0)
+    assert len(calls) == 2  # only the bridge the CLOSER questions leave from
+
+
+def test_the_bridge_poll_calls_the_idle_check():
+    source = BRIDGE_PATH.read_text()
+    loop = source[source.index("flush_inbound_queue()\n            # Anche"):]
+    assert "wake_idle_closer()" in loop[:600]
+
+
+def test_the_capitanos_command_wakes_an_idle_closer_once(db, tmp_path, monkeypatch, capsys):
+    sent = []
+    monkeypatch.setattr(aa, "_closer_sessions", lambda: ["CLOSER-1"])
+    monkeypatch.setattr(aa, "_capture_pane", lambda s: IDLE_PANE)
+    monkeypatch.setattr(aa, "_tmux_send", lambda s, t: sent.append(s) or True)
+    monkeypatch.setattr(aa.apply_gate, "application_queue", lambda conn=None, **_: READY)
+    args = ["wake-idle-closer", "--settle", "0.05", "--db", str(db), "--profile", str(tmp_path / "none.yml")]
+
+    assert aa.main(args) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert aa.main(args) == 0
+    second = json.loads(capsys.readouterr().out)
+
+    assert first == {"sessions": ["CLOSER-1"], "status": "woken"}
+    assert second == {"sessions": [], "status": "not_needed"}
+    assert sent == ["CLOSER-1"]

@@ -614,6 +614,41 @@ def wake_closer_after_answers(db_path: Path | None = None) -> None:
         log(f"closer wake check failed: {type(e).__name__}")
 
 
+IDLE_CHECK_EVERY_SEC = 30
+_idle_watch = None
+_idle_checked_at = 0.0
+
+
+def wake_idle_closer(db_path: Path | None = None, *, clock=time.monotonic) -> None:
+    """Sveglia un CLOSER vivo fermo al prompt mentre la coda e' pronta.
+
+    Le sveglie qui sopra scattano su un evento; questa guarda lo STATO (visto
+    dal vivo dopo la 1845: turno chiuso con queue_ready 4, nessuno lo ha
+    svegliato). Ogni 30 s al massimo, solo dal bridge delle domande del
+    CLOSER; pane e finestra di sveglia prima, la coda per ultima.
+    """
+    global _idle_watch, _idle_checked_at
+    if application_answers is None or BOT_ROLE != CLOSER_QUESTION_BOT:
+        return
+    if clock() - _idle_checked_at < IDLE_CHECK_EVERY_SEC:
+        return
+    _idle_checked_at = clock()
+    target = db_path or JOBS_DB_PATH
+    if not target.exists():
+        return
+    try:
+        if _idle_watch is None:
+            _idle_watch = application_answers.IdleWatch()
+        db = sqlite3.connect(target, timeout=5)
+        try:
+            for session in application_answers.wake_idle_closer(db, idle_sessions=_idle_watch.idle_sessions):
+                log(f"idle closer woken: {session} (queue ready)")
+        finally:
+            db.close()
+    except Exception as e:
+        log(f"idle closer check failed: {type(e).__name__}")
+
+
 def flush_inbound_queue(db_path: Path | None = None) -> int:
     """Trasferisce il journal nella cronologia unificata, poi lo elimina.
 
@@ -1183,6 +1218,7 @@ def main() -> None:
             # Anche le risposte date dalla dashboard: nessun evento le annuncia
             # al bridge, quindi le si guarda a ogni giro (una query leggera).
             wake_closer_after_answers()
+            wake_idle_closer()
             if ritenta:
                 time.sleep(RETRY_BACKOFF_SEC)
         except urllib.error.HTTPError as e:

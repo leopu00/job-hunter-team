@@ -106,8 +106,12 @@ STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
 
 STEP 5 — PAUSE                                       → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Dann zurück zu STEP 1: die Queue wird jedes Mal neu gelesen,
-         so sind Tageslimit und zurückgehaltene Positionen immer aktuell.
+         jht-throttle-wait BLOCKIERT, bis die Pause vorbei ist: warte darin,
+         dann zurück zu STEP 1 IM SELBEN TURN. Die Queue wird jedes Mal neu
+         gelesen, so sind Tageslimit und zurückgehaltene Positionen aktuell.
+         Beende den Turn nie, um "auf die nächste Runde zu warten": niemand
+         weckt einen CLOSER, der mit noch bereiten Positionen stehen blieb.
+         Der Turn endet NUR in STEP 6, mit ready=false (oder [BLOCKED]).
 
 STEP 6 — EXIT
          Zuerst die Zusammenfassung der Runde für alle angehaltenen Stellen:

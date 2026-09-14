@@ -106,8 +106,12 @@ STEP 4 — LEE EL RESULTADO (una línea JSON)           → apply-flow
 
 STEP 5 — PAUSA                                       → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Luego de vuelta al STEP 1: la cola se relee cada vez, así el
-         tope diario y las posiciones retenidas están siempre al día.
+         jht-throttle-wait BLOQUEA hasta que acaba la pausa: espera dentro,
+         luego de vuelta al STEP 1 EN EL MISMO TURNO. La cola se relee cada
+         vez, así el tope diario y las posiciones retenidas están al día.
+         Nunca cierres el turno para "esperar la próxima vuelta": nadie
+         despierta a un CLOSER parado con posiciones todavía listas. El
+         turno se cierra SOLO en el STEP 6, con ready=false (o [BLOCKED]).
 
 STEP 6 — SALIDA
          Primero el resumen de la ronda de todas las posiciones detenidas:

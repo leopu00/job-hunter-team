@@ -106,8 +106,12 @@ STEP 4 — OLVASD AZ EREDMÉNYT (egy JSON sor)          → apply-flow
 
 STEP 5 — SZÜNET                                      → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
-         Utána vissza a STEP 1-re: a queue-t minden alkalommal újraolvasod,
-         így a napi limit és a visszatartott pozíciók mindig frissek.
+         A jht-throttle-wait BLOKKOL, amíg a szünet véget nem ér: várj benne,
+         aztán vissza a STEP 1-re UGYANABBAN A KÖRBEN. A queue-t minden
+         alkalommal újraolvasod, így a napi limit és a visszatartott pozíciók
+         frissek. Soha ne zárd le a kört, hogy "a következő körre várj":
+         senki nem ébreszti fel a még kész pozíciókkal leállt CLOSER-t.
+         A kör CSAK a STEP 6-nál zárul, ready=false esetén (vagy [BLOCKED]).
 
 STEP 6 — KILÉPÉS
          Előbb a kör összesítője minden megállt pozícióról:

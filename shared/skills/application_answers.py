@@ -51,6 +51,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1250,6 +1251,132 @@ def _tmux_send(session: str, text: str) -> bool:
         return False
 
 
+# ── An idle CLOSER with a ready queue (seen live after 1845, 14/09) ──────────
+#
+# CLOSER-1 armed its throttle, wrote that the other positions "stay queued for
+# the next paced iteration" and ended its turn with queue_ready 4. Every wake
+# above fires on an event (an answer, an authorisation); nothing fired. This
+# one fires on the state: a live CLOSER whose pane sits idle while the queue
+# is ready, once per window, and never within a window of any other wake.
+
+IDLE_WAKE_INTERVAL = timedelta(minutes=10)
+IDLE_STABLE = timedelta(seconds=90)
+
+
+def _capture_pane(session: str) -> str:
+    try:
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", session], capture_output=True, text=True, timeout=5, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout if result.returncode == 0 else ""
+
+
+def pane_is_idle(text: str) -> bool:
+    """At the prompt with an empty composer: no turn running, nothing typed."""
+    if not text.strip():
+        return False
+    try:
+        from agent_unblock import classify_pane
+    except ImportError:  # pragma: no cover - package import
+        from shared.skills.agent_unblock import classify_pane
+    return classify_pane(text)["state"] == "idle"
+
+
+class IdleWatch:
+    """Which live CLOSER panes have sat idle, unchanged, for `stable`.
+
+    One capture per call; a pane that changed or got busy starts over. A turn
+    between two tool calls shows "esc to interrupt", so a working CLOSER is
+    never idle here.
+    """
+
+    def __init__(
+        self,
+        stable: timedelta = IDLE_STABLE,
+        *,
+        sessions: Callable[[], list[str]] | None = None,
+        capture: Callable[[str], str] | None = None,
+        clock: Callable[[], datetime] | None = None,
+    ):
+        self.stable = stable
+        self.sessions = sessions or _closer_sessions
+        self.capture = capture or _capture_pane
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.seen: dict[str, tuple[str, datetime]] = {}
+
+    def idle_sessions(self) -> list[str]:
+        now = self.clock()
+        idle = []
+        live = self.sessions()
+        for session in live:
+            text = self.capture(session)
+            if not pane_is_idle(text):
+                self.seen.pop(session, None)
+                continue
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            previous = self.seen.get(session)
+            if previous is None or previous[0] != digest:
+                self.seen[session] = (digest, now)
+                previous = self.seen[session]
+            if now - previous[1] >= self.stable:
+                idle.append(session)
+        for gone in set(self.seen) - set(live):
+            self.seen.pop(gone, None)
+        return idle
+
+
+def wake_idle_closer(
+    conn: sqlite3.Connection,
+    *,
+    idle_sessions: Callable[[], list[str]],
+    sender: Callable[[str, str], bool] | None = None,
+    queue: Callable[[sqlite3.Connection], Mapping[str, Any]] | None = None,
+    now: datetime | None = None,
+) -> list[str]:
+    """Wake a live, idle CLOSER while the queue is ready. The sessions woken.
+
+    Cheap checks first (an idle pane, no wake of any kind in the last
+    `IDLE_WAKE_INTERVAL`), the queue last. The window key is claimed before
+    the message, so the bridge and the Capitano cannot both send it; a
+    message no CLOSER took gives the claim back.
+    """
+    import _db
+
+    now = now or datetime.now(timezone.utc)
+    sessions = idle_sessions()
+    if not sessions:
+        return []
+    _db._migrate_closer_wakes(conn)
+    last = apply_gate._parse_instant(conn.execute("SELECT MAX(created_at) FROM closer_wakes").fetchone()[0])
+    if last is not None and now - last < IDLE_WAKE_INTERVAL:
+        return []
+    current = (queue or (lambda c: apply_gate.application_queue(conn=c)))(conn)
+    if not current.get("ready"):
+        return []
+    key = f"idle_ready:{int(now.timestamp() // IDLE_WAKE_INTERVAL.total_seconds())}"
+    claimed = conn.execute(
+        "INSERT OR IGNORE INTO closer_wakes (wake_key, position_id, created_at) VALUES (?, NULL, ?)",
+        (key, now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"),
+    ).rowcount
+    conn.commit()
+    if claimed != 1:
+        return []
+    count = len(current.get("positions") or [])
+    text = (
+        f"[BRIDGE INFO] queue_ready: {count} authorised position(s) can go out now and your turn has ended. "
+        "Re-read the queue (apply_gate.py queue) and continue from STEP 1; end the turn only when ready=false."
+    )
+    woken = [session for session in sessions if (sender or _tmux_send)(session, text)]
+    if woken:
+        conn.execute("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", (key,))
+    else:
+        conn.execute("DELETE FROM closer_wakes WHERE wake_key = ? AND delivered = 0", (key,))
+    conn.commit()
+    return woken
+
+
 def wake_message(wake: Wake) -> str:
     if wake.reason == "essentials_complete":
         what = "the user answered the essential application facts"
@@ -1427,8 +1554,10 @@ def main(argv: list[str] | None = None) -> int:
     save.add_argument("--position-id", type=int)
     save.add_argument("--label", default="")
     save.add_argument("--purpose", default="", help="the pending_question's purpose, when it has one")
+    idle = sub.add_parser("wake-idle-closer", help="wake a live CLOSER sitting idle while the queue is ready")
+    idle.add_argument("--settle", type=float, default=8.0, help="seconds the pane must stay idle and unchanged")
     lst = sub.add_parser("list", help="the remembered answers (keys, channels and bases only)")
-    for p in (ess, ask, save, lst):
+    for p in (ess, ask, save, lst, idle):
         p.add_argument("--json", action="store_true")
         p.add_argument("--db")
         p.add_argument("--profile")
@@ -1450,6 +1579,13 @@ def main(argv: list[str] | None = None) -> int:
                 code = 0 if out["status"] == "complete" else 3
             elif args.command == "ask":
                 out, code = _ask(conn, profile, args.position_id, args.key)
+            elif args.command == "wake-idle-closer":
+                watch = IdleWatch(timedelta(seconds=args.settle))
+                watch.idle_sessions()
+                time.sleep(args.settle)
+                woken = wake_idle_closer(conn, idle_sessions=watch.idle_sessions)
+                out = {"status": "woken" if woken else "not_needed", "sessions": woken}
+                code = 0
             elif args.command == "save":
                 try:
                     out = save_inferred(
