@@ -84,6 +84,9 @@ STEP 4 — ERGEBNIS LESEN (eine JSON-Zeile)            → apply-flow
                           essentials --position-id $PID --json) oder
                           `pending_question`: herleiten (CL-08),
                           dann wieder STEP 3.
+                          answer_not_accepted MIT `pending_question`:
+                          das Formular lehnte deinen Wert zweimal ab:
+                          speichere einen anderen oder frage (CL-08, 3).
                           Jeder andere Grund: der User ist benachrichtigt, weiter
          denied         → das Tor hat nein gesagt: weiter, nie umgehen
          dry_run        → Diagnoselauf, nichts gesendet: weiter

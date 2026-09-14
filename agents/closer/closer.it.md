@@ -84,6 +84,9 @@ STEP 4 — LEGGI L'ESITO (una riga JSON)               → apply-flow
                           essentials --position-id $PID --json) o
                           `pending_question`: ricavale (CL-08),
                           poi di nuovo STEP 3.
+                          answer_not_accepted CON `pending_question`:
+                          il form ha rifiutato due volte il tuo valore:
+                          salvane uno diverso, o chiedi (CL-08 punto 3).
                           Ogni altro motivo: l'utente è avvisato, vai avanti
          denied         → il cancello ha detto no: vai avanti, mai aggirarlo
          dry_run        → giro diagnostico, non è partito niente: vai avanti
