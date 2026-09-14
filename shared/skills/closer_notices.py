@@ -99,6 +99,21 @@ def text(key: str, **params: Any) -> str:
         return template
 
 
+def localized(key: str, default: str, **params: Any) -> str:
+    """`text(key)`, or `default` when the key is unknown or anything fails.
+
+    For callers whose message must go out whatever happens (a question that
+    does not leave blocks the application): never an exception, never a key.
+    """
+    try:
+        if i18n.t(key) == key:
+            return default
+        rendered = text(key, **params)
+    except Exception:
+        return default
+    return rendered if rendered.strip() else default
+
+
 def reason_why(reason: str) -> str:
     key = f"closer.reason.{reason}.why"
     value = i18n.t(key)
@@ -156,41 +171,43 @@ def _position_label(position_id: int, facts: Mapping[str, str]) -> str:
 # ── per-position messages ───────────────────────────────────────────────────
 
 
-def stop_message(reason: str, detail: str, position_id: int) -> str:
-    """The stop of one application, in the user's language."""
-    facts = _position(position_id)
-    return text(
-        "closer.stop.message",
-        position=_position_label(position_id, facts),
-        why=reason_why(reason),
-        action=reason_action(reason),
-        reason=reason,
-        detail=" ".join(str(detail or "").split())[:300],
-    )
+def _stop(key: str, reason: str, detail: str, position_id: int, default: str) -> str:
+    try:
+        return localized(
+            key,
+            default,
+            position=_position_label(position_id, _position(position_id)),
+            why=reason_why(reason),
+            action=reason_action(reason),
+            reason=reason,
+            detail=" ".join(str(detail or "").split())[:300],
+        )
+    except Exception:
+        return default
 
 
-def email_stop_message(reason: str, detail: str, position_id: int) -> str:
-    facts = _position(position_id)
-    return text(
-        "closer.email.stop",
-        position=_position_label(position_id, facts),
-        why=reason_why(reason),
-        action=reason_action(reason),
-        reason=reason,
-        detail=" ".join(str(detail or "").split())[:300],
-    )
+def stop_message(reason: str, detail: str, position_id: int, default: str = "") -> str:
+    """The stop of one application, in the user's language (`default` if that fails)."""
+    return _stop("closer.stop.message", reason, detail, position_id, default)
 
 
-def question_dashboard_hint() -> str:
-    return text("closer.question.dashboard_hint")
+def email_stop_message(reason: str, detail: str, position_id: int, default: str = "") -> str:
+    """The stop of an email application, in the user's language (`default` if that fails)."""
+    return _stop("closer.email.stop", reason, detail, position_id, default)
 
 
-def question_essential_note() -> str:
-    return text("closer.question.essential_note")
+def question_dashboard_hint(default: str = "") -> str:
+    return localized("closer.question.dashboard_hint", default)
 
 
-def question_telegram_hint(code: str) -> str:
-    return text("closer.question.telegram_hint", code=code)
+def question_essential_note(default: str = "") -> str:
+    return localized("closer.question.essential_note", default)
+
+
+def question_telegram_hint(code: str, default: str = "") -> str:
+    """The code stays the same token: application_answers._CODE finds it anywhere."""
+    hint = localized("closer.question.telegram_hint", default, code=code)
+    return hint if code in hint else default
 
 
 # ── the per-round summary ───────────────────────────────────────────────────

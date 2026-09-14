@@ -243,3 +243,81 @@ def test_closer_flushes_the_summary_when_its_round_ends(lang):
     assert "Bash(python3 /app/shared/skills/closer_notices.py *)" in skill.split("---")[1]
     for reason in sorted(notices.DIGEST_REASONS):
         assert f"`{reason}`" in skill
+
+
+# ── localized prose never breaks the parsers (HQ-BACKEND's conditions) ─────
+
+import application_answers as aa  # noqa: E402
+import _db  # noqa: E402
+
+HEAD = "CLOSER needs one required application answer before it can continue.\n"
+WEB_PREFIX = HEAD + "Question: "  # web/lib/application-answer-request.ts REQUEST_PREFIX
+
+
+def _answer_db(tmp_path: Path) -> Path:
+    path = tmp_path / "answers.db"
+    with sqlite3.connect(path) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO positions(id, title, company, url, status, apply_requested, apply_requested_at, "
+            "apply_requested_by) VALUES (7, 'Fixture Role', 'Fixture Co', 'https://jobs.example.com/7', "
+            "'ready', 1, '2026-09-13T10:00:00.000Z', 'user_web')"
+        )
+    return path
+
+
+def _question_body(source_id: str, *, essential: bool) -> str:
+    """The head as apply_flow/application_answers write it, then the localized prose."""
+    english_hint = aa.telegram_hint(source_id)
+    code = aa.answer_code(source_id)
+    head = HEAD + "Question: Which work model can you accept?\nField type: radio\nOptions:\n- Remote\n- Hybrid"
+    prose = [notices.question_essential_note(default="x") if essential else notices.question_dashboard_hint(default="x"),
+             notices.question_telegram_hint(code, default=english_hint)]
+    return head + "\n\n" + "\n".join(prose)
+
+
+@pytest.mark.parametrize("lang", LANGS)
+@pytest.mark.parametrize("essential", [False, True])
+def test_localized_question_resolves_like_english(lang, essential, home, tmp_path):
+    _set_lang(home, lang)
+    db = _answer_db(tmp_path)
+    source_id = ("closer-essential:work model:1" if essential else "closer-answer:7:workmodel")
+    body = _question_body(source_id, essential=essential)
+    assert body.startswith(WEB_PREFIX)
+    assert body.split("\n\n")[0].endswith("\nOptions:\n- Remote\n- Hybrid")
+    assert aa._CODE.search(body.split("\n\n", 1)[1]).group(1) == aa.answer_code(source_id)
+    payload = {"version": 1, "position_id": 7, "key": "which work model can you accept",
+               "label": "Which work model can you accept?", "field_type": "radio", "options": ["Remote", "Hybrid"]}
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO pending_user_messages (agent, body, kind, related_position_id, source_id, source_action, "
+            "source_payload, delivered_via) VALUES ('closer', ?, 'question', 7, ?, ?, ?, 'telegram')",
+            (body, source_id, aa.SOURCE_ACTION, json.dumps(payload)),
+        )
+        by_code = aa.resolve_telegram_reply(conn, text=f"{aa.answer_code(source_id)} Remote")
+        assert by_code.status == "resolved", (lang, by_code)
+        conn.execute("UPDATE pending_user_messages SET user_reply = NULL, user_reply_at = NULL")
+        by_quote = aa.resolve_telegram_reply(conn, text="Hybrid", reply_to_text=body)
+        assert by_quote.status == "resolved", (lang, by_quote)
+
+
+def test_without_a_translation_the_english_default_goes_out(home, monkeypatch):
+    monkeypatch.setattr(notices.i18n, "t", lambda key: key)
+    assert notices.question_telegram_hint("Q1A2B", default="english hint Q1A2B") == "english hint Q1A2B"
+    assert notices.question_dashboard_hint(default="english dashboard") == "english dashboard"
+    assert notices.stop_message("captcha", "d", 1817, default="english stop") == "english stop"
+
+
+def test_a_failing_catalog_never_raises(home, monkeypatch):
+    def broken(key):
+        raise RuntimeError("catalog unreadable")
+
+    monkeypatch.setattr(notices.i18n, "t", broken)
+    assert notices.question_essential_note(default="english note") == "english note"
+    assert notices.email_stop_message("cv_missing", "d", 1845, default="english email") == "english email"
+
+
+def test_a_translation_that_drops_the_code_falls_back(home, monkeypatch):
+    monkeypatch.setattr(notices, "text", lambda key, **params: "localized hint without the token")
+    assert notices.question_telegram_hint("Q1A2B", default="english Q1A2B") == "english Q1A2B"
