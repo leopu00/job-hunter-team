@@ -93,6 +93,18 @@ def test_position_without_company_or_database(home):
     assert notices.stop_message("captcha", "", 1817).startswith("Der CLOSER hat die Bewerbung #1817 gestoppt")
 
 
+def test_scraped_title_and_company_are_cleaned_of_bidi_controls(home):
+    with sqlite3.connect(home / "jobs.db") as conn:
+        conn.execute("UPDATE positions SET title = ?, company = ? WHERE id = 1817",
+                     ("Data\u202e Engineer\u2066", "Example\u200b Corp"))
+    message = notices.stop_message("captcha", "detail", 1817)
+    assert not any(ch in message for ch in "\u202e\u2066\u200b")
+    assert "#1817 (Data Engineer at ExampleCorp)" in message  # ZWSP goes without a space (external_content rule)
+    notices.defer(1817, "ats_unsupported", "https://a.example.com")
+    summary = notices.summary_message(notices._read_state(notices._state_path())["pending"])
+    assert "\u202e" not in summary
+
+
 def test_email_stop_message_is_localized(home):
     _set_lang(home, "fr")
     message = notices.email_stop_message("cv_missing", "no cv", 1845)
