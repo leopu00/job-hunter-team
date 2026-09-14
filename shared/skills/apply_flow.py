@@ -2216,6 +2216,19 @@ class GreenhouseRecipe:
                         "review",
                     )
 
+        forms = page.locator(self.FORM)
+        if forms.count() == 1 and not forms.first.evaluate(
+            "form => typeof form.checkValidity !== 'function' || form.checkValidity()"
+        ):
+            # A required consent or survey control outside the questions: the
+            # browser would refuse the click and nothing would be sent (the
+            # same hole HQ-FULLSTACK-2 found in the Lever recipe).
+            raise BlockedHuman(
+                "required_field_unanswered",
+                "A required Greenhouse control outside the application questions is empty or invalid",
+                "review",
+            )
+
         submit = page.locator(self.SUBMIT)
         if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
             raise BlockedHuman(
