@@ -33,7 +33,7 @@ detect → fill → upload_cv → screening → review → submit → applied
   `submit_outcome_unknown`.
 - A porta é verificada no arranque **e** mesmo antes do clique. Um flag revogado
   enquanto o formulário era preenchido para o envio.
-- Hoje três receitas completas: **Ashby**, **Greenhouse** (só os seus três hosts públicos, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, em HTTPS; a página é verificada outra vez depois de cada passo) e **Lever** (só `jobs.lever.co` e `jobs.eu.lever.co`, em HTTPS, verificados da mesma forma). Qualquer outra plataforma bloqueia para uma pessoa.
+- Hoje três receitas completas: **Ashby**, **Greenhouse** (só os seus três hosts públicos, `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`, `boards.greenhouse.io`, em HTTPS; a página é verificada outra vez depois de cada passo) e **Lever** (só `jobs.lever.co` e `jobs.eu.lever.co`, em HTTPS, verificados da mesma forma). LinkedIn: «candidatar-se no site da empresa» continua nesse site com a sua receita; Easy Apply inicia sessão com a conta do utilizador (sessão guardada, código de verificação no Telegram) e preenche a janela. Qualquer outra plataforma bloqueia para uma pessoa.
 
 ## O recibo
 
@@ -77,6 +77,14 @@ O fluxo para em tudo o que não consegue fazer com certeza:
 | `ats_unsupported` / `ats_conflict` / `ashby_dom_unrecognised` / `greenhouse_dom_unrecognised` / `ashby_form_missing` / `ashby_apply_ambiguous` / `greenhouse_form_missing` / `greenhouse_form_ambiguous` / `lever_dom_unrecognised` / `lever_form_missing` / `lever_apply_ambiguous` / `lever_form_ambiguous` | ainda não há receita para esta página, ou o formulário não é o que a receita conhece |
 | `greenhouse_redirect_untrusted` | durante o fluxo a página do Greenhouse saiu dos seus três hosts de confiança |
 | `lever_redirect_untrusted` | durante o fluxo a página do Lever saiu de `jobs.lever.co` / `jobs.eu.lever.co` |
+| `linkedin_dom_unrecognised` / `linkedin_form_missing` / `linkedin_form_ambiguous` / `linkedin_step_unrecognised` / `linkedin_apply_control_missing` / `linkedin_apply_ambiguous` / `linkedin_session_unavailable` / `linkedin_login_unrecognised` | a vaga do LinkedIn ou a sua janela Easy Apply não é a que a receita conhece |
+| `linkedin_credentials_missing` | `$JHT_HOME/credentials/linkedin.json` (`email`, `password`) falta, não é um ficheiro regular 0600 deste utilizador ou está vazio: o utilizador cria-o com o script das credenciais. Nunca peças a palavra-passe num chat |
+| `linkedin_login_failed` | o LinkedIn recusou o início de sessão duas vezes: nenhuma nova tentativa até o utilizador escrever credenciais novas |
+| `linkedin_login_code_missing` / `linkedin_login_code_undelivered` | o código de verificação do LinkedIn foi pedido no Telegram e não chegou a tempo (ou o pedido não chegou ao Telegram): uma nova volta pede um código novo |
+| `linkedin_challenge` | o LinkedIn mostra um captcha ou uma verificação de segurança: o utilizador resolve-a no ecrã ao vivo e volta a autorizar a posição |
+| `linkedin_redirect_untrusted` / `application_redirect_untrusted` | a página do LinkedIn saiu de `www.linkedin.com`, ou o endereço da empresa que indica não é uma página HTTPS fora do LinkedIn (ou é uma segunda passagem) |
+| `linkedin_follow_not_cleared` | não foi possível desmarcar a caixa «seguir a empresa» antes de Submit: nada é enviado |
+| `linkedin_throttled` / `linkedin_login_retry` / `linkedin_interval_invalid` | **negado, não bloqueado**: as candidaturas no LinkedIn são espaçadas (`linkedin_min_interval_minutes`, por omissão 20), o início de sessão falhou uma vez e a próxima volta tenta mais uma vez, ou essa definição não é um número inteiro de minutos. A fila tenta de novo sozinha |
 | `mailto_ambiguous` / `mailto_invalid` / `application_form_ambiguous` / `application_field_outside_form` / `submit_outside_form` | dois endereços mailto de candidatura diferentes, ou o formulário de candidatura, os seus campos ou o seu botão de envio não cabem num único formulário (newsletter, rodapé e formulários de demo nunca fazem parte) |
 | `form_error` / `field_invalid` / `submit_unavailable` | o formulário assinala um erro, o formato de um campo é recusado, ou o botão de envio falta ou está desativado |
 | `url_refused` / `checkpoint_invalid` | o URL da candidatura não passou o controlo de endereços públicos, ou o checkpoint guardado não se lê |
