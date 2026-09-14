@@ -611,30 +611,166 @@ def test_lever_required_consent_outside_the_questions_blocks_before_the_click(
     assert recorded == []
 
 
-@pytest.mark.parametrize("required", (True, False))
-def test_lever_location_autocomplete_is_never_typed_into(page, tmp_path: Path, cv_path: Path, required):
+PLACES = {
+    "milan": ["Milan, Lombardy, Italy", "Milan, Tennessee, United States"],
+    "milan, italy": [],
+}
+
+
+def lever_location_form(
+    *, required: bool = True, script: bool = True, places: dict | None = None, keeps_choice: bool = True
+) -> str:
+    """Lever's location autocomplete, as its retrieveLocations.js behaves (14/09).
+
+    A search on keydown after a pause (a filled value never searches), a blur
+    without a pick empties the field, a mousedown on a suggestion writes the
+    visible text and the hidden selectedLocation.
+    """
     mark = '<span class="required">✱</span>' if required else ""
-    location = (
+    widget = (
         f'<li class="application-question"><label><div class="application-label">Current location{mark}</div>'
-        f'<div class="application-field"><input type="text" name="location" {"required" if required else ""}>'
-        '<input type="hidden" name="selectedLocation"></div></label></li>'
+        f'<div class="application-field"><input class="location-input" type="text" name="location" {"required" if required else ""}>'
+        '<input id="selected-location" type="hidden" name="selectedLocation">'
+        '<div class="dropdown-container" style="display:none"><div class="dropdown-results"></div></div></div></label></li>'
     )
-    html = lever_form(confirmation="none").replace("{custom}", "").replace(
+    behaviour = """
+    <script>
+    (() => {
+      const places = PLACES_JSON;
+      const input = document.querySelector('input.location-input');
+      const hidden = document.querySelector('#selected-location');
+      const box = document.querySelector('.dropdown-container');
+      const results = document.querySelector('.dropdown-results');
+      let timer, found = [];
+      input.addEventListener('input', () => { box.style.display = 'flex'; });
+      input.addEventListener('keydown', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          results.innerHTML = '';
+          found = places[input.value.trim().toLowerCase()] || [];
+          found.forEach((name, index) => {
+            const option = document.createElement('div');
+            option.className = 'dropdown-location';
+            option.id = 'location-' + index;
+            option.textContent = name;
+            results.appendChild(option);
+          });
+        }, 300);
+      });
+      input.addEventListener('blur', () => {
+        if (box.style.display !== 'none') {
+          box.style.display = 'none'; results.innerHTML = ''; input.value = ''; hidden.value = '';
+        }
+      });
+      document.addEventListener('mousedown', event => {
+        if (!event.target.classList.contains('dropdown-location')) return;
+        box.style.display = 'none';
+        input.value = event.target.textContent;
+        if (KEEPS) hidden.value = JSON.stringify({name: found[Number(event.target.id.split('-')[1])]});
+        results.innerHTML = '';
+      });
+    })();
+    </script>""".replace("PLACES_JSON", json.dumps(places if places is not None else PLACES)).replace(
+        "KEEPS", "true" if keeps_choice else "false"
+    )
+    return lever_form().replace(
         '<li class="application-question">\n              <label><div class="application-label">Phone',
-        location + '<li class="application-question">\n              <label><div class="application-label">Phone',
+        widget + '<li class="application-question">\n              <label><div class="application-label">Phone',
+    ).replace("</form>", "</form>" + (behaviour if script else ""))
+
+
+def _sent_location(page) -> None:
+    page.evaluate(
+        "() => document.getElementById('application-form').addEventListener('submit', () => {"
+        " window.sentLocation = [document.querySelector('input[name=location]').value,"
+        " document.querySelector('#selected-location').value]; }, true)"
     )
-    assert "selectedLocation" in html
-    open_at(page, APPLY, html)
-    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Test City"))
+
+
+def test_lever_location_picks_the_suggestion_of_the_same_city_and_country(page, tmp_path: Path, cv_path: Path):
+    # 1888 (14/09): a hard stop and a Telegram question for a fact the profile states.
+    open_at(page, APPLY, lever_location_form())
+    _sent_location(page)
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Milan, Italy"), notifications=notifications)
 
     result = flow.run(page=page, navigate=False)
 
+    assert result.status == "applied", result
+    text, selected = page.evaluate("window.sentLocation")
+    assert text == "Milan, Lombardy, Italy"
+    assert json.loads(selected) == {"name": "Milan, Lombardy, Italy"}
+    assert notifications == []
+
+
+def test_lever_location_without_a_certain_match_is_a_question_with_the_suggestions(
+    page, tmp_path: Path, cv_path: Path
+):
+    open_at(page, APPLY, lever_location_form())
+    notifications: list[dict] = []
+    candidate = profile(location="Milan")  # no country: two Milans
+    flow = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    question = result.pending_question
+    assert (question["key"], question["label"], question["field_type"]) == (
+        "current location", "Current location", "select"
+    )
+    assert question["options"] == ["Milan, Lombardy, Italy", "Milan, Tennessee, United States"]
     assert page.locator("input[name=location]").input_value() == ""
+    assert page.evaluate("window.submitCount") == 0
+    assert notifications == []  # a form question never goes to the user by itself
+
+    # The CLOSER chooses one option with its basis; the rerun clicks exactly it.
+    open_at(page, APPLY, lever_location_form())
+    _sent_location(page)
+    chosen = {**candidate, "application_answers": {"current location": "Milan, Tennessee, United States"}}
+    result = build_flow(tmp_path, cv_path, candidate=chosen, notifications=notifications).run(page=page, navigate=False)
+    assert result.status == "applied", result
+    assert page.evaluate("window.sentLocation")[0] == "Milan, Tennessee, United States"
+    assert notifications == []
+
+
+def test_lever_location_whose_hidden_choice_stays_empty_is_not_sent(page, tmp_path: Path, cv_path: Path):
+    # The visible text is not what Lever keeps: without selectedLocation the pick did not happen.
+    open_at(page, APPLY, lever_location_form(keeps_choice=False))
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Milan, Italy"))
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "answer_not_accepted")
+    assert page.locator("input[name=location]").input_value() == ""
+    assert page.evaluate("window.submitCount") == 0
+
+
+@pytest.mark.parametrize("required", (True, False))
+def test_lever_location_that_shows_no_suggestions_is_never_left_typed(page, tmp_path: Path, cv_path: Path, required):
+    open_at(page, APPLY, lever_location_form(required=required, script=False))
+    _sent_location(page)
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Test City, Test Country"))
+
+    result = flow.run(page=page, navigate=False)
+
     if required:
         assert result.reason == "unknown_required_control"
         assert page.evaluate("window.submitCount") == 0
+        assert page.locator("input[name=location]").input_value() == ""
     else:
-        assert result.reason == "receipt_missing"
+        assert result.status == "applied", result
+        assert page.evaluate("window.sentLocation") == ["", ""]
+
+
+def test_lever_location_missing_from_the_profile_is_a_question(page, tmp_path: Path, cv_path: Path):
+    open_at(page, APPLY, lever_location_form())
+    flow = build_flow(tmp_path, cv_path)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "current location"
+    assert page.evaluate("window.submitCount") == 0
 
 
 def test_lever_localised_apply_control_opens_the_form(page, tmp_path: Path, cv_path: Path):

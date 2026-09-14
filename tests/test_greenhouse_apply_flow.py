@@ -815,3 +815,117 @@ def test_greenhouse_required_consent_outside_the_questions_blocks_before_the_cli
     assert page.evaluate("window.submitCount") == 0
     assert json.loads((tmp_path / "checkpoint.json").read_text())["submit_started"] is False
     assert recorded == []
+
+
+GEOCODER = {
+    "rome, italy": [],
+    "rome": ["Rome, Lazio, Italy", "Rome, Georgia, United States"],
+}
+
+
+def _location_city_field(*, required: bool = True) -> str:
+    """Greenhouse "Location (City)" as job-boards renders it (14/09): a react-select
+    whose options exist only after typing, fed by a geocoder."""
+    star = '<span aria-hidden="true">*</span>' if required else ""
+    return f"""
+      <div class="field-wrapper">
+        <label id="candidate-location-label" for="candidate-location" class="label select__label">Location (City){star}</label>
+        <div class="select-shell">
+          <div class="select__value-container"></div>
+          <input id="candidate-location" class="select__input" type="text" role="combobox" aria-autocomplete="list"
+                 aria-expanded="false" aria-labelledby="candidate-location-label" {'aria-required="true"' if required else ""}>
+          <div class="select__menu" hidden><div role="listbox" id="react-select-candidate-location-listbox"></div></div>
+        </div>
+      </div>
+      <script>
+      (() => {{  // a second set_content reuses the page's JS realm: no top-level const
+        const places = {json.dumps(GEOCODER)};
+        const input = document.querySelector('#candidate-location');
+        const menu = document.querySelector('.select__menu');
+        const list = menu.querySelector('[role=listbox]');
+        let timer;
+        input.addEventListener('input', () => {{
+          clearTimeout(timer);
+          timer = setTimeout(() => {{
+            list.innerHTML = '';
+            (places[input.value.trim().toLowerCase()] || []).forEach(name => {{
+              const option = document.createElement('div');
+              option.setAttribute('role', 'option');
+              option.textContent = name;
+              option.addEventListener('click', () => {{
+                const value = document.querySelector('.select__value-container');
+                value.innerHTML = '<div class="select__single-value"></div>';
+                value.firstChild.textContent = name;
+                input.value = '';
+                menu.hidden = true;
+              }});
+              list.appendChild(option);
+            }});
+            menu.hidden = !list.children.length;
+          }}, 250);
+        }});
+        input.addEventListener('keydown', event => {{ if (event.key === 'Escape') {{ menu.hidden = true; input.value = ''; }} }});
+      }})();
+      </script>"""
+
+
+def _with_location_city(**kwargs) -> str:
+    return greenhouse_form(**kwargs).replace(
+        '<div class="field-wrapper">\n            <label for="resume">',
+        _location_city_field() + '\n          <div class="field-wrapper">\n            <label for="resume">',
+    )
+
+
+def test_greenhouse_location_city_picks_the_geocoder_suggestion_of_the_profile(page, tmp_path: Path, cv_path: Path):
+    # 1888 (14/09) on Lever; Greenhouse's "Location (City)" is the same control.
+    page.set_content(_with_location_city(confirmation=False))
+    page.evaluate(
+        "() => document.querySelector('form').addEventListener('submit', () => { window.sentCity ="
+        " (document.querySelector('.select__single-value') || {}).textContent; }, true)"
+    )
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Rome, Italy"), notifications=notifications)
+
+    flow.run(page=page, navigate=False)
+
+    assert page.evaluate("window.submitCount") == 1
+    assert page.evaluate("window.sentCity") == "Rome, Lazio, Italy"
+
+
+def test_greenhouse_location_city_without_a_certain_match_is_a_question(page, tmp_path: Path, cv_path: Path):
+    page.set_content(_with_location_city())
+    notifications: list[dict] = []
+    flow = build_flow(tmp_path, cv_path, candidate=profile(location="Rome"), notifications=notifications)
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    question = result.pending_question
+    assert (question["key"], question["field_type"]) == ("location city", "select")
+    assert question["options"] == ["Rome, Lazio, Italy", "Rome, Georgia, United States"]
+    assert page.evaluate("window.submitCount") == 0
+    assert notifications == []
+
+    page.set_content(_with_location_city())
+    chosen = profile(location="Rome", application_answers={"location city": "Rome, Georgia, United States"})
+    result = build_flow(tmp_path, cv_path, candidate=chosen, notifications=notifications).run(page=page, navigate=False)
+    assert result.status == "applied", result
+    assert notifications == []
+
+
+def test_greenhouse_core_choice_whose_options_cannot_be_read_is_never_a_text_question(
+    page, tmp_path: Path, cv_path: Path
+):
+    # 1967 (15:19Z): an unreadable combobox came back as a text question, and a
+    # text answer never fills a choice: the same question again, for ever.
+    empty = _country_field("combobox").replace(
+        '<div role="option">Germany</div>\n            <div role="option">Italy</div>\n            <div role="option">Spain</div>', ""
+    )
+    assert "Germany" not in empty
+    page.set_content(greenhouse_form().replace(
+        '<div class="field-wrapper">\n            <label for="resume">', empty + '\n          <div class="field-wrapper">\n            <label for="resume">'
+    ))
+    result = build_flow(tmp_path, cv_path).run(page=page, navigate=False)
+    assert (result.status, result.reason) == ("blocked_human", "unknown_required_control")
+    assert result.pending_question is None
+    assert page.evaluate("window.submitCount") == 0
