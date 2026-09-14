@@ -30,7 +30,7 @@ Exit `0` só quando algo pode sair agora; exit `1` caso contrário. O JSON:
 | `ready` | `true` = pelo menos uma posição pode ser tomada agora |
 | `reason` | token estável, ver abaixo |
 | `mode` | `authorised` (envia) ou `dry_run` (diagnóstico, preenche e para antes do botão) |
-| `max_per_day` / `sent_today` / `remaining_today` | o limite diário de candidaturas enviadas pelo CLOSER |
+| `max_per_day` / `sent_today` / `remaining_today` | as enviadas hoje pelo CLOSER e o limite diário se o utilizador definiu um (null = sem limite, nada é recusado pelo número) |
 | `positions` | o que podes tomar, por ordem de autorização: `position_id`, `url`, `cv_pdf_path` |
 | `held` | posições autorizadas que NÃO devem ser tomadas agora, cada uma com o seu `reason` |
 
@@ -46,7 +46,7 @@ quando o comando sai com `0`.
 | `consent_mode_unknown` / `consent_cap_invalid` | o bloco existe mas um valor não é reconhecido | nada: a porta recusa em vez de adivinhar |
 | `db_unavailable` / `queue_unreadable` | a base de dados local não se lê | `[BLOCKED]` ao Capitano |
 | `queue_empty` | nenhuma posição autorizada pode ser tomada | sai |
-| `daily_cap_reached` | o CLOSER já enviou `max_per_day` hoje | sai; a queue reabre amanhã |
+| `daily_cap_reached` | o utilizador definiu `max_per_day` e o CLOSER já enviou esse número hoje (nunca sem limite) | sai; a queue reabre amanhã |
 
 ## Porque é que uma posição está retida (`held[].reason`)
 

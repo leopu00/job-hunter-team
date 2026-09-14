@@ -30,7 +30,7 @@ Exit `0` seulement quand quelque chose peut partir maintenant ; exit `1` sinon. 
 | `ready` | `true` = au moins une position peut être prise maintenant |
 | `reason` | token stable, voir plus bas |
 | `mode` | `authorised` (envoie) ou `dry_run` (diagnostic, remplit et s'arrête avant le bouton) |
-| `max_per_day` / `sent_today` / `remaining_today` | le plafond quotidien des candidatures envoyées par le CLOSER |
+| `max_per_day` / `sent_today` / `remaining_today` | les envois du jour du CLOSER, et le plafond quotidien si l'utilisateur en a fixé un (null = pas de plafond, rien n'est refusé pour le nombre) |
 | `positions` | ce que tu peux prendre, dans l'ordre d'autorisation : `position_id`, `url`, `cv_pdf_path` |
 | `held` | positions autorisées à NE PAS prendre maintenant, chacune avec son `reason` |
 
@@ -46,7 +46,7 @@ CLOSER que lorsque la commande sort avec `0`.
 | `consent_mode_unknown` / `consent_cap_invalid` | le bloc existe mais une valeur n'est pas reconnue | rien : la porte refuse au lieu de deviner |
 | `db_unavailable` / `queue_unreadable` | la base de données locale est illisible | `[BLOCKED]` au Capitano |
 | `queue_empty` | aucune position autorisée ne peut être prise | sors |
-| `daily_cap_reached` | le CLOSER a déjà envoyé `max_per_day` aujourd'hui | sors ; la queue rouvre demain |
+| `daily_cap_reached` | l'utilisateur a fixé `max_per_day` et le CLOSER en a déjà envoyé autant aujourd'hui (jamais sans plafond) | sors ; la queue rouvre demain |
 
 ## Pourquoi une position est retenue (`held[].reason`)
 

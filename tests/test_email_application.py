@@ -706,3 +706,13 @@ def test_the_cv_guard_reads_no_environment_variable():
         for fn in ast.walk(tree):
             if isinstance(fn, ast.FunctionDef) and fn.name in {"cv_layout_hold", "refresh_cv_preview"}:
                 assert "environ" not in ast.unparse(fn), f"{name}:{fn.name} reads the environment"
+
+
+
+def test_without_a_cap_the_email_goes_out_after_other_sends(box):
+    _edit_cap(box, None)
+    sql(box, "UPDATE applications SET applied = 1, applied_via = 'agent_closer', "
+             "applied_at = datetime('now', 'localtime') WHERE position_id = 2")
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("sent", "sent")
+    assert len(FakeTransport.sends) == 1

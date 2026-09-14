@@ -30,7 +30,7 @@ Exit `0` nur, wenn jetzt etwas rausgehen kann; sonst Exit `1`. Das JSON:
 | `ready` | `true` = mindestens eine Position kann jetzt genommen werden |
 | `reason` | stabiles Token, siehe unten |
 | `mode` | `authorised` (sendet) oder `dry_run` (Diagnose, füllt aus und stoppt vor dem Button) |
-| `max_per_day` / `sent_today` / `remaining_today` | das Tageslimit der vom CLOSER gesendeten Bewerbungen |
+| `max_per_day` / `sent_today` / `remaining_today` | heute vom CLOSER gesendet, und das Tageslimit, falls der User eins gesetzt hat (null = kein Limit, nichts wird wegen der Anzahl abgelehnt) |
 | `positions` | was du nehmen darfst, in Autorisierungsreihenfolge: `position_id`, `url`, `cv_pdf_path` |
 | `held` | autorisierte Positionen, die jetzt NICHT genommen werden dürfen, jede mit ihrem `reason` |
 
@@ -46,7 +46,7 @@ CLOSER nur, wenn der Befehl mit `0` endet.
 | `consent_mode_unknown` / `consent_cap_invalid` | der Block existiert, aber ein Wert wird nicht erkannt | nichts: das Tor lehnt ab, statt zu raten |
 | `db_unavailable` / `queue_unreadable` | die lokale Datenbank ist nicht lesbar | `[BLOCKED]` an den Capitano |
 | `queue_empty` | keine autorisierte Position kann genommen werden | beenden |
-| `daily_cap_reached` | der CLOSER hat heute schon `max_per_day` gesendet | beenden; die Queue öffnet morgen wieder |
+| `daily_cap_reached` | der User hat `max_per_day` gesetzt und der CLOSER hat heute schon so viele gesendet (nie ohne Limit) | beenden; die Queue öffnet morgen wieder |
 
 ## Warum eine Position zurückgehalten wird (`held[].reason`)
 
