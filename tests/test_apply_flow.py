@@ -1600,3 +1600,31 @@ def test_answer_refusals_in_a_checkpoint_are_validated(tmp_path: Path, refusals)
 
     with pytest.raises(FlowError):
         FlowCheckpoint.load(tmp_path / "checkpoint.json", 41, ASHBY_URL)
+
+
+def test_a_user_answer_is_never_held_by_the_count_of_refused_guesses(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    db_path = _answers_db(tmp_path)
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text")
+    for _ in range(2):
+        page.set_content(_refusing_text_form())
+        flow = build_flow(tmp_path, cv_path)
+        flow.db_path = db_path
+        last = flow.run(page=page, navigate=False)
+    assert last.reason == "answer_not_accepted"
+
+    # The user answers the same value on Telegram: the flow looks at the form again.
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text", channel="telegram")
+    opened: list[str] = []
+    page.set_content(_refusing_text_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+    monkeypatch.setattr(flow, "_managed_page", lambda: opened.append("browser") or contextlib.nullcontext(page))
+
+    result = flow.run(page=None, navigate=False)
+
+    assert opened == ["browser"], "user answer held by the counter"
+    # The form refuses the user's own answer: a human stop, not a question for the CLOSER.
+    assert (result.status, result.reason, result.pending_question) == ("blocked_human", "answer_not_accepted", None)
+    assert "which work model can you accept" not in _read_checkpoint(tmp_path)["answer_refusals"]

@@ -2915,12 +2915,19 @@ class ApplicationFlow:
         payload = request.get("payload")
         key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
         entry = checkpoint.answer_refusals.get(key)
-        if not entry or int(entry.get("count", 0)) < MAX_INFERRED_REFUSALS:
+        if not entry:
             return False
         try:
             answers = self._profile_with_saved_answers().get("application_answers") or {}
         except Exception:
             return True
+        if getattr(self, "answer_origins", {}).get(key) != "agent_inferred":
+            # The user's (or the profile's) answer resets the count of the
+            # CLOSER's refused guesses, even when it is the same value.
+            checkpoint.answer_refusals.pop(key, None)
+            return False
+        if int(entry.get("count", 0)) < MAX_INFERRED_REFUSALS:
+            return False
         return key in answers and _value_digest(answers[key]) == entry.get("digest")
 
     def _answer_saved_for(self, request: Mapping[str, Any]) -> bool:
