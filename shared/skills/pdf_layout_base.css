@@ -1,4 +1,4 @@
-/* pdf_layout_base.css — v1 — base layout for every CV / cover-letter PDF.
+/* pdf_layout_base.css — v2 — base layout for every CV / cover-letter PDF.
  *
  * Why: pandoc's standalone HTML template caps the body at `max-width: 36em`,
  * centres it and pads it by 50px. wkhtmltopdf renders that literally, so a CV
@@ -15,6 +15,14 @@
  * it starts from the full usable width.
  * Visual gate: shared/skills/pdf_layout_check.py.
  */
+
+/* v2 — printed size. wkhtmltopdf 0.12.6 with an unpatched Qt shrinks the page
+ * by ~0.744: a 9.3pt body printed at 6.92pt, full width but unreadable. The
+ * zoom undoes it for everything in the .md, titles included, so a CSS point
+ * prints as about one point. Qt rounds glyphs to steps of 0.58pt: measured on
+ * a 9.3pt body, zoom 1.30 → 9.22pt, 1.35 → 9.80pt. The gate wants ≥ 9.5pt.
+ * zoom scales the CSS box, not the sheet: the column stays full width. */
+html { zoom: 1.35; }
 
 html, body {
   max-width: none !important;

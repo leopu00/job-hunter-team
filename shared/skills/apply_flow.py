@@ -479,6 +479,8 @@ class FlowCheckpoint:
     answer_sources: dict[str, str] = field(default_factory=dict)
     # Question key → {digest, count} of the worked-out value the form refused.
     answer_refusals: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Page 1 of the CV PDF as rendered when the layout check stopped the flow.
+    cv_preview: str = ""
     version: int = CHECKPOINT_VERSION
     updated_at: str = field(default_factory=_utc_now)
 
@@ -538,6 +540,8 @@ class FlowCheckpoint:
             for entry in refusals.values()
         ):
             raise FlowError("checkpoint has invalid answer refusals")
+        if not isinstance(raw.get("cv_preview", ""), str):
+            raise FlowError("checkpoint has an invalid CV preview")
         known = {name for name in cls.__dataclass_fields__}
         return cls(**{name: value for name, value in raw.items() if name in known})
 
@@ -715,6 +719,37 @@ def _read_only_essentials(
         sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=10)
     ) as conn:
         return list(application_answers.check_essentials(conn, profile)["missing"])
+
+
+class CvCheckUnavailable(FlowError):
+    """The CV PDF could not be measured: not a pass."""
+
+
+_CV_REASON = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
+
+
+def _cv_pdf_check_module():
+    try:
+        import pdf_layout_check as cv_pdf_check
+    except ImportError:
+        try:
+            from shared.skills import pdf_layout_check as cv_pdf_check
+        except ImportError as exc:
+            raise CvCheckUnavailable("pdf_layout_check is not installed") from exc
+    return cv_pdf_check
+
+
+def _default_cv_checker(cv_path: Path) -> Mapping[str, Any]:
+    """The shared visual check of the CV PDF (`pdf_layout_check.analyze`)."""
+    module = _cv_pdf_check_module()
+    try:
+        return module.analyze(Path(cv_path))
+    except module.CheckError as exc:
+        raise CvCheckUnavailable(type(exc).__name__) from exc
+
+
+def _default_cv_previewer(cv_path: Path, target: Path) -> None:
+    _cv_pdf_check_module().render_preview(Path(cv_path), Path(target))
 
 
 def _default_cap_reserver(*, position_id: int, db_path: str | Path | None):
@@ -2065,6 +2100,8 @@ class ApplicationFlow:
         applied_recorder: Callable[..., None] | None = None,
         essentials_checker: Callable[..., list[str]] | None = None,
         cap_reserver: Callable[..., Any] | None = None,
+        cv_checker: Callable[[Path], Mapping[str, Any]] | None = None,
+        cv_previewer: Callable[[Path, Path], None] | None = None,
         confirmation_timeout_ms: int = 20_000,
         headless: bool = True,
     ):
@@ -2088,6 +2125,8 @@ class ApplicationFlow:
         self.applied_recorder = applied_recorder or _default_applied_recorder
         self.essentials_checker = essentials_checker or _default_essentials_checker
         self.cap_reserver = cap_reserver or _default_cap_reserver
+        self.cv_checker = cv_checker or _default_cv_checker
+        self.cv_previewer = cv_previewer or _default_cv_previewer
         self.confirmation_timeout_ms = max(0, int(confirmation_timeout_ms))
         self.headless = headless
 
@@ -2399,6 +2438,50 @@ class ApplicationFlow:
             release_daily_slot(str(token), db_path=str(self.db_path) if self.db_path else None)
         except Exception as exc:
             LOG.error("cap slot release failed: %s", type(exc).__name__)
+
+    def _cv_layout_stop(self, checkpoint: FlowCheckpoint) -> FlowResult | None:
+        """blocked_human when the CV PDF fails the shared visual check or cannot be checked.
+
+        A missing file is left to the upload step (`cv_missing`).  The remedy is
+        a regenerated CV, never a question: the stop notifies like any
+        blocked_human, and page 1 is rendered next to the checkpoint.
+        """
+        if not self.cv_path.is_file():
+            return None
+        try:
+            report = self.cv_checker(self.cv_path)
+        except Exception as exc:
+            reason = "cv_pdf_check_unavailable"
+            detail = f"The CV PDF could not be checked ({type(exc).__name__}); nothing is sent"
+        else:
+            if isinstance(report, Mapping) and report.get("ok") is True:
+                return None
+            if isinstance(report, Mapping):
+                raw = report.get("reasons") if isinstance(report.get("reasons"), list) else []
+                reasons = [str(item) for item in raw if isinstance(item, str) and _CV_REASON.match(item)]
+                reason = "cv_pdf_layout_bad"
+                detail = "The CV PDF layout failed the visual check: " + (", ".join(reasons) or "unspecified")
+            else:
+                reason = "cv_pdf_check_unavailable"
+                detail = "The CV PDF check returned no report; nothing is sent"
+        checkpoint.cv_preview = self._render_cv_preview() if reason == "cv_pdf_layout_bad" else ""
+        return self._block(checkpoint, BlockedHuman(reason, detail, "upload_cv"))
+
+    def _render_cv_preview(self) -> str:
+        """Best effort: page 1 of the CV next to the checkpoint, 0600, tmp then rename."""
+        target = self.checkpoint_path.with_name(f"{self.checkpoint_path.stem}.cv-page1.png")
+        temporary = target.with_name(f".{target.stem}.partial.png")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.cv_previewer(self.cv_path, temporary)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, target)
+            return str(target)
+        except Exception as exc:
+            LOG.error("CV preview failed: %s", type(exc).__name__)
+            with contextlib.suppress(OSError):
+                temporary.unlink()
+            return ""
 
     def _stop_screenshot_prefix(self) -> str:
         return f"{self.checkpoint_path.stem}.stop-"
@@ -3029,6 +3112,14 @@ class ApplicationFlow:
         waiting = self._resume_dashboard_answer(checkpoint)
         if waiting is not None:
             return waiting
+
+        if not checkpoint.submit_started:
+            # The CV that would be attached, checked before the page is touched:
+            # a squeezed or unreadable PDF is never sent, and filling a form
+            # with it would only have to be undone.
+            cv_stop = self._cv_layout_stop(checkpoint)
+            if cv_stop is not None:
+                return cv_stop
 
         if checkpoint.submit_started and checkpoint.receipt:
             receipt = Receipt.from_dict(checkpoint.receipt)
