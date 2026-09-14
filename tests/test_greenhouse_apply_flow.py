@@ -185,6 +185,8 @@ def test_greenhouse_recipe_submits_on_every_supported_host(
 def test_greenhouse_never_splits_a_full_name_into_required_parts(
     page, tmp_path: Path, cv_path: Path
 ):
+    # 1967 (14/09): a profile with only `name` was a hard stop on First Name.
+    # It is a question the CLOSER works out (CL-08); the code never splits.
     page.set_content(greenhouse_form())
     notifications: list[dict] = []
     candidate = {
@@ -198,11 +200,32 @@ def test_greenhouse_never_splits_a_full_name_into_required_parts(
     result = flow.run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason == "required_profile_field_missing"
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "first name"
+    assert result.pending_question["field_type"] == "text"
     assert page.locator("#first_name").input_value() == ""
     assert page.locator("#last_name").input_value() == ""
     assert page.evaluate("window.submitCount") == 0
-    assert len(notifications) == 1
+    assert notifications == []  # a form question never goes to the user by itself
+
+    # The CLOSER saves both parts from `name`; the rerun fills and submits.
+    page.set_content(greenhouse_form())
+    worked_out = {**candidate, "application_answers": {"first name": "Test", "last name": "Candidate"}}
+    rerun = build_flow(tmp_path, cv_path, candidate=worked_out, notifications=notifications)
+    result = rerun.run(page=page, navigate=False)
+    assert result.status == "applied", result
+    assert notifications == []
+
+
+def test_greenhouse_profile_aliases_fill_the_name_parts(page, tmp_path: Path, cv_path: Path):
+    page.set_content(greenhouse_form())
+    candidate = {
+        "name": "Test Candidate",
+        "given_name": "Test",
+        "contacts": {"email": "candidate@example.invalid", "last_name": "Candidate"},
+    }
+    result = build_flow(tmp_path, cv_path, candidate=candidate).run(page=page, navigate=False)
+    assert result.status == "applied", result
 
 
 def test_greenhouse_accepts_exact_saved_first_and_last_name_answers(
@@ -369,7 +392,8 @@ def test_greenhouse_legacy_required_marker_still_needs_exact_name_parts(
     result = flow.run(page=page, navigate=False)
 
     assert result.status == "blocked_human"
-    assert result.reason == "required_profile_field_missing"
+    assert result.reason == "required_answer_missing"
+    assert result.pending_question["key"] == "first name"
     assert page.locator("#first_name").input_value() == ""
 
 
@@ -609,3 +633,166 @@ def test_greenhouse_recipe_recognises_current_public_form_marker(page, cv_path: 
 
     recipe.open_form(page)
     assert page.locator("#application-form.application--form").count() == 1
+
+
+def test_greenhouse_name_parts_the_closer_saves_complete_the_flow(page, tmp_path: Path, cv_path: Path):
+    """D1 end to end: pending question → application_answers save (--basis profile) → applied."""
+    import contextlib
+    import sqlite3
+
+    import _db
+    import application_answers
+
+    db_path = tmp_path / "jobs.db"
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO positions(id, title, company, url, status, apply_requested, apply_requested_at, "
+            "apply_requested_by) VALUES (52, 'Fixture Role', 'Fixture Co', ?, 'ready', 1, "
+            "'2026-09-14T10:00:00.000Z', 'user_web')",
+            (GREENHOUSE_URLS[0],),
+        )
+        conn.commit()
+    candidate = {"name": "Test Candidate", "contacts": {"email": "candidate@example.invalid"}}
+    notifications: list[dict] = []
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications)
+        built.db_path = db_path
+        return built
+
+    for expected_key, answer in (("first name", "Test"), ("last name", "Candidate")):
+        page.set_content(greenhouse_form())
+        stopped = flow().run(page=page, navigate=False)
+        assert stopped.reason == "required_answer_missing", stopped
+        assert stopped.pending_question["key"] == expected_key
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            application_answers.save_answer(
+                conn,
+                key=expected_key,
+                label=stopped.pending_question["label"],
+                answer=answer,
+                field_type="text",
+                channel="agent_inferred",
+                scope=application_answers.answer_scope(conn, "text", 52),
+            )
+            conn.commit()
+
+    page.set_content(greenhouse_form())
+    resumed = flow().run(page=page, navigate=False)
+    assert resumed.status == "applied", resumed
+    assert page.evaluate("window.submitCount") == 1
+    assert notifications == []
+    assert resumed.receipt.answer_sources.get("first name") == "agent_inferred"
+
+
+def _country_field(kind: str) -> str:
+    if kind == "select":
+        return """
+      <div class="field-wrapper">
+        <label for="country">Country<span aria-hidden="true">*</span></label>
+        <select id="country" required>
+          <option value="">Select...</option>
+          <option value="DE">Germany</option>
+          <option value="IT">Italy</option>
+          <option value="ES">Spain</option>
+        </select>
+      </div>"""
+    return """
+      <div class="field-wrapper">
+        <label id="country-label" for="country">Country*</label>
+        <div class="select-shell">
+          <input id="country" role="combobox" aria-required="true" aria-labelledby="country-label">
+          <input id="country-required" type="hidden" aria-hidden="true" required>
+          <div id="country-options" hidden>
+            <div role="option">Germany</div>
+            <div role="option">Italy</div>
+            <div role="option">Spain</div>
+          </div>
+        </div>
+      </div>
+      <script>
+      (() => {  // a second set_content reuses the page's JS realm: no top-level const
+        const country = document.querySelector('#country');
+        country.addEventListener('click', () => document.querySelector('#country-options').hidden = false);
+        document.querySelectorAll('#country-options [role=option]').forEach(option => {
+          option.addEventListener('click', () => {
+            const selected = document.createElement('div');
+            selected.className = 'select__single-value';
+            selected.textContent = option.textContent;
+            country.parentElement.prepend(selected);
+            document.querySelector('#country-required').value = option.textContent;
+            document.querySelector('#country-options').hidden = true;
+          });
+        });
+      })();
+      </script>"""
+
+
+@pytest.mark.parametrize("kind", ["combobox", "select"])
+def test_greenhouse_core_country_is_a_question_with_the_page_options(page, tmp_path: Path, cv_path: Path, kind: str):
+    """1967 (14/09, after D1): "Country*" stopped and the CLOSER asked the user.
+    The page's exact options go to the CLOSER, which picks the one the profile
+    supports; the saved option fills the field on the rerun."""
+    import contextlib
+    import sqlite3
+
+    import _db
+    import application_answers
+
+    html = greenhouse_form().replace(
+        '<div class="field-wrapper">\n            <label for="resume">', _country_field(kind) + '\n          <div class="field-wrapper">\n            <label for="resume">'
+    )
+    assert html != greenhouse_form()
+    db_path = tmp_path / "jobs.db"
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        _db.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO positions(id, title, company, url, status, apply_requested, apply_requested_at, "
+            "apply_requested_by) VALUES (52, 'Fixture Role', 'Fixture Co', ?, 'ready', 1, "
+            "'2026-09-14T10:00:00.000Z', 'user_web')",
+            (GREENHOUSE_URLS[0],),
+        )
+        conn.commit()
+    candidate = profile(first_name="Test", last_name="Candidate", location="Rome, Italy")
+    notifications: list[dict] = []
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path, candidate=candidate, notifications=notifications)
+        built.db_path = db_path
+        return built
+
+    page.set_content(html)
+    stopped = flow().run(page=page, navigate=False)
+    assert stopped.reason == "required_answer_missing", stopped
+    question = stopped.pending_question
+    assert question["key"] == "country"
+    assert question["field_type"] == "select"
+    assert question["options"] == ["Germany", "Italy", "Spain"]
+    assert notifications == []
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        application_answers.save_answer(
+            conn, key="country", label=question["label"], answer="Italy", field_type="select",
+            channel="agent_inferred", scope=application_answers.answer_scope(conn, "select", 52),
+        )
+        conn.commit()
+    page.set_content(html)
+    resumed = flow().run(page=page, navigate=False)
+    assert resumed.status == "applied", resumed
+    assert page.evaluate("window.submitCount") == 1
+    assert notifications == []
+    assert resumed.receipt.answer_sources.get("country") == "agent_inferred"
+
+
+def test_greenhouse_core_country_never_takes_a_free_text_profile_value(page, tmp_path: Path, cv_path: Path):
+    html = greenhouse_form().replace(
+        '<div class="field-wrapper">\n            <label for="resume">', _country_field("select") + '\n          <div class="field-wrapper">\n            <label for="resume">'
+    )
+    page.set_content(html)
+    candidate = profile(first_name="Test", last_name="Candidate", country="Italy", location="Italy")
+    result = build_flow(tmp_path, cv_path, candidate=candidate).run(page=page, navigate=False)
+    assert result.reason == "required_answer_missing"
+    assert page.locator("#country").input_value() == ""

@@ -1,7 +1,7 @@
 ---
 name: apply-flow
 description: How the CLOSER runs one authorised application with `apply_flow.py` — the checkpointed state machine (detect, fill, upload_cv, screening, review, submit), the mandatory receipt without which `applied` is never written, and what to do on each result, `blocked_human` first of all. Use it for every position taken from the queue. Owned by the CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — one application, one receipt, no blind retry
@@ -79,10 +79,14 @@ The flow stops on anything it cannot do with certainty:
 | `form_error` / `field_invalid` / `submit_unavailable` | the form reports an error, a field format is rejected, or the submit button is missing or disabled |
 | `url_refused` / `checkpoint_invalid` | the application URL failed the public-address guard, or the saved checkpoint is unreadable |
 | `page_unavailable` / `browser_uncertainty` | the page or the browser failed mid-flow |
+| `page_not_found` / `bot_protection` / `page_temporarily_unavailable` | the vacancy page is gone (404/410 with no closed-vacancy evidence), an anti-bot wall stopped the browser (after one try in a visible browser), or the site did not answer three times in a day. A single 5xx or timeout is NOT a stop: the checkpoint says `retry_later`, the queue gives the position back later by itself, and nobody is notified. The checkpoint keeps `http_status` and `final_url` |
 | `receipt_missing` / `receipt_incomplete` / `confirmation_ambiguous` | submit was clicked but the confirmation is not certain |
 | `receipt_screenshot_failed` | the confirmation was visible but its screenshot could not be saved |
 | `submit_outcome_unknown` | a previous run started submit and left no receipt |
 | `applied_record_failed` | the receipt exists but the state could not be recorded — the application most likely went out |
+| `login_required` / `account_creation` | the site wants a sign-in or a new account before the application: the CLOSER never signs in and never creates accounts |
+| `generic_form_missing` / `generic_form_unrecognised` / `application_form_embedded` / `application_redirect_untrusted` | a company site: no application form, a form the generic recipe cannot pin down, a form embedded from another host (the detail names it), or an Apply control that leads to a site with no recipe |
+| `cover_letter_required` / `pre_submit_screenshot_failed` | the form requires a cover-letter file · the filled form could not be photographed before the click |
 
 What you do for every other reason (the missing answers are above):
 
@@ -95,6 +99,24 @@ What you do for every other reason (the missing answers are above):
 Retrying a blocked position is the blind attempt this design exists to prevent:
 on a captcha it burns the user's account, on an unknown outcome it sends a
 second letter to the same recruiter.
+
+## Company career sites — the generic recipe
+
+When no ATS is recognised and the page is not a `mailto:` channel, the flow uses
+`apply_generic.py` on the company's own site: it finds the ONE application form
+(a CV upload, or a name and an email with an Apply button — also behind an Apply
+button or on a linked page of the same site), fills fields from their labels
+(profile for name, email, phone, links; saved answers for the questions), and
+never touches a newsletter, contact, search or login form. The filled form is
+photographed before the click; without a confirmation it recognises (text or
+URL) the result is `submit_outcome_unknown`, never a second click. An Apply
+control that leads to a known ATS hands the position to that recipe.
+
+**One summary per round.** Stops that are a property of the site
+(`ats_unsupported`, `ats_conflict`, `linkedin_easy_apply`,
+`application_form_embedded`, `page_not_found`, `bot_protection`, `page_temporarily_unavailable`) are not notified one by one: they wait for the
+summary you send at STEP 6 with `python3 /app/shared/skills/closer_notices.py flush`.
+Every notice reaches the user in the language of their profile.
 
 ## Checking an application afterwards
 
