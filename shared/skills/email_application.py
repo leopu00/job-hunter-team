@@ -848,6 +848,14 @@ class EmailApplication:
         # A dry run stops before the transport, so it neither needs nor reads the secret.
         settings, password = (None, "") if dry else self._transport_settings(required=True)
         cv = self._attachment(position["cv_pdf_path"], "cv_missing", "cv")
+        layout = apply_gate.cv_layout_hold(Path(cv["path"]))
+        if layout:
+            raise _blocked(
+                layout,
+                "the CV PDF failed the visual layout check; nothing was attached or sent"
+                if layout == "cv_pdf_layout_bad"
+                else "the CV PDF could not be measured; an unmeasured CV is never sent",
+            )
         attachments = [cv]
         haystack = "\n".join(
             str(v) for v in (mailto.subject, mailto.body, position["jd_text"], position["requirements"]) if v

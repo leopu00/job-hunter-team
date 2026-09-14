@@ -719,6 +719,40 @@ def _checkpoint_hold(position_id: int, authorised_at: Any, jht_home: Path | None
     return f"checkpoint_{state}"
 
 
+# Test suites build queues on placeholder PDFs that no layout check can measure;
+# they set this to "1" once for the whole run. Never set on a box.
+PDF_LAYOUT_SKIP_ENV = "JHT_TEST_SKIP_PDF_LAYOUT"
+
+
+def cv_layout_hold(cv: Path) -> str:
+    """Why this CV PDF must not go out, or `""`.
+
+    `cv_pdf_layout_bad` when the visual check fails (narrow column, near-empty
+    page, too many pages, fonts not embedded); `cv_pdf_check_unavailable` when
+    it cannot be measured (poppler missing, unreadable file): an unmeasured CV
+    is not a pass. Computed from the file every time, never cached: a CV the
+    Scrittore renders again lifts the hold by itself, and no stale verdict can
+    wave a new file through.
+    """
+    if os.environ.get(PDF_LAYOUT_SKIP_ENV) == "1":
+        return ""
+    try:
+        from pdf_layout_check import CheckError, analyze
+    except ImportError:
+        try:
+            from shared.skills.pdf_layout_check import CheckError, analyze
+        except ImportError:
+            return "cv_pdf_check_unavailable"
+    try:
+        report = analyze(Path(cv))
+    except CheckError:
+        return "cv_pdf_check_unavailable"
+    except Exception as err:  # noqa: BLE001 — a crashing check is an unmeasured CV
+        print(f"[apply-gate] CV layout check failed: {type(err).__name__}", file=sys.stderr)
+        return "cv_pdf_check_unavailable"
+    return "" if isinstance(report, dict) and report.get("ok") is True else "cv_pdf_layout_bad"
+
+
 def _essentials_hold(conn: sqlite3.Connection, jht_home: Path | None) -> str:
     """`essential_answers_pending` while an essential fact was asked and is still unknown.
 
@@ -1080,6 +1114,10 @@ def application_queue(
             cv = _resolve_file(cv_pdf, jht_home)
             if cv is None:
                 held.append({"position_id": pid, "reason": "cv_pdf_missing"})
+                continue
+            layout = cv_layout_hold(cv)
+            if layout:
+                held.append({"position_id": pid, "reason": layout})
                 continue
             hold = (
                 _checkpoint_hold(pid, asked_at, jht_home)

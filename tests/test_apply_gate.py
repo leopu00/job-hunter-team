@@ -693,3 +693,67 @@ def test_una_domanda_di_form_mai_chiesta_non_trattiene_la_posizione(tmp_path, re
     else:
         assert q["ready"], q
         assert [p["position_id"] for p in q["positions"]] == [1]
+
+
+# ── CV layout hold (pdf_layout_check) ───────────────────────────────────────
+
+import pdf_layout_check  # noqa: E402
+
+
+@pytest.fixture
+def layout_check_on(monkeypatch):
+    monkeypatch.delenv("JHT_TEST_SKIP_PDF_LAYOUT", raising=False)
+    return monkeypatch
+
+
+def test_un_cv_non_misurabile_non_parte_mai(tmp_path, layout_check_on):
+    # A placeholder PDF: poppler cannot measure it, and without poppler neither.
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    q = queue(tmp_path, db)
+    assert not q["ready"]
+    assert q["held"] == [{"position_id": 1, "reason": "cv_pdf_check_unavailable"}]
+
+
+@pytest.mark.parametrize(
+    "outcome, reason",
+    [
+        ({"ok": True, "reasons": []}, ""),
+        ({"ok": False, "reasons": ["narrow_text"]}, "cv_pdf_layout_bad"),
+        ({"ok": "yes"}, "cv_pdf_layout_bad"),
+        (["not a report"], "cv_pdf_layout_bad"),
+        (pdf_layout_check.CheckError("pdftotext not found"), "cv_pdf_check_unavailable"),
+        (RuntimeError("boom"), "cv_pdf_check_unavailable"),
+    ],
+)
+def test_la_coda_trattiene_un_cv_dal_layout_rotto(tmp_path, layout_check_on, outcome, reason):
+    def analyze(_path):
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    layout_check_on.setattr(pdf_layout_check, "analyze", analyze)
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv, 0, None, None)])
+    q = queue(tmp_path, db)
+    if reason:
+        assert q["held"] == [{"position_id": 1, "reason": reason}]
+    else:
+        assert q["ready"] and q["positions"] == [{"position_id": 1, "url": URL, "cv_pdf_path": cv}]
+
+
+def test_senza_il_modulo_di_controllo_nessun_cv_parte(tmp_path, layout_check_on):
+    layout_check_on.setitem(sys.modules, "pdf_layout_check", None)
+    layout_check_on.setitem(sys.modules, "shared.skills.pdf_layout_check", None)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv_file(tmp_path), 0, None, None)])
+    assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_check_unavailable"}]
+
+
+def test_un_cv_rigenerato_toglie_la_trattenuta_da_solo(tmp_path, layout_check_on):
+    layout_check_on.setattr(
+        pdf_layout_check, "analyze", lambda path: {"ok": b"full width" in Path(path).read_bytes(), "reasons": []}
+    )
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, [authorised()], [(1, cv, 0, None, None)])
+    assert queue(tmp_path, db)["held"] == [{"position_id": 1, "reason": "cv_pdf_layout_bad"}]
+    Path(cv).write_bytes(b"%PDF-1.4 full width")  # the Scrittore renders it again
+    assert queue(tmp_path, db)["ready"]

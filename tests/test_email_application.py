@@ -618,3 +618,25 @@ def test_the_smtp_transport_keeps_the_numeric_reply_to_the_letter():
     with pytest.raises(ea.smtplib.SMTPDataError):
         transport.send(message, "sender@example.com", ["jobs@example.com"])
     assert transport.last_reply_code == 554
+
+
+@pytest.mark.parametrize(
+    "analyze_result, reason",
+    [({"ok": False, "reasons": ["narrow_text"]}, "cv_pdf_layout_bad"), (None, "cv_pdf_check_unavailable")],
+)
+def test_a_cv_that_fails_the_layout_check_is_never_attached(box, monkeypatch, analyze_result, reason):
+    import pdf_layout_check
+
+    monkeypatch.delenv("JHT_TEST_SKIP_PDF_LAYOUT", raising=False)
+
+    def analyze(_path):
+        if analyze_result is None:
+            raise pdf_layout_check.CheckError("pdftotext not found")
+        return analyze_result
+
+    monkeypatch.setattr(pdf_layout_check, "analyze", analyze)
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("blocked_human", reason)
+    assert FakeTransport.sends == []
+    assert sql(box, "SELECT COUNT(*) FROM email_application_attempts WHERE state IN ('send_started', 'sent')") == [(0,)]
+    assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
