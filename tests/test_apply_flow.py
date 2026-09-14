@@ -1399,3 +1399,112 @@ def test_end_to_end_the_closer_asks_with_the_cli_when_it_has_no_basis(page, tmp_
             "SELECT source_action FROM pending_user_messages WHERE related_position_id = 41"
         ).fetchall() == [("closer_application_answer",)]
     assert json.loads(checkpoint_path.read_text())["answer_request"]["asked"] is True
+
+
+WORK_MODEL = "Which work model can you accept?"
+
+
+def _radio_form() -> str:
+    field = f"""
+      <div class="ashby-application-form-field-entry" data-field-path="question-work-model">
+        <label class="required-marker ashby-application-form-question-title">{WORK_MODEL}</label>
+        <input id="remote" name="question-work-model" type="radio" required>
+        <label for="remote">Remote</label>
+        <input id="hybrid" name="question-work-model" type="radio" required>
+        <label for="hybrid">Hybrid</label>
+      </div>
+    """
+    return ashby_form().replace(
+        '<button class="ashby-application-form-submit-button"',
+        field + '<button class="ashby-application-form-submit-button"',
+    )
+
+
+def _save_inferred(db_path: Path, key: str, value, field_type: str = "radio", channel: str = "agent_inferred"):
+    import application_answers
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        application_answers.save_answer(
+            conn, key=key, label=key, answer=value, field_type=field_type, channel=channel, basis="judgement"
+        ) if channel == "agent_inferred" else application_answers.save_answer(
+            conn, key=key, label=key, answer=value, field_type=field_type, channel=channel
+        )
+        conn.commit()
+
+
+def test_a_saved_answer_that_is_not_an_exact_option_keeps_the_question_open(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+
+    def flow() -> ApplicationFlow:
+        built = build_flow(tmp_path, cv_path)
+        built.db_path = db_path
+        return built
+
+    page.set_content(ashby_form(question="Why do you want to join us?"))
+    first = flow().run(page=page, navigate=False)
+    assert first.reason == "required_answer_missing"
+    # Saved with a type the question does not have: an empty textarea answer is no answer.
+    _save_inferred(db_path, "why do you want to join us", "   ", field_type="text")
+
+    rerun = flow().run(page=page, navigate=False)
+
+    assert (rerun.status, rerun.reason) == ("blocked_human", "required_answer_missing")
+    assert rerun.pending_question["key"] == "why do you want to join us"
+    assert _read_checkpoint(tmp_path)["answer_request"] is not None
+
+
+def test_a_worked_out_option_the_form_refuses_becomes_the_question_again(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+    # An older worked-out answer whose wording is not one of this form's options.
+    _save_inferred(db_path, "which work model can you accept", "Remote-first")
+    page.set_content(_radio_form())
+    flow = build_flow(tmp_path, cv_path, notifications=notifications)
+    flow.db_path = db_path
+
+    result = flow.run(page=page, navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["options"] == ["Remote", "Hybrid"]
+    assert notifications == []
+    assert page.evaluate("window.submitCount") == 0
+
+    # The CLOSER corrects itself with an exact option, and the flow completes.
+    _save_inferred(db_path, "which work model can you accept", "Remote")
+    page.set_content(_radio_form())
+    again = build_flow(tmp_path, cv_path, notifications=notifications)
+    again.db_path = db_path
+    assert again.run(page=page, navigate=False).status == "applied"
+
+
+def test_a_user_option_the_form_refuses_stays_a_human_stop(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    _save_inferred(db_path, "which work model can you accept", "Remote-first", channel="telegram")
+    page.set_content(_radio_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+
+    result = flow.run(page=page, navigate=False)
+
+    assert result.status == "blocked_human"
+    assert result.reason != "required_answer_missing"
+    assert result.pending_question is None
+
+
+def test_a_worked_out_value_outside_the_options_does_not_reopen_the_browser(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    db_path = _answers_db(tmp_path)
+    page.set_content(_radio_form())
+    first = build_flow(tmp_path, cv_path)
+    first.db_path = db_path
+    assert first.run(page=page, navigate=False).reason == "required_answer_missing"
+    _save_inferred(db_path, "which work model can you accept", "Remote-first")
+
+    rerun = build_flow(tmp_path, cv_path)
+    rerun.db_path = db_path
+    monkeypatch.setattr(rerun, "_managed_page", lambda: pytest.fail("browser reopened for an answer that cannot fit"))
+    result = rerun.run(page=None)
+
+    assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
+    assert result.pending_question["options"] == ["Remote", "Hybrid"]

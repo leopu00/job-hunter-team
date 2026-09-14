@@ -341,6 +341,54 @@ class BlockedHuman(FlowError):
 
 
 ANSWER_ORIGINS = ("user", "profile", "agent_inferred")
+_REFUSED_ANSWER_REASONS = frozenset(
+    {"answer_option_unknown", "answer_type_unknown", "answer_not_accepted"}
+)
+
+
+def _inferred_answer_refused(recipe: Any, refused: BlockedHuman, request_of: Callable[[], Any]) -> BlockedHuman:
+    """An answer the CLOSER worked out that the form refuses is its question again.
+
+    The CLOSER can correct its own answer (a different option, another
+    wording); a user's or the profile's answer that does not fit stays a
+    human stop, as before.
+    """
+    key = getattr(recipe, "last_answer_key", "")
+    if refused.reason not in _REFUSED_ANSWER_REASONS or recipe.answer_sources.get(key) != "agent_inferred":
+        return refused
+    try:
+        request = request_of()
+    except Exception:
+        request = None
+    if not request:
+        return refused
+    recipe.answer_sources.pop(key, None)
+    return BlockedHuman(
+        "required_answer_missing",
+        f"The worked-out answer does not fit the form ({refused.reason})",
+        refused.step,
+        answer_request=request,
+    )
+
+
+def _answer_fits(payload: Mapping[str, Any], value: Any) -> bool:
+    """Would this saved value fill the question as asked? Exact options, never a guess."""
+    field_type = str(payload.get("field_type", ""))
+    options = [str(option) for option in payload.get("options") or []]
+    if field_type in {"radio", "select"}:
+        return isinstance(value, str) and value in options
+    if field_type == "checkbox":
+        return isinstance(value, bool) or value in {"Yes", "No"}
+    if field_type == "checkboxes":
+        return (
+            isinstance(value, list)
+            and bool(value)
+            and all(isinstance(item, str) and item in options for item in value)
+            and len(set(value)) == len(value)
+        )
+    if isinstance(value, bool) or value is None:
+        return False
+    return bool(str(value).strip())
 
 
 def _answer_sources(value: Any) -> dict[str, str]:
@@ -789,6 +837,7 @@ class AshbyRecipe:
         # Set by the flow: key → origin of each saved answer; unknown means the profile.
         self.answer_origins: Mapping[str, str] = {}
         self.answer_sources: dict[str, str] = {}
+        self.last_answer_key = ""
 
     @staticmethod
     def _answer_index(value: Any) -> dict[str, Any]:
@@ -989,6 +1038,7 @@ class AshbyRecipe:
         for key in keys:
             if key in self.answers:
                 self.answer_sources[key] = self.answer_origins.get(key, "profile")
+                self.last_answer_key = key
                 return True, self.answers[key]
         return False, None
 
@@ -1081,13 +1131,16 @@ class AshbyRecipe:
                         answer_request=request,
                     )
                 continue
-            self._fill_answer(entry, label, answer)
-            if not self._is_answered(entry):
-                raise BlockedHuman(
-                    "answer_not_accepted",
-                    f"Ashby did not retain the answer for: {_safe_label(label)}",
-                    "screening",
-                )
+            try:
+                self._fill_answer(entry, label, answer)
+                if not self._is_answered(entry):
+                    raise BlockedHuman(
+                        "answer_not_accepted",
+                        f"Ashby did not retain the answer for: {_safe_label(label)}",
+                        "screening",
+                    )
+            except BlockedHuman as refused:
+                raise _inferred_answer_refused(self, refused, lambda: self._answer_request(entry, label)) from None
 
     def _fill_answer(self, entry, label: str, answer: Any) -> None:
         yes_no = entry.locator(".ashby-application-form-input-yesno-option")
@@ -1326,6 +1379,7 @@ class GreenhouseRecipe:
         self.answers = AshbyRecipe._answer_index(profile.get("application_answers"))
         self.answer_origins: Mapping[str, str] = {}
         self.answer_sources: dict[str, str] = {}
+        self.last_answer_key = ""
 
     @staticmethod
     def _profile_value(profile: Mapping[str, Any], path: tuple[str, ...]) -> str | None:
@@ -1423,6 +1477,7 @@ class GreenhouseRecipe:
         for key in keys:
             if key in self.answers:
                 self.answer_sources[key] = self.answer_origins.get(key, "profile")
+                self.last_answer_key = key
                 return True, self.answers[key]
         return False, None
 
@@ -1744,13 +1799,16 @@ class GreenhouseRecipe:
                         answer_request=request,
                     )
                 continue
-            self._fill_answer(page, entry, label, answer)
-            if not self._is_answered(entry):
-                raise BlockedHuman(
-                    "answer_not_accepted",
-                    f"Greenhouse did not retain the answer for: {_safe_label(label)}",
-                    "screening",
-                )
+            try:
+                self._fill_answer(page, entry, label, answer)
+                if not self._is_answered(entry):
+                    raise BlockedHuman(
+                        "answer_not_accepted",
+                        f"Greenhouse did not retain the answer for: {_safe_label(label)}",
+                        "screening",
+                    )
+            except BlockedHuman as refused:
+                raise _inferred_answer_refused(self, refused, lambda: self._answer_request(page, entry, label)) from None
 
     def _fill_answer(self, page, entry, label: str, answer: Any) -> None:
         if not entry.count():
@@ -2817,6 +2875,7 @@ class ApplicationFlow:
         return self._close_answer_request(checkpoint)
 
     def _answer_saved_for(self, request: Mapping[str, Any]) -> bool:
+        """A saved answer for this key that fits the question's type and exact options."""
         payload = request.get("payload")
         key = str(payload.get("key", "")) if isinstance(payload, Mapping) else ""
         if not key:
@@ -2826,7 +2885,7 @@ class ApplicationFlow:
         except Exception as exc:
             LOG.error("saved answers unreadable: %s", type(exc).__name__)
             return False
-        return key in answers
+        return key in answers and _answer_fits(payload, answers[key])
 
     def _close_answer_request(self, checkpoint: FlowCheckpoint) -> None:
         checkpoint.answer_request = None
