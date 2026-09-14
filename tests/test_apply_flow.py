@@ -1508,3 +1508,123 @@ def test_a_worked_out_value_outside_the_options_does_not_reopen_the_browser(
 
     assert (result.status, result.reason) == ("blocked_human", "required_answer_missing")
     assert result.pending_question["options"] == ["Remote", "Hybrid"]
+
+
+def _refusing_text_form() -> str:
+    """A text question whose field the page empties after every input: answer_not_accepted."""
+    field = """
+      <div class="ashby-application-form-field-entry" data-field-path="question-work-model">
+        <label class="required-marker ashby-application-form-question-title"
+               for="work-model">Which work model can you accept?</label>
+        <input id="work-model" name="question-work-model" type="text" required>
+      </div>
+    """
+    return ashby_form().replace(
+        '<button class="ashby-application-form-submit-button"',
+        field + '<button class="ashby-application-form-submit-button"',
+    ).replace(
+        "window.submitCount = 0;",
+        """
+        document.querySelector('#work-model').addEventListener('input', event => { event.target.value = ''; });
+        window.submitCount = 0;
+        """,
+    )
+
+
+def test_the_same_refused_value_twice_stops_the_loop_until_an_explicit_ask(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    db_path = _answers_db(tmp_path)
+    notifications: list[dict] = []
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text")
+
+    def run(page_obj=None):
+        flow = build_flow(tmp_path, cv_path, notifications=notifications)
+        flow.db_path = db_path
+        if page_obj is None:
+            monkeypatch.setattr(flow, "_managed_page", lambda: pytest.fail("browser reopened on a value refused twice"))
+            return flow.run(page=None)
+        return flow.run(page=page_obj, navigate=False)
+
+    page.set_content(_refusing_text_form())
+    first = run(page)
+    assert (first.status, first.reason) == ("blocked_human", "required_answer_missing")
+
+    # The CLOSER saves the same value again: the form refuses it a second time.
+    page.set_content(_refusing_text_form())
+    second = run(page)
+    assert (second.status, second.reason) == ("blocked_human", "answer_not_accepted")
+    assert second.pending_question["key"] == "which work model can you accept"
+    checkpoint = _read_checkpoint(tmp_path)
+    assert checkpoint["answer_refusals"]["which work model can you accept"]["count"] == 2
+    assert "Remote" not in json.dumps(checkpoint["answer_refusals"])
+
+    # Rerun with the same saved value: no browser, same stop, nothing sent.
+    third = run()
+    assert (third.status, third.reason) == ("blocked_human", "answer_not_accepted")
+    assert notifications == []
+
+    # Only the explicit ask sends the question.
+    asked = apply_flow_module.ask_pending_question(
+        41, db_path=db_path, checkpoint_path=tmp_path / "checkpoint.json",
+        notifier=lambda **kwargs: notifications.append(kwargs) or "1",
+    )
+    assert asked["status"] == "asked" and len(notifications) == 1
+
+
+def test_a_different_worked_out_value_gets_its_own_tries(page, tmp_path: Path, cv_path: Path):
+    db_path = _answers_db(tmp_path)
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text")
+
+    def run():
+        flow = build_flow(tmp_path, cv_path)
+        flow.db_path = db_path
+        page.set_content(_refusing_text_form())
+        return flow.run(page=page, navigate=False)
+
+    assert run().reason == "required_answer_missing"
+    _save_inferred(db_path, "which work model can you accept", "Hybrid", field_type="text")
+    assert run().reason == "required_answer_missing"
+    assert _read_checkpoint(tmp_path)["answer_refusals"]["which work model can you accept"]["count"] == 1
+
+
+@pytest.mark.parametrize(
+    "refusals",
+    [[], {"k": "Remote"}, {"k": {"digest": "abc", "count": "2"}}, {"k": {"digest": 1, "count": 2}}, {"k": {"digest": "a", "count": True}}],
+)
+def test_answer_refusals_in_a_checkpoint_are_validated(tmp_path: Path, refusals):
+    FlowCheckpoint.new(41, ASHBY_URL).save(tmp_path / "checkpoint.json")
+    raw = _read_checkpoint(tmp_path)
+    raw["answer_refusals"] = refusals
+    (tmp_path / "checkpoint.json").write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(FlowError):
+        FlowCheckpoint.load(tmp_path / "checkpoint.json", 41, ASHBY_URL)
+
+
+def test_a_user_answer_is_never_held_by_the_count_of_refused_guesses(
+    page, tmp_path: Path, cv_path: Path, monkeypatch
+):
+    db_path = _answers_db(tmp_path)
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text")
+    for _ in range(2):
+        page.set_content(_refusing_text_form())
+        flow = build_flow(tmp_path, cv_path)
+        flow.db_path = db_path
+        last = flow.run(page=page, navigate=False)
+    assert last.reason == "answer_not_accepted"
+
+    # The user answers the same value on Telegram: the flow looks at the form again.
+    _save_inferred(db_path, "which work model can you accept", "Remote", field_type="text", channel="telegram")
+    opened: list[str] = []
+    page.set_content(_refusing_text_form())
+    flow = build_flow(tmp_path, cv_path)
+    flow.db_path = db_path
+    monkeypatch.setattr(flow, "_managed_page", lambda: opened.append("browser") or contextlib.nullcontext(page))
+
+    result = flow.run(page=None, navigate=False)
+
+    assert opened == ["browser"], "user answer held by the counter"
+    # The form refuses the user's own answer: a human stop, not a question for the CLOSER.
+    assert (result.status, result.reason, result.pending_question) == ("blocked_human", "answer_not_accepted", None)
+    assert "which work model can you accept" not in _read_checkpoint(tmp_path)["answer_refusals"]
