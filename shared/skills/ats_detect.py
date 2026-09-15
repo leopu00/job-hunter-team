@@ -164,6 +164,15 @@ def detect_ats(url: str | None = None, dom: str | None = None) -> AtsDetection:
             host = ""
         if host:
             url_platform = _platform_for_host(host)
+            if url_platform is None and _is(host, "oraclecloud.com"):
+                # Oracle Recruiting Cloud's candidate site (1944, 14/09): the
+                # shared cloud host is an ATS only on the CandidateExperience path.
+                try:
+                    path = urllib.parse.urlsplit(raw_url).path
+                except ValueError:
+                    path = ""
+                if path.startswith("/hcmUI/CandidateExperience/"):
+                    url_platform = "oracle_ce"
 
     dom_platforms = _platforms_for_dom(dom or "")
     # Multiple vendor markers are an uncertainty, not a vote.  Embedded forms
