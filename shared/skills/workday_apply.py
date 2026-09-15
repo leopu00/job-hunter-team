@@ -15,6 +15,7 @@ from an open one, without clicking anything.
 - open posting (its Apply control is there)  → account_creation
 - no Apply control and a closed-vacancy notice → vacancy_closed
 - no Apply control, no notice                 → ats_unsupported (named detail)
+- a page with content but no posting          → ats_unsupported
 - nothing rendered in time                    → page_unavailable
 
 The selectors are Workday's own data-automation-id attributes, stable across
@@ -44,6 +45,14 @@ def stop_for(page, *, wait_ms: int = RENDER_WAIT_MS) -> BlockedHuman:
     try:
         page.locator(_RENDERED).first.wait_for(state="visible", timeout=wait_ms)
     except Exception:
+        try:
+            drawn = bool(page.locator("body").inner_text(timeout=5_000).strip())
+        except Exception:
+            drawn = False
+        if drawn:
+            # Content, but no Workday posting: never a company form on a
+            # Workday host, and not a page that failed to load either.
+            return BlockedHuman("ats_unsupported", "The Workday host shows no Workday posting", "detect")
         return BlockedHuman(
             "page_unavailable",
             f"The Workday page did not render its posting within {wait_ms // 1000} s",
