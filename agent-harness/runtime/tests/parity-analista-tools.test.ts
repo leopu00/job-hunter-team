@@ -11,6 +11,7 @@ import { enrichmentPolicyCommand } from "../src/parity/skills/enrichment-policy.
 import { SafeHttpsClient, type PinnedHttpsRequest } from "../../../api-worker/src/safe-http.ts";
 import { classify, recheckLiveness } from "../src/parity/skills/recheck-liveness.ts";
 import { safeFetch } from "../src/parity/skills/safe-fetch.ts";
+import { logoFetch } from "../src/parity/skills/logo-fetch.ts";
 import { roleRegistry } from "../src/parity/skills/role-registry.ts";
 import { salaryEstimate } from "../src/parity/skills/salary-estimate.ts";
 import { ticketCommand } from "../src/parity/skills/ticket.ts";
@@ -418,5 +419,160 @@ describe("safe_fetch", () => {
     });
     const failed = await safeFetch(["https://geo.example/fail"], client);
     expect([failed.exitCode, failed.stderr]).toEqual([2, "safe_fetch: socket hang up\n"]);
+  });
+});
+
+/** A PNG of the given side, padded to `bytes`: only the header is read. */
+function png(side: number, bytes = 400): Buffer {
+  const b = Buffer.alloc(bytes);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]).copy(b);
+  b.writeUInt32BE(side, 16);
+  b.writeUInt32BE(side, 20);
+  return b;
+}
+function ico(side: number): Buffer {
+  const b = Buffer.alloc(300);
+  Buffer.from([0, 0, 1, 0, 1, 0, side % 256, side % 256]).copy(b);
+  return b;
+}
+function webp(kind: "VP8X" | "VP8L" | "VP8 ", w: number, h: number): Buffer {
+  const b = Buffer.alloc(300);
+  b.write("RIFF", 0, "latin1");
+  b.write("WEBP", 8, "latin1");
+  b.write(kind, 12, "latin1");
+  if (kind === "VP8X") {
+    b.writeUIntLE(w - 1, 24, 3);
+    b.writeUIntLE(h - 1, 27, 3);
+  } else if (kind === "VP8L") {
+    b.writeUInt32LE(((h - 1) << 14) | (w - 1), 21);
+  } else {
+    b.writeUInt16LE(w, 26);
+    b.writeUInt16LE(h, 28);
+  }
+  return b;
+}
+
+/** The web both sides see: each URL's status, body and, for a redirect, where it lands. */
+const WEB: Record<string, { status: number; body: Buffer; final?: string }> = {
+  "https://acme.example": { status: 200, final: "https://www.acme.example/home/", body: Buffer.from(
+    '<html><head><link rel="icon" sizes="16x16" href="/fav16.png"><link rel="icon" href="icons/small.ico">' +
+    '<link REL="apple-touch-icon" href="/touch.png?a=1&amp;b=2"><meta property="og:image" content="https://cdn.example/og.webp">' +
+    '<link rel="icon" sizes="192x192" href="data:image/png;base64,AAAA"><link rel="shortcut icon" sizes="128x128" href="/big.png"></head></html>') },
+  "https://www.acme.example/touch.png?a=1&b=2": { status: 200, body: png(16) },
+  "https://www.acme.example/big.png": { status: 200, body: Buffer.alloc(40_000, 1) },
+  "https://cdn.example/og.webp": { status: 200, body: webp("VP8X", 400, 300) },
+  "https://www.acme.example/home/icons/small.ico": { status: 200, body: ico(0) },
+  "https://globex.example": { status: 500, body: Buffer.from("down") },
+  "https://globex.example/apple-touch-icon.png": { status: 404, body: Buffer.from("") },
+  "https://globex.example/favicon-192x192.png": { status: 200, body: Buffer.from("<svg></svg>".padEnd(300)) },
+  "https://globex.example/favicon.png": { status: 200, body: webp("VP8L", 64, 48) },
+  "https://initech.example": { status: 200, body: Buffer.from("<html></html>") },
+  "https://img.example/logo.jpg": { status: 200, body: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(500)]) },
+  "https://img.example/tiny.png": { status: 200, body: png(64, 100) },
+  "https://img.example/vp8.webp": { status: 200, body: webp("VP8 ", 20, 200) },
+};
+const PRIVATE = ["intranet.example"];
+
+function logoDb(path: string): Database {
+  const db = openJobsDb(path);
+  const run = (sql: string, ...p: Array<string | number | null>) => db.prepare(sql).run(...p);
+  run("INSERT INTO companies (name, website) VALUES (?, ?)", "Acme", "acme.example");
+  run("INSERT INTO companies (name, website) VALUES (?, ?)", "Globex", "https://globex.example");
+  run("INSERT INTO companies (name, website) VALUES (?, ?)", "Initech", "https://initech.example");
+  run("INSERT INTO companies (name, website) VALUES (?, ?)", "Hooli", null);
+  run("INSERT INTO companies (name, website, logo) VALUES (?, ?, ?)", "Umbrella", "https://umbrella.example", "data:image/png;base64,AAA");
+  run("INSERT INTO companies (name, website) VALUES (?, ?)", "Inside", "https://intranet.example");
+  run("INSERT INTO positions (title, company, company_id, url, status) VALUES ('A', 'Acme', 1, 'https://a.example/1', 'scored')");
+  run("INSERT INTO scores (position_id, total_score) VALUES (1, 72)");
+  return db;
+}
+
+const LOGOS: Array<[string, Record<string, unknown> | null, string[]]> = [
+  ["", null, ["Acme"]],
+  ["", null, ["acme", "--dry-run"]],
+  ["", null, ["Globex"]],
+  ["", null, ["Initech"]],
+  ["", null, ["Initech", "--mark-attempted"]],
+  ["", null, ["Initech", "--mark-attempted", "--dry-run"]],
+  ["", null, ["Hooli"]],
+  ["", null, ["Hooli", "--website", "https://acme.example"]],
+  ["", null, ["Hooli", "--from-url", "https://img.example/logo.jpg"]],
+  ["", null, ["Hooli", "--from-url", "https://img.example/tiny.png"]],
+  ["", null, ["Hooli", "--from-url", "https://img.example/vp8.webp"]],
+  ["", null, ["Hooli", "--from-url", "img.example/logo.jpg"]],
+  ["", null, ["Umbrella"]],
+  ["", null, ["Nobody's Co"]],
+  ["", null, ["Inside"]],
+  ["", null, ["Hooli", "--from-url", "https://intranet.example/l.png"]],
+  ["economy", { economy: true }, ["Acme"]],
+  ["logo off", { logo: { enabled: false } }, ["Acme"]],
+  ["score gate 80", { logo: { min_score: 80 } }, ["Acme"]],
+  ["score gate 70", { logo: { min_score: 70 } }, ["Acme"]],
+  ["score gate, no positions", { logo: { min_score: 10 } }, ["Globex"]],
+];
+
+describe("logo_fetch against logo_fetch.py, on the same web", () => {
+  const PUBLIC = [8, 8, 8, 8].join(".");
+  const requestPinned: PinnedHttpsRequest = async (url) => {
+    const key = url.href.replace(/\/$/, "");
+    const page = WEB[url.href] ?? WEB[key];
+    if (!page) return { status: 404, headers: {}, body: Buffer.alloc(0) };
+    if (page.final && page.final !== url.href) return { status: 301, headers: { location: page.final }, body: Buffer.alloc(0) };
+    return { status: page.status, headers: {}, body: page.body };
+  };
+  const client = new SafeHttpsClient({
+    resolveHostname: async (host) => (PRIVATE.includes(host) ? ["10.1.2.3"] : [PUBLIC]),
+    requestPinned,
+  });
+  // The redirect's landing page answers with the home's own body.
+  WEB["https://www.acme.example/home/"] = { status: 200, body: WEB["https://acme.example"]!.body };
+
+  it.skipIf(skills === null).each(LOGOS.map(([label, policy, args]) => [`${label} ${args.join(" ")}`.trim(), policy, args]))(
+    "%s",
+    async (_label, policy, args) => {
+      const pyDb = logoDb(join(root, "py", "jobs.db"));
+      const ourDb = logoDb(join(root, "ours.db"));
+      const profile = join(root, "py", "profile");
+      mkdirSync(profile, { recursive: true });
+      if (policy) writeFileSync(join(profile, "enrichment-policy.json"), JSON.stringify(policy));
+      const ours = await logoFetch(args as string[], { db: () => ourDb, client, policy: new EnrichmentPolicy(profile) });
+      const web = Object.fromEntries(Object.entries(WEB).map(([u, p]) => [u, [p.status, p.body.toString("base64"), p.final ?? u]]));
+      const script = [
+        "import base64, json, sys, logo_fetch as lf",
+        "from url_guard import UrlRejected",
+        "web, private = json.load(sys.stdin)",
+        "def check_url(url):",
+        "    from urllib.parse import urlsplit",
+        "    if (urlsplit(url).hostname or '') in private: raise UrlRejected('internal address')",
+        "    return url",
+        "def walk(url, *a, **k):",
+        "    check_url(url)",
+        "    page = web.get(url) or web.get(url.rstrip('/'))",
+        "    if page is None: return 404, url, b''",
+        "    return page[0], page[2], base64.b64decode(page[1])",
+        "lf.check_url = check_url",
+        "lf.safe_walk = walk",
+        "sys.argv = ['logo_fetch.py'] + sys.argv[1:]",
+        "lf.main()",
+      ].join("\n");
+      const py = runPython(skills!, ["-c", script, ...(args as string[])], { JHT_DB: join(root, "py", "jobs.db") }, JSON.stringify([web, PRIVATE]));
+      const ourJson = JSON.parse(ours.stdout) as Record<string, unknown>;
+      const pyJsonOut = JSON.parse(py.stdout) as Record<string, unknown>;
+      // A refusal's reason is the guard's own words, which differ; the verdict does not.
+      if (pyJsonOut["status_code"] === "URL_REFUSED") {
+        expect([ours.exitCode, ourJson["status_code"]]).toEqual([py.status, "URL_REFUSED"]);
+      } else {
+        expect([ours.exitCode, ours.stdout]).toEqual([py.status, py.stdout]);
+      }
+      const logos = (db: Database) => db.prepare("SELECT name, logo, logo_source, logo_fetched FROM companies ORDER BY id").all();
+      expect(logos(ourDb)).toEqual(logos(pyDb));
+    },
+  );
+
+  it("refuses --force: the spending brake is not the agent's to bypass", async () => {
+    const db = logoDb(join(root, "f.db"));
+    const r = await logoFetch(["Umbrella", "--force"], { db: () => db, client, policy: new EnrichmentPolicy(join(root, "none")) });
+    expect(r.exitCode).toBe(1);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: false, status_code: "POLICY_DISABLED" });
   });
 });
