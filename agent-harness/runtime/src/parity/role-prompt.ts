@@ -99,6 +99,10 @@ export async function resolveUserLocale(options: {
 /** Reads the role's identity, skills and team docs from the repo at `appRoot`. */
 export async function loadRolePrompt(options: { appRoot: string; role: string; locale: Locale }): Promise<RolePrompt> {
   const { appRoot, role, locale } = options;
+  // A role names a folder under agents/: nothing that could climb out of it.
+  if (!/^[a-z][a-z0-9_-]{0,31}$/.test(role)) {
+    throw new HarnessError("config_invalid", `"${role}" is not a role name: lowercase letters, digits, - and _.`);
+  }
   const roleDir = join(appRoot, "agents", role);
 
   const localized = join(roleDir, `${role}.${locale}.md`);

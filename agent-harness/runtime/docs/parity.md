@@ -110,6 +110,16 @@ tmux and the throttle engine do for a TUI agent:
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
 
+From the command line (`JHT_API_APP_ROOT` defaults to this checkout, `/app`
+in the container; `JHT_HOME` to `~/.jht`, read only for the locale):
+
+```sh
+npm run role -- --role scout --agent scout-1 --turns 2 --pause-ms 0
+npm run monitor -- --last
+```
+
+On the mock it plays `PRODUCT_ROLE_MOCK_SCRIPT` (`src/cli/mock-script.ts`).
+`tests/parity-run-role.test.ts` runs that command and reads its trace;
 `tests/parity-scout-run.test.ts` runs the real SCOUT prompt this way on the
 mock provider: two turns, one pause, the CAPITANO's order delivered on wake,
 every call accepted, and no `bash` call at all.

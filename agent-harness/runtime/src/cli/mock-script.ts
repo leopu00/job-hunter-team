@@ -58,6 +58,21 @@ export const DEFAULT_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: the loop, the tools, a subagent and the trace all worked." },
 ];
 
+/**
+ * The rehearsal for a product role (`--role` without `--prompt`): the same
+ * shape as a TUI worker's cycle, on the native tools. Read the identity,
+ * report to the CAPITANO, pause; after the wake-up, check for the person's
+ * replies and stop. The second turn plays only with `--turns 2` or more.
+ */
+export const PRODUCT_ROLE_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: batch done, 0 new positions." } }] },
+  { toolCalls: [{ name: "throttle", args: { reason: "batch done" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: identity, a peer message, a pause and a wake-up on the native tools." },
+];
+
 /** A script from a JSON file: an array of `ScriptedTurn`. */
 export async function readMockScript(path: string): Promise<ScriptedTurn[]> {
   let raw: unknown;

@@ -106,6 +106,13 @@ describe("loadRolePrompt", () => {
     expect(prompt.missingSkills).toEqual(["ghost"]);
   });
 
+  it("refuses a role name that is a path", async () => {
+    const app = await fixtureRepo();
+    for (const role of ["../scout", "scout/..", "/etc", "Scout", ""]) {
+      await expect(loadRolePrompt({ appRoot: app, role, locale: "en" })).rejects.toMatchObject({ code: "config_invalid" });
+    }
+  });
+
   it("refuses a role with no template", async () => {
     const app = await fixtureRepo();
     await expect(loadRolePrompt({ appRoot: app, role: "nobody", locale: "en" })).rejects.toMatchObject({
