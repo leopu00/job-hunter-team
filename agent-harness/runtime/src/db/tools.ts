@@ -135,25 +135,25 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
-          a["title"]!,
-          a["company"]!,
+          sql(a["title"]),
+          sql(a["company"]),
           companyId,
-          a["location"]!,
-          a["remote_type"]!,
-          a["salary_declared_min"]!,
-          a["salary_declared_max"]!,
-          (a["salary_declared_currency"] as string | null) || "EUR",
-          a["salary_estimated_min"]!,
-          a["salary_estimated_max"]!,
-          (a["salary_estimated_currency"] as string | null) || "EUR",
-          a["salary_estimated_source"]!,
-          a["url"]!,
-          a["source"]!,
-          a["jd_text"]!,
-          a["requirements"]!,
-          a["found_by"]!,
-          a["deadline"]!,
-          a["notes"]!,
+          sql(a["location"]),
+          sql(a["remote_type"]),
+          sql(a["salary_declared_min"]),
+          sql(a["salary_declared_max"]),
+          sql(a["salary_declared_currency"]) || "EUR",
+          sql(a["salary_estimated_min"]),
+          sql(a["salary_estimated_max"]),
+          sql(a["salary_estimated_currency"]) || "EUR",
+          sql(a["salary_estimated_source"]),
+          sql(a["url"]),
+          sql(a["source"]),
+          sql(a["jd_text"]),
+          sql(a["requirements"]),
+          sql(a["found_by"]),
+          sql(a["deadline"]),
+          sql(a["notes"]),
         );
       positionId = Number(inserted.lastInsertRowid);
       // Python: JHT_AGENT_NAME or --found-by or 'unknown'. The harness always knows the agent.
@@ -209,6 +209,11 @@ const POSITION_INSERT: CommandSpec = {
     { flag: "--notes" },
   ],
 };
+
+/** A parsed argument as a bound SQL value. Only `store_true` flags are booleans, and none reaches SQL. */
+function sql(value: string | number | boolean | null | undefined): string | number | null {
+  return typeof value === "boolean" || value === undefined ? null : value;
+}
 
 /** `_db.resolve_company_id`: the company's id by case-insensitive name, or null. */
 function resolveCompanyId(db: Database, name: string | null): number | null {
