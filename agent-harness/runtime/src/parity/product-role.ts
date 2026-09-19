@@ -13,6 +13,7 @@
 import { join } from "node:path";
 
 import type { ToolHandler } from "../tools/registry.ts";
+import { createSkillTools, type JobsDbHandle } from "./skills/index.ts";
 import {
   createJhtTools,
   FileMailbox,
@@ -46,6 +47,11 @@ export interface ProductRoleOptions {
   /** The user's JHT home, read only for the locale. */
   jhtHome: string;
   env?: Record<string, string | undefined>;
+  /**
+   * The team's jobs.db, opened by the runtime. The Python skills that read or
+   * write it become native tools only when it is given.
+   */
+  jobsDb?: JobsDbHandle | undefined;
 }
 
 export interface ProductRole {
@@ -74,6 +80,12 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     replies: new FileUserReplies(join(channels, "replies")),
     pause,
   });
+  // `shared/skills/*.py` the role lists, as native tools (T7).
+  const skills = createSkillTools({
+    skills: prompt.skills.map((s) => s.name),
+    jobsDb: options.jobsDb,
+    jhtHome: options.jhtHome,
+  });
 
   return {
     prompt,
@@ -85,6 +97,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
         tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command) : tool,
       ),
       ...native,
+      ...skills,
     ],
   };
 }
