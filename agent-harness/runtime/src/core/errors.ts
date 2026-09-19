@@ -19,7 +19,9 @@ export type HarnessErrorCode =
   | "provider_failed"
   | "model_incapable"
   | "output_invalid"
-  | "agent_running";
+  | "agent_running"
+  | "hub_unreachable"
+  | "hub_failed";
 
 export class HarnessError extends Error {
   readonly code: HarnessErrorCode;

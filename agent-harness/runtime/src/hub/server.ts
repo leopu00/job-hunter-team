@@ -1,0 +1,232 @@
+/**
+ * `jht-hub`: the one process that holds the team's database and channels.
+ *
+ * SICUREZZA §8 phase 2 (T18). A role's container no longer mounts `jobs.db`
+ * nor `channels/`: from its shell, `node:sqlite` finds no file and no inbox
+ * is there to write. Its runtime reaches both through this process, which
+ * applies the same rules the tools applied in the role — the code is the
+ * same code, run here — with the agent taken from the token, never from the
+ * request:
+ *
+ * - the database tools of the role's skills (`createSkillTools`, with the
+ *   role's `skills.list` read here), `role-policy.ts` deciding per role;
+ * - `send`, with `from` set by the hub, and `drain` of the caller's inbox only;
+ * - `notify`, with the rate limit kept here too;
+ * - `take` of the person's replies to the caller.
+ *
+ * One token per role, in the role's environment. A shell in that role can
+ * read it, and gets that role's rights and nothing more: the other tokens
+ * are in other containers. The hub listens on the pod's loopback only.
+ */
+
+import { createHash, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { join } from "node:path";
+
+import type { z } from "zod";
+
+import { formatIssues, TurnAccount } from "../core/agent-loop.ts";
+import { agentInstanceId } from "../core/agent-id.ts";
+import { openJobsDb, type Database } from "../db/jobs-db.ts";
+import { roleOf } from "../db/role-policy.ts";
+import { DEFAULT_NOTIFY_LIMIT, FileMailbox, FileNotifier, FileUserReplies } from "../parity/jht-tools.ts";
+import { loadRolePrompt } from "../parity/role-prompt.ts";
+import { createSkillTools } from "../parity/skills/index.ts";
+import type { ToolContext, ToolHandler } from "../tools/registry.ts";
+import {
+  EmptyRequest,
+  HUB_PATHS,
+  MAX_BODY_BYTES,
+  NotifyRequest,
+  SendRequest,
+  TOKEN,
+  ToolRequest,
+  type ToolResponse,
+} from "./protocol.ts";
+
+export interface HubOptions {
+  /** token → agent id (`scout-1`). */
+  tokens: ReadonlyMap<string, string>;
+  /** The team's jobs.db. */
+  dbPath: string;
+  /** `mailbox/`, `replies/` and `notify.jsonl`. */
+  channelsDir: string;
+  /** The folder holding `agents/`: each role's `skills.list` is read from there. */
+  appRoot: string;
+  /** The person's profile, read-only: profile_gate and the enrichment policy. */
+  profileDir?: string;
+  /** The hub's own state: the salary cache, `scout-dedup.log`. */
+  stateDir: string;
+  /** `$JHT_HOME`, as the feedback display reads it. */
+  jhtHome?: string;
+  notifyLimit?: { max: number; windowMs: number };
+  now?: () => number;
+  /** Test seam: the tools of an agent, instead of the ones its role lists. */
+  toolsFor?: (agent: string, db: () => Database) => Promise<ToolHandler[]>;
+}
+
+/** Reads `{ "<token>": "<agent>" }`; a token that is short or an agent twice refuses to start. */
+export function loadTokens(file: string): Map<string, string> {
+  const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${file}: expected an object of token → agent.`);
+  const tokens = new Map<string, string>();
+  const agents = new Set<string>();
+  for (const [token, agent] of Object.entries(raw)) {
+    if (!TOKEN.test(token)) throw new Error(`${file}: a token must be 32 to 256 characters of [A-Za-z0-9_-].`);
+    if (typeof agent !== "string") throw new Error(`${file}: every token names an agent.`);
+    const id = agentInstanceId(agent);
+    if (agents.has(id)) throw new Error(`${file}: ${id} has two tokens.`);
+    agents.add(id);
+    tokens.set(token, id);
+  }
+  return tokens;
+}
+
+class HttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const digest = (text: string) => createHash("sha256").update(text).digest();
+
+export function createHub(options: HubOptions): Server {
+  const now = options.now ?? Date.now;
+  // Compared as digests, in constant time, against every token: which one
+  // matched, or how much of one, does not show in the timing.
+  const known = [...options.tokens].map(([token, agent]) => ({ digest: digest(token), agent }));
+  const agentOf = (header: string | undefined): string => {
+    const token = /^Bearer (\S+)$/.exec(header ?? "")?.[1];
+    if (!token || !TOKEN.test(token)) throw new HttpError(401, "A role's token is required.");
+    const offered = digest(token);
+    let agent: string | undefined;
+    for (const k of known) if (timingSafeEqual(k.digest, offered)) agent = k.agent;
+    if (!agent) throw new HttpError(401, "Unknown token.");
+    return agent;
+  };
+
+  let opened: Database | undefined;
+  const db = () => (opened ??= openJobsDb(options.dbPath));
+  const mailbox = new FileMailbox(join(options.channelsDir, "mailbox"));
+  const notifier = new FileNotifier(join(options.channelsDir, "notify.jsonl"));
+  const replies = new FileUserReplies(join(options.channelsDir, "replies"));
+  const notifyLimit = options.notifyLimit ?? DEFAULT_NOTIFY_LIMIT;
+  const notified = new Map<string, number[]>();
+
+  const toolsFor =
+    options.toolsFor ??
+    (async (agent: string, open: () => Database) => {
+      // The role's skills as its runtime reads them; the locale changes texts, never names.
+      const prompt = await loadRolePrompt({ appRoot: options.appRoot, role: roleOf(agent), locale: "en" });
+      const common = {
+        skills: prompt.skills.map((s) => s.name),
+        agent,
+        jhtHome: options.jhtHome,
+        dedupLog: join(options.stateDir, "logs", "scout-dedup.log"),
+        profileDir: options.profileDir,
+        stateDir: options.stateDir,
+      };
+      // Only what needs the database runs here: the rest stays in the role.
+      const without = new Set(createSkillTools(common).map((t) => t.spec.name));
+      return createSkillTools({ ...common, jobsDb: { open, path: options.dbPath } }).filter((t) => !without.has(t.spec.name));
+    });
+  const tools = new Map<string, Promise<Map<string, ToolHandler>>>();
+  const toolOf = async (agent: string, name: string): Promise<ToolHandler> => {
+    let forAgent = tools.get(agent);
+    if (!forAgent) {
+      forAgent = toolsFor(agent, db).then((list) => new Map(list.map((t) => [t.spec.name, t])));
+      tools.set(agent, forAgent);
+    }
+    const tool = (await forAgent).get(name);
+    if (!tool) throw new HttpError(403, `\`${name}\` is not a tool of ${agent} on the hub.`);
+    return tool;
+  };
+
+  const handle = async (path: string, agent: string, body: unknown): Promise<unknown> => {
+    switch (path) {
+      case HUB_PATHS.tool: {
+        const request = parse(ToolRequest, body);
+        const tool = await toolOf(agent, request.name);
+        const args = tool.spec.schema.safeParse(request.args);
+        if (!args.success) return { ok: false, content: `Error: invalid arguments for ${request.name}: ${formatIssues(args.error)}` } satisfies ToolResponse;
+        const context: ToolContext = { account: new TurnAccount(now), remainingMs: () => 120_000 };
+        const result = await tool.execute(args.data, context);
+        return { ok: result.ok, content: result.content, ...(result.details ? { details: result.details } : {}) } satisfies ToolResponse;
+      }
+      case HUB_PATHS.send: {
+        const request = parse(SendRequest, body);
+        // The sender is the token's agent, whatever the role's runtime believes it is.
+        await mailbox.send({ from: agent, to: request.to, text: request.text, ts: now() });
+        return {};
+      }
+      case HUB_PATHS.drain:
+        parse(EmptyRequest, body);
+        return { messages: await mailbox.drain(agent) };
+      case HUB_PATHS.notify: {
+        const request = parse(NotifyRequest, body);
+        const at = now();
+        const window = (notified.get(agent) ?? []).filter((t) => at - t < notifyLimit.windowMs);
+        if (window.length >= notifyLimit.max) throw new HttpError(429, `Notification limit reached (${notifyLimit.max} per window).`);
+        window.push(at);
+        notified.set(agent, window);
+        await notifier.notify({ from: agent, kind: request.kind, text: request.text, ts: at, ...(request.positionId === undefined ? {} : { positionId: request.positionId }) });
+        return {};
+      }
+      case HUB_PATHS.replies:
+        parse(EmptyRequest, body);
+        return { replies: await replies.take(agent) };
+      default:
+        throw new HttpError(404, "No such operation.");
+    }
+  };
+
+  const server = createServer((req, res) => {
+    void serve(req, res);
+  });
+  const serve = async (req: IncomingMessage, res: ServerResponse) => {
+    try {
+      if (req.method !== "POST") throw new HttpError(405, "POST only.");
+      const path = req.url ?? "";
+      if (!Object.values(HUB_PATHS).includes(path as never)) throw new HttpError(404, "No such operation.");
+      const agent = agentOf(req.headers.authorization);
+      const body = await readBody(req);
+      reply(res, 200, await handle(path, agent, body));
+    } catch (error) {
+      if (error instanceof HttpError) reply(res, error.status, { error: error.message });
+      else reply(res, 500, { error: "The hub failed on this request." });
+    }
+  };
+  server.on("close", () => opened?.close());
+  return server;
+}
+
+function parse<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
+  const result = schema.safeParse(body);
+  if (!result.success) throw new HttpError(400, "Malformed request.");
+  return result.data;
+}
+
+async function readBody(req: IncomingMessage): Promise<unknown> {
+  if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "JSON only.");
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > MAX_BODY_BYTES) throw new HttpError(413, "Request too large.");
+    chunks.push(chunk as Buffer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new HttpError(400, "Malformed JSON.");
+  }
+}
+
+function reply(res: ServerResponse, status: number, body: unknown): void {
+  const text = JSON.stringify(body);
+  res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(text) });
+  res.end(text);
+}

@@ -51,6 +51,7 @@ import { displayPath } from "../tools/paths.ts";
 import { buildToolkit } from "../tools/toolkit.ts";
 import { prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
 import { jobsDbPath, openJobsDb, type Database } from "../db/jobs-db.ts";
+import { HubClient } from "../hub/client.ts";
 import { resolveUserPath } from "../tools/paths.ts";
 import { DEFAULT_MOCK_SCRIPT, productRoleMockScript, readMockScript } from "./mock-script.ts";
 import { c, TraceView } from "./render.ts";
@@ -162,7 +163,9 @@ async function main(): Promise<number> {
   let systemPrompt: string;
   if (values.prompt === undefined) {
     const env = process.env;
-    jobsDb = { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
+    // With a hub (T18) the database and the channels are its: nothing opens them here.
+    const hub = config.hub ? new HubClient(config.hub) : undefined;
+    jobsDb = hub ? undefined : { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
     role = await prepareProductRole({
       appRoot: resolveUserPath(env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT, process.cwd(), homedir()),
       role: values.role,
@@ -173,6 +176,7 @@ async function main(): Promise<number> {
       profileDir: config.profileDir,
       env,
       jobsDb,
+      hub,
     });
     systemPrompt = role.systemPrompt.trimEnd();
   } else {
