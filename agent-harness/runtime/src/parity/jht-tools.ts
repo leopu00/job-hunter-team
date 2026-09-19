@@ -421,11 +421,17 @@ async function drainJsonLines<T>(file: string): Promise<T[]> {
   const out: T[] = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
+    let value: unknown;
     try {
-      out.push(JSON.parse(line) as T);
+      value = JSON.parse(line);
     } catch {
       // A torn line is dropped, not fatal: the writer is another process.
+      continue;
     }
+    // Every writer here writes an object. `null`, a number or an array is not
+    // one of ours, and a reader that trusted it would throw after the file is
+    // already gone, losing the good lines with the bad.
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) out.push(value as T);
   }
   return out;
 }

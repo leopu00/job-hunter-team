@@ -92,6 +92,21 @@ describe("createJhtTools", () => {
     expect(await new FileMailbox(join(root, "mailbox")).drain("scout-1")).toEqual([good]);
   });
 
+  it("a line that is JSON but not an object costs that line, not the inbox", async () => {
+    await mkdir(join(root, "mailbox"), { recursive: true });
+    await mkdir(join(root, "replies"), { recursive: true });
+    const good = { from: "capitano", to: "scout-1", text: "go", ts: 1 };
+    const junk = ["null", "7", '"text"', "[1]", "true"];
+    await writeFile(join(root, "mailbox", "scout-1.jsonl"), [...junk, JSON.stringify(good)].join("\n") + "\n");
+    await writeFile(
+      join(root, "replies", "scout-1.jsonl"),
+      [...junk, JSON.stringify({ id: "1", text: "yes" })].join("\n") + "\n",
+    );
+
+    expect(await new FileMailbox(join(root, "mailbox")).drain("scout-1")).toEqual([good]);
+    expect(await new FileUserReplies(join(root, "replies")).take("scout-1")).toEqual([{ id: "1", text: "yes" }]);
+  });
+
   it("send_message refuses a path for a name and a message to itself", async () => {
     const { byName } = toolkit();
     const send = byName("send_message");
