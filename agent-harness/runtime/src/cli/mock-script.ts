@@ -223,10 +223,59 @@ export const ANALISTA_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: one position analysed and moved to checked on the native tools." },
 ];
 
-/** The rehearsal for a product role: the SCORER and the ANALISTA have their own, every other role plays the SCOUT's. */
+/**
+ * T21: the CAPITANO's rehearsal, without spawning. It wakes as capitano.md
+ * C-21 and C-06 say (yesterday's handoff, the person's standing orders, the
+ * time as the person reads it), reads the pipeline, drains the user-ticket
+ * queue (C-15), merges two near-duplicate categories (C-17), tries to start
+ * a Scorer the TUI way and is told the harness's way, writes a note in its
+ * diary and pauses. The database needs an open ticket and the two
+ * categories; nothing reaches the network.
+ */
+export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "Waking up: yesterday's notes, the person's orders, the time.",
+    toolCalls: [
+      { name: "captain_diary", args: { args: ["handoff"] } },
+      { name: "team_directives", args: { args: ["active"] } },
+      { name: "format_time", args: { args: ["--now"] } },
+    ],
+  },
+  {
+    text: "The pipeline, and the user tickets before any autonomous work.",
+    toolCalls: [
+      { name: "db_query", args: { args: ["dashboard"] } },
+      { name: "db_query", args: { args: ["next-for-scorer"] } },
+      { name: "ticket", args: { args: ["list-open"] } },
+    ],
+  },
+  {
+    text: "The oldest ticket to the Analista, two duplicate categories into one.",
+    toolCalls: [
+      { name: "ticket", args: { args: ["assign", "1", "analista-1"] } },
+      { name: "role_registry", args: { args: ["merge", "--into", "Backend Engineering", "--sources", "Backend", "Backend Eng"] } },
+    ],
+  },
+  {
+    text: "A Scorer for the checked queue, the way I know.",
+    toolCalls: [{ name: "bash", args: { command: "/app/.launcher/start-agent.sh scorer 1" } }],
+  },
+  {
+    text: "Not here without the hub. A note for tomorrow.",
+    toolCalls: [{ name: "captain_diary", args: { args: ["add", "Ticket #1 to analista-1; Backend families merged."] } }],
+  },
+  { toolCalls: [{ name: "throttle", args: { reason: "queue drained" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: the CAPITANO woke, read the pipeline, routed a ticket and merged two categories on the native tools." },
+];
+
+/** The rehearsal for a product role: the SCORER, the ANALISTA and the CAPITANO have their own, every other role plays the SCOUT's. */
 export function productRoleMockScript(role: string): ScriptedTurn[] {
   if (role === "scorer") return SCORER_MOCK_SCRIPT;
   if (role === "analista") return ANALISTA_MOCK_SCRIPT;
+  if (role === "capitano") return CAPITANO_MOCK_SCRIPT;
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 

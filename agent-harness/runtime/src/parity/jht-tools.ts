@@ -299,6 +299,8 @@ instructions name for talking and pausing are tools here:
 - \`jht-notify-user\`, \`jht-telegram-send\` → \`notify_user\`
 - \`jht-check-user-replies\` → \`check_user_replies\`
 - \`jht-install\` → not available: the image carries the dependencies
+- \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\` → not here: agents are not tmux sessions. The
+  CAPITANO starts, lists and stops them with \`spawn_agent\`, \`list_agents\`, \`stop_agent\`
 
 The Python skills your instructions run are tools too, named after the script:
 \`db_query\`, \`db_insert\`, \`db_update\`, \`scout_dedup\` take the words that follow the
@@ -337,6 +339,11 @@ const REPLACED: Record<string, string> = {
   "jht-telegram-send": use("notify_user"),
   "jht-check-user-replies": use("check_user_replies"),
   "jht-install": "is not available here: the image carries every dependency. Report what is missing instead.",
+  // T21, the CAPITANO's team (FULLSTACK-1's launcher, T22): agents are containers the hub
+  // starts, not tmux sessions. The launcher picks the instance and holds every limit.
+  "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
+  "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
+  tmux: "is not available here: agents are not tmux sessions. Write to one with `send_message`; the CAPITANO lists, starts and stops them with `list_agents`, `spawn_agent`, `stop_agent`.",
 };
 
 const COMMAND_AT = new RegExp(
@@ -384,10 +391,10 @@ export const PYTHON_SKILLS: Record<string, string> = {
 };
 
 /** Scripts with no tool of their own but a native equivalent. */
-const PYTHON_EQUIVALENTS: Record<string, string> = { "throttle_engine.py": "throttle" };
+const PYTHON_EQUIVALENTS: Record<string, string> = { "throttle_engine.py": "throttle", "roll_worker_number.py": "spawn_agent" };
 
 /** `python3 [flags] [path/]<script>.py` anywhere in a text. */
-const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']*\/)?([A-Za-z0-9_]+\.py)\b/g;
+const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']*\/)?([A-Za-z0-9_-]+\.py)\b/g;
 
 /**
  * The role's prompt and skills as an API agent reads them: every
@@ -410,10 +417,17 @@ export function rewritePythonSkills(
     })
     // T10b: a script named as a file, not run — "Wrapper at `/app/shared/skills/db_insert.py`".
     // The image has no shared/, so it is the tool, or it is not here.
-    .replace(/(?<![\w./-])(?:\/app\/)?shared\/skills\/([A-Za-z0-9_]+\.py)\b/g, (_whole, script: string) => {
+    .replace(/(?<![\w./-])(?:\/app\/)?shared\/skills\/([A-Za-z0-9_-]+\.py)\b/g, (_whole, script: string) => {
       const tool = skills[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ? `the ${tool} tool` : `${script} (not available in the API harness)`;
     })
+    // T21: the CAPITANO's text points at the TUI's machinery, none of it in the image.
+    // The folder of the scripts is the tools; the launcher is the hub's spawn_agent.
+    .replace(/(?<![\w./-])\/app\/shared\/skills\/(?![\w.-])/g, "(the scripts are native tools in the API harness)")
+    .replace(/(?<![\w./-])\/app\/\.launcher\/start-agent\.sh\b/g, "spawn_agent")
+    .replace(/(?<![\w./-])\/app\/\.launcher\/([\w.-]+)/g, "$1 (not available in the API harness)")
+    .replace(/(?<![\w./-])\/app\/\.launcher\/(?![\w.-])/g, "(the launcher is not in the API harness)")
+    .replace(/(?<![\w./-])\/app\/cli\/bin\/jht\.js\b/g, "jht.js (not available in the API harness)")
     .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)")
     // T12: position-insert says "`check-url` deduplicates" beside the dedup gate, and
     // db-insert says `db-query check-url`: three runs in a row the SCOUT took it for a
