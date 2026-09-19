@@ -12,7 +12,8 @@
  * harness cannot load as it runs TypeScript directly, and it has no way back
  * from a lock left by a process that died — a `podman stop` past its timeout
  * would block every later start until someone removed the file by hand. Here
- * the lock names its process, and a lock whose process is gone is taken over.
+ * the lock names its process, and a lock whose process is gone is taken over —
+ * under a takeover guard, so two starts after a crash cannot both take it.
  * The lock lives under the runtime's state, which no agent's file tools reach.
  *
  * Liveness is a pid, so the lock holds among runs that share a pid namespace:
@@ -56,7 +57,18 @@ export class AgentLock {
   }
 
   /** Takes the lock for `agent` under `dir`, or throws `agent_running` naming who holds it. */
-  static acquire(options: { dir: string; agent: string; runId: string; pid?: number; now?: () => Date }): AgentLock {
+  static acquire(options: {
+    dir: string;
+    agent: string;
+    runId: string;
+    pid?: number;
+    now?: () => Date;
+    /**
+     * Test seam: runs after this start judged the lock stale and before it
+     * takes it over — the window a second start could use. Never set in production.
+     */
+    beforeTakeover?: () => void;
+  }): AgentLock {
     const id = agentInstanceId(options.agent);
     const path = join(options.dir, `${id}.lock`);
     const holder: Holder = {
@@ -66,36 +78,35 @@ export class AgentLock {
       startedAt: (options.now ?? (() => new Date()))().toISOString(),
     };
     mkdirSync(options.dir, { recursive: true, mode: 0o700 });
+    const refuse = (current: Holder | "writing") => {
+      const who =
+        current === "writing" ? "another run that is starting" : `pid ${current.pid}, started as '${current.agent}' at ${current.startedAt}`;
+      return new HarnessError(
+        "agent_running",
+        `${id} is already running (${who}). ` +
+          `'${options.agent}' would act as ${id} too: two runs would write the same claims and the same split. ` +
+          "Stop the other run, or start this one under another instance name.",
+      );
+    };
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const fd = openSync(path, "wx", 0o600);
-        try {
-          writeSync(fd, `${JSON.stringify(holder)}\n`);
-        } finally {
-          closeSync(fd);
-        }
-        return new AgentLock(path, holder);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (create(path, holder)) return new AgentLock(path, holder);
       const current = readHolder(path);
-      if (current === "writing" || (current !== null && isAlive(current.pid))) {
-        const who = current === "writing" ? "another run that is starting" : `pid ${current.pid}, started as '${current.agent}' at ${current.startedAt}`;
-        throw new HarnessError(
-          "agent_running",
-          `${id} is already running (${who}). ` +
-            `'${options.agent}' would act as ${id} too: two runs would write the same claims and the same split. ` +
-            "Stop the other run, or start this one under another instance name.",
-        );
-      }
-      // Its process is gone: the lock is stale. Take it over; if another run
-      // takes it first, the next attempt sees that run alive and refuses.
-      try {
-        unlinkSync(path);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
+      if (current === "writing" || (current !== null && isAlive(current.pid))) throw refuse(current);
+      options.beforeTakeover?.();
+      // The lock's process is gone. Removing it is read-then-unlink, and two
+      // starts doing that at once could each remove the other's new lock and
+      // both run. So only the holder of the takeover guard may remove it, and
+      // only after reading, under the guard, that it is still the same dead lock.
+      const taken = underGuard(`${path}.takeover`, () => {
+        const again = readHolder(path);
+        if (again === "writing" || (again !== null && isAlive(again.pid))) throw refuse(again);
+        if (again !== null && current !== null && (again.pid !== current.pid || again.runId !== current.runId)) return false;
+        removeIfPresent(path);
+        return create(path, holder);
+      });
+      if (taken === true) return new AgentLock(path, holder);
+      // Guard busy, or the lock changed hands: look again from the start.
     }
     throw new HarnessError("agent_running", `${id} is being started by another run at the same moment.`);
   }
@@ -112,6 +123,61 @@ export class AgentLock {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
+  }
+}
+
+/** Creates the lock file only if there is none. False when one exists. */
+function create(path: string, holder: Holder): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, "wx", 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw error;
+  }
+  try {
+    writeSync(fd, `${JSON.stringify(holder)}\n`);
+  } finally {
+    closeSync(fd);
+  }
+  return true;
+}
+
+/**
+ * Runs `work` holding the guard file, created exclusively. Returns undefined
+ * when another start holds it. A guard older than the grace period was left
+ * by a start that died mid-takeover, and is removed.
+ */
+function underGuard<T>(guard: string, work: () => T): T | undefined {
+  let fd: number;
+  try {
+    fd = openSync(guard, "wx", 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (ageMs(guard) >= WRITING_GRACE_MS) removeIfPresent(guard);
+    return undefined;
+  }
+  closeSync(fd);
+  try {
+    return work();
+  } finally {
+    removeIfPresent(guard);
+  }
+}
+
+function ageMs(path: string): number {
+  try {
+    return Date.now() - statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function removeIfPresent(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
 
