@@ -44,6 +44,7 @@ import {
   ToolRequest,
   type ToolResponse,
 } from "./protocol.ts";
+import { Launcher, SpawnRequest, StopRequest } from "./launcher.ts";
 
 export interface HubOptions {
   /** token → agent id (`scout-1`). */
@@ -64,6 +65,8 @@ export interface HubOptions {
   /** Messages one agent may send in a window (HUB-3): a loop fills no inbox. */
   sendLimit?: { max: number; windowMs: number };
   now?: () => number;
+  /** The CAPITANO's launcher (SICUREZZA §9). Absent: no one spawns through this hub. */
+  launcher?: Launcher;
   /** Test seam: the tools of an agent, instead of the ones its role lists. */
   toolsFor?: (agent: string, db: () => Database) => Promise<ToolHandler[]>;
 }
@@ -196,6 +199,18 @@ export function createHub(options: HubOptions): Server {
       case HUB_PATHS.replies:
         parse(EmptyRequest, body);
         return { replies: await replies.take(agent) };
+      case HUB_PATHS.spawn:
+      case HUB_PATHS.spawnStop:
+      case HUB_PATHS.spawnList: {
+        // Only a CAPITANO starts or stops children; a child never does, so the tree is one deep.
+        if (!Launcher.mayLaunch(agent)) throw new HttpError(403, "Only the CAPITANO starts or stops agents.");
+        const launcher = options.launcher;
+        if (!launcher) throw new HttpError(503, "This hub has no launcher.");
+        if (path === HUB_PATHS.spawn) return launcher.spawn(agent, parse(SpawnRequest, body));
+        if (path === HUB_PATHS.spawnStop) return launcher.stop(agent, parse(StopRequest, body).spawn_id);
+        parse(EmptyRequest, body);
+        return launcher.list(agent);
+      }
       default:
         throw new HttpError(404, "No such operation.");
     }

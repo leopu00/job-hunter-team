@@ -49,7 +49,7 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_PROFILE_DIR` | the person's profile: the rendered prompt points at it, every role reads it, no tool writes in it |
 | `JHT_API_DB` | the team's `jobs.db` (default `<JHT_API_HOME>/db/jobs.db`), created with the product's schema if missing; reached only through the db tools |
 | `JHT_API_APP_ROOT` | the folder holding `agents/` (default this checkout; `/app` in the image) |
-| `JHT_HUB_URL` + `JHT_HUB_TOKEN` | the team's database and channels are `jht-hub`'s (`docs/hub.md`): this runtime opens neither. Loopback URL only |
+| `JHT_HUB_URL` + `JHT_HUB_TOKEN` | the team's database and channels are `jht-hub`'s (`docs/hub.md`): this runtime opens neither. Loopback URL only. A CAPITANO on the hub gets `spawn_agent`, `stop_agent` and `list_agents` (`docs/launcher.md`) |
 | `JHT_API_PERMISSION_MODE` | `auto` (default), `ask`, `read-only` |
 | `JHT_API_MCP_CONFIG` | MCP servers to connect (Claude Code's JSON shape) |
 | `JHT_API_KEEP_HOME=1` | keep the role's home between runs |
