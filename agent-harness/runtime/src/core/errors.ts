@@ -18,7 +18,8 @@ export type HarnessErrorCode =
   | "input_too_large"
   | "provider_failed"
   | "model_incapable"
-  | "output_invalid";
+  | "output_invalid"
+  | "agent_running";
 
 export class HarnessError extends Error {
   readonly code: HarnessErrorCode;

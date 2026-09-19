@@ -15,9 +15,11 @@
  * - **Text only**: HTML becomes readable text; JSON, XML and plain text pass
  *   through; anything else is refused with a pointer to bash.
  * - **Paged**: a long page comes back in windows, with the offset of the next.
- * - **`format`**, as other agents' fetch tools take it: `markdown` and `text`
- *   give the readable text above, `html` the page's own markup. Models trained
- *   on those tools pass it unasked; refusing the key cost a round for nothing.
+ * - **`format`**, as other agents' fetch tools take it (models pass it
+ *   unasked; refusing the key cost a round for nothing). Every value gives the
+ *   readable text above, `html` included: the markup is never handed over —
+ *   scripts, styles, comments and attributes are where injected instructions
+ *   hide, and they are tokens the model pays for and cannot use.
  */
 
 import { z } from "zod";
@@ -59,7 +61,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): ToolHandler {
           format: z
             .enum(["markdown", "text", "html"])
             .optional()
-            .describe("markdown or text (default): readable text; html: the page's markup"),
+            .describe("accepted for compatibility; every value returns the page as readable text"),
         })
         .strict(),
     },
@@ -70,11 +72,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): ToolHandler {
     },
 
     async execute(args, context) {
-      const { url, offset = 0, format = "markdown" } = args as {
-        url: string;
-        offset?: number;
-        format?: "markdown" | "text" | "html";
-      };
+      const { url, offset = 0 } = args as { url: string; offset?: number };
 
       let current: URL;
       try {
@@ -123,8 +121,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): ToolHandler {
 
       const body = new TextDecoder().decode(response.body);
       const isHtml = type.includes("html") || (type === "" && /<html[\s>]/i.test(body));
-      const readable = isHtml && format !== "html";
-      const { title, text } = readable ? htmlToText(body) : { title: undefined, text: body };
+      const { title, text } = isHtml ? htmlToText(body) : { title: undefined, text: body };
 
       const header = [
         `URL: ${current.href}`,
