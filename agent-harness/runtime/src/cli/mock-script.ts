@@ -173,9 +173,61 @@ export const SCORER_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: the queue, one score and a pause on the native tools." },
 ];
 
-/** The rehearsal for a product role: the SCORER has its own, every other role plays the SCOUT's. */
+/** What the ANALISTA writes on the position it checks: RULE-04's five fields and the team note, RULE-13's metadata, RULE-16's summary. */
+const MOCK_ANALYSIS = [
+  "position", "1", "--status", "checked",
+  "--notes",
+  "EXPERIENCE_REQUIRED: 3\\nEXPERIENCE_TYPE: preferred\\nDEGREE: not required\\nLANGUAGE_REQUIRED: English\\nSENIORITY_JD: mid\\n\\nA product team that ships weekly: worth a look.",
+  "--jd-summary", "**Backend Developer** at Acme, hybrid in **Milan**.\\n- TypeScript services\\n- Weekly releases",
+  "--loc-city", "Milan", "--loc-country", "Italy", "--loc-country-code", "IT", "--work-mode", "hybrid",
+  "--salary-estimated-min", "40000", "--salary-estimated-max", "55000", "--salary-estimated-currency", "EUR", "--salary-estimated-source", "default",
+  "--role-family", "Backend Engineering", "--expires-at", "2099-12-31",
+];
+
+/**
+ * The ANALISTA's rehearsal (T14): its queue, the position, the deadline and
+ * the rough salary, the company registry, then the analysis written and the
+ * position moved `new` → `checked`, one highlight, a pause. It works on
+ * position #1, so the database needs one in `new`, as the SCOUT leaves it.
+ * No network tool: the rehearsal runs offline.
+ */
+export const ANALISTA_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "My queue, and the first position in it.",
+    toolCalls: [
+      { name: "db_query", args: { args: ["next-for-analista"] } },
+      { name: "db_query", args: { args: ["position", "1"] } },
+    ],
+  },
+  {
+    text: "Deadline, rough salary, and whether the company is known.",
+    toolCalls: [
+      { name: "deadline_extract", args: { args: ["--jd", "Applications close on 2099-12-31."] } },
+      { name: "salary_estimate", args: { args: ["--position-id", "1", "--stack", "typescript", "--seniority", "mid", "--country", "IT", "--mode", "hybrid"] } },
+      { name: "db_query", args: { args: ["company", "Acme"] } },
+      { name: "db_query", args: { args: ["active-categories"] } },
+    ],
+  },
+  {
+    text: "First time I meet Acme: into the registry. Then the analysis.",
+    toolCalls: [
+      { name: "db_insert", args: { args: ["company", "--name", "Acme", "--hq-country", "IT", "--sector", "software", "--verdict", "GO", "--analyzed-by", "analista-1"] } },
+      { name: "db_update", args: { args: MOCK_ANALYSIS } },
+      { name: "db_insert", args: { args: ["highlight", "--position-id", "1", "--type", "pro", "--text", "Weekly releases and a hybrid week"] } },
+    ],
+  },
+  { toolCalls: [{ name: "throttle", args: { reason: "one position per turn" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: one position analysed and moved to checked on the native tools." },
+];
+
+/** The rehearsal for a product role: the SCORER and the ANALISTA have their own, every other role plays the SCOUT's. */
 export function productRoleMockScript(role: string): ScriptedTurn[] {
-  return role === "scorer" ? SCORER_MOCK_SCRIPT : PRODUCT_ROLE_MOCK_SCRIPT;
+  if (role === "scorer") return SCORER_MOCK_SCRIPT;
+  if (role === "analista") return ANALISTA_MOCK_SCRIPT;
+  return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 
 /** A script from a JSON file: an array of `ScriptedTurn`. */

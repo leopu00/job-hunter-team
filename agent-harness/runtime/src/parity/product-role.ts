@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
-import { createSkillTools, type JobsDbHandle } from "./skills/index.ts";
+import { createSkillTools, scriptOverrides, type JobsDbHandle } from "./skills/index.ts";
 import {
   createJhtTools,
   FileMailbox,
@@ -83,7 +83,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     profileDir,
     locale,
   });
-  const rewrite = (text: string) => paths(rewritePythonSkills(text));
+  const overrides = scriptOverrides(loaded.skills.map((s) => s.name));
+  const rewrite = (text: string) => paths(rewritePythonSkills(text, overrides));
   const prompt = {
     ...loaded,
     identity: rewrite(loaded.identity),
@@ -111,6 +112,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     jhtHome: options.jhtHome,
     dedupLog,
     profileDir,
+    stateDir: options.apiHome,
   });
 
   return {
@@ -120,7 +122,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     pause,
     tools: (base) => [
       ...base.map((tool) =>
-        tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command) : tool,
+        tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool,
       ),
       ...native,
       ...skills,
