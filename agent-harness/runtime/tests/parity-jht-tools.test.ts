@@ -291,5 +291,9 @@ describe("rewritePythonSkills", () => {
     );
     expect(rewritePythonSkills("allowed-tools: Bash(python3 *)")).not.toMatch(/python3/);
     expect(rewritePythonSkills("no interpreter named here")).toBe("no interpreter named here");
+    // T10b: scripts named as files, with no python3 before them.
+    expect(rewritePythonSkills("Wrapper at `/app/shared/skills/db_insert.py`.")).toBe("Wrapper at `the db_insert tool`.");
+    expect(rewritePythonSkills("- `shared/skills/web_scrape_robust.py`")).toBe("- `web_scrape_robust.py (not available in the API harness)`");
+    expect(rewritePythonSkills("see my/shared/skills/x.py")).toBe("see my/shared/skills/x.py");
   });
 });
