@@ -76,6 +76,27 @@ interface State {
   spawns: Spawn[];
 }
 
+class LauncherStateError extends Error {}
+
+/** `state.json` as the launcher writes it: anything else is not its state. */
+const StateSchema = z.object({
+  session: z.string(),
+  spawns: z.array(
+    z.object({
+      id: z.string(),
+      agent: z.string(),
+      role: z.string(),
+      model: z.string(),
+      capUsd: z.number(),
+      requestedBy: z.string(),
+      at: z.number(),
+      state: z.enum(["queued", "running", "done", "failed", "stopped"]),
+      spentUsd: z.number().optional(),
+      exitCode: z.number().optional(),
+    }),
+  ),
+});
+
 /** What the host's executor writes back. */
 const Result = z
   .object({
@@ -129,11 +150,12 @@ export class Launcher {
 
   spawn(by: string, request: z.infer<typeof SpawnRequest>): SpawnAnswer {
     const c = this.#config;
-    const state = this.#refresh();
     const refuse = (reason: string): SpawnAnswer => {
       this.#write({ event: "refused", by, role: request.role, instance: request.instance, cap_usd: request.cap_usd, model: request.model, task: headline(request.task), reason });
       return { ok: false, reason };
     };
+    const state = this.#readable(refuse);
+    if (!("spawns" in state)) return state;
     if (this.#stopped()) return refuse("The operator's STOP is on: nothing starts.");
     const allowed = Object.hasOwn(c.roles, request.role) ? c.roles[request.role] : undefined;
     if (!allowed) return refuse(`${request.role || "(none)"} is not a role the launcher starts. Allowed: ${Object.keys(c.roles).join(", ")}.`);
@@ -193,7 +215,11 @@ export class Launcher {
 
   /** A CAPITANO stops only the children it started. */
   stop(by: string, spawnId: string): { ok: boolean; reason?: string } {
-    const state = this.#refresh();
+    const state = this.#readable((reason) => {
+      this.#write({ event: "stop_refused", by, spawn_id: spawnId, reason });
+      return { ok: false, reason };
+    });
+    if (!("spawns" in state)) return state;
     const spawn = state.spawns.find((s) => s.id === spawnId && s.requestedBy === by);
     if (!spawn) return { ok: false, reason: "No child of yours has that spawn_id." };
     if (spawn.state !== "queued" && spawn.state !== "running") return { ok: false, reason: `That child has already ended (${spawn.state}).` };
@@ -202,13 +228,26 @@ export class Launcher {
     return { ok: true };
   }
 
-  list(by: string): { session: string; left_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } {
-    const state = this.#refresh();
+  list(by: string): { session: string; left_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } | { ok: false; reason: string } {
+    const state = this.#readable((reason) => ({ ok: false as const, reason }));
+    if (!("spawns" in state)) return state;
     return {
       session: state.session,
       left_usd: round(this.#config.sessionUsd - this.#used(state)),
       spawns: state.spawns.filter((s) => s.requestedBy === by).map(({ requestedBy: _by, ...rest }) => rest),
     };
+  }
+
+  /** The state, or `refuse`'s answer, logged, when it cannot be read. */
+  #readable<T>(refuse: (reason: string) => T): State | T {
+    try {
+      return this.#refresh();
+    } catch (error) {
+      if (!(error instanceof LauncherStateError)) throw error;
+      const reason = `The launcher's state ${error.message}: nothing starts or stops through it until the operator checks it. The operator's STOP still works.`;
+      this.#write({ event: "state_unreadable", detail: error.message });
+      return refuse(reason);
+    }
   }
 
   /** The CAPITANO's own cap, the children still running at their caps, the ended ones at what they spent. */
@@ -223,14 +262,29 @@ export class Launcher {
     return this.#stopFile !== undefined && existsSync(this.#stopFile);
   }
 
-  /** The state, with what the executor reported since. */
+  /**
+   * The state, with what the executor reported since. No file is a fresh
+   * start; a file that cannot be read is not (L-1): starting over would empty
+   * the piggy bank and every count in silence, so it throws and nothing
+   * starts until the operator looks.
+   */
   #refresh(): State {
     let state: State = { session: this.#config.session, spawns: [] };
+    let text: string | undefined;
     try {
-      const saved = JSON.parse(readFileSync(this.#stateFile, "utf8")) as State;
+      text = readFileSync(this.#stateFile, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new LauncherStateError(`cannot be read (${(error as NodeJS.ErrnoException).code ?? "error"})`);
+    }
+    if (text !== undefined) {
+      let saved: State;
+      try {
+        saved = StateSchema.parse(JSON.parse(text)) as State;
+      } catch {
+        throw new LauncherStateError("is not a launcher state");
+      }
+      // Another session's state is the past: this session starts over.
       if (saved.session === this.#config.session) state = saved;
-    } catch {
-      // No state yet, or a new session.
     }
     let changed = false;
     const results = new Set(safeList(join(this.#spool, "results")));
