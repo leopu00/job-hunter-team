@@ -22,6 +22,13 @@ export interface Pricing {
   outputPerMTokUsd: number;
   /** USD per server-side web search, charged on top of the tokens it brings in. */
   webSearchPerCallUsd?: number;
+  /**
+   * USD per million tokens written to the provider's prefix cache, charged ON
+   * TOP of their input price. OpenAI reports them inside `inputTokens`; adding
+   * the full write price again overstates spend, which is the side a cap
+   * should err on.
+   */
+  cacheWritePerMTokUsd?: number;
 }
 
 export const ZERO_USAGE: Usage = { inputTokens: 0, outputTokens: 0 };
@@ -45,8 +52,13 @@ export function totalTokens(usage: Usage): number {
  * never treated as zero: callers must refuse a live run instead.
  */
 export function costUsd(usage: Usage, pricing: Pricing): number {
+  return inputCostUsd(usage, pricing) + (usage.outputTokens / 1_000_000) * pricing.outputPerMTokUsd;
+}
+
+/** The input side of `costUsd`: input tokens, plus the cache writes among them. */
+export function inputCostUsd(usage: Usage, pricing: Pricing): number {
   return (
     (usage.inputTokens / 1_000_000) * pricing.inputPerMTokUsd +
-    (usage.outputTokens / 1_000_000) * pricing.outputPerMTokUsd
+    ((usage.cacheWriteTokens ?? 0) / 1_000_000) * (pricing.cacheWritePerMTokUsd ?? 0)
   );
 }

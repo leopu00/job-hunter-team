@@ -303,7 +303,7 @@ describe("AiSdkProvider — web search", () => {
       text: "Tram 8 serves Monteverde.",
       sources: [{ url: "https://example.com/atac", title: "ATAC" }],
       searches: 2,
-      usage: { inputTokens: 120, outputTokens: 34, cachedInputTokens: 0 },
+      usage: { inputTokens: 120, outputTokens: 34, cachedInputTokens: 0, cacheWriteTokens: 0 },
     });
     expect(JSON.stringify(calls[0])).toContain("tram Monteverde");
   });
@@ -447,5 +447,23 @@ describe("OpenAI without server-side state, as the key proxy admits it", () => {
     expect(input).toContainEqual(expect.objectContaining({ type: "function_call_output", call_id: "call_1" }));
     // Every reasoning item that goes out carries its encrypted content.
     for (const item of input.filter((i) => i["type"] === "reasoning")) expect(item["encrypted_content"]).toBeTruthy();
+  });
+});
+
+describe("AiSdkProvider — cache writes (T1c)", () => {
+  it("maps a web search's cache writes from the provider", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: "found" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 8_712, noCache: 4_312, cacheRead: 0, cacheWrite: 4_400 },
+          outputTokens: { total: 194, text: 105, reasoning: 89 },
+        },
+        warnings: [],
+      }),
+    });
+    const provider = new AiSdkProvider({ profile: { ...PROFILE, providerId: "openai" as const, modelId: "gpt-5.6-luna", capabilities: { ...PROFILE.capabilities, webSearch: true } }, model });
+    expect((await provider.webSearch({ query: "q" })).usage.cacheWriteTokens).toBe(4_400);
   });
 });

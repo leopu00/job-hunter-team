@@ -41,8 +41,18 @@ interface CatalogEntry {
  */
 const WEB_SEARCH_PER_CALL_USD = 0.01;
 
-function usd(inputPerMTokUsd: number, outputPerMTokUsd: number, webSearchPerCallUsd = WEB_SEARCH_PER_CALL_USD): Pricing {
-  return { inputPerMTokUsd, outputPerMTokUsd, webSearchPerCallUsd };
+function usd(
+  inputPerMTokUsd: number,
+  outputPerMTokUsd: number,
+  webSearchPerCallUsd = WEB_SEARCH_PER_CALL_USD,
+  cacheWritePerMTokUsd?: number,
+): Pricing {
+  return {
+    inputPerMTokUsd,
+    outputPerMTokUsd,
+    webSearchPerCallUsd,
+    ...(cacheWritePerMTokUsd === undefined ? {} : { cacheWritePerMTokUsd }),
+  };
 }
 
 const CATALOG: Record<string, CatalogEntry> = {
@@ -51,9 +61,17 @@ const CATALOG: Record<string, CatalogEntry> = {
   // 2026-09-12. The API budget is OpenAI's, so only OpenAI is catalogued: any
   // other model runs live only with an explicit JHT_API_PRICE_* override.
   // Cheapest first; pick the cheapest one that holds the role.
-  // Search fee verified 2026-09-19 (see WEB_SEARCH_PER_CALL_USD): stated, not defaulted.
-  "gpt-5.6-luna": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.2, 1.2, 0.01) },
-  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.25, 2, 0.01) },
+  // luna and mini: developers.openai.com/api/docs/pricing, standard tier, reread
+  // from the VPS and here on 2026-09-19 (agents-hq/piani/web-search-prezzi-vps-res.txt).
+  // The page gives no threshold between short and long context, so luna is
+  // priced at its long-context rates, the higher ones: input 0.40 (short 0.20),
+  // output 1.80 (short 1.20), cache writes 0.50 (short 0.25), on top of input,
+  // as the key proxy charges them. gpt-5-mini has no long-context or
+  // cache-write price on the page (dashes): its short rates stand, and a cache
+  // write is charged at twice its input price, 0.50, as the proxy does.
+  // Search fee: see WEB_SEARCH_PER_CALL_USD, stated rather than defaulted.
+  "gpt-5.6-luna": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.4, 1.8, 0.01, 0.5) },
+  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.25, 2, 0.01, 0.5) },
   "gpt-5": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(1.25, 10) },
   "gpt-5.6-terra": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(2, 12) },
   "gpt-5.6-sol": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(4, 20) },

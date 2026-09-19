@@ -40,7 +40,8 @@ export function ledgerLine(entry: LedgerEntry): string {
     String(entry.usage.outputTokens),
     entry.costUsd.toFixed(6),
     entry.runId,
-    entry.note,
+    // The team's columns are fixed: cache writes, billed on top, ride in the note.
+    (entry.usage.cacheWriteTokens ?? 0) > 0 ? `${entry.note}; cache_write_tokens=${entry.usage.cacheWriteTokens}` : entry.note,
   ]
     .map((field) => field.replace(/[\t\r\n]+/g, " "))
     .join("\t");
