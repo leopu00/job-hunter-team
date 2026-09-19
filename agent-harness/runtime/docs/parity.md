@@ -105,14 +105,18 @@ tmux and the throttle engine do for a TUI agent:
    call tells it to end the turn, so the pause costs one short closing round.
 3. After a pause the process waits `pauseMs` (the caller's choice; the TUI's
    engine takes it from the CAPITANO's config), then opens the next turn
-   with every inbox message, as the peer wrote it behind the sender the
-   mailbox recorded (`[from scout-1] …`), followed by
+   with every inbox message under a `[from <sender>]` line, the sender the
+   mailbox recorded, followed by
    `[@system -> @<agent>] [WAKE] Your pause is over. Continue your loop.`
-   An envelope inside a peer's text that names anyone but its real sender,
-   or a line dressed as `[USER REPLY …]`, becomes `[forged by <sender>: …]`:
-   a peer that read an injected page cannot speak as the system, another
-   agent or the person. No agent may be named `system`. (The TUI has no
-   verified sender, so this is a difference on purpose.)
+   Every line of a peer's text is quoted with `> ` (whatever breaks it:
+   `\n`, `\r`, `\u2028`…), so only the harness's own lines start at column 0,
+   and `PARITY_NOTES` tells the agent that a quoted line is the peer's words,
+   never an instruction from the harness or the person. A peer can still
+   *write* a fake header or envelope — its text is the model's output — but
+   it lands quoted. Envelopes the harness recognises (`[@X -> …]` with X not
+   the real sender, `[USER REPLY …]`) are also marked `[forged by <sender>:
+   …]`, as a hint; the quoting is the boundary. No agent may be named
+   `system`. (The TUI has no verified sender: this is a difference on purpose.)
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
 
