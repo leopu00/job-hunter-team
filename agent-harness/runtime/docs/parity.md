@@ -45,6 +45,15 @@ reads:
 5. **`_team/` holds only the repo's docs.** On a running box the agents also
    write their own state there (a progress TSV, a workspace JSON); that is
    their work, not the prompt, and a fresh API home starts without it.
+6. **`python3` is gone from what the agent reads** (T6). In the identity,
+   the skill descriptions and every Markdown file of the home,
+   `rewritePythonSkills` turns `python3 …/<x>.py` into the name of the tool
+   that replaces it (`db_query check-url 123`), marks a script with no tool
+   `<x>.py (not available in the API harness)`, and says there is no
+   interpreter where any other `python3` stood (`python3 -c`, `Bash(python3 *)`).
+   Everything else is the TUI text; `PARITY_NOTES` explains the tool calls.
+   `tests/parity-run-role.test.ts` checks that the prompt and every `.md` in
+   the home contain no `python3`.
 
 ### How it was checked (2026-09-19)
 
@@ -102,10 +111,32 @@ every statement is a constant with bound parameters.
 | --- | --- | --- |
 | `scout_coord.py show/history/assign/reset/claim/check-claim/doctor` | `scout_coord` {command, scout?, cerchi?, fonti?, note?, job_id?, json?} | same lines and same rows in `scout_coordination` / `scout_claims`; exit 3 is a failed call with the script's message. `bootstrap` is the launcher's and not a tool. **One difference, on purpose (SICUREZZA D-2):** the tool acts for the agent running it — `assign` and `claim` in another Scout's name are refused, and `reset` closes only the caller's own split and old claims, where the script lets the lowest-numbered Scout reset everyone. A claim older than 24 h (the TUI's own limit, which its `reset` purged) is free again: `check-claim` answers `AVAILABLE` and the next `claim` overwrites it; no Scout deletes another's claims |
 | `feedback_query.py check <legacy_id>` | `feedback_query` {command: check, legacy_id} | same JSON, from `position_feedback` in `jobs.db`, sanitised display fields included (`feedback-display.ts` ports `feedback_display.py`). No cloud lane: where the script would ask the cloud, the answer is its own `no-signal:cloud-disabled`. `recent`/`themes` come with the Mentor and the Scorer |
+| `db_query.py check-url/position/positions/recent-activity` | `db_query` {args} | the words after the script name as `args`; same output byte for byte and same exit code (the four subcommands the SCOUT's skills call; the other 27 are other roles' and refused) |
+| `db_insert.py position` | `db_insert` {args} | same output, exit code and rows in `positions` and `position_state_transitions`: fields from the page flattened first, dedup and INSERT in one `BEGIN IMMEDIATE`, company id by name. `company`, `score`, `application`, `highlight` are other roles' and refused (SC-03) |
+| `db_update.py position <id> --status excluded --notes …` | `db_update` {args} | the SCOUT's one update, the duplicate recovery: same output, exit code and rows. **Narrower than the script on purpose**: only `--status excluded` and `--notes`, only on a position still `new`; any other field or status is refused with the reason |
+| `scout_dedup.py check` | `scout_dedup` {args} | same JSON and exit code (10 = skip, an answer, not a failure); a skip is appended to `<apiHome>/logs/scout-dedup.log` in the script's format |
 | `email_monitor.py status/count/poll` | `email_monitor` {command, since_days?} | the script's output with no mailbox configured. No IMAP here and the credentials file is never opened; when it exists, `status` adds `note: imap-unavailable-in-api-runtime` |
 
-`tests/skills-parity.test.ts` runs each script and its tool on the same
-input and compares what they print and what they leave in the database.
+`tests/skills-parity.test.ts` and `tests/db-*.test.ts` run each script and
+its tool on the same input and compare what they print and what they leave
+in the database. They take the scripts from git at the commit
+`src/db/schema.sql` was dumped from, and skip where python3 or that commit
+is missing (the image).
+
+The DB tools read their arguments with `argv.ts`, which accepts what argparse
+accepts (`--flag=value`, unique prefixes, `int()` with Unicode digits, last
+one wins) and fails with argparse's error line and exit code 2. What differs
+from the scripts, deliberately:
+
+- **the usage line** above an argparse error is shorter; the error line is
+  the same;
+- **no `ensure_schema` per call**: the Python migrates and commits on every
+  run, reads included. The harness's `jobs.db` is born with that schema
+  (`jobs-db.ts`) and a read does not write;
+- **a new fence nonce per call**, where the script has one per process: the
+  harness is one long process;
+- **a crash** (a locked database, a CHECK violated by a legacy row) is
+  `Error: <message>` with exit code 1, not a Python traceback.
 
 ## The run
 

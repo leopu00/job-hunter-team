@@ -67,6 +67,20 @@ export const DEFAULT_MOCK_SCRIPT: ScriptedTurn[] = [
  * stop. The second turn plays only with `--turns 2` or more. Written for the
  * SCOUT: another role lacks the Scout's tools and gets an unknown-tool answer.
  */
+/** The insert of the mock cycle, as the skill position-insert writes it. */
+const MOCK_INSERT = [
+  "position",
+  "--title", "Mock Engineer",
+  "--company", "Mock Ltd",
+  "--url", "https://jobs.example/mock-1",
+  "--location", "Milan, Italy",
+  "--remote-type", "hybrid",
+  "--source", "mock",
+  "--found-by", "scout-1",
+  "--jd-text", "A mock job description.",
+  "--requirements", "TypeScript",
+];
+
 export const PRODUCT_ROLE_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
   {
@@ -84,7 +98,23 @@ export const PRODUCT_ROLE_MOCK_SCRIPT: ScriptedTurn[] = [
       { name: "feedback_query", args: { command: "check", legacy_id: "1" } },
     ],
   },
-  { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: batch done, 0 new positions." } }] },
+  // T6: one position found, checked, inserted; then the same one again, which the dedup catches.
+  {
+    text: "Gate 1, then Gate 5.",
+    toolCalls: [
+      { name: "scout_dedup", args: { args: ["check", "--url", "https://jobs.example/mock-1", "--company", "Mock Ltd", "--title", "Mock Engineer"] } },
+      { name: "db_insert", args: { args: MOCK_INSERT } },
+    ],
+  },
+  {
+    text: "The same ad, found again on another board.",
+    toolCalls: [
+      { name: "scout_dedup", args: { args: ["check", "--url", "https://jobs.example/mock-1", "--company", "Mock Ltd", "--title", "Mock Engineer"] } },
+      { name: "db_insert", args: { args: MOCK_INSERT } },
+      { name: "db_query", args: { args: ["check-url", "https://jobs.example/mock-1"] } },
+    ],
+  },
+  { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: batch done, 1 new position." } }] },
   { toolCalls: [{ name: "throttle", args: { reason: "batch done" } }] },
   { text: "Paused." },
   { toolCalls: [{ name: "check_user_replies", args: {} }] },

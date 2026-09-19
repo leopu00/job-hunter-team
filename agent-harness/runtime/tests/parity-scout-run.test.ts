@@ -12,7 +12,7 @@ import { Guardrails } from "../src/core/guardrails.ts";
 import { MockProvider, type ScriptedTurn } from "../src/core/provider/mock.ts";
 import { RoleSession, type SessionEvent } from "../src/core/role-session.ts";
 import { prepareProductRole, runCycles, wakeMessage } from "../src/parity/product-role.ts";
-import { JHT_TOOL_NAMES } from "../src/parity/jht-tools.ts";
+import { JHT_TOOL_NAMES, rewritePythonSkills } from "../src/parity/jht-tools.ts";
 import { buildToolkit } from "../src/tools/toolkit.ts";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -91,7 +91,9 @@ describe("a mock SCOUT run", () => {
     // The model saw the TUI identity first, then the notes, then the skills.
     const scoutMd = await readFile(join(REPO_ROOT, "agents", "scout", "scout.md"), "utf8");
     const system = provider.requests[0]?.system ?? "";
-    expect(system.startsWith(scoutMd.trimEnd())).toBe(true);
+    // The TUI identity, with what it runs through python3 pointing at the tools (T6).
+    expect(system.startsWith(rewritePythonSkills(scoutMd).trimEnd())).toBe(true);
+    expect(system).not.toMatch(/python3/);
     expect(system).toContain("# Running as an API agent");
     expect(system).toContain("skills/scout-coord/SKILL.md");
     for (const name of JHT_TOOL_NAMES) expect(provider.requests[0]?.tools?.map((t) => t.name)).toContain(name);

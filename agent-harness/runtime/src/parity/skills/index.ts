@@ -8,6 +8,7 @@
  */
 
 import type { Database } from "../../db/jobs-db.ts";
+import { createDbTools } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
 import { createEmailMonitorTool } from "./email-monitor.ts";
 import { createFeedbackQueryTool } from "./feedback-query.ts";
@@ -27,6 +28,8 @@ export interface SkillToolsOptions {
   jobsDb?: JobsDbHandle | undefined;
   /** `$JHT_HOME`, as the scripts read it. */
   jhtHome?: string | undefined;
+  /** Where `scout-dedup.log` goes: the runtime's logs, not the person's JHT home. */
+  dedupLog?: string | undefined;
 }
 
 export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
@@ -36,5 +39,18 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   if (db && listed.has("scout-coord")) tools.push(createScoutCoordTool({ agent: options.agent, db: db.open, dbPath: db.path }));
   if (db && listed.has("feedback-query")) tools.push(createFeedbackQueryTool({ db: db.open, jhtHome: options.jhtHome }));
   if (listed.has("email-monitor")) tools.push(createEmailMonitorTool({ jhtHome: options.jhtHome }));
+  // T6: the DB skills. scout_dedup comes with db-insert: the check always precedes an insert.
+  if (db) {
+    const wanted = new Set<string>();
+    if (listed.has("db-query")) wanted.add("db_query");
+    if (listed.has("db-insert")) wanted.add("db_insert").add("scout_dedup");
+    if (listed.has("db-update")) wanted.add("db_update");
+    const dbTools = createDbTools({
+      db: db.open,
+      agent: options.agent,
+      ...(options.dedupLog ? { dedupLog: options.dedupLog } : {}),
+    });
+    tools.push(...dbTools.filter((t) => wanted.has(t.spec.name)));
+  }
   return tools;
 }

@@ -103,8 +103,9 @@ describe("schema.sql against shared/skills/_db.py", () => {
   it.skipIf(!tools)(`matches what ensure_schema() at ${source ?? "?"} creates, row for row`, () => {
     const src = join(root, "src");
     mkdirSync(src);
-    const tar = execFileSync("git", ["archive", source!, "shared/skills"], { cwd: join(RUNTIME, "..", ".."), maxBuffer: 64 << 20 });
-    execFileSync("tar", ["-x", "-C", src], { input: tar });
+    const archive = join(root, "skills.tar");
+    execFileSync("git", ["archive", `--output=${archive}`, source!, "shared/skills"], { cwd: join(RUNTIME, "..", "..") });
+    execFileSync("tar", ["-xf", archive, "-C", src]);
     const skills = join(src, "shared", "skills");
 
     // The file is what the script writes today from that source…

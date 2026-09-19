@@ -14,6 +14,7 @@ import {
   PARITY_NOTES,
   PauseRequest,
   replacedCommand,
+  rewritePythonSkills,
 } from "../src/parity/jht-tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
 
@@ -241,9 +242,10 @@ describe("guardShellTool", () => {
 
   it("lets every other command through", async () => {
     ran.length = 0;
-    const result = await guarded.execute({ command: "python3 /app/shared/skills/db_query.py positions" }, context);
+    // A skill with no native tool still goes to the shell (T6 made db_query.py one of the guarded ones).
+    const result = await guarded.execute({ command: "python3 /app/shared/skills/linkedin_check.py" }, context);
     expect(result).toEqual({ ok: true, content: "ran" });
-    expect(ran).toEqual(["python3 /app/shared/skills/db_query.py positions"]);
+    expect(ran).toEqual(["python3 /app/shared/skills/linkedin_check.py"]);
   });
 });
 
@@ -272,5 +274,22 @@ describe("replacedCommand", () => {
     expect(replacedCommand("echo 'use jht-send later'")).toBeNull();
     expect(replacedCommand("throttle-set scout 600")).toBeNull();
     expect(replacedCommand("python3 throttle_engine.py check")).toBeNull();
+  });
+});
+
+describe("rewritePythonSkills", () => {
+  it("points each python3 script at its tool, marks the rest, and leaves no interpreter", () => {
+    expect(rewritePythonSkills("python3 /app/shared/skills/db_query.py check-url 123")).toBe("db_query check-url 123");
+    expect(rewritePythonSkills("run `python3 $APP/shared/skills/db_insert.py position \\`")).toBe("run `db_insert position \\`");
+    expect(rewritePythonSkills("python3 -u /app/shared/skills/scout_coord.py show")).toBe("scout_coord show");
+    expect(rewritePythonSkills("python3 /app/shared/skills/throttle_engine.py check x")).toBe("throttle check x");
+    expect(rewritePythonSkills("python3 /app/shared/skills/linkedin_access.py search")).toBe(
+      "linkedin_access.py (not available in the API harness) search",
+    );
+    expect(rewritePythonSkills('jid=$(echo "$l" | python3 -c "import json")')).toBe(
+      'jid=$(echo "$l" | (no Python interpreter in the API harness) -c "import json")',
+    );
+    expect(rewritePythonSkills("allowed-tools: Bash(python3 *)")).not.toMatch(/python3/);
+    expect(rewritePythonSkills("no interpreter named here")).toBe("no interpreter named here");
   });
 });

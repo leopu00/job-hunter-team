@@ -280,6 +280,14 @@ instructions name for talking and pausing are tools here:
 - \`jht-check-user-replies\` → \`check_user_replies\`
 - \`jht-install\` → not available: the image carries the dependencies
 
+The Python skills your instructions run are tools too, named after the script:
+\`db_query\`, \`db_insert\`, \`db_update\`, \`scout_dedup\` take the words that follow the
+name as \`args\` (\`db_query check-url 123\` → \`db_query\` with \`args: ["check-url", "123"]\`),
+with the same output and exit code as the script. \`scout_coord\`, \`feedback_query\` and
+\`email_monitor\` take named arguments: see their schemas. A script marked
+"not available in the API harness" does not exist here, and there is no Python
+interpreter: read pages with the web tools.
+
 Messages from other agents arrive as user messages, as they would in your pane:
 each under a \`[from <agent>]\` line the harness writes, with every line of the
 agent's text quoted with \`> \`. Only lines that do not start with \`> \` come from
@@ -330,10 +338,36 @@ export function replacedCommand(command: string): string | null {
  * reaches the shell fails with nothing to learn from.
  */
 export const PYTHON_SKILLS: Record<string, string> = {
+  "db_query.py": "db_query",
+  "db_insert.py": "db_insert",
+  "db_update.py": "db_update",
+  "scout_dedup.py": "scout_dedup",
   "scout_coord.py": "scout_coord",
   "feedback_query.py": "feedback_query",
   "email_monitor.py": "email_monitor",
 };
+
+/** Scripts with no tool of their own but a native equivalent. */
+const PYTHON_EQUIVALENTS: Record<string, string> = { "throttle_engine.py": "throttle" };
+
+/** `python3 [flags] [path/]<script>.py` anywhere in a text. */
+const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']*\/)?([A-Za-z0-9_]+\.py)\b/g;
+
+/**
+ * The role's prompt and skills as an API agent reads them: every
+ * `python3 …/<script>.py` becomes the tool that replaces it (`db_query
+ * check-url 123`), or is marked unavailable, and any other mention of the
+ * interpreter says there is none. The TUI text is otherwise untouched; this
+ * is difference 6 in docs/parity.md.
+ */
+export function rewritePythonSkills(text: string): string {
+  return text
+    .replace(PYTHON_SCRIPT_TEXT, (_whole, script: string) => {
+      const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
+      return tool ?? `${script} (not available in the API harness)`;
+    })
+    .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)");
+}
 
 /** `python3 [flags] [path/]<script>.py` at a command position; the script's file name is captured. */
 const PYTHON_AT = new RegExp(

@@ -75,7 +75,9 @@ describe("which roles get which skill tools", () => {
     createSkillTools({ skills, agent: "scout-1", ...(withDb ? { jobsDb: db } : {}) }).map((t) => t.spec.name);
 
   it("gives a tool only for a skill the role lists", () => {
-    expect(names(["scout-coord", "feedback-query", "email-monitor", "db-query"])).toEqual(["scout_coord", "feedback_query", "email_monitor"]);
+    expect(names(["scout-coord", "feedback-query", "email-monitor", "db-query"])).toEqual(["scout_coord", "feedback_query", "email_monitor", "db_query"]);
+    // T6: scout_dedup comes with db-insert, since the check always precedes an insert.
+    expect(names(["db-insert", "db-update"])).toEqual(["db_insert", "db_update", "scout_dedup"]);
     expect(names(["feedback-query"])).toEqual(["feedback_query"]);
     expect(names(["tmux-send", "throttle"])).toEqual([]);
   });
