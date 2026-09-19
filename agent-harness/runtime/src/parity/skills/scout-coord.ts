@@ -38,6 +38,13 @@ export const SCOUT_COORD_TOOL = "scout_coord";
 const SCOUT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const DB_ORIGIN = "jobs_db";
 
+/**
+ * A claim older than this is free again (the TUI's own 24 h, which its
+ * `reset` purged). Nobody deletes a stale claim on another Scout's behalf:
+ * `check-claim` does not see it, and the next `claim` overwrites it.
+ */
+const LIVE_CLAIM = "claimed_at >= datetime('now', '-24 hours')";
+
 export interface ScoutCoordOptions {
   /** The agent running the tool: `scout-1`. Every write is in this name. */
   agent: string;
@@ -172,23 +179,28 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
       const scout = self(named);
       if (scout === null) return notYours(named!, "claim a position");
       const db = open();
-      const existing = db.prepare("SELECT scout, claimed_at FROM scout_claims WHERE job_id=?").get(job_id) as Row | undefined;
+      const existing = db
+        .prepare(`SELECT scout, claimed_at FROM scout_claims WHERE job_id=? AND ${LIVE_CLAIM}`)
+        .get(job_id) as Row | undefined;
       if (existing) return ok([`ALREADY_CLAIMED by ${pyStr(existing["scout"])} at ${pyStr(existing["claimed_at"])}`]);
-      try {
-        db.prepare("INSERT INTO scout_claims (job_id, scout) VALUES (?, ?)").run(job_id, scout);
-      } catch (error) {
-        // The primary key is the lock: a peer inserted between the SELECT and here.
-        if (isConstraint(error)) return ok(["ALREADY_CLAIMED (race condition)"]);
-        throw error;
-      }
-      return ok([`CLAIMED by ${scout}`]);
+      // One statement: a new claim, or the overwrite of an expired one. The
+      // primary key is still the lock, and the WHERE keeps a live claim a peer
+      // made since the SELECT: then nothing changes.
+      const { changes } = db
+        .prepare(
+          "INSERT INTO scout_claims (job_id, scout) VALUES (?, ?) " +
+            "ON CONFLICT(job_id) DO UPDATE SET scout=excluded.scout, claimed_at=CURRENT_TIMESTAMP " +
+            `WHERE NOT (scout_claims.${LIVE_CLAIM})`,
+        )
+        .run(job_id, scout);
+      return ok([changes === 1 ? `CLAIMED by ${scout}` : "ALREADY_CLAIMED (race condition)"]);
     },
 
     "check-claim"({ job_id }) {
       if (job_id === undefined) return usage("check-claim needs job_id.");
-      const existing = open().prepare("SELECT scout, claimed_at FROM scout_claims WHERE job_id=?").get(job_id) as
-        | Row
-        | undefined;
+      const existing = open()
+        .prepare(`SELECT scout, claimed_at FROM scout_claims WHERE job_id=? AND ${LIVE_CLAIM}`)
+        .get(job_id) as Row | undefined;
       return ok([existing ? `CLAIMED by ${pyStr(existing["scout"])} at ${pyStr(existing["claimed_at"])}` : "AVAILABLE"]);
     },
 
@@ -267,10 +279,4 @@ function ok(lines: string[]): ToolExecution {
 
 function usage(message: string): ToolExecution {
   return { ok: false, content: `Error: ${message}` };
-}
-
-/** SQLite's primary-key and unique violations: the extended codes of SQLITE_CONSTRAINT (19). */
-function isConstraint(error: unknown): boolean {
-  const code = (error as { errcode?: unknown } | null)?.errcode;
-  return typeof code === "number" && (code & 0xff) === 19;
 }
