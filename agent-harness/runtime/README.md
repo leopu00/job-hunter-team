@@ -14,11 +14,15 @@ and how to run it.
 npm install
 npm test               # offline: mock provider, no key, no network
 npm run typecheck
+npm run role -- --role scout --agent scout-1 --turns 2   # a product role, as its TUI twin
 npm run role -- --role demo --prompt path/to/prompt.md --task "Start."
 npm run monitor        # follow live runs; --list, --last, <run-id>, --verbose
 ```
 
-`npm run role` runs one role headless. Without `--mock-script` the mock plays
+`npm run role` runs one role headless. Without `--prompt` the role is a
+product role: prompt, skills and team docs come from `agents/<role>/` by the
+TUI launcher's rules, the `_tools` commands are native tools, and `--turns`
+and `--pause-ms` drive its cycle (`docs/parity.md`). Without `--mock-script` the mock plays
 a built-in rehearsal (todo list, file tools, bash, a subagent, a reply), so any
 prompt can be exercised end to end for free. Each run writes:
 

@@ -1,14 +1,25 @@
 /**
  * `npm run role` — run one role headless, on the API.
  *
- *   npm run role -- --role scout --prompt path/to/prompt.md --task "Start your cycle."
+ *   npm run role -- --role scout --agent scout-1 --turns 2
+ *   npm run role -- --role demo --prompt path/to/prompt.md --task "Start your cycle."
  *
  *   --role <name>        the role: names its home (~/.jht-api/agents/<role>) and its trace
- *   --prompt <file>      the role's full system prompt, sent verbatim
+ *   --prompt <file>      the role's full system prompt, sent verbatim. Without it the
+ *                        role is a product role, built from agents/<role>/ as the TUI
+ *                        launcher builds it (docs/parity.md)
+ *   --agent <name>       product role: the name peers address it by, which also names
+ *                        its home and trace (default: the role)
+ *   --turns <n>          product role: turns to run at most (default: 1)
+ *   --pause-ms <ms>      product role: how long a `throttle` pause lasts (default: 600000)
  *   --task <text>        the first message (default: "Start.")
  *   --task-file <file>   the first message, from a file
- *   --skills <dir>       folder copied into the home as skills/
+ *   --skills <dir>       folder copied into the home as skills/ (not with a product role)
  *   --mock-script <f>    JSON turns for the mock provider (default: a built-in rehearsal)
+ *
+ * A product role reads its repo from `JHT_API_APP_ROOT` (default: this
+ * checkout; `/app` in the container) and the person's locale from `JHT_HOME`
+ * (default: `~/.jht`), as the launcher does.
  *   --quiet              no live view: the trace file only
  *   --verbose            full prompt, arguments, outputs and process samples
  *
@@ -21,8 +32,9 @@
 
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { hostname, platform, release } from "node:os";
+import { homedir, hostname, platform, release } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { loadConfig, type Config } from "../config.ts";
@@ -36,8 +48,13 @@ import { RoleSession } from "../core/role-session.ts";
 import { JsonlTrace, sampleProcess, traceThen, type TraceSink } from "../core/trace.ts";
 import { displayPath } from "../tools/paths.ts";
 import { buildToolkit } from "../tools/toolkit.ts";
-import { DEFAULT_MOCK_SCRIPT, readMockScript } from "./mock-script.ts";
+import { prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
+import { resolveUserPath } from "../tools/paths.ts";
+import { DEFAULT_MOCK_SCRIPT, PRODUCT_ROLE_MOCK_SCRIPT, readMockScript } from "./mock-script.ts";
 import { c, TraceView } from "./render.ts";
+
+/** The checkout this file belongs to: `agent-harness/runtime/src/cli/` is four levels down. */
+const CHECKOUT_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 /** Kept outside `main` so a run that dies still records and shows why. */
 let emit: TraceSink | undefined;
@@ -52,23 +69,42 @@ async function main(): Promise<number> {
       task: { type: "string" },
       "task-file": { type: "string" },
       skills: { type: "string" },
+      agent: { type: "string" },
+      turns: { type: "string" },
+      "pause-ms": { type: "string" },
       "mock-script": { type: "string" },
       quiet: { type: "boolean", default: false },
       verbose: { type: "boolean", default: false },
     },
     strict: true,
   });
-  if (!values.role || !values.prompt) {
-    throw new HarnessError("config_invalid", "Usage: npm run role -- --role <name> --prompt <file> [--task <text>]");
+  if (!values.role) {
+    throw new HarnessError(
+      "config_invalid",
+      "Usage: npm run role -- --role <name> [--prompt <file>] [--task <text>] [--agent <name>] [--turns <n>]",
+    );
   }
+  // No prompt file: a product role, built from agents/<role>/ like its TUI twin.
+  const product = values.prompt === undefined;
+  if (product && values.skills) {
+    throw new HarnessError("config_invalid", "--skills is for a --prompt role; a product role takes its skills from agents/<role>/.");
+  }
+  if (!product && (values.agent || values.turns || values["pause-ms"])) {
+    throw new HarnessError("config_invalid", "--agent, --turns and --pause-ms are for a product role, without --prompt.");
+  }
+  const turns = positiveInt(values.turns ?? "1", "--turns");
+  const pauseMs = positiveInt(values["pause-ms"] ?? "600000", "--pause-ms", true);
 
-  const config = loadConfig(process.env, values.role);
+  const config = loadConfig(process.env, values.agent ?? values.role);
   const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
   const startedAt = Date.now();
 
-  const systemPrompt = (await readFile(values.prompt, "utf8")).trimEnd();
   const task = values["task-file"] ? (await readFile(values["task-file"], "utf8")).trim() : (values.task ?? "Start.");
-  const script = values["mock-script"] ? await readMockScript(values["mock-script"]) : DEFAULT_MOCK_SCRIPT;
+  const script = values["mock-script"]
+    ? await readMockScript(values["mock-script"])
+    : product
+      ? PRODUCT_ROLE_MOCK_SCRIPT
+      : DEFAULT_MOCK_SCRIPT;
 
   const provider = await resolveProvider(config, script);
   const pricing = config.profile.pricing;
@@ -104,6 +140,24 @@ async function main(): Promise<number> {
     ...(values.skills ? { skillsSource: values.skills } : {}),
   });
 
+  let role: ProductRole | undefined;
+  let systemPrompt: string;
+  if (values.prompt === undefined) {
+    const env = process.env;
+    role = await prepareProductRole({
+      appRoot: resolveUserPath(env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT, process.cwd(), homedir()),
+      role: values.role,
+      agent: config.role,
+      homeDir: config.agentHome,
+      apiHome: config.apiHome,
+      jhtHome: resolveUserPath(env["JHT_HOME"]?.trim() || "~/.jht", process.cwd(), homedir()),
+      env,
+    });
+    systemPrompt = role.systemPrompt.trimEnd();
+  } else {
+    systemPrompt = (await readFile(values.prompt, "utf8")).trimEnd();
+  }
+
   // Headless: nobody is at a keyboard, so `ask` mode denies what it would ask.
   const toolkit = await buildToolkit(config, { provider });
   const session = new RoleSession({
@@ -111,7 +165,7 @@ async function main(): Promise<number> {
     guardrails,
     audit,
     systemPrompt,
-    tools: toolkit.tools,
+    tools: role ? role.tools(toolkit.tools) : toolkit.tools,
     permissions: toolkit.permissions,
     workdir: config.workdir,
     platform: toolkit.platform,
@@ -160,7 +214,11 @@ async function main(): Promise<number> {
   stopSampling = sampleProcess(sink);
 
   try {
-    await session.send(task);
+    if (role) {
+      await runCycles(session, { agent: config.role, task, maxTurns: turns, mailbox: role.mailbox, pause: role.pause, pauseMs });
+    } else {
+      await session.send(task);
+    }
   } finally {
     await toolkit.close();
   }
@@ -171,6 +229,14 @@ async function main(): Promise<number> {
   sink({ type: "run_finished", reason: "completed", steps, toolCalls, usage, costUsd, durationMs: Date.now() - startedAt });
   settle("completed");
   return 0;
+}
+
+function positiveInt(raw: string, flag: string, zeroOk = false): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < (zeroOk ? 0 : 1)) {
+    throw new HarnessError("config_invalid", `${flag} must be a whole number${zeroOk ? "" : " above zero"}; got '${raw}'.`);
+  }
+  return value;
 }
 
 /**
