@@ -42,6 +42,7 @@ import { prepareAgentHome, writeIdentity } from "../core/agent-home.ts";
 import { JsonlAuditLog } from "../core/audit.ts";
 import { HarnessError, isHarnessError } from "../core/errors.ts";
 import { Guardrails } from "../core/guardrails.ts";
+import { AgentLock } from "../core/agent-lock.ts";
 import { appendLedger } from "../core/ledger.ts";
 import { resolveProvider } from "../core/provider/resolve.ts";
 import { RoleSession } from "../core/role-session.ts";
@@ -103,6 +104,12 @@ async function main(): Promise<number> {
   const config = loadConfig(process.env, values.agent ?? values.role);
   const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
   const startedAt = Date.now();
+
+  // One process per agent, and `scout` is `scout-1`: taken before anything is
+  // written, released however the process exits (a lock left by a killed one
+  // is taken over by the next start).
+  const lock = AgentLock.acquire({ dir: join(config.apiHome, "locks"), agent: config.role, runId });
+  process.once("exit", () => lock.release());
 
   const task = values["task-file"] ? (await readFile(values["task-file"], "utf8")).trim() : (values.task ?? "Start.");
   const script = values["mock-script"]
