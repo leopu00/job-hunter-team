@@ -517,8 +517,32 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
     ]) {
       expect((await call("db_update", args)).ok, args.join(" ")).toBe(true);
     }
-    // A scored position that closed can be excluded (RULE-14 care mode).
-    expect((await call("db_update", ["position", "1", "--status", "excluded", "--is-open", "false", "--last-open-check", "now", "--notes", "[SCADUTO] 404"])).ok).toBe(true);
+    // SICUREZZA A-3: a scored position is closed only on proof, the liveness check that confirmed it and its evidence.
+    const before3 = fullSnapshot(ourDb);
+    for (const args of [
+      ["position", "1", "--status", "excluded", "--notes", "[SCADUTO] 404"],
+      ["position", "1", "--is-open", "false", "--last-open-check", "now"],
+      ["position", "1", "--status", "excluded", "--action", "liveness_check", "--outcome", "confirmed_closed"],
+      ["position", "1", "--status", "excluded", "--action", "liveness_check", "--outcome", "unchanged", "--evidence-code", "404"],
+      ["position", "1", "--status", "excluded", "--action", "exclude", "--outcome", "confirmed_closed", "--evidence-code", "404"],
+      ["position", "1", "--is-open", "false", "--outcome", "confirmed_closed", "--evidence-url", "https://a.example/x"],
+    ]) {
+      const r = await call("db_update", args);
+      expect(r.ok, args.join(" ")).toBe(false);
+      expect(r.content, args.join(" ")).toMatch(/is 'scored': past the analysis it is closed only on proof\. Add --action liveness_check --outcome confirmed_closed/);
+    }
+    expect(fullSnapshot(ourDb)).toEqual(before3);
+    // With the proof it closes (RULE-14 care mode), and the history keeps the evidence.
+    expect(
+      (await call("db_update", ["position", "1", "--status", "excluded", "--is-open", "false", "--last-open-check", "now", "--notes", "[SCADUTO] 404",
+        "--action", "liveness_check", "--outcome", "confirmed_closed", "--evidence-code", "404"])).ok,
+    ).toBe(true);
+    expect(ourDb.prepare("SELECT status, is_open FROM positions WHERE id = 1").get()).toEqual({ status: "excluded", is_open: 0 });
+    expect(ourDb.prepare("SELECT DISTINCT action, outcome, evidence_code FROM maintenance_events WHERE target_id = 1 AND by_agent = 'analista-1' AND field = 'status'").all()).toEqual([
+      { action: "liveness_check", outcome: "confirmed_closed", evidence_code: 404 },
+    ]);
+    // A position still in analysis is excluded on judgement, no proof needed (RULE-06).
+    expect((await call("db_update", ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [GEO]"])).ok).toBe(true);
   });
 });
 

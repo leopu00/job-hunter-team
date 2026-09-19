@@ -47,6 +47,13 @@ export interface PositionUpdateRule {
    * its link or its salary.
    */
   later?: { statuses: readonly string[]; fields: readonly string[] };
+  /**
+   * On a row in the `later` statuses, closing it (`--status excluded`, or
+   * `--is-open false`) takes a recorded proof: the liveness check that
+   * confirmed it closed, and its evidence (SICUREZZA A-3). A scored or ready
+   * position is the Scorer's and the Scrittore's work already paid for.
+   */
+  laterCloseNeedsProof?: boolean;
   /** Said when a call is refused: what this role's update is for. */
   purpose: string;
 }
@@ -100,6 +107,7 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
           "action", "outcome", "evidence_kind", "evidence_url", "evidence_code", "evidence_hash", "duration_ms",
         ],
       },
+      laterCloseNeedsProof: true,
       purpose: "The ANALISTA moves a position new → checked or excluded, and excludes a later one only on proof it closed (analista.md RULE-06/14).",
     },
   },
