@@ -236,21 +236,48 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
 }
 
 /**
+ * What an API agent is told that a TUI agent is not: where its commands went.
+ * It follows the identity in the system prompt (`composeSystemPrompt`) and is
+ * the only prose the harness adds — `docs/parity.md` lists it as the one
+ * expected difference in the prompt diff. Kept short: it is paid on every round.
+ */
+export const PARITY_NOTES = `# Running as an API agent
+
+You run inside the JHT API harness, not in a terminal session. The commands your
+instructions name for talking and pausing are tools here:
+
+- \`jht-tmux-send <SESSION> "<msg>"\` → \`send_message\` (to, text)
+- \`jht-send "<msg>"\` → \`chat_reply\` (text)
+- \`throttle <you>\`, \`jht-throttle*\` → \`throttle\`, then end your turn
+- \`throttle-ack\` → nothing: the harness records your wake-up
+- \`jht-notify-user\`, \`jht-telegram-send\` → \`notify_user\`
+- \`jht-check-user-replies\` → \`check_user_replies\`
+- \`jht-install\` → not available: the image carries the dependencies
+
+Messages from other agents and from the person arrive as user messages, as they
+would in your pane. Every other command in your instructions runs with the shell tool.`;
+
+function use(tool: string): string {
+  return `does not exist here. Use the \`${tool}\` tool instead.`;
+}
+
+/**
  * The commands a TUI agent runs from its shell that have a native tool here,
  * or no place in an API agent at all. Matched at a command position: at the
  * start, or after `;`, `&&`, `||`, `|`, `(` or `$(`.
  */
 const REPLACED: Record<string, string> = {
-  "jht-tmux-send": "send_message",
-  "jht-send": "chat_reply",
-  throttle: "throttle",
-  "jht-throttle": "throttle",
-  "jht-throttle-check": "throttle",
-  "jht-throttle-wait": "throttle",
-  "throttle-ack": "",
-  "jht-notify-user": "notify_user",
-  "jht-telegram-send": "notify_user",
-  "jht-check-user-replies": "check_user_replies",
+  "jht-tmux-send": use("send_message"),
+  "jht-send": use("chat_reply"),
+  throttle: use("throttle"),
+  "jht-throttle": use("throttle"),
+  "jht-throttle-check": use("throttle"),
+  "jht-throttle-wait": use("throttle"),
+  "throttle-ack": "is not needed here: the harness records your wake-up itself.",
+  "jht-notify-user": use("notify_user"),
+  "jht-telegram-send": use("notify_user"),
+  "jht-check-user-replies": use("check_user_replies"),
+  "jht-install": "is not available here: the image carries every dependency. Report what is missing instead.",
 };
 
 const COMMAND_AT = new RegExp(
@@ -279,13 +306,7 @@ export function guardShellTool(shell: ToolHandler, commandOf: (args: unknown) =>
     async execute(args, context) {
       const found = replacedCommand(commandOf(args));
       if (found === null) return shell.execute(args, context);
-      const native = REPLACED[found];
-      return {
-        ok: false,
-        content: native
-          ? `Error: \`${found}\` does not exist here. Use the \`${native}\` tool instead; nothing was run.`
-          : `Error: \`${found}\` is not needed here: the harness records your wake-up itself. Nothing was run.`,
-      };
+      return { ok: false, content: `Error: \`${found}\` ${REPLACED[found]} Nothing was run.` };
     },
   };
 }

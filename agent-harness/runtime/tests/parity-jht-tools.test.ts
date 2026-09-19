@@ -11,6 +11,7 @@ import {
   FileUserReplies,
   guardShellTool,
   JHT_TOOL_NAMES,
+  PARITY_NOTES,
   PauseRequest,
   replacedCommand,
 } from "../src/parity/jht-tools.ts";
@@ -152,6 +153,8 @@ describe("guardShellTool", () => {
 
     const ack = await guarded.execute({ command: "throttle-ack scout-1" }, context);
     expect(ack.content).toContain("not needed");
+    const install = await guarded.execute({ command: "jht-install py requests" }, context);
+    expect(install.content).toContain("not available");
     expect(ran).toEqual([]);
   });
 
@@ -160,6 +163,16 @@ describe("guardShellTool", () => {
     const result = await guarded.execute({ command: "python3 /app/shared/skills/db_query.py positions" }, context);
     expect(result).toEqual({ ok: true, content: "ran" });
     expect(ran).toEqual(["python3 /app/shared/skills/db_query.py positions"]);
+  });
+});
+
+describe("PARITY_NOTES", () => {
+  it("names every native tool and every command the guard stops", () => {
+    for (const name of JHT_TOOL_NAMES) expect(PARITY_NOTES).toContain(`\`${name}\``);
+    for (const command of ["jht-tmux-send", "jht-send", "throttle-ack", "jht-telegram-send", "jht-install"]) {
+      expect(PARITY_NOTES).toContain(command);
+      expect(replacedCommand(`${command} x`)).toBe(command);
+    }
   });
 });
 
