@@ -32,7 +32,7 @@ function seeded(path: string): Database {
 }
 
 function tools(db: Database, extra: { dedupLog?: string } = {}) {
-  const list = createDbTools({ db: () => db, agent: "scout-1", now: () => new Date("2026-09-19T15:00:00.123Z"), ...extra });
+  const list = createDbTools({ db: () => db, agent: "scout-1", now: () => new Date("2026-09-19T15:00:00.123Z"), nonce: () => "0badf00d", ...extra });
   return (name: string) => {
     const tool = list.find((t) => t.spec.name === name) as ToolHandler;
     return (args: string[]) => tool.execute(tool.spec.schema.parse({ args }), context);
@@ -90,11 +90,31 @@ describe("db_insert position against db_insert.py", () => {
         expect(result.content.split("\n").at(-2)).toBe(pyRun.stderr.trim().split("\n").at(-1));
       } else {
         expect(result.ok).toBe(py.exitCode === 0);
-        expect(result.content).toBe(py.exitCode === 0 ? py.stdout.trimEnd() : `${py.stdout.trimEnd()}\n(exit code ${py.exitCode})`);
+        // D-4: the existing row's company and title come back fenced; the rest is the Python's text.
+        const unfenced = result.content.replaceAll("\u27e6EXT\u00b70badf00d\u27e7", "").replaceAll("\u27e6/EXT\u00b70badf00d\u27e7", "");
+        expect(unfenced).toBe(py.exitCode === 0 ? py.stdout.trimEnd() : `${py.stdout.trimEnd()}\n(exit code ${py.exitCode})`);
       }
-      expect(snapshot(ourDb)).toEqual(snapshot(pyDb));
+      // D-5: found_by is the agent, whatever --found-by said; every other column is the Python's.
+      const withoutFoundBy = (snap: ReturnType<typeof snapshot>) => ({
+        ...snap,
+        positions: snap.positions.map(({ found_by: _f, ...rest }) => rest),
+      });
+      expect(withoutFoundBy(snapshot(ourDb))).toEqual(withoutFoundBy(snapshot(pyDb)));
+      const inserted = snapshot(ourDb).positions.slice(2);
+      for (const row of inserted) expect(row["found_by"]).toBe("scout-1");
     },
   );
+
+  it("fences the existing row in a DUPLICATE answer (D-4) and records the agent as finder (D-5)", async () => {
+    const db = seeded(join(root, "d.db"));
+    const insert = tools(db)("db_insert");
+    const dup = await insert(["position", "--title", "X", "--company", "Y", "--url", "https://acme.example/jobs/1"]);
+    expect(dup.content).toContain(
+      "(\u27e6EXT\u00b70badf00d\u27e7Acme\u27e6/EXT\u00b70badf00d\u27e7 \u2014 \u27e6EXT\u00b70badf00d\u27e7Software Engineer, Junior\u27e6/EXT\u00b70badf00d\u27e7)",
+    );
+    await insert(["position", "--title", "New", "--company", "Z", "--url", "https://z.example/1", "--found-by", "capitano"]);
+    expect(db.prepare("SELECT found_by FROM positions WHERE url = ?").get("https://z.example/1")).toEqual({ found_by: "scout-1" });
+  });
 
   it("refuses what the SCOUT does not write, and logs a skipped duplicate like the Python", async () => {
     const db = seeded(join(root, "a.db"));
