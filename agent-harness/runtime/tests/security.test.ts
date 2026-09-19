@@ -133,6 +133,16 @@ describe("protected paths: ssh keys and .env never reach the model", () => {
     expect(result.content).not.toContain(FAKE_KEY);
   });
 
+  it("grep from a parent folder does not walk into another role's home", async () => {
+    const other = join(home, ".jht-api", "agents", "analista");
+    await mkdir(other, { recursive: true });
+    await writeFile(join(other, "walked.md"), `walked ${FAKE_KEY}\n`);
+    for (const path of [home, join(home, ".jht-api"), join(home, ".jht-api", "agents")]) {
+      const result = await call(autoPolicy(), "grep", { pattern: "walked", path });
+      expect(result.content, path).not.toContain(FAKE_KEY);
+    }
+  });
+
   it("recognises other common credential files", () => {
     for (const p of ["/h/.git-credentials", "/h/.config/gh/hosts.yml", "/h/.aws/credentials", "/h/.netrc"]) {
       expect(isSensitivePath(p), p).toBe(true);
