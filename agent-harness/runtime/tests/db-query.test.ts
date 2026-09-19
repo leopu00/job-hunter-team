@@ -229,6 +229,18 @@ describe("scout_dedup check against scout_dedup.py", () => {
     expect(ours.ok).toBe(theirs.status === 0 || theirs.status === 10);
   });
 
+  it.skipIf(skills === null)("answers check-url with argparse's own error, then points at db_query (T10)", async () => {
+    const { call, py } = twins();
+    const ours = await call("scout_dedup", ["check-url", "https://beta.example/dev"]);
+    const theirs = py("scout_dedup.py", ["check-url", "https://beta.example/dev"]);
+    expect(theirs.status).toBe(2);
+    const lines = ours.content.split("\n");
+    expect(lines).toContain(theirs.stderr.trim().split("\n").at(-1));
+    expect(ours.content).toContain("check-url is a db_query subcommand: db_query check-url <url>");
+    expect(lines.at(-1)).toBe("(exit code 2)");
+    expect(ours.ok).toBe(false);
+  });
+
   it.skipIf(skills === null)("logs a skip as the Python does, field for field", async () => {
     const { call, py } = twins();
     const args = ["check", "--url", "https://beta.example/dev", "--company", "Zürich", "--title", "Tëst \"q\""];

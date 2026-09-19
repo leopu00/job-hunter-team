@@ -77,7 +77,11 @@ describe("npm run role -- --role scout (a product role)", () => {
 
     const scoutMd = await readFile(join(RUNTIME, "..", "..", "agents", "scout", "scout.md"), "utf8");
     const prompt = records.find((r) => r.type === "system_prompt")?.["text"] as string;
-    expect(prompt.startsWith(rewritePythonSkills(scoutMd).trimEnd())).toBe(true);
+    // The TUI identity through the two documented rewrites: python3 calls (T6) and document paths (T10).
+    const { createPathRewriter } = await import("../src/parity/prompt-paths.ts");
+    const homeSkills = new Set(await readdir(join(root, "api", "agents", "scout-1", "skills")));
+    const paths = createPathRewriter({ appRoot: join(RUNTIME, "..", ".."), homeSkills, dedupLog: join(root, "api", "logs", "scout-dedup.log") });
+    expect(prompt.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));
@@ -91,6 +95,20 @@ describe("npm run role -- --role scout (a product role)", () => {
       { title: "Mock Engineer", found_by: "scout-1", status: "new" },
     ]);
     db.close();
+
+    // T10: every document the prompt and the home's Markdown point at is a file this agent can open.
+    const { documentPaths, onDisk } = await import("../src/parity/prompt-paths.ts");
+    const { existsSync } = await import("node:fs");
+    const homeDir = join(root, "api", "agents", "scout-1");
+    const texts = [prompt];
+    for (const f of (await readdir(homeDir, { recursive: true })).filter((p) => p.endsWith(".md"))) {
+      texts.push(await readFile(join(homeDir, f), "utf8"));
+    }
+    const appRoot = join(RUNTIME, "..", "..");
+    const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot)))];
+    expect(referenced.length).toBeGreaterThan(20);
+    expect(referenced.filter((p) => !existsSync(onDisk(p, homeDir)))).toEqual([]);
+    for (const t of texts) expect(t).not.toMatch(/(?<![\w./-])(?:\/jht_home\/|\/app\/)?agents\/_(?:skills|manual|team)\//);
 
     // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.
     const home = join(root, "api", "agents", "scout-1");

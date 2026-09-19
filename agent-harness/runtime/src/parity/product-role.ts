@@ -13,6 +13,7 @@
 import { join } from "node:path";
 
 import type { ToolHandler } from "../tools/registry.ts";
+import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, type JobsDbHandle } from "./skills/index.ts";
 import {
   createJhtTools,
@@ -67,14 +68,22 @@ export interface ProductRole {
 export async function prepareProductRole(options: ProductRoleOptions): Promise<ProductRole> {
   const locale = await resolveUserLocale({ jhtHome: options.jhtHome, ...(options.env ? { env: options.env } : {}) });
   const loaded = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
+  const dedupLog = join(options.apiHome, "logs", "scout-dedup.log");
   // T6: what the prompt tells the agent to run with python3 is a tool here.
+  // T10: and the documents it names are where this agent can open them.
+  const paths = createPathRewriter({
+    appRoot: options.appRoot,
+    homeSkills: new Set(loaded.skills.map((s) => s.name)),
+    dedupLog,
+  });
+  const rewrite = (text: string) => paths(rewritePythonSkills(text));
   const prompt = {
     ...loaded,
-    identity: rewritePythonSkills(loaded.identity),
-    skills: loaded.skills.map((s) => ({ ...s, description: rewritePythonSkills(s.description) })),
+    identity: rewrite(loaded.identity),
+    skills: loaded.skills.map((s) => ({ ...s, description: rewrite(s.description) })),
   };
   const systemPrompt = composeSystemPrompt(prompt, PARITY_NOTES);
-  await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewritePythonSkills);
+  await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");
   const mailbox = new FileMailbox(join(channels, "mailbox"));
@@ -93,7 +102,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     agent: options.agent,
     jobsDb: options.jobsDb,
     jhtHome: options.jhtHome,
-    dedupLog: join(options.apiHome, "logs", "scout-dedup.log"),
+    dedupLog,
   });
 
   return {
