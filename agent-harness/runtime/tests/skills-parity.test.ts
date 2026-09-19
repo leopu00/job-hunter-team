@@ -509,4 +509,34 @@ describe.skipIf(!HAS_PYTHON)("feedback_query recent and themes ↔ feedback_quer
     }
     db.close();
   });
+
+  it("takes an id as the SCORER's prompt writes it: one value or a list, text or number (T22)", async () => {
+    const pyDb = join(root, "py", "jobs.db");
+    const tsDb = join(root, "ts", "jobs.db");
+    seed(pyDb);
+    seed(tsDb);
+    const db = openJobsDb(tsDb);
+    const tool = createFeedbackQueryTool({ db: () => db, jhtHome });
+    const base = { command: "themes", legacy_ids: "1,2,3,4,5,6,99", min_positions: 1, top: 10 };
+    const pyBase = ["themes", "--legacy-ids", "1,2,3,4,5,6,99", "--min-positions", "1", "--top", "10"];
+
+    // scorer.md: `--exclude-legacy-id <legacy_id>`, one value. The live chain of 19/09 sent it as a string.
+    const one = python("feedback_query.py", [...pyBase, "--exclude-legacy-id", "3"], { JHT_DB: pyDb }).stdout;
+    for (const exclude of ["3", 3, ["3"], [3]]) {
+      expect((await native(tool, { ...base, exclude_legacy_id: exclude })).content, JSON.stringify(exclude)).toBe(one);
+    }
+    const two = python("feedback_query.py", [...pyBase, "--exclude-legacy-id", "3", "--exclude-legacy-id", "5"], { JHT_DB: pyDb }).stdout;
+    expect((await native(tool, { ...base, exclude_legacy_id: [3, "5"] })).content).toBe(two);
+    // legacy_ids as a list reads as the script's comma-separated text.
+    expect((await native(tool, { ...base, legacy_ids: [1, 2, 3, 4, 5, 6, 99], exclude_legacy_id: "3" })).content).toBe(one);
+    // check with a number.
+    const check = python("feedback_query.py", ["check", "2"], { JHT_DB: pyDb }).stdout;
+    expect((await native(tool, { command: "check", legacy_id: 2 })).content).toBe(check);
+
+    // What is not an id is still refused before the tool runs, with the schema's reason.
+    for (const bad of [{ id: 3 }, "", [[3]], 1.5]) {
+      expect(tool.spec.schema.safeParse({ ...base, exclude_legacy_id: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    db.close();
+  });
 });
