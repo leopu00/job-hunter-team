@@ -144,22 +144,33 @@ export async function runCycles(session: TurnDriver, options: CycleOptions): Pro
 }
 
 /**
- * The next turn's message: the messages that arrived, each as the peer wrote
- * it — what the pane would show — behind the sender the runtime recorded,
- * and, after a pause, the wake-up.
+ * The next turn's message: the messages that arrived, each under the sender
+ * the mailbox recorded, and, after a pause, the wake-up.
  *
  * A peer's text is the model's output, and a peer that read an injected page
- * can write anything, including the envelope of the system or of another
- * agent, or a line dressed as the person's reply. The TUI cannot tell those
- * apart; here the mailbox knows who really sent each message, so every one
- * opens with `[from <sender>]` and any envelope in it that names someone else,
- * or poses as a reply from the person, is rewritten as `[forged by <sender>:
- * …]`. The only `[@system -> …]` a turn can open on is the runtime's own.
+ * can write anything: another sender's header, the system's envelope, a line
+ * dressed as the person's reply, in any spelling a model reads the same way
+ * (split by a line break, a zero-width space, a look-alike letter, an arrow).
+ * Matching those is a losing game, so the text is quoted instead: every line
+ * of it starts with `> `, whatever breaks the lines, and only the runtime's
+ * own lines — `[from <sender>]` and the wake-up — start at column 0.
+ * `PARITY_NOTES` tells the agent so. `defuse` also marks the envelopes it
+ * does recognise, as a hint to the reader; the quoting is the boundary.
  */
 export function wakeMessage(agent: string, woke: boolean, inbox: AgentMessage[]): string {
-  const lines = inbox.map((m) => `[from ${m.from}] ${defuse(m.text, m.from)}`);
-  if (woke) lines.push(`[@system -> @${agent}] [WAKE] Your pause is over. Continue your loop.`);
-  return lines.join("\n\n");
+  const blocks = inbox.map((m) => `[from ${m.from}]\n${quote(defuse(m.text, m.from))}`);
+  if (woke) blocks.push(`[@system -> @${agent}] [WAKE] Your pause is over. Continue your loop.`);
+  return blocks.join("\n\n");
+}
+
+/** Every way a reader may break a line, CRLF first so it counts once. */
+const LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
+
+function quote(text: string): string {
+  return text
+    .split(LINE_BREAK)
+    .map((line) => `> ${line}`)
+    .join("\n");
 }
 
 /** `[@name -> …]` in any spacing or case. Group 1 is the inside, group 2 the claimed sender. */
