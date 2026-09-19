@@ -26,6 +26,7 @@ const REPO_ROOT = join(RUNTIME, "..", "..");
 const SCOUT = "s".repeat(40);
 const SCORER = "c".repeat(40);
 const ANALISTA = "a".repeat(40);
+const CAPITANO = "k".repeat(40);
 
 let root: string;
 let url: string;
@@ -48,6 +49,7 @@ beforeEach(async () => {
       [SCOUT, "scout-1"],
       [SCORER, "scorer-1"],
       [ANALISTA, "analista-1"],
+      [CAPITANO, "capitano-1"],
     ]),
     dbPath: join(root, "hub", "jobs.db"),
     channelsDir: join(root, "hub", "channels"),
@@ -55,6 +57,7 @@ beforeEach(async () => {
     appRoot: REPO_ROOT,
     profileDir,
     notifyLimit: { max: 2, windowMs: 60_000 },
+    sendLimit: { max: 3, windowMs: 60_000 },
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -160,6 +163,21 @@ describe("the channels", () => {
     const written = existsSync(channels) ? await readdir(channels, { recursive: true }) : [];
     expect(written).toEqual([]);
     expect((await raw(HUB_PATHS.replies, { token: SCORER })).body).toEqual({ replies: [] });
+  });
+
+  it("sends only to an agent of the team, and at most so many messages per sender (HUB-3)", async () => {
+    const send = (token: string, to: string) => raw(HUB_PATHS.send, { token, body: JSON.stringify({ to, text: "x" }) });
+    // CAPITANO-01 is not capitano-1: a message there would sit in an inbox nobody reads.
+    expect(await send(SCOUT, "CAPITANO-01")).toMatchObject({ status: 404, body: { error: expect.stringContaining("capitano-1") } });
+    expect(await send(SCOUT, "scrittore")).toMatchObject({ status: 404 });
+    expect(await send(SCOUT, "CAPITANO")).toMatchObject({ status: 200 });
+    expect(await send(SCOUT, "capitano-1")).toMatchObject({ status: 200 });
+    expect(await send(SCOUT, "analista")).toMatchObject({ status: 200 });
+    // The fourth in the window is refused; another sender has its own count.
+    expect(await send(SCOUT, "analista")).toMatchObject({ status: 429 });
+    expect(await send(SCORER, "analista")).toMatchObject({ status: 200 });
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(join(root, "hub", "channels", "mailbox"))).sort()).toEqual(["analista-1.jsonl", "capitano-1.jsonl"]);
   });
 
   it("keeps the notification limit per agent", async () => {

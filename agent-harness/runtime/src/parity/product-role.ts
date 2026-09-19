@@ -14,6 +14,8 @@ import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } from "../hub/client.ts";
+import { createSpawnTools } from "../hub/spawn-tools.ts";
+import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
@@ -122,6 +124,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     stateDir: options.apiHome,
   };
   const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
+  // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
+  if (hub && roleOf(options.agent) === "capitano") skills.push(...createSpawnTools(hub));
 
   return {
     prompt,
