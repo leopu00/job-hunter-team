@@ -13,9 +13,10 @@
 import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
+import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } from "../hub/client.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
-import { createSkillTools, scriptOverrides, type JobsDbHandle } from "./skills/index.ts";
+import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
   createJhtTools,
   FileMailbox,
@@ -58,6 +59,11 @@ export interface ProductRoleOptions {
    * write it become native tools only when it is given.
    */
   jobsDb?: JobsDbHandle | undefined;
+  /**
+   * `jht-hub` (T18): the database tools and the channels run there, and
+   * `jobsDb` is not used. The role's container mounts neither.
+   */
+  hub?: HubClient | undefined;
 }
 
 export interface ProductRole {
@@ -95,26 +101,27 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");
-  const mailbox = new FileMailbox(join(channels, "mailbox"));
+  const hub = options.hub;
+  const mailbox = hub ? new HubMailbox(hub) : new FileMailbox(join(channels, "mailbox"));
   const pause = new PauseRequest();
   const native = createJhtTools({
     agent: options.agent,
     homeDir: options.homeDir,
     mailbox,
-    notifier: new FileNotifier(join(channels, "notify.jsonl")),
-    replies: new FileUserReplies(join(channels, "replies")),
+    notifier: hub ? new HubNotifier(hub) : new FileNotifier(join(channels, "notify.jsonl")),
+    replies: hub ? new HubUserReplies(hub) : new FileUserReplies(join(channels, "replies")),
     pause,
   });
   // `shared/skills/*.py` the role lists, as native tools (T7).
-  const skills = createSkillTools({
+  const skillOptions = {
     skills: prompt.skills.map((s) => s.name),
     agent: options.agent,
-    jobsDb: options.jobsDb,
     jhtHome: options.jhtHome,
     dedupLog,
     profileDir,
     stateDir: options.apiHome,
-  });
+  };
+  const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
 
   return {
     prompt,
@@ -129,6 +136,27 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
       ...skills,
     ],
   };
+}
+
+/**
+ * The role's skill tools with a hub: those that need the database are the
+ * hub's, which builds them from the same list with the same rule; the rest
+ * run here. The local build of the database tools is only for their specs:
+ * its database never opens.
+ */
+function hubSkillTools(options: Omit<SkillToolsOptions, "jobsDb">, hub: HubClient): ToolHandler[] {
+  const local = createSkillTools(options);
+  const names = new Set(local.map((t) => t.spec.name));
+  const noDatabase: JobsDbHandle = {
+    path: "(jht-hub)",
+    open: () => {
+      throw new Error("The team's database is the hub's.");
+    },
+  };
+  const remote = createSkillTools({ ...options, jobsDb: noDatabase })
+    .filter((t) => !names.has(t.spec.name))
+    .map((t) => remoteTool(t, hub));
+  return [...local, ...remote];
 }
 
 /** What `runCycles` needs of a session: one message in, the turn run to its end. */

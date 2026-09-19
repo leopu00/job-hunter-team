@@ -35,7 +35,22 @@ import { agentInstanceId } from "../core/agent-id.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 
 /** An agent or session name: `SCOUT-1`, `capitano`. Never a path. */
-const AGENT_NAME = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,39}$/, "an agent name such as SCOUT-1 or capitano");
+export const AGENT_NAME = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,39}$/, "an agent name such as SCOUT-1 or capitano");
+
+/** A canonical agent id, the only thing a channel file is named after: `scout-1`. */
+const CANONICAL_AGENT = /^[a-z][a-z0-9_-]{0,39}-\d{1,3}$/;
+
+/**
+ * `agent`'s canonical id, checked before it names a file. The tools validate
+ * the names they take, but a channel is also reached from the hub, whose
+ * callers are shells (HUB-1: `../replies/capitano` became a reply "from the
+ * person"): no path, dot or separator ever gets as far as a `join`.
+ */
+export function channelId(agent: string): string {
+  const id = agentInstanceId(agent);
+  if (!CANONICAL_AGENT.test(id)) throw new Error(`'${agent.slice(0, 64)}' is not an agent name.`);
+  return id;
+}
 
 /** Longest message one call may carry; a TUI pane takes about this much before it scrolls. */
 const MAX_MESSAGE_CHARS = 8_000;
@@ -491,7 +506,7 @@ export class FileMailbox implements Mailbox {
   async send(message: AgentMessage): Promise<void> {
     // One inbox per agent, whatever name it was written to: SCOUT-1, scout-1
     // and scout all land where scout-1 reads.
-    const to = agentInstanceId(message.to);
+    const to = channelId(message.to);
     await appendJsonLine(join(this.dir, `${to}.jsonl`), { ...message, to });
   }
 
@@ -503,7 +518,7 @@ export class FileMailbox implements Mailbox {
    * the rest of the line, as a torn line is.
    */
   async drain(agent: string): Promise<AgentMessage[]> {
-    const to = agentInstanceId(agent);
+    const to = channelId(agent);
     const lines = await drainJsonLines<Partial<AgentMessage>>(join(this.dir, `${to}.jsonl`));
     return lines.filter(
       (m): m is AgentMessage =>
@@ -536,8 +551,16 @@ export class FileUserReplies implements UserReplies {
     this.dir = dir;
   }
 
+  /**
+   * Only a line shaped as a reply comes out: the check prints it as the
+   * person's words, so a line with no string `id` and `text` is not one.
+   */
   async take(agent: string): Promise<UserReply[]> {
-    return drainJsonLines<UserReply>(join(this.dir, `${agent}.jsonl`));
+    const lines = await drainJsonLines<Partial<UserReply>>(join(this.dir, `${channelId(agent)}.jsonl`));
+    return lines.filter(
+      (r): r is UserReply =>
+        typeof r.id === "string" && typeof r.text === "string" && (r.inReplyTo === undefined || typeof r.inReplyTo === "string"),
+    );
   }
 }
 

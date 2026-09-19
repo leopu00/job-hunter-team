@@ -26,6 +26,8 @@ import type {
   ProviderId,
 } from "./core/provider/port.ts";
 import type { Pricing } from "./core/usage.ts";
+import type { HubSettings } from "./hub/client.ts";
+import { TOKEN } from "./hub/protocol.ts";
 import { resolveUserPath } from "./tools/paths.ts";
 
 const PROVIDER_IDS: ProviderId[] = ["mock", "anthropic", "openai", "openai-compatible"];
@@ -69,6 +71,11 @@ export interface Config {
   openAICompatible?: OpenAICompatibleSettings;
   /** Set when OpenAI requests go through a proxy instead of api.openai.com. */
   openAI?: OpenAISettings;
+  /**
+   * `jht-hub` (T18): with it, the team's database and channels are the hub's,
+   * and this runtime opens neither. `JHT_HUB_URL` + `JHT_HUB_TOKEN`.
+   */
+  hub?: HubSettings;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -88,7 +95,7 @@ export function loadConfig(env: Env = process.env, role = "agent"): Config {
     maxWebSearches: readMaxWebSearches(env) ?? DEFAULT_LIMITS.maxWebSearches,
   };
 
-  const local = readLocal(env, role);
+  const local = { ...readLocal(env, role), ...readHub(env) };
   const rawAudit = env["JHT_API_AUDIT_DIR"]?.trim();
   const auditDir = rawAudit ? resolveUserPath(rawAudit, process.cwd(), homedir()) : join(local.apiHome, "audit");
 
@@ -186,6 +193,22 @@ function readLocal(
   const rawMcp = env["JHT_API_MCP_CONFIG"]?.trim();
   const mcpConfig = rawMcp ? resolveUserPath(rawMcp, cwd, homedir()) : undefined;
   return { role, apiHome, agentHome, workdir, permissionMode, ...(profileDir ? { profileDir } : {}), ...(mcpConfig ? { mcpConfig } : {}) };
+}
+
+/**
+ * The hub is on the pod's loopback: the token travels in clear, so any other
+ * address is refused rather than trusted.
+ */
+function readHub(env: Env): Pick<Config, "hub"> {
+  const url = env["JHT_HUB_URL"]?.trim();
+  const token = env["JHT_HUB_TOKEN"]?.trim();
+  if (!url && !token) return {};
+  if (!url || !token) throw new HarnessError("config_invalid", "JHT_HUB_URL and JHT_HUB_TOKEN go together.");
+  if (!/^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d{1,5}\/?$/.test(url)) {
+    throw new HarnessError("config_invalid", `JHT_HUB_URL is '${url}'; the hub is reached on the loopback only (http://127.0.0.1:<port>).`);
+  }
+  if (!TOKEN.test(token)) throw new HarnessError("config_invalid", "JHT_HUB_TOKEN must be 32 to 256 characters of [A-Za-z0-9_-].");
+  return { hub: { url, token } };
 }
 
 function readProviderId(env: Env): ProviderId {
