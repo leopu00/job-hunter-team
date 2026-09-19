@@ -184,3 +184,44 @@ export function pyPad(text: string, width: number, align: "<" | ">"): string {
   const pad = Math.max(0, width - Array.from(text).length);
   return align === "<" ? text + " ".repeat(pad) : " ".repeat(pad) + text;
 }
+
+/**
+ * `f"{x:.{digits}f}"`: the double's exact decimal value rounded half to even,
+ * as Python formats it. `toFixed` rounds the tie up (3.25 → "3.3", Python
+ * "3.2"), so the digits are computed here: a finite double is m·2^e, which
+ * is m·5^-e / 10^-e when e < 0 — an exact decimal to round by hand.
+ */
+export function pyFixed(x: number, digits: number): string {
+  if (!Number.isFinite(x)) return Number.isNaN(x) ? "nan" : x > 0 ? "inf" : "-inf";
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, x);
+  const bits = view.getBigUint64(0);
+  const negative = bits >> 63n === 1n;
+  const rawExp = Number((bits >> 52n) & 0x7ffn);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const mantissa = rawExp === 0 ? fraction : fraction | (1n << 52n);
+  const exp = (rawExp === 0 ? 1 : rawExp) - 1075;
+  // The value as an integer `scaled` over 10^places.
+  let scaled: bigint;
+  let places: number;
+  if (exp >= 0) {
+    scaled = mantissa << BigInt(exp);
+    places = 0;
+  } else {
+    scaled = mantissa * 5n ** BigInt(-exp);
+    places = -exp;
+  }
+  let kept: bigint;
+  if (places <= digits) {
+    kept = scaled * 10n ** BigInt(digits - places);
+  } else {
+    const divisor = 10n ** BigInt(places - digits);
+    kept = scaled / divisor;
+    const rest = scaled % divisor;
+    const twice = rest * 2n;
+    if (twice > divisor || (twice === divisor && kept % 2n === 1n)) kept += 1n;
+  }
+  const text = kept.toString().padStart(digits + 1, "0");
+  const body = digits === 0 ? text : `${text.slice(0, -digits)}.${text.slice(-digits)}`;
+  return negative ? `-${body}` : body;
+}
