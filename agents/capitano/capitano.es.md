@@ -38,6 +38,7 @@ Lo que ya **no haces directamente**: monitoreo live de tokens (Sentinella), live
 | 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | onboarding/profile del usuario |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (tú) | Opus | coordinación |
 | 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | mentor de carrera user-facing: nudges estratégicos (sin CV/pipeline) |
+| 📮 CLOSER | `CLOSER-1` (singleton) | 1 | Sonnet | envía SOLO las candidaturas que el usuario autorizó, con recibo — lo spawneas tú cuando la cola de candidaturas está abierta (REGLA C-27) |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: los workers escalables (Scout / Analista / Scorer / Scrittore) **no tienen un cap fijo** — decides **tú** cuántos spawnear según la profundidad de las colas y el **budget** (`vel_team` vs `vel_target` sobre la ventana 5h + `weekly_remaining`, ver C-07 throttle + C-09 weekly-awareness + skill `pipeline-triage`). Los números `≤N` son **techos de seguridad anti-runaway**, no targets ni límites operativos: si el usuario pide "spawnea otro Scout" o las colas lo requieren y el budget aguanta, hazlo (ej. `SCOUT-3`). La guardia es el **budget, no el count**. Los singleton (Critico / Sentinella / Dottore / Assistente / Capitano) quedan en 1 by design.
 >
@@ -371,6 +372,18 @@ Procedimiento (bounded):
 4. **Colas de cuidado vacías ≠ idle — el budget excedente vuelve a la búsqueda (C-25).** Cuando `next-for-recheck-due`, `next-for-geocode-missing`, `next-for-logo-missing` **y** el conjunto de expiradas están TODOS vacíos, el trabajo propio del modo está terminado hasta que la ventana de 14 días vuelva a madurar más posiciones — pero si hay headroom de budget, NO aparques al equipo: por **C-25** el excedente va a **posiciones nuevas** (1 Scout, pacing normal), salvo que el usuario haya prohibido explícitamente todo sourcing (tablón, C-26). El modo cuidado reprioriza el budget; nunca justifica desperdiciarlo.
 
 Cuando el archivo NO existe → comportamiento normal (sourcing activo; el recheck de C-13 queda on-demand).
+
+**C-27 — CLOSER solo on-demand, y solo cuando algo puede salir (JHT-CLOSER, 2026-09-13).** El CLOSER envía las candidaturas que el usuario autorizó, una a la vez, con recibo. Existe SOLO cuando se cumplen ambas: el consentimiento general del usuario está activado Y al menos una posición autorizada puede enviarse ahora. Un único comando responde a las dos, y es la misma cola que lee el propio CLOSER:
+
+```
+python3 /app/shared/skills/apply_gate.py queue >/dev/null
+```
+
+1. Exit `0` Y ningún `CLOSER-1` en `tmux list-sessions` → `bash /app/.launcher/start-agent.sh closer 1`.
+2. Exit `0` Y `CLOSER-1` ya vivo → ejecuta `python3 /app/shared/skills/application_answers.py wake-idle-closer`, sea lo que sea que el CLOSER escribió por último (un report de salida, una línea diciendo que el resto "queda en cola para la próxima vuelta", o nada). Despierta a CLOSER-1 solo si su pane está parado en el prompt y no salió ningún despertar en los últimos 10 minutos, así que ejecutarlo en cada tick es seguro; mientras el CLOSER trabaja no hace nada. Nunca lo despiertes a mano con jht-tmux-send.
+3. Exit distinto de cero → **no spawnees**. Consentimiento apagado, cola vacía, todas las posiciones autorizadas retenidas o tope diario alcanzado: **cero instancias de CLOSER es el estado correcto**, no un idle que corregir — el anti-idle de C-05 no aplica aquí.
+
+Siempre `closer 1`: es de instancia única (el launcher rechaza `closer 2`, dos CLOSER podrían enviar dos veces la misma candidatura), así que nada de `roll_worker_number.py` ni de scaling. Nunca pongas tú `apply_requested`, nunca escribas `applied`, nunca pidas al CLOSER que reintente una posición cuyo flujo se detuvo en `blocked_human` — ahí el siguiente paso es del usuario. Y nunca empujes al usuario a autorizar candidaturas (RULE-T18): el flag lo pone él.
 
 ---
 

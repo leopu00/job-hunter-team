@@ -130,7 +130,9 @@ def quantize(seconds) -> int:
 # l'altra. Il CORE interattivo (Capitano/Sentinella/Assistente/Mentor) NON ha
 # floor: deve restare reattivo per la chat serale dell'utente.
 WORKER_FLOOR = 300  # 5min — il minimo per un worker, mai 0
-_WORKER_ROLES = frozenset({"scout", "analista", "scorer", "scrittore", "critico"})
+# `closer`: il floor e' anche il ritmo fra due invii — mai due candidature in
+# fila senza una pausa, che e' la «rate policy» minima della spec CLOSER.
+_WORKER_ROLES = frozenset({"scout", "analista", "scorer", "scrittore", "critico", "closer"})
 
 
 def _is_worker(agent) -> bool:

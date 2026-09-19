@@ -815,8 +815,42 @@ def update_application(args):
         conn.close()
         return
 
+    # [JHT-CV-REWORK] The CV of an application that went out (or whose send
+    # started) is what the employer has: a PDF rendered afterwards must not
+    # replace it in the record. Checked again inside the UPDATE for a send
+    # that lands in between; the browser checkpoint is a file, read here.
+    guards_sent_cv = bool((args.cv_pdf_path or args.cv_path) and not marks_applied)
+    if guards_sent_cv:
+        try:
+            from application_rework import sent_blocker
+
+            blocker = sent_blocker(conn, args.position_id)
+        except ImportError as err:
+            # The Scrittore's normal CVs must still be recorded: the UPDATE
+            # predicate below keeps refusing a sent application or email send.
+            print(f"⚠️  sent-CV check unavailable ({type(err).__name__}): SQL guard only", file=sys.stderr)
+            blocker = ""
+        if blocker:
+            print(
+                f"⚠️  CV UPDATE REJECTED ({blocker}): this application was sent "
+                "or its send started, so its CV stays the one that went out.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+
     params.append(args.position_id)
     guarded_where = "position_id = ?"
+    if guards_sent_cv:
+        guarded_where += " AND COALESCE(applied, 0) != 1"
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'email_application_attempts'"
+        ).fetchone():
+            guarded_where += (
+                " AND NOT EXISTS (SELECT 1 FROM email_application_attempts e "
+                "WHERE e.position_id = applications.position_id AND e.state IN "
+                "('send_started', 'send_outcome_unknown', 'receipt_incomplete', 'sent'))"
+            )
     if guards_applied_downgrade:
         guarded_where += (
             " AND NOT EXISTS (SELECT 1 FROM positions "
@@ -827,6 +861,17 @@ def update_application(args):
         params,
     )
     if cursor.rowcount == 0:
+        if guards_sent_cv and conn.execute(
+            "SELECT 1 FROM applications WHERE position_id = ?", (args.position_id,)
+        ).fetchone():
+            conn.rollback()
+            print(
+                "⚠️  CV UPDATE REJECTED (send_started): the send started while "
+                "the CV was being recorded, so its CV stays the one that went out.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
         if guards_applied_downgrade:
             # L'UPDATE è già una write transaction: questa verifica distingue
             # un'applicazione assente da un downgrade respinto senza lasciare

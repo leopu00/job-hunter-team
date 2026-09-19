@@ -160,6 +160,35 @@ export const TeamSettingsSchema = z.object({
   local_scorer: LocalScorerSchema.optional(),
 });
 
+// Candidature automatiche [JHT-CLOSER]. Il consenso generale dell'utente: la
+// PRIMA di due condizioni, mai l'unica — senza il flag su quella posizione
+// (`positions.apply_requested`) non parte niente.
+//
+// ⚠️ I default di questo schema NON sono il cancello. Zod riempie i buchi di
+// un blocco che ESISTE; il caso che conta — il blocco assente — non passa
+// nemmeno di qui, e lo decide `shared/skills/apply_gate.py`, che è l'unico
+// posto che risponde a «si può inviare?». Chi legge questo schema come una
+// garanzia sta guardando la porta sbagliata.
+//
+// `enabled` NON ha default: scriverlo `false` qui sarebbe indistinguibile da
+// un utente che ha scritto `false` a mano, e il gate deve poter dire quale dei
+// due casi ha davanti quando spiega il rifiuto.
+export const AutoApplySchema = z.object({
+  enabled: z.boolean(),
+  // Nessun tetto per default (ordine dell'operatore, 2026-09-14): assente o
+  // null = nessun tetto. Un intero positivo resta un tetto, se l'utente lo
+  // vuole. Nessun default qui: scriverne uno rimetterebbe un tetto che
+  // l'utente non ha chiesto.
+  max_per_day: z.number().int().min(1).nullable().optional(),
+  // `authorised` è la consegna: posizione flaggata = candidatura inviata.
+  // `dry_run` è diagnostica per collaudare una ricetta ATS senza spedire.
+  mode: z.enum(["authorised", "dry_run"]).default("authorised"),
+});
+
+export const ApplicationsSchema = z.object({
+  auto_apply: AutoApplySchema.optional(),
+});
+
 // --- Root schema ---
 
 export const JHTConfigSchema = z
@@ -173,6 +202,7 @@ export const JHTConfigSchema = z
     }),
     channels: ChannelsSchema.default({}),
     team: TeamSettingsSchema.optional(),
+    applications: ApplicationsSchema.optional(),
     workspace: z.string().min(1, "workspace obbligatorio"),
   })
   .refine(

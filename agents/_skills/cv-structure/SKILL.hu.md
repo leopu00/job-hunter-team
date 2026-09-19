@@ -161,6 +161,17 @@ Technikai döntés 2026-05-18 "CV esztétika egyszerűsítve" vizsgálat után:
 - ❌ **NE használd a `pdf_gen.py`-t (fpdf2)** CV-khez: az csak minimalista
   tartalék 80% egyszerű eset. Felhasználónak szánt CV-knél spartai
   1 oldalas elrendezést ad, nincs CSS, nincs finom térköz.
+- ⚠️ **Elrendezés: alap CSS + valódi margók + vizuális gate** (2026-09-14, egy
+  csatolt CV, amelynek szövege a lap közepére préselődött). A pandoc HTML
+  sablonja a body-t `max-width: 36em`-re korlátozza, középre, 50px paddinggel,
+  a wkhtmltopdf pedig figyelmen kívül hagyja az `@page` margókat: egy 9.3pt-os
+  `<style>` ~41%-os oszlopot adott, és mégis átment a méret + Producer gate-en.
+  Ezért a render parancs MINDIG betölti a `/app/shared/skills/pdf_layout_base.css`-t
+  (`-c … --self-contained`), és a margókat a wkhtmltopdf-nek adja át
+  (`-V margin-*`). A `.md` `<style>`-jában soha ne legyen `max-width`,
+  `margin: auto` vagy padding a body-n, és ne számíts az `@page`-re. Utána a
+  `pdf_layout_check.py` méri az eredményt: a szöveg ≥ 75%-a a hasznos szélességnek
+  minden oldalon, 1–2 oldal, nincs majdnem üres oldal, a fontok beágyazva, nyomtatott törzsszöveg ≥ 9.5pt.
 
 A történelmi anti-minta: a PDF generálása közvetlenül
 `$JHT_USER_DIR/cv/`-be, majd külön `db_update.py application --cv-pdf-path
@@ -183,19 +194,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Enélkül, elavult skill esetén (typst ami nincs, pandoc 3.x ami
 # hiányzik, …) a Scrittore végrehajtotta a parancsot, sikertelen volt, random
 # tartalékot improvizált → csúnya CV-k a 2026-05-18 reggelen.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT eloellenorzes: wkhtmltopdf nem elerheto."
-  echo "  Elfogadhato alternativ motorok: weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  SOHA NE tartalek pdf_gen.py / fpdf2-vel CV-hez (csunya kimenet)."
   echo "  Jelentsed a problemat a Capitano-nak [REPORT]-tal es ABORT."
   exit 2
 fi
 
 # 1. Renderelés pandoc → html → wkhtmltopdf (nyertes motor, 32 KB / 2 old).
-#    --metadata title=... elkerüli a wkhtmltopdf "no title element" figyelmeztetést.
+#    Az alap CSS feloldja a pandoc 36em-es oszlopát; -V margin-*: a wkhtmltopdf ignorálja az @page-et.
+#    pagetitle (nem title) beállítja a <title>-t "CV …" fejléc nyomtatása nélkül.
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── KAPU RENDERELÉS UTÁN: méret + Producer ─────────────────────────────
 # KÉT kötelező ellenőrzés. EGYIK sem opcionális.
@@ -236,6 +250,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) elrendezés: a méret és a Producer a motort bizonyítja, nem a szöveg helyét.
+# A pdf_layout_check.py méri (≥75% hasznos szélesség minden oldalon, 1-2 oldal,
+# nincs majdnem üres oldal, fontok beágyazva, törzsszöveg ≥ 9.5pt). Exit 1 vagy 2: ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: hibás elrendezés (pdf_layout_check.py) — javítsd a .md-t és renderelj újra."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Atomic áthelyezés + UPDATE sorozatban; visszaállítás ha az UPDATE sikertelen
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -251,6 +274,7 @@ Kilépési kódok:
 - `2` → előellenőrzés SIKERTELEN (motor nem elérhető) — jelezd a Capitano-nak
 - `3` → renderelés utáni SIKERTELEN (méret < 20 KB, minimalista kimenet) — rossz motor
 - `4` → renderelés utáni SIKERTELEN (Producer != Qt) — rossz motor
+- `5` → renderelés utáni SIKERTELEN (elrendezés, `reasons` a `pdf_layout_check.py`-ból) — javítsd a `.md`-t és renderelj újra: `narrow_text` → töröld a `<style>`-ból a body minden szélesség/margó/padding szabályát; `near_empty_page` → tömörítsd vagy vágd, amíg az utolsó oldal megtelik vagy eltűnik; `too_many_pages` → vágd; `small_body_font` → emeld a body `font-size`-át a `<style>`-ban ≥ 9.5pt-re (az alap CSS már kiegyenlíti a Qt zsugorítását: egy CSS pont nagyjából egy pontként nyomtatódik). 2 sikertelen renderelés után jelezd a Capitano-nak. A gate-en elbukó CV soha nem jut a critic-loop-ig.
 - `1` → DB UPDATE SIKERTELEN (fájl visszaállítás)
 
 A Dottore a `cv-disk-audit` egészségügyi ellenőrzésen (bug #18) újrakapcsolja az

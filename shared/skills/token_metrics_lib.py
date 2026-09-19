@@ -46,7 +46,7 @@ def _jht_home() -> Path:
 VALID_AGENT_ROLES = frozenset({
     "capitano", "sentinella", "assistente", "mentor", "dottore",
     "mantenitore", "scout", "analista", "scorer", "scrittore",
-    "critico", "tesoriere",
+    "critico", "tesoriere", "closer",
 })
 
 

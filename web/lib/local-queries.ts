@@ -1,4 +1,8 @@
+import fs from "fs";
+import path from "path";
 import { getDb } from "./db";
+import { JHT_HOME } from "./jht-paths";
+import type { ApplyRequestSignals } from "./apply-request-rule";
 import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
 import { likePattern, parsePositionQuery } from "./position-search";
@@ -1421,6 +1425,68 @@ export function getScrittoreActivityLocal(ws: string) {
   };
 }
 
+// [JHT-CLOSER] Cosa sa il box di una candidatura autorizzata: l'ultima
+// domanda del CLOSER su questa posizione e il checkpoint del flow. Il
+// checkpoint esiste solo qui (il cloud non lo riceve), ed è l'unico segnale
+// che distingue «in invio» da «autorizzata». Illeggibile = assente: il
+// bottone ripiega su «autorizzata», mai su «inviata».
+export function getApplyRequestSignalsLocal(
+  ws: string,
+  id: string,
+): ApplyRequestSignals {
+  const db = getDb(ws);
+  const numId = Number(id);
+  let closerQuestion: ApplyRequestSignals["closerQuestion"] = null;
+  try {
+    const row = db
+      .prepare(
+        `SELECT id, body, created_at, user_reply
+           FROM pending_user_messages
+          WHERE agent = 'closer' AND kind = 'question'
+            AND related_position_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1`,
+      )
+      .get(numId) as
+      | {
+          id: number;
+          body: string;
+          created_at: string;
+          user_reply: string | null;
+        }
+      | undefined;
+    if (row) closerQuestion = { ...row, id: sid(row.id) };
+  } catch {
+    closerQuestion = null;
+  }
+  let checkpoint: ApplyRequestSignals["checkpoint"] = null;
+  if (Number.isInteger(numId) && numId > 0) {
+    try {
+      const raw = JSON.parse(
+        fs.readFileSync(
+          path.join(JHT_HOME, ".cache", "apply-flow", `${numId}.json`),
+          "utf8",
+        ),
+      );
+      if (
+        raw &&
+        typeof raw.state === "string" &&
+        typeof raw.updated_at === "string"
+      ) {
+        checkpoint = {
+          state: raw.state,
+          updated_at: raw.updated_at,
+          blocked_reason:
+            typeof raw.blocked_reason === "string" ? raw.blocked_reason : "",
+        };
+      }
+    } catch {
+      checkpoint = null;
+    }
+  }
+  return { closerQuestion, checkpoint };
+}
+
 // Storico completo per la pagina /messages: stessi campi dei pendenti ma
 // SENZA il filtro acknowledged (i letti restano visibili in coda alla lista).
 // [JHT-CHAT-UNIFY] Niente più filtro `delivered_via='web'`: la colonna dice
@@ -1547,27 +1613,6 @@ export function sendUserChatLocal(
     )
     .run(agent, body);
   return sid(Number(result.lastInsertRowid));
-}
-
-export function replyPendingMessageLocal(
-  ws: string,
-  id: string,
-  reply: string,
-): boolean {
-  const db = getDb(ws);
-  // Risposta + ack atomico: una reply implica visione.
-  const result = db
-    .prepare(
-      `
-    UPDATE pending_user_messages
-    SET user_reply = ?,
-        user_reply_at = CURRENT_TIMESTAMP,
-        acknowledged_at = COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
-    WHERE id = ?
-  `,
-    )
-    .run(reply, id);
-  return result.changes > 0;
 }
 
 // ── Team activity (per-agente nel tempo) ───────────────────────────
@@ -1803,6 +1848,9 @@ function mapPositionFull(r: any): Position {
     recheck_requested:
       r.recheck_requested === 1 || r.recheck_requested === true,
     recheck_requested_at: r.recheck_requested_at ?? null,
+    apply_requested: r.apply_requested === 1 || r.apply_requested === true,
+    apply_requested_at: r.apply_requested_at ?? null,
+    apply_requested_by: r.apply_requested_by ?? null,
     last_open_check: r.last_open_check ?? null,
   };
 }

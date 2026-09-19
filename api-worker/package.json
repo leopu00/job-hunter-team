@@ -31,18 +31,18 @@
     "verify": "npm run format:check && npm run typecheck && npm test"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.39",
-    "@ai-sdk/openai": "^4.0.43",
-    "@ai-sdk/openai-compatible": "^3.0.31",
-    "ai": "^7.0.69",
-    "playwright-core": "^1.62.1",
+    "@ai-sdk/anthropic": "^4.0.52",
+    "@ai-sdk/openai": "^4.0.65",
+    "@ai-sdk/openai-compatible": "^3.0.47",
+    "ai": "^7.0.97",
+    "playwright-core": "^1.63.0",
     "yaml": "^2.8.1",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.4",
     "prettier": "^3.9.0",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.0",
     "vitest": "^4.1.11"
   }

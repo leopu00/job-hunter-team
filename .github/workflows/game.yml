@@ -74,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: chickensoft-games/setup-godot@v2.4.1
+      - uses: chickensoft-games/setup-godot@v2.4.2
         with:
           version: 4.7.0
           use-dotnet: false

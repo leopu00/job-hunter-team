@@ -24,7 +24,7 @@ from typing import Callable, ContextManager, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-087.web.v8.json"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-088.web.v9.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
 CATALOG_ORDERED_MIGRATIONS = [
@@ -36,14 +36,21 @@ CATALOG_ORDERED_MIGRATIONS = [
     "supabase/migrations/083_position_ticket_state_model.sql",
     "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
 ]
-# Il contratto web arriva due migrazioni più in là del catalog: verifica
-# applications.updated_at (085) e le due RPC dell'esito candidatura (086). Le
-# due fasi hanno contratti distinti proprio perché possono coprire finestre
-# diverse.
+# Il contratto web arriva più in là del catalog: verifica
+# applications.updated_at (085), le due RPC dell'esito candidatura (086), il
+# motivo del rifiuto (087) e l'autorizzazione per-posizione alla candidatura
+# (088, [JHT-CLOSER]). Le due fasi hanno contratti distinti proprio perché
+# possono coprire finestre diverse.
+#
+# ⚠️ Questa lista e `WEB_MANIFEST` si spostano INSIEME. Il manifest dichiara la
+# sua `clone_contract.ordered_migrations` e il loader la confronta con questa:
+# spostarne uno solo dà `manifest_invalid`, che NON nomina la migrazione
+# mancante.
 WEB_ORDERED_MIGRATIONS = CATALOG_ORDERED_MIGRATIONS + [
     "supabase/migrations/085_applications_updated_at.sql",
     "supabase/migrations/086_position_outcome.sql",
     "supabase/migrations/087_rejection_reason.sql",
+    "supabase/migrations/088_positions_apply_requested.sql",
 ]
 API_ORIGIN = "https://api.supabase.com"
 MAX_RESPONSE_BYTES = 64 * 1024

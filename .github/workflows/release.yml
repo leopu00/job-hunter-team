@@ -78,7 +78,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: chickensoft-games/setup-godot@f166999204a4f2722c6fe042fbaa3b3ea0d9c789 # v2.4.1
+      - uses: chickensoft-games/setup-godot@c233594225991af5aec714e52457cc76d6df8fa2 # v2.4.2
         with:
           version: 4.7.0
           use-dotnet: false
@@ -516,7 +516,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
           body_path: release-assets/RELEASE-NOTES.md

@@ -885,6 +885,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_role_family_proposed(conn)
     _migrate_positions_user_excluded(conn)
     _migrate_positions_recheck_requested(conn)
+    _migrate_positions_apply_requested(conn)
     _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
@@ -898,6 +899,145 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_user_notes_origin(conn)
     _migrate_applications_critic_round(conn)
     _migrate_applications_rejection_reason(conn)
+    _migrate_email_application_attempts(conn)
+    _migrate_application_answers(conn)
+    _migrate_closer_wakes(conn)
+    _migrate_apply_cap_reservations(conn)
+
+
+def _migrate_application_answers(conn: sqlite3.Connection) -> None:
+    """The user's answers to application questions. [JHT-CLOSER-ANSWERS]
+
+    One row per question the user has answered, keyed by the label normalised
+    the way the recipes normalise it (`application_answers.normalise_label`).
+    The CLOSER reads here first, so an answer given once — on Telegram or on
+    the dashboard — survives restarts and new agent contexts, and the same
+    question is never asked twice. `answer_json` keeps the typed value a form
+    control receives (text, boolean, list of options).
+
+    Local only: the dashboard answers through `pending_user_messages`, which
+    already travels; nothing on the web reads this table, so there is no
+    Supabase twin. Additive and idempotent (CREATE ... IF NOT EXISTS).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS application_answers (
+            key TEXT PRIMARY KEY CHECK (key <> ''),
+            label TEXT NOT NULL,
+            answer_json TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            options_json TEXT NOT NULL DEFAULT '[]',
+            channel TEXT NOT NULL,
+            source_message_id INTEGER,
+            answered_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )
+        """
+    )
+    # Where an answer the CLOSER worked out came from: profile · cv · vacancy ·
+    # judgement. Empty for the user's own answers. Additive.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(application_answers)")}
+    if "basis" not in columns:
+        conn.execute("ALTER TABLE application_answers ADD COLUMN basis TEXT NOT NULL DEFAULT ''")
+
+
+def _migrate_apply_cap_reservations(conn: sqlite3.Connection) -> None:
+    """One slot of today's automated-application cap, taken just before a send. [JHT-CLOSER-CAP]
+
+    `apply_gate.reserve_daily_slot` counts today's sends and inserts the row in
+    ONE `BEGIN IMMEDIATE` transaction, then the channel (email or browser)
+    performs the irreversible send. Two runs with one slot left cannot both
+    pass: the second waits for the first commit and counts it. A reservation
+    whose outcome is unknown keeps counting (`reserved`); only a send that
+    certainly did not happen marks it `released`.
+
+    Local only: the web does not read it. Additive and idempotent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS apply_cap_reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            channel TEXT NOT NULL CHECK (channel IN ('email', 'browser')),
+            token TEXT NOT NULL UNIQUE,
+            state TEXT NOT NULL DEFAULT 'reserved' CHECK (state IN ('reserved', 'released')),
+            reserved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            released_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_apply_cap_reservations_day "
+        "ON apply_cap_reservations(state, reserved_at)"
+    )
+
+
+def _migrate_closer_wakes(conn: sqlite3.Connection) -> None:
+    """One row per wake-up sent to the CLOSER after the user answered. [JHT-CLOSER-ANSWERS]
+
+    `wake_key` names what was answered (the position and its last answered
+    question, or the last essential fact), so several answers arriving
+    together wake the CLOSER once, and a replayed answer never wakes it again.
+    Local only; additive and idempotent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closer_wakes (
+            wake_key TEXT PRIMARY KEY,
+            position_id INTEGER,
+            delivered INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )
+        """
+    )
+
+
+def _migrate_email_application_attempts(conn: sqlite3.Connection) -> None:
+    """The register of email application attempts. [JHT-CLOSER-EMAIL]
+
+    One row per attempt to send ONE application by email. `send_started` is
+    committed BEFORE the SMTP DATA command: a process killed after it leaves a
+    row that says "this may have gone out", and `email_application.py` never
+    sends again for that position — a second letter to a recruiter cannot be
+    taken back, a missing one can be asked for.
+
+    `UNIQUE(position_id, idempotency_key)`: the key hashes recipients, subject,
+    body and attachments together with the user's authorisation instant, so a
+    replay of the same draft cannot create a second row. No secret is stored:
+    `receipt_json` is redacted (no body, no credential) and the body is kept
+    only as its hash.
+
+    Local only: the web does not read it, so there is no Supabase twin.
+    Additive and idempotent (CREATE ... IF NOT EXISTS).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_application_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            state TEXT NOT NULL CHECK (state IN (
+                'draft_ready', 'send_started', 'sent',
+                'send_outcome_unknown', 'receipt_incomplete', 'error'
+            )),
+            message_id TEXT NOT NULL,
+            recipients_json TEXT NOT NULL,
+            body_sha256 TEXT NOT NULL,
+            attachments_json TEXT NOT NULL,
+            receipt_json TEXT,
+            error_class TEXT,
+            send_started_at TEXT,
+            accepted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            UNIQUE (position_id, idempotency_key)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_email_attempts_position "
+        "ON email_application_attempts(position_id, state)"
+    )
 
 
 def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
@@ -1942,6 +2082,38 @@ def _migrate_positions_recheck_requested(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_recheck_requested "
         "ON positions(recheck_requested) WHERE recheck_requested = 1"
+    )
+
+
+def _migrate_positions_apply_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge le colonne dell'AUTORIZZAZIONE per-posizione (mirror Supabase mig 088).
+
+    [JHT-CLOSER] Il salto `ready -> applied` lo può fare il CLOSER, ma solo su
+    posizioni che l'utente ha flaggato UNA PER UNA. Queste tre colonne sono
+    metà del vincolo (l'altra metà è il consenso generale nel config): manca il
+    flag, nessun invio, qualunque sia lo score.
+
+    `apply_requested_by` dice CHI ha autorizzato, e serve perché un booleano da
+    solo non distingue una persona da un processo — regola #186, dal cloud si
+    prende l'AZIONE dell'utente e mai lo stato generico. Il vocabolario
+    (`user_web` / `user_local`) lo fa rispettare `apply_gate.py`, non un CHECK.
+
+    Idempotente: guard PRAGMA table_info, come gli altri quattro flag
+    desired-state.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('apply_requested',    'INTEGER DEFAULT 0'),
+        ('apply_requested_at', 'TIMESTAMP'),
+        ('apply_requested_by', 'TEXT'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_apply_requested "
+        "ON positions(apply_requested) WHERE apply_requested = 1"
     )
 
 

@@ -111,12 +111,13 @@ export function decidePeriodicPush({ now, state = {}, limits, signature }) {
 /** Stato di un controllo che non ha richiesto traffico remoto. */
 export function nextPeriodicCheckState({ state = {}, now, signature, reason }) {
   const quarantineCount = Number(state.quarantined_count) || 0;
+  const invalidIdentityCount = Number(state.invalid_identity_count) || 0;
   const next = {
     ...state,
     status:
       reason === "signature_unavailable"
         ? "signature_unavailable"
-        : quarantineCount > 0
+        : quarantineCount > 0 || invalidIdentityCount > 0
           ? "partial"
           : "idle",
     last_check_at: new Date(now).toISOString(),
@@ -133,10 +134,13 @@ export function nextPeriodicCheckState({ state = {}, now, signature, reason }) {
 
 export function periodicPushResultStatus(result) {
   const quarantined = Number(result?.quarantined ?? result?.skipped ?? 0);
-  if (result?.ok === true && quarantined === 0) return "completed";
+  const invalidIdentity = Number(result?.invalidIdentity ?? 0);
+  if (result?.ok === true && quarantined === 0 && invalidIdentity === 0)
+    return "completed";
   if (result?.timedOut === true) return "timeout";
   if (result?.authFailed === true) return "auth_failed";
-  if (quarantined > 0) return "partial";
+  if (quarantined > 0 || (result?.ok === true && invalidIdentity > 0))
+    return "partial";
   return "failed";
 }
 
@@ -152,6 +156,16 @@ export function nextPeriodicPushState({
   const status = periodicPushResultStatus(result);
   const completed = status === "completed";
   const quarantineCount = Number(result?.quarantined ?? result?.skipped ?? 0);
+  const invalidIdentityCount = Number(result?.invalidIdentity ?? 0);
+  // Righe senza identità escluse da un push per il resto riuscito: riprovare
+  // fra un minuto rileggerebbe le stesse righe e le escluderebbe di nuovo. Le
+  // ripara solo una modifica locale, che cambia la firma e fa ripartire il
+  // push da sola. Quindi la firma avanza: `partial` la ricontrolla al ritmo
+  // del retry, ma senza novita' locali non parte nessun push. Lo stato resta
+  // `partial` e il conteggio resta visibile.
+  const deliveredAllItCould =
+    completed ||
+    (result?.ok === true && quarantineCount === 0 && invalidIdentityCount > 0);
   const next = {
     ...state,
     status,
@@ -159,12 +173,13 @@ export function nextPeriodicPushState({
     last_check_at: at,
     last_attempt_at: at,
     last_reason: status,
-    consecutive_failures: completed
+    consecutive_failures: deliveredAllItCould
       ? 0
       : (Number(state.consecutive_failures) || 0) + 1,
     quarantined_count: quarantineCount,
+    invalid_identity_count: invalidIdentityCount,
   };
-  if (completed) {
+  if (deliveredAllItCould) {
     next.signature = signature;
     next.last_success_at = at;
   }
@@ -179,6 +194,9 @@ export function periodicPushStatusLine(state = {}) {
   if (state.status === "idle") return `idle; checked at ${last}`;
   if (state.status === "partial" && Number(state.quarantined_count) > 0) {
     return `${state.quarantined_count} quarantined record(s) at ${last}; valid data continues syncing`;
+  }
+  if (state.status === "partial" && Number(state.invalid_identity_count) > 0) {
+    return `${state.invalid_identity_count} record(s) without a valid identity excluded at ${last}; valid data continues syncing`;
   }
   return `${state.status} at ${last}; retry is automatic`;
 }

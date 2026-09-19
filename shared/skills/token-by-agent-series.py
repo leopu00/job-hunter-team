@@ -87,7 +87,7 @@ CODEX_DIR = JHT_HOME / ".codex" / "sessions"
 VALID_AGENT_ROLES = frozenset({
     "capitano", "sentinella", "assistente", "mentor", "dottore",
     "mantenitore", "scout", "analista", "scorer", "scrittore",
-    "critico", "tesoriere",
+    "critico", "tesoriere", "closer",
 })
 
 

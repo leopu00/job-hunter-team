@@ -191,6 +191,73 @@ describe("policy del push periodico", () => {
       "2 quarantined record(s)",
     );
   });
+
+  it("righe senza identità: partial e contate, ma niente retry a vuoto ogni minuto", () => {
+    // Un nuovo tentativo rileggerebbe le stesse righe e le escluderebbe di
+    // nuovo: le ripara solo una modifica locale, che cambia la firma.
+    const partial = nextPeriodicPushState({
+      state: { consecutive_failures: 3, signature: signature(1) },
+      now: T0,
+      signature: signature(2),
+      result: { ok: true, skipped: 0, quarantined: 0, invalidIdentity: 2 },
+      source: "periodic",
+    });
+    expect(partial).toMatchObject({
+      status: "partial",
+      invalid_identity_count: 2,
+      quarantined_count: 0,
+      consecutive_failures: 0,
+      signature: signature(2),
+    });
+    // `partial` ricontrolla la firma al ritmo del retry, ma la firma e' gia'
+    // avanzata: nessun push finche' in locale non cambia qualcosa.
+    expect(
+      decidePeriodicPush({
+        now: T0 + MIN,
+        state: partial,
+        limits,
+        signature: signature(2),
+      }),
+    ).toMatchObject({ push: false, reason: "nothing_new" });
+    expect(
+      decidePeriodicPush({
+        now: T0 + MIN,
+        state: partial,
+        limits,
+        signature: signature(3),
+      }),
+    ).toMatchObject({ push: true, reason: "local_changes" });
+
+    const idleCheck = nextPeriodicCheckState({
+      state: partial,
+      now: T0 + MIN,
+      signature: signature(2),
+      reason: "nothing_new",
+    });
+    expect(idleCheck.status).toBe("partial");
+    expect(periodicPushObservation({ state: idleCheck })).toEqual({
+      cloud_push_status: "partial",
+      cloud_push_checked_at: iso(T0 + MIN),
+    });
+    expect(periodicPushStatusLine(idleCheck)).toContain(
+      "2 record(s) without a valid identity",
+    );
+  });
+
+  it("un push fallito resta fallito anche se aveva escluso righe", () => {
+    const failed = nextPeriodicPushState({
+      state: { signature: signature(1) },
+      now: T0,
+      signature: signature(2),
+      result: { ok: false, skipped: 0, invalidIdentity: 1 },
+      source: "periodic",
+    });
+    expect(failed).toMatchObject({
+      status: "failed",
+      consecutive_failures: 1,
+      signature: signature(1),
+    });
+  });
 });
 
 describe("esecuzione bounded", () => {

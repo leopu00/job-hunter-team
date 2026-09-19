@@ -13,7 +13,15 @@ services:
     # process must reach the bind mount as the Podman machine user (UID 1000).
     userns_mode: "keep-id:uid=1001,gid=1001"
     network_mode: host
+    # Host networking puts the container on the host's own interfaces: the
+    # live-screen port of the base file cannot be published (Compose rejects
+    # ports with network_mode host), and the stream must bind loopback itself —
+    # the 0.0.0.0 default of .launcher/live-screen.sh would be every interface
+    # of the machine here.
+    ports: !reset []
     environment:
+      - JHT_LIVE_SCREEN_BIND=127.0.0.1
+      - JHT_LIVE_SCREEN_PORT=${JHT_LIVE_SCREEN_PORT:-6080}
       - HTTP_PROXY=${JHT_PODMAN_HTTP_PROXY:-}
       - HTTPS_PROXY=${JHT_PODMAN_HTTPS_PROXY:-}
       - ALL_PROXY=${JHT_PODMAN_ALL_PROXY:-}

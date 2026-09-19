@@ -23,8 +23,10 @@ Output: stampa l'id della riga su stdout (utile per follow-up via cloud sync).
 """
 import argparse
 import importlib.util
+import json
 import os
 import pathlib
+import re
 import subprocess
 import sqlite3
 import sys
@@ -146,19 +148,50 @@ def insert_pending(
     body: str,
     kind: str,
     related_position_id: int | None,
-) -> int:
+    source_id: str | None = None,
+    source_action: str | None = None,
+    source_payload: str | None = None,
+) -> tuple[int, bool]:
     conn = sqlite3.connect(db_path, timeout=10)
     try:
         conn.execute("PRAGMA foreign_keys=ON")
+        if source_id:
+            existing = conn.execute(
+                "SELECT id, agent, body, kind, related_position_id, source_action, source_payload "
+                "FROM pending_user_messages WHERE source_id = ?",
+                (source_id,),
+            ).fetchone()
+            if existing:
+                expected = (
+                    agent,
+                    body,
+                    kind,
+                    related_position_id,
+                    source_action,
+                    source_payload,
+                )
+                if existing[1:] != expected:
+                    raise ValueError("source-id collision with different notification data")
+                return int(existing[0]), False
         cur = conn.execute(
             """
-            INSERT INTO pending_user_messages (agent, body, kind, related_position_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO pending_user_messages (
+                agent, body, kind, related_position_id,
+                source_id, source_action, source_payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (agent, body, kind, related_position_id),
+            (
+                agent,
+                body,
+                kind,
+                related_position_id,
+                source_id,
+                source_action,
+                source_payload,
+            ),
         )
         conn.commit()
-        return cur.lastrowid
+        return int(cur.lastrowid), True
     finally:
         conn.close()
 
@@ -206,12 +239,41 @@ def main() -> int:
         action="store_true",
         help="Salta il tentativo Telegram, scrivi direttamente su web.",
     )
+    parser.add_argument(
+        "--existing-id",
+        type=int,
+        help="Deliver a row already persisted by the caller instead of inserting it.",
+    )
+    parser.add_argument("--source-id", help="Stable idempotency key (optional).")
+    parser.add_argument("--source-action", help="Structured action name (optional).")
+    parser.add_argument("--source-payload", help="Structured JSON payload (optional).")
     parser.add_argument("body", help="Testo del messaggio (quotalo).")
     args = parser.parse_args()
 
     if not args.body.strip():
         print("jht-notify-user: body vuoto", file=sys.stderr)
         return 1
+    if args.existing_id is not None and args.existing_id <= 0:
+        print("jht-notify-user: invalid existing-id", file=sys.stderr)
+        return 1
+    if args.source_id and not re.fullmatch(r"[A-Za-z0-9_.:-]{1,180}", args.source_id):
+        print("jht-notify-user: invalid source-id", file=sys.stderr)
+        return 1
+    if args.source_action and not re.fullmatch(r"[a-z0-9_]{1,80}", args.source_action):
+        print("jht-notify-user: invalid source-action", file=sys.stderr)
+        return 1
+    if bool(args.source_action) != bool(args.source_payload) or bool(args.source_id) != bool(args.source_action):
+        print("jht-notify-user: source metadata incompleti", file=sys.stderr)
+        return 1
+    if args.source_payload:
+        try:
+            decoded_payload = json.loads(args.source_payload)
+        except (TypeError, ValueError):
+            print("jht-notify-user: source-payload non e JSON valido", file=sys.stderr)
+            return 1
+        if not isinstance(decoded_payload, dict) or len(args.source_payload) > 16_000:
+            print("jht-notify-user: invalid source-payload", file=sys.stderr)
+            return 1
 
     # Normalizza una sola volta: il body interpretato finisce sia in DB
     # (e quindi in dashboard web via cloud push) sia in Telegram, coerente.
@@ -223,33 +285,49 @@ def main() -> int:
         return 2
 
     try:
-        row_id = insert_pending(
+        row_id, created = insert_pending(
             db_path,
             agent=args.agent,
             body=body,
             kind=args.kind,
             related_position_id=args.position_id,
+            source_id=args.source_id,
+            source_action=args.source_action,
+            source_payload=args.source_payload,
         )
-    except sqlite3.Error as e:
+        if args.existing_id is not None and row_id != args.existing_id:
+            raise ValueError("existing-id does not match the durable notification")
+    except (sqlite3.Error, ValueError) as e:
         print(f"jht-notify-user: insert fallita: {e}", file=sys.stderr)
         return 2
 
     delivered_via = "web"
-    off_hours = _is_off_hours()
-    if (
+    # A CLOSER question about an application the user authorised is an answer
+    # the user is waiting for, not a notification to hold for working hours;
+    # a login verification code expires in minutes.
+    # Held, it was consumed on the web and never reached Telegram: its source
+    # id counted it as asked, so no later round delivered it (13/09).
+    # The CLOSER's round summary is the outcome of those same applications:
+    # held for working hours it stayed on the web (14/09, after patch 21).
+    off_hours = args.source_action not in (
+        "closer_application_answer", "closer_login_code", "closer_digest"
+    ) and _is_off_hours()
+    should_deliver = created or args.existing_id is not None
+    if should_deliver and (
         not args.no_telegram
         and not off_hours
         and try_telegram(args.agent, body, row_id)
     ):
         delivered_via = "telegram"
-    if off_hours:
+    if should_deliver and off_hours:
         print(
             f"jht-notify-user: off-hours, push Telegram saltato (id={row_id}, "
             f"delivered_via=web)", file=sys.stderr,
         )
 
     try:
-        mark_delivered(db_path, row_id, delivered_via)
+        if should_deliver:
+            mark_delivered(db_path, row_id, delivered_via)
     except sqlite3.Error as e:
         # Riga c'e', solo l'update di stato e' fallito. Non e' fatale —
         # un retry potra' riprenderla. Log e prosegui con exit 0.

@@ -85,7 +85,10 @@ from pathlib import Path
 # sorvegliava. Il Critico e' escluso di proposito: lo spawna e lo killa lo
 # Scrittore dentro `critic-loop` (effimero, per singola review) — respawnarlo
 # significherebbe combattere con lo Scrittore invece che col Capitano.
-WORKER_ROLES = ("scout", "analista", "scorer", "scrittore")
+# Il CLOSER sta qui pur essendo a istanza unica (`start-agent.sh` rifiuta
+# `closer 2`): e' un worker che produce, lo spawna il Capitano, e se muore a
+# meta' coda qualcuno deve accorgersene.
+WORKER_ROLES = ("scout", "analista", "scorer", "scrittore", "closer")
 
 # Ruoli core: gia' coperti da `AGENTS=(...)` in agent-watchdog.sh. Vengono
 # registrati comunque (il roster e' l'inventario completo, serve anche al TTL),
@@ -115,6 +118,17 @@ PRODUCTION = {
     "analista": ("positions", "analyzed_by", "last_checked"),
     "scorer": ("scores", "scored_by", "scored_at"),
     "scrittore": ("applications", "written_by", "written_at"),
+    "closer": ("applications", "applied_via", "applied_at"),
+}
+
+# Ruoli la cui colonna-autore NON contiene il nome della sessione. Gli altri
+# scrivono `scout-1` (o `scout-1 (codex)`) e si cercano per prefisso; il CLOSER
+# scrive il CANALE, `applied_via = 'agent_closer'`, che e' anche il valore che
+# distingue il suo invio da quello dell'utente. Senza questa mappa il `LIKE
+# 'closer-1%'` non troverebbe mai una riga e la sua produzione resterebbe
+# invisibile al cancello di attivita'.
+PRODUCTION_AUTHOR = {
+    "closer": "agent_closer",
 }
 
 _SESSION_RE = re.compile(r"^([A-Z]+)(?:-(\d+))?$")
@@ -439,9 +453,10 @@ def last_activity(session: str, home: Path | None = None) -> datetime | None:
             try:
                 cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
                 if by_col in cols and ts_col in cols:
+                    author = PRODUCTION_AUTHOR.get(role)
                     row = conn.execute(
                         f"SELECT MAX({ts_col}) FROM {table} WHERE {by_col} LIKE ?",
-                        (name + "%",),
+                        (author if author else name + "%",),
                     ).fetchone()
                     ts = _parse_iso(row[0] if row else None)
                     if ts and (best is None or ts > best):

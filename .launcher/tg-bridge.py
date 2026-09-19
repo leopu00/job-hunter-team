@@ -41,6 +41,7 @@ direttamente. Questo bridge gestisce solo l'inbound.
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -83,6 +84,15 @@ for _skills_candidate in (
 # una sanificazione che si spegne da sola no. Meglio un bridge che non parte.
 from external_content import flatten_to_one_line  # noqa: E402  (dopo sys.path)
 
+# [JHT-CLOSER-ANSWERS] Una risposta a una domanda del CLOSER va risolta qui,
+# nella stessa transazione che la scrive in cronologia. Senza il modulo il
+# bridge continua a consegnare la chat: la domanda resta aperta e la dashboard
+# puo' ancora risponderle, quindi niente si perde.
+try:
+    import application_answers  # noqa: E402
+except Exception as _answers_import_error:  # pragma: no cover - degraded image
+    application_answers = None
+
 VALID_ROLES = ("assistente", "capitano", "mentor")
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -123,6 +133,10 @@ DEADLETTER_PATH = JHT_HOME / f"tg-bridge-deadletter-{BOT_ROLE}.jsonl"
 INBOUND_QUEUE_DIR = JHT_HOME / f"tg-inbound-queue-{BOT_ROLE}"
 JOBS_DB_PATH = JHT_HOME / "jobs.db"
 TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
+# Il bot da cui escono le domande del CLOSER (jht-notify-user: chi non ha un bot
+# suo parla da quello dell'Assistente). Solo su questo bot un messaggio senza
+# reply e senza codice puo' valere come risposta all'unica domanda aperta.
+CLOSER_QUESTION_BOT = "assistente"
 POLL_TIMEOUT_SEC = 30
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 DOWNLOAD_CHUNK_BYTES = 64 * 1024
@@ -174,6 +188,10 @@ BOT_COMMANDS = {
         ("candles",     "bot_commands.assistente.candles"),
         ("mappa",       "bot_commands.assistente.mappa"),
         ("mappa_it",    "bot_commands.assistente.mappa_it"),
+        # Gli ultimi due bottoni della vecchia tastiera persistente (⭐ Top CV,
+        # 📅 Reset) non avevano un comando: senza tastiera sparirebbero.
+        ("top_cv",      "bot_commands.assistente.top_cv"),
+        ("reset",       "bot_commands.assistente.reset"),
         ("stato",       "bot_commands.assistente.stato"),
         ("help",        "bot_commands.assistente.help"),
     ],
@@ -352,8 +370,16 @@ def _telegram_created_at(msg: dict) -> str:
     return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _reply_to_text(msg: dict) -> str | None:
+    replied = msg.get("reply_to_message")
+    if not isinstance(replied, dict):
+        return None
+    text = replied.get("text") or replied.get("caption")
+    return str(text) if text else None
+
+
 def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
-                         *, edited: bool = False) -> bool:
+                         *, edited: bool = False, login_text: str | None = None) -> bool:
     """Journal atomico PRIMA dell'offset; update_id e' la chiave di dedup.
 
     Un file per update evita rewrite non atomiche della coda. Se il processo
@@ -375,7 +401,14 @@ def enqueue_inbound_turn(update_id: int, msg: dict, body: str,
         "delivered_via": "telegram",
         "created_at": _telegram_created_at(msg),
         "edited": bool(edited),
+        # Il testo del messaggio a cui l'utente ha risposto: e' cosi' che una
+        # risposta trova la SUA domanda quando ce n'e' piu' d'una aperta.
+        "reply_to_text": _reply_to_text(msg),
     }
+    if login_text is not None:
+        # A verification code: `body` is the mask the chat keeps, the text
+        # lives only in this 0600 journal until the flush hands it over.
+        record["login_text"] = str(login_text)
     try:
         _atomic_json(path, record)
     except Exception as e:
@@ -402,6 +435,218 @@ def _ensure_inbound_schema(db: sqlite3.Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_messages_source_id "
         "ON pending_user_messages(source_id) WHERE source_id IS NOT NULL"
     )
+
+
+def _resolve_closer_answer(db: sqlite3.Connection, rec: dict):
+    """La risposta dell'utente a una domanda del CLOSER, se lo e'.
+
+    Dentro un SAVEPOINT: un errore della risoluzione non deve far perdere il
+    turno di chat appena scritto, ne' lasciare mezza risposta salvata.
+    """
+    if application_answers is None:
+        return None
+    db.execute("SAVEPOINT closer_answer")
+    try:
+        outcome = application_answers.resolve_telegram_reply(
+            db,
+            text=str(rec.get("body") or ""),
+            reply_to_text=rec.get("reply_to_text"),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+        )
+    except Exception as e:
+        db.execute("ROLLBACK TO closer_answer")
+        db.execute("RELEASE closer_answer")
+        log(f"closer answer resolution failed: {type(e).__name__} — chat turn kept")
+        return None
+    db.execute("RELEASE closer_answer")
+    if outcome.status == "resolved":
+        log(f"closer answer resolved message={outcome.message_id} position={outcome.position_id}")
+        return outcome
+    if outcome.status == "rejected":
+        log(f"closer answer rejected message={outcome.message_id} reason={outcome.reason}")
+        return outcome
+    if outcome.status in {"already_answered", "unknown_code"} and (
+        rec.get("reply_to_text") or BOT_ROLE == CLOSER_QUESTION_BOT
+    ):
+        # A quoted code, or a code written to the bot the questions leave
+        # from: the user meant to answer. A "Q2025" chatted elsewhere is chat.
+        return outcome
+    if outcome.status == "ambiguous" and (
+        rec.get("reply_to_text") or application_answers._CODE.search(str(rec.get("body") or ""))
+    ):
+        return outcome
+    return None
+
+
+def _login_code_masked(msg: dict) -> bool:
+    """Is this text a LinkedIn verification code? Then it never reaches the chat.
+
+    Read only, before the journal: the ASSISTENTE and the chat history (pushed
+    to the cloud) must never see the digits. No jobs.db, no login request.
+    """
+    if application_answers is None or not JOBS_DB_PATH.exists():
+        return False
+    db = sqlite3.connect(f"file:{JOBS_DB_PATH}?mode=ro", uri=True, timeout=5)
+    try:
+        return application_answers.login_code_candidate(
+            db,
+            text=str(msg.get("text") or ""),
+            reply_to_text=_reply_to_text(msg),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+        )
+    finally:
+        db.close()
+
+
+def _resolve_login_code(db: sqlite3.Connection, rec: dict):
+    """Hand a masked verification code to the flow waiting for it; the outcome for the user."""
+    if application_answers is None:
+        return None
+    db.execute("SAVEPOINT closer_login_code")
+    try:
+        outcome = application_answers.resolve_login_code(
+            db,
+            text=str(rec.get("login_text") or ""),
+            reply_to_text=rec.get("reply_to_text"),
+            direct=BOT_ROLE == CLOSER_QUESTION_BOT,
+            jht_home=JHT_HOME,
+        )
+    except Exception as e:
+        db.execute("ROLLBACK TO closer_login_code")
+        db.execute("RELEASE closer_login_code")
+        log(f"closer login code failed: {type(e).__name__}")
+        return application_answers.LoginCodeOutcome("failed")
+    db.execute("RELEASE closer_login_code")
+    log(f"closer login code {outcome.status}")
+    return outcome
+
+
+_LOGIN_FEEDBACK = {
+    "received": "Verification code received. CLOSER is signing in with it.",
+    "expired": "That verification code request has expired. CLOSER will ask again.",
+    "closed": "That verification code request is already closed. CLOSER will ask again if it still needs one.",
+    "ambiguous": "This message was not used as a verification code. Reply to the code request message with the code.",
+    "failed": "The verification code could not be handed over. CLOSER will ask again.",
+}
+
+
+_REJECTION_TEXT = {
+    "closer_answer_not_exact_option": "it must be one of the listed choices, written exactly as shown",
+    "closer_answer_empty": "the answer is empty",
+    "closer_answer_already_submitted": "this application has already been sent",
+    "closer_answer_position_not_ready": "this position is no longer ready to apply",
+}
+
+
+def _answer_feedback_text(outcome) -> str:
+    if application_answers is not None and isinstance(outcome, application_answers.LoginCodeOutcome):
+        return _LOGIN_FEEDBACK.get(outcome.status, _LOGIN_FEEDBACK["failed"])
+    if outcome.status == "resolved" and outcome.reason == "position_withdrawn":
+        return (
+            "Answer saved. That application is withdrawn, so CLOSER will not send it: "
+            "the answer is used only if you ask to apply again."
+        )
+    if outcome.status == "resolved":
+        return "Answer saved. CLOSER will use it for this application and will not ask it again."
+    if outcome.status == "already_answered":
+        return "That CLOSER question already has an answer, so this message was not saved as a new one."
+    if outcome.status == "unknown_code":
+        return "No open CLOSER question has that code, so this message was not saved as an answer."
+    if outcome.status == "rejected":
+        why = _REJECTION_TEXT.get(outcome.reason, "it does not fit this question")
+        return f"That answer was not saved: {why}. Here is the question again:\n\n{outcome.question}"
+    return (
+        "More than one CLOSER question is open and this message does not say which one it answers. "
+        "Reply to the question message, or start your answer with its code."
+    )
+
+
+def _answer_feedback(outcome) -> None:
+    """Best-effort: la risposta e' gia' salvata (o rifiutata) nel DB."""
+    try:
+        subprocess.run(
+            ["jht-telegram-send", "--from", BOT_ROLE, _answer_feedback_text(outcome)],
+            capture_output=True, text=True, timeout=25, check=False,
+        )
+    except Exception as e:
+        log(f"closer answer feedback not sent: {type(e).__name__}")
+
+
+def wake_closer_after_answers(db_path: Path | None = None) -> None:
+    """Sveglia il CLOSER vivo quando le risposte dell'utente sbloccano qualcosa.
+
+    Stessa funzione per le risposte arrivate da Telegram e da dashboard: le une
+    e le altre finiscono sulle righe delle domande, e la chiave di sveglia e'
+    in jobs.db, quindi una sola sveglia per posizione anche con tre bridge.
+    Best-effort: senza sveglia la posizione e' comunque pronta in coda e la
+    regola di spawn del Capitano la vede.
+    """
+    if application_answers is None or BOT_ROLE != CLOSER_QUESTION_BOT:
+        return
+    target = db_path or JOBS_DB_PATH
+    if not target.exists():
+        return
+    try:
+        # Every poll comes here: jobs.db alone says whether there is anything
+        # to announce, before the profile is parsed or the queue is read.
+        probe = sqlite3.connect(target, timeout=5)
+        try:
+            if not application_answers.wake_candidates(probe):
+                return
+        finally:
+            probe.close()
+        profile = {}
+        profile_path = JHT_HOME / "profile" / "candidate_profile.yml"
+        try:
+            import yaml
+
+            loaded = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+            profile = loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            profile = {}
+        db = sqlite3.connect(target, timeout=5)
+        try:
+            for wake in application_answers.wake_closer(db, profile):
+                log(f"closer woken: {wake.reason} key={wake.key}")
+        finally:
+            db.close()
+    except Exception as e:
+        log(f"closer wake check failed: {type(e).__name__}")
+
+
+IDLE_CHECK_EVERY_SEC = 30
+_idle_watch = None
+_idle_checked_at = 0.0
+
+
+def wake_idle_closer(db_path: Path | None = None, *, clock=time.monotonic) -> None:
+    """Sveglia un CLOSER vivo fermo al prompt mentre la coda e' pronta.
+
+    Le sveglie qui sopra scattano su un evento; questa guarda lo STATO (visto
+    dal vivo dopo la 1845: turno chiuso con queue_ready 4, nessuno lo ha
+    svegliato). Ogni 30 s al massimo, solo dal bridge delle domande del
+    CLOSER; pane e finestra di sveglia prima, la coda per ultima.
+    """
+    global _idle_watch, _idle_checked_at
+    if application_answers is None or BOT_ROLE != CLOSER_QUESTION_BOT:
+        return
+    if clock() - _idle_checked_at < IDLE_CHECK_EVERY_SEC:
+        return
+    _idle_checked_at = clock()
+    target = db_path or JOBS_DB_PATH
+    if not target.exists():
+        return
+    try:
+        if _idle_watch is None:
+            _idle_watch = application_answers.IdleWatch()
+        db = sqlite3.connect(target, timeout=5)
+        try:
+            for session in application_answers.wake_idle_closer(db, idle_sessions=_idle_watch.idle_sessions):
+                log(f"idle closer woken: {session} (queue ready)")
+        finally:
+            db.close()
+    except Exception as e:
+        log(f"idle closer check failed: {type(e).__name__}")
 
 
 def flush_inbound_queue(db_path: Path | None = None) -> int:
@@ -442,16 +687,32 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
                 "VALUES (?, ?, 'notification', 'user', NULL, 'telegram', "
                 "        NULL, ?, ?)"
             )
+            resolutions = []
             for _path, rec in records:
-                db.execute(insert, (
+                inserted = db.execute(insert, (
                     rec["agent"], rec["body"], rec["created_at"], rec["source_id"],
-                ))
+                )).rowcount
+                # Solo la prima volta: un replay del journal trova la riga gia'
+                # scritta e non deve risolvere (o rifiutare) una seconda volta.
+                if inserted == 1 and "login_text" in rec:
+                    outcome = _resolve_login_code(db, rec) if not rec.get("edited") else None
+                    if outcome is not None:
+                        resolutions.append(outcome)
+                elif inserted == 1 and not rec.get("edited"):
+                    outcome = _resolve_closer_answer(db, rec)
+                    if outcome is not None:
+                        resolutions.append(outcome)
             db.commit()
         finally:
             db.close()
     except (OSError, ValueError, KeyError, sqlite3.Error, DurableQueueError) as e:
         log(f"inbound queue flush failed: {e} — durable journal retained")
         return 0
+
+    for outcome in resolutions:
+        _answer_feedback(outcome)
+    if any(outcome.status == "resolved" for outcome in resolutions):
+        wake_closer_after_answers(target)
 
     for path, _rec in records:
         try:
@@ -617,10 +878,26 @@ def _discard_partial(local: Path | None) -> None:
 
 # ── Dispatch messaggi ───────────────────────────────────────────────────
 
+# Buste che scrive solo il trasporto o un agente: in testa a una riga di un
+# testo dell'utente farebbero passare le sue parole per un messaggio del daemon
+# ([BRIDGE INFO]) o di un collega ([@x -> @y]). Il testo resta intatto, ma
+# chi lo legge vede per prima cosa che l'ha scritto l'utente.
+_FORGED_ENVELOPE_RE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I)
+USER_TEXT_MARK = "[USER TEXT]"
+
+
 def handle_text(msg: dict) -> str | None:
     text = msg.get("text", "").strip()
     if not text:
         return None
+    lines = text.split("\n")
+    if any(_FORGED_ENVELOPE_RE.match(line) for line in lines):
+        # Ogni riga che comincia come una busta porta il marchio, e anche la
+        # prima: chi legge il pane vede una riga per volta.
+        lines = [f"{USER_TEXT_MARK} {line}" if _FORGED_ENVELOPE_RE.match(line) else line for line in lines]
+        if not lines[0].startswith(USER_TEXT_MARK):
+            lines[0] = f"{USER_TEXT_MARK} {lines[0]}"
+        text = "\n".join(lines)
     log(f"text len={len(text)} → {TARGET_SESSION}")
     return text
 
@@ -744,7 +1021,12 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
         log(f"uid={uid} /start ack (no forward)")
         return
     body = None
-    if "text" in m:
+    login_text = None
+    if "text" in m and _login_code_masked(m):
+        login_text = str(m.get("text") or "")
+        body = application_answers.LOGIN_CODE_MASK
+        log(f"uid={uid} verification code masked")
+    elif "text" in m:
         body = handle_text(m)
     elif "document" in m:
         body = handle_document(token, m)
@@ -759,7 +1041,44 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
         # storico gia' consegnato e non puo' collidere col messaggio originale.
         if edited:
             body = f"[TG-EDITED] {body}"
-        enqueue_inbound_turn(uid, m, body, edited=edited)
+        enqueue_inbound_turn(uid, m, body, edited=edited, login_text=login_text)
+
+
+_CODE_DIGITS_RE = re.compile(r"(?<![A-Za-z0-9])\d(?:[ -]?\d){3,}(?![A-Za-z0-9])")
+# An eight-character code (Greenhouse's alnum8), a space or dash tolerated.
+_CODE_ALNUM8_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9](?:[ -]?[A-Za-z0-9]){7}(?![A-Za-z0-9])")
+
+
+def _mask_alnum8(match):
+    token = re.sub(r"[ -]", "", match.group(0))
+    if token.isalpha() and (token.islower() or token.istitle()):
+        return match.group(0)  # an ordinary word keeps the dead letter readable
+    return "[code]"
+
+
+def _mask_code_digits(text):
+    """A group of 4+ digits or an 8-character token may be a verification code:
+    never written to disk raw. Ordinary words ("qualcosa") stay."""
+    if not isinstance(text, str):
+        return text
+    return _CODE_ALNUM8_RE.sub(_mask_alnum8, _CODE_DIGITS_RE.sub("[digits]", text))
+
+
+def _mask_update_digits(u: dict) -> dict:
+    """The dead letter keeps the update, not a code it may carry (the DB may be why it failed)."""
+    masked = json.loads(json.dumps(u, default=str))
+    for key in ("message", "edited_message"):
+        m = masked.get(key)
+        if not isinstance(m, dict):
+            continue
+        for field in ("text", "caption"):
+            m[field] = _mask_code_digits(m.get(field)) if field in m else None
+            if m[field] is None:
+                m.pop(field)
+        replied = m.get("reply_to_message")
+        if isinstance(replied, dict) and "text" in replied:
+            replied["text"] = _mask_code_digits(replied["text"])
+    return masked
 
 
 def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
@@ -776,8 +1095,8 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
         "role": BOT_ROLE,
         "update_id": uid,
         "attempts": attempts,
-        "error": reason,
-        "update": u,
+        "error": _mask_code_digits(reason),
+        "update": _mask_update_digits(u),
     }
     try:
         DEADLETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -802,7 +1121,7 @@ def dead_letter(u: dict, err: BaseException, attempts: int) -> None:
         uid,
         m,
         f"[TG-UNDELIVERED] "
-        f"update_id={uid} attempts={attempts} error={reason} file={DEADLETTER_PATH} — "
+        f"update_id={uid} attempts={attempts} error={_mask_code_digits(reason)} file={DEADLETTER_PATH} — "
         f"a user message was not delivered: notify the user and ask them to send it again.",
     )
 
@@ -896,6 +1215,10 @@ def main() -> None:
             # Riduce la latenza normale: il journal appena scritto entra nella
             # cronologia senza aspettare i 30s del long-poll successivo.
             flush_inbound_queue()
+            # Anche le risposte date dalla dashboard: nessun evento le annuncia
+            # al bridge, quindi le si guarda a ogni giro (una query leggera).
+            wake_closer_after_answers()
+            wake_idle_closer()
             if ritenta:
                 time.sleep(RETRY_BACKOFF_SEC)
         except urllib.error.HTTPError as e:

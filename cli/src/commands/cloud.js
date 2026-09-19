@@ -37,6 +37,7 @@ import {
   retryTables,
   sanitizedQuarantineReason,
 } from '../lib/cloud-push-quarantine.js';
+import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -1339,6 +1340,14 @@ async function performPush(options) {
         // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
         // (cross-device: push qui + pull desired-state) + risultato testuale.
         'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
+        // [JHT-CLOSER] Autorizzazione alla candidatura (mig 088): stesso
+        // pattern cross-device, con l'AUTORE accanto al flag. Guardata da
+        // `sqliteHasColumn` come `write_request_kind`, e per la stessa ragione:
+        // un jobs.db di un'immagine precedente non ha ancora la colonna, e
+        // nominarla farebbe fallire la SELECT — cioe' l'INTERO push, non solo
+        // questo flag (regola B01: degradare, non cadere).
+        ...(sqliteHasColumn(db, 'positions', 'apply_requested')
+          ? ['apply_requested', 'apply_requested_at', 'apply_requested_by'] : []),
         // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
         // dall'analista, alimentano i grafici categoria/mappa della dashboard
         // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
@@ -1430,7 +1439,19 @@ async function performPush(options) {
       // corsia veloce, che salta le righe già sincronizzate — a creare i
       // gemelli (O-16). Su un DB più vecchio del codice la colonna non c'è:
       // si comporta come prima, nessuna riga cambia identità.
+      //
+      // Un `cloud_legacy_id` NEGATIVO e' un turno nato sul web: la riga vera e'
+      // gia' sul cloud (mig 060) e il full-push per contratto non la manda. La
+      // merge RPC scarta comunque `legacy_id <= 0` per non sovrascrivere cio'
+      // che l'utente ha scritto dal browser, e sul cloud quelle righe non hanno
+      // `chat_ts` (lo scrive solo il mirror del box): rimandarle non poteva
+      // produrre ne' una scrittura ne' una ricevuta coerente. Mapparle sull'id
+      // negativo le trasformava invece in righe senza identita' valida, e
+      // bastavano due di loro per fermare l'intero push a ogni giro.
       if (hasCloudLegacyId) {
+        pendingMessages = pendingMessages.filter(
+          (m) => !(Number.isFinite(m.cloud_legacy_id) && m.cloud_legacy_id < 0),
+        );
         pendingMessages = pendingMessages.map((m) => {
           if (!Number.isFinite(m.cloud_legacy_id)) return m;
           const { cloud_legacy_id: cloudId, ...rest } = m;
@@ -1503,8 +1524,34 @@ async function performPush(options) {
     tombstones,
   };
   const held = {};
+  // Una riga senza identita' di ricevuta resta FUORI dal convoglio, contata
+  // per `tabella.campo`, e il resto viaggia. Prima un solo ReceiptKeyInvalid
+  // abortiva tutte le tabelle a ogni giro, per sempre (32856 fallimenti di
+  // fila su un box con due righe cattive su 1182).
+  //
+  // Esclusa per riga e non per tabella: la tabella intera ferma perderebbe
+  // proprio le righe che una ricevuta la possono avere. Ma esclusa NON vuol
+  // dire in quarantena ne' "settled": la quarantena si indicizza con
+  // quell'identita' che manca, e `checkpointTable` conta come settled solo
+  // righe confermate o in quarantena. Il cursore della tabella si ferma
+  // quindi prima della riga esclusa, che viene riletta a ogni giro e parte da
+  // sola appena la si corregge in locale. Nessuna ricevuta su una riga
+  // sbagliata, nessuna riga persa dietro un cursore.
+  const invalidIdentity = new Map();
+  const withValidIdentity = (table, rows) => rows.filter((row) => {
+    try {
+      quarantineIdentity(table, row);
+      return true;
+    } catch (err) {
+      if (!(err instanceof ReceiptKeyInvalid)) throw err;
+      invalidIdentity.set(err.label, (invalidIdentity.get(err.label) || 0) + 1);
+      return false;
+    }
+  });
   const partition = (table, rows) => {
-    const result = partitionQuarantinedRows(table, rows, quarantineState);
+    const result = partitionQuarantinedRows(
+      table, withValidIdentity(table, rows), quarantineState,
+    );
     held[table] = result.held;
     return result.send;
   };
@@ -1530,12 +1577,24 @@ async function performPush(options) {
         force: options.full === true,
       }], quarantineState)
       : { send: [], held: [] };
-  } catch {
-    console.error(pc.red('Cloud push source identity is invalid; no rows were sent.'));
+  } catch (err) {
+    // Non e' piu' un problema d'identita' (quelle righe sono gia' escluse
+    // sopra): e' un guasto vero, e il messaggio vero e' l'unica diagnosi.
+    console.error(pc.red(`Cloud push could not prepare the rows (${err?.message || err}); no rows were sent.`));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
   held.profile = profilePartition.held;
+  const invalidIdentityCount = [...invalidIdentity.values()].reduce((a, b) => a + b, 0);
+  if (invalidIdentityCount > 0) {
+    const fields = [...invalidIdentity.entries()]
+      .map(([label, count]) => `${label} x${count}`)
+      .join(', ');
+    console.error(pc.yellow(
+      `⚠ Cloud push excluded ${invalidIdentityCount} row(s) without a valid source identity (${fields}); `
+      + 'the other rows are sent, and each excluded row holds its table cursor until it is fixed locally.'
+    ));
+  }
   const sendProfile = profilePartition.send[0] || null;
 
   const profileChunks = sendProfile
@@ -1586,6 +1645,7 @@ async function performPush(options) {
       authFailed: false,
       skipped: unresolved,
       quarantined: unresolved,
+      invalidIdentity: invalidIdentityCount,
       nothingToSync: true,
     };
   }
@@ -1719,9 +1779,9 @@ async function performPush(options) {
         let receiptIds;
         try {
           receiptIds = rows.map((row) => quarantineIdentity(table, row));
-        } catch {
+        } catch (err) {
           outcome.aborted = true;
-          console.error(pc.red('Cloud push source identity is invalid; cursor unchanged.'));
+          console.error(pc.red(`Cloud push receipt identity failed for ${table} (${err?.message || err}); cursor unchanged.`));
           return { confirmed, quarantined };
         }
         const wireRows = rows.map((row, index) => ({
@@ -1741,9 +1801,9 @@ async function performPush(options) {
         if (res.ok) {
           try {
             resolveConfirmedRetries(table, rows, { path: quarantinePath });
-          } catch {
+          } catch (err) {
             outcome.aborted = true;
-            console.error(pc.red('Push quarantine acknowledgement could not be persisted; cursor unchanged.'));
+            console.error(pc.red(`Push quarantine acknowledgement could not be persisted (${err?.message || err}); cursor unchanged.`));
             return { confirmed, quarantined };
           }
           addUp(res.body);
@@ -1787,9 +1847,9 @@ async function performPush(options) {
               }
             }
             continue;
-          } catch {
+          } catch (err) {
             outcome.aborted = true;
-            console.error(pc.red('Cloud push quarantine could not be persisted; cursor unchanged.'));
+            console.error(pc.red(`Cloud push quarantine could not be persisted (${err?.message || err}); cursor unchanged.`));
             return { confirmed, quarantined };
           }
         }
@@ -1890,6 +1950,7 @@ async function performPush(options) {
       ok: false,
       authFailed: outcome.authFailed,
       skipped: activeQuarantineEntries(readCloudPushQuarantine(quarantinePath)).length,
+      invalidIdentity: invalidIdentityCount,
       timedOut: outcome.timedOut === true,
     };
   }
@@ -1913,6 +1974,7 @@ async function performPush(options) {
     skipped: unresolved,
     quarantined: unresolved,
     quarantinedNew: outcome.quarantinedNew,
+    invalidIdentity: invalidIdentityCount,
   };
 }
 
@@ -2158,7 +2220,11 @@ async function handleDisable(options = {}) {
  * è offline → write_requested=TRUE su Supabase → senza pull al riavvio
  * il Capitano non vede mai il flag (push è write-only locale → cloud).
  *
- * Scope MVP: solo `positions.write_requested` + `write_requested_at`.
+ * Scope: i flag desired-state di `positions` — write/geocode/recheck/
+ * salary_precise e, da [JHT-CLOSER], `apply_requested[_at][_by]`, che e' il
+ * click con cui l'utente AUTORIZZA una candidatura. Quest'ultimo e' l'unico
+ * che, se non scende, ha come sintomo un CLOSER che non parte mai: l'operatore
+ * flagga dal browser sulla VPS e il box non lo saprebbe.
  * Endpoint server: GET /api/cloud-sync/pull-desired-state?since=<ISO>.
  *
  * Best-effort: non blocca il boot del team su errore di rete o cloud
@@ -2200,6 +2266,36 @@ function laterInstant(a, b) {
   if (Number.isNaN(ma)) return Number.isNaN(mb) ? null : b;
   if (Number.isNaN(mb)) return a;
   return mb > ma ? b : a;
+}
+
+/**
+ * [JHT-CLOSER] Quale autorizzazione vale fra quella del box e quella del cloud.
+ *
+ * Dal cloud si prende l'AZIONE dell'utente, non lo stato della riga (#186): una
+ * posizione rientra nel pull anche per altri motivi (un'esclusione, un altro
+ * flag), e la sua riga cloud puo' non conoscere un flag acceso sul box che il
+ * push non ha ancora portato su. Il 13/09 una riga trascinata da
+ * un'esclusione ha spento cosi' due autorizzazioni date con `jht apply request`.
+ *
+ * Vince il cloud solo con un `apply_requested_at` strettamente piu' recente di
+ * quello locale: e' un click (o un ritiro, che ha il suo istante) successivo.
+ * Altrimenti la terna locale resta intera, istante e autore compresi.
+ */
+export function resolveApplyRequest(local, cloud) {
+  const localValue = {
+    flag: (local?.apply_requested ?? 0) === 1 ? 1 : 0,
+    at: local?.apply_requested_at ?? null,
+    by: local?.apply_requested_by ?? null,
+  };
+  const cloudMs = Date.parse(cloud?.apply_requested_at ?? '');
+  if (Number.isNaN(cloudMs)) return localValue;
+  const localMs = Date.parse(localValue.at ?? '');
+  if (!Number.isNaN(localMs) && cloudMs <= localMs) return localValue;
+  return {
+    flag: cloud.apply_requested === true || cloud.apply_requested === 1 ? 1 : 0,
+    at: cloud.apply_requested_at,
+    by: cloud.apply_requested_by || null,
+  };
 }
 
 async function handlePullDesiredState(options = {}) {
@@ -2269,8 +2365,15 @@ async function handlePullDesiredState(options = {}) {
       let maxTs = cursor.since;
       let maxMs = maxTs ? Date.parse(maxTs) : NaN;
       for (const r of rows) {
+        // `apply_requested_at` sta in questa lista e non e' una ripetizione
+        // meccanica: e' l'unico timestamp che puo' cambiare DA SOLO in un tick
+        // (l'utente flagga una posizione e basta). Fuori di qui, un tick del
+        // genere non farebbe avanzare il cursore, la stessa finestra
+        // tornerebbe a ogni giro e il difetto si vedrebbe come «il pull gira
+        // ma non conclude mai», non come una colonna dimenticata.
         for (const ts of [r.write_requested_at, r.geocode_requested_at,
-          r.recheck_requested_at, r.salary_precise_requested_at, r.user_excluded_at]) {
+          r.recheck_requested_at, r.salary_precise_requested_at,
+          r.apply_requested_at, r.user_excluded_at]) {
           if (!ts) continue;
           const ms = Date.parse(ts);
           if (Number.isNaN(ms)) continue;
@@ -2377,7 +2480,8 @@ async function handlePullDesiredState(options = {}) {
         log(
           pc.dim(
             `  #${p.legacy_id} write=${p.write_requested}@${p.write_requested_at || '-'} ` +
-              `geo=${p.geocode_requested}@${p.geocode_requested_at || '-'}`
+              `geo=${p.geocode_requested}@${p.geocode_requested_at || '-'} ` +
+              `apply=${p.apply_requested}@${p.apply_requested_at || '-'} by=${p.apply_requested_by || '-'}`
           )
         );
       }
@@ -2512,7 +2616,10 @@ async function handlePullDesiredState(options = {}) {
              recheck_requested = ?,
              recheck_requested_at = ?,
              salary_precise_requested = ?,
-             salary_precise_requested_at = ?
+             salary_precise_requested_at = ?,
+             apply_requested = ?,
+             apply_requested_at = ?,
+             apply_requested_by = ?
        WHERE id = ?
     `);
     // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
@@ -2520,7 +2627,8 @@ async function handlePullDesiredState(options = {}) {
     const checkStmt = db.prepare(
       'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
         'write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, ' +
-        'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at ' +
+        'recheck_requested, recheck_requested_at, salary_precise_requested, salary_precise_requested_at, ' +
+        'apply_requested, apply_requested_at, apply_requested_by ' +
         'FROM positions WHERE id = ?'
     );
     // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
@@ -2559,6 +2667,13 @@ async function handlePullDesiredState(options = {}) {
       const rcAt = p.recheck_requested_at || null;
       const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
       const spAt = p.salary_precise_requested_at || null;
+      // [JHT-CLOSER] L'autorizzazione alla candidatura. Viaggia con gli altri
+      // flag perche' e' un desired-state come loro, ma l'AUTORE non e' un
+      // ornamento: il gate (`shared/skills/apply_gate.py`) rifiuta un flag il
+      // cui `apply_requested_by` non nomina un canale utente, quindi una
+      // corsia che portasse a casa il booleano e lasciasse indietro l'autore
+      // produrrebbe autorizzazioni che il box scarta senza dire perche'.
+      const { flag: apFlag, at: apAt, by: apBy } = resolveApplyRequest(local, p);
       // Skip delle scritture no-op: l'UPDATE non tocca updated_at, quindi il
       // trigger `positions_touch_updated_at` (AFTER UPDATE ... WHEN NEW.updated_at
       // IS OLD.updated_at) rilancerebbe una UPDATE annidata su updated_at PER OGNI
@@ -2574,9 +2689,13 @@ async function handlePullDesiredState(options = {}) {
         (local.recheck_requested ?? 0) !== rcFlag ||
         (local.recheck_requested_at ?? null) !== rcAt ||
         (local.salary_precise_requested ?? 0) !== spFlag ||
-        (local.salary_precise_requested_at ?? null) !== spAt;
+        (local.salary_precise_requested_at ?? null) !== spAt ||
+        (local.apply_requested ?? 0) !== apFlag ||
+        (local.apply_requested_at ?? null) !== apAt ||
+        (local.apply_requested_by ?? null) !== apBy;
       if (flagsChanged) {
-        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
+        stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt,
+          apFlag, apAt, apBy, legacyId);
         updated++;
       }
 
@@ -3930,6 +4049,13 @@ async function handleDaemon(options) {
   const chatCycleState = { lastPulledRequestedAt: null };
   let stoppedPollAttempt = 0;
   while (running) {
+    // Dichiarata QUI, non nel ramo che la legge dal cloud: il calcolo dello
+    // sleep in fondo al giro la usa anche quando HALT-WEEKLY salta la lettura.
+    // Dentro l'else era fuori portata e ogni giro finiva in ReferenceError
+    // (crash-loop del daemon sui pairing senza Realtime). Con il flag resta
+    // null: nessuna osservazione di team fermo, quindi cadenza syncCheckSec e
+    // backoff azzerato, come per una lettura fallita.
+    let rendezvousState = null;
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
         console.log(pc.dim(`  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.`));
@@ -3971,7 +4097,6 @@ async function handleDaemon(options) {
       // push dati parte solo se c'è una richiesta dell'utente → il pulsante
       // risponde in pochi secondi; la chat, che non può permettersi minuti
       // di latenza, gira qui e non nel giro pesante.
-      let rendezvousState = null;
       try {
         rendezvousState = await readRendezvousState(config, { silent: true });
       } catch (err) {

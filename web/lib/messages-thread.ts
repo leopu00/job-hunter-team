@@ -13,6 +13,7 @@
  */
 import type { PendingMessage } from "@/lib/types";
 import { noteServerTimeFromResponse } from "@/lib/server-clock";
+import { isApplicationAnswerRequestBody } from "@/lib/application-answer-request";
 
 /**
  * Voci di dizionario usate identiche da entrambe le viste. Ogni componente
@@ -211,6 +212,21 @@ export function withReply(
           acknowledged_at: m.acknowledged_at ?? now,
         }
       : m,
+  );
+}
+
+/**
+ * CLOSER is not a free-form chat target: its only web input is an answer
+ * attached to the exact durable question row that stopped an application.
+ */
+export function isApplicationAnswerRequest(message: PendingMessage): boolean {
+  return (
+    message.agent === "closer" &&
+    message.author === "agent" &&
+    message.kind === "question" &&
+    !!message.related_position_id &&
+    isApplicationAnswerRequestBody(message.body) &&
+    !message.user_reply
   );
 }
 

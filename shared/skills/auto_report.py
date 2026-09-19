@@ -20,7 +20,7 @@ It creates two artifacts:
        ⏱️ Budget        49% (projection 79% — Phase 1 UNDERUTILIZED)
 
 The final output sends the caption and PNG through `jht-telegram-send --from capitano
---keyboard capitano --photo <path>`.
+--photo <path>`. No reply keyboard: the bot's commands live in its ☰ menu.
 
 The timestamp of the latest notification is stored in
 `$JHT_HOME/state/auto_report_last.json`. The script sends only when
@@ -365,8 +365,7 @@ def send_to_telegram(text: str, photo: Path | None, dry_run: bool = False) -> bo
         if photo and photo.exists():
             print(f"[dry-run] PNG ready: {photo} ({photo.stat().st_size} B)")
         return True
-    args = [TELEGRAM_SEND, "--from", "capitano",
-            "--keyboard", "capitano", "--html"]
+    args = [TELEGRAM_SEND, "--from", "capitano", "--html"]
     if photo and photo.exists():
         args.extend(["--photo", str(photo)])
     args.append(text)

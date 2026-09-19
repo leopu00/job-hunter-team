@@ -222,6 +222,14 @@ interface PositionIn {
   salary_precise_requested?: number | boolean | null;
   salary_precise_requested_at?: string | null;
   salary_precise?: string | null;
+  // [JHT-CLOSER] Autorizzazione per-posizione alla candidatura (mig 088).
+  // Stesso pattern desired-state degli altri quattro flag, con in piu' l'AUTORE
+  // (`apply_requested_by`): un flag che non dice chi l'ha acceso non distingue
+  // una persona da un processo, e qui la differenza e' fra un'autorizzazione e
+  // un team che si candida da solo (#186).
+  apply_requested?: number | boolean | null;
+  apply_requested_at?: string | null;
+  apply_requested_by?: string | null;
 }
 
 interface ScoreIn {
@@ -906,6 +914,15 @@ export async function POST(req: NextRequest) {
                 : p.salary_precise_requested === 1,
           salary_precise_requested_at: p.salary_precise_requested_at ?? null,
           salary_precise: p.salary_precise ?? null,
+          // [JHT-CLOSER] Autorizzazione alla candidatura (mig 088).
+          apply_requested:
+            p.apply_requested == null
+              ? false
+              : typeof p.apply_requested === "boolean"
+                ? p.apply_requested
+                : p.apply_requested === 1,
+          apply_requested_at: p.apply_requested_at ?? null,
+          apply_requested_by: p.apply_requested_by ?? null,
         };
       });
 

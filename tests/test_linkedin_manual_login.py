@@ -1,0 +1,392 @@
+"""The user's manual LinkedIn sign-in, and the flow reusing that profile.
+
+14/09: the operator signs in to LinkedIn with Google and has no LinkedIn
+password; Google refuses automated browsers.  `linkedin_apply.py login
+--interactive` opens a plain Chromium once, the user signs in by hand, and the
+flow reuses the profile.
+
+Synthetic only: a fake Chromium binary that writes a cookie database, made-up
+cookie values, Playwright routes.  Nothing reaches LinkedIn or Google.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import stat
+import sys
+import textwrap
+import time
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "shared" / "skills"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import apply_flow  # noqa: E402
+import linkedin_apply  # noqa: E402
+from apply_flow import ApplicationFlow  # noqa: E402
+
+from test_linkedin_apply_flow import (  # noqa: E402
+    JOB,
+    Site,
+    build_flow,
+    checkpoint,
+    home,  # noqa: F401 — fixture
+    cv_path,  # noqa: F401 — fixture
+    page,  # noqa: F401 — fixture
+    no_dns_guard,  # noqa: F401 — fixture
+    write_credentials,
+)
+
+SECRET = "synthetic-li-at-value-never-printed"
+_EPOCH_OFFSET_S = 11_644_473_600
+
+
+def chromium_time(unix_seconds: float) -> int:
+    return int((unix_seconds + _EPOCH_OFFSET_S) * 1_000_000)
+
+
+def write_cookie_db(profile: Path, *, expires: float, host: str = ".www.linkedin.com", name: str = "li_at") -> None:
+    database = profile / "Default" / "Network" / "Cookies"
+    database.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(database) as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, expires_utc INTEGER)"
+        )
+        conn.execute(
+            "INSERT INTO cookies VALUES (?, ?, '', ?, ?)", (host, name, SECRET.encode(), chromium_time(expires))
+        )
+
+
+FAKE_CHROMIUM = textwrap.dedent(
+    """\
+    #!{python}
+    import json, os, signal, sqlite3, sys, time
+    from pathlib import Path
+    record = Path(os.environ["FAKE_CHROMIUM_RECORD"])
+    record.write_text(json.dumps({{"argv": sys.argv[1:], "display": os.environ.get("DISPLAY"), "pid": os.getpid()}}))
+    signal.signal(signal.SIGTERM, lambda *_: (record.with_suffix(".stopped").write_text("1"), sys.exit(0)))
+    profile = Path(next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--user-data-dir=")))
+    if os.environ.get("FAKE_CHROMIUM_MODE") == "login":
+        time.sleep(0.3)
+        db = profile / "Default" / "Network" / "Cookies"
+        db.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(db) as conn:
+            conn.execute("CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, expires_utc INTEGER)")
+            conn.execute("INSERT INTO cookies VALUES ('.www.linkedin.com', 'li_at', '', ?, ?)",
+                         ({secret!r}.encode(), int((time.time() + 86400 + {offset}) * 1_000_000)))
+    while True:
+        time.sleep(0.1)
+    """
+)
+
+
+@pytest.fixture
+def fake_chromium(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "fake-chromium"
+    binary.write_text(FAKE_CHROMIUM.format(python=sys.executable, secret=SECRET, offset=_EPOCH_OFFSET_S))
+    binary.chmod(0o755)
+    record = tmp_path / "fake-chromium.json"
+    monkeypatch.setenv("FAKE_CHROMIUM_RECORD", str(record))
+    monkeypatch.delenv("DISPLAY", raising=False)
+    return binary, record
+
+
+# ── the command ───────────────────────────────────────────────────────────────
+
+
+def test_interactive_login_waits_for_the_session_then_closes_a_plain_chromium(tmp_path: Path, fake_chromium, monkeypatch, capsys):
+    binary, record = fake_chromium
+    monkeypatch.setenv("FAKE_CHROMIUM_MODE", "login")
+    monkeypatch.setenv("JHT_CHROMIUM_BIN", str(binary))
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setattr(linkedin_apply, "interactive_login", _fast(linkedin_apply.interactive_login))
+
+    code = linkedin_apply.main(["login", "--interactive", "--timeout-minutes", "0.5"])
+
+    out = capsys.readouterr()
+    assert code == 0 and json.loads(out.out) == {"status": "logged_in"}
+    assert SECRET not in out.out + out.err
+    launched = json.loads(record.read_text())
+    profile = tmp_path / ".cache" / "linkedin" / "profile"
+    assert f"--user-data-dir={profile}" in launched["argv"]
+    assert launched["argv"][-1] == linkedin_apply.LOGIN_URL
+    assert not any(a.startswith(("--enable-automation", "--remote-debugging", "--headless")) for a in launched["argv"])
+    assert launched["display"] == ":99"
+    assert stat.S_IMODE(profile.stat().st_mode) == 0o700
+    assert record.with_suffix(".stopped").exists(), "Chromium is closed once the session exists"
+    assert linkedin_apply.profile_state(tmp_path) == "valid"
+
+
+def _fast(function):
+    def wrapper(*args, **kwargs):
+        kwargs.setdefault("poll_s", 0.1)
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def test_interactive_login_times_out_and_closes_the_browser(tmp_path: Path, fake_chromium, monkeypatch):
+    binary, record = fake_chromium
+    monkeypatch.setenv("FAKE_CHROMIUM_MODE", "never")
+
+    result = linkedin_apply.interactive_login(tmp_path, binary=str(binary), timeout_s=1.0, poll_s=0.1)
+
+    assert result == {"status": "timeout"}
+    assert record.with_suffix(".stopped").exists()
+    assert linkedin_apply.profile_state(tmp_path) == "expired"
+
+
+def test_interactive_login_never_opens_a_second_browser_on_a_held_profile(tmp_path: Path, fake_chromium):
+    binary, record = fake_chromium
+
+    with linkedin_apply.profile_lock(tmp_path):
+        result = linkedin_apply.interactive_login(tmp_path, binary=str(binary), timeout_s=1.0, poll_s=0.1)
+
+    assert result == {"status": "busy"}
+    assert not record.exists()
+
+
+@pytest.mark.parametrize(
+    "expires, host, name, state",
+    (
+        (time.time() + 3600, ".www.linkedin.com", "li_at", "valid"),
+        (time.time() - 3600, ".www.linkedin.com", "li_at", "expired"),
+        (time.time() + 3600, ".linkedin.com.example.invalid", "li_at", "absent"),
+        (time.time() + 3600, ".www.linkedin.com", "JSESSIONID", "absent"),
+    ),
+)
+def test_the_session_cookie_is_judged_by_host_name_and_expiry_only(tmp_path: Path, expires, host, name, state):
+    write_cookie_db(tmp_path, expires=expires, host=host, name=name)
+    assert linkedin_apply.session_cookie_state(tmp_path) == state
+
+
+# ── the flow reusing the profile ─────────────────────────────────────────────
+
+
+def make_profile(home: Path, *, expires: float) -> Path:
+    profile = home / ".cache" / "linkedin" / "profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    profile.chmod(0o700)
+    write_cookie_db(profile, expires=expires)
+    return profile
+
+
+def never_open_a_browser(monkeypatch):
+    def refuse(self):
+        raise AssertionError("no browser may open")
+
+    monkeypatch.setattr(ApplicationFlow, "_managed_page", refuse)
+
+
+def test_an_expired_hand_made_session_stops_for_the_user_before_any_browser(home: Path, cv_path: Path, monkeypatch):
+    make_profile(home, expires=time.time() - 60)
+    never_open_a_browser(monkeypatch)
+    notices: list = []
+
+    flow = build_flow(home, cv_path)
+    flow.notifier = lambda **kwargs: notices.append(kwargs) or "1"
+    result = flow.run()
+
+    assert (result.status, result.reason) == ("blocked_human", "linkedin_session_expired")
+    assert notices == []  # one line in the round's summary, not a message of its own
+    pending = json.loads((home / ".cache" / "apply-flow" / "notices.json").read_text())["pending"]
+    assert [entry["reason"] for entry in pending] == ["linkedin_session_expired"]
+
+
+def test_a_profile_another_browser_holds_is_denied_without_opening_one(home: Path, cv_path: Path, monkeypatch):
+    make_profile(home, expires=time.time() + 3600)
+    never_open_a_browser(monkeypatch)
+
+    with linkedin_apply.profile_lock(home):
+        result = build_flow(home, cv_path).run()
+
+    assert (result.status, result.reason) == ("denied", "linkedin_profile_busy")
+    assert not (home / ".cache" / "apply-flow" / "71.json").exists()
+
+
+def test_a_session_linkedin_rejects_stops_and_never_signs_in_with_anything_else(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() + 3600)  # the cookie looks valid; LinkedIn shows signed out
+    site = Site()
+
+    site.install(page)
+    result = build_flow(home, cv_path).run(page=page, navigate=True)
+
+    assert (result.status, result.reason) == ("blocked_human", "linkedin_session_expired")
+    assert site.logins() == 0
+
+
+def test_with_a_credentials_file_the_password_sign_in_is_still_the_fallback(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() - 60)
+    write_credentials(home)
+    site = Site()
+
+    site.install(page)
+    result = build_flow(home, cv_path).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert site.logins() == 1
+
+
+def test_the_flow_opens_the_real_profile_with_its_cookie_and_holds_it(home: Path, cv_path: Path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    profile = home / ".cache" / "linkedin" / "profile"
+    profile.mkdir(parents=True)
+    profile.chmod(0o700)
+    # A real Chromium profile, written by Playwright's own browser (no network).
+    with playwright.sync_playwright() as runtime:
+        context = runtime.chromium.launch_persistent_context(str(profile), headless=True)
+        context.add_cookies([{
+            "name": "li_at", "value": SECRET, "domain": ".www.linkedin.com", "path": "/",
+            "expires": time.time() + 3600, "secure": True, "httpOnly": True, "sameSite": "None",
+        }])
+        context.close()
+    assert linkedin_apply.profile_state(home) == "valid"
+
+    flow = build_flow(home, cv_path)
+    flow._linkedin_profile = profile
+    with flow._managed_page() as opened:
+        names = {cookie["name"] for cookie in opened.context.cookies("https://www.linkedin.com/")}
+        assert "li_at" in names
+        assert linkedin_apply.profile_busy(home)
+    assert not linkedin_apply.profile_busy(home)
+
+
+# ── a browser a person can sign in with (live 14/09: Chrome for Testing left Google's popup blank) ──
+
+
+def executable(path: Path, body: str = "exit 0") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+    return path
+
+
+def test_the_sign_in_browser_is_the_system_chromium_never_chrome_for_testing(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("JHT_CHROMIUM_BIN", raising=False)
+    bin_dir = tmp_path / "bin"
+    playwright_build = executable(tmp_path / "ms-playwright" / "chromium-1228" / "chrome-linux" / "chrome")
+    bin_dir.mkdir()
+    (bin_dir / "chromium").symlink_to(playwright_build)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    assert linkedin_apply.chromium_binary() is None  # the only Chromium is the testing build
+
+    (bin_dir / "chromium").unlink()
+    system = executable(bin_dir / "chromium")
+    assert linkedin_apply.chromium_binary() == str(system)
+
+    monkeypatch.setenv("JHT_CHROMIUM_BIN", str(executable(tmp_path / "Google Chrome for Testing")))
+    assert linkedin_apply.chromium_binary() is None
+
+
+def test_without_a_sign_in_browser_nothing_is_opened(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("JHT_CHROMIUM_BIN", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+
+    assert linkedin_apply.interactive_login(tmp_path, timeout_s=1.0, poll_s=0.1) == {"status": "browser_missing"}
+    assert not (tmp_path / ".cache" / "linkedin" / "profile").exists()
+
+
+def test_a_window_manager_runs_on_the_display_only_during_the_sign_in(tmp_path: Path, fake_chromium, monkeypatch):
+    binary, record = fake_chromium
+    monkeypatch.setenv("FAKE_CHROMIUM_MODE", "login")
+    events = tmp_path / "wm-events"
+    manager = tmp_path / "fake-openbox"
+    manager.write_text(
+        f"#!{sys.executable}\n"
+        "import os, signal, sys, time\n"
+        f"log = open({str(events)!r}, 'a')\n"
+        "log.write('start ' + os.environ.get('DISPLAY', '') + '\\n'); log.flush()\n"
+        "signal.signal(signal.SIGTERM, lambda *_: (log.write('stop\\n'), log.flush(), sys.exit(0)))\n"
+        "while True: time.sleep(0.1)\n"
+    )
+    manager.chmod(0o755)
+    monkeypatch.setenv("JHT_WINDOW_MANAGER_BIN", str(manager))
+
+    result = linkedin_apply.interactive_login(tmp_path, binary=str(binary), timeout_s=10.0, poll_s=0.1)
+
+    assert result == {"status": "logged_in"}
+    assert events.read_text().splitlines() == ["start :99", "stop"]
+
+
+def test_the_tool_health_gate_refuses_chrome_for_testing_and_needs_a_window_manager(tmp_path: Path, monkeypatch):
+    import tool_health
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    executable(bin_dir / "openbox")
+    testing = executable(tmp_path / "ms-playwright" / "chrome", 'echo "<p>manual-login-ok</p>"')
+    (bin_dir / "chromium").symlink_to(testing)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    status, evidence = tool_health.check_manual_login_browser()
+    assert status == "BROKEN" and "Chrome for Testing" in evidence
+
+    (bin_dir / "chromium").unlink()
+    executable(bin_dir / "chromium", 'echo "<html><body><p>manual-login-ok</p></body></html>"')
+    assert tool_health.check_manual_login_browser()[0] == "OK"
+
+    (bin_dir / "openbox").unlink()
+    status, evidence = tool_health.check_manual_login_browser()
+    assert status == "BROKEN" and "window manager" in evidence
+
+
+
+def signed_in_cookie(page) -> None:
+    page.context.add_cookies([{"name": "li_at", "value": "synthetic", "domain": "www.linkedin.com", "path": "/",
+                               "secure": True, "httpOnly": True, "sameSite": "Lax", "expires": time.time() + 3600}])
+
+
+# ── live 14/09: a valid session read as expired, a closed vacancy read as a sign-in problem ──
+
+
+def test_the_2026_signed_in_top_bar_counts_as_signed_in(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() + 3600)
+    signed_in_cookie(page)  # what the hand-made profile carries: LinkedIn shows the signed-in layout
+    recorded: list = []
+    site = Site(modern_nav=True)
+
+    site.install(page)
+    result = build_flow(home, cv_path, recorded=recorded).run(page=page, navigate=True)
+
+    assert result.status == "applied", result
+    assert site.logins() == 0 and len(recorded) == 1
+
+
+def test_a_closed_vacancy_seen_signed_in_is_closed_not_an_expired_session(page, home: Path, cv_path: Path):
+    make_profile(home, expires=time.time() + 3600)
+    signed_in_cookie(page)
+    site = Site(modern_nav=True, closed=True)
+
+    site.install(page)
+    result = build_flow(home, cv_path).run(page=page, navigate=True)
+
+    assert (result.status, result.reason) == ("blocked_human", "vacancy_closed")
+    assert site.logins() == 0
+
+
+def test_the_recipe_itself_recognises_the_closed_notice_when_signed_in(page, cv_path: Path):
+    # The flow's own check can miss it (a public page with Apply controls before
+    # the sign-in); the recipe, signed in and with no control, must not.
+    class SignedIn:
+        def signed_in(self, _page):
+            return True
+
+        def challenge(self, _page):
+            return False
+
+    page.set_content(
+        '<html><body><a href="https://www.linkedin.com/messaging/">Messaggistica</a>'
+        "<p>Not currently accepting applications</p></body></html>"
+    )
+    recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
+    recipe.session = SignedIn()
+    recipe.job_url = "about:blank"
+
+    with pytest.raises(apply_flow.BlockedHuman) as stop:
+        recipe.open_form(page)
+    assert stop.value.reason == "vacancy_closed"
+    assert linkedin_apply.LinkedInSession.signed_in(page)

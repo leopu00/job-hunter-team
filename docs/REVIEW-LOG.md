@@ -29,7 +29,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-24 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-08-24 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-09-12 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-13 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
@@ -50,7 +50,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-08-13 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-13 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-13 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-08-13 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-08-16 | ✅ |
@@ -62,6 +62,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-08-13 | ✅ |
 | [agents/mantenitore/mantenitore.md](../agents/mantenitore/mantenitore.md) | 👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team. | — | 2026-08-13 | ✅ |
 | [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent). | — | 2026-08-13 | ✅ |
+| [agents/closer/closer.md](../agents/closer/closer.md) | 📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima | — | 2026-09-13 | ✅ |
 
 
 ## 📐 Team architecture & manuals
@@ -144,6 +145,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
+| [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-13 | ✅ |
+| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-13 | ✅ |
+| [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-09-13 | ✅ |
 
 
 ## 💂 Skill Sentinella
@@ -237,7 +241,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-08-24 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-09-13 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -373,6 +377,20 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/prototypes/2026-08-20-all-agents-api-roadmap.md](./internal/prototypes/2026-08-20-all-agents-api-roadmap.md) | Roadmap e milestone full-team dei worker API isolati: contratti proposal-only, coordinamento, canary sintetici/live e percorso di promozione | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/architecture/2026-08-24-desktop-setup-modes.md](./internal/architecture/2026-08-24-desktop-setup-modes.md) | Matrice dei setup desktop e perimetro attivo own PC, Podman e chiave API effimera | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md](./internal/roadmap/2026-08-24-desktop-tauri-migration.md) | Roadmap a fette della migrazione desktop Tauri con confini, compatibilità e gate di distribuzione | 2026-08-24 | 2026-08-24 | 🟢 |
+| [docs/internal/architecture/closer-application-assistant-design.md](./internal/architecture/closer-application-assistant-design.md) | 📮 [JHT-CLOSER] design: assistente alle candidature — sessione loggata + broker credenziali, ricette ATS, ricevuta obbligatoria, gate di autorizzazione | — | 2026-09-12 | ✅ |
+| [docs/internal/ops/2026-09-01-spawn-fixes-container-test-plan.md](./internal/ops/2026-09-01-spawn-fixes-container-test-plan.md) | Verifica su team vivo del batch di fix allo spawn: 10 test con procedura, criterio di passaggio ed esito da compilare; distingue i bloccanti, quelli a guasto indotto e quelli che solo la VPS o solo Windows possono riprodurre | — | 2026-09-13 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-1-wsl-twin-branch.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-1-wsl-twin-branch.md) | Il gemello WSL della new-session e' dentro la regione del flock ma irraggiungibile su ogni percorso supportato: rischio teorico. Censisce le 13 chiamate tmux illimitate dopo la presa del lock | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-2-timeout-portability.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-2-timeout-portability.md) | timeout e' GNU coreutils e manca su host macOS, dove la sua assenza era fatale invece che degradante; censimento degli 11 precedenti in .launcher/ che degradano, e il percorso host vivo che lo raggiunge | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-3-timeout-value.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-3-timeout-value.md) | Perche' 20s cadeva nella fascia raggiungibile di un host saturo e 45s no, il vincolo di coerenza col flock -w, e il fd 9 ereditato dai tre figli detached del ramo agente | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-4-error-message.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-4-error-message.md) | La diagnostica che mente: tabella dei return code, perche' dentro un if ! il $? e' la negazione logica, e perche' il cleanup incondizionato uccideva la sessione di un agente vivo | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-5-orphan-session-race.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-5-orphan-session-race.md) | Sessione guscio dopo il timeout: copertura del watchdog ruolo per ruolo, e i worker numerati e i CRITICO effimeri che nessuna sonda di liveness guarda | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-6-escalation-agente-non-avviabile.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-6-escalation-agente-non-avviabile.md) | Non esiste in nessun file un contatore dei FALLIMENTI di spawn: perche' 2.677 fallimenti non hanno prodotto alcun allarme, e il progetto dei due gradini di escalation | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/214-7-osservabilita-spawn.md](./internal/reviews/2026-09-01-lee-launcher-prs/214-7-osservabilita-spawn.md) | Inventario dei log dello spawn e ipotesi ordinate sulla causa profonda (H1: il server tmux eredita il fd 9 del flock), con i comandi diagnostici in sola lettura per la produzione | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-1-finestra-rilevazione.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-1-finestra-rilevazione.md) | capture-pane -S -3 senza -E non restringe la finestra ma la allarga a ~53 righe: capture-pane -p nudo sarebbe piu' stretto, e i due grep indipendenti rendono la firma piu' larga di quanto dichiarato | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-2-nessun-freno-e-costo.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-2-nessun-freno-e-costo.md) | Nessun cooldown e cecita' ai tre flag di halt/standby: stima del burn e il precedente [HEALER-BLIND-TO-GATES-AND-ROLES] gia' pagato in codex-auth-healer.sh | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md) | Un daemon gestito da pid1 fuori dal registro di process_health.py muore invisibile a ogni canary: la checklist del precedente throttle-engine, file per file | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md) | Diario scritto con >> invece di tee -a: l'unico del container che nessuno ruota e che docker logs non vede; il mkdir mancante invece non e' un difetto sul percorso reale | — | 2026-09-01 | ✅ |
+| [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione | — | 2026-09-01 | ✅ |
 
 
 ## 🔒 docs/security

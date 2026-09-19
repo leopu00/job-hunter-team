@@ -33,6 +33,12 @@ MIGRATION_ADDED = [
     'user_excluded_reason', 'user_excluded_note', 'user_excluded_at',
     'user_excluded_prev_status',
     'write_requested', 'geocode_requested', 'recheck_requested',
+    # [JHT-CLOSER] L'autorizzazione per-posizione alla candidatura. Sta qui e
+    # non fra i «nice to have»: se `ensure_schema` la lasciasse fuori, il gate
+    # non troverebbe la colonna — e un gate che non sa rispondere deve
+    # rifiutare, quindi il difetto si vedrebbe come «il CLOSER non parte mai»
+    # invece che come una migrazione mancante.
+    'apply_requested', 'apply_requested_at', 'apply_requested_by',
     'role_family', 'role_family_proposed', 'jd_summary',
 ]
 

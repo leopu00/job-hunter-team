@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimum permissions for the first-run window",
-  "windows": ["main"],
+  "description": "Minimum permissions for the first-run window and the detached CLOSER live screen",
+  "windows": ["main", "live-screen"],
   "permissions": ["core:default"]
 }

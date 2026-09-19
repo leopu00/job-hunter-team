@@ -37,15 +37,16 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 APP = os.environ.get("JHT_APP_DIR", "/app")
 TIMEOUT = 25  # un browser headless freddo può metterci qualche secondo
 
 
-def _run(cmd, timeout=TIMEOUT):
+def _run(cmd, timeout=TIMEOUT, cwd=None):
     """Esegue un comando, ritorna (rc, stdout+stderr troncato). rc=-1 su timeout/errore."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         return p.returncode, (p.stdout + p.stderr)[-600:]
     except subprocess.TimeoutExpired:
         return -1, "timeout after %ds" % timeout
@@ -126,10 +127,94 @@ def check_linkedin_check():
     return "UNKNOWN", "linkedin_check --batch rc=%d: %s" % (rc, out.strip()[:120])
 
 
+def check_cv_pdf_render():
+    """Il CV esce davvero, e largo quanto la pagina: pandoc + wkhtmltopdf + il
+    CSS base + pdf_layout_check.py, sullo stesso comando della skill cv-structure.
+
+    Nessuno dei due binari era nell'immagine: erano arrivati con un `sudo
+    apt-get` degli agenti dentro il container, e il redeploy del 13/09 (container
+    ricreato) li ha persi in silenzio — lo Scrittore trovava solo weasyprint.
+    Ora sono nel Dockerfile e questo check e' il gate di build: se manca un
+    pezzo, o il layout torna una colonna stretta, il BUILD va rosso."""
+    missing = [b for b in ("pandoc", "wkhtmltopdf", "pdftotext", "pdffonts") if not shutil.which(b)]
+    if missing:
+        return "BROKEN", "missing CV PDF toolchain: %s (CVs cannot be rendered or checked)" % ", ".join(missing)
+    skills = os.path.join(APP, "shared", "skills")
+    css = os.path.join(skills, "pdf_layout_base.css")
+    if not os.path.isfile(css):
+        return "BROKEN", "pdf_layout_base.css not found at %s" % css
+    import tempfile
+    sys.path.insert(0, skills)
+    try:
+        import pdf_layout_check
+    finally:
+        sys.path.remove(skills)
+    bullet = ("- Synthetic health-check line that wraps across the whole usable width of the page "
+              "so the gate can measure the text column of the real renderer.")
+    body = "\n".join("## Section %d\n\n%s\n" % (i, "\n".join([bullet] * 4)) for i in range(1, 5))  # one page, well filled
+    with tempfile.TemporaryDirectory() as tmp:
+        md = os.path.join(tmp, "health.md")
+        pdf = os.path.join(tmp, "health.pdf")
+        with open(md, "w", encoding="utf-8") as fh:
+            # Same small type a Writer's <style> uses: at the template's 36em the
+            # column is only narrow when the font is small, so the gate needs it.
+            fh.write("<style>body { font-size: 9.3pt; }</style>\n\n# Health Check\n\n" + body)
+        rc, out = _run([
+            "pandoc", md, "-o", pdf, "--pdf-engine=wkhtmltopdf",
+            "-c", css, "--self-contained",
+            "-V", "papersize=A4", "-V", "margin-top=11mm", "-V", "margin-bottom=11mm",
+            "-V", "margin-left=15mm", "-V", "margin-right=15mm",
+            "--metadata", "pagetitle=health",
+        ], timeout=60, cwd=tmp)  # pandoc writes its temp HTML in the cwd: /app is read-only for jht
+        if rc != 0 or not os.path.isfile(pdf):
+            return "BROKEN", "pandoc/wkhtmltopdf render failed (rc=%d): %s" % (rc, out.strip()[-200:])
+        try:
+            report = pdf_layout_check.analyze(Path(pdf))
+        except pdf_layout_check.CheckError as e:
+            return "BROKEN", "pdf_layout_check cannot measure the render: %s" % e
+    if not report["ok"]:
+        widths = [p["width_ratio"] for p in report["per_page"]]
+        return "BROKEN", "rendered CV fails the layout gate: %s (width %s)" % (",".join(report["reasons"]), widths)
+    return "OK", "CV render ok (width %s of the usable page, body font %spt)" % (
+        report["per_page"][0]["width_ratio"], report["body_font_pt"])
+
+
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
+def check_manual_login_browser():
+    """The browser the user signs in to LinkedIn with, by hand (linkedin_apply.py login --interactive).
+
+    A system Chromium that is not Chrome for Testing (whose build left Google's
+    sign-in popup blank, 14/09), that really starts and renders a page, and a
+    window manager for the popup."""
+    for name in ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome"):
+        binary = shutil.which(name)
+        if binary:
+            break
+    else:
+        return "BROKEN", "no system Chromium for the manual LinkedIn sign-in"
+    real = os.path.realpath(binary).casefold()
+    if any(marker in real for marker in ("for testing", "chrome-for-testing", "ms-playwright", "/opt/playwright")):
+        return "BROKEN", "the only Chromium is Chrome for Testing: %s" % real
+    if not (shutil.which("openbox") or shutil.which("matchbox-window-manager")):
+        return "BROKEN", "no window manager (openbox) for the sign-in popup"
+    # stdout alone: the rendered DOM comes first and Chromium's stderr (dbus,
+    # GPU) would push it out of _run's 600-character tail.
+    command = [binary, "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+               "--dump-dom", "data:text/html,<p>manual-login-ok</p>"]
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except (subprocess.TimeoutExpired, OSError, ValueError) as e:
+        return "BROKEN", "%s did not start: %s" % (binary, e)
+    if done.returncode == 0 and "manual-login-ok" in done.stdout:
+        return "OK", "%s starts and renders" % binary
+    return "BROKEN", "%s did not render (rc=%d): %s" % (binary, done.returncode, done.stderr.strip()[-200:])
+
+
 CHECKS = {
     "playwright_browser": check_playwright_browser,
     "linkedin_check": check_linkedin_check,
+    "cv_pdf_render": check_cv_pdf_render,
+    "manual_login_browser": check_manual_login_browser,
 }
 
 

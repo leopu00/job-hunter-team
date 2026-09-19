@@ -161,6 +161,17 @@ Decisione tecnica 2026-05-18 dopo indagine "CV estetica semplificata":
 - ❌ **NON usare `pdf_gen.py` (fpdf2)** per CV: è solo fallback
   minimalista 80% casi semplici. Per CV user-facing produce layout
   spartano 1 pagina, niente CSS, niente spacing fine.
+- ⚠️ **Layout: CSS base + margini veri + gate visivo** (2026-09-14, un CV
+  allegato col testo schiacciato al centro del foglio). Il template HTML di
+  pandoc limita il body a `max-width: 36em`, centrato con padding 50px, e
+  wkhtmltopdf ignora i margini `@page`: uno `<style>` a 9.3pt usciva come
+  colonna al ~41% e passava lo stesso il gate dimensione + Producer. Quindi il
+  comando di render carica SEMPRE `/app/shared/skills/pdf_layout_base.css`
+  (`-c … --self-contained`) e passa i margini a wkhtmltopdf (`-V margin-*`).
+  Nello `<style>` del `.md` mai `max-width`, `margin: auto` o padding sul body,
+  e non contare su `@page`. Poi `pdf_layout_check.py` misura il risultato: testo
+  ≥ 75% della larghezza utile su ogni pagina, 1–2 pagine, nessuna pagina quasi
+  vuota, font incorporati, corpo stampato ≥ 9.5pt.
 
 L'anti-pattern storico: generare il PDF direttamente in
 `$JHT_USER_DIR/cv/`, poi eseguire `db_update.py application --cv-pdf-path
@@ -183,19 +194,22 @@ TMP_PDF="$(mktemp -t cv_${POSITION_ID}.XXXXXX.pdf)"
 # Senza, in caso di skill obsoleta (typst che non c'è, pandoc 3.x che
 # manca, …) lo Scrittore eseguiva il comando, falliva, improvvisava
 # fallback random → CV brutti del 2026-05-18 mattina.
-if ! command -v wkhtmltopdf >/dev/null 2>&1; then
+if ! command -v pandoc >/dev/null 2>&1 || ! command -v wkhtmltopdf >/dev/null 2>&1; then
   echo "[cv-structure] ABORT preflight: wkhtmltopdf non disponibile."
-  echo "  Engine alternativi accettabili: weasyprint (pandoc --pdf-engine=weasyprint)."
   echo "  NEVER fallback a pdf_gen.py / fpdf2 per CV (output brutto)."
   echo "  Riportare il problema al Capitano via [REPORT] e ABORT."
   exit 2
 fi
 
 # 1. Render via pandoc → html → wkhtmltopdf (engine vincente, 32 KB / 2 pag).
-#    --metadata title=... evita il warning di wkhtmltopdf "no title element".
+#    Il CSS base azzera la colonna 36em di pandoc; -V margin-*: wkhtmltopdf ignora @page.
+#    pagetitle (non title) imposta <title> senza stampare un'intestazione "CV …".
 pandoc "$SRC_MD" -o "$TMP_PDF" \
        --pdf-engine=wkhtmltopdf \
-       --metadata title="CV $CANDIDATO"
+       -c /app/shared/skills/pdf_layout_base.css --self-contained \
+       -V papersize=A4 -V margin-top=11mm -V margin-bottom=11mm \
+       -V margin-left=15mm -V margin-right=15mm \
+       --metadata pagetitle="CV $CANDIDATO"
 
 # ── GATE POST-RENDER: dimensione + Producer ──────────────────────────
 # DUE check obbligatori. NESSUNO dei due è opzionale.
@@ -236,6 +250,15 @@ case "$producer" in
     ;;
 esac
 
+# Check C) layout: dimensione e Producer provano l'engine, non dove sta il testo.
+# pdf_layout_check.py lo misura (≥75% della larghezza utile su ogni pagina, 1-2
+# pagine, nessuna pagina quasi vuota, font incorporati, corpo ≥ 9.5pt). Exit 1 o 2: ABORT.
+if ! python3 /app/shared/skills/pdf_layout_check.py "$TMP_PDF"; then
+  echo "[cv-structure] ABORT post-render: layout sbagliato (pdf_layout_check.py) — correggi il .md e rigenera."
+  rm -f "$TMP_PDF"
+  exit 5
+fi
+
 # 3. Mv atomico + UPDATE in sequenza; rollback se UPDATE fallisce
 mv "$TMP_PDF" "$FINAL_PDF"
 if ! python3 /app/shared/skills/db_update.py application "$POSITION_ID" \
@@ -251,6 +274,7 @@ Codici di uscita:
 - `2` → preflight FAIL (engine non disponibile) — segnala al Capitano
 - `3` → post-render FAIL (dimensione < 20 KB, output minimalista) — engine sbagliato
 - `4` → post-render FAIL (Producer != Qt) — engine sbagliato
+- `5` → post-render FAIL (layout, `reasons` da `pdf_layout_check.py`) — correggi il `.md` e rigenera: `narrow_text` → togli dallo `<style>` ogni regola di larghezza/margine/padding sul body; `near_empty_page` → stringi o taglia finché l'ultima pagina si riempie o sparisce; `too_many_pages` → taglia; `small_body_font` → alza il `font-size` del body nello `<style>` a ≥ 9.5pt (il CSS base compensa già lo shrinking di Qt: un punto CSS stampa circa un punto). Dopo 2 render falliti segnala al Capitano. Un CV che non passa il gate non arriva mai al critic-loop.
 - `1` → DB UPDATE FAIL (rollback file)
 
 Il Dottore via `cv-disk-audit` healthcheck (bug #18) ricollega eventuali
