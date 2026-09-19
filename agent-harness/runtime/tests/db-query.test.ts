@@ -27,7 +27,7 @@ afterEach(() => {
  * Python floors), a title an ad dressed as our marker, unicode, NULLs, and
  * transitions minutes old.
  */
-function seeded(path: string): Database {
+function seeded(path: string, base = sqliteNow()): Database {
   const db = openJobsDb(path);
   const run = (sql: string, ...p: Array<string | number | null>) => db.prepare(sql).run(...p);
   run("INSERT INTO companies (name, hq_country, verdict, sector) VALUES (?, ?, ?, ?)", "Acme Corporation International Ltd", "IT", "GO", "software");
@@ -44,23 +44,31 @@ function seeded(path: string): Database {
   run("INSERT INTO scores (position_id, total_score) VALUES (?, ?)", 3, 70.5);
   run("INSERT INTO applications (position_id, status, written_at, critic_verdict, critic_score, applied_at, applied_via, response) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     1, "applied", "2026-09-02", "PASS", 7.5, "2026-09-03", "email", "interview");
-  const tr = "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes, ts) VALUES (?, ?, ?, ?, ?, datetime('now', ?))";
-  run(tr, 1, null, "new", "scout-1", "first seen note that is long enough to be cut somewhere", "-12 minutes");
-  run(tr, 1, "new", "checked", "analista-very-long-name", null, "-10 minutes");
-  run(tr, 2, "new", "checked", "scout-1", "", "-9 minutes");
-  run(tr, 3, "", "new", "scout-2", null, "-2 hours");
+  // Minutes before one fixed instant, the same for both twins: seeded a second apart,
+  // the times recent-activity prints would differ (the 1-in-4 failure of T10's review).
+  const tr = "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes, ts) VALUES (?, ?, ?, ?, ?, datetime(?, ?))";
+  run(tr, 1, null, "new", "scout-1", "first seen note that is long enough to be cut somewhere", base, "-12 minutes");
+  run(tr, 1, "new", "checked", "analista-very-long-name", null, base, "-10 minutes");
+  run(tr, 2, "new", "checked", "scout-1", "", base, "-9 minutes");
+  run(tr, 3, "", "new", "scout-2", null, base, "-2 hours");
   // The most recent row is an agent seen once: "by agent" must still list scout-1 (2) first.
-  run(tr, 3, "new", "checked", "scorer-1", null, "-1 minutes");
+  run(tr, 3, "new", "checked", "scorer-1", null, base, "-1 minutes");
   // A REAL column holding an integral value: Python prints 45.0, not 45.
   run("UPDATE positions SET office_lat = ?, office_lon = ? WHERE id = 1", 45, 9.19);
   return db;
 }
 
+/** SQLite's `datetime('now')`: UTC, `YYYY-MM-DD HH:MM:SS`. */
+function sqliteNow(): string {
+  return new Date().toISOString().slice(0, 19).replace("T", " ");
+}
+
 function twins() {
   const pyPath = join(root, "py.db");
   const ourPath = join(root, "ours.db");
-  const pyDb = seeded(pyPath);
-  const ourDb = seeded(ourPath);
+  const base = sqliteNow();
+  const pyDb = seeded(pyPath, base);
+  const ourDb = seeded(ourPath, base);
   const tools = createDbTools({ db: () => ourDb, agent: "scout-1", nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
   const call = (name: string, args: string[]) => {
     const tool = tools.find((t) => t.spec.name === name) as ToolHandler;

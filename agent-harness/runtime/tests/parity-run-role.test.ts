@@ -108,6 +108,21 @@ describe("npm run role -- --role scout (a product role)", () => {
     const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot)))];
     expect(referenced.length).toBeGreaterThan(20);
     expect(referenced.filter((p) => !existsSync(onDisk(p, homeDir)))).toEqual([]);
+    // Existing is not enough: read_file must open each one under the SCOUT's own policy,
+    // the toolkit the run builds (a path in another role's state is refused).
+    const { loadConfig } = await import("../src/config.ts");
+    const { buildToolkit } = await import("../src/tools/toolkit.ts");
+    const { MockProvider } = await import("../src/core/provider/mock.ts");
+    const config = loadConfig({ JHT_API_HOME: join(root, "api") }, "scout-1");
+    const toolkit = await buildToolkit(config, { provider: new MockProvider([]), jobsDbFile: join(root, "api", "db", "jobs.db") });
+    const readFileTool = toolkit.tools.find((t) => t.spec.name === "read_file")!;
+    const refused: string[] = [];
+    for (const path of referenced) {
+      const decision = await toolkit.permissions.decide("read_file", readFileTool.classify({ path }));
+      if (!decision.allowed) refused.push(`${path}: ${decision.message ?? ""}`);
+    }
+    await toolkit.close();
+    expect(refused).toEqual([]);
     for (const t of texts) expect(t).not.toMatch(/(?<![\w./-])(?:\/jht_home\/|\/app\/)?agents\/_(?:skills|manual|team)\//);
 
     // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.

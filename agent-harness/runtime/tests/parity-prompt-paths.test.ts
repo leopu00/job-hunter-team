@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { createPathRewriter, documentPaths } from "../src/parity/prompt-paths.ts";
@@ -16,12 +20,13 @@ describe("createPathRewriter", () => {
     expect(rewrite("- `agents/_skills/expiration-tracking/SKILL.md`")).toBe("- `/srv/app/agents/_skills/expiration-tracking/SKILL.md`");
   });
 
-  it("finds the manual in the repo and the team docs beside the home", () => {
+  it("finds the manual and the team docs in the repo, never in the runtime's state beside the home", () => {
     expect(rewrite("[rules](../_manual/communication-rules.md)")).toBe("[rules](/srv/app/agents/_manual/communication-rules.md)");
     expect(rewrite("[x](../../_manual/anti-collision.md) agents/_manual/db-schema.md")).toBe(
       "[x](/srv/app/agents/_manual/anti-collision.md) /srv/app/agents/_manual/db-schema.md",
     );
-    expect(rewrite("`agents/_team/team-rules.md`")).toBe("`../_team/team-rules.md`");
+    expect(rewrite("`agents/_team/team-rules.md`")).toBe("`/srv/app/agents/_team/team-rules.md`");
+    expect(rewrite("[r](../_team/team-rules.md)")).toBe("[r](/srv/app/agents/_team/team-rules.md)");
   });
 
   it("rewrites the TUI container's own paths, and leaves the person's data and other words alone", () => {
@@ -31,6 +36,17 @@ describe("createPathRewriter", () => {
     for (const same of ["$JHT_HOME/profile/candidate_profile.yml", "$JHT_HOME/agents/_team/scout_workspace.json", "web/app/api/team/queue/", "master/jht_home/{state}", "my_agents/_skills/x"]) {
       expect(rewrite(same)).toBe(same);
     }
+  });
+
+  it("points a team doc at the person's language when the repo has it, as the launcher copies it", () => {
+    const app = mkdtempSync(join(tmpdir(), "jht-paths-"));
+    mkdirSync(join(app, "agents", "_team"), { recursive: true });
+    writeFileSync(join(app, "agents", "_team", "team-rules.it.md"), "regole");
+    const it_ = createPathRewriter({ appRoot: app, homeSkills: new Set(), dedupLog: "/l", locale: "it" });
+    expect(it_("../_team/team-rules.md and agents/_team/architettura.md")).toBe(
+      `${app}/agents/_team/team-rules.it.md and ${app}/agents/_team/architettura.md`,
+    );
+    rmSync(app, { recursive: true, force: true });
   });
 
   it("lists the documents a text points at, without placeholders", () => {

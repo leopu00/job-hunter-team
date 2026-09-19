@@ -61,13 +61,17 @@ reads:
    Now `agents/_skills/<x>/…` (bare, `/app/…` or `/jht_home/…`) becomes
    `skills/<x>/…` for a skill in the home and `<appRoot>/agents/_skills/<x>/…`
    otherwise; `agents/_manual/…` and `../_manual/…` (a link that is broken in
-   the TUI too) become `<appRoot>/agents/_manual/…`; `agents/_team/…` becomes
-   `../_team/…`; `/app/` becomes `<appRoot>/`; `/jht_home/jobs.db` becomes "the
+   the TUI too) become `<appRoot>/agents/_manual/…`; `agents/_team/…` and
+   `../_team/…` become `<appRoot>/agents/_team/…` in the person's language
+   when the repo has it (the copy beside the home is another role's state to
+   the permission policy, so `read_file` would refuse it); `/app/` becomes
+   `<appRoot>/`; `/jht_home/jobs.db` becomes "the
    team database (reach it only through the db tools)" and
    `/jht_home/logs/scout-dedup.log` the harness's log. Left alone: paths under
    `$JHT_HOME` that name the person's data or state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
-   Markdown, and all must exist.
+   Markdown: each must exist, and `read_file` must open it under the SCOUT's
+   own permission policy.
 
 ### How it was checked (2026-09-19)
 

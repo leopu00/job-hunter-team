@@ -17,6 +17,7 @@
  * placeholders such as `<agent>`. `docs/parity.md` lists the rules.
  */
 
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 export interface PromptPathOptions {
@@ -26,6 +27,8 @@ export interface PromptPathOptions {
   homeSkills: ReadonlySet<string>;
   /** Where `scout-dedup.log` really is. */
   dedupLog: string;
+  /** The person's locale: a team doc's `<name>.<locale>.md` wins over `<name>.md`, as the launcher copies it. */
+  locale?: string;
 }
 
 /** A path segment: no spaces, quotes, backticks or closing brackets. */
@@ -35,7 +38,13 @@ export function createPathRewriter(options: PromptPathOptions): (text: string) =
   const app = options.appRoot.replace(/\/+$/, "");
   const skillPath = new RegExp(String.raw`(?<![\w./-])(?:(?:/app|/jht_home)/)?agents/_skills/([A-Za-z0-9_-]+)(/${SEG})?`, "g");
   const manual = new RegExp(String.raw`(?<![\w./-])(?:(?:\.\./)+|(?:/app/)?agents/)_manual/(${SEG})`, "g");
-  const team = new RegExp(String.raw`(?<![\w./$-])(?:/app/)?agents/_team/(${SEG})`, "g");
+  // `agents/_team/…` and the TUI's relative `../_team/…`. The copy beside the
+  // home is another role's state to the permission policy, so it goes to the repo.
+  const team = new RegExp(String.raw`(?<![\w./$-])(?:(?:/app/)?agents/|(?:\.\./)+)_team/(${SEG})`, "g");
+  const teamDoc = (file: string) => {
+    const localized = options.locale && options.locale !== "en" ? file.replace(/\.md$/, `.${options.locale}.md`) : file;
+    return existsSync(join(app, "agents", "_team", localized)) ? localized : file;
+  };
 
   return (text) =>
     text
@@ -43,7 +52,7 @@ export function createPathRewriter(options: PromptPathOptions): (text: string) =
         options.homeSkills.has(skill) ? `skills/${skill}${rest ?? ""}` : `${app}/agents/_skills/${skill}${rest ?? ""}`,
       )
       .replace(manual, (_whole, file: string) => `${app}/agents/_manual/${file}`)
-      .replace(team, (_whole, file: string) => `../_team/${file}`)
+      .replace(team, (_whole, file: string) => `${app}/agents/_team/${teamDoc(file)}`)
       .replace(/(?<![\w./-])\/app\//g, `${app}/`)
       .replace(/(?<![\w./-])\/jht_home\/logs\/scout-dedup\.log/g, options.dedupLog)
       .replace(/(?<![\w./-])\/jht_home\/jobs\.db/g, "the team database (reach it only through the db tools)");
@@ -55,7 +64,7 @@ export function documentPaths(text: string, appRoot: string): string[] {
   const found = new Set<string>();
   const patterns = [
     new RegExp(String.raw`(?<![\w./-])skills/[A-Za-z0-9_-]+(?:/${SEG})?`, "g"),
-    new RegExp(String.raw`(?<![\w./-])\.\./_team/${SEG}`, "g"),
+    new RegExp(String.raw`(?<![\w./-])(?:\.\./)+_team/${SEG}`, "g"),
     new RegExp(`${app.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${SEG}`, "g"),
   ];
   for (const re of patterns) {

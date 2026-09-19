@@ -75,6 +75,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     appRoot: options.appRoot,
     homeSkills: new Set(loaded.skills.map((s) => s.name)),
     dedupLog,
+    locale,
   });
   const rewrite = (text: string) => paths(rewritePythonSkills(text));
   const prompt = {
