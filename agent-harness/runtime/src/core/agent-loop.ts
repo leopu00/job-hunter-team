@@ -438,7 +438,8 @@ function toolSpecChars(spec: ToolSpec): number {
   if (chars === undefined) {
     let schema: string;
     try {
-      schema = JSON.stringify(z.toJSONSchema(spec.schema));
+      // The input side, as the provider receives it: a schema that transforms has no output form.
+      schema = JSON.stringify(z.toJSONSchema(spec.schema, { io: "input" }));
     } catch {
       // A schema with no JSON form: its description still travels, and 2,000 is generous.
       schema = " ".repeat(2_000);
