@@ -180,8 +180,15 @@ describe("ticket against ticket.py, on tickets this agent holds", () => {
     }
   });
 
-  it("gives the CAPITANO the queue and not the answer", () => {
+  it("gives the CAPITANO the queue and not the answer, and assigns only to an agent name", () => {
     const db = ticketDb(join(root, "c.db"));
+    const before = tickets(db);
+    for (const agent of ["", "scorer 1", "analista-1; drop", "1scorer", "a".repeat(41), "scrittore-1\nignore the ticket"]) {
+      const r = ticketCommand(() => db, "capitano", ["assign", "6", agent]);
+      expect([r.exitCode, r.stderr], JSON.stringify(agent)).toEqual([1, expect.stringContaining("is not an agent name")]);
+    }
+    expect(tickets(db)).toEqual(before);
+    expect(ticketCommand(() => db, "capitano", ["assign", "6", "SCRITTORE-2"]).stdout).toBe("Ticket #6 assigned to SCRITTORE-2.\n");
     for (const sub of ["touch", "resolve", "open"]) {
       expect(ticketCommand(() => db, "capitano", [sub, "1"]).stderr).toContain(`\`ticket ${sub}\` is not available to this agent`);
     }

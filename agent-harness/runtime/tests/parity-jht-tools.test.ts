@@ -258,7 +258,7 @@ describe("guardShellTool", () => {
 describe("PARITY_NOTES", () => {
   it("names every native tool and every command the guard stops", () => {
     for (const name of JHT_TOOL_NAMES) expect(PARITY_NOTES).toContain(`\`${name}\``);
-    for (const command of ["jht-tmux-send", "jht-send", "throttle-ack", "jht-telegram-send", "jht-install"]) {
+    for (const command of ["jht-tmux-send", "jht-send", "throttle-ack", "jht-telegram-send", "jht-install", "tmux", "start-agent.sh", "jht-agent-contain"]) {
       expect(PARITY_NOTES).toContain(command);
       expect(replacedCommand(`${command} x`)).toBe(command);
     }
@@ -273,6 +273,12 @@ describe("replacedCommand", () => {
     expect(replacedCommand("echo x | jht-telegram-send --from capitano")).toBe("jht-telegram-send");
     expect(replacedCommand("out=$(jht-check-user-replies --agent scout-1)")).toBe("jht-check-user-replies");
     expect(replacedCommand("  throttle-ack scout-1")).toBe("throttle-ack");
+    // T21: the CAPITANO's team.
+    expect(replacedCommand("/app/.launcher/start-agent.sh scorer 2")).toBe("start-agent.sh");
+    expect(replacedCommand("tmux kill-session -t SCORER-2")).toBe("tmux");
+    expect(replacedCommand("n=$(tmux capture-pane -t ANALISTA-1 -p | tail -5)")).toBe("tmux");
+    expect(replacedCommand("jht-agent-contain SCOUT-1 && echo ok")).toBe("jht-agent-contain");
+    expect(replacedCommand("tmux-send x")).toBeNull();
   });
 
   it("ignores the names inside arguments and longer names", () => {
@@ -289,6 +295,18 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("run `python3 $APP/shared/skills/db_insert.py position \\`")).toBe("run `db_insert position \\`");
     expect(rewritePythonSkills("python3 -u /app/shared/skills/scout_coord.py show")).toBe("scout_coord show");
     expect(rewritePythonSkills("python3 /app/shared/skills/throttle_engine.py check x")).toBe("throttle check x");
+    expect(rewritePythonSkills("N=$(python3 /app/shared/skills/roll_worker_number.py scorer)")).toBe("N=$(spawn_agent scorer)");
+    // T21: the TUI's machinery the CAPITANO's text names.
+    expect(rewritePythonSkills("python3 /app/shared/skills/agent-speed-table.py --since-min 60")).toBe("agent-speed-table.py (not available in the API harness) --since-min 60");
+    expect(rewritePythonSkills("via `throttle-config.py` (Bash(python3 /app/shared/skills/throttle-config.py *))")).toBe(
+      "via `throttle-config.py` (Bash(throttle-config.py (not available in the API harness) *))",
+    );
+    expect(rewritePythonSkills("bash /app/.launcher/start-agent.sh scorer 2")).toBe("bash spawn_agent scorer 2");
+    expect(rewritePythonSkills("bash /app/.launcher/spawn-doctor.sh")).toBe("bash spawn-doctor.sh (not available in the API harness)");
+    expect(rewritePythonSkills("grep -rn x /app/shared/skills/ /app/agents/, the bridge in `/app/.launcher/`")).toBe(
+      "grep -rn x (the scripts are native tools in the API harness) /app/agents/, the bridge in `(the launcher is not in the API harness)`",
+    );
+    expect(rewritePythonSkills("node /app/cli/bin/jht.js cache prune")).toBe("node jht.js (not available in the API harness) cache prune");
     // T15: scorer.md, the link check before a score.
     expect(rewritePythonSkills("python3 /app/shared/skills/safe_fetch.py 'URL' | grep -i 'expired'")).toBe("web_fetch 'URL' | grep -i 'expired'");
     expect(rewritePythonSkills("python3 /app/shared/skills/linkedin_access.py search")).toBe(

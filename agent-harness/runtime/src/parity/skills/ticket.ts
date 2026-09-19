@@ -25,6 +25,7 @@ import { roleOf } from "../../db/role-policy.ts";
 import { refused, type ScriptResult } from "../../db/tools.ts";
 import { agentAliases } from "../../core/agent-id.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
+import { AGENT_NAME } from "../jht-tools.ts";
 import { argvTool } from "./argv-tool.ts";
 
 const SUBCOMMANDS = ["open", "list-open", "count-open", "assign", "touch", "resolve", "show", "for-position"];
@@ -124,6 +125,12 @@ function captainCommand(db: Database, sub: string, a: Record<string, unknown>, e
     return { stdout: `${n + staleAssignments(db, staleHours(env)).length}\n`, exitCode: 0 };
   }
   if (sub === "assign") {
+    // Narrower than the script on purpose (SICUREZZA, T21-2b): the assignee is a name the
+    // team's messages accept, not any text the model writes into a row the workers read.
+    const agent = a["agent"] as string;
+    if (!AGENT_NAME.safeParse(agent).success) {
+      return { stdout: "", stderr: `Ticket #${a["id"] as number} not assigned: ${pyRepr(agent)} is not an agent name (such as analista-1 or SCORER-2).\n`, exitCode: 1 };
+    }
     const r = db
       .prepare(
         "UPDATE position_tickets SET status = 'assigned', assigned_agent = ?, assigned_at = datetime('now','localtime'), " +

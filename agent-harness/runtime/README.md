@@ -16,6 +16,7 @@ npm test               # offline: mock provider, no key, no network
 npm run typecheck
 npm run role -- --role scout --agent scout-1 --turns 2   # a product role, as its TUI twin
 npm run role -- --role analista --agent analista-1 --turns 2   # the ANALISTA (T14)
+npm run role -- --role capitano --agent capitano --turns 2    # the CAPITANO, without spawning (T21)
 npm run role -- --role demo --prompt path/to/prompt.md --task "Start."
 npm run monitor        # follow live runs; --list, --last, <run-id>, --verbose
 ```
