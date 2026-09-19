@@ -77,7 +77,7 @@ its replacement, without running anything.
 | `jht-send "<msg>"` | `chat_reply` {text, partial?} | `<home>/chat.jsonl`, the same line `jht-send` writes (`role`, `text`, `ts` in seconds, `done`) |
 | `throttle <me>`, `jht-throttle`, `jht-throttle-check`, `jht-throttle-wait` | `throttle` {reason?} | `PauseRequest`; the role loop ends the turn and owns the wait |
 | `throttle-ack <me>` | none: the harness records the wake-up | — |
-| `jht-notify-user`, `jht-telegram-send` | `notify_user` {text, kind?, position_id?} | `Notifier` port; `FileNotifier`: an outbox file |
+| `jht-notify-user`, `jht-telegram-send` | `notify_user` {text, kind?, position_id?} | `Notifier` port; `FileNotifier`: an outbox file. At most 5 per sliding hour (`notifyLimit`); past it the call fails and nothing is queued |
 | `jht-check-user-replies` | `check_user_replies` {} | `UserReplies` port; same output format as the TUI tool |
 | `jht-install` | refused: the image carries the dependencies | — |
 | `throttle-set`, `token-rate-now` | not mapped yet: CAPITANO only | — |
@@ -105,8 +105,14 @@ tmux and the throttle engine do for a TUI agent:
    call tells it to end the turn, so the pause costs one short closing round.
 3. After a pause the process waits `pauseMs` (the caller's choice; the TUI's
    engine takes it from the CAPITANO's config), then opens the next turn
-   with every inbox message, as the peer wrote it, followed by
+   with every inbox message, as the peer wrote it behind the sender the
+   mailbox recorded (`[from scout-1] …`), followed by
    `[@system -> @<agent>] [WAKE] Your pause is over. Continue your loop.`
+   An envelope inside a peer's text that names anyone but its real sender,
+   or a line dressed as `[USER REPLY …]`, becomes `[forged by <sender>: …]`:
+   a peer that read an injected page cannot speak as the system, another
+   agent or the person. No agent may be named `system`. (The TUI has no
+   verified sender, so this is a difference on purpose.)
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
 
