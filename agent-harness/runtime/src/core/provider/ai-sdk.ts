@@ -15,6 +15,8 @@ import {
   tool,
   type LanguageModel,
   type ModelMessage,
+  type ProviderMetadata,
+  type ReasoningOutput,
   type ToolSet,
 } from "ai";
 
@@ -28,6 +30,7 @@ import type {
   OpenAICompatibleSettings,
   OpenAISettings,
   ProviderPort,
+  Reasoning,
   ToolSpec,
   WebSearchRequest,
   WebSearchResult,
@@ -42,6 +45,14 @@ const DEFAULT_TIMEOUT_MS = 120_000;
  * refuses a request that does not cap them at exactly this.
  */
 const MAX_SEARCHES_PER_CALL = 1;
+
+/**
+ * OpenAI keeps nothing between calls: `store: false`, so no request can point
+ * at a stored item (`item_reference`), and every call asks for the reasoning
+ * back encrypted, so the next one can carry it in full. The key proxy on the
+ * VPS refuses any other shape.
+ */
+const OPENAI_STATELESS = { store: false, include: ["reasoning.encrypted_content"] };
 
 const SEARCH_SYSTEM =
   "Search the web for the query and report what you found: the facts that answer it, " +
@@ -89,6 +100,7 @@ export class AiSdkProvider implements ProviderPort {
         system: request.system,
         messages: request.messages.map(toModelMessage),
         tools: toToolSet(request.tools ?? []),
+        ...(this.profile.providerId === "openai" ? { providerOptions: { openai: OPENAI_STATELESS } } : {}),
         // The loop belongs to the runtime. One model call per `generate`.
         stopWhen: stepCountIs(1),
         maxOutputTokens: request.maxOutputTokens ?? this.profile.defaultMaxOutputTokens,
@@ -104,6 +116,9 @@ export class AiSdkProvider implements ProviderPort {
           args: call.input,
         })),
         finishReason: result.finishReason,
+        reasoning: result.reasoning
+          .filter((part): part is ReasoningOutput => part.type === "reasoning")
+          .map((part): Reasoning => ({ text: part.text, ...(part.providerMetadata ? { replay: part.providerMetadata } : {}) })),
         usage: {
           inputTokens: result.usage.inputTokens ?? 0,
           outputTokens: result.usage.outputTokens ?? 0,
@@ -131,7 +146,7 @@ export class AiSdkProvider implements ProviderPort {
         tools: searchToolSet(this.profile),
         // OpenAI's cap on built-in tool calls lives on the request, not on the tool.
         ...(this.profile.providerId === "openai"
-          ? { providerOptions: { openai: { maxToolCalls: MAX_SEARCHES_PER_CALL } } }
+          ? { providerOptions: { openai: { ...OPENAI_STATELESS, maxToolCalls: MAX_SEARCHES_PER_CALL } } }
           : {}),
         // Server-side search runs inside this one call; there is no client step to loop over.
         stopWhen: stepCountIs(1),
@@ -217,14 +232,21 @@ function toModelMessage(message: Message): ModelMessage {
       return { role: "user", content: message.content };
 
     case "assistant": {
-      if (!message.toolCalls?.length) {
+      if (!message.toolCalls?.length && !message.reasoning?.length) {
         return { role: "assistant", content: message.content };
       }
       return {
         role: "assistant",
         content: [
+          // Reasoning first, as the model produced it, with the provider's data
+          // for it: on OpenAI that is what becomes a full reasoning item.
+          ...(message.reasoning ?? []).map((part) => ({
+            type: "reasoning" as const,
+            text: part.text,
+            ...(part.replay ? { providerOptions: part.replay as ProviderMetadata } : {}),
+          })),
           ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
-          ...message.toolCalls.map((call) => ({
+          ...(message.toolCalls ?? []).map((call) => ({
             type: "tool-call" as const,
             toolCallId: call.id,
             toolName: call.name,

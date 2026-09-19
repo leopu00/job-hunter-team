@@ -278,6 +278,8 @@ export async function runRound(
     role: "assistant",
     content: result.text,
     ...(result.toolCalls.length > 0 ? { toolCalls: result.toolCalls } : {}),
+    // Carried back on the next round: a reasoning model resumes from it.
+    ...(result.reasoning?.length ? { reasoning: result.reasoning } : {}),
   });
   return result;
 }

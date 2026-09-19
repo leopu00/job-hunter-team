@@ -48,8 +48,20 @@ export interface ToolCall {
 
 export type Message =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+  | { role: "assistant"; content: string; toolCalls?: ToolCall[]; reasoning?: Reasoning[] }
   | { role: "tool"; callId: string; name: string; content: string };
+
+/**
+ * A piece of the model's reasoning, kept only to be sent back on the next
+ * call. `replay` is the provider's own data for it — on OpenAI, the item id
+ * and the encrypted content that lets a request with `store: false` hand the
+ * reasoning back without the server keeping it. Opaque outside the adapter:
+ * nothing else reads it, and the trace never records it.
+ */
+export interface Reasoning {
+  text: string;
+  replay?: Record<string, Record<string, unknown>>;
+}
 
 export interface ToolSpec {
   name: string;
@@ -80,6 +92,8 @@ export interface GenerateResult {
   toolCalls: ToolCall[];
   finishReason: FinishReason;
   usage: Usage;
+  /** The model's reasoning, for the next request to carry back. Empty on most providers. */
+  reasoning?: Reasoning[];
   /** Provider-side facts about the call, for the trace. */
   response?: ResponseMeta;
 }
