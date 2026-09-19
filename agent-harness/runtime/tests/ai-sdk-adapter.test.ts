@@ -344,3 +344,108 @@ describe("OpenAI through a key proxy", () => {
     expect(seen[0]?.auth).toBe("Bearer placeholder");
   });
 });
+
+describe("OpenAI web search, as the key proxy admits it", () => {
+  it("asks for one search at low context size, and nothing else on the tool", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    // The SDK's real OpenAI provider builds the request; only the socket is fake.
+    const fakeFetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ error: { message: "offline test", type: "test" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const previous = process.env["OPENAI_API_KEY"];
+    process.env["OPENAI_API_KEY"] = "placeholder";
+    try {
+      const provider = new AiSdkProvider({
+        profile: { ...PROFILE, providerId: "openai", modelId: "gpt-5.6-luna", capabilities: { ...PROFILE.capabilities, webSearch: true } },
+        openAI: { baseURL: "http://127.0.0.1:8787/v1" },
+        fetch: fakeFetch,
+      });
+      await expect(provider.webSearch({ query: "offerte lavoro Roma" })).rejects.toMatchObject({ code: "provider_failed" });
+    } finally {
+      if (previous === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = previous;
+    }
+    expect(bodies[0]?.["max_tool_calls"]).toBe(1);
+    expect(bodies[0]?.["tools"]).toEqual([{ type: "web_search", search_context_size: "low" }]);
+  });
+});
+
+describe("OpenAI without server-side state, as the key proxy admits it", () => {
+  it("sends store:false every round and hands the reasoning back encrypted, never by reference", async () => {
+    const { RoleSession } = await import("../src/core/role-session.ts");
+    const { Guardrails, DEFAULT_LIMITS } = await import("../src/core/guardrails.ts");
+    const { MemoryAuditLog } = await import("../src/core/audit.ts");
+    const { PermissionPolicy } = await import("../src/core/permissions.ts");
+
+    const usage = { input_tokens: 50, output_tokens: 20, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 10 } };
+    // Round 1: the model reasons, then calls a tool. Round 2: it answers.
+    const replies = [
+      {
+        id: "resp_1",
+        created_at: 1_700_000_000,
+        model: "gpt-5.6-luna",
+        output: [
+          { type: "reasoning", id: "rs_1", encrypted_content: "enc-1", summary: [] },
+          { type: "function_call", id: "fc_1", call_id: "call_1", name: "lookup", arguments: '{"key":"zone"}' },
+        ],
+        usage,
+      },
+      {
+        id: "resp_2",
+        created_at: 1_700_000_001,
+        model: "gpt-5.6-luna",
+        output: [{ type: "message", role: "assistant", id: "msg_2", content: [{ type: "output_text", text: "Monteverde.", annotations: [] }] }],
+        usage,
+      },
+    ];
+    const bodies: Array<Record<string, unknown>> = [];
+    const fakeFetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify(replies[bodies.length - 1]), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+
+    const previous = process.env["OPENAI_API_KEY"];
+    process.env["OPENAI_API_KEY"] = "placeholder";
+    try {
+      const provider = new AiSdkProvider({
+        profile: { ...PROFILE, providerId: "openai", modelId: "gpt-5.6-luna" },
+        openAI: { baseURL: "http://127.0.0.1:8787/v1" },
+        fetch: fakeFetch,
+      });
+      const lookup = {
+        spec: { name: "lookup", description: "Looks up.", schema: z.object({ key: z.string() }).strict() },
+        classify: () => ({ risk: "none" as const, paths: [], summary: "lookup" }),
+        execute: async () => ({ ok: true, content: "zone = Monteverde" }),
+      };
+      const session = new RoleSession({
+        provider,
+        guardrails: new Guardrails({ limits: DEFAULT_LIMITS, pricing: { inputPerMTokUsd: 0.2, outputPerMTokUsd: 1.2 } }),
+        audit: new MemoryAuditLog(),
+        systemPrompt: "You are a test role.",
+        tools: [lookup],
+        permissions: new PermissionPolicy({ mode: "auto", freeReadRoots: [] }),
+      });
+      expect((await session.send("Where?")).text).toBe("Monteverde.");
+    } finally {
+      if (previous === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = previous;
+    }
+
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(body["store"]).toBe(false);
+      expect(body["include"]).toContain("reasoning.encrypted_content");
+    }
+    const input = bodies[1]!["input"] as Array<Record<string, unknown>>;
+    expect(input.filter((item) => item["type"] === "item_reference")).toEqual([]);
+    expect(input).toContainEqual(expect.objectContaining({ type: "reasoning", id: "rs_1", encrypted_content: "enc-1" }));
+    expect(input).toContainEqual(expect.objectContaining({ type: "function_call", call_id: "call_1", name: "lookup" }));
+    expect(input).toContainEqual(expect.objectContaining({ type: "function_call_output", call_id: "call_1" }));
+    // Every reasoning item that goes out carries its encrypted content.
+    for (const item of input.filter((i) => i["type"] === "reasoning")) expect(item["encrypted_content"]).toBeTruthy();
+  });
+});

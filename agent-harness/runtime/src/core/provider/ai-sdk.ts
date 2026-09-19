@@ -15,6 +15,8 @@ import {
   tool,
   type LanguageModel,
   type ModelMessage,
+  type ProviderMetadata,
+  type ReasoningOutput,
   type ToolSet,
 } from "ai";
 
@@ -28,6 +30,7 @@ import type {
   OpenAICompatibleSettings,
   OpenAISettings,
   ProviderPort,
+  Reasoning,
   ToolSpec,
   WebSearchRequest,
   WebSearchResult,
@@ -36,8 +39,20 @@ import type {
 /** A single model call that takes longer than this is a stuck call, not a slow one. */
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-/** Searches one `webSearch` call may run. Each is billed; a digest rarely needs more. */
-const MAX_SEARCHES_PER_CALL = 3;
+/**
+ * Searches one `webSearch` call may run. Each is billed (0.01 USD on OpenAI,
+ * plus the result tokens at input price), and the key proxy on the VPS
+ * refuses a request that does not cap them at exactly this.
+ */
+const MAX_SEARCHES_PER_CALL = 1;
+
+/**
+ * OpenAI keeps nothing between calls: `store: false`, so no request can point
+ * at a stored item (`item_reference`), and every call asks for the reasoning
+ * back encrypted, so the next one can carry it in full. The key proxy on the
+ * VPS refuses any other shape.
+ */
+const OPENAI_STATELESS = { store: false, include: ["reasoning.encrypted_content"] };
 
 const SEARCH_SYSTEM =
   "Search the web for the query and report what you found: the facts that answer it, " +
@@ -85,6 +100,7 @@ export class AiSdkProvider implements ProviderPort {
         system: request.system,
         messages: request.messages.map(toModelMessage),
         tools: toToolSet(request.tools ?? []),
+        ...(this.profile.providerId === "openai" ? { providerOptions: { openai: OPENAI_STATELESS } } : {}),
         // The loop belongs to the runtime. One model call per `generate`.
         stopWhen: stepCountIs(1),
         maxOutputTokens: request.maxOutputTokens ?? this.profile.defaultMaxOutputTokens,
@@ -100,6 +116,9 @@ export class AiSdkProvider implements ProviderPort {
           args: call.input,
         })),
         finishReason: result.finishReason,
+        reasoning: result.reasoning
+          .filter((part): part is ReasoningOutput => part.type === "reasoning")
+          .map((part): Reasoning => ({ text: part.text, ...(part.providerMetadata ? { replay: part.providerMetadata } : {}) })),
         usage: {
           inputTokens: result.usage.inputTokens ?? 0,
           outputTokens: result.usage.outputTokens ?? 0,
@@ -125,6 +144,10 @@ export class AiSdkProvider implements ProviderPort {
         system: SEARCH_SYSTEM,
         prompt: request.query,
         tools: searchToolSet(this.profile),
+        // OpenAI's cap on built-in tool calls lives on the request, not on the tool.
+        ...(this.profile.providerId === "openai"
+          ? { providerOptions: { openai: { ...OPENAI_STATELESS, maxToolCalls: MAX_SEARCHES_PER_CALL } } }
+          : {}),
         // Server-side search runs inside this one call; there is no client step to loop over.
         stopWhen: stepCountIs(1),
         maxOutputTokens: this.profile.defaultMaxOutputTokens,
@@ -209,14 +232,21 @@ function toModelMessage(message: Message): ModelMessage {
       return { role: "user", content: message.content };
 
     case "assistant": {
-      if (!message.toolCalls?.length) {
+      if (!message.toolCalls?.length && !message.reasoning?.length) {
         return { role: "assistant", content: message.content };
       }
       return {
         role: "assistant",
         content: [
+          // Reasoning first, as the model produced it, with the provider's data
+          // for it: on OpenAI that is what becomes a full reasoning item.
+          ...(message.reasoning ?? []).map((part) => ({
+            type: "reasoning" as const,
+            text: part.text,
+            ...(part.replay ? { providerOptions: part.replay as ProviderMetadata } : {}),
+          })),
           ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
-          ...message.toolCalls.map((call) => ({
+          ...(message.toolCalls ?? []).map((call) => ({
             type: "tool-call" as const,
             toolCallId: call.id,
             toolName: call.name,
@@ -265,7 +295,9 @@ function toToolSet(specs: ToolSpec[]): ToolSet {
 function searchToolSet(profile: ModelProfile): ToolSet {
   switch (profile.providerId) {
     case "openai":
-      return { web_search: openai.tools.webSearch({}) } as ToolSet;
+      // `low`: the fewest result tokens, which are billed at the model's input
+      // price. It is also the only shape the key proxy lets through.
+      return { web_search: openai.tools.webSearch({ searchContextSize: "low" }) } as ToolSet;
     case "anthropic":
       return { web_search: anthropic.tools.webSearch_20250305({ maxUses: MAX_SEARCHES_PER_CALL }) } as ToolSet;
     default:
