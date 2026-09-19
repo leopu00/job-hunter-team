@@ -27,6 +27,8 @@ export interface LedgerEntry {
   runId: string;
   /** How the run ended: `completed`, `stopped`, or a failure code. */
   note: string;
+  /** Searches the provider ran (T19), in the note beside the cache writes. */
+  webSearches?: number;
 }
 
 /** The line for `entry`, without its newline. Tabs and newlines inside a field become spaces. */
@@ -40,8 +42,12 @@ export function ledgerLine(entry: LedgerEntry): string {
     String(entry.usage.outputTokens),
     entry.costUsd.toFixed(6),
     entry.runId,
-    // The team's columns are fixed: cache writes, billed on top, ride in the note.
-    (entry.usage.cacheWriteTokens ?? 0) > 0 ? `${entry.note}; cache_write_tokens=${entry.usage.cacheWriteTokens}` : entry.note,
+    // The team's columns are fixed: cache writes, billed on top, and searches ride in the note.
+    [
+      entry.note,
+      ...((entry.usage.cacheWriteTokens ?? 0) > 0 ? [`cache_write_tokens=${entry.usage.cacheWriteTokens}`] : []),
+      ...((entry.webSearches ?? 0) > 0 ? [`web_searches=${entry.webSearches}`] : []),
+    ].join("; "),
   ]
     .map((field) => field.replace(/[\t\r\n]+/g, " "))
     .join("\t");

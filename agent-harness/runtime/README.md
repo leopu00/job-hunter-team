@@ -40,7 +40,8 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_PROVIDER` | `mock` (default), `openai`, `anthropic`, `openai-compatible` |
 | `JHT_API_LIVE=1` | required for anything but the mock |
 | `JHT_API_MODEL` | required live; priced from the catalogue or `JHT_API_PRICE_*_PER_MTOK` |
-| `JHT_API_BUDGET_USD` | required live, > 0: the hard cap for the run |
+| `JHT_API_BUDGET_USD` | required live, > 0: the hard cap for the run; a model call or a search whose worst case does not fit in what is left does not start |
+| `JHT_API_MAX_WEB_SEARCHES` | searches per run, as the provider ran them (default 8, `0` = none); past it `web_search` answers without calling the provider. The count is in the monitor and in the ledger's note (`web_searches=N`) |
 | `JHT_API_LEDGER` | required live: the team's spend TSV (`agents-hq/ledger/openai-spesa.tsv`) |
 | `JHT_API_OPENAI_BASE_URL` / `OPENAI_BASE_URL` | OpenAI through a key proxy, e.g. `http://127.0.0.1:8787/v1` |
 | `JHT_API_HOME` | state root (default `~/.jht-api`) |

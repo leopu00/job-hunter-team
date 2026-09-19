@@ -91,6 +91,8 @@ export type TraceEvent =
       toolCalls: number;
       usage: Usage;
       costUsd: number;
+      /** Searches the provider ran in the run (T19). Absent in traces written before. */
+      webSearches?: number;
       durationMs: number;
     };
 

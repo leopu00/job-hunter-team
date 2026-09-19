@@ -82,7 +82,11 @@ export function loadConfig(env: Env = process.env, role = "agent"): Config {
   }
   const providerId = readProviderId(env);
   const budgetUsd = readBudget(env);
-  const limits: Limits = { ...DEFAULT_LIMITS, budgetUsd: budgetUsd ?? DEFAULT_LIMITS.budgetUsd };
+  const limits: Limits = {
+    ...DEFAULT_LIMITS,
+    budgetUsd: budgetUsd ?? DEFAULT_LIMITS.budgetUsd,
+    maxWebSearches: readMaxWebSearches(env) ?? DEFAULT_LIMITS.maxWebSearches,
+  };
 
   const local = readLocal(env, role);
   const rawAudit = env["JHT_API_AUDIT_DIR"]?.trim();
@@ -204,6 +208,17 @@ function readBudget(env: Env): number | undefined {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) {
     throw new HarnessError("config_invalid", `JHT_API_BUDGET_USD is '${raw}'; expected a positive number.`);
+  }
+  return value;
+}
+
+/** `JHT_API_MAX_WEB_SEARCHES`: a whole number, zero included (a run that may not search). */
+function readMaxWebSearches(env: Env): number | undefined {
+  const raw = env["JHT_API_MAX_WEB_SEARCHES"]?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new HarnessError("config_invalid", `JHT_API_MAX_WEB_SEARCHES is '${raw}'; expected a whole number, 0 or more.`);
   }
   return value;
 }

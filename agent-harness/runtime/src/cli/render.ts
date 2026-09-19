@@ -109,6 +109,9 @@ export class TraceView {
   #rateLimit: Record<string, string> = {};
   #summarised = false;
   #toolSpendUsd = 0;
+  /** Searches the provider ran, and the run's cap (T19). */
+  #webSearches = 0;
+  #maxWebSearches: number | undefined;
 
   constructor(options: RenderOptions = {}) {
     this.#verbose = options.verbose ?? false;
@@ -214,6 +217,7 @@ export class TraceView {
     this.#budgetUsd = event.budgetUsd;
     this.#pricing = event.pricing;
     this.#permissionMode = event.permissionMode;
+    this.#maxWebSearches = event.limits["maxWebSearches"];
     const mode = event.live ? c.yellow("● live") : c.green("○ mock");
     const lines = [
       `${c.bold(this.#agent)} ${c.dim("·")} ${c.cyan(this.#runId)} ${c.dim(`pid ${event.pid}`)}`,
@@ -318,6 +322,10 @@ export class TraceView {
     if (d?.stdoutBytes !== undefined) facts.push(`stdout ${bytes(d.stdoutBytes)}`);
     if (d?.stderrBytes) facts.push(c.yellow(`stderr ${bytes(d.stderrBytes)}`));
     if (event.costUsd) facts.push(c.yellow(usd(event.costUsd)));
+    if (typeof d?.webSearches === "number") {
+      this.#webSearches += d.webSearches;
+      facts.push(c.yellow(`searches ${this.#searchCount()}`));
+    }
     facts.push(`${int(event.resultChars)} chars to model`);
     this.#out(`  ${c.dim("┊")}     ${OUTCOME[event.outcome]} ${c.dim(facts.join(" · "))}`);
 
@@ -446,6 +454,7 @@ export class TraceView {
     const filled = Math.min(barWidth, Math.round((pct / 100) * barWidth));
     const paint = pct >= 80 ? c.red : pct >= 50 ? c.yellow : c.green;
     this.#out(`  ${c.dim("budget ")} ${paint("█".repeat(filled))}${c.dim("░".repeat(barWidth - filled))} ${usd(spent)} ${c.dim("of")} ${usd(this.#budgetUsd)} ${c.dim(`(${pct.toFixed(1)}%)`)}`);
+    if (this.#webSearches > 0 || this.#tools.has("web_search")) this.#out(`  ${c.dim("search ")} ${this.#searchCount()}`);
     if (this.#startedAt !== undefined) this.#out(`  ${c.dim("elapsed")} ${dur(endTs - this.#startedAt)}`);
     if (this.#proc.samples > 0) {
       this.#out(`  ${c.dim("process")} peak rss ${bytes(this.#proc.peakRss)} · cpu ${dur(this.#proc.cpuMs)} · max loop lag ${this.#proc.maxLagMs}ms`);
@@ -454,6 +463,11 @@ export class TraceView {
     const limits = Object.entries(this.#rateLimit).filter(([k]) => /remaining/i.test(k));
     if (limits.length > 0) this.#out(`  ${c.dim("quota  ")} ${limits.map(([k, v]) => `${k.replace(/^x-ratelimit-/i, "")} ${v}`).join(" · ")}`);
     this.#out();
+  }
+
+  /** `3 of 8`, or just `3` for a trace that did not record the cap. */
+  #searchCount(): string {
+    return this.#maxWebSearches === undefined ? int(this.#webSearches) : `${int(this.#webSearches)} of ${int(this.#maxWebSearches)}`;
   }
 
   #table(head: string[], right: number[], body: (string[] | "sep")[], total: string[]): void {

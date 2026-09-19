@@ -74,3 +74,12 @@ export function inputCostUsd(usage: Usage, pricing: Pricing): number {
     ((usage.cacheWriteTokens ?? 0) / 1_000_000) * (pricing.cacheWritePerMTokUsd ?? 0)
   );
 }
+
+/**
+ * The most `inputTokens` of input can cost before a call: all of it at full
+ * price and all of it written to the cache (billed on top where the provider
+ * charges writes). Output is added by the caller, at its cap.
+ */
+export function worstCase(inputTokens: number): Usage {
+  return { inputTokens, outputTokens: 0, cacheWriteTokens: inputTokens };
+}

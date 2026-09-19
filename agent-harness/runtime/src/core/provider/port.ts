@@ -98,6 +98,30 @@ export interface GenerateResult {
   response?: ResponseMeta;
 }
 
+/**
+ * Searches one `webSearch` call may run. Each is billed (0.01 USD on OpenAI,
+ * plus the result tokens at input price), and the key proxy on the VPS
+ * refuses a request that does not cap them at exactly this.
+ */
+export const MAX_SEARCHES_PER_CALL = 1;
+
+/**
+ * Searches one `webSearch` call is booked for before it runs, as the key
+ * proxy books them. The request asks for one, but OpenAI ran two under
+ * `max_tool_calls: 1` in 32 of 35 requests of the T13 proxy log, never
+ * three; the proxy books twice the most seen (SICUREZZA T19-a). Source: the
+ * proxy calibration, agents-hq/piani/t13-vps-res.txt §4.
+ */
+export const SEARCHES_BOOKED_PER_CALL = 4;
+
+/**
+ * Input tokens reserved for one search before it runs: the results come back
+ * as input the model reads on the provider's side (at most 12,406 per request
+ * in the T13 log). The key proxy's SEARCH_TOKENS, twice that, from the same
+ * calibration (agents-hq/piani/t13-vps-res.txt §4).
+ */
+export const SEARCH_RESERVED_INPUT_TOKENS = 25_000;
+
 export interface WebSearchRequest {
   query: string;
   timeoutMs?: number;
