@@ -99,6 +99,14 @@ export interface WebSearchResult {
   usage: Usage;
 }
 
+/**
+ * Where OpenAI requests go when not straight to api.openai.com: a key proxy
+ * on the same host, say, that holds the real key and accepts a placeholder.
+ */
+export interface OpenAISettings {
+  baseURL?: string;
+}
+
 /** Endpoint settings for any OpenAI-compatible provider (HHT ADR 0001 decision 2). */
 export interface OpenAICompatibleSettings {
   name: string;

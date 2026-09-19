@@ -127,6 +127,28 @@ describe("loadConfig — catalogue", () => {
   });
 });
 
+describe("loadConfig — OpenAI through a key proxy", () => {
+  it("goes straight to OpenAI when no base URL is set", () => {
+    expect(loadConfig(LIVE).openAI).toBeUndefined();
+  });
+
+  it("honours OPENAI_BASE_URL, and JHT_API_OPENAI_BASE_URL over it", () => {
+    expect(loadConfig({ ...LIVE, OPENAI_BASE_URL: "http://127.0.0.1:8787/v1" }).openAI).toEqual({ baseURL: "http://127.0.0.1:8787/v1" });
+    expect(
+      loadConfig({ ...LIVE, OPENAI_BASE_URL: "http://elsewhere.invalid/v1", JHT_API_OPENAI_BASE_URL: "http://127.0.0.1:8787/v1" }).openAI,
+    ).toEqual({ baseURL: "http://127.0.0.1:8787/v1" });
+  });
+
+  it("accepts a placeholder key: the proxy holds the real one", () => {
+    const config = loadConfig({ ...LIVE, OPENAI_API_KEY: "placeholder", OPENAI_BASE_URL: "http://127.0.0.1:8787/v1" });
+    expect(config.live).toBe(true);
+  });
+
+  it("refuses a base URL that is not a URL", () => {
+    expect(codeOf(() => loadConfig({ ...LIVE, JHT_API_OPENAI_BASE_URL: "127.0.0.1:8787 v1" }))).toBe("config_invalid");
+  });
+});
+
 describe("loadConfig — profile folder", () => {
   it("has no profile folder unless one is configured", () => {
     expect(loadConfig({}).profileDir).toBeUndefined();

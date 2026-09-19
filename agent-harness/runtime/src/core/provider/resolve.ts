@@ -20,5 +20,6 @@ export async function resolveProvider(
   return new AiSdkProvider({
     profile: config.profile,
     openAICompatible: config.openAICompatible,
+    openAI: config.openAI,
   });
 }

@@ -22,6 +22,7 @@ import { MOCK_PROFILE } from "./core/provider/mock.ts";
 import type {
   ModelProfile,
   OpenAICompatibleSettings,
+  OpenAISettings,
   ProviderId,
 } from "./core/provider/port.ts";
 import type { Pricing } from "./core/usage.ts";
@@ -66,6 +67,8 @@ export interface Config {
    */
   ledger?: string;
   openAICompatible?: OpenAICompatibleSettings;
+  /** Set when OpenAI requests go through a proxy instead of api.openai.com. */
+  openAI?: OpenAISettings;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -138,6 +141,17 @@ export function loadConfig(env: Env = process.env, role = "agent"): Config {
   const config: Config = { live: true, profile, limits, auditDir, ledger, ...local };
   if (providerId === "openai-compatible") {
     config.openAICompatible = readOpenAICompatible(env);
+  }
+  if (providerId === "openai") {
+    // On a VPS the key stays with a proxy on the host (`http://127.0.0.1:8787/v1`)
+    // and the agent holds a placeholder: the key is never checked for shape.
+    const baseURL = env["JHT_API_OPENAI_BASE_URL"]?.trim() || env["OPENAI_BASE_URL"]?.trim();
+    if (baseURL) {
+      if (!URL.canParse(baseURL)) {
+        throw new HarnessError("config_invalid", `The OpenAI base URL '${baseURL}' is not a URL.`);
+      }
+      config.openAI = { baseURL };
+    }
   }
   return config;
 }

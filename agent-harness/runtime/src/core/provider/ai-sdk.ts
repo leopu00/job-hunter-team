@@ -7,7 +7,7 @@
  */
 
 import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   generateText,
@@ -26,6 +26,7 @@ import type {
   Message,
   ModelProfile,
   OpenAICompatibleSettings,
+  OpenAISettings,
   ProviderPort,
   ToolSpec,
   WebSearchRequest,
@@ -51,6 +52,13 @@ export class AiSdkProvider implements ProviderPort {
   constructor(options: {
     profile: ModelProfile;
     openAICompatible?: OpenAICompatibleSettings | undefined;
+    openAI?: OpenAISettings | undefined;
+    /**
+     * Test seam: the HTTP client the OpenAI provider uses, so where a request
+     * goes and with which key can be checked without a network. Production
+     * never passes it.
+     */
+    fetch?: typeof globalThis.fetch | undefined;
     /**
      * Test seam. Supplying a model skips provider resolution, so the mapping
      * below can be exercised through the real AI SDK code path without a key
@@ -59,7 +67,8 @@ export class AiSdkProvider implements ProviderPort {
     model?: LanguageModel | undefined;
   }) {
     this.profile = options.profile;
-    this.#model = options.model ?? resolveModel(options.profile, options.openAICompatible);
+    this.#model =
+      options.model ?? resolveModel(options.profile, options.openAICompatible, options.openAI, options.fetch);
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
@@ -165,12 +174,21 @@ function responseMeta(response: { id?: string; modelId?: string; headers?: Recor
 function resolveModel(
   profile: ModelProfile,
   compatible: OpenAICompatibleSettings | undefined,
+  openAISettings: OpenAISettings | undefined,
+  fetchImpl: typeof globalThis.fetch | undefined,
 ): LanguageModel {
   switch (profile.providerId) {
     case "anthropic":
       return anthropic(profile.modelId);
     case "openai":
-      return openai(profile.modelId);
+      // The key is whatever OPENAI_API_KEY holds: behind a key proxy it is a
+      // placeholder, so nothing here checks its shape.
+      return openAISettings?.baseURL || fetchImpl
+        ? createOpenAI({
+            ...(openAISettings?.baseURL ? { baseURL: openAISettings.baseURL } : {}),
+            ...(fetchImpl ? { fetch: fetchImpl } : {}),
+          })(profile.modelId)
+        : openai(profile.modelId);
     case "openai-compatible": {
       if (!compatible) {
         throw new HarnessError(

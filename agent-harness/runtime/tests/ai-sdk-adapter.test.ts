@@ -313,3 +313,34 @@ describe("AiSdkProvider — web search", () => {
     await expect(provider.webSearch({ query: "x" })).rejects.toMatchObject({ code: "model_incapable" });
   });
 });
+
+describe("OpenAI through a key proxy", () => {
+  it("sends the request to the configured base URL, with the placeholder key as is", async () => {
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    // The SDK's real OpenAI provider builds the request; only the socket is fake.
+    const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      seen.push({ url: String(input instanceof Request ? input.url : input), auth: new Headers(init?.headers).get("authorization") });
+      return new Response(JSON.stringify({ error: { message: "offline test", type: "test" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const previous = process.env["OPENAI_API_KEY"];
+    process.env["OPENAI_API_KEY"] = "placeholder";
+    try {
+      const provider = new AiSdkProvider({
+        profile: { ...PROFILE, providerId: "openai", modelId: "gpt-5.6-luna" },
+        openAI: { baseURL: "http://127.0.0.1:8787/v1" },
+        fetch: fakeFetch,
+      });
+      const error = await provider.generate({ system: "s", messages: [{ role: "user", content: "hi" }] }).catch((e: unknown) => e);
+      expect(isHarnessError(error) && error.code).toBe("provider_failed");
+    } finally {
+      if (previous === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = previous;
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]?.url.startsWith("http://127.0.0.1:8787/v1/")).toBe(true);
+    expect(seen[0]?.auth).toBe("Bearer placeholder");
+  });
+});
