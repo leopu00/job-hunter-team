@@ -65,7 +65,8 @@ export function documentPaths(text: string, appRoot: string): string[] {
   const patterns = [
     new RegExp(String.raw`(?<![\w./-])skills/[A-Za-z0-9_-]+(?:/${SEG})?`, "g"),
     new RegExp(String.raw`(?<![\w./-])(?:\.\./)+_team/${SEG}`, "g"),
-    new RegExp(`${app.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${SEG}`, "g"),
+    // Anchored like the rewrites: `web/app/api/…` is not `/app/api/…` when the root is `/app`.
+    new RegExp(`(?<![\\w./-])${app.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${SEG}`, "g"),
   ];
   for (const re of patterns) {
     for (const m of text.matchAll(re)) {

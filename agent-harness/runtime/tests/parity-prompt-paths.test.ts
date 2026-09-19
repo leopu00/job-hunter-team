@@ -49,6 +49,10 @@ describe("createPathRewriter", () => {
     rmSync(app, { recursive: true, force: true });
   });
 
+  it("does not take a route inside a longer path for a file of the root (T10b)", () => {
+    expect(documentPaths("rename `web/app/api/team/queue/` and /app/agents/_manual/x.md", "/app")).toEqual(["/app/agents/_manual/x.md"]);
+  });
+
   it("lists the documents a text points at, without placeholders", () => {
     expect(documentPaths("skills/a/SKILL.md, ../_team/r.md. /srv/app/agents/_manual/x.md and /srv/app/<role>/y", "/srv/app").sort()).toEqual(
       ["../_team/r.md", "/srv/app/agents/_manual/x.md", "skills/a/SKILL.md"],

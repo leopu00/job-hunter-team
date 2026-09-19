@@ -51,6 +51,9 @@ reads:
    that replaces it (`db_query check-url 123`), marks a script with no tool
    `<x>.py (not available in the API harness)`, and says there is no
    interpreter where any other `python3` stood (`python3 -c`, `Bash(python3 *)`).
+   A script named as a file rather than run (`Wrapper at
+   /app/shared/skills/db_insert.py`) becomes "the db_insert tool", or is
+   marked not available: the image has no `shared/` (T10b).
    Everything else is the TUI text; `PARITY_NOTES` explains the tool calls.
    `tests/parity-run-role.test.ts` checks that the prompt and every `.md` in
    the home contain no `python3`.
@@ -71,7 +74,8 @@ reads:
    `$JHT_HOME` that name the person's data or state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
    Markdown: each must exist, and `read_file` must open it under the SCOUT's
-   own permission policy.
+   own permission policy. It renders from a copy of `agents/` alone, the
+   image's layout, so a path into the checkout's `shared/` cannot pass.
 
 ### How it was checked (2026-09-19)
 

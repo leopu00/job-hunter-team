@@ -366,6 +366,12 @@ export function rewritePythonSkills(text: string): string {
       const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ?? `${script} (not available in the API harness)`;
     })
+    // T10b: a script named as a file, not run — "Wrapper at `/app/shared/skills/db_insert.py`".
+    // The image has no shared/, so it is the tool, or it is not here.
+    .replace(/(?<![\w./-])(?:\/app\/)?shared\/skills\/([A-Za-z0-9_]+\.py)\b/g, (_whole, script: string) => {
+      const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
+      return tool ? `the ${tool} tool` : `${script} (not available in the API harness)`;
+    })
     .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)");
 }
 

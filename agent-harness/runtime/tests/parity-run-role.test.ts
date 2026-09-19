@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,7 +44,13 @@ function roleWith(env: Record<string, string>, ...args: string[]) {
 
 describe("npm run role -- --role scout (a product role)", () => {
   it("runs SCOUT from agents/scout on the native tools and traces every turn", async () => {
-    const { stdout } = await role("--role", "scout", "--agent", "scout-1", "--turns", "2", "--pause-ms", "0", "--quiet");
+    // The image's layout, not this checkout's: /app holds the runtime and agents/, no shared/ (T10b).
+    const imageRoot = join(root, "image-app");
+    await cp(join(RUNTIME, "..", "..", "agents"), join(imageRoot, "agents"), { recursive: true });
+    const { stdout } = await roleWith(
+      { JHT_API_APP_ROOT: imageRoot },
+      "--role", "scout", "--agent", "scout-1", "--turns", "2", "--pause-ms", "0", "--quiet",
+    );
     const tracePath = stdout.trim();
     expect(tracePath).toMatch(/logs\/scout-1\/.+\.jsonl$/);
 
@@ -80,7 +86,7 @@ describe("npm run role -- --role scout (a product role)", () => {
     // The TUI identity through the two documented rewrites: python3 calls (T6) and document paths (T10).
     const { createPathRewriter } = await import("../src/parity/prompt-paths.ts");
     const homeSkills = new Set(await readdir(join(root, "api", "agents", "scout-1", "skills")));
-    const paths = createPathRewriter({ appRoot: join(RUNTIME, "..", ".."), homeSkills, dedupLog: join(root, "api", "logs", "scout-dedup.log") });
+    const paths = createPathRewriter({ appRoot: imageRoot, homeSkills, dedupLog: join(root, "api", "logs", "scout-dedup.log") });
     expect(prompt.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
@@ -104,7 +110,7 @@ describe("npm run role -- --role scout (a product role)", () => {
     for (const f of (await readdir(homeDir, { recursive: true })).filter((p) => p.endsWith(".md"))) {
       texts.push(await readFile(join(homeDir, f), "utf8"));
     }
-    const appRoot = join(RUNTIME, "..", "..");
+    const appRoot = imageRoot;
     const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot)))];
     expect(referenced.length).toBeGreaterThan(20);
     expect(referenced.filter((p) => !existsSync(onDisk(p, homeDir)))).toEqual([]);
