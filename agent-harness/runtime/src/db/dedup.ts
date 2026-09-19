@@ -33,10 +33,13 @@ export interface Duplicate {
   matchType: string;
 }
 
-/** The id in `linkedin.com/jobs/view/<id>`. A `currentJobId=` in the query is another ad and is ignored. */
+/**
+ * The id in `linkedin.com/jobs/view/<id>`. A `currentJobId=` in the query is
+ * another ad and is ignored. Python's `\d` is any Unicode decimal digit.
+ */
 export function extractLinkedinJobId(url: string | null | undefined): string | null {
   if (!url) return null;
-  return /linkedin\.com\/jobs\/view\/(\d+)/.exec(url)?.[1] ?? null;
+  return /linkedin\.com\/jobs\/view\/(\p{Nd}+)/u.exec(url)?.[1] ?? null;
 }
 
 /** `_title_similarity`: difflib's ratio on lowercased titles; 0 when either is empty. */

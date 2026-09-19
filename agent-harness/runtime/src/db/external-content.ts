@@ -31,16 +31,30 @@ const MARKER_BRACKETS: Array<[string, string]> = [
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
 
 /**
- * `_MARKER_SHAPE`. Python's `\b` is Unicode-aware and JavaScript's is not, so
- * the word boundary after the keyword is spelled as "not followed by a letter,
- * digit or underscore" — Python's `\w` on `str`.
+ * Python's `\s` on `str`: JavaScript's lacks U+001C-U+001F and U+0085 and adds
+ * U+FEFF. It matters in a block, which is defanged without being flattened.
+ */
+const PY_SPACE = "[\\t\\n\\v\\f\\r\\u001c-\\u001f \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]";
+
+/**
+ * A letter as Python's `re.IGNORECASE` matches it on `str`: also the dotless
+ * and dotted I and the long s, which JavaScript's case folding leaves out.
+ */
+const FOLD: Record<string, string> = { I: "[Iiıİ]", S: "[Ssſ]" };
+const word = (w: string) => Array.from(w, (ch) => FOLD[ch] ?? `[${ch}${ch.toLowerCase()}]`).join("");
+
+/**
+ * `_MARKER_SHAPE`, spelled out: Python's `\s`, its case folding, and its
+ * Unicode `\b` — JavaScript's `\b` is ASCII-only even with the `u` flag, so
+ * the boundary after the keyword is "not followed by a letter, digit or
+ * underscore", Python's `\w` on `str`.
  */
 const MARKER_SHAPE = new RegExp(
   MARKER_BRACKETS.map(
     ([open, close]) =>
-      `${escapeRe(open)}\\s*\\/?\\s*(?:DATI[_\\s]*ESTERNI|EXT)(?![\\p{L}\\p{N}_])[^${escapeRe(close[0]!)}]*${escapeRe(close)}`,
+      `${escapeRe(open)}${PY_SPACE}*\\/?${PY_SPACE}*(?:${word("DATI")}(?:_|${PY_SPACE})*${word("ESTERNI")}|${word("EXT")})(?![\\p{L}\\p{N}_])[^${escapeRe(close[0]!)}]*${escapeRe(close)}`,
   ).join("|"),
-  "giu",
+  "gu",
 );
 
 /** Controls and line/paragraph separators: they become a space (`_STRUCTURAL_CATEGORIES`). */

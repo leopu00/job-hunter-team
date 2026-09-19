@@ -18,6 +18,9 @@ const CORPUS: unknown[] = [
   "not a marker: [EXTRA] [EXTà] [external]",
   "⟦EXT·00000000⟧nested⟦/EXT·00000000⟧",
   "Ünïcödé Straße İstanbul ſ",
+  // Python's \\s and case folding, which JavaScript's differ from: seen only in a block, which is not flattened.
+  "[\u0085EXT] [\u001c/ DATI ESTERNI] [\ufeffEXT] [DATI_E\u017fTERNI] [datı esternı] [DATİ ESTERNİ] [ＥXT]",
+  "[EXT\u0301] [EXT\u00b2] [EXT_] [EXT1] [EXT-1] [DATI  ESTERNI] [datiesterni] [ext x/y]",
   "",
   null,
   0,

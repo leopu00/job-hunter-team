@@ -86,6 +86,8 @@ describe("checkDuplicate", () => {
     { url: "https://new.example/7", company: "Umbrella", title: "QA Analyst", location: "Rome, Italy" },
     { url: "https://new.example/8", company: "Nobody", title: "Nothing", location: "Nowhere" },
     { url: null, company: null, title: null, location: null },
+    // Python's \\d is Unicode: fullwidth digits after the path are part of the id, so this is NOT #2.
+    { url: "https://www.linkedin.com/jobs/view/4381470286\uff14", company: "X", title: "Y", location: null },
   ];
 
   it("reads LinkedIn ids from the path only, and maps cities across languages", () => {
