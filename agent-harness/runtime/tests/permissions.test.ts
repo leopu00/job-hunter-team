@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PermissionPolicy, type PermissionAnswer, type PermissionRequest } from "../src/core/permissions.ts";
 import type { ToolAccess } from "../src/tools/registry.ts";
 import { createWorkspaceTools } from "../src/tools/workspace.ts";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -149,6 +149,9 @@ describe("workspace walks — runtime state", () => {
       await writeFile(join(own, "mine.md"), "needle mine\n");
       await writeFile(join(root, "state", "agents", "analyst", "theirs.md"), "needle theirs\n");
       await writeFile(join(root, "state", "logs", "analyst", "run.jsonl"), "needle trace\n");
+      // A link with an innocent name, outside the state, pointing into another role's home.
+      await mkdir(join(root, "proj", "shared"), { recursive: true });
+      await symlink(join(root, "state", "agents", "analyst", "theirs.md"), join(root, "proj", "shared", "notes.md"));
       const tools = createWorkspaceTools({ workdir: own, ownRoots: [own], stateRoots: [join(root, "state")] });
       const run = async (name: string, args: Record<string, unknown>) => {
         const tool = tools.find((t) => t.spec.name === name)!;
@@ -160,6 +163,7 @@ describe("workspace walks — runtime state", () => {
         expect(out).toContain("mine");
         expect(out).not.toContain("theirs");
         expect(out).not.toContain("run.jsonl");
+        expect(out).not.toContain("notes.md");
       }
     } finally {
       await rm(root, { recursive: true, force: true });

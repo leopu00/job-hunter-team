@@ -200,7 +200,8 @@ export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandle
       for await (const entry of fsGlob(pattern, { cwd: base })) {
         const name = String(entry);
         if (name.split(/[\\/]/).some((segment) => SKIPPED_DIRS.has(segment))) continue;
-        if (hidden(join(base, name))) continue;
+        // Judged where it leads: a link's name must not reveal a file the agent may not see.
+        if (hidden(realPath(join(base, name)))) continue;
         if (found.length >= MAX_GLOB_RESULTS) {
           more = true;
           break;
