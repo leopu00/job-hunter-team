@@ -13,14 +13,18 @@ POSTs, JSON in and out, each with a role's token in `Authorization: Bearer`:
 
 | Path | Does |
 | --- | --- |
-| `/v1/tool` `{name, args}` | runs one of the caller's database tools: the tools `createSkillTools` builds with the database for the caller's role (its `skills.list`, read by the hub), with the same code and `role-policy.ts`. Tools that do not need the database stay in the role; asking the hub for one is a 403 |
+| `/v1/tool` `{name, args}` | runs one of the caller's database tools: the tools `createSkillTools` builds with the database for the caller's role (its `skills.list`, read by the hub), with the same code and `role-policy.ts`. Tools that do not need the database stay in the role; asking the hub for one is a 403. One of them reaches the web: `logo_fetch` (the ANALISTA's `logo-extraction`) needs the database, so it runs here, through the same `SafeHttpsClient` guard as in the role (every hop resolved, private and loopback addresses refused) |
 | `/v1/mailbox/send` `{to, text}` | appends to `to`'s inbox, `from` set to the token's agent |
 | `/v1/mailbox/drain` `{}` | empties the caller's inbox, and only the caller's |
 | `/v1/notify` `{kind, text, positionId?}` | appends to `notify.jsonl`, at most 5 per hour per agent (kept here too, not only in the role) |
 | `/v1/replies/take` `{}` | the person's replies to the caller |
 
 The agent is the token's, never a field of the request: a body with an extra
-field is refused (400). Status codes: 401 no or unknown token, 403 a tool the
+field is refused (400). `to` is an agent name (`SCOUT-1`, `capitano`), and
+every channel file is named after a canonical id checked just before the path
+is built: `../replies/capitano`, `a/b` or a backslash are a 400, and never a
+file (HUB-1). A reply that is not an object with string `id` and `text` is
+dropped, not handed out as the person's words. Status codes: 401 no or unknown token, 403 a tool the
 role does not have, 404/405/415/413 wrong shape, 429 notification limit.
 
 ## The role's side
@@ -36,6 +40,9 @@ clear.
 
 - **Container:** the `jht-api` image, `npm run hub`, in the pod (`--pod`), its
   own uid (not a role's), `--read-only --security-opt no-new-privileges --cap-drop=all`.
+- **Network:** outbound HTTPS, for `logo_fetch` (HUB-2). The pod already has
+  it; the guard refuses the pod's loopback, so the key proxy is not reachable
+  through a fetched URL.
 - **Mounts:** `jobs.db`'s folder and `channels/` read-write, a state folder of
   its own read-write, the profile read-only, the token file read-only.
 - **Environment:** `JHT_HUB_TOKENS` (the file), `JHT_HUB_DB`, `JHT_HUB_CHANNELS`,

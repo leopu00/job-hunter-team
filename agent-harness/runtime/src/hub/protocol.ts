@@ -8,6 +8,8 @@
 
 import { z } from "zod";
 
+import { AGENT_NAME } from "../parity/jht-tools.ts";
+
 export const HUB_PATHS = {
   tool: "/v1/tool",
   send: "/v1/mailbox/send",
@@ -24,7 +26,8 @@ export const TOKEN = /^[A-Za-z0-9_-]{32,256}$/;
 
 export const ToolRequest = z.object({ name: z.string().min(1).max(64), args: z.unknown() }).strict();
 
-export const SendRequest = z.object({ to: z.string().min(1).max(64), text: z.string().max(8_000) }).strict();
+/** `to` is an agent name, as send_message takes it: no path, no dot, no separator (HUB-1). */
+export const SendRequest = z.object({ to: AGENT_NAME, text: z.string().max(8_000) }).strict();
 
 export const NotifyRequest = z
   .object({
