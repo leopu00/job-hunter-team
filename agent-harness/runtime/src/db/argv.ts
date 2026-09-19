@@ -84,29 +84,30 @@ export function parseArgv(spec: CommandSpec, argv: readonly string[]): Parsed {
   for (const p of positionals) out[p.name] = p.default ?? null;
 
   const seen = new Set<string>();
-  const loose: string[] = [];
-  const unknown: string[] = [];
+  // Each word keeps its place: argparse lists the words it did not want in the order they came.
+  const loose: Array<[number, string]> = [];
+  const unknown: Array<[number, string]> = [];
 
   for (let i = 0; i < argv.length; i++) {
     const word = argv[i]!;
     if (word === "--") {
-      loose.push(...argv.slice(i + 1));
+      argv.slice(i + 1).forEach((w, k) => loose.push([i + 1 + k, w]));
       break;
     }
     // A negative number is a value, not a flag, as argparse sees it when no flag looks like one.
     if (!word.startsWith("-") || word === "-" || /^-\d+(\.\d+)?$/.test(word)) {
-      loose.push(word);
+      loose.push([i, word]);
       continue;
     }
     if (!word.startsWith("--")) {
-      unknown.push(word);
+      unknown.push([i, word]);
       continue;
     }
     const eq = word.indexOf("=");
     const name = eq >= 0 ? word.slice(0, eq) : word;
     const option = findOption(options, name, fail);
     if (!option) {
-      unknown.push(word);
+      unknown.push([i, word]);
       continue;
     }
     const dest = destOf(option.flag);
@@ -133,7 +134,7 @@ export function parseArgv(spec: CommandSpec, argv: readonly string[]): Parsed {
 
   let at = 0;
   for (const p of positionals) {
-    const word = loose[at];
+    const word = loose[at]?.[1];
     if (word === undefined) {
       if (!p.optional) continue;
       break;
@@ -147,7 +148,7 @@ export function parseArgv(spec: CommandSpec, argv: readonly string[]): Parsed {
     ...options.filter((o) => o.required && !seen.has(destOf(o.flag))).map((o) => o.flag),
   ];
   if (missing.length > 0) fail(`the following arguments are required: ${missing.join(", ")}`);
-  const extra = [...loose.slice(at), ...unknown];
+  const extra = [...loose.slice(at), ...unknown].sort((x, y) => x[0] - y[0]).map(([, w]) => w);
   if (extra.length > 0) fail(`unrecognized arguments: ${extra.join(" ")}`, spec.mainProg ?? spec.prog.split(" ")[0]);
   return out;
 }

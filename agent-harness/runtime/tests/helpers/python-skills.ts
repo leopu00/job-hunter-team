@@ -33,8 +33,11 @@ export function pythonSkills(): string | null {
     return extracted;
   }
   const dir = mkdtempSync(join(tmpdir(), "jht-py-skills-"));
-  const tar = execFileSync("git", ["archive", SOURCE_COMMIT, "shared/skills"], { cwd: REPO, maxBuffer: 64 << 20 });
-  execFileSync("tar", ["-x", "-C", dir], { input: tar });
+  // Through a file, not a pipe: tar stops reading at the end-of-archive marker
+  // and closes its stdin while git's padding is still being written (EPIPE).
+  const archive = join(dir, "skills.tar");
+  execFileSync("git", ["archive", `--output=${archive}`, SOURCE_COMMIT, "shared/skills"], { cwd: REPO });
+  execFileSync("tar", ["-xf", archive, "-C", dir]);
   extracted = join(dir, "shared", "skills");
   return extracted;
 }

@@ -126,13 +126,17 @@ export function pythonIsoUtc(date: Date): string {
   return ms === 0 ? `${base}+00:00` : `${base}.${String(ms).padStart(3, "0")}000+00:00`;
 }
 
+/** The spaces `int()` skips around a number: `str.isspace()` except U+001C-U+001F (measured). */
+const INT_SPACE = "\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
+const INT_TRIM = new RegExp(`^[${INT_SPACE}]+|[${INT_SPACE}]+$`, "gu");
+
 /**
  * Python's `int(str)` as argparse's `type=int` uses it: surrounding
  * whitespace, a sign, underscores between digits, and any Unicode decimal
  * digit. Null when Python would raise ValueError.
  */
 export function pyInt(raw: string): number | null {
-  const text = pyStrip(raw);
+  const text = raw.replace(INT_TRIM, "");
   if (!/^[+-]?\p{Nd}+(?:_\p{Nd}+)*$/u.test(text)) return null;
   let out = "";
   for (const ch of text) {
