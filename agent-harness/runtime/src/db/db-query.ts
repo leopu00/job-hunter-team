@@ -47,6 +47,9 @@ const QUEUES = {
   "next-for-recheck": "recheck",
   "next-for-categorize": "categorize",
   "next-for-salary-precise": "salary-precise",
+  // The CAPITANO's (T21): the Scrittore's and the Critico's queues, which it watches.
+  "next-for-scrittore": "scrittore",
+  "next-for-critico": "critico",
   // Care mode (RULE-14): assigned by the Capitano, gated by the enrichment policy.
   "next-for-recheck-due": "recheck-due",
   "next-for-recheck-weekly": "recheck-due",
@@ -56,7 +59,7 @@ const QUEUES = {
 type QueueCommand = keyof typeof QUEUES;
 
 export const DB_QUERY_PORTED = [
-  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history",
+  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "dashboard",
   "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
 ] as const;
 type Ported = (typeof DB_QUERY_PORTED)[number];
@@ -91,6 +94,7 @@ const SPECS: Record<Ported, CommandSpec> = {
     ],
   },
   stats: { prog: "db_query.py stats", options: [JSON_FLAG] },
+  dashboard: { prog: "db_query.py dashboard", options: [JSON_FLAG] },
   "check-history": { prog: "db_query.py check-history", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
   "active-categories": {
     prog: "db_query.py active-categories",
@@ -376,6 +380,108 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     return done();
   }
 
+  if (name === "dashboard") {
+    const statuses = select(
+      db(),
+      `
+        SELECT status, COUNT(*) as cnt FROM positions GROUP BY status ORDER BY
+        CASE status
+            WHEN 'new' THEN 1 WHEN 'checked' THEN 2 WHEN 'scored' THEN 3
+            WHEN 'writing' THEN 4 WHEN 'review' THEN 5 WHEN 'ready' THEN 6
+            WHEN 'applied' THEN 7 WHEN 'response' THEN 8 ELSE 9
+        END
+    `,
+      [],
+    );
+    const total = statuses.rows.reduce((n, r) => n + Number(r["cnt"]), 0);
+    const verdicts = select(db(), "SELECT verdict, COUNT(*) as cnt FROM companies WHERE verdict IS NOT NULL GROUP BY verdict", []);
+    const withCid = Number((db().prepare("SELECT COUNT(*) AS n FROM positions WHERE company_id IS NOT NULL").get() as { n: number }).n);
+    if (a["json"]) {
+      const top = select(
+        db(),
+        `
+                SELECT p.id, p.title, p.company, s.total_score, p.status
+                FROM positions p JOIN scores s ON s.position_id = p.id
+                ORDER BY s.total_score DESC LIMIT 10
+            `,
+        [],
+      );
+      const apps = select(
+        db(),
+        `
+                SELECT p.id AS position_id, p.company, p.title, a.status,
+                       a.critic_verdict, a.applied_at, a.written_at
+                FROM applications a JOIN positions p ON p.id = a.position_id
+                ORDER BY a.id DESC
+            `,
+        [],
+      );
+      // A dict comprehension keyed by status: a NULL status is the key "null", as json.dumps writes None.
+      const byKey = (rows: Row[], key: string) => Object.fromEntries(rows.map((r) => [r[key] === null ? "null" : String(r[key]), Number(r["cnt"])]));
+      print(
+        pyJson(
+          {
+            total,
+            by_status: byKey(statuses.rows, "status"),
+            top_scores: top.rows.map((r) => cells(r, top.declared)),
+            applications: apps.rows.map((r) => cells(r, apps.declared)),
+            companies_by_verdict: byKey(verdicts.rows, "verdict"),
+            positions_with_company_id: withCid,
+          },
+          { ensureAscii: false },
+        ),
+      );
+      return done();
+    }
+    print(`\n${"=".repeat(60)}`);
+    print("  JOB HUNTER — DASHBOARD (Schema V2)");
+    print("=".repeat(60));
+    print(`\n  Total positions: ${total}`);
+    for (const r of statuses.rows) print(`    ${pyPad(statuses.s(r, "status"), 10, ">")}: ${statuses.s(r, "cnt")}`);
+    const top = select(
+      db(),
+      `
+        SELECT p.title, p.company, s.total_score, p.status
+        FROM positions p JOIN scores s ON s.position_id = p.id
+        ORDER BY s.total_score DESC LIMIT 10
+    `,
+      [],
+    );
+    if (top.rows.length) {
+      print("\n  TOP 10 by score:");
+      for (const r of top.rows) {
+        const company = pySlice(flattenExternalValue(r["company"]), 0, 20);
+        const title = pySlice(flattenExternalValue(r["title"]), 0, 30);
+        print(`    ${pyPad(top.s(r, "total_score"), 3, ">")}/100  ${pyPad(company, 20, "<")} ${pyPad(title, 30, "<")} [${top.s(r, "status")}]`);
+      }
+    }
+    const apps = select(
+      db(),
+      `
+        SELECT p.company, p.title, a.status, a.critic_verdict, a.applied_at, a.written_at
+        FROM applications a JOIN positions p ON p.id = a.position_id
+        ORDER BY a.id DESC
+    `,
+      [],
+    );
+    if (apps.rows.length) {
+      print(`\n  Applications (${apps.rows.length}):`);
+      for (const r of apps.rows) {
+        const verdict = pyTruthy(r["critic_verdict"]) ? ` [${apps.s(r, "critic_verdict")}]` : "";
+        const applied = pyTruthy(r["applied_at"]) ? ` | Inviata ${apps.s(r, "applied_at")}` : "";
+        const company = pySlice(flattenExternalValue(r["company"]), 0, 20);
+        const title = pySlice(flattenExternalValue(r["title"]), 0, 25);
+        print(`    ${pyPad(company, 20, "<")} ${pyPad(title, 25, "<")} ${apps.s(r, "status")}${verdict}${applied}`);
+      }
+    }
+    if (verdicts.rows.length) {
+      print("\n  Companies analyzed:");
+      for (const r of verdicts.rows) print(`    ${pyPad(verdicts.s(r, "verdict"), 8, ">")}: ${verdicts.s(r, "cnt")}`);
+    }
+    print(`\n  Company ID: ${withCid}/${total} linked positions (${total ? Math.floor((100 * withCid) / total) : 0}%)`);
+    return done();
+  }
+
   if (name === "stats") {
     // Four constant table names, as the Python's loop has them.
     const count = (table: string) => Number((db().prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n);
@@ -630,6 +736,8 @@ function disabledQueue(role: string, label: string, message: string, asJson: boo
 
 function queue(db: Database, role: string, lim: number, asJson: boolean, gate: QueueGate, print: (line?: string) => void): void {
   const userId = gate.userId;
+  // Rows computed in code rather than by one SELECT: the Scrittore's queue, sorted after a union.
+  let computed: { rows: Row[]; declared: Record<string, string | null> } | null = null;
   let sql: string;
   let params: Array<string | number | boolean> = [];
   let label: string;
@@ -720,6 +828,57 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
         `;
     const shown = ms === null ? "" : `, best-score >= ${typeof ms === "boolean" ? (ms ? "True" : "False") : ms}`;
     label = `Care-mode logo (companies with live positions and no logo${shown})`;
+  } else if (role === "scrittore") {
+    const q = select(
+      db,
+      `
+            SELECT p.id, p.title, p.company, s.total_score,
+                   COALESCE(p.write_request_kind, 'cv') AS request_kind,
+                   p.write_requested_at AS _requested_at
+            FROM positions p
+            JOIN scores s ON s.position_id = p.id
+            LEFT JOIN applications a ON a.position_id = p.id
+            WHERE p.write_requested = 1
+              AND (
+                (COALESCE(p.write_request_kind, 'cv') = 'cv'
+                 AND s.total_score >= 50
+                 AND a.id IS NULL
+                 AND p.status = 'scored')
+                OR
+                (p.write_request_kind = 'cover_letter' AND a.id IS NOT NULL)
+              )
+        `,
+      [],
+    );
+    // [JHT-CV-REWORK] rows need application_rework.py (the CV's layout check, the send state),
+    // not ported: CVs and cover letters flow as in the script, a rework request does not show
+    // (docs/parity.md). The CAPITANO reads this queue; the SCRITTORE is not ported yet.
+    const queued = [...q.rows].sort((x, y) => {
+      const rx = pyStr(x["_requested_at"] ?? "") === "None" ? "" : String(x["_requested_at"] ?? "");
+      const ry = pyStr(y["_requested_at"] ?? "") === "None" ? "" : String(y["_requested_at"] ?? "");
+      if (rx !== ry) return rx < ry ? -1 : 1;
+      return -(Number(x["total_score"]) || 0) - -(Number(y["total_score"]) || 0);
+    });
+    const kept = lim < 0 ? queued : queued.slice(0, lim);
+    computed = {
+      rows: kept.map((r) => {
+        const { _requested_at: _dropped, ...rest } = r;
+        return { ...rest, _total: queued.length };
+      }),
+      declared: q.declared,
+    };
+    sql = "";
+    label = "Positions with a user-requested CV, CV rework or cover letter";
+  } else if (role === "critico") {
+    sql = `
+            SELECT p.id, p.title, p.company, a.written_by, COUNT(*) OVER () AS _total
+            FROM positions p
+            JOIN applications a ON a.position_id = p.id
+            WHERE a.status = 'review' AND a.critic_verdict IS NULL
+            ORDER BY a.id ASC
+            LIMIT ?
+        `;
+    label = "Applications in review without a verdict";
   } else if (role === "analista") {
     sql = `
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
@@ -791,7 +950,7 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
   }
   // A bool threshold is Python's int 1 or 0 once bound.
   const bound = params.map((p) => (typeof p === "boolean" ? Number(p) : p));
-  const { rows, declared, s } = select(db, sql, [...bound, lim]);
+  const { rows, declared, s } = computed ? { ...computed, s: (r: Row, c: string) => pyStr(r[c], computed!.declared[c]) } : select(db, sql, [...bound, lim]);
   const total = rows.length ? Number(rows[0]!["_total"]) : 0;
   const shown = rows.length;
   if (asJson) {
@@ -812,9 +971,10 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
   print(`\n${label} (${counted}):`);
   for (const r of rows) {
     const extra = "total_score" in r ? ` [score: ${s(r, "total_score")}]` : "";
+    const prefix = "request_kind" in r ? `[request_kind=${s(r, "request_kind")}] ` : "";
     const company = pySlice(flattenExternalValue(r["company"]), 0, 20);
     const title = pySlice(flattenExternalValue(r["title"]), 0, 35);
-    print(`  #${s(r, "id")} ${pyPad(company, 20, "<")} ${title}${extra}`);
+    print(`  #${s(r, "id")} ${prefix}${pyPad(company, 20, "<")} ${title}${extra}`);
   }
   if (shown < total) {
     print(`  … ${total - shown} more in the queue. The limit is a default, not a cap: use --limit N to see more, or --all to see everything.`);
