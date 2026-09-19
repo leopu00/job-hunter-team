@@ -55,7 +55,34 @@ function seeded(path: string, base = sqliteNow()): Database {
   run(tr, 3, "new", "checked", "scorer-1", null, base, "-1 minutes");
   // A REAL column holding an integral value: Python prints 45.0, not 45.
   run("UPDATE positions SET office_lat = ?, office_lon = ? WHERE id = 1", 45, 9.19);
+  // T14, the ANALISTA's reads: a company in full, the queues' flags, the category registry, check history.
+  run("UPDATE companies SET website = ?, size = ?, glassdoor_rating = ?, red_flags = ?, culture_notes = ? WHERE id = 1",
+    "https://acme.example", "51-200 employees", 4.0, "layoffs 2025", "remote-first");
+  run("UPDATE companies SET glassdoor_rating = ?, verdict = ?, sector = ? WHERE id = 2", 3.25, "NO_GO", "a sector name longer than fifteen");
+  run("INSERT INTO companies (name, verdict) VALUES (?, ?)", "Ümlaut GmbH", "CAUTIOUS");
+  run("UPDATE positions SET company_id = 2 WHERE id = 3");
+  run("UPDATE positions SET role_family = 'Backend', recheck_requested = 1, recheck_requested_at = ?, salary_precise_requested = 1, salary_precise_requested_at = ? WHERE id = 1",
+    "2026-09-10 10:00:00", "2026-09-11 10:00:00");
+  run("UPDATE positions SET geocode_requested = 1, geocode_requested_at = ? WHERE id = 3", "2026-09-12 10:00:00");
+  run(pos, "Data Engineer", "Delta", null, "Rome", null, "https://delta.example/1", null, null, null, "checked", "scout-1", "2026-09-04 08:00:00", null, null, null, null, null, null);
+  run(pos, "Analyst \u2014 [/EXT fake]", "Epsilon", null, null, null, "https://eps.example/1", null, null, null, "checked", "scout-2", "2026-09-05 08:00:00", null, null, null, null, null, null);
+  run(pos, "Legacy", "Zeta", null, null, null, "https://zeta.example/1", null, null, null, "writing", "scout-1", "2026-09-06 08:00:00", null, null, null, null, null, null);
+  run("UPDATE positions SET role_family = 'Other', role_family_proposed = 'Data' WHERE id = 5");
+  run("UPDATE positions SET role_family = 'Legacy drift' WHERE id = 6");
+  const family = "INSERT INTO role_family_registry (user_id, name, status, support_count) VALUES (?, ?, ?, ?)";
+  run(family, "local", "Backend", "active", 3);
+  run(family, "local", "Data", "active", 3);
+  run(family, "local", "Old", "dormant", 9);
+  run(family, "someone-else", "Sales", "active", 7);
+  const event = "INSERT INTO maintenance_events (ts, by_agent, target_type, target_id, action, outcome, field, before, after, evidence_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+  run(event, "2026-09-10 10:00:00", "analista-1", "position", 1, "liveness_check", "open", null, null, null, 200);
+  run(event, "2026-09-11 10:00:00", "analista-1", "position", 1, "liveness_check", "unreachable", "is_open", "1", "1", null);
+  run(event, "2026-09-12 10:00:00", "analista-very-long-2", "position", 1, "liveness_check", "inconclusive", null, null, null, 403);
+  // A recheck already served: checked after it was requested, so out of the queue.
+  run("UPDATE positions SET recheck_requested = 1, recheck_requested_at = ?, last_open_check = ? WHERE id = 3", "2026-09-01 10:00:00", "2026-09-02 10:00:00");
   pinClock(db, base);
+  // The uncategorized position is the newer one: the queue still puts it before the drifted.
+  run("UPDATE positions SET created_at = datetime(?, '+1 minutes') WHERE id = 4", base);
   return db;
 }
 
@@ -67,12 +94,15 @@ function seeded(path: string, base = sqliteNow()): Database {
  * trigger fires when an UPDATE leaves it unchanged.
  */
 function pinClock(db: Database, base: string): void {
-  const columns = (db.prepare("PRAGMA table_info(positions)").all() as Array<{ name: string; dflt_value: string | null }>)
-    .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
-    .map((c) => c.name);
-  for (const value of ["1970-01-01 00:00:00", base]) {
-    // Column names from the schema itself, never from input.
-    db.prepare(`UPDATE positions SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
+  // Companies too: `company --json` prints analyzed_at, created_at, updated_at (T14).
+  for (const table of ["positions", "companies"]) {
+    const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string; dflt_value: string | null }>)
+      .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
+      .map((c) => c.name);
+    for (const value of ["1970-01-01 00:00:00", base]) {
+      // Table and column names from the schema itself, never from input.
+      db.prepare(`UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
+    }
   }
 }
 
@@ -81,13 +111,13 @@ function sqliteNow(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
-function twins() {
+function twins(agent = "scout-1") {
   const pyPath = join(root, "py.db");
   const ourPath = join(root, "ours.db");
   const base = sqliteNow();
   const pyDb = seeded(pyPath, base);
   const ourDb = seeded(ourPath, base);
-  const tools = createDbTools({ db: () => ourDb, agent: "scout-1", nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
+  const tools = createDbTools({ db: () => ourDb, agent, nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
   const call = (name: string, args: string[]) => {
     const tool = tools.find((t) => t.spec.name === name) as ToolHandler;
     return tool.execute(tool.spec.schema.parse({ args }), context);
@@ -96,7 +126,7 @@ function twins() {
     runPython(skills!, [script, ...args], {
       JHT_DB: pyPath,
       JHT_HOME: join(root, "py-home"),
-      JHT_AGENT_NAME: "scout-1",
+      JHT_AGENT_NAME: agent,
       JHT_EXTERNAL_CONTENT_NONCE: NONCE,
       COLUMNS: "80",
     });
@@ -159,7 +189,85 @@ const QUERIES: string[][] = [
   ["check-url", "a", "b"],
 ];
 
+/** The ANALISTA's reads (T14), each run by an analista against the Python. */
+const ANALISTA_QUERIES: string[][] = [
+  ["next-for-analista"],
+  ["next-for-analista", "--limit", "1"],
+  ["next-for-analista", "--limit", "0", "--json"],
+  ["next-for-analista", "--all"],
+  ["next-for-analista", "--json", "--limit", "1"],
+  ["next-for-recheck"],
+  ["next-for-recheck", "--json"],
+  ["next-for-categorize"],
+  ["next-for-categorize", "--json"],
+  ["next-for-salary-precise"],
+  ["next-for-geocoding", "--json"],
+  ["next-for-geocoding", "--limit", "-3"],
+  ["company", "acme"],
+  ["company", "Globex"],
+  ["company", "nobody"],
+  ["company", "acme", "--json"],
+  ["company", "nobody", "--json"],
+  ["company", "%"],
+  ["companies"],
+  ["companies", "--verdict", "NO_GO"],
+  ["companies", "--missing-glassdoor"],
+  ["companies", "--missing-verdict", "--json"],
+  ["companies", "--verdict", "BAD"],
+  ["stats"],
+  ["stats", "--json"],
+  ["check-history", "1"],
+  ["check-history", "2"],
+  ["check-history", "1", "--json"],
+  ["check-history", "99"],
+  ["active-categories"],
+  ["active-categories", "--json"],
+  ["active-categories", "someone-else"],
+  ["active-categories", "nobody", "--json"],
+  ["other-pile"],
+  ["other-pile", "--limit", "0"],
+  ["category-sizes"],
+  ["category-sizes", "--big", "0"],
+  ["category-sizes", "someone-else"],
+  ["next-for-analista", "--limit", "x"],
+];
+
 describe("db_query against db_query.py", () => {
+  it.skipIf(skills === null).each(ANALISTA_QUERIES.map((q) => [`analista: ${q.join(" ")}`, q]))("%s", async (_label, args) => {
+    const { call, py } = twins("analista-1");
+    expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
+  });
+
+  it.skipIf(skills === null)("next-for-scorer, as the SCORER runs it (T15)", async () => {
+    const { call, py } = twins("scorer-1");
+    for (const args of [["next-for-scorer"], ["next-for-scorer", "--json"]]) {
+      expectSame(await call("db_query", args), py("db_query.py", args));
+    }
+  });
+
+  it("gives each role only its own reads", async () => {
+    const db = seeded(join(root, "roles.db"));
+    const run = async (agent: string, args: string[]) => {
+      const tool = createDbTools({ db: () => db, agent }).find((t) => t.spec.name === "db_query")!;
+      return tool.execute(tool.spec.schema.parse({ args }), context);
+    };
+    for (const [agent, args] of [
+      ["scout-1", ["next-for-analista"]],
+      ["scout-1", ["company", "acme"]],
+      ["analista-1", ["next-for-scorer"]],
+      ["analista-2", ["next-for-scrittore"]],
+      ["scorer-1", ["next-for-analista"]],
+      ["scorer-1", ["positions"]],
+      ["capitano-1", ["position", "1"]],
+    ] as const) {
+      const r = await run(agent, [...args]);
+      expect(r.ok, `${agent} ${args.join(" ")}`).toBe(false);
+      expect(r.content).toContain(`\`db_query ${args[0]}\` is not available to this agent`);
+    }
+    expect((await run("analista-2", ["next-for-analista"])).ok).toBe(true);
+    expect((await run("scorer-1", ["next-for-scorer"])).ok).toBe(true);
+  });
+
   it.skipIf(skills === null).each(QUERIES.map((q) => [q.join(" ") || "(no args)", q]))("%s", async (_label, args) => {
     const { call, py } = twins();
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));

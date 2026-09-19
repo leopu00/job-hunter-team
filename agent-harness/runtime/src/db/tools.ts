@@ -25,6 +25,7 @@ import { dbQuery } from "./db-query.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
+import { dbPolicyFor } from "./role-policy.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
@@ -38,6 +39,8 @@ export interface DbToolsOptions {
   now?: () => Date;
   /** The fence's nonce, for tests that compare with the Python. Absent: a new random one per call. */
   nonce?: () => string;
+  /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
+  userId?: string;
 }
 
 /** What a script run comes to: its output and its exit code. */
@@ -68,6 +71,8 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
   const [ownId, ownAlias = ownId] = agentAliases(options.agent) as [string, string?];
   const owns = (foundBy: string | null) => foundBy !== null && [ownId, ownAlias].includes(foundBy.toLowerCase());
   const now = options.now ?? (() => new Date());
+  // What this agent's role may run, subcommand by subcommand (role-policy.ts).
+  const policy = dbPolicyFor(options.agent);
 
   const tool = (
     name: string,
@@ -112,7 +117,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
 
   const dbInsert = (argv: string[]): ScriptResult => {
     const entity = argv[0];
-    if (entity !== "position") return refused("db_insert", entity, ["position"]);
+    if (entity !== "position" || !policy.insert.includes(entity)) return refused("db_insert", entity, [...policy.insert]);
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -196,7 +201,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
 
   const dbUpdate = (argv: string[]): ScriptResult => {
     const entity = argv[0];
-    if (entity !== "position") return refused("db_update", entity, ["position"]);
+    if (entity !== "position" || !policy.update.includes(entity)) return refused("db_update", entity, [...policy.update]);
     const a = parseArgv(POSITION_UPDATE, argv.slice(1));
     const id = a["id"] as number;
     // SC-03: the SCOUT's one update is marking its own duplicate excluded.
@@ -306,8 +311,14 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     tool(
       "db_query",
       "db_query.py",
-      "Read the team's database: check-url, position, positions, recent-activity.",
-      (argv) => dbQuery(options.db, argv, options.nonce?.(), (sub) => refused("db_query", sub, ["check-url", "position", "positions", "recent-activity"])),
+      `Read the team's database: ${policy.query.join(", ")}.`,
+      (argv) =>
+        dbQuery(options.db, argv, {
+          nonce: options.nonce?.(),
+          allowed: policy.query,
+          refuse: (sub) => refused("db_query", sub, [...policy.query]),
+          ...(options.userId ? { userId: options.userId } : {}),
+        }),
     ),
     tool(
       "db_insert",
