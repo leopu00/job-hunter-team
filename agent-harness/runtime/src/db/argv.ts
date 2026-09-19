@@ -12,6 +12,8 @@
  * before it is shorter than argparse's, the one documented difference.
  */
 
+import { pyInt } from "./py-format.ts";
+
 export type ArgType = "str" | "int" | "float";
 
 export interface OptionSpec {
@@ -34,6 +36,11 @@ export interface PositionalSpec {
 export interface CommandSpec {
   /** `db_insert.py position`: how errors name the command. */
   prog: string;
+  /**
+   * `db_insert.py`: argparse reports words no subcommand wanted from the top
+   * parser, under this name. Defaults to the first word of `prog`.
+   */
+  mainProg?: string;
   positionals?: PositionalSpec[];
   options?: OptionSpec[];
 }
@@ -44,6 +51,23 @@ export class ArgvError extends Error {
   readonly exitCode = 2;
 }
 
+/** `repr(str)` as argparse prints a bad value: single quotes unless the text has one and no double quote. */
+export function pyRepr(text: string): string {
+  const quote = text.includes("'") && !text.includes('"') ? '"' : "'";
+  let out = "";
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (ch === "\\") out += "\\\\";
+    else if (ch === quote) out += `\\${ch}`;
+    else if (ch === "\n") out += "\\n";
+    else if (ch === "\r") out += "\\r";
+    else if (ch === "\t") out += "\\t";
+    else if (cp < 0x20 || cp === 0x7f) out += `\\x${cp.toString(16).padStart(2, "0")}`;
+    else out += ch;
+  }
+  return `${quote}${out}${quote}`;
+}
+
 export function destOf(flag: string): string {
   return flag.replace(/^--/, "").replaceAll("-", "_");
 }
@@ -51,8 +75,8 @@ export function destOf(flag: string): string {
 export function parseArgv(spec: CommandSpec, argv: readonly string[]): Parsed {
   const options = spec.options ?? [];
   const positionals = spec.positionals ?? [];
-  const fail = (message: string): never => {
-    throw new ArgvError(`usage: ${spec.prog} [-h] ...\n${spec.prog}: error: ${message}`);
+  const fail = (message: string, prog = spec.prog): never => {
+    throw new ArgvError(`usage: ${prog} [-h] ...\n${prog}: error: ${message}`);
   };
 
   const out: Parsed = {};
@@ -124,7 +148,7 @@ export function parseArgv(spec: CommandSpec, argv: readonly string[]): Parsed {
   ];
   if (missing.length > 0) fail(`the following arguments are required: ${missing.join(", ")}`);
   const extra = [...loose.slice(at), ...unknown];
-  if (extra.length > 0) fail(`unrecognized arguments: ${extra.join(" ")}`);
+  if (extra.length > 0) fail(`unrecognized arguments: ${extra.join(" ")}`, spec.mainProg ?? spec.prog.split(" ")[0]);
   return out;
 }
 
@@ -147,19 +171,18 @@ function convert(
 ): string | number {
   let value: string | number = raw;
   if (type === "int") {
-    // Python's int(): optional sign, digits, underscores between digits, surrounding whitespace.
-    const text = raw.trim();
-    if (!/^[+-]?\d+(_\d+)*$/.test(text)) fail(`${label}: invalid int value: '${raw}'`);
-    value = Number(text.replaceAll("_", ""));
+    const n = pyInt(raw);
+    if (n === null) fail(`${label}: invalid int value: ${pyRepr(raw)}`);
+    value = n!;
   } else if (type === "float") {
     const text = raw.trim();
     const n = Number(text.replaceAll("_", ""));
-    if (text === "" || Number.isNaN(n)) fail(`${label}: invalid float value: '${raw}'`);
+    if (text === "" || Number.isNaN(n)) fail(`${label}: invalid float value: ${pyRepr(raw)}`);
     value = n;
   }
   if (choices && !choices.includes(String(value))) {
     const shown = choices.map((c) => `'${c}'`).join(", ");
-    fail(`${label}: invalid choice: '${raw}' (choose from ${shown})`);
+    fail(`${label}: invalid choice: ${pyRepr(raw)} (choose from ${shown})`);
   }
   return value;
 }

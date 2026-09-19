@@ -24,6 +24,7 @@ import { ArgvError, parseArgv, type CommandSpec, type Parsed } from "./argv.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, flattenExternalValue } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
+import { pyJson, pythonIsoUtc } from "./py-format.ts";
 
 export interface DbToolsOptions {
   /** The team's database, opened by the runtime on first use. */
@@ -254,29 +255,6 @@ function asExecution(result: ScriptResult): ToolExecution {
   const text = `${result.stdout}${result.stderr ?? ""}`.trimEnd();
   const content = result.exitCode === 0 ? text : `${text}${text ? "\n" : ""}(exit code ${result.exitCode})`;
   return { ok: result.exitCode === 0, content, details: { exitCode: result.exitCode } };
-}
-
-/** `datetime.now(timezone.utc).isoformat()`: microseconds and `+00:00`. */
-export function pythonIsoUtc(date: Date): string {
-  return date.toISOString().replace(/\.(\d{3})Z$/, ".$1000+00:00");
-}
-
-/**
- * `json.dumps(value)` with Python's defaults: `", "` and `": "` separators and
- * `ensure_ascii`, every character past ASCII written as `\uXXXX` (a surrogate
- * pair above the BMP). Strings, integers, booleans, null, arrays and objects.
- */
-export function pyJson(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") {
-    return JSON.stringify(value).replace(/[\u007f-\uffff]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
-  }
-  if (Array.isArray(value)) return `[${value.map(pyJson).join(", ")}]`;
-  return `{${Object.entries(value as Record<string, unknown>)
-    .map(([k, v]) => `${pyJson(k)}: ${pyJson(v)}`)
-    .join(", ")}}`;
 }
 
 export type { Parsed };
