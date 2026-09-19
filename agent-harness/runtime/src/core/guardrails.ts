@@ -22,6 +22,12 @@ export interface Limits {
   maxTotalTokens: number;
   /** Maximum spend in one run, in USD. */
   budgetUsd: number;
+  /**
+   * Maximum web searches in one run, counted as the provider ran them (one
+   * `web_search` call can run more than one). T13: a SCOUT spent 82 % of its
+   * budget on 34 searches and saved nothing.
+   */
+  maxWebSearches: number;
   /** Wall-clock deadline for the whole run, in milliseconds. */
   wallClockMs: number;
   /** Maximum size of a single piece of caller-supplied input, in characters. */
@@ -37,6 +43,7 @@ export const DEFAULT_LIMITS: Limits = {
   maxToolCalls: 200,
   maxTotalTokens: 400_000,
   budgetUsd: 0.5,
+  maxWebSearches: 8,
   // Interactive sessions count the person's thinking time too.
   wallClockMs: 2 * 60 * 60_000,
   maxInputChars: 8_000,
@@ -48,6 +55,7 @@ export interface GuardrailState {
   toolCalls: number;
   usage: Usage;
   costUsd: number;
+  webSearches: number;
 }
 
 export class Guardrails {
@@ -61,6 +69,8 @@ export class Guardrails {
   #usage: Usage = ZERO_USAGE;
   /** Spend that is not tokens: web searches, billed per call. */
   #chargesUsd = 0;
+  #webSearches = 0;
+  #tokensPerChar = 0;
 
   constructor(options: { limits: Limits; pricing: Pricing; now?: () => number }) {
     this.limits = options.limits;
@@ -75,6 +85,7 @@ export class Guardrails {
       toolCalls: this.#toolCalls,
       usage: this.#usage,
       costUsd: this.#spent(),
+      webSearches: this.#webSearches,
     };
   }
 
@@ -132,6 +143,49 @@ export class Guardrails {
       );
     }
     this.#checkBudget();
+  }
+
+  /** Web searches this run may still run; never negative. */
+  get webSearchesLeft(): number {
+    return Math.max(0, this.limits.maxWebSearches - this.#webSearches);
+  }
+
+  /** Counts the searches the provider ran, all of them, even past the cap. */
+  recordSearches(count: number): void {
+    this.#webSearches += count;
+  }
+
+  /** Whether a call that could cost up to `usage` plus `extraUsd` still fits in the budget. */
+  fits(usage: Usage, extraUsd = 0): boolean {
+    return this.#spent() + this.costOf(usage) + extraUsd <= this.limits.budgetUsd;
+  }
+
+  /**
+   * Refuses a model call whose worst case does not fit in what is left
+   * (SICUREZZA, T13): the budget was only checked after a round, so the round
+   * that crossed it was paid in full (0.0033 USD over the cap in T13 run 2).
+   */
+  reserve(usage: Usage, extraUsd = 0): void {
+    if (this.fits(usage, extraUsd)) return;
+    const worst = this.costOf(usage) + extraUsd;
+    throw new HarnessError(
+      "budget_exhausted",
+      `The next model call could cost up to ${worst.toFixed(4)} USD; ${Math.max(0, this.limits.budgetUsd - this.#spent()).toFixed(4)} USD of the ${this.limits.budgetUsd} USD budget is left.`,
+    );
+  }
+
+  /**
+   * Input tokens a context of `chars` characters may take: 1 per 3 characters
+   * (English and Italian run near 4), or the densest ratio a round of this run
+   * has shown, whichever is higher, plus a tenth.
+   */
+  estimateInputTokens(chars: number): number {
+    return Math.ceil(chars * Math.max(1 / 3, this.#tokensPerChar) * 1.1);
+  }
+
+  /** Learns the provider's real tokens per character from a finished round. */
+  observeInput(chars: number, inputTokens: number): void {
+    if (chars > 0 && inputTokens > 0) this.#tokensPerChar = Math.max(this.#tokensPerChar, inputTokens / chars);
   }
 
   /** Records spend that is not tokens, such as a per-call search fee, then re-checks the budget. */

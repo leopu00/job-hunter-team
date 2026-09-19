@@ -98,6 +98,20 @@ export interface GenerateResult {
   response?: ResponseMeta;
 }
 
+/**
+ * Searches one `webSearch` call may run. Each is billed (0.01 USD on OpenAI,
+ * plus the result tokens at input price), and the key proxy on the VPS
+ * refuses a request that does not cap them at exactly this.
+ */
+export const MAX_SEARCHES_PER_CALL = 1;
+
+/**
+ * Input tokens reserved for one search before it runs: the results come back
+ * as input the model reads on the provider's side (8,712 in the 19/09
+ * calibration). The key proxy reserves the same (SEARCH_TOKENS).
+ */
+export const SEARCH_RESERVED_INPUT_TOKENS = 25_000;
+
 export interface WebSearchRequest {
   query: string;
   timeoutMs?: number;

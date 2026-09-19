@@ -135,8 +135,8 @@ async function main(): Promise<number> {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
       stopSampling?.();
-      const { steps, toolCalls, usage, costUsd } = guardrails.state;
-      sink({ type: "run_finished", reason: "stopped", steps, toolCalls, usage, costUsd, durationMs: Date.now() - startedAt });
+      const { steps, toolCalls, usage, costUsd, webSearches } = guardrails.state;
+      sink({ type: "run_finished", reason: "stopped", steps, toolCalls, usage, costUsd, webSearches, durationMs: Date.now() - startedAt });
       settle?.("stopped");
       process.exit(130);
     });
@@ -246,9 +246,9 @@ async function main(): Promise<number> {
   }
 
   stopSampling();
-  const { steps, toolCalls, usage, costUsd } = guardrails.state;
+  const { steps, toolCalls, usage, costUsd, webSearches } = guardrails.state;
   await audit.write({ type: "run_finished", steps, usage, costUsd });
-  sink({ type: "run_finished", reason: "completed", steps, toolCalls, usage, costUsd, durationMs: Date.now() - startedAt });
+  sink({ type: "run_finished", reason: "completed", steps, toolCalls, usage, costUsd, webSearches, durationMs: Date.now() - startedAt });
   settle("completed");
   return 0;
 }
@@ -271,8 +271,9 @@ function ledgerWriter(config: Config, runId: string, guardrails: Guardrails): (n
   return (note) => {
     if (written || !config.live || !config.ledger) return;
     written = true;
-    const { usage, costUsd } = guardrails.state;
+    const { usage, costUsd, webSearches } = guardrails.state;
     appendLedger(config.ledger, {
+      webSearches,
       at: new Date(),
       role: config.role,
       model: `${config.profile.providerId}/${config.profile.modelId}`,

@@ -14,7 +14,7 @@ import type { AuditLog } from "./audit.ts";
 import type { Guardrails } from "./guardrails.ts";
 import type { GenerateResult, Message, ProviderPort, ToolSpec } from "./provider/port.ts";
 import type { ResponseMeta, ToolDetails } from "./trace.ts";
-import { addUsage, inputCostUsd, totalTokens, ZERO_USAGE, type Usage } from "./usage.ts";
+import { addUsage, inputCostUsd, totalTokens, worstCase, ZERO_USAGE, type Usage } from "./usage.ts";
 import { cap } from "../tools/output.ts";
 import type { ToolExecution, ToolRegistry, ToolRisk } from "../tools/registry.ts";
 
@@ -74,7 +74,7 @@ export type AgentEvent =
       toolCalls: { id: string; name: string; args: unknown }[];
       response?: ResponseMeta;
       /** Run totals after this round, against the limits. */
-      run: { steps: number; toolCalls: number; totalTokens: number; costUsd: number; remainingMs: number };
+      run: { steps: number; toolCalls: number; totalTokens: number; costUsd: number; webSearches: number; remainingMs: number };
       agent?: string;
     }
   | {
@@ -207,6 +207,13 @@ export async function runRound(
   const label = request.agent === undefined ? {} : { agent: request.agent };
 
   guardrails.beginStep();
+  // The round's worst case must fit before it starts: the whole context at
+  // full input price, written to the cache too, and every output token.
+  const inputChars = requestChars(request);
+  guardrails.reserve({
+    ...worstCase(guardrails.estimateInputTokens(inputChars)),
+    outputTokens: deps.provider.profile.defaultMaxOutputTokens,
+  });
   const step = guardrails.state.steps;
   await audit.write({ type: "step_started", step });
   emit({
@@ -226,6 +233,7 @@ export async function runRound(
     timeoutMs: Math.min(STEP_TIMEOUT_MS, guardrails.remainingMs()),
   });
   const durationMs = now() - startedAt;
+  guardrails.observeInput(inputChars, result.usage.inputTokens);
   const stepCost = guardrails.costOf(result.usage);
   request.account.record(result.usage, stepCost);
 
@@ -259,6 +267,7 @@ export async function runRound(
       toolCalls: run.toolCalls,
       totalTokens: totalTokens(run.usage),
       costUsd: run.costUsd,
+      webSearches: run.webSearches,
       remainingMs: guardrails.remainingMs(),
     },
     ...label,
@@ -379,7 +388,11 @@ export class ToolRunner {
     const startedAt = now();
     let outcome: ToolExecution;
     try {
-      outcome = await handler.execute(args.data, { account, remainingMs: () => guardrails.remainingMs() });
+      outcome = await handler.execute(args.data, {
+        account,
+        remainingMs: () => guardrails.remainingMs(),
+        budget: { webSearchesLeft: () => guardrails.webSearchesLeft, fits: (usage, extra) => guardrails.fits(usage, extra) },
+      });
     } catch (error) {
       // A tool that throws is a bug in the tool, or a guardrail. The first is
       // an answer for the model; the second ends the run.
@@ -402,6 +415,7 @@ export class ToolRunner {
     await audit.write({ type: "tool_executed", toolName: name, ok: outcome.ok, resultChars: content.length });
 
     // Recorded last: a breach here must not lose the call's own accounting.
+    if (outcome.webSearches) guardrails.recordSearches(outcome.webSearches);
     if (outcome.usage) guardrails.recordUsage(outcome.usage);
     if (outcome.chargeUsd) guardrails.recordCharge(outcome.chargeUsd);
     return content;
@@ -415,6 +429,30 @@ const RUN_ENDING = new Set([
   "token_limit_reached",
   "deadline_exceeded",
 ]);
+
+/** Characters a tool's schema adds to every request, measured once per spec. */
+const specChars = new WeakMap<ToolSpec, number>();
+
+function toolSpecChars(spec: ToolSpec): number {
+  let chars = specChars.get(spec);
+  if (chars === undefined) {
+    let schema: string;
+    try {
+      schema = JSON.stringify(z.toJSONSchema(spec.schema));
+    } catch {
+      // A schema with no JSON form: its description still travels, and 2,000 is generous.
+      schema = " ".repeat(2_000);
+    }
+    chars = spec.name.length + spec.description.length + schema.length;
+    specChars.set(spec, chars);
+  }
+  return chars;
+}
+
+/** Everything a round sends as input, in characters: system, messages with their tool calls, tool schemas. */
+function requestChars(request: { system: string; messages: Message[]; tools: ToolSpec[] }): number {
+  return request.system.length + JSON.stringify(request.messages).length + request.tools.reduce((n, t) => n + toolSpecChars(t), 0);
+}
 
 function isRunEnding(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && RUN_ENDING.has(String(error.code));

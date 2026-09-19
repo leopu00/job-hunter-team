@@ -89,7 +89,7 @@ function list(): void {
     console.log(`\n  No runs yet in ${logsDir}\n`);
     return;
   }
-  const head = ["agent", "run", "status", "started", "time", "rounds", "tools", "tok in", "tok out", "$ total", "model"];
+  const head = ["agent", "run", "status", "started", "time", "rounds", "tools", "search", "tok in", "tok out", "$ total", "model"];
   const rows = files.map((file) => {
     const records = readRecords(file);
     const started = records.find((r) => r.type === "run_started");
@@ -100,6 +100,8 @@ function list(): void {
     const inTok = rounds.reduce((a, r) => a + (r.type === "round_finished" ? r.usage.inputTokens : 0), 0);
     const outTok = rounds.reduce((a, r) => a + (r.type === "round_finished" ? r.usage.outputTokens : 0), 0);
     const cost = rounds.reduce((a, r) => a + (r.type === "round_finished" ? r.costUsd : 0), 0);
+    // T19: the searches the provider ran, as each web_search call recorded them.
+    const searches = records.reduce((a, r) => a + (r.type === "tool_finished" && typeof r.details?.webSearches === "number" ? r.details.webSearches : 0), 0);
     const status = statusOf(records);
     return [
       basename(dirname(file)),
@@ -109,6 +111,7 @@ function list(): void {
       first && last ? dur(Date.parse(last.ts) - Date.parse(first.ts)) : "",
       int(rounds.length),
       tools.length ? `${tools.length} ${c.dim(`(${countNames(tools)})`)}` : c.dim("–"),
+      searches ? int(searches) : c.dim("–"),
       int(inTok),
       int(outTok),
       usd(cost),
@@ -117,7 +120,7 @@ function list(): void {
   });
   const all = [head, ...rows];
   const w = head.map((_, i) => Math.max(...all.map((r) => width(r[i] ?? ""))));
-  const right = new Set([4, 5, 7, 8, 9]);
+  const right = new Set([4, 5, 7, 8, 9, 10]);
   const row = (r: string[]) => `  ${r.map((s, i) => (right.has(i) ? " ".repeat(w[i]! - width(s)) + s : s + " ".repeat(w[i]! - width(s)))).join("  ")}`;
   console.log();
   console.log(row(head.map((h) => c.bold(h))));
