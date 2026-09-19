@@ -146,7 +146,7 @@ Python, so each script a role uses is a native tool, given only to a role
 whose `skills.list` names the skill (`src/parity/skills/index.ts`), or whose
 prompt runs the script without a skill listing it (the ANALISTA's `ticket`,
 `role_registry`, `deadline_extract`, and `db_insert` for companies; the
-CAPITANO's `team_directives`, `enrichment_policy`, `email_monitor`). What
+CAPITANO's `team_directives`, `enrichment_policy`, `email_monitor`, `ticket`, `role_registry`). What
 each role may run in the database, subcommand by subcommand and status by
 status, is one table, `src/db/role-policy.ts`: the TUI keeps that boundary in
 the prompt ("NEVER touch `scores`"), the harness in code. A
@@ -166,7 +166,8 @@ every statement is a constant with bound parameters.
 | `db_insert.py company/highlight` | `db_insert` {args} | the ANALISTA's registry and highlights (RULE-08): same output and rows, the foreign-key failures included (`INSERT OR REPLACE` on a company positions point at). `analyzed_by` is the agent (A-2) |
 | `deadline_extract.py --jd` | `deadline_extract` {args} | same date or empty line on 26 JDs, "today" given to both; the regexes read as Python's `str` patterns (Unicode digits, `\s`, `\b`). No stdin: a missing `--jd` is an empty JD |
 | `ticket.py show/touch/resolve` | `ticket` {args} | same lines, errors and rows (RULE-15). **Narrower on purpose:** `touch` and `resolve` only on a ticket assigned to this agent, where the script lets anyone overwrite the answer the user reads; `open`, `assign`, `list-open`, `count-open`, `for-position` are the Capitano's and the Assistente's, refused |
-| `role_registry.py promote` | `role_registry` {args} | same output and registry/positions rows, `--dry-run` included (step 8). `--user-id` only for the local candidate; `merge` (the Capitano's) and `pass` (legacy) refused |
+| `ticket.py list-open/count-open/assign/for-position` | `ticket` {args} | the CAPITANO's queue (C-15, T21): same lines and rows, stale assignments returned to the queue by `list-open` (`JHT_TICKET_IDLE_HOURS`, default 6). The script asks tmux who is alive; the harness has none, so liveness is unknown — the script's own "nobody is declared dead" — and a ticket returns only for lack of progress, `assign` never warns of a dead session. `touch`/`resolve` are the worker's, refused to the CAPITANO |
+| `role_registry.py promote` | `role_registry` {args} | same output and registry/positions rows, `--dry-run` included (step 8). `--user-id` only for the local candidate; `pass` (legacy) refused. The CAPITANO gets `merge --into X --sources A B …` instead (C-17, T21): same output and rows, the sources dormant with `merged_into`; `promote` stays the ANALISTA's |
 | `salary_estimate.py` | `salary_estimate` {args} | same levels and JSON (step 7). The cache is read from `<JHT_API_HOME>/cache/`, never written: `--seed-cache` refused |
 | `enrichment_policy.py show` | `enrichment_policy` {args} | same JSON; `json.load`'s int/float distinction kept (a `70.0` threshold is ignored, as in Python). `set` is the Capitano's on the person's order: refused |
 | `recheck_liveness.py <url>` | `recheck_liveness` {args} | same tiers, verdict JSON and exit codes (0 open, 1 closed, 2 unverified), compared on 14 fetch outcomes. No browser in the harness: where the script would render, the answer is its own no-Playwright case, `OPEN_UNVERIFIED` — never a false open. Fetched through the SSRF guard (the script ran `curl -L` to any address) |

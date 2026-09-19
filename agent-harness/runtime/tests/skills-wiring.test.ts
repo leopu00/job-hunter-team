@@ -101,7 +101,7 @@ describe("which roles get which skill tools", () => {
     const profileDir = join(root, "profile");
     const tools = createSkillTools({ skills, agent: "capitano", jobsDb: db, profileDir, stateDir });
     expect(tools.map((t) => t.spec.name)).toEqual([
-      "email_monitor", "db_query", "db_update", "enrichment_policy", "format_time", "captain_diary", "team_directives",
+      "email_monitor", "db_query", "db_update", "ticket", "role_registry", "enrichment_policy", "format_time", "captain_diary", "team_directives",
     ]);
     const diary = tools.find((t) => t.spec.name === "captain_diary")!;
     const r = await diary.execute(diary.spec.schema.parse({ args: ["add", "a lesson"] }), { signal: new AbortController().signal } as never);
