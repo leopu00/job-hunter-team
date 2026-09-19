@@ -170,6 +170,7 @@ async function main(): Promise<number> {
       homeDir: config.agentHome,
       apiHome: config.apiHome,
       jhtHome: resolveUserPath(env["JHT_HOME"]?.trim() || "~/.jht", process.cwd(), homedir()),
+      profileDir: config.profileDir,
       env,
       jobsDb,
     });

@@ -24,7 +24,7 @@ applies the same rules to the same files:
 
 The system prompt is `composeSystemPrompt`: the identity whole, then
 `PARITY_NOTES`, then a skill index (`- <name>: <description>
-(skills/<name>/SKILL.md)`). The identity comes first so the prefix is the TUI
+(<home>/skills/<name>/SKILL.md)`, absolute: T10b). The identity comes first so the prefix is the TUI
 prompt and the provider's prompt cache holds across runs.
 
 ### Expected differences
@@ -62,19 +62,29 @@ reads:
    container's paths; in T5-bis the API SCOUT built
    `/jht_home/agents/_skills/<x>/SKILL.md` from them and lost three rounds.
    Now `agents/_skills/<x>/…` (bare, `/app/…` or `/jht_home/…`) becomes
-   `skills/<x>/…` for a skill in the home and `<appRoot>/agents/_skills/<x>/…`
-   otherwise; `agents/_manual/…` and `../_manual/…` (a link that is broken in
+   `<home>/skills/<x>/…` for a skill in the home and
+   `<appRoot>/agents/_skills/<x>/…` otherwise, both absolute (in T5-ter a bare
+   `skills/<x>` read beside `_manual` became
+   `/app/agents/_manual/skills/<x>/SKILL.md`); `agents/_manual/…` and `../_manual/…` (a link that is broken in
    the TUI too) become `<appRoot>/agents/_manual/…`; `agents/_team/…` and
    `../_team/…` become `<appRoot>/agents/_team/…` in the person's language
    when the repo has it (the copy beside the home is another role's state to
    the permission policy, so `read_file` would refuse it); `/app/` becomes
    `<appRoot>/`; `/jht_home/jobs.db` becomes "the
    team database (reach it only through the db tools)" and
-   `/jht_home/logs/scout-dedup.log` the harness's log. Left alone: paths under
-   `$JHT_HOME` that name the person's data or state the agent writes. The CLI
+   `/jht_home/logs/scout-dedup.log` the harness's log. The person's profile
+   (`$JHT_HOME/profile`, `${JHT_HOME}/profile`, `/jht_home/profile`,
+   `~/.jht/profile`) becomes `JHT_API_PROFILE_DIR`, or `<JHT_HOME>/profile`
+   when it is unset (T10b: in T5-ter the container set the variable, the
+   prompt still said `$JHT_HOME/profile`, `JHT_HOME` was unset, and the SCOUT
+   searched without the profile). The permission policy reads that folder
+   freely and refuses every write into it, in every mode
+   (`readOnlyRoots`). Left alone: other paths under `$JHT_HOME`, which name
+   state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
    Markdown: each must exist, and `read_file` must open it under the SCOUT's
-   own permission policy. It renders from a copy of `agents/` alone, the
+   own permission policy, and the profile must be named and refused to
+   `write_file` and `edit_file`. It renders from a copy of `agents/` alone, the
    image's layout, so a path into the checkout's `shared/` cannot pass.
 
 ### How it was checked (2026-09-19)
@@ -189,7 +199,8 @@ tmux and the throttle engine do for a TUI agent:
    idle TUI agent waits at its prompt for free, an idle process does not.
 
 From the command line (`JHT_API_APP_ROOT` defaults to this checkout, `/app`
-in the container; `JHT_HOME` to `~/.jht`, read only for the locale):
+in the container; `JHT_HOME` to `~/.jht`, read for the locale;
+`JHT_API_PROFILE_DIR` is the profile the prompt points at):
 
 ```sh
 npm run role -- --role scout --agent scout-1 --turns 2 --pause-ms 0

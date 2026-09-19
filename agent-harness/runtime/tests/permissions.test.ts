@@ -113,6 +113,27 @@ describe("PermissionPolicy — network and internal tools", () => {
   });
 });
 
+describe("PermissionPolicy — read-only folders (T10b: the person's profile)", () => {
+  it("reads freely, and refuses any write in every mode, even to a person who would allow it", async () => {
+    for (const mode of ["auto", "ask", "read-only"] as const) {
+      const { requests, ask } = asker("allow-always");
+      const policy = new PermissionPolicy({ mode, freeReadRoots: ["/work", "/data/profile"], readOnlyRoots: ["/data/profile"], ask });
+      expect(await policy.decide("read_file", read("/data/profile/candidate_profile.yml")), mode).toEqual({ allowed: true, asked: false });
+      for (const path of ["/data/profile/candidate_profile.yml", "/data/profile/new.md", "/data/profile"]) {
+        const decision = await policy.decide("write_file", write(path));
+        expect(decision.allowed, `${mode} ${path}`).toBe(false);
+        expect(decision.message).toMatch(/profile.*read.*never change/i);
+      }
+      expect(requests, mode).toHaveLength(0);
+    }
+  });
+
+  it("leaves a sibling with a shared prefix writable", async () => {
+    const policy = new PermissionPolicy({ mode: "auto", freeReadRoots: ["/work"], readOnlyRoots: ["/data/profile"] });
+    expect((await policy.decide("write_file", write("/data/profile-old/x.md"))).allowed).toBe(true);
+  });
+});
+
 describe("PermissionPolicy — runtime state", () => {
   const policy = () =>
     new PermissionPolicy({

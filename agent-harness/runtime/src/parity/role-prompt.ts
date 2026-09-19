@@ -154,9 +154,15 @@ export function parseSkillsList(text: string): string[] {
  * harness adds — the parity notes and the skill index. The identity comes
  * first and whole so the prefix is the TUI prompt and caches across runs.
  */
-export function composeSystemPrompt(prompt: RolePrompt, parityNotes: string): string {
+export function composeSystemPrompt(
+  prompt: RolePrompt,
+  parityNotes: string,
+  /** The agent's home: with it, the index names each SKILL.md by its absolute path (T10b). */
+  homeDir?: string,
+): string {
+  const skillsDir = homeDir ? join(homeDir, HOME_SKILLS_DIR) : HOME_SKILLS_DIR;
   const index = prompt.skills
-    .map((s) => `- ${s.name}: ${s.description} (${HOME_SKILLS_DIR}/${s.name}/SKILL.md)`)
+    .map((s) => `- ${s.name}: ${s.description} (${skillsDir}/${s.name}/SKILL.md)`)
     .join("\n");
   const skills =
     prompt.skills.length === 0
