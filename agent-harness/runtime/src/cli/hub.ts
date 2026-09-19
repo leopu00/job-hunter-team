@@ -10,10 +10,16 @@
  *   JHT_API_APP_ROOT    the folder holding agents/ (default this checkout; /app in the image)
  *   JHT_API_PROFILE_DIR the person's profile, read-only
  *   JHT_HOME            as the feedback display reads it
+ *   JHT_LAUNCHER_CONFIG the CAPITANO's launcher: its limits (docs/launcher.md). Absent: no spawns
+ *   JHT_LAUNCHER_SPOOL  the folder shared with the host's executor
+ *   JHT_LAUNCHER_STOP   the operator's STOP file, read-only
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Launcher, LauncherConfigSchema } from "../hub/launcher.ts";
 import { createHub, loadTokens } from "../hub/server.ts";
 
 const CHECKOUT_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
@@ -35,6 +41,16 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 const tokens = loadTokens(required("JHT_HUB_TOKENS"));
 const profileDir = process.env["JHT_API_PROFILE_DIR"]?.trim();
 const jhtHome = process.env["JHT_HOME"]?.trim();
+// The launcher is on only when the operator gives it a configuration (SICUREZZA §9).
+const launcherConfig = process.env["JHT_LAUNCHER_CONFIG"]?.trim();
+const launcher = launcherConfig
+  ? new Launcher({
+      config: LauncherConfigSchema.parse(JSON.parse(readFileSync(launcherConfig, "utf8"))),
+      stateDir: join(required("JHT_HUB_STATE"), "launcher"),
+      spoolDir: required("JHT_LAUNCHER_SPOOL"),
+      ...(process.env["JHT_LAUNCHER_STOP"]?.trim() ? { stopFile: process.env["JHT_LAUNCHER_STOP"].trim() } : {}),
+    })
+  : undefined;
 const server = createHub({
   tokens,
   dbPath: required("JHT_HUB_DB"),
@@ -43,6 +59,7 @@ const server = createHub({
   appRoot: process.env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT,
   ...(profileDir ? { profileDir } : {}),
   ...(jhtHome ? { jhtHome } : {}),
+  ...(launcher ? { launcher } : {}),
 });
 // The loopback only: in the pod, every role reaches it; outside the pod, nothing does.
 server.listen(port, "127.0.0.1", () => {

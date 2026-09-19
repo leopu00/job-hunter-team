@@ -16,6 +16,9 @@ export const HUB_PATHS = {
   drain: "/v1/mailbox/drain",
   notify: "/v1/notify",
   replies: "/v1/replies/take",
+  spawn: "/v1/spawn",
+  spawnStop: "/v1/spawn/stop",
+  spawnList: "/v1/spawn/list",
 } as const;
 
 /** Largest request body: a `db_insert position` with a long job description fits well below. */
