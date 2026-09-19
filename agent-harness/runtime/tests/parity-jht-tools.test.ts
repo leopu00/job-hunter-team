@@ -117,6 +117,54 @@ describe("createJhtTools", () => {
     });
   });
 
+  it("notify_user stops at the limit before anything reaches the person", async () => {
+    let clock = 1_700_000_000_000;
+    const sent: string[] = [];
+    const tools = createJhtTools({
+      agent: "scout-1",
+      homeDir: join(root, "home"),
+      mailbox: new FileMailbox(join(root, "mailbox")),
+      notifier: { notify: async (n) => void sent.push(n.text) },
+      replies: new FileUserReplies(join(root, "replies")),
+      pause: new PauseRequest(),
+      notifyLimit: { max: 3, windowMs: 3_600_000 },
+      now: () => clock,
+    });
+    const notify = tools.find((t) => t.spec.name === "notify_user")!;
+    const call = (text: string) => notify.execute(notify.spec.schema.parse({ text }), context);
+
+    for (const n of [1, 2, 3]) expect((await call(`n${n}`)).ok).toBe(true);
+    const refused = await call("n4");
+    expect(refused.ok).toBe(false);
+    expect(refused.content).toMatch(/limit/i);
+    expect(sent).toEqual(["n1", "n2", "n3"]);
+
+    // The window slides: an hour after the first, one more goes out.
+    clock += 3_600_000;
+    expect((await call("n5")).ok).toBe(true);
+    expect(sent).toEqual(["n1", "n2", "n3", "n5"]);
+  });
+
+  it("refuses to name an agent after the runtime's own voice", () => {
+    expect(() =>
+      createJhtTools({
+        agent: "System",
+        homeDir: root,
+        mailbox: new FileMailbox(join(root, "m")),
+        notifier: new FileNotifier(join(root, "n.jsonl")),
+        replies: new FileUserReplies(join(root, "r")),
+        pause: new PauseRequest(),
+      }),
+    ).toThrow(/reserved/);
+  });
+
+  it("notify_user has a limit even when the caller sets none", async () => {
+    const { byName } = toolkit();
+    const results = [];
+    for (let i = 0; i < 50; i++) results.push((await byName("notify_user").run({ text: `spam ${i}` })).ok);
+    expect(results.filter((ok) => !ok).length).toBeGreaterThan(0);
+  });
+
   it("check_user_replies hands each reply out once, in the TUI tool's format", async () => {
     const { byName } = toolkit();
     const check = byName("check_user_replies");

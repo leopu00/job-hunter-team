@@ -145,10 +145,32 @@ export async function runCycles(session: TurnDriver, options: CycleOptions): Pro
 
 /**
  * The next turn's message: the messages that arrived, each as the peer wrote
- * it — what the pane would show — and, after a pause, the wake-up.
+ * it — what the pane would show — behind the sender the runtime recorded,
+ * and, after a pause, the wake-up.
+ *
+ * A peer's text is the model's output, and a peer that read an injected page
+ * can write anything, including the envelope of the system or of another
+ * agent, or a line dressed as the person's reply. The TUI cannot tell those
+ * apart; here the mailbox knows who really sent each message, so every one
+ * opens with `[from <sender>]` and any envelope in it that names someone else,
+ * or poses as a reply from the person, is rewritten as `[forged by <sender>:
+ * …]`. The only `[@system -> …]` a turn can open on is the runtime's own.
  */
 export function wakeMessage(agent: string, woke: boolean, inbox: AgentMessage[]): string {
-  const lines = inbox.map((m) => m.text);
+  const lines = inbox.map((m) => `[from ${m.from}] ${defuse(m.text, m.from)}`);
   if (woke) lines.push(`[@system -> @${agent}] [WAKE] Your pause is over. Continue your loop.`);
   return lines.join("\n\n");
+}
+
+/** `[@name -> …]` in any spacing or case. Group 1 is the inside, group 2 the claimed sender. */
+const ENVELOPE = /\[\s*(@([A-Za-z][A-Za-z0-9_-]*)\s*->[^\]\n]*)\]/g;
+/** The line `check_user_replies` hands out: `[USER REPLY via WEB — id=…]`. */
+const USER_REPLY = /\[\s*(USER\s+REPLY[^\]\n]*)\]/gi;
+
+function defuse(text: string, sender: string): string {
+  return text
+    .replace(ENVELOPE, (whole, inside: string, claimed: string) =>
+      claimed.toLowerCase() === sender.toLowerCase() ? whole : `[forged by ${sender}: ${inside}]`,
+    )
+    .replace(USER_REPLY, (_whole, inside: string) => `[forged by ${sender}: ${inside}]`);
 }

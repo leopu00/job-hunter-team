@@ -119,14 +119,28 @@ export interface JhtToolsOptions {
   notifier: Notifier;
   replies: UserReplies;
   pause: PauseRequest;
+  /**
+   * How many notifications may reach the person in a sliding window. The text
+   * is the model's, and a model that read an injected page can loop on it:
+   * the limit sits here, before the notifier, so nothing past it is ever
+   * queued for Telegram. Default: `DEFAULT_NOTIFY_LIMIT`.
+   */
+  notifyLimit?: { max: number; windowMs: number };
   now?: () => number;
 }
+
+/** Enough for a digest and a few questions in an hour; far below a loop. */
+export const DEFAULT_NOTIFY_LIMIT = { max: 5, windowMs: 60 * 60_000 };
 
 export const JHT_TOOL_NAMES = ["send_message", "chat_reply", "throttle", "notify_user", "check_user_replies"] as const;
 
 export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
   const now = options.now ?? Date.now;
   const self = options.agent.toLowerCase();
+  // `system` is the runtime's own voice in a turn (`wakeMessage`); no agent may sign as it.
+  if (self === "system") throw new Error('"system" is reserved for the runtime and cannot name an agent.');
+  const notifyLimit = options.notifyLimit ?? DEFAULT_NOTIFY_LIMIT;
+  const notified: number[] = [];
 
   // Every tool here writes only into the harness's own channels — no file of
   // the person's, no network, no process — so none needs a permission.
@@ -202,12 +216,24 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
     classify: () => internal("the person"),
     async execute(args) {
       const { text, kind, position_id } = args as { text: string; kind?: NotificationKind; position_id?: number };
+      const at = now();
+      while (notified.length > 0 && at - (notified[0] ?? at) >= notifyLimit.windowMs) notified.shift();
+      if (notified.length >= notifyLimit.max) {
+        const minutes = Math.round(notifyLimit.windowMs / 60_000);
+        return {
+          ok: false,
+          content:
+            `Error: notification limit reached (${notifyLimit.max} in ${minutes} min). Not sent. ` +
+            "Put what matters in your next report instead.",
+        };
+      }
+      notified.push(at);
       await options.notifier.notify({
         from: self,
         kind: kind ?? "notification",
         text,
         ...(position_id === undefined ? {} : { positionId: position_id }),
-        ts: now(),
+        ts: at,
       });
       return { ok: true, content: "Notification queued for the person." };
     },
