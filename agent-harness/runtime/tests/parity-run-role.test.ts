@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -144,5 +144,24 @@ describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1
     const db = openJobsDb(dbFile);
     expect(db.prepare("SELECT job_id FROM scout_claims").all()).toEqual([{ job_id: "https://jobs.example/1" }]);
     db.close();
+  });
+});
+
+describe("npm run role and a running agent of the same id (SICUREZZA P2)", () => {
+  it("refuses to start `scout` while scout-1 runs, and leaves no lock after a run", async () => {
+    // A live run as scout-1: this test process holds its lock.
+    const locks = join(root, "api", "locks");
+    await mkdir(locks, { recursive: true });
+    await writeFile(join(locks, "scout-1.lock"), JSON.stringify({ pid: process.pid, runId: "live", agent: "scout-1", startedAt: "now" }));
+    const refused = await roleWith({}, "--role", "scout", "--quiet").then(
+      () => null,
+      (error: { code?: number; stderr?: string }) => error,
+    );
+    expect(refused?.code).toBe(1);
+    expect(refused?.stderr).toContain("agent_running: scout-1 is already running");
+
+    await rm(join(locks, "scout-1.lock"));
+    await role("--role", "scout", "--agent", "scout-2", "--quiet");
+    expect(await readdir(locks)).toEqual([]);
   });
 });
