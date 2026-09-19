@@ -4,7 +4,7 @@
  * the shell is answered with the tool to use instead of reaching a shell.
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,6 +92,22 @@ describe("which roles get which skill tools", () => {
     expect(createSkillTools({ skills: ["db-query"], agent: "scout-1", jobsDb: db }).map((t) => t.spec.name)).toEqual(["db_query"]);
     expect(scriptOverrides(skills)).toEqual({ "safe_fetch.py": "safe_fetch" });
     expect(scriptOverrides(["db-query"])).toEqual({});
+  });
+
+  it("gives the CAPITANO its scripts, its diary in the runtime's state and not in the profile (T21)", async () => {
+    const list = await readFile(join(REPO_ROOT, "agents", "capitano", "skills.list"), "utf8");
+    const skills = list.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+    const stateDir = join(root, "api");
+    const profileDir = join(root, "profile");
+    const tools = createSkillTools({ skills, agent: "capitano", jobsDb: db, profileDir, stateDir });
+    expect(tools.map((t) => t.spec.name)).toEqual([
+      "email_monitor", "db_query", "db_update", "enrichment_policy", "format_time", "captain_diary", "team_directives",
+    ]);
+    const diary = tools.find((t) => t.spec.name === "captain_diary")!;
+    const r = await diary.execute(diary.spec.schema.parse({ args: ["add", "a lesson"] }), { signal: new AbortController().signal } as never);
+    expect(r.ok).toBe(true);
+    expect(await readdir(join(stateDir, "team", "logs"))).toEqual([expect.stringMatching(/^captain-diary-\d{4}-\d{2}-\d{2}\.md$/)]);
+    await expect(readdir(profileDir)).rejects.toThrow();
   });
 
   it("offers no database tool when the runtime opened no database", () => {

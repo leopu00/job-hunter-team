@@ -111,6 +111,19 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       purpose: "The ANALISTA moves a position new → checked or excluded, and excludes a later one only on proof it closed (analista.md RULE-06/14).",
     },
   },
+  // T21, capitano.md: the CAPITANO watches the pipeline and routes work; it writes no
+  // position, score or application (C-10: "the Captain does not write CVs"). Its writes are
+  // its own state (diary) and, in the TUI, other agents' pace and lifecycle.
+  capitano: {
+    query: [
+      "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "dashboard", "check-history",
+      "next-for-analista", "next-for-scorer", "next-for-scrittore", "next-for-critico", "next-for-categorize",
+      "next-for-recheck", "next-for-recheck-due", "next-for-geocode-missing", "next-for-logo-missing",
+      "active-categories", "other-pile", "category-sizes",
+    ],
+    insert: [],
+    update: [],
+  },
   // T15 (FULLSTACK-1), scorer.md RULE-02/03/04/06: its queue and the position it scores.
   scorer: {
     query: ["next-for-scorer", "position"],
