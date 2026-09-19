@@ -4,7 +4,7 @@
  * host's executor carries only fields the launcher set.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -53,6 +53,13 @@ function launcher(config: Partial<LauncherConfig> = {}) {
 
 const ask = (l: Launcher, role: string, extra: Record<string, unknown> = {}) =>
   l.spawn("capitano-1", { role, cap_usd: 0.4, model: "gpt-5.6-luna", task: "Find three positions.", ...extra });
+
+/** The list, or the test fails: the state must be readable here. */
+function listed(l: Launcher, by: string) {
+  const answer = l.list(by);
+  if (!("spawns" in answer)) throw new Error(answer.reason);
+  return answer;
+}
 
 /** What the host's executor writes back when a child ends. */
 function report(id: string, state: string, extra: Record<string, unknown> = {}) {
@@ -138,7 +145,7 @@ describe("how much", () => {
     if (!first.ok) throw new Error("refused");
     // The scout ends having spent 0.12: 0.28 comes back.
     report(first.spawn_id, "done", { exit_code: 0, spent_usd: 0.12 });
-    expect(l.list("capitano-1").left_usd).toBeCloseTo(0.28, 6);
+    expect(listed(l, "capitano-1").left_usd).toBeCloseTo(0.28, 6);
     expect(ask(l, "scorer", { cap_usd: 0.28 })).toMatchObject({ ok: true, left_usd: 0 });
   });
 
@@ -147,7 +154,33 @@ describe("how much", () => {
     const a = ask(l, "scout");
     if (!a.ok) throw new Error(a.reason);
     report(a.spawn_id, "stopped");
-    expect(l.list("capitano-1").left_usd).toBeCloseTo(0, 6);
+    expect(listed(l, "capitano-1").left_usd).toBeCloseTo(0, 6);
+  });
+
+  it("starts nothing when its state exists and cannot be read, and says so (L-1)", () => {
+    const stateFile = join(root, "state", "state.json");
+    for (const [label, spoil] of [
+      ["torn", () => writeFileSync(stateFile, '{"session": "s1", "spawns": [')],
+      ["not a state", () => writeFileSync(stateFile, JSON.stringify({ session: "s1", spawns: "none" }))],
+      ["unreadable", () => chmodSync(stateFile, 0o000)],
+    ] as const) {
+      const l = launcher({ sessionUsd: 0.7 });
+      const first = ask(l, "scout");
+      if (!first.ok) throw new Error(first.reason);
+      // The piggy bank is full: a fresh start would let this one through.
+      spoil();
+      const before = label === "unreadable" ? null : readFileSync(stateFile, "utf8");
+      expect(ask(l, "scorer"), label).toMatchObject({ ok: false, reason: expect.stringContaining("nothing starts or stops") });
+      expect(l.stop("capitano-1", first.spawn_id), label).toMatchObject({ ok: false });
+      expect(l.list("capitano-1"), label).toMatchObject({ ok: false });
+      // Left as found, for the operator to look at.
+      if (before !== null) expect(readFileSync(stateFile, "utf8")).toBe(before);
+      else chmodSync(stateFile, 0o600);
+      const log = readFileSync(join(root, "state", "launcher.log"), "utf8");
+      expect(log, label).toContain('"event":"state_unreadable"');
+      rmSync(join(root, "state"), { recursive: true, force: true });
+      rmSync(join(root, "spool"), { recursive: true, force: true });
+    }
   });
 
   it("starts over with a new session", () => {
@@ -174,7 +207,7 @@ describe("who stops what", () => {
     expect(existsSync(join(root, "spool", "stops", a.spawn_id))).toBe(true);
     report(a.spawn_id, "stopped", { spent_usd: 0.01 });
     expect(l.stop("capitano-1", a.spawn_id)).toMatchObject({ ok: false, reason: expect.stringContaining("already ended") });
-    expect(l.list("capitano-2").spawns).toEqual([]);
+    expect(listed(l, "capitano-2").spawns).toEqual([]);
   });
 
   it("logs every spawn, refusal and end on one line each, the task cut to 200 characters", () => {
