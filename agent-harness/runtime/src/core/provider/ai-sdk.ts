@@ -36,8 +36,12 @@ import type {
 /** A single model call that takes longer than this is a stuck call, not a slow one. */
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-/** Searches one `webSearch` call may run. Each is billed; a digest rarely needs more. */
-const MAX_SEARCHES_PER_CALL = 3;
+/**
+ * Searches one `webSearch` call may run. Each is billed (0.01 USD on OpenAI,
+ * plus the result tokens at input price), and the key proxy on the VPS
+ * refuses a request that does not cap them at exactly this.
+ */
+const MAX_SEARCHES_PER_CALL = 1;
 
 const SEARCH_SYSTEM =
   "Search the web for the query and report what you found: the facts that answer it, " +
@@ -125,6 +129,10 @@ export class AiSdkProvider implements ProviderPort {
         system: SEARCH_SYSTEM,
         prompt: request.query,
         tools: searchToolSet(this.profile),
+        // OpenAI's cap on built-in tool calls lives on the request, not on the tool.
+        ...(this.profile.providerId === "openai"
+          ? { providerOptions: { openai: { maxToolCalls: MAX_SEARCHES_PER_CALL } } }
+          : {}),
         // Server-side search runs inside this one call; there is no client step to loop over.
         stopWhen: stepCountIs(1),
         maxOutputTokens: this.profile.defaultMaxOutputTokens,
@@ -265,7 +273,9 @@ function toToolSet(specs: ToolSpec[]): ToolSet {
 function searchToolSet(profile: ModelProfile): ToolSet {
   switch (profile.providerId) {
     case "openai":
-      return { web_search: openai.tools.webSearch({}) } as ToolSet;
+      // `low`: the fewest result tokens, which are billed at the model's input
+      // price. It is also the only shape the key proxy lets through.
+      return { web_search: openai.tools.webSearch({ searchContextSize: "low" }) } as ToolSet;
     case "anthropic":
       return { web_search: anthropic.tools.webSearch_20250305({ maxUses: MAX_SEARCHES_PER_CALL }) } as ToolSet;
     default:

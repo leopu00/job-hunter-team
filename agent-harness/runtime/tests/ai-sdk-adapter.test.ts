@@ -344,3 +344,32 @@ describe("OpenAI through a key proxy", () => {
     expect(seen[0]?.auth).toBe("Bearer placeholder");
   });
 });
+
+describe("OpenAI web search, as the key proxy admits it", () => {
+  it("asks for one search at low context size, and nothing else on the tool", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    // The SDK's real OpenAI provider builds the request; only the socket is fake.
+    const fakeFetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ error: { message: "offline test", type: "test" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const previous = process.env["OPENAI_API_KEY"];
+    process.env["OPENAI_API_KEY"] = "placeholder";
+    try {
+      const provider = new AiSdkProvider({
+        profile: { ...PROFILE, providerId: "openai", modelId: "gpt-5.6-luna", capabilities: { ...PROFILE.capabilities, webSearch: true } },
+        openAI: { baseURL: "http://127.0.0.1:8787/v1" },
+        fetch: fakeFetch,
+      });
+      await expect(provider.webSearch({ query: "offerte lavoro Roma" })).rejects.toMatchObject({ code: "provider_failed" });
+    } finally {
+      if (previous === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = previous;
+    }
+    expect(bodies[0]?.["max_tool_calls"]).toBe(1);
+    expect(bodies[0]?.["tools"]).toEqual([{ type: "web_search", search_context_size: "low" }]);
+  });
+});

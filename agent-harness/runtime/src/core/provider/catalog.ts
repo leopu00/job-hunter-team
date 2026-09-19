@@ -31,11 +31,18 @@ interface CatalogEntry {
   pricing: Pricing;
 }
 
-/** Both providers: $10 per 1,000 searches, plus the tokens the results bring in. Checked 2026-09-13. */
+/**
+ * Web search on a reasoning model: $10 per 1,000 calls, plus the search
+ * content tokens billed at the model's input price. developers.openai.com
+ * /api/docs/pricing and /docs/guides/tools-web-search, checked from the VPS
+ * on 2026-09-19 for gpt-5-mini and gpt-5.6-luna (agents-hq/piani/
+ * web-search-prezzi-vps-res.txt); the other models carry the same rate from
+ * the 2026-09-13 check. (The $25 per 1,000 rate is for non-reasoning models.)
+ */
 const WEB_SEARCH_PER_CALL_USD = 0.01;
 
-function usd(inputPerMTokUsd: number, outputPerMTokUsd: number): Pricing {
-  return { inputPerMTokUsd, outputPerMTokUsd, webSearchPerCallUsd: WEB_SEARCH_PER_CALL_USD };
+function usd(inputPerMTokUsd: number, outputPerMTokUsd: number, webSearchPerCallUsd = WEB_SEARCH_PER_CALL_USD): Pricing {
+  return { inputPerMTokUsd, outputPerMTokUsd, webSearchPerCallUsd };
 }
 
 const CATALOG: Record<string, CatalogEntry> = {
@@ -44,8 +51,9 @@ const CATALOG: Record<string, CatalogEntry> = {
   // 2026-09-12. The API budget is OpenAI's, so only OpenAI is catalogued: any
   // other model runs live only with an explicit JHT_API_PRICE_* override.
   // Cheapest first; pick the cheapest one that holds the role.
-  "gpt-5.6-luna": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.2, 1.2) },
-  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.25, 2) },
+  // Search fee verified 2026-09-19 (see WEB_SEARCH_PER_CALL_USD): stated, not defaulted.
+  "gpt-5.6-luna": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.2, 1.2, 0.01) },
+  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.25, 2, 0.01) },
   "gpt-5": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(1.25, 10) },
   "gpt-5.6-terra": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(2, 12) },
   "gpt-5.6-sol": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(4, 20) },
