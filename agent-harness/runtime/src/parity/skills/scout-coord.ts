@@ -38,6 +38,19 @@ export const SCOUT_COORD_TOOL = "scout_coord";
 const SCOUT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const DB_ORIGIN = "jobs_db";
 
+/** The role's own name. A lone Scout runs as `scout` here and as SCOUT-1 in the TUI. */
+const ROLE_NAME = "scout";
+
+/**
+ * The Scout id an agent name stands for: lowercase, and the bare role name
+ * as the TUI's first Scout, `scout-1`: `start-agent.sh scout` with no
+ * instance starts instance 1, SCOUT-1, and that is the $MY_ID its prompt writes.
+ */
+function scoutId(name: string): string {
+  const id = name.trim().toLowerCase();
+  return id === ROLE_NAME ? `${ROLE_NAME}-1` : id;
+}
+
 /**
  * A claim older than this is free again (the TUI's own 24 h, which its
  * `reset` purged). Nobody deletes a stale claim on another Scout's behalf:
@@ -75,12 +88,15 @@ type Args = z.infer<typeof schema>;
 
 export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
   const now = options.now ?? (() => new Date());
-  const me = options.agent.trim().toLowerCase();
+  const me = scoutId(options.agent);
   if (!SCOUT_NAME.test(me)) throw new Error(`scout_coord needs a Scout's name for its agent, not '${options.agent}'.`);
 
-  /** The Scout a write is for: the caller, whether it named itself or not. Null for anyone else. */
+  /**
+   * The Scout a write is for: the caller, whether it named itself, used the
+   * role name `scout`, or left the name out. Null for any other Scout.
+   */
   const self = (scout: string | undefined): string | null =>
-    scout === undefined || scout.trim().toLowerCase() === me ? me : null;
+    scout === undefined || scout.trim().toLowerCase() === ROLE_NAME || scoutId(scout) === me ? me : null;
   const notYours = (scout: string, what: string) =>
     usage(
       `you are ${me}: you can ${what} only in your own name, not '${scout}'. ` +
