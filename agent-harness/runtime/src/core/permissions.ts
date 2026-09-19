@@ -16,14 +16,21 @@
  *
  * Files that commonly hold credentials (`.env`, SSH keys, cloud config) are
  * protected in every mode: `auto` refuses them, `ask` always asks and "always"
- * does not cover them.
+ * does not cover them. So is the runtime's own state (`~/.jht-api`) outside
+ * the agent's own folders: another role's home, notes and traces are that
+ * role's, and one agent does not read or change them.
+ *
+ * Paths arrive with symlinks already resolved (`realPath`), and the roots are
+ * resolved the same way here, so both sides of every comparison are real.
  *
  * This is a gate, not a sandbox. A permitted shell command can do anything the
  * user can. The sandbox is the container of HHT ADR 0002; this is what makes the
  * agent usable on a bare machine until then.
  */
 
-import { isInside, isSensitivePath } from "../tools/paths.ts";
+import { sep } from "node:path";
+
+import { isInside, isSensitivePath, realPath } from "../tools/paths.ts";
 import type { ToolAccess, ToolRisk } from "../tools/registry.ts";
 
 export type PermissionMode = "ask" | "auto" | "read-only";
@@ -50,21 +57,48 @@ export interface PermissionDecision {
   message?: string;
 }
 
+/** A folder with this name holds the runtime's state wherever it is mounted. */
+const STATE_DIR = ".jht-api";
+
 export class PermissionPolicy {
   readonly mode: PermissionMode;
   #freeReadRoots: string[];
+  #ownRoots: string[];
+  #stateRoots: string[];
   #ask: PermissionAsker | undefined;
   #alwaysAllowed = new Set<string>();
 
-  constructor(options: { mode: PermissionMode; freeReadRoots: string[]; ask?: PermissionAsker | undefined }) {
+  constructor(options: {
+    mode: PermissionMode;
+    freeReadRoots: string[];
+    /**
+     * The agent's own folders inside the runtime state: its home, its
+     * workdir. Defaults to `freeReadRoots`.
+     */
+    ownRoots?: string[] | undefined;
+    /**
+     * Where the runtime keeps every role's state (`JHT_API_HOME`). Any folder
+     * named `.jht-api` counts too, so a default install is covered without it.
+     */
+    stateRoots?: string[] | undefined;
+    ask?: PermissionAsker | undefined;
+  }) {
     this.mode = options.mode;
-    this.#freeReadRoots = options.freeReadRoots;
+    this.#freeReadRoots = options.freeReadRoots.map(realPath);
+    this.#ownRoots = (options.ownRoots ?? options.freeReadRoots).map(realPath);
+    this.#stateRoots = (options.stateRoots ?? []).map(realPath);
     this.#ask = options.ask;
+  }
+
+  /** Runtime state that is not this agent's: another role's home, the traces, the audit. */
+  #othersState(path: string): boolean {
+    const state = path.split(sep).includes(STATE_DIR) || this.#stateRoots.some((root) => isInside(root, path));
+    return state && !this.#ownRoots.some((root) => isInside(root, path));
   }
 
   async decide(toolName: string, access: ToolAccess): Promise<PermissionDecision> {
     if (access.risk === "none") return { allowed: true, asked: false };
-    const sensitive = access.paths.some(isSensitivePath);
+    const sensitive = access.paths.some((p) => isSensitivePath(p) || this.#othersState(p));
     const freeRead =
       !sensitive &&
       access.risk === "read" &&

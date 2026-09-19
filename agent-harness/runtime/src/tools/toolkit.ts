@@ -37,7 +37,7 @@ const PLATFORM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
 };
 
 export async function buildToolkit(
-  config: Pick<Config, "workdir" | "profileDir" | "permissionMode" | "mcpConfig" | "profile">,
+  config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile">,
   options: { provider: ProviderPort; ask?: PermissionAsker | undefined; webFetch?: WebFetchOptions | undefined },
 ): Promise<Toolkit> {
   const { workdir } = config;
@@ -57,6 +57,9 @@ export async function buildToolkit(
     permissions: new PermissionPolicy({
       mode: config.permissionMode,
       freeReadRoots: [workdir, ...(config.profileDir ? [config.profileDir] : [])],
+      // Inside the runtime state, only this role's own folders are its to touch.
+      ownRoots: [workdir, config.agentHome],
+      stateRoots: [config.apiHome],
       ask: options.ask,
     }),
     mcpServers: mcp?.servers ?? [],

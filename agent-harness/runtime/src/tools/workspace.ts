@@ -20,7 +20,7 @@ import { homedir } from "node:os";
 import { dirname, join, matchesGlob, relative } from "node:path";
 import { z } from "zod";
 
-import { displayPath, isSensitivePath, resolveUserPath } from "./paths.ts";
+import { displayPath, isSensitivePath, realPath, resolveUserPath } from "./paths.ts";
 import type { ToolExecution, ToolHandler } from "./registry.ts";
 
 export interface WorkspaceToolsOptions {
@@ -38,7 +38,9 @@ const SKIPPED_DIRS = new Set([".git", "node_modules", ".hg", ".svn", ".venv", "_
 
 export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandler[] {
   const home = options.homeDir ?? homedir();
-  const at = (input: string) => resolveUserPath(input, options.workdir, home);
+  // Symlinks resolved before anything is classified: the policy must judge the
+  // file a call really touches, not the name it was given.
+  const at = (input: string) => realPath(resolveUserPath(input, options.workdir, home));
   const show = (abs: string) => displayPath(abs, home);
 
   const readFileTool: ToolHandler = {

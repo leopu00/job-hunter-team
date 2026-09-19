@@ -8,9 +8,11 @@
  * - **A deadline.** A command that does not finish is killed, with its whole
  *   process group, and the model is told. A hung `npm install` must not hang
  *   the agent.
- * - **No secrets in reach.** Environment variables that look like keys,
- *   tokens or passwords are removed before the command starts, so `env` cannot
- *   print the provider key into the conversation.
+ * - **No secrets in reach.** The command gets an allowlisted environment —
+ *   the variables a shell needs to work, and the runtime's own settings — and
+ *   even those go if their name or value looks like a credential, so `env`
+ *   cannot print the provider key, or a password inside a URL, into the
+ *   conversation.
  * - **No stdin.** A command waiting for input gets end-of-file instead of
  *   waiting forever.
  * - **The exit code is part of the result.** Output alone does not say whether
@@ -40,7 +42,11 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
 /** Bytes kept per stream while the command runs. The runtime caps the result again afterwards. */
 const MAX_STREAM_BYTES = 1_000_000;
-const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL/i;
+/** Variables a command may see. Anything else in the runtime's environment stays out. */
+const ENV_ALLOWED = /^(PATH|HOME|USER|LOGNAME|SHELL|PWD|LANG|LANGUAGE|LC_[A-Z]+|TERM|TZ|TMPDIR|NO_COLOR|JHT_API_[A-Z0-9_]+|JHT_[A-Z0-9_]+)$/;
+const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE/i;
+/** A URL carrying a password: `scheme://user:pass@host`. */
+const SECRET_VALUE = /[a-z][a-z0-9+.-]*:\/\/[^\s/@:]*:[^\s/@]+@/i;
 
 export function createBashTool(options: BashToolOptions): ToolHandler {
   const defaultTimeout = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -210,7 +216,15 @@ function killGroup(pid: number | undefined): void {
   }
 }
 
-/** The environment minus anything that looks like a credential. */
+/**
+ * The environment a command gets: allowlisted names only, minus any whose
+ * name or value looks like a credential. An allowlist, because a denylist
+ * misses whatever it did not think of (`DATABASE_URL`, `SENTRY_DSN`…).
+ */
 export function scrubEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => !SECRET_NAME.test(name)));
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([name, value]) => ENV_ALLOWED.test(name) && !SECRET_NAME.test(name) && !SECRET_VALUE.test(value ?? ""),
+    ),
+  );
 }

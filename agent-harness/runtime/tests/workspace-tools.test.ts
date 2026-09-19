@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -20,7 +21,8 @@ async function call(name: string, args: Record<string, unknown>) {
 }
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "jht-api-ws-"));
+  // Real path: the tools resolve symlinks, and on macOS the temp folder is one.
+  root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-ws-")));
   await mkdir(join(root, "notes", "deep"), { recursive: true });
   await mkdir(join(root, "node_modules", "pkg"), { recursive: true });
   await writeFile(join(root, "notes", "README.md"), "# Search\nbudget: 1400\nzone: Rome\n");
@@ -117,7 +119,7 @@ describe("classify", () => {
       summary: "~/notes/README.md",
     });
     expect(tools["edit_file"]!.classify({ path: "a.md", old_string: "x", new_string: "y" }).risk).toBe("write");
-    expect(tools["grep"]!.classify({ pattern: "x", path: "/etc" }).paths).toEqual(["/etc"]);
+    expect(tools["grep"]!.classify({ pattern: "x", path: "/etc" }).paths).toEqual([realpathSync("/etc")]);
   });
 });
 

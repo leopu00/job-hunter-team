@@ -108,3 +108,28 @@ describe("PermissionPolicy — network and internal tools", () => {
     expect(await policy.decide("todo_write", none)).toEqual({ allowed: true, asked: false });
   });
 });
+
+describe("PermissionPolicy — runtime state", () => {
+  const policy = () =>
+    new PermissionPolicy({
+      mode: "auto",
+      freeReadRoots: ["/srv/state/agents/scout"],
+      ownRoots: ["/srv/state/agents/scout"],
+      stateRoots: ["/srv/state"],
+    });
+
+  it("lets a role use its own home", async () => {
+    expect((await policy().decide("write_file", write("/srv/state/agents/scout/notes.md"))).allowed).toBe(true);
+  });
+
+  it("refuses another role's home, the traces and the audit under a custom JHT_API_HOME", async () => {
+    for (const path of ["/srv/state/agents/analyst/notes.md", "/srv/state/logs/analyst/run.jsonl", "/srv/state/audit/run.jsonl"]) {
+      expect((await policy().decide("read_file", read(path))).allowed, path).toBe(false);
+      expect((await policy().decide("write_file", write(path))).allowed, path).toBe(false);
+    }
+  });
+
+  it("does not mistake a sibling of the state folder for state", async () => {
+    expect((await policy().decide("read_file", read("/srv/state-old/x.md"))).allowed).toBe(true);
+  });
+});
