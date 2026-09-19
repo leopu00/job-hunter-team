@@ -35,7 +35,11 @@ export const MODE_UNKNOWN = "unknown";
 
 /** A number json.load would read as a float. */
 class PyFloat {
-  constructor(readonly value: number) {}
+  readonly value: number;
+
+  constructor(value: number) {
+    this.value = value;
+  }
 }
 
 /** `json.load`, keeping floats apart from ints. Throws on what JSON.parse refuses. */

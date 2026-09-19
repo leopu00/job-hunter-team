@@ -300,6 +300,12 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("see my/shared/skills/x.py")).toBe("see my/shared/skills/x.py");
   });
 
+  it("uses a role's own tool for a script when the role has one (T14: the ANALISTA's safe_fetch)", () => {
+    const text = "python3 /app/shared/skills/safe_fetch.py --status 'URL' and python3 /app/shared/skills/ticket.py show 3";
+    expect(rewritePythonSkills(text)).toBe("web_fetch --status 'URL' and ticket show 3");
+    expect(rewritePythonSkills(text, { "safe_fetch.py": "safe_fetch" })).toBe("safe_fetch --status 'URL' and ticket show 3");
+  });
+
   it("names the tool whenever the text says check-url alone (T12: the SCOUT ran scout_dedup check-url three runs in a row)", () => {
     // position-insert/SKILL.md, the line next to the dedup gate: every language says it the same way.
     expect(rewritePythonSkills("a LinkedIn cross-listing), `check-url` deduplicates.")).toBe(

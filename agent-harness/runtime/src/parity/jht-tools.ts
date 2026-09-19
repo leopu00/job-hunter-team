@@ -353,6 +353,14 @@ export const PYTHON_SKILLS: Record<string, string> = {
   // T15: the SCORER checks whether a posting is still open. web_fetch is the
   // same guard (every hop resolved and checked) and every role has it.
   "safe_fetch.py": "web_fetch",
+  // T14, the ANALISTA's scripts.
+  "deadline_extract.py": "deadline_extract",
+  "ticket.py": "ticket",
+  "role_registry.py": "role_registry",
+  "salary_estimate.py": "salary_estimate",
+  "recheck_liveness.py": "recheck_liveness",
+  "logo_fetch.py": "logo_fetch",
+  "enrichment_policy.py": "enrichment_policy",
 };
 
 /** Scripts with no tool of their own but a native equivalent. */
@@ -369,16 +377,21 @@ const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']
  * `db_query`. The TUI text is otherwise untouched; this is difference 6 in
  * docs/parity.md.
  */
-export function rewritePythonSkills(text: string): string {
+export function rewritePythonSkills(
+  text: string,
+  /** A role's own tool for a script, over the shared map: the ANALISTA's safe_fetch (T14). */
+  overrides: Readonly<Record<string, string>> = {},
+): string {
+  const skills = { ...PYTHON_SKILLS, ...overrides };
   return text
     .replace(PYTHON_SCRIPT_TEXT, (_whole, script: string) => {
-      const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
+      const tool = skills[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ?? `${script} (not available in the API harness)`;
     })
     // T10b: a script named as a file, not run — "Wrapper at `/app/shared/skills/db_insert.py`".
     // The image has no shared/, so it is the tool, or it is not here.
     .replace(/(?<![\w./-])(?:\/app\/)?shared\/skills\/([A-Za-z0-9_]+\.py)\b/g, (_whole, script: string) => {
-      const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
+      const tool = skills[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ? `the ${tool} tool` : `${script} (not available in the API harness)`;
     })
     .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)")
@@ -408,7 +421,12 @@ export function replacedSkill(command: string): string | null {
  * replaces it instead of `command not found`. The model learns the mapping
  * from one refused call, and nothing reaches a shell.
  */
-export function guardShellTool(shell: ToolHandler, commandOf: (args: unknown) => string): ToolHandler {
+export function guardShellTool(
+  shell: ToolHandler,
+  commandOf: (args: unknown) => string,
+  /** The role's own tools for scripts, as its text was rewritten with (`rewritePythonSkills`). */
+  overrides: Readonly<Record<string, string>> = {},
+): ToolHandler {
   return {
     spec: shell.spec,
     classify: (args) => shell.classify(args),
@@ -417,7 +435,7 @@ export function guardShellTool(shell: ToolHandler, commandOf: (args: unknown) =>
       if (skill !== null) {
         return {
           ok: false,
-          content: `Error: \`python3 …/${skill}\` does not exist here. Use the \`${PYTHON_SKILLS[skill]}\` tool instead. Nothing was run.`,
+          content: `Error: \`python3 …/${skill}\` does not exist here. Use the \`${overrides[skill] ?? PYTHON_SKILLS[skill]}\` tool instead. Nothing was run.`,
         };
       }
       const found = replacedCommand(commandOf(args));
