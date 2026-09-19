@@ -61,6 +61,8 @@ export interface HubOptions {
   /** `$JHT_HOME`, as the feedback display reads it. */
   jhtHome?: string;
   notifyLimit?: { max: number; windowMs: number };
+  /** Messages one agent may send in a window (HUB-3): a loop fills no inbox. */
+  sendLimit?: { max: number; windowMs: number };
   now?: () => number;
   /** Test seam: the tools of an agent, instead of the ones its role lists. */
   toolsFor?: (agent: string, db: () => Database) => Promise<ToolHandler[]>;
@@ -91,6 +93,9 @@ class HttpError extends Error {
   }
 }
 
+/** A report or an order every minute for an hour; far below a loop. */
+export const DEFAULT_SEND_LIMIT = { max: 60, windowMs: 60 * 60_000 };
+
 const digest = (text: string) => createHash("sha256").update(text).digest();
 
 export function createHub(options: HubOptions): Server {
@@ -114,7 +119,21 @@ export function createHub(options: HubOptions): Server {
   const notifier = new FileNotifier(join(options.channelsDir, "notify.jsonl"));
   const replies = new FileUserReplies(join(options.channelsDir, "replies"));
   const notifyLimit = options.notifyLimit ?? DEFAULT_NOTIFY_LIMIT;
+  const sendLimit = options.sendLimit ?? DEFAULT_SEND_LIMIT;
   const notified = new Map<string, number[]>();
+  const sent = new Map<string, number[]>();
+  /** Counts one more for `agent` in a sliding window, or refuses it past `limit`. */
+  const within = (log: Map<string, number[]>, agent: string, limit: { max: number; windowMs: number }, what: string) => {
+    const at = now();
+    const window = (log.get(agent) ?? []).filter((t) => at - t < limit.windowMs);
+    if (window.length >= limit.max) throw new HttpError(429, `${what} limit reached (${limit.max} per ${Math.round(limit.windowMs / 60_000)} min).`);
+    window.push(at);
+    log.set(agent, window);
+    return at;
+  };
+  // The agents that exist are the ones with a token: a message to anyone else
+  // would sit in an inbox nobody reads (CAPITANO-01 is not capitano-1).
+  const agents = new Set(options.tokens.values());
 
   const toolsFor =
     options.toolsFor ??
@@ -158,8 +177,11 @@ export function createHub(options: HubOptions): Server {
       }
       case HUB_PATHS.send: {
         const request = parse(SendRequest, body);
+        const to = agentInstanceId(request.to);
+        if (!agents.has(to)) throw new HttpError(404, `No agent ${to} on this team. Agents: ${[...agents].sort().join(", ")}.`);
+        const at = within(sent, agent, sendLimit, "Message");
         // The sender is the token's agent, whatever the role's runtime believes it is.
-        await mailbox.send({ from: agent, to: request.to, text: request.text, ts: now() });
+        await mailbox.send({ from: agent, to, text: request.text, ts: at });
         return {};
       }
       case HUB_PATHS.drain:
@@ -167,11 +189,7 @@ export function createHub(options: HubOptions): Server {
         return { messages: await mailbox.drain(agent) };
       case HUB_PATHS.notify: {
         const request = parse(NotifyRequest, body);
-        const at = now();
-        const window = (notified.get(agent) ?? []).filter((t) => at - t < notifyLimit.windowMs);
-        if (window.length >= notifyLimit.max) throw new HttpError(429, `Notification limit reached (${notifyLimit.max} per window).`);
-        window.push(at);
-        notified.set(agent, window);
+        const at = within(notified, agent, notifyLimit, "Notification");
         await notifier.notify({ from: agent, kind: request.kind, text: request.text, ts: at, ...(request.positionId === undefined ? {} : { positionId: request.positionId }) });
         return {};
       }
