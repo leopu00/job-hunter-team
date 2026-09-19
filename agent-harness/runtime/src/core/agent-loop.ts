@@ -14,7 +14,7 @@ import type { AuditLog } from "./audit.ts";
 import type { Guardrails } from "./guardrails.ts";
 import type { GenerateResult, Message, ProviderPort, ToolSpec } from "./provider/port.ts";
 import type { ResponseMeta, ToolDetails } from "./trace.ts";
-import { addUsage, totalTokens, ZERO_USAGE, type Usage } from "./usage.ts";
+import { addUsage, inputCostUsd, totalTokens, ZERO_USAGE, type Usage } from "./usage.ts";
 import { cap } from "../tools/output.ts";
 import type { ToolExecution, ToolRegistry, ToolRisk } from "../tools/registry.ts";
 
@@ -248,7 +248,8 @@ export async function runRound(
     finishReason: result.finishReason,
     usage: result.usage,
     costUsd: stepCost,
-    costInUsd: (result.usage.inputTokens / 1_000_000) * pricing.inputPerMTokUsd,
+    // Cache writes are input: `costInUsd + costOutUsd` is the round's cost.
+    costInUsd: inputCostUsd(result.usage, pricing),
     costOutUsd: (result.usage.outputTokens / 1_000_000) * pricing.outputPerMTokUsd,
     text: result.text,
     toolCalls: result.toolCalls,

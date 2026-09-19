@@ -11,7 +11,7 @@ import { stdout } from "node:process";
 
 import type { ToolOutcome } from "../core/agent-loop.ts";
 import type { TraceEvent } from "../core/trace.ts";
-import type { Usage } from "../core/usage.ts";
+import { inputCostUsd, type Usage } from "../core/usage.ts";
 import { displayPath } from "../tools/paths.ts";
 
 const COLOR = stdout.isTTY === true && !process.env["NO_COLOR"];
@@ -240,7 +240,9 @@ export class TraceView {
     const calls = event.toolCalls.length;
     const what =
       calls > 0 ? c.blue(`→ ${calls} tool call${calls === 1 ? "" : "s"}`) : event.finishReason === "stop" ? c.green("→ reply") : c.yellow(`→ ${event.finishReason}`);
-    const cached = (u.cachedInputTokens ?? 0) > 0 ? c.dim(` (${int(u.cachedInputTokens ?? 0)} cached)`) : "";
+    const cached =
+      ((u.cachedInputTokens ?? 0) > 0 ? c.dim(` (${int(u.cachedInputTokens ?? 0)} cached)`) : "") +
+      ((u.cacheWriteTokens ?? 0) > 0 ? c.dim(` (${int(u.cacheWriteTokens ?? 0)} cache write)`) : "");
     const reasoning = (u.reasoningTokens ?? 0) > 0 ? c.dim(` (${int(u.reasoningTokens ?? 0)} reasoning)`) : "";
     this.#out(
       `  ${c.magenta("◆")} ${agentTag(event.agent)}${c.bold(padEnd(`R${event.round}`, 3))} ${c.dim(padStart(dur(event.durationMs), 6))}  ` +
@@ -336,7 +338,8 @@ export class TraceView {
     const cost = this.#split(u);
     this.#out(
       `  ${c.dim("└")} ${c.dim(`${event.rounds} round${event.rounds === 1 ? "" : "s"} · ${dur(event.durationMs)} · ctx ${int(this.#contextChars)} chars ·`)} ` +
-        `${c.dim("in")} ${int(u.inputTokens)}${(u.cachedInputTokens ?? 0) > 0 ? c.dim(` (${int(u.cachedInputTokens ?? 0)} cached)`) : ""} ${c.dim("·")} ` +
+        `${c.dim("in")} ${int(u.inputTokens)}${(u.cachedInputTokens ?? 0) > 0 ? c.dim(` (${int(u.cachedInputTokens ?? 0)} cached)`) : ""}` +
+        `${(u.cacheWriteTokens ?? 0) > 0 ? c.dim(` (${int(u.cacheWriteTokens ?? 0)} cache write)`) : ""} ${c.dim("·")} ` +
         `${c.dim("out")} ${int(u.outputTokens)} ${c.dim("·")} ${c.dim(`${usd(cost.in)} + ${usd(cost.out)} =`)} ${c.bold(usd(event.costUsd))}`,
     );
     if (event.text.trim()) {
@@ -352,7 +355,7 @@ export class TraceView {
 
   #split(u: Usage) {
     return {
-      in: (u.inputTokens / 1_000_000) * this.#pricing.inputPerMTokUsd,
+      in: inputCostUsd(u, this.#pricing),
       out: (u.outputTokens / 1_000_000) * this.#pricing.outputPerMTokUsd,
     };
   }
@@ -371,19 +374,20 @@ export class TraceView {
           ms: a.ms + r.durationMs,
           in: a.in + r.usage.inputTokens,
           cached: a.cached + (r.usage.cachedInputTokens ?? 0),
+          written: a.written + (r.usage.cacheWriteTokens ?? 0),
           out: a.out + r.usage.outputTokens,
           reasoning: a.reasoning + (r.usage.reasoningTokens ?? 0),
           costIn: a.costIn + r.costInUsd,
           costOut: a.costOut + r.costOutUsd,
           cost: a.cost + r.costUsd,
         }),
-        { ms: 0, in: 0, cached: 0, out: 0, reasoning: 0, costIn: 0, costOut: 0, cost: 0 },
+        { ms: 0, in: 0, cached: 0, written: 0, out: 0, reasoning: 0, costIn: 0, costOut: 0, cost: 0 },
       );
     const cells = (turn: string, round: string, rows: RoundRow[], tools: string, strong = false) => {
       const s = sum(rows);
       const b = strong ? c.bold : (x: string) => x;
       const dash = (n: number) => (n > 0 ? int(n) : c.dim("–"));
-      return [turn, round, dur(s.ms), b(int(s.in)), dash(s.cached), b(int(s.out)), dash(s.reasoning), usd(s.costIn), usd(s.costOut), b(usd(s.cost)), tools];
+      return [turn, round, dur(s.ms), b(int(s.in)), dash(s.cached), dash(s.written), b(int(s.out)), dash(s.reasoning), usd(s.costIn), usd(s.costOut), b(usd(s.cost)), tools];
     };
     const body: (string[] | "sep")[] = [];
     for (const turn of [...new Set(this.#rows.map((r) => r.turn))]) {
@@ -398,8 +402,8 @@ export class TraceView {
     body.pop();
     const total = cells(c.bold("Σ"), String(this.#rows.length), this.#rows, "", true);
     this.#table(
-      ["turn", "round", "time", "tok in", "cached", "tok out", "reasoning", "$ in", "$ out", "$ total", "tools"],
-      [2, 3, 4, 5, 6, 7, 8, 9],
+      ["turn", "round", "time", "tok in", "cached", "cache wr", "tok out", "reasoning", "$ in", "$ out", "$ total", "tools"],
+      [2, 3, 4, 5, 6, 7, 8, 9, 10],
       body,
       total,
     );

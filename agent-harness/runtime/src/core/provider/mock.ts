@@ -8,6 +8,7 @@
  */
 
 import { HarnessError } from "../errors.ts";
+import type { Usage } from "../usage.ts";
 import type {
   GenerateRequest,
   GenerateResult,
@@ -21,7 +22,7 @@ import type {
 export interface ScriptedTurn {
   text?: string;
   toolCalls?: Array<{ name: string; args: unknown }>;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: Usage;
 }
 
 export const MOCK_PROFILE: ModelProfile = {

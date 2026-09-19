@@ -173,6 +173,8 @@ export class AiSdkProvider implements ProviderPort {
           inputTokens: result.usage.inputTokens ?? 0,
           outputTokens: result.usage.outputTokens ?? 0,
           cachedInputTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+          // A search writes to the cache too (19/09 calibration: 4,400 of 8,712).
+          cacheWriteTokens: result.usage.inputTokenDetails?.cacheWriteTokens ?? 0,
         },
       };
     } catch (cause) {

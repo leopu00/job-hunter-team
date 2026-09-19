@@ -88,11 +88,19 @@ describe("loadConfig", () => {
 
 describe("loadConfig — catalogue", () => {
   it("prices the plan's models from the catalog, cheapest included", () => {
-    expect(loadConfig(LIVE).profile.pricing).toEqual({ inputPerMTokUsd: 0.2, outputPerMTokUsd: 1.2, webSearchPerCallUsd: 0.01 });
+    // luna at its long-context rates, the higher ones: no threshold is published.
+    expect(loadConfig(LIVE).profile.pricing).toEqual({
+      inputPerMTokUsd: 0.4,
+      outputPerMTokUsd: 1.8,
+      webSearchPerCallUsd: 0.01,
+      cacheWritePerMTokUsd: 0.5,
+    });
+    // mini has no long-context or cache-write price: short rates, cache writes at twice input.
     expect(loadConfig({ ...LIVE, JHT_API_MODEL: "gpt-5-mini" }).profile.pricing).toEqual({
       inputPerMTokUsd: 0.25,
       outputPerMTokUsd: 2,
       webSearchPerCallUsd: 0.01,
+      cacheWritePerMTokUsd: 0.5,
     });
     expect(loadConfig(LIVE).profile.capabilities.webSearch).toBe(true);
   });
