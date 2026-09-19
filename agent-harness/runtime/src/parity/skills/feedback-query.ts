@@ -79,14 +79,35 @@ type Row = Record<string, unknown>;
 /** One feedback event, with the keys in the order the script builds them. */
 type FeedbackEvent = Record<string, unknown>;
 
+/**
+ * A legacy_id as a model writes it: the text of the prompt (`--legacy-id 42`)
+ * or the number it stands for.
+ */
+const legacyId = z.union([z.string().min(1).max(64), z.number().int()]).transform(String);
+
+/**
+ * One id or a list of them. The script's flag repeats (`--exclude-legacy-id
+ * 12 --exclude-legacy-id 13`) and the SCORER's prompt passes one, so a model
+ * copies it as a single value: the live chain of 19/09 sent a string where
+ * the tool wanted an array, and lost the call.
+ */
+const legacyIdList = z
+  .union([legacyId, z.array(legacyId).max(200)])
+  .transform((value) => (Array.isArray(value) ? value : [value]));
+
 const window_ = {
   days: z.number().int().optional().describe(`window in days (default ${DEFAULT_WINDOW_DAYS}, 0 = all)`),
   limit: z.number().int().optional().describe(`maximum events (default ${DEFAULT_EVENT_LIMIT})`),
-  legacy_ids: z.string().max(4_000).optional().describe('comma-separated legacy_ids, read one at a time: "12,13"'),
+  // The script takes "12,13"; a list or a single id reads the same.
+  legacy_ids: z
+    .union([z.string().max(4_000), z.number().int(), z.array(legacyId).max(200)])
+    .transform((value) => (Array.isArray(value) ? value.join(",") : String(value)))
+    .optional()
+    .describe('legacy_ids read one at a time: "12,13" or ["12", "13"]'),
 };
 
 const schema = z.discriminatedUnion("command", [
-  z.object({ command: z.literal("check"), legacy_id: z.string().min(1).max(64).describe("the position's legacy_id") }).strict(),
+  z.object({ command: z.literal("check"), legacy_id: legacyId.describe("the position's legacy_id") }).strict(),
   z
     .object({
       command: z.literal("recent"),
@@ -102,11 +123,11 @@ const schema = z.discriminatedUnion("command", [
       min_positions: z.number().int().optional().describe("drop themes below N distinct positions (default 3)"),
       top: z.number().int().optional().describe("keep the top N themes"),
       include_cleared: z.boolean().optional(),
-      exclude_legacy_id: z.array(z.string().min(1).max(64)).max(200).optional().describe("positions left out of the aggregate"),
+      exclude_legacy_id: legacyIdList.optional().describe('positions left out of the aggregate: "12" or ["12", "13"]'),
     })
     .strict(),
 ]);
-type Args = z.infer<typeof schema>;
+type Args = z.output<typeof schema>;
 
 export function createFeedbackQueryTool(options: FeedbackQueryOptions): ToolHandler {
   const now = options.now ?? (() => new Date());
