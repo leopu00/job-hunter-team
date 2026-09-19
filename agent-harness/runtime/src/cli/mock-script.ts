@@ -61,11 +61,29 @@ export const DEFAULT_MOCK_SCRIPT: ScriptedTurn[] = [
 /**
  * The rehearsal for a product role (`--role` without `--prompt`): the same
  * shape as a TUI worker's cycle, on the native tools. Read the identity,
- * report to the CAPITANO, pause; after the wake-up, check for the person's
- * replies and stop. The second turn plays only with `--turns 2` or more.
+ * coordinate and claim as a Scout does at boot — on `scout_coord`,
+ * `email_monitor` and `feedback_query`, never `python3 …/skills` — report to
+ * the CAPITANO, pause; after the wake-up, check for the person's replies and
+ * stop. The second turn plays only with `--turns 2` or more. Written for the
+ * SCOUT: another role lacks the Scout's tools and gets an unknown-tool answer.
  */
 export const PRODUCT_ROLE_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "Boot: the split, then the mailbox.",
+    toolCalls: [
+      { name: "scout_coord", args: { command: "doctor" } },
+      { name: "scout_coord", args: { command: "show" } },
+      { name: "email_monitor", args: { command: "status" } },
+    ],
+  },
+  {
+    toolCalls: [
+      { name: "scout_coord", args: { command: "assign", scout: "scout-1", cerchi: "1,2", fonti: "linkedin,greenhouse" } },
+      { name: "scout_coord", args: { command: "claim", job_id: "https://jobs.example/mock-1", scout: "scout-1" } },
+      { name: "feedback_query", args: { command: "check", legacy_id: "1" } },
+    ],
+  },
   { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: batch done, 0 new positions." } }] },
   { toolCalls: [{ name: "throttle", args: { reason: "batch done" } }] },
   { text: "Paused." },

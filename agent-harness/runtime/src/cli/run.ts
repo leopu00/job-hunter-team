@@ -49,12 +49,17 @@ import { JsonlTrace, sampleProcess, traceThen, type TraceSink } from "../core/tr
 import { displayPath } from "../tools/paths.ts";
 import { buildToolkit } from "../tools/toolkit.ts";
 import { prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
+import { jobsDbPath, openJobsDb, type Database } from "../db/jobs-db.ts";
 import { resolveUserPath } from "../tools/paths.ts";
 import { DEFAULT_MOCK_SCRIPT, PRODUCT_ROLE_MOCK_SCRIPT, readMockScript } from "./mock-script.ts";
 import { c, TraceView } from "./render.ts";
 
 /** The checkout this file belongs to: `agent-harness/runtime/src/cli/` is four levels down. */
 const CHECKOUT_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+
+/** jobs.db, once a tool opened it. Closed when the run ends. */
+let openedDb: Database | undefined;
+let jobsDb: { path: string; open: () => Database } | undefined;
 
 /** Kept outside `main` so a run that dies still records and shows why. */
 let emit: TraceSink | undefined;
@@ -144,6 +149,11 @@ async function main(): Promise<number> {
   let systemPrompt: string;
   if (values.prompt === undefined) {
     const env = process.env;
+    // The team database: its path is the runtime's, fixed here, never a tool
+    // argument. Opened on first use, so a cycle that never touches it never
+    // creates it.
+    const dbFile = jobsDbPath(env, config.apiHome);
+    jobsDb = { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
     role = await prepareProductRole({
       appRoot: resolveUserPath(env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT, process.cwd(), homedir()),
       role: values.role,
@@ -152,6 +162,7 @@ async function main(): Promise<number> {
       apiHome: config.apiHome,
       jhtHome: resolveUserPath(env["JHT_HOME"]?.trim() || "~/.jht", process.cwd(), homedir()),
       env,
+      jobsDb,
     });
     systemPrompt = role.systemPrompt.trimEnd();
   } else {
@@ -221,6 +232,7 @@ async function main(): Promise<number> {
     }
   } finally {
     await toolkit.close();
+    openedDb?.close();
   }
 
   stopSampling();

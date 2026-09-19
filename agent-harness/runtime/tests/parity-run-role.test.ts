@@ -47,6 +47,13 @@ describe("npm run role -- --role scout (a product role)", () => {
     const tools = records.filter((r) => r.type === "tool_finished").map((r) => [r["name"], r["outcome"]]);
     expect(tools).toEqual([
       ["read_file", "accepted"],
+      // T7: the boot of a Scout on its native skills, in the runtime's jobs.db.
+      ["scout_coord", "accepted"],
+      ["scout_coord", "accepted"],
+      ["email_monitor", "accepted"],
+      ["scout_coord", "accepted"],
+      ["scout_coord", "accepted"],
+      ["feedback_query", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
