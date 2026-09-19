@@ -369,3 +369,54 @@ describe("scout_coord is bound to the Scout that runs it (SICUREZZA D-2)", () =>
     expect(() => createScoutCoordTool({ agent: "../capitano", db: () => openJobsDb(":memory:"), dbPath: ":memory:" })).toThrow();
   });
 });
+
+describe("scout_coord: an expired claim is free again, without deleting anyone's claims", () => {
+  const setup = () => {
+    const db = openJobsDb(":memory:");
+    const as = (agent: string) => createScoutCoordTool({ agent, db: () => db, dbPath: ":memory:" });
+    const claimAt = db.prepare("INSERT INTO scout_claims (job_id, scout, claimed_at) VALUES (?, ?, datetime('now', ?))");
+    return { db, one: as("scout-1"), claimAt };
+  };
+
+  it("lets a Scout take a position whose claim expired on another Scout, and leaves every other claim alone", async () => {
+    const { db, one, claimAt } = setup();
+    claimAt.run("https://jobs.example/stale", "scout-2", "-25 hours");
+    claimAt.run("https://jobs.example/other-stale", "scout-2", "-3 days");
+    claimAt.run("https://jobs.example/live", "scout-2", "-23 hours");
+
+    expect((await native(one, { command: "check-claim", job_id: "https://jobs.example/stale" })).content).toBe("AVAILABLE");
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/stale" })).content).toBe("CLAIMED by scout-1");
+    expect((await native(one, { command: "check-claim", job_id: "https://jobs.example/live" })).content).toMatch(/^CLAIMED by scout-2 at /);
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/live" })).content).toMatch(/^ALREADY_CLAIMED by scout-2 at /);
+
+    const rows = db
+      .prepare("SELECT job_id, scout, claimed_at >= datetime('now', '-1 minute') AS fresh FROM scout_claims ORDER BY job_id")
+      .all();
+    expect(rows).toEqual([
+      { job_id: "https://jobs.example/live", scout: "scout-2", fresh: 0 },
+      // Not the caller's to delete: an expired claim nobody asked for stays, and stays ignored.
+      { job_id: "https://jobs.example/other-stale", scout: "scout-2", fresh: 0 },
+      { job_id: "https://jobs.example/stale", scout: "scout-1", fresh: 1 },
+    ]);
+  });
+
+  it("keeps a claim a peer made between the check and the write", async () => {
+    const real = openJobsDb(":memory:");
+    real.prepare("INSERT INTO scout_claims (job_id, scout, claimed_at) VALUES (?, ?, datetime('now', '-2 days'))").run("https://jobs.example/9", "scout-3");
+    // A peer renews the claim right after scout-1's SELECT, just before its write.
+    const racing = new Proxy(real, {
+      get(target, key) {
+        if (key !== "prepare") return Reflect.get(target, key);
+        return (sql: string) => {
+          if (sql.startsWith("INSERT INTO scout_claims")) {
+            target.prepare("UPDATE scout_claims SET scout = ?, claimed_at = CURRENT_TIMESTAMP WHERE job_id = ?").run("scout-2", "https://jobs.example/9");
+          }
+          return target.prepare(sql);
+        };
+      },
+    });
+    const one = createScoutCoordTool({ agent: "scout-1", db: () => racing, dbPath: ":memory:" });
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/9" })).content).toBe("ALREADY_CLAIMED (race condition)");
+    expect(real.prepare("SELECT scout FROM scout_claims").all()).toEqual([{ scout: "scout-2" }]);
+  });
+});
