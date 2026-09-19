@@ -52,7 +52,7 @@ import { buildToolkit } from "../tools/toolkit.ts";
 import { prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
 import { jobsDbPath, openJobsDb, type Database } from "../db/jobs-db.ts";
 import { resolveUserPath } from "../tools/paths.ts";
-import { DEFAULT_MOCK_SCRIPT, PRODUCT_ROLE_MOCK_SCRIPT, readMockScript } from "./mock-script.ts";
+import { DEFAULT_MOCK_SCRIPT, productRoleMockScript, readMockScript } from "./mock-script.ts";
 import { c, TraceView } from "./render.ts";
 
 /** The checkout this file belongs to: `agent-harness/runtime/src/cli/` is four levels down. */
@@ -115,7 +115,7 @@ async function main(): Promise<number> {
   const script = values["mock-script"]
     ? await readMockScript(values["mock-script"])
     : product
-      ? PRODUCT_ROLE_MOCK_SCRIPT
+      ? productRoleMockScript(values.role)
       : DEFAULT_MOCK_SCRIPT;
 
   const provider = await resolveProvider(config, script);
