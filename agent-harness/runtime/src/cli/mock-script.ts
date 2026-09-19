@@ -137,8 +137,8 @@ const MOCK_SCORE = [
 ];
 
 /**
- * The SCORER's rehearsal (T15): its queue, the feedback themes, the position,
- * the score, the report and a pause. It scores position #1, so the database
+ * The SCORER's rehearsal (T15): its queue, the feedback themes, the claim of
+ * the position, the score and `--status scored`, the report and a pause. It scores position #1, so the database
  * needs one in `checked`, as the ANALISTA leaves it; on an empty one the queue
  * is empty and the insert fails on the foreign key, which is what the script
  * would do too.
@@ -152,8 +152,20 @@ export const SCORER_MOCK_SCRIPT: ScriptedTurn[] = [
       { name: "feedback_query", args: { command: "themes" } },
     ],
   },
-  { toolCalls: [{ name: "db_query", args: { args: ["position", "1"] } }] },
-  { text: "One position, scored and saved right away.", toolCalls: [{ name: "db_insert", args: { args: MOCK_SCORE } }] },
+  {
+    text: "Claim it, then read it.",
+    toolCalls: [
+      { name: "db_update", args: { args: ["position", "1", "--last-checked", "now"] } },
+      { name: "db_query", args: { args: ["position", "1"] } },
+    ],
+  },
+  {
+    text: "One position, scored and saved right away.",
+    toolCalls: [
+      { name: "db_insert", args: { args: MOCK_SCORE } },
+      { name: "db_update", args: { args: ["position", "1", "--status", "scored"] } },
+    ],
+  },
   { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: 1 position scored, 72/100." } }] },
   { toolCalls: [{ name: "throttle", args: { reason: "queue done" } }] },
   { text: "Paused." },

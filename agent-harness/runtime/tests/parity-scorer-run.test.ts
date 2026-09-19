@@ -1,8 +1,8 @@
 /**
  * T15: `npm run role -- --role scorer` on the mock, as a person types it. The
  * SCORER takes the position the ANALISTA left in `checked`, reads the
- * feedback themes, scores it on the native db_insert behind profile_gate, and
- * reports; nothing goes through a shell.
+ * feedback themes, claims it, scores it on the native db_insert behind
+ * profile_gate, moves it to `scored` and reports; nothing goes through a shell.
  */
 
 import { execFile } from "node:child_process";
@@ -71,8 +71,10 @@ describe("npm run role -- --role scorer (T15)", () => {
       ["read_file", "accepted"],
       ["db_query", "accepted"],
       ["feedback_query", "accepted"],
+      ["db_update", "accepted"],
       ["db_query", "accepted"],
       ["db_insert", "accepted"],
+      ["db_update", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
@@ -80,13 +82,15 @@ describe("npm run role -- --role scorer (T15)", () => {
     const results = finished.map((r) => String(r["result"]));
     expect(results[1]).toContain("Backend Developer");
     expect(results[2]).toContain("no-signal:cloud-disabled");
-    expect(results[4]).toBe("Score inserted for position 1: 72/100");
+    expect(results[5]).toBe("Score inserted for position 1: 72/100");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     const db = openJobsDb(join(root, "api", "db", "jobs.db"));
     expect(db.prepare("SELECT position_id, total_score, stack_match, experience_fit, scored_by FROM scores").all()).toEqual([
       { position_id: 1, total_score: 72, stack_match: 30, experience_fit: 7, scored_by: "scorer-1" },
     ]);
+    const position = db.prepare("SELECT status, last_checked IS NOT NULL AS claimed FROM positions WHERE id = 1").get();
+    expect(position).toEqual({ status: "scored", claimed: 1 });
     db.close();
 
     // The TUI prompt, with its python3 lines pointing at the tools: safe_fetch is web_fetch.
