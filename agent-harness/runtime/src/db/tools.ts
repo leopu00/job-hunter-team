@@ -547,7 +547,8 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--loc-country" },
     { flag: "--loc-country-code" },
     { flag: "--loc-continent", choices: ["Europe", "Asia", "Americas", "Africa", "Oceania"] },
-    { flag: "--work-mode", choices: ["onsite", "hybrid", "remote"] },
+    // `full_remote` too: analista.md says "loc_city unless full_remote", remote_type's word (T21).
+    { flag: "--work-mode", choices: ["onsite", "hybrid", "remote", "full_remote"] },
     { flag: "--work-country" },
     { flag: "--work-country-code" },
     { flag: "--is-multi-location", choices: ["true", "false"] },

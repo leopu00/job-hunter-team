@@ -25,6 +25,7 @@ import {
   PARITY_NOTES,
   PauseRequest,
   rewritePythonSkills,
+  rewriteThrottleCommands,
   type AgentMessage,
   type Mailbox,
 } from "./jht-tools.ts";
@@ -84,7 +85,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     locale,
   });
   const overrides = scriptOverrides(loaded.skills.map((s) => s.name));
-  const rewrite = (text: string) => paths(rewritePythonSkills(text, overrides));
+  const rewrite = (text: string) => paths(rewriteThrottleCommands(rewritePythonSkills(text, overrides)));
   const prompt = {
     ...loaded,
     identity: rewrite(loaded.identity),
