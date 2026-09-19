@@ -20,12 +20,16 @@ import { homedir } from "node:os";
 import { dirname, join, matchesGlob, relative } from "node:path";
 import { z } from "zod";
 
-import { displayPath, isSensitivePath, realPath, resolveUserPath } from "./paths.ts";
+import { displayPath, isInside, isOthersState, isSensitivePath, realPath, resolveUserPath, type StateScope } from "./paths.ts";
 import type { ToolExecution, ToolHandler } from "./registry.ts";
 
 export interface WorkspaceToolsOptions {
   workdir: string;
   homeDir?: string;
+  /** The agent's own folders inside the runtime state. Defaults to the workdir. */
+  ownRoots?: string[];
+  /** Where every role's state lives (`JHT_API_HOME`). */
+  stateRoots?: string[];
 }
 
 const MAX_READ_BYTES = 5_000_000;
@@ -42,6 +46,15 @@ export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandle
   // file a call really touches, not the name it was given.
   const at = (input: string) => realPath(resolveUserPath(input, options.workdir, home));
   const show = (abs: string) => displayPath(abs, home);
+  // What a walk from a parent folder must not descend into: the policy judges
+  // the folder asked for, not every file below it.
+  const scope: StateScope = {
+    ownRoots: (options.ownRoots ?? [options.workdir]).map(realPath),
+    stateRoots: (options.stateRoots ?? []).map(realPath),
+  };
+  const hidden = (abs: string) => isSensitivePath(abs) || isOthersState(abs, scope);
+  // A folder on the way to the agent's own home is walked through, not into.
+  const hiddenDir = (abs: string) => hidden(abs) && !scope.ownRoots.some((own) => isInside(abs, own));
 
   const readFileTool: ToolHandler = {
     spec: {
@@ -187,6 +200,7 @@ export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandle
       for await (const entry of fsGlob(pattern, { cwd: base })) {
         const name = String(entry);
         if (name.split(/[\\/]/).some((segment) => SKIPPED_DIRS.has(segment))) continue;
+        if (hidden(join(base, name))) continue;
         if (found.length >= MAX_GLOB_RESULTS) {
           more = true;
           break;
@@ -239,7 +253,7 @@ export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandle
       const info = await statOrNull(base);
       if (!info) return fail(`There is nothing at ${show(base)}.`);
 
-      const files = info.isDirectory() ? await walk(base, MAX_GREP_FILES) : { paths: [base], truncated: false };
+      const files = info.isDirectory() ? await walk(base, MAX_GREP_FILES, hidden, hiddenDir) : { paths: [base], truncated: false };
       const matches: string[] = [];
       for (const file of files.paths) {
         const rel = info.isDirectory() ? relative(base, file) : show(file);
@@ -270,7 +284,12 @@ export function createWorkspaceTools(options: WorkspaceToolsOptions): ToolHandle
   return [readFileTool, writeFileTool, editFileTool, globTool, grepTool];
 }
 
-async function walk(root: string, limit: number): Promise<{ paths: string[]; truncated: boolean }> {
+async function walk(
+  root: string,
+  limit: number,
+  hidden: (path: string) => boolean,
+  hiddenDir: (path: string) => boolean,
+): Promise<{ paths: string[]; truncated: boolean }> {
   const paths: string[] = [];
   const queue = [root];
   while (queue.length > 0) {
@@ -282,11 +301,12 @@ async function walk(root: string, limit: number): Promise<{ paths: string[]; tru
       continue;
     }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const path = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIPPED_DIRS.has(entry.name)) queue.push(join(dir, entry.name));
-      } else if (entry.isFile() && !isSensitivePath(join(dir, entry.name))) {
+        if (!SKIPPED_DIRS.has(entry.name) && !hiddenDir(path)) queue.push(path);
+      } else if (entry.isFile() && !hidden(path)) {
         if (paths.length >= limit) return { paths, truncated: true };
-        paths.push(join(dir, entry.name));
+        paths.push(path);
       }
     }
   }

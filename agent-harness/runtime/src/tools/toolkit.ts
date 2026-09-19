@@ -49,17 +49,20 @@ export async function buildToolkit(
   }
   web.push(createWebFetchTool(options.webFetch));
 
+  // Inside the runtime state, only this role's own folders are its to touch.
+  const ownRoots = [workdir, config.agentHome];
+  const stateRoots = [config.apiHome];
+
   const mcp = config.mcpConfig ? await connectMcpFromFile(config.mcpConfig) : undefined;
 
   return {
     platform: PLATFORM_NAMES[platform()] ?? platform(),
-    tools: [...createWorkspaceTools({ workdir }), createBashTool({ workdir }), ...web, ...(mcp?.tools ?? [])],
+    tools: [...createWorkspaceTools({ workdir, ownRoots, stateRoots }), createBashTool({ workdir }), ...web, ...(mcp?.tools ?? [])],
     permissions: new PermissionPolicy({
       mode: config.permissionMode,
       freeReadRoots: [workdir, ...(config.profileDir ? [config.profileDir] : [])],
-      // Inside the runtime state, only this role's own folders are its to touch.
-      ownRoots: [workdir, config.agentHome],
-      stateRoots: [config.apiHome],
+      ownRoots,
+      stateRoots,
       ask: options.ask,
     }),
     mcpServers: mcp?.servers ?? [],

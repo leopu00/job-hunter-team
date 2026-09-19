@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { PermissionPolicy, type PermissionAnswer, type PermissionRequest } from "../src/core/permissions.ts";
 import type { ToolAccess } from "../src/tools/registry.ts";
+import { createWorkspaceTools } from "../src/tools/workspace.ts";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const read = (...paths: string[]): ToolAccess => ({ risk: "read", paths, summary: paths.join(" ") });
 const write = (path: string): ToolAccess => ({ risk: "write", paths: [path], summary: path });
@@ -131,5 +135,34 @@ describe("PermissionPolicy — runtime state", () => {
 
   it("does not mistake a sibling of the state folder for state", async () => {
     expect((await policy().decide("read_file", read("/srv/state-old/x.md"))).allowed).toBe(true);
+  });
+});
+
+describe("workspace walks — runtime state", () => {
+  it("glob and grep from a parent folder skip other roles' state, not the role's own", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-walk-")));
+    try {
+      const own = join(root, "state", "agents", "scout");
+      await mkdir(own, { recursive: true });
+      await mkdir(join(root, "state", "agents", "analyst"), { recursive: true });
+      await mkdir(join(root, "state", "logs", "analyst"), { recursive: true });
+      await writeFile(join(own, "mine.md"), "needle mine\n");
+      await writeFile(join(root, "state", "agents", "analyst", "theirs.md"), "needle theirs\n");
+      await writeFile(join(root, "state", "logs", "analyst", "run.jsonl"), "needle trace\n");
+      const tools = createWorkspaceTools({ workdir: own, ownRoots: [own], stateRoots: [join(root, "state")] });
+      const run = async (name: string, args: Record<string, unknown>) => {
+        const tool = tools.find((t) => t.spec.name === name)!;
+        return (await tool.execute(tool.spec.schema.parse(args), { account: undefined as never, remainingMs: () => 1 })).content;
+      };
+      const grep = await run("grep", { pattern: "needle", path: root });
+      const glob = await run("glob", { pattern: "**/*", path: root });
+      for (const out of [grep, glob]) {
+        expect(out).toContain("mine");
+        expect(out).not.toContain("theirs");
+        expect(out).not.toContain("run.jsonl");
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

@@ -28,9 +28,7 @@
  * agent usable on a bare machine until then.
  */
 
-import { sep } from "node:path";
-
-import { isInside, isSensitivePath, realPath } from "../tools/paths.ts";
+import { isInside, isOthersState, isSensitivePath, realPath, type StateScope } from "../tools/paths.ts";
 import type { ToolAccess, ToolRisk } from "../tools/registry.ts";
 
 export type PermissionMode = "ask" | "auto" | "read-only";
@@ -57,14 +55,10 @@ export interface PermissionDecision {
   message?: string;
 }
 
-/** A folder with this name holds the runtime's state wherever it is mounted. */
-const STATE_DIR = ".jht-api";
-
 export class PermissionPolicy {
   readonly mode: PermissionMode;
   #freeReadRoots: string[];
-  #ownRoots: string[];
-  #stateRoots: string[];
+  #scope: StateScope;
   #ask: PermissionAsker | undefined;
   #alwaysAllowed = new Set<string>();
 
@@ -85,20 +79,16 @@ export class PermissionPolicy {
   }) {
     this.mode = options.mode;
     this.#freeReadRoots = options.freeReadRoots.map(realPath);
-    this.#ownRoots = (options.ownRoots ?? options.freeReadRoots).map(realPath);
-    this.#stateRoots = (options.stateRoots ?? []).map(realPath);
+    this.#scope = {
+      ownRoots: (options.ownRoots ?? options.freeReadRoots).map(realPath),
+      stateRoots: (options.stateRoots ?? []).map(realPath),
+    };
     this.#ask = options.ask;
-  }
-
-  /** Runtime state that is not this agent's: another role's home, the traces, the audit. */
-  #othersState(path: string): boolean {
-    const state = path.split(sep).includes(STATE_DIR) || this.#stateRoots.some((root) => isInside(root, path));
-    return state && !this.#ownRoots.some((root) => isInside(root, path));
   }
 
   async decide(toolName: string, access: ToolAccess): Promise<PermissionDecision> {
     if (access.risk === "none") return { allowed: true, asked: false };
-    const sensitive = access.paths.some((p) => isSensitivePath(p) || this.#othersState(p));
+    const sensitive = access.paths.some((p) => isSensitivePath(p) || isOthersState(p, this.#scope));
     const freeRead =
       !sensitive &&
       access.risk === "read" &&

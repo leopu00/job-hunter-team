@@ -65,3 +65,24 @@ export function isSensitivePath(path: string): boolean {
   const segments = path.split(sep);
   return segments.some((segment, i) => SECRET_DIRS.has(segment) || SECRET_DIRS.has(`${segment}/${segments[i + 1]}`));
 }
+
+/** A folder with this name holds the runtime's state wherever it is mounted. */
+const STATE_DIR = ".jht-api";
+
+/** Which state is the agent's own, and where all roles' state lives. Both lists real paths. */
+export interface StateScope {
+  /** The agent's own folders inside the state: its home, its workdir. */
+  ownRoots: string[];
+  /** `JHT_API_HOME`. Any folder named `.jht-api` counts too. */
+  stateRoots: string[];
+}
+
+/**
+ * True for runtime state that is not this agent's: another role's home, the
+ * traces, the audit. One role does not read or change another's; a tool that
+ * walks folders skips these as it skips credential files.
+ */
+export function isOthersState(path: string, scope: StateScope): boolean {
+  const state = path.split(sep).includes(STATE_DIR) || scope.stateRoots.some((root) => isInside(root, path));
+  return state && !scope.ownRoots.some((root) => isInside(root, path));
+}
