@@ -443,6 +443,49 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
   });
 });
 
+const ANALISTA_INSERTS: string[][] = [
+  ["company", "--name", "Delta", "--website", "https://delta.example", "--hq-country", "IT", "--sector", "fintech", "--size", "11-50",
+    "--glassdoor-rating", "3.9", "--red-flags", "", "--culture-notes", "Remote-first", "--analyzed-by", "analista-1", "--verdict", "GO"],
+  ["company", "--name", "Ümlaut GmbH", "--verdict", "NO_GO"],
+  ["company", "--name", "New Co"],
+  ["company", "--website", "x"],
+  ["company", "--name", "X", "--glassdoor-rating", "high"],
+  ["highlight", "--position-id", "2", "--type", "pro", "--text", "4-day week and a budget for conferences, which is rare in this sector"],
+  ["highlight", "--position-id", "2", "--type", "con", "--text", "on-call"],
+  ["highlight", "--position-id", "2", "--type", "neutral", "--text", "x"],
+  ["highlight", "--type", "pro", "--text", "x"],
+];
+
+describe("db_insert, as the ANALISTA runs it, against db_insert.py (T14)", () => {
+  it.skipIf(skills === null).each(ANALISTA_INSERTS.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("analista-1");
+    expectSame(await call("db_insert", args as string[]), py("db_insert.py", args as string[]));
+    expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+    const highlights = (db: Database) => db.prepare("SELECT position_id, type, text FROM position_highlights ORDER BY id").all();
+    expect(highlights(ourDb)).toEqual(highlights(pyDb));
+  });
+
+  it.skipIf(skills === null)("fails as the Python does where the database refuses: a referenced company replaced, a highlight on no position", async () => {
+    const { call, py, pyDb, ourDb } = twins("analista-1");
+    for (const args of [["company", "--name", "Globex", "--verdict", "GO"], ["highlight", "--position-id", "99", "--type", "pro", "--text", "x"]]) {
+      const ours = await call("db_insert", args);
+      const theirs = py("db_insert.py", args);
+      expect([ours.ok, theirs.status], args.join(" ")).toEqual([false, 1]);
+      expect(ours.content).toContain("FOREIGN KEY constraint failed");
+      expect(theirs.stderr).toContain("FOREIGN KEY constraint failed");
+    }
+    expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+  });
+
+  it("gives the ANALISTA no position, score or application insert", async () => {
+    const { call } = twins("analista-1");
+    for (const entity of ["position", "score", "application"]) {
+      const r = await call("db_insert", [entity, "--position-id", "1"]);
+      expect(r.content).toContain(`\`db_insert ${entity}\` is not available to this agent. Available: db_insert company, db_insert highlight`);
+    }
+  });
+});
+
 const SCORER_UPDATES: string[][] = [
   ["position", "4", "--last-checked", "now"],
   ["position", "4", "--status", "scored"],

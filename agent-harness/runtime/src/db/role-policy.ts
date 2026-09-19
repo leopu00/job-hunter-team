@@ -68,7 +68,8 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       "next-for-analista", "next-for-recheck", "next-for-categorize", "next-for-salary-precise", "next-for-geocoding",
       "active-categories", "other-pile", "category-sizes",
     ],
-    insert: [],
+    // RULE-08: the company registry and the position's highlights are the ANALISTA's to fill.
+    insert: ["company", "highlight"],
     update: ["position", "company"],
     position: {
       // Every field: the analysis writes notes, summary, location, salary estimate,

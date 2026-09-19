@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
+import { insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
 import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
@@ -118,7 +119,11 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
 
   const dbInsert = (argv: string[]): ScriptResult => {
     const entity = argv[0];
-    if (entity !== "position" || !policy.insert.includes(entity)) return refused("db_insert", entity, [...policy.insert]);
+    if (entity === undefined || !INSERT_ENTITIES.has(entity) || !policy.insert.includes(entity)) {
+      return refused("db_insert", entity, [...policy.insert]);
+    }
+    if (entity === "company") return insertCompany(options.db(), parseArgv(COMPANY_INSERT, argv.slice(1)));
+    if (entity === "highlight") return insertHighlight(options.db(), parseArgv(HIGHLIGHT_INSERT, argv.slice(1)));
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -291,7 +296,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     tool(
       "db_insert",
       "db_insert.py",
-      "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
+      policy.insert.includes("position")
+        ? "Insert a position you found into the team's database, after the duplicate check (skill position-insert)."
+        : `Insert into the team's database: ${policy.insert.join(", ")}.`,
       dbInsert,
     ),
     tool(
@@ -391,6 +398,35 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--evidence-code", type: "int" },
     { flag: "--evidence-hash" },
     { flag: "--duration-ms", type: "int" },
+  ],
+};
+
+const INSERT_ENTITIES = new Set(["position", "company", "highlight"]);
+
+/** `db_insert.py company`'s arguments. */
+const COMPANY_INSERT: CommandSpec = {
+  prog: "db_insert.py company",
+  options: [
+    { flag: "--name", required: true },
+    { flag: "--website" },
+    { flag: "--hq-country" },
+    { flag: "--sector" },
+    { flag: "--size" },
+    { flag: "--glassdoor-rating", type: "float" },
+    { flag: "--red-flags" },
+    { flag: "--culture-notes" },
+    { flag: "--analyzed-by" },
+    { flag: "--verdict", choices: ["GO", "CAUTIOUS", "NO_GO"] },
+  ],
+};
+
+/** `db_insert.py highlight`'s arguments. */
+const HIGHLIGHT_INSERT: CommandSpec = {
+  prog: "db_insert.py highlight",
+  options: [
+    { flag: "--position-id", type: "int", required: true },
+    { flag: "--type", required: true, choices: ["pro", "con"] },
+    { flag: "--text", required: true },
   ],
 };
 
