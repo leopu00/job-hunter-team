@@ -83,6 +83,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   // `shared/skills/*.py` the role lists, as native tools (T7).
   const skills = createSkillTools({
     skills: prompt.skills.map((s) => s.name),
+    agent: options.agent,
     jobsDb: options.jobsDb,
     jhtHome: options.jhtHome,
   });
