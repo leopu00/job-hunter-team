@@ -28,6 +28,10 @@ import { isSensitivePath } from "../src/tools/paths.ts";
 import type { ToolHandler } from "../src/tools/registry.ts";
 import { createWebFetchTool } from "../src/tools/web-fetch.ts";
 import { createWorkspaceTools } from "../src/tools/workspace.ts";
+import { buildToolkit } from "../src/tools/toolkit.ts";
+import { jobsDbPath, openJobsDb } from "../src/db/jobs-db.ts";
+import { MockProvider } from "../src/core/provider/mock.ts";
+import { MOCK_PROFILE } from "../src/core/provider/mock.ts";
 
 const CONTEXT = { account: new TurnAccount(Date.now), remainingMs: () => 60_000 };
 const FAKE_KEY = "sk-proj-SECURITYTESTFAKEKEY0000000000000000000000";
@@ -258,4 +262,63 @@ describe("web_fetch: no local network, no cloud metadata", () => {
       expect(isPublicAddress(address)).toBe(false);
     },
   );
+});
+
+describe("jobs.db outside apiHome (SICUREZZA D-1): only the database tools touch it", () => {
+  /**
+   * The ashley layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
+   * home, next to the candidate's profile under the same JHT home. The file
+   * tools must not rewrite, truncate or read the database or SQLite's files
+   * beside it — by name or through a link — and the profile stays readable.
+   */
+  it("refuses write_file, edit_file and read_file on the database, its -wal, -shm and -journal, and through a link", async () => {
+    const jht = join(home, "jht_home");
+    const apiHome = join(home, ".jht-api");
+    const agentHome = join(apiHome, "agents", "scout-1");
+    await mkdir(join(jht, "profile"), { recursive: true });
+    await mkdir(agentHome, { recursive: true });
+    await writeFile(join(jht, "profile", "candidate_profile.yml"), "role: backend\n");
+
+    const dbFile = jobsDbPath({ JHT_API_DB: join(jht, "db", "jobs.db") }, apiHome);
+    const db = openJobsDb(dbFile); // WAL: -wal and -shm exist while it is open
+    db.prepare("INSERT INTO scout_claims (job_id, scout) VALUES (?, ?)").run("https://jobs.example/1", "scout-1");
+    await symlink(dbFile, join(agentHome, "notes.db"));
+
+    const toolkit = await buildToolkit(
+      {
+        workdir: agentHome,
+        agentHome,
+        apiHome,
+        profileDir: join(jht, "profile"),
+        permissionMode: "auto",
+        profile: MOCK_PROFILE,
+      },
+      { provider: new MockProvider([]), jobsDbFile: dbFile },
+    );
+    const byName = new Map(toolkit.tools.map((tool) => [tool.spec.name, tool]));
+    const run = async (name: string, args: Record<string, unknown>) => {
+      const tool = byName.get(name)!;
+      const parsed = tool.spec.schema.parse(args);
+      const decision = await toolkit.permissions.decide(name, tool.classify(parsed));
+      if (!decision.allowed) return { allowed: false, content: decision.message ?? "" };
+      return { allowed: true, content: (await tool.execute(parsed, CONTEXT)).content };
+    };
+
+    for (const target of [dbFile, `${dbFile}-wal`, `${dbFile}-shm`, `${dbFile}-journal`, join(agentHome, "notes.db")]) {
+      expect((await run("write_file", { path: target, content: "" })).allowed, target).toBe(false);
+      expect((await run("edit_file", { path: target, old_string: "SQLite", new_string: "x" })).allowed, target).toBe(false);
+      expect((await run("read_file", { path: target })).allowed, target).toBe(false);
+    }
+    // Walks from the shared folder skip the database files.
+    const grep = await run("grep", { pattern: "jobs.example", path: jht });
+    const glob = await run("glob", { pattern: "**/*", path: jht });
+    for (const out of [grep.content, glob.content]) expect(out).not.toMatch(/jobs\.db/);
+    // The profile next to it is still the agent's to read.
+    expect((await run("read_file", { path: join(jht, "profile", "candidate_profile.yml") })).content).toContain("role: backend");
+
+    // And the database is intact.
+    expect(db.prepare("SELECT job_id FROM scout_claims").all()).toEqual([{ job_id: "https://jobs.example/1" }]);
+    db.close();
+    await toolkit.close();
+  });
 });

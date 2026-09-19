@@ -145,14 +145,16 @@ async function main(): Promise<number> {
     ...(values.skills ? { skillsSource: values.skills } : {}),
   });
 
+  // The team database: its path is the runtime's, fixed here, never a tool
+  // argument. Opened on first use, so a cycle that never touches it never
+  // creates it. Resolved for every run, so the file tools are kept off it even
+  // in a run that has no database tool.
+  const dbFile = jobsDbPath(process.env, config.apiHome);
+
   let role: ProductRole | undefined;
   let systemPrompt: string;
   if (values.prompt === undefined) {
     const env = process.env;
-    // The team database: its path is the runtime's, fixed here, never a tool
-    // argument. Opened on first use, so a cycle that never touches it never
-    // creates it.
-    const dbFile = jobsDbPath(env, config.apiHome);
     jobsDb = { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
     role = await prepareProductRole({
       appRoot: resolveUserPath(env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT, process.cwd(), homedir()),
@@ -170,7 +172,7 @@ async function main(): Promise<number> {
   }
 
   // Headless: nobody is at a keyboard, so `ask` mode denies what it would ask.
-  const toolkit = await buildToolkit(config, { provider });
+  const toolkit = await buildToolkit(config, { provider, jobsDbFile: dbFile });
   const session = new RoleSession({
     provider,
     guardrails,
