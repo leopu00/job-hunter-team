@@ -55,7 +55,25 @@ function seeded(path: string, base = sqliteNow()): Database {
   run(tr, 3, "new", "checked", "scorer-1", null, base, "-1 minutes");
   // A REAL column holding an integral value: Python prints 45.0, not 45.
   run("UPDATE positions SET office_lat = ?, office_lon = ? WHERE id = 1", 45, 9.19);
+  pinClock(db, base);
   return db;
+}
+
+/**
+ * Every positions column SQLite fills with the clock (created_at, updated_at…),
+ * read from the schema, set to the twins' one instant: the JSON of position and
+ * positions prints them, and twins seeded a second apart differed (the flake
+ * FULLSTACK-1 saw once). Through a sentinel first, since updated_at's touch
+ * trigger fires when an UPDATE leaves it unchanged.
+ */
+function pinClock(db: Database, base: string): void {
+  const columns = (db.prepare("PRAGMA table_info(positions)").all() as Array<{ name: string; dflt_value: string | null }>)
+    .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
+    .map((c) => c.name);
+  for (const value of ["1970-01-01 00:00:00", base]) {
+    // Column names from the schema itself, never from input.
+    db.prepare(`UPDATE positions SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
+  }
 }
 
 /** SQLite's `datetime('now')`: UTC, `YYYY-MM-DD HH:MM:SS`. */
