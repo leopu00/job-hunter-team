@@ -106,9 +106,19 @@ export interface GenerateResult {
 export const MAX_SEARCHES_PER_CALL = 1;
 
 /**
+ * Searches one `webSearch` call is booked for before it runs, as the key
+ * proxy books them. The request asks for one, but OpenAI ran two under
+ * `max_tool_calls: 1` in 32 of 35 requests of the T13 proxy log, never
+ * three; the proxy books twice the most seen (SICUREZZA T19-a). Source: the
+ * proxy calibration, agents-hq/piani/t13-vps-res.txt §4.
+ */
+export const SEARCHES_BOOKED_PER_CALL = 4;
+
+/**
  * Input tokens reserved for one search before it runs: the results come back
- * as input the model reads on the provider's side (8,712 in the 19/09
- * calibration). The key proxy reserves the same (SEARCH_TOKENS).
+ * as input the model reads on the provider's side (at most 12,406 per request
+ * in the T13 log). The key proxy's SEARCH_TOKENS, twice that, from the same
+ * calibration (agents-hq/piani/t13-vps-res.txt §4).
  */
 export const SEARCH_RESERVED_INPUT_TOKENS = 25_000;
 

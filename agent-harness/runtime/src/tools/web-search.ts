@@ -16,7 +16,7 @@
 import { z } from "zod";
 
 import { HarnessError } from "../core/errors.ts";
-import { MAX_SEARCHES_PER_CALL, SEARCH_RESERVED_INPUT_TOKENS, type ProviderPort } from "../core/provider/port.ts";
+import { SEARCH_RESERVED_INPUT_TOKENS, SEARCHES_BOOKED_PER_CALL, type ProviderPort } from "../core/provider/port.ts";
 import { worstCase } from "../core/usage.ts";
 import type { ToolHandler } from "./registry.ts";
 
@@ -56,13 +56,13 @@ export function createWebSearchTool(provider: ProviderPort, perSearchUsd: number
       if (budget && budget.webSearchesLeft() <= 0) {
         return { ok: false, content: SEARCHES_EXHAUSTED, details: { webSearchesLeft: 0 } };
       }
-      // Reserved before the call: the query and the results read as input, a
-      // full answer, and the fee of every search the call may run.
+      // Reserved before the call: the query and the results of every search
+      // the call may run read as input, a full answer, and their fees.
       const worst = {
-        ...worstCase(SEARCH_RESERVED_INPUT_TOKENS + Math.ceil((SEARCH_SYSTEM_CHARS + query.length) / 3)),
+        ...worstCase(SEARCHES_BOOKED_PER_CALL * SEARCH_RESERVED_INPUT_TOKENS + Math.ceil((SEARCH_SYSTEM_CHARS + query.length) / 3)),
         outputTokens: provider.profile.defaultMaxOutputTokens,
       };
-      if (budget && !budget.fits(worst, MAX_SEARCHES_PER_CALL * perSearchUsd)) {
+      if (budget && !budget.fits(worst, SEARCHES_BOOKED_PER_CALL * perSearchUsd)) {
         return { ok: false, content: BUDGET_TOO_LOW, details: { webSearchesLeft: budget.webSearchesLeft() } };
       }
       const result = await search({ query, timeoutMs: Math.min(SEARCH_TIMEOUT_MS, context.remainingMs()) });
