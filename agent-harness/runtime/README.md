@@ -43,7 +43,10 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_LEDGER` | required live: the team's spend TSV (`agents-hq/ledger/openai-spesa.tsv`) |
 | `JHT_API_OPENAI_BASE_URL` / `OPENAI_BASE_URL` | OpenAI through a key proxy, e.g. `http://127.0.0.1:8787/v1` |
 | `JHT_API_HOME` | state root (default `~/.jht-api`) |
-| `JHT_API_WORKDIR`, `JHT_API_PROFILE_DIR` | where commands start; the candidate profile, read freely |
+| `JHT_API_WORKDIR` | where commands start |
+| `JHT_API_PROFILE_DIR` | the person's profile: the rendered prompt points at it, every role reads it, no tool writes in it |
+| `JHT_API_DB` | the team's `jobs.db` (default `<JHT_API_HOME>/db/jobs.db`), created with the product's schema if missing; reached only through the db tools |
+| `JHT_API_APP_ROOT` | the folder holding `agents/` (default this checkout; `/app` in the image) |
 | `JHT_API_PERMISSION_MODE` | `auto` (default), `ask`, `read-only` |
 | `JHT_API_MCP_CONFIG` | MCP servers to connect (Claude Code's JSON shape) |
 | `JHT_API_KEEP_HOME=1` | keep the role's home between runs |
@@ -56,6 +59,50 @@ The key is read from the environment (or a gitignored, 0600 `.env` next to
 `package.json`). On a VPS the agent should hold only a placeholder and reach
 OpenAI through a key proxy: `bash` runs as the agent's uid, so a key the
 process can read is a key the model can print.
+
+## On the VPS
+
+The image (`agents/`, this folder and `api-worker/src/safe-http.ts`, no
+`shared/`, no Python) runs under podman in a pod with a key proxy. The launch
+script and the proxy belong to the VPS configuration, not to this repo; what
+they set is this:
+
+| | How |
+| --- | --- |
+| mock run | `run.sh mock scout --agent scout-1 --turns 2 --pause-ms 0`: `--network=none`, `JHT_API_PROVIDER=mock`, same mounts as live |
+| live run | `run.sh live scout <model> <usd> --agent scout-1`: `JHT_API_LIVE=1`, `JHT_API_MODEL`, `JHT_API_BUDGET_USD=<usd>` |
+| caps | the run's USD budget (the cap that counts), the token cap on input not served from the cache, and the proxy's cumulative ceiling across runs with its model allowlist |
+| key | only the proxy container holds it; the agent gets `OPENAI_BASE_URL=http://127.0.0.1:8787/v1` and a placeholder key |
+| profile | mounted read-only at `/jht_home/profile`, `JHT_API_PROFILE_DIR=/jht_home/profile`: read-only twice, in the container and in the policy |
+| jobs.db | its own volume at `/jht_home/db`, `JHT_API_DB=/jht_home/db/jobs.db`: a new database, never a copy of a person's |
+| ledger | one line per live run in `JHT_API_LEDGER`, copied to the team's spend TSV |
+| test | `run.sh test`: `npm test` in the container, network closed. Without Python the parity comparisons skip (about 90); nothing fails |
+
+To read a run, `run.sh monitor --last` (or `--list`, `<run-id>`, `--verbose`)
+replays its trace. That is the same view as `npm run monitor`, from the
+`~/.jht-api` volume and read-only. The trace has the rendered system prompt,
+every tool call with its outcome, the token counts and the cost.
+
+## What the live runs cost (T5, 2026-09-19)
+
+SCOUT, one turn per run, on `gpt-5.6-luna` through the key proxy. The figures
+come from the spend ledger; the proxy's count matched the runtime's to the
+cent in every run.
+
+| Run | USD | New positions | USD / position | Rounds | Ended |
+| --- | ---: | ---: | ---: | ---: | --- |
+| T5 | 0.17 | 0 | — | 19 | completed, but blocked: no Python for the skills (the native db tools came from this) |
+| T5-bis | 0.23 | 1 | 0.23 | 16 | stopped at the token cap, which then counted cached input |
+| T5-ter | 0.36 | 2 | 0.18 | 21 | completed; the profile was not read (fixed in T10b) |
+| T5-quater | 0.43 | 2 | 0.22 | 26 | completed; profile read first |
+
+The baseline for the same role on a TUI subscription is 2.26 USD a session and
+0.53 USD a position. The last two runs, the first comparable ones, came to
+0.18 and 0.22 USD a position: 59–66 % less. That is 4 positions over 2
+sessions, too small a sample to settle it. A runtime session is also shorter
+than a TUI one (21–26 rounds, against a median of 74 calls), so the per-session
+figures do not compare like for like.
+Web search is 30–47 % of the spend of those runs.
 
 ## Boundaries
 
