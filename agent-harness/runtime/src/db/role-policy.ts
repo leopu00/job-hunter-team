@@ -39,7 +39,8 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
     update: [],
   },
   // T15 (FULLSTACK-1), scorer.md RULE-02/03/04/06: its queue and the position it scores.
-  scorer: { query: ["next-for-scorer", "position"], insert: [], update: [] },
+  // db_insert score: one row per position, behind profile_gate (T15).
+  scorer: { query: ["next-for-scorer", "position"], insert: ["score"], update: [] },
 };
 
 /** `analista-2` → `analista`. */

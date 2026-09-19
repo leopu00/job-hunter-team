@@ -26,6 +26,7 @@ import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
 import { dbPolicyFor } from "./role-policy.ts";
+import { checkMinimumViableProfile } from "../parity/skills/profile-gate.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
@@ -39,6 +40,11 @@ export interface DbToolsOptions {
   now?: () => Date;
   /** The fence's nonce, for tests that compare with the Python. Absent: a new random one per call. */
   nonce?: () => string;
+  /**
+   * `candidate_profile.yml`, which `db_insert score` checks before it writes
+   * (profile_gate). Absent: no profile, so no score is written.
+   */
+  profilePath?: string;
   /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
   userId?: string;
 }
@@ -117,7 +123,10 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
 
   const dbInsert = (argv: string[]): ScriptResult => {
     const entity = argv[0];
-    if (entity !== "position" || !policy.insert.includes(entity)) return refused("db_insert", entity, [...policy.insert]);
+    if (entity === undefined || !INSERT_ENTITIES.has(entity) || !policy.insert.includes(entity)) {
+      return refused("db_insert", entity, [...policy.insert]);
+    }
+    if (entity === "score") return insertScore(argv.slice(1));
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -197,6 +206,71 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     }
     const cidInfo = companyId ? ` (company_id=${companyId})` : " (company_id=NULL — company not found in DB)";
     return { stdout: `Position inserted with ID: ${positionId}${cidInfo}\n`, exitCode: 0 };
+  };
+
+  /** `db_insert.py score` (T15): the SCORER's verdict on one position. */
+  const insertScore = (argv: string[]): ScriptResult => {
+    const a = parseArgv(SCORE_INSERT, argv);
+    // The maintenance history (`--action rescore`) is the Mantenitore's, and
+    // scorer.md never passes it: a score here is a first score or a plain re-score.
+    if (a["action"] !== null && a["action"] !== undefined) {
+      return { stdout: "", stderr: "--action: not available to this agent. Score with db_insert score and no maintenance flags.\n", exitCode: 2 };
+    }
+    // profile_gate.py, before anything else, as insert_score runs it.
+    const gate = options.profilePath
+      ? checkMinimumViableProfile(options.profilePath)
+      : { ok: false, reason: "candidate profile is missing: the runtime has no profile folder" };
+    if (!gate.ok) {
+      return {
+        stdout:
+          `⚠\ufe0f  SCORE REJECTED: ${gate.reason}.\n` +
+          "    The candidate profile is substantially empty: do not assign a score.\n" +
+          "    Leave the position in 'checked' and escalate to the Captain (RULE-T10 — do not invent).\n",
+        exitCode: 1,
+      };
+    }
+    for (const [column, maximum] of [["total", SCORE_TOTAL_LIMIT], ...Object.entries(SCORE_COMPONENT_LIMITS)] as const) {
+      const value = a[column] as number | null | undefined;
+      if (value !== null && value !== undefined && (value < 0 || value > maximum)) {
+        return { stdout: `⚠\ufe0f  ERROR: ${column}=${value} is outside range [0-${maximum}]\n`, exitCode: 1 };
+      }
+    }
+    // An upsert, not REPLACE: a re-score keeps scores.id, the row's identity
+    // towards the cloud, and deletes nothing (no tombstone for a live score).
+    options
+      .db()
+      .prepare(
+        `INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
+                             salary_fit, experience_fit, strategic_fit,
+                             breakdown, notes, scored_by, scored_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 strftime('%Y-%m-%d %H:%M:%f', 'now'))
+         ON CONFLICT(position_id) DO UPDATE SET
+             total_score = excluded.total_score,
+             stack_match = excluded.stack_match,
+             remote_fit = excluded.remote_fit,
+             salary_fit = excluded.salary_fit,
+             experience_fit = excluded.experience_fit,
+             strategic_fit = excluded.strategic_fit,
+             breakdown = excluded.breakdown,
+             notes = excluded.notes,
+             scored_by = excluded.scored_by,
+             scored_at = excluded.scored_at`,
+      )
+      .run(
+        sql(a["position_id"]),
+        sql(a["total"]),
+        sql(a["stack_match"]),
+        sql(a["remote_fit"]),
+        sql(a["salary_fit"]),
+        sql(a["experience_fit"]),
+        sql(a["strategic_fit"]),
+        sql(a["breakdown"]),
+        sql(a["notes"]),
+        // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
+        options.agent,
+      );
+    return { stdout: `Score inserted for position ${a["position_id"]}: ${a["total"]}/100\n`, exitCode: 0 };
   };
 
   const dbUpdate = (argv: string[]): ScriptResult => {
@@ -323,7 +397,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     tool(
       "db_insert",
       "db_insert.py",
-      "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
+      policy.insert.includes("score")
+        ? "Save your score for one position, right after evaluating it: db_insert score --position-id <ID> --total … (scorer.md). Refused when the candidate profile is empty."
+        : "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
       dbInsert,
     ),
     tool(
@@ -364,6 +440,45 @@ const POSITION_INSERT: CommandSpec = {
     { flag: "--found-by" },
     { flag: "--deadline" },
     { flag: "--notes" },
+  ],
+};
+
+/** The entities of `db_insert.py`, each written here by its own branch. */
+const INSERT_ENTITIES = new Set(["position", "score"]);
+
+/** `shared/skills/score_ranges.py`: the one source of the caps, as the Python validates them. */
+const SCORE_TOTAL_LIMIT = 100;
+const SCORE_COMPONENT_LIMITS = {
+  stack_match: 40,
+  remote_fit: 25,
+  salary_fit: 20,
+  experience_fit: 10,
+  strategic_fit: 15,
+} as const;
+
+/** `db_insert.py score`'s arguments, flag for flag, maintenance flags included. */
+const SCORE_INSERT: CommandSpec = {
+  prog: "db_insert.py score",
+  options: [
+    { flag: "--position-id", type: "int", required: true },
+    { flag: "--total", type: "int", required: true },
+    { flag: "--stack-match", type: "int" },
+    { flag: "--remote-fit", type: "int" },
+    { flag: "--salary-fit", type: "int" },
+    { flag: "--experience-fit", type: "int" },
+    { flag: "--strategic-fit", type: "int" },
+    { flag: "--breakdown" },
+    { flag: "--pros" },
+    { flag: "--cons" },
+    { flag: "--notes" },
+    { flag: "--scored-by" },
+    { flag: "--action", choices: ["liveness_check", "geocode", "logo_fetch", "website_fetch", "jd_refresh", "exclude", "rescore"] },
+    { flag: "--outcome", choices: ["confirmed_open", "confirmed_closed", "inconclusive", "updated", "unchanged", "unreachable", "skipped", "failed"] },
+    { flag: "--evidence-kind", choices: ["http", "api", "manual", "none"] },
+    { flag: "--evidence-url" },
+    { flag: "--evidence-code", type: "int" },
+    { flag: "--evidence-hash" },
+    { flag: "--duration-ms", type: "int" },
   ],
 };
 

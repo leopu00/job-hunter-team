@@ -7,6 +7,8 @@
  * `scout_coord` on each call.
  */
 
+import { join } from "node:path";
+
 import type { Database } from "../../db/jobs-db.ts";
 import { createDbTools } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
@@ -30,6 +32,8 @@ export interface SkillToolsOptions {
   jhtHome?: string | undefined;
   /** Where `scout-dedup.log` goes: the runtime's logs, not the person's JHT home. */
   dedupLog?: string | undefined;
+  /** The person's profile folder: `db_insert score` checks `candidate_profile.yml` there first. */
+  profileDir?: string | undefined;
 }
 
 export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
@@ -49,6 +53,7 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
       db: db.open,
       agent: options.agent,
       ...(options.dedupLog ? { dedupLog: options.dedupLog } : {}),
+      ...(options.profileDir ? { profilePath: join(options.profileDir, "candidate_profile.yml") } : {}),
     });
     tools.push(...dbTools.filter((t) => wanted.has(t.spec.name)));
   }
