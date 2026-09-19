@@ -22,6 +22,8 @@ export interface JobsDbHandle {
 export interface SkillToolsOptions {
   /** Skill names from `skills.list`. */
   skills: string[];
+  /** The agent the tools act for: `scout-1`. */
+  agent: string;
   jobsDb?: JobsDbHandle | undefined;
   /** `$JHT_HOME`, as the scripts read it. */
   jhtHome?: string | undefined;
@@ -31,7 +33,7 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   const listed = new Set(options.skills);
   const tools: ToolHandler[] = [];
   const db = options.jobsDb;
-  if (db && listed.has("scout-coord")) tools.push(createScoutCoordTool({ db: db.open, dbPath: db.path }));
+  if (db && listed.has("scout-coord")) tools.push(createScoutCoordTool({ agent: options.agent, db: db.open, dbPath: db.path }));
   if (db && listed.has("feedback-query")) tools.push(createFeedbackQueryTool({ db: db.open, jhtHome: options.jhtHome }));
   if (listed.has("email-monitor")) tools.push(createEmailMonitorTool({ jhtHome: options.jhtHome }));
   return tools;
