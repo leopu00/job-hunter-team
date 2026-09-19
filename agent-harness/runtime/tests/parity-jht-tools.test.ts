@@ -296,4 +296,17 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("- `shared/skills/web_scrape_robust.py`")).toBe("- `web_scrape_robust.py (not available in the API harness)`");
     expect(rewritePythonSkills("see my/shared/skills/x.py")).toBe("see my/shared/skills/x.py");
   });
+
+  it("names the tool whenever the text says check-url alone (T12: the SCOUT ran scout_dedup check-url three runs in a row)", () => {
+    // position-insert/SKILL.md, the line next to the dedup gate: every language says it the same way.
+    expect(rewritePythonSkills("a LinkedIn cross-listing), `check-url` deduplicates.")).toBe(
+      "a LinkedIn cross-listing), `db_query check-url` deduplicates.",
+    );
+    expect(rewritePythonSkills("`check-url` is cheap, always run it.")).toBe("`db_query check-url` is cheap, always run it.");
+    // db-insert/SKILL.md names the skill, with a hyphen: the tool has an underscore.
+    expect(rewritePythonSkills("Use `db-query check-url <url>` before inserting")).toBe("Use `db_query check-url <url>` before inserting");
+    // Already the tool, or a word that only contains it: untouched.
+    expect(rewritePythonSkills("python3 x/db_query.py check-url 1")).toBe("db_query check-url 1");
+    for (const same of ["`db_query check-url 1`", "`my-check-url`", "`check-urls`"]) expect(rewritePythonSkills(same), same).toBe(same);
+  });
 });

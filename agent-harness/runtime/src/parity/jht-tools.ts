@@ -357,8 +357,9 @@ const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']
  * The role's prompt and skills as an API agent reads them: every
  * `python3 …/<script>.py` becomes the tool that replaces it (`db_query
  * check-url 123`), or is marked unavailable, and any other mention of the
- * interpreter says there is none. The TUI text is otherwise untouched; this
- * is difference 6 in docs/parity.md.
+ * interpreter says there is none; a bare `check-url` names its tool,
+ * `db_query`. The TUI text is otherwise untouched; this is difference 6 in
+ * docs/parity.md.
  */
 export function rewritePythonSkills(text: string): string {
   return text
@@ -372,7 +373,11 @@ export function rewritePythonSkills(text: string): string {
       const tool = PYTHON_SKILLS[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ? `the ${tool} tool` : `${script} (not available in the API harness)`;
     })
-    .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)");
+    .replace(/\bpython3(?:\.\d+)?\b/g, "(no Python interpreter in the API harness)")
+    // T12: position-insert says "`check-url` deduplicates" beside the dedup gate, and
+    // db-insert says `db-query check-url`: three runs in a row the SCOUT took it for a
+    // scout_dedup subcommand. The tool is named where the text names the subcommand alone.
+    .replace(/`(?:db-query )?check-url(?![\w-])/g, "`db_query check-url");
 }
 
 /** `python3 [flags] [path/]<script>.py` at a command position; the script's file name is captured. */

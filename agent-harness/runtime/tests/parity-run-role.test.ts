@@ -152,6 +152,9 @@ describe("npm run role -- --role scout (a product role)", () => {
     await toolkit.close();
     expect(refused).toEqual([]);
     for (const t of texts) expect(t).not.toMatch(/(?<![\w./-])(?:\/jht_home\/|\/app\/)?agents\/_(?:skills|manual|team)\//);
+    // T12: check-url is never named without its tool, the way position-insert's dedup gate named it.
+    for (const t of texts) expect(t).not.toMatch(/`(?:db-query )?check-url/);
+    expect(await readFile(join(homeDir, "skills", "position-insert", "SKILL.md"), "utf8")).toContain("`db_query check-url` deduplicates");
 
     // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.
     const home = join(root, "api", "agents", "scout-1");
