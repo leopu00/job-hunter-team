@@ -95,16 +95,31 @@ describe.skipIf(!HAS_PYTHON)("scout_coord ↔ scout_coord.py", () => {
       ["scout-2", ["assign", "scout-2", "--fonti", "lever", "--note", "curated only"], { command: "assign", fonti: "lever", note: "curated only" }],
       // An empty value prints as "-", like a missing one.
       ["scout-4", ["assign", "scout-4", "--cerchi", "", "--fonti", "x"], { command: "assign", scout: "scout-4", cerchi: "", fonti: "x" }],
+    ];
+    const compare = async (list: typeof steps) => {
+      for (const [agent, pyArgs, tsArgs] of list) {
+        const py = python("scout_coord.py", pyArgs, { JHT_DB: pyDb });
+        const ts = await native(as(agent), tsArgs);
+        expect(py.status, pyArgs.join(" ")).toBe(0);
+        expect(norm(ts.content), pyArgs.join(" ")).toBe(norm(py.stdout));
+        expect(ts.ok).toBe(true);
+      }
+    };
+    await compare(steps);
+
+    // `history` groups rows by started_at, to the second. The script spends a
+    // process start on every step and the tool does not, so under load the two
+    // sides can cross a second at different steps and group the same rows
+    // differently. Give both the same clock before reading the split back.
+    for (const path of [pyDb, tsDb]) {
+      const side = path === tsDb ? db : openJobsDb(path);
+      side.prepare("UPDATE scout_coordination SET started_at = ?").run("2026-09-19 12:00:00");
+      if (side !== db) side.close();
+    }
+    await compare([
       ["scout-2", ["show"], { command: "show" }],
       ["scout-2", ["history"], { command: "history" }],
-    ];
-    for (const [agent, pyArgs, tsArgs] of steps) {
-      const py = python("scout_coord.py", pyArgs, { JHT_DB: pyDb });
-      const ts = await native(as(agent), tsArgs);
-      expect(py.status, pyArgs.join(" ")).toBe(0);
-      expect(norm(ts.content), pyArgs.join(" ")).toBe(norm(py.stdout));
-      expect(ts.ok).toBe(true);
-    }
+    ]);
 
     const pyView = openJobsDb(pyDb);
     for (const table of ["scout_coordination", "scout_claims"]) expect(dump(db, table), table).toEqual(dump(pyView, table));
