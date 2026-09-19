@@ -43,6 +43,18 @@ export function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
+/**
+ * The tokens the token limit counts: input not served from the prefix cache
+ * (cache writes included — they are part of it), plus output. A cached prefix
+ * is re-read on every round, so counting it made a long session hit the
+ * limit on context it had already paid for once: the first live SCOUT with
+ * 87 % of its input cached stopped at round 16 (T5-bis). What a cached token
+ * costs, the USD budget still counts.
+ */
+export function countedTokens(usage: Usage): number {
+  return usage.inputTokens - (usage.cachedInputTokens ?? 0) + usage.outputTokens;
+}
+
 export function totalTokens(usage: Usage): number {
   return usage.inputTokens + usage.outputTokens;
 }

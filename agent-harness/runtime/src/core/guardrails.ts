@@ -8,14 +8,17 @@
  */
 
 import { HarnessError } from "./errors.ts";
-import { addUsage, costUsd, totalTokens, ZERO_USAGE, type Pricing, type Usage } from "./usage.ts";
+import { addUsage, costUsd, countedTokens, ZERO_USAGE, type Pricing, type Usage } from "./usage.ts";
 
 export interface Limits {
   /** Maximum model calls in one run. */
   maxSteps: number;
   /** Maximum tool calls in one run. */
   maxToolCalls: number;
-  /** Maximum input tokens plus output tokens in one run. */
+  /**
+   * Maximum tokens in one run, counting input not served from the cache and
+   * output. Cached input is left to the USD budget, the run's real cap.
+   */
   maxTotalTokens: number;
   /** Maximum spend in one run, in USD. */
   budgetUsd: number;
@@ -120,10 +123,12 @@ export class Guardrails {
   recordUsage(usage: Usage): void {
     this.#usage = addUsage(this.#usage, usage);
 
-    if (totalTokens(this.#usage) > this.limits.maxTotalTokens) {
+    // Cached input is not counted here (see `countedTokens`); the budget below prices it.
+    const counted = countedTokens(this.#usage);
+    if (counted > this.limits.maxTotalTokens) {
       throw new HarnessError(
         "token_limit_reached",
-        `Used ${totalTokens(this.#usage)} tokens, the limit is ${this.limits.maxTotalTokens}.`,
+        `Used ${counted} tokens not served from the cache, the limit is ${this.limits.maxTotalTokens}.`,
       );
     }
     this.#checkBudget();

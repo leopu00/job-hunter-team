@@ -114,6 +114,17 @@ describe("web_fetch", () => {
     expect((await fetchWith({ url: "https://example.com/to-http" })).content).toContain("Only https URLs");
   });
 
+  it("takes the format other agents' fetch tools take (T9)", async () => {
+    const markdown = await fetchWith({ url: "https://example.com/page", format: "markdown" });
+    const text = await fetchWith({ url: "https://example.com/page", format: "text" });
+    const html = await fetchWith({ url: "https://example.com/page", format: "html" });
+    expect(markdown.content).toContain("# Quartiere");
+    expect(text.content).toBe(markdown.content);
+    expect(html.content).toContain("<h1>Quartiere</h1>");
+    expect(net.tool.spec.schema.safeParse({ url: "https://example.com/page", format: "pdf" }).success).toBe(false);
+    expect(net.tool.spec.schema.safeParse({ url: "https://example.com/page", prompt: "x" }).success).toBe(false);
+  });
+
   it("classifies as network, never as a free read", () => {
     expect(net.tool.classify({ url: "https://example.com" })).toEqual({ risk: "network", paths: [], summary: "https://example.com" });
   });

@@ -420,3 +420,24 @@ describe("scout_coord: an expired claim is free again, without deleting anyone's
     expect(real.prepare("SELECT scout FROM scout_claims").all()).toEqual([{ scout: "scout-2" }]);
   });
 });
+
+describe("scout_coord and the role's own name (T9)", () => {
+  it("runs a Scout started as `scout` as scout-1, as the TUI does, and takes `scout` as the caller", async () => {
+    const db = openJobsDb(":memory:");
+    const lone = createScoutCoordTool({ agent: "scout", db: () => db, dbPath: ":memory:" });
+    // T5-bis: the prompt says $MY_ID = scout-1; the run had no --agent.
+    expect((await native(lone, { command: "assign", scout: "scout-1", cerchi: "1" })).content).toBe(
+      "Assigned: scout-1 → search_areas=1, sources=None",
+    );
+    expect((await native(lone, { command: "claim", job_id: "https://jobs.example/1", scout: "scout" })).content).toBe("CLAIMED by scout-1");
+    expect(db.prepare("SELECT scout FROM scout_coordination").all()).toEqual([{ scout: "scout-1" }]);
+  });
+
+  it("reads `scout` as the caller for a numbered Scout too, and still refuses a peer's name", async () => {
+    const db = openJobsDb(":memory:");
+    const two = createScoutCoordTool({ agent: "scout-2", db: () => db, dbPath: ":memory:" });
+    expect((await native(two, { command: "claim", job_id: "https://jobs.example/2", scout: "scout" })).content).toBe("CLAIMED by scout-2");
+    expect((await native(two, { command: "assign", scout: "scout-1", cerchi: "1" })).ok).toBe(false);
+    expect(db.prepare("SELECT scout FROM scout_coordination").all()).toEqual([]);
+  });
+});
