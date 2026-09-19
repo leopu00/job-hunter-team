@@ -40,6 +40,13 @@ export interface PositionUpdateRule {
   ownRowsOnly?: boolean;
   /** The statuses a row must be in for any update of this role, a move or not; absent: any. */
   touches?: readonly string[];
+  /**
+   * Rows in these statuses take only these flags: past the analysis a
+   * position is the Scorer's and the Scrittore's, and what is left to the
+   * role is keeping it true (liveness, category, office) — never its text,
+   * its link or its salary.
+   */
+  later?: { statuses: readonly string[]; fields: readonly string[] };
   /** Said when a call is refused: what this role's update is for. */
   purpose: string;
 }
@@ -78,7 +85,19 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       // new → checked | excluded is the analysis; a live position is excluded later only on
       // proof it closed (RULE-14 care mode). Never back to new, never past the Scorer's states
       // into the Scrittore's, never an application's.
-      moves: { checked: ["new", "checked"], excluded: ["new", "checked", "scored", "writing", "review", "ready", "excluded"] },
+      moves: { checked: ["new", "checked"], excluded: ["new", "checked", "scored", "writing", "review", "ready"] },
+      // Nothing once applied or answered, nor on a position already excluded (SICUREZZA A-1).
+      touches: ["new", "checked", "scored", "writing", "review", "ready"],
+      later: {
+        statuses: ["scored", "writing", "review", "ready"],
+        fields: [
+          // RULE-12/14 recheck: liveness, and the exclusion with its reason when closed.
+          "status", "notes", "is_open", "last_open_check", "last_checked", "expires_at",
+          // RULE-14 categorize runs on checked..ready; geocoding on any live position.
+          "role_family", "office_lat", "office_lon", "office_address", "office_geocoded", "office_verified",
+          "action", "outcome", "evidence_kind", "evidence_url", "evidence_code", "evidence_hash", "duration_ms",
+        ],
+      },
       purpose: "The ANALISTA moves a position new → checked or excluded, and excludes a later one only on proof it closed (analista.md RULE-06/14).",
     },
   },

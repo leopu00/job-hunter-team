@@ -52,7 +52,7 @@ export interface ScriptResult {
   exitCode: number;
 }
 
-const ARGS = z
+export const ARGS = z
   .object({
     args: z
       .array(z.string().max(200_000))
@@ -122,7 +122,12 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     if (entity === undefined || !INSERT_ENTITIES.has(entity) || !policy.insert.includes(entity)) {
       return refused("db_insert", entity, [...policy.insert]);
     }
-    if (entity === "company") return insertCompany(options.db(), parseArgv(COMPANY_INSERT, argv.slice(1)));
+    if (entity === "company") {
+      const a = parseArgv(COMPANY_INSERT, argv.slice(1));
+      // SICUREZZA A-2: the row says who analyzed it, and that is this agent.
+      a["analyzed_by"] = options.agent;
+      return insertCompany(options.db(), a);
+    }
     if (entity === "highlight") return insertHighlight(options.db(), parseArgv(HIGHLIGHT_INSERT, argv.slice(1)));
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
@@ -208,7 +213,12 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
   const dbUpdate = (argv: string[]): ScriptResult => {
     const entity = argv[0];
     if (entity === undefined || !policy.update.includes(entity)) return refused("db_update", entity, [...policy.update]);
-    if (entity === "company") return updateCompany(options.db(), parseArgv(COMPANY_UPDATE, argv.slice(1)), options.agent);
+    if (entity === "company") {
+      const a = parseArgv(COMPANY_UPDATE, argv.slice(1));
+      // SICUREZZA A-2, as D-5 for found_by: who analyzed the company is this agent, never an argument.
+      if (a["analyzed_by"] !== null) a["analyzed_by"] = options.agent;
+      return updateCompany(options.db(), a, options.agent);
+    }
     const rule = policy.position!;
     const a = parseArgv(POSITION_UPDATE, argv.slice(1));
     const id = a["id"] as number;
@@ -227,8 +237,21 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         return deny(`--${flag.replaceAll("_", "-")} goes only with --status ${target} for this agent. ${rule.purpose}`);
       }
     }
-    // Where the row must stand: the move's own sources, or the role's statuses for any update.
-    const from = pyTruthy(status) ? rule.moves[status!]! : rule.touches;
+    // Where the row must stand: the move's own sources, or the role's statuses for any update;
+    // and out of the later statuses when a flag is passed that those rows do not take.
+    const given = POSITION_UPDATE.options!.map((o) => destOf(o.flag)).filter((k) => a[k] !== null);
+    let from: readonly string[] | undefined = pyTruthy(status) ? rule.moves[status!]! : rule.touches;
+    const early = rule.later && given.filter((k) => !rule.later!.fields.includes(k));
+    if (rule.later && early && early.length > 0) {
+      const later = rule.later.statuses;
+      from = from?.filter((f) => !later.includes(f));
+      const row = options.db().prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
+      if (row && later.includes(row.status ?? "")) {
+        return deny(
+          `Position #${id} is '${row.status}': past the analysis this agent may change only ${rule.later.fields.filter((f) => !/^(action|outcome|evidence_|duration)/.test(f)).map((f) => `--${f.replaceAll("_", "-")}`).join(", ")}, not ${early.map((k) => `--${k.replaceAll("_", "-")}`).join(", ")}. ${rule.purpose}`,
+        );
+      }
+    }
     const current = options.db().prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
       | { status: string | null; found_by: string | null }
       | undefined;
@@ -490,7 +513,7 @@ export function refused(tool: string, sub: string | undefined, allowed: string[]
 }
 
 /** Argument errors become argparse's exit 2; anything else is the script crashing, exit 1. */
-function guarded(run: () => ScriptResult): ScriptResult {
+export function guarded(run: () => ScriptResult): ScriptResult {
   try {
     return run();
   } catch (error) {
@@ -499,7 +522,7 @@ function guarded(run: () => ScriptResult): ScriptResult {
   }
 }
 
-function asExecution(result: ScriptResult, okCodes: number[]): ToolExecution {
+export function asExecution(result: ScriptResult, okCodes: number[]): ToolExecution {
   const text = `${result.stdout}${result.stderr ?? ""}`.trimEnd();
   const content = result.exitCode === 0 ? text : `${text}${text ? "\n" : ""}(exit code ${result.exitCode})`;
   return { ok: okCodes.includes(result.exitCode), content, details: { exitCode: result.exitCode } };

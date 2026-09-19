@@ -438,6 +438,29 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
       expect(r.content, args.join(" ")).toMatch(/not available to this agent|only from/);
     }
     expect(fullSnapshot(ourDb)).toEqual(before);
+    // SICUREZZA A-1: past the analysis, only liveness, category and office; nothing once applied.
+    for (const args of [
+      ["position", "1", "--jd-summary", "rewritten"],
+      ["position", "1", "--url", "https://elsewhere.example"],
+      ["position", "1", "--salary-estimated-min", "1"],
+    ]) {
+      const r = await call("db_update", args);
+      expect(r.ok, args.join(" ")).toBe(false);
+      expect(r.content, args.join(" ")).toMatch(/is 'scored': past the analysis this agent may change only .*--is-open.*, not --/);
+    }
+    for (const args of [["position", "6", "--notes", "x"], ["position", "6", "--is-open", "false"]]) {
+      const r = await call("db_update", args);
+      expect(r.ok, args.join(" ")).toBe(false);
+      expect(r.content, args.join(" ")).toMatch(/is 'applied': this agent updates it at all only from/);
+    }
+    expect(fullSnapshot(ourDb)).toEqual(before);
+    for (const args of [
+      ["position", "1", "--role-family", "Data"],
+      ["position", "1", "--action", "geocode", "--office-geocoded", "true", "--office-lat", "45.4", "--office-lon", "9.2"],
+      ["position", "1", "--action", "liveness_check", "--outcome", "inconclusive", "--last-open-check", "now", "--notes", "NOTE_MISMATCH: [OPEN_UNVERIFIED]"],
+    ]) {
+      expect((await call("db_update", args)).ok, args.join(" ")).toBe(true);
+    }
     // A scored position that closed can be excluded (RULE-14 care mode).
     expect((await call("db_update", ["position", "1", "--status", "excluded", "--is-open", "false", "--last-open-check", "now", "--notes", "[SCADUTO] 404"])).ok).toBe(true);
   });
@@ -446,8 +469,9 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
 const ANALISTA_INSERTS: string[][] = [
   ["company", "--name", "Delta", "--website", "https://delta.example", "--hq-country", "IT", "--sector", "fintech", "--size", "11-50",
     "--glassdoor-rating", "3.9", "--red-flags", "", "--culture-notes", "Remote-first", "--analyzed-by", "analista-1", "--verdict", "GO"],
-  ["company", "--name", "Ümlaut GmbH", "--verdict", "NO_GO"],
-  ["company", "--name", "New Co"],
+  // --analyzed-by as the agent: the tool writes the agent whatever is passed (A-2), the script what is passed.
+  ["company", "--name", "Ümlaut GmbH", "--verdict", "NO_GO", "--analyzed-by", "analista-1"],
+  ["company", "--name", "New Co", "--analyzed-by", "analista-1"],
   ["company", "--website", "x"],
   ["company", "--name", "X", "--glassdoor-rating", "high"],
   ["highlight", "--position-id", "2", "--type", "pro", "--text", "4-day week and a budget for conferences, which is rare in this sector"],
@@ -475,6 +499,18 @@ describe("db_insert, as the ANALISTA runs it, against db_insert.py (T14)", () =>
       expect(theirs.stderr).toContain("FOREIGN KEY constraint failed");
     }
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+  });
+
+  it("signs a company as this agent, whatever --analyzed-by says (SICUREZZA A-2)", async () => {
+    const { call, ourDb } = twins("analista-2");
+    await call("db_insert", ["company", "--name", "Omega", "--analyzed-by", "capitano"]);
+    await call("db_insert", ["company", "--name", "Sigma"]);
+    await call("db_update", ["company", "Globex", "--verdict", "GO", "--analyzed-by", "someone-else"]);
+    expect(ourDb.prepare("SELECT name, analyzed_by FROM companies WHERE name IN ('Omega', 'Sigma', 'Globex') ORDER BY name").all()).toEqual([
+      { name: "Globex", analyzed_by: "analista-2" },
+      { name: "Omega", analyzed_by: "analista-2" },
+      { name: "Sigma", analyzed_by: "analista-2" },
+    ]);
   });
 
   it("gives the ANALISTA no position, score or application insert", async () => {
