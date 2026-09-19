@@ -54,6 +54,10 @@ reads:
    A script named as a file rather than run (`Wrapper at
    /app/shared/skills/db_insert.py`) becomes "the db_insert tool", or is
    marked not available: the image has no `shared/` (T10b).
+   A bare `` `check-url` `` or `` `db-query check-url` `` becomes
+   `` `db_query check-url` `` (T12): `position-insert` says "`check-url`
+   deduplicates" beside the dedup gate, and for three runs in a row the
+   SCOUT called `scout_dedup check-url`.
    Everything else is the TUI text; `PARITY_NOTES` explains the tool calls.
    `tests/parity-run-role.test.ts` checks that the prompt and every `.md` in
    the home contain no `python3`.
