@@ -284,6 +284,8 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("run `python3 $APP/shared/skills/db_insert.py position \\`")).toBe("run `db_insert position \\`");
     expect(rewritePythonSkills("python3 -u /app/shared/skills/scout_coord.py show")).toBe("scout_coord show");
     expect(rewritePythonSkills("python3 /app/shared/skills/throttle_engine.py check x")).toBe("throttle check x");
+    // T15: scorer.md, the link check before a score.
+    expect(rewritePythonSkills("python3 /app/shared/skills/safe_fetch.py 'URL' | grep -i 'expired'")).toBe("web_fetch 'URL' | grep -i 'expired'");
     expect(rewritePythonSkills("python3 /app/shared/skills/linkedin_access.py search")).toBe(
       "linkedin_access.py (not available in the API harness) search",
     );
