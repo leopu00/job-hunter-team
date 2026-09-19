@@ -325,6 +325,32 @@ export function replacedCommand(command: string): string | null {
 }
 
 /**
+ * The `shared/skills/*.py` scripts a TUI prompt runs with `python3`, and the
+ * native tool that replaces each. The image carries no Python: a call that
+ * reaches the shell fails with nothing to learn from.
+ */
+export const PYTHON_SKILLS: Record<string, string> = {
+  "scout_coord.py": "scout_coord",
+  "feedback_query.py": "feedback_query",
+  "email_monitor.py": "email_monitor",
+};
+
+/** `python3 [flags] [path/]<script>.py` at a command position; the script's file name is captured. */
+const PYTHON_AT = new RegExp(
+  String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?python3?(?:\.\d+)?\s+(?:-\S+\s+)*(?:\S*/)?([A-Za-z0-9_]+\.py)(?=\s|$|[;&|)])`,
+  "g",
+);
+
+/** The replaced Python skill a shell line runs, if any. */
+export function replacedSkill(command: string): string | null {
+  for (const match of command.matchAll(PYTHON_AT)) {
+    const script = match[1] ?? "";
+    if (Object.hasOwn(PYTHON_SKILLS, script)) return script;
+  }
+  return null;
+}
+
+/**
  * Wraps the shell tool so a TUI command is answered with the tool that
  * replaces it instead of `command not found`. The model learns the mapping
  * from one refused call, and nothing reaches a shell.
@@ -334,6 +360,13 @@ export function guardShellTool(shell: ToolHandler, commandOf: (args: unknown) =>
     spec: shell.spec,
     classify: (args) => shell.classify(args),
     async execute(args, context) {
+      const skill = replacedSkill(commandOf(args));
+      if (skill !== null) {
+        return {
+          ok: false,
+          content: `Error: \`python3 …/${skill}\` does not exist here. Use the \`${PYTHON_SKILLS[skill]}\` tool instead. Nothing was run.`,
+        };
+      }
       const found = replacedCommand(commandOf(args));
       if (found === null) return shell.execute(args, context);
       return { ok: false, content: `Error: \`${found}\` ${REPLACED[found]} Nothing was run.` };

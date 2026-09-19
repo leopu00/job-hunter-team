@@ -83,14 +83,29 @@ its replacement, without running anything.
 | `throttle-set`, `token-rate-now` | not mapped yet: CAPITANO only | — |
 | `jht-agent-contain` | not mapped yet: SENTINELLA only | — |
 
-The `python3 /app/shared/skills/*.py` commands in the skills (`db_query.py`,
-`db_insert.py`, `scout_coord.py`, …) are not `_tools` and still run through
-the shell tool.
-
 None of the native tools asks a permission: each writes only into the
 harness's own channels, never a file of the person's, the network or a
 process. `send_message` takes an agent name (`^[A-Za-z][A-Za-z0-9_-]{0,39}$`),
 never a path.
+
+## The Python skills
+
+The skills call `python3 /app/shared/skills/<x>.py`. The image carries no
+Python, so each script a role uses is a native tool, given only to a role
+whose `skills.list` names the skill (`src/parity/skills/index.ts`). A
+`python3 …/<x>.py` typed into the shell is refused with the tool to use
+(`PYTHON_SKILLS` in `jht-tools.ts`). The tools that touch `jobs.db` get it
+from the runtime (`jobsDbPath` + `openJobsDb`): no tool takes a path, and
+every statement is a constant with bound parameters.
+
+| Script | Native tool | Parity |
+| --- | --- | --- |
+| `scout_coord.py show/history/assign/reset/claim/check-claim/doctor` | `scout_coord` {command, scout?, cerchi?, fonti?, note?, job_id?, json?} | same lines and same rows in `scout_coordination` / `scout_claims`; exit 3 is a failed call with the script's message. `bootstrap` is the launcher's and not a tool |
+| `feedback_query.py check <legacy_id>` | `feedback_query` {command: check, legacy_id} | same JSON, from `position_feedback` in `jobs.db`, sanitised display fields included (`feedback-display.ts` ports `feedback_display.py`). No cloud lane: where the script would ask the cloud, the answer is its own `no-signal:cloud-disabled`. `recent`/`themes` come with the Mentor and the Scorer |
+| `email_monitor.py status/count/poll` | `email_monitor` {command, since_days?} | the script's output with no mailbox configured. No IMAP here and the credentials file is never opened; when it exists, `status` adds `note: imap-unavailable-in-api-runtime` |
+
+`tests/skills-parity.test.ts` runs each script and its tool on the same
+input and compares what they print and what they leave in the database.
 
 ## The run
 
