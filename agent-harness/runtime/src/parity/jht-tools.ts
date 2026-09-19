@@ -353,8 +353,23 @@ export class FileMailbox implements Mailbox {
     await appendJsonLine(join(this.dir, `${message.to}.jsonl`), message);
   }
 
+  /**
+   * Only what `send` itself would have written comes out: the file is on disk,
+   * and a shell with the runtime's uid can append to it. A `from` that is not
+   * an agent name — one carrying a line break, say — would reach the peer's
+   * turn as the header `wakeMessage` writes at column 0, so it is dropped with
+   * the rest of the line, as a torn line is.
+   */
   async drain(agent: string): Promise<AgentMessage[]> {
-    return drainJsonLines<AgentMessage>(join(this.dir, `${agent.toLowerCase()}.jsonl`));
+    const to = agent.toLowerCase();
+    const lines = await drainJsonLines<Partial<AgentMessage>>(join(this.dir, `${to}.jsonl`));
+    return lines.filter(
+      (m): m is AgentMessage =>
+        AGENT_NAME.safeParse(m.from).success &&
+        m.to === to &&
+        typeof m.text === "string" &&
+        typeof m.ts === "number",
+    );
   }
 }
 
