@@ -1,0 +1,5 @@
+node_modules/
+# Keys never live in the repo: a live run reads them from a 0600 file outside it.
+.env
+.env.*
+!.env.example
