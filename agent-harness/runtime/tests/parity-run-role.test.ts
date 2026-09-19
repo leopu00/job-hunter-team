@@ -47,8 +47,12 @@ describe("npm run role -- --role scout (a product role)", () => {
     // The image's layout, not this checkout's: /app holds the runtime and agents/, no shared/ (T10b).
     const imageRoot = join(root, "image-app");
     await cp(join(RUNTIME, "..", "..", "agents"), join(imageRoot, "agents"), { recursive: true });
+    // The profile where the runtime has it (JHT_API_PROFILE_DIR), not under JHT_HOME (T10b).
+    const profileDir = join(root, "person-profile");
+    await mkdir(profileDir, { recursive: true });
+    await writeFile(join(profileDir, "candidate_profile.yml"), "target_roles: [engineer]\n");
     const { stdout } = await roleWith(
-      { JHT_API_APP_ROOT: imageRoot },
+      { JHT_API_APP_ROOT: imageRoot, JHT_API_PROFILE_DIR: profileDir },
       "--role", "scout", "--agent", "scout-1", "--turns", "2", "--pause-ms", "0", "--quiet",
     );
     const tracePath = stdout.trim();
@@ -86,7 +90,13 @@ describe("npm run role -- --role scout (a product role)", () => {
     // The TUI identity through the two documented rewrites: python3 calls (T6) and document paths (T10).
     const { createPathRewriter } = await import("../src/parity/prompt-paths.ts");
     const homeSkills = new Set(await readdir(join(root, "api", "agents", "scout-1", "skills")));
-    const paths = createPathRewriter({ appRoot: imageRoot, homeSkills, dedupLog: join(root, "api", "logs", "scout-dedup.log") });
+    const paths = createPathRewriter({
+      appRoot: imageRoot,
+      homeSkills,
+      dedupLog: join(root, "api", "logs", "scout-dedup.log"),
+      homeDir: join(root, "api", "agents", "scout-1"),
+      profileDir,
+    });
     expect(prompt.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
@@ -111,7 +121,11 @@ describe("npm run role -- --role scout (a product role)", () => {
       texts.push(await readFile(join(homeDir, f), "utf8"));
     }
     const appRoot = imageRoot;
-    const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot)))];
+    const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot, [homeDir, profileDir])))];
+    // T10b: the SCOUT is sent to the person's real profile, and to no JHT_HOME the container does not set.
+    expect(prompt).toContain(`${profileDir}/candidate_profile.yml`);
+    expect(referenced).toContain(`${profileDir}/candidate_profile.yml`);
+    for (const t of texts) expect(t).not.toMatch(/(?:\$\{?JHT_HOME\}?|\/jht_home|~\/\.jht)\/profile/);
     expect(referenced.length).toBeGreaterThan(20);
     expect(referenced.filter((p) => !existsSync(onDisk(p, homeDir)))).toEqual([]);
     // Existing is not enough: read_file must open each one under the SCOUT's own policy,
@@ -119,13 +133,21 @@ describe("npm run role -- --role scout (a product role)", () => {
     const { loadConfig } = await import("../src/config.ts");
     const { buildToolkit } = await import("../src/tools/toolkit.ts");
     const { MockProvider } = await import("../src/core/provider/mock.ts");
-    const config = loadConfig({ JHT_API_HOME: join(root, "api") }, "scout-1");
+    const config = loadConfig({ JHT_API_HOME: join(root, "api"), JHT_API_PROFILE_DIR: profileDir }, "scout-1");
     const toolkit = await buildToolkit(config, { provider: new MockProvider([]), jobsDbFile: join(root, "api", "db", "jobs.db") });
     const readFileTool = toolkit.tools.find((t) => t.spec.name === "read_file")!;
     const refused: string[] = [];
     for (const path of referenced) {
       const decision = await toolkit.permissions.decide("read_file", readFileTool.classify({ path }));
       if (!decision.allowed) refused.push(`${path}: ${decision.message ?? ""}`);
+    }
+    // The profile is read, never written: not by write_file, not by edit_file.
+    for (const name of ["write_file", "edit_file"]) {
+      const tool = toolkit.tools.find((t) => t.spec.name === name)!;
+      const args = { path: join(profileDir, "candidate_profile.yml"), content: "x", old_string: "engineer", new_string: "x" };
+      const decision = await toolkit.permissions.decide(name, tool.classify(args));
+      expect(decision.allowed, name).toBe(false);
+      expect(decision.message, name).toMatch(/person's profile/);
     }
     await toolkit.close();
     expect(refused).toEqual([]);

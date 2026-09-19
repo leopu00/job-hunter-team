@@ -46,8 +46,10 @@ export interface ProductRoleOptions {
   homeDir: string;
   /** The runtime's state root: channels live under it. */
   apiHome: string;
-  /** The user's JHT home, read only for the locale. */
+  /** The user's JHT home, read for the locale. */
   jhtHome: string;
+  /** The person's profile folder (`JHT_API_PROFILE_DIR`); `<jhtHome>/profile` when the runtime has none. */
+  profileDir?: string | undefined;
   env?: Record<string, string | undefined>;
   /**
    * The team's jobs.db, opened by the runtime. The Python skills that read or
@@ -75,6 +77,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     appRoot: options.appRoot,
     homeSkills: new Set(loaded.skills.map((s) => s.name)),
     dedupLog,
+    homeDir: options.homeDir,
+    profileDir: options.profileDir ?? join(options.jhtHome, "profile"),
     locale,
   });
   const rewrite = (text: string) => paths(rewritePythonSkills(text));
@@ -83,7 +87,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     identity: rewrite(loaded.identity),
     skills: loaded.skills.map((s) => ({ ...s, description: rewrite(s.description) })),
   };
-  const systemPrompt = composeSystemPrompt(prompt, PARITY_NOTES);
+  const systemPrompt = composeSystemPrompt(prompt, PARITY_NOTES, options.homeDir);
   await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");

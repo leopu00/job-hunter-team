@@ -97,11 +97,13 @@ describe("a mock SCOUT run", () => {
       appRoot: REPO_ROOT,
       homeSkills: new Set(role.prompt.skills.map((s) => s.name)),
       dedupLog: join(config.apiHome, "logs", "scout-dedup.log"),
+      homeDir: config.agentHome,
+      profileDir: join(root, "jht", "profile"),
     });
     expect(system.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
     expect(system).not.toMatch(/python3/);
     expect(system).toContain("# Running as an API agent");
-    expect(system).toContain("skills/scout-coord/SKILL.md");
+    expect(system).toContain(`${config.agentHome}/skills/scout-coord/SKILL.md`);
     for (const name of JHT_TOOL_NAMES) expect(provider.requests[0]?.tools?.map((t) => t.name)).toContain(name);
 
     // Every call ran, and none went through a shell.

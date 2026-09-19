@@ -74,6 +74,8 @@ export async function buildToolkit(
     permissions: new PermissionPolicy({
       mode: config.permissionMode,
       freeReadRoots: [workdir, ...(config.profileDir ? [config.profileDir] : [])],
+      // The person's profile: every role reads it, none writes it (T10b).
+      readOnlyRoots: config.profileDir ? [config.profileDir] : [],
       ownRoots,
       stateRoots,
       ask: options.ask,

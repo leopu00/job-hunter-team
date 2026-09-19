@@ -18,7 +18,9 @@
  * protected in every mode: `auto` refuses them, `ask` always asks and "always"
  * does not cover them. So is the runtime's own state (`~/.jht-api`) outside
  * the agent's own folders: another role's home, notes and traces are that
- * role's, and one agent does not read or change them.
+ * role's, and one agent does not read or change them. Read-only folders (the
+ * person's profile) are read like any free folder and written in no mode: no
+ * role changes what the person said about themselves.
  *
  * Paths arrive with symlinks already resolved (`realPath`), and the roots are
  * resolved the same way here, so both sides of every comparison are real.
@@ -58,6 +60,7 @@ export interface PermissionDecision {
 export class PermissionPolicy {
   readonly mode: PermissionMode;
   #freeReadRoots: string[];
+  #readOnlyRoots: string[];
   #scope: StateScope;
   #ask: PermissionAsker | undefined;
   #alwaysAllowed = new Set<string>();
@@ -75,10 +78,13 @@ export class PermissionPolicy {
      * named `.jht-api` counts too, so a default install is covered without it.
      */
     stateRoots?: string[] | undefined;
+    /** Folders no tool writes in, whatever the mode or the person's answer. */
+    readOnlyRoots?: string[] | undefined;
     ask?: PermissionAsker | undefined;
   }) {
     this.mode = options.mode;
     this.#freeReadRoots = options.freeReadRoots.map(realPath);
+    this.#readOnlyRoots = (options.readOnlyRoots ?? []).map(realPath);
     this.#scope = {
       ownRoots: (options.ownRoots ?? options.freeReadRoots).map(realPath),
       stateRoots: (options.stateRoots ?? []).map(realPath),
@@ -88,6 +94,9 @@ export class PermissionPolicy {
 
   async decide(toolName: string, access: ToolAccess): Promise<PermissionDecision> {
     if (access.risk === "none") return { allowed: true, asked: false };
+    if (access.risk === "write" && access.paths.some((p) => this.#readOnlyRoots.some((root) => isInside(root, p)))) {
+      return { allowed: false, asked: false, message: READ_ONLY };
+    }
     const sensitive = access.paths.some((p) => isSensitivePath(p) || isOthersState(p, this.#scope));
     const freeRead =
       !sensitive &&
@@ -134,6 +143,10 @@ const PROTECTED =
   "Not allowed: this path is protected for your role. Do not retry it or work around it. " +
   "If you need it, request access from the captain: say which path and why, and either the " +
   "captain does it for you or grants you access. Carry on with what you can do meanwhile.";
+
+const READ_ONLY =
+  "Not allowed: this is the person's profile. Read it, never change it. " +
+  "If something in it looks wrong or out of date, tell the captain instead.";
 
 const REASON: Record<ToolRisk, string> = {
   none: "",

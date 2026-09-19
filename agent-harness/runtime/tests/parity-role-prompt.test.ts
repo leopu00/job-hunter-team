@@ -131,6 +131,9 @@ describe("composeSystemPrompt", () => {
     expect(system.indexOf("# Notes")).toBeLessThan(system.indexOf("# Skills"));
     expect(system).toContain("- tmux-send: Deliver a message. (skills/tmux-send/SKILL.md)");
     expect(system).not.toContain("unlisted");
+    expect(composeSystemPrompt(prompt, "", "/api/agents/scout-1")).toContain(
+      "- tmux-send: Deliver a message. (/api/agents/scout-1/skills/tmux-send/SKILL.md)",
+    );
   });
 });
 
