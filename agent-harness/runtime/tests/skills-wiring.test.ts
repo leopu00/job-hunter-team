@@ -72,7 +72,7 @@ describe("python3 …/shared/skills in the shell", () => {
 describe("which roles get which skill tools", () => {
   const db = { open: () => openJobsDb(":memory:"), path: ":memory:" };
   const names = (skills: string[], withDb = true) =>
-    createSkillTools({ skills, ...(withDb ? { jobsDb: db } : {}) }).map((t) => t.spec.name);
+    createSkillTools({ skills, agent: "scout-1", ...(withDb ? { jobsDb: db } : {}) }).map((t) => t.spec.name);
 
   it("gives a tool only for a skill the role lists", () => {
     expect(names(["scout-coord", "feedback-query", "email-monitor", "db-query"])).toEqual(["scout_coord", "feedback_query", "email_monitor", "db_query"]);

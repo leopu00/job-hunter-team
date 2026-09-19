@@ -8,6 +8,14 @@
  * reports on stderr with exit 3 (the database is unusable) comes back as a
  * failed call with the same message.
  *
+ * Bound to the Scout that runs it (SICUREZZA §7 D-2). The script takes any
+ * name, so one Scout could claim or assign in another's name, or close every
+ * Scout's split. Here `assign` and `claim` act only for the calling agent —
+ * `scout` may be omitted, and naming someone else is refused — and `reset`
+ * closes only the caller's own split and old claims. The lowest-numbered
+ * Scout no longer resets the others: each resets itself. No other role has
+ * the tool (only the Scout lists `scout-coord`), so none needs an exception.
+ *
  * Left out, on purpose:
  * - `bootstrap` runs in the TUI launcher before any Scout, and imports a
  *   legacy file this runtime never had; the runtime opens the database itself.
@@ -30,7 +38,16 @@ export const SCOUT_COORD_TOOL = "scout_coord";
 const SCOUT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const DB_ORIGIN = "jobs_db";
 
+/**
+ * A claim older than this is free again (the TUI's own 24 h, which its
+ * `reset` purged). Nobody deletes a stale claim on another Scout's behalf:
+ * `check-claim` does not see it, and the next `claim` overwrites it.
+ */
+const LIVE_CLAIM = "claimed_at >= datetime('now', '-24 hours')";
+
 export interface ScoutCoordOptions {
+  /** The agent running the tool: `scout-1`. Every write is in this name. */
+  agent: string;
   /** Opens the team database. The runtime decides which file; the tool never does. */
   db: () => Database;
   /** The database file, for `doctor` to report. */
@@ -45,7 +62,7 @@ class CoordinationDbError extends Error {}
 const schema = z
   .object({
     command: z.enum(["show", "history", "assign", "reset", "claim", "check-claim", "doctor"]),
-    scout: z.string().min(1).max(64).optional().describe("assign, claim: the Scout's name, e.g. scout-1"),
+    scout: z.string().min(1).max(64).optional().describe("assign, claim: your own name (the default); another Scout's is refused"),
     cerchi: z.string().max(200).optional().describe('assign: circles, e.g. "1,2"'),
     fonti: z.string().max(500).optional().describe('assign: source slugs, e.g. "linkedin,greenhouse"'),
     note: z.string().max(1_000).optional().describe("assign: a note"),
@@ -58,6 +75,17 @@ type Args = z.infer<typeof schema>;
 
 export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
   const now = options.now ?? (() => new Date());
+  const me = options.agent.trim().toLowerCase();
+  if (!SCOUT_NAME.test(me)) throw new Error(`scout_coord needs a Scout's name for its agent, not '${options.agent}'.`);
+
+  /** The Scout a write is for: the caller, whether it named itself or not. Null for anyone else. */
+  const self = (scout: string | undefined): string | null =>
+    scout === undefined || scout.trim().toLowerCase() === me ? me : null;
+  const notYours = (scout: string, what: string) =>
+    usage(
+      `you are ${me}: you can ${what} only in your own name, not '${scout}'. ` +
+        "Nothing was written. Ask that Scout to do it, or agree the split with them by message.",
+    );
 
   const actionable = (detail: string) =>
     `scout coordination unusable in ${options.dbPath}: ${detail}. ` +
@@ -108,15 +136,16 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
       return ok(out);
     },
 
-    assign({ scout, cerchi, fonti, note }) {
-      if (scout === undefined) return usage("assign needs scout.");
+    assign({ scout: named, cerchi, fonti, note }) {
       // An assignment owned by a typo shows up as a participant in the split.
-      if (!SCOUT_NAME.test(scout.trim().toLowerCase())) {
+      if (named !== undefined && !SCOUT_NAME.test(named.trim().toLowerCase())) {
         throw new CoordinationDbError(
-          `'${scout}' is not a Scout name (expected something like \`scout-1\`). Nothing was written: ` +
+          `'${named}' is not a Scout name (expected something like \`scout-1\`). Nothing was written: ` +
             "an assignment owned by a typo would show up as a participant in the split.",
         );
       }
+      const scout = self(named);
+      if (scout === null) return notYours(named!, "assign circles and sources");
       const db = open();
       const existing = db
         .prepare("SELECT id FROM scout_coordination WHERE scout=? AND superseded_at IS NULL")
@@ -133,34 +162,45 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
 
     reset() {
       const db = open();
+      // Only the caller's own split and claims: a Scout never closes a peer's.
       const updated = db
-        .prepare("UPDATE scout_coordination SET superseded_at=? WHERE superseded_at IS NULL")
-        .run(pyNowIso(now())).changes;
+        .prepare("UPDATE scout_coordination SET superseded_at=? WHERE superseded_at IS NULL AND scout=?")
+        .run(pyNowIso(now()), me).changes;
       // Claims older than a day go with the session.
-      db.prepare("DELETE FROM scout_claims WHERE claimed_at < datetime('now', '-24 hours')").run();
+      db.prepare("DELETE FROM scout_claims WHERE claimed_at < datetime('now', '-24 hours') AND scout=?").run(me);
       return ok([`Session closed: ${updated} assignments archived.`]);
     },
 
-    claim({ job_id, scout }) {
-      if (job_id === undefined || scout === undefined) return usage("claim needs job_id and scout.");
-      const db = open();
-      const existing = db.prepare("SELECT scout, claimed_at FROM scout_claims WHERE job_id=?").get(job_id) as Row | undefined;
-      if (existing) return ok([`ALREADY_CLAIMED by ${pyStr(existing["scout"])} at ${pyStr(existing["claimed_at"])}`]);
-      try {
-        db.prepare("INSERT INTO scout_claims (job_id, scout) VALUES (?, ?)").run(job_id, scout);
-      } catch (error) {
-        // The primary key is the lock: a peer inserted between the SELECT and here.
-        if (isConstraint(error)) return ok(["ALREADY_CLAIMED (race condition)"]);
-        throw error;
+    claim({ job_id, scout: named }) {
+      if (job_id === undefined) return usage("claim needs job_id.");
+      if (named !== undefined && !SCOUT_NAME.test(named.trim().toLowerCase())) {
+        return usage(`'${named}' is not a Scout name (expected something like \`scout-1\`). Nothing was claimed.`);
       }
-      return ok([`CLAIMED by ${scout}`]);
+      const scout = self(named);
+      if (scout === null) return notYours(named!, "claim a position");
+      const db = open();
+      const existing = db
+        .prepare(`SELECT scout, claimed_at FROM scout_claims WHERE job_id=? AND ${LIVE_CLAIM}`)
+        .get(job_id) as Row | undefined;
+      if (existing) return ok([`ALREADY_CLAIMED by ${pyStr(existing["scout"])} at ${pyStr(existing["claimed_at"])}`]);
+      // One statement: a new claim, or the overwrite of an expired one. The
+      // primary key is still the lock, and the WHERE keeps a live claim a peer
+      // made since the SELECT: then nothing changes.
+      const { changes } = db
+        .prepare(
+          "INSERT INTO scout_claims (job_id, scout) VALUES (?, ?) " +
+            "ON CONFLICT(job_id) DO UPDATE SET scout=excluded.scout, claimed_at=CURRENT_TIMESTAMP " +
+            `WHERE NOT (scout_claims.${LIVE_CLAIM})`,
+        )
+        .run(job_id, scout);
+      return ok([changes === 1 ? `CLAIMED by ${scout}` : "ALREADY_CLAIMED (race condition)"]);
     },
 
     "check-claim"({ job_id }) {
       if (job_id === undefined) return usage("check-claim needs job_id.");
-      const existing = open().prepare("SELECT scout, claimed_at FROM scout_claims WHERE job_id=?").get(job_id) as
-        | Row
-        | undefined;
+      const existing = open()
+        .prepare(`SELECT scout, claimed_at FROM scout_claims WHERE job_id=? AND ${LIVE_CLAIM}`)
+        .get(job_id) as Row | undefined;
       return ok([existing ? `CLAIMED by ${pyStr(existing["scout"])} at ${pyStr(existing["claimed_at"])}` : "AVAILABLE"]);
     },
 
@@ -204,7 +244,8 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
       description:
         "The Scouts' coordination in the team database (replaces `python3 …/scout_coord.py`). " +
         "show: the active split. history: past splits. assign: record your circles and sources (scout, cerchi, fonti, note). " +
-        "reset: close the current split. claim: take a position before working it (job_id, scout). " +
+        "reset: close your own current split. claim: take a position before working it (job_id). " +
+        "assign and claim are always in your own name. " +
         "check-claim: is a position taken (job_id). doctor: which database, and is it writable.",
       schema,
     },
@@ -238,10 +279,4 @@ function ok(lines: string[]): ToolExecution {
 
 function usage(message: string): ToolExecution {
   return { ok: false, content: `Error: ${message}` };
-}
-
-/** SQLite's primary-key and unique violations: the extended codes of SQLITE_CONSTRAINT (19). */
-function isConstraint(error: unknown): boolean {
-  const code = (error as { errcode?: unknown } | null)?.errcode;
-  return typeof code === "number" && (code & 0xff) === 19;
 }

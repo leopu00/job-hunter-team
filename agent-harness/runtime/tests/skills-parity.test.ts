@@ -74,34 +74,33 @@ describe.skipIf(!HAS_PYTHON)("scout_coord ↔ scout_coord.py", () => {
     const tsDb = join(root, "ts", "jobs.db");
     openJobsDb(pyDb).close();
     const db = openJobsDb(tsDb);
-    const tool = createScoutCoordTool({ db: () => db, dbPath: tsDb });
+    // One tool per Scout, as each agent gets its own (D-2).
+    const tools = new Map<string, ToolHandler>();
+    const as = (agent: string) => {
+      if (!tools.has(agent)) tools.set(agent, createScoutCoordTool({ agent, db: () => db, dbPath: tsDb }));
+      return tools.get(agent)!;
+    };
 
-    const steps: Array<[string[], Record<string, unknown>]> = [
-      [["show"], { command: "show" }],
-      [["history"], { command: "history" }],
-      [["check-claim", "https://jobs.example/1"], { command: "check-claim", job_id: "https://jobs.example/1" }],
-      [["claim", "https://jobs.example/1", "scout-1"], { command: "claim", job_id: "https://jobs.example/1", scout: "scout-1" }],
-      [["claim", "https://jobs.example/1", "scout-2"], { command: "claim", job_id: "https://jobs.example/1", scout: "scout-2" }],
-      [["check-claim", "https://jobs.example/1"], { command: "check-claim", job_id: "https://jobs.example/1" }],
-      [["assign", "scout-1", "--cerchi", "1,2", "--fonti", "linkedin,greenhouse"], { command: "assign", scout: "scout-1", cerchi: "1,2", fonti: "linkedin,greenhouse" }],
-      [["assign", "scout-2", "--fonti", "lever", "--note", "curated only"], { command: "assign", scout: "scout-2", fonti: "lever", note: "curated only" }],
-      [["assign", "scout-1", "--cerchi", "1", "--fonti", "remoteok"], { command: "assign", scout: "scout-1", cerchi: "1", fonti: "remoteok" }],
-      [["show"], { command: "show" }],
-      [["history"], { command: "history" }],
-      [["reset"], { command: "reset" }],
-      [["show"], { command: "show" }],
-      [["history"], { command: "history" }],
-      // A new Scout: re-assigning scout-2 within the same second would hit the
-      // (scout, started_at) unique key on both sides, a second-resolution edge of the schema.
-      [["assign", "scout-3", "--cerchi", "3"], { command: "assign", scout: "scout-3", cerchi: "3" }],
+    // [agent running the tool, script args, tool args]
+    const steps: Array<[string, string[], Record<string, unknown>]> = [
+      ["scout-1", ["show"], { command: "show" }],
+      ["scout-1", ["history"], { command: "history" }],
+      ["scout-1", ["check-claim", "https://jobs.example/1"], { command: "check-claim", job_id: "https://jobs.example/1" }],
+      ["scout-1", ["claim", "https://jobs.example/1", "scout-1"], { command: "claim", job_id: "https://jobs.example/1", scout: "scout-1" }],
+      ["scout-2", ["claim", "https://jobs.example/1", "scout-2"], { command: "claim", job_id: "https://jobs.example/1" }],
+      ["scout-2", ["check-claim", "https://jobs.example/1"], { command: "check-claim", job_id: "https://jobs.example/1" }],
+      ["scout-1", ["reset"], { command: "reset" }],
+      ["scout-1", ["assign", "scout-1", "--cerchi", "1,2", "--fonti", "linkedin,greenhouse"], { command: "assign", scout: "scout-1", cerchi: "1,2", fonti: "linkedin,greenhouse" }],
+      ["scout-1", ["assign", "scout-1", "--cerchi", "1", "--fonti", "remoteok"], { command: "assign", cerchi: "1", fonti: "remoteok" }],
+      ["scout-2", ["assign", "scout-2", "--fonti", "lever", "--note", "curated only"], { command: "assign", fonti: "lever", note: "curated only" }],
       // An empty value prints as "-", like a missing one.
-      [["assign", "scout-4", "--cerchi", "", "--fonti", "x"], { command: "assign", scout: "scout-4", cerchi: "", fonti: "x" }],
-      [["show"], { command: "show" }],
-      [["history"], { command: "history" }],
+      ["scout-4", ["assign", "scout-4", "--cerchi", "", "--fonti", "x"], { command: "assign", scout: "scout-4", cerchi: "", fonti: "x" }],
+      ["scout-2", ["show"], { command: "show" }],
+      ["scout-2", ["history"], { command: "history" }],
     ];
-    for (const [pyArgs, tsArgs] of steps) {
+    for (const [agent, pyArgs, tsArgs] of steps) {
       const py = python("scout_coord.py", pyArgs, { JHT_DB: pyDb });
-      const ts = await native(tool, tsArgs);
+      const ts = await native(as(agent), tsArgs);
       expect(py.status, pyArgs.join(" ")).toBe(0);
       expect(norm(ts.content), pyArgs.join(" ")).toBe(norm(py.stdout));
       expect(ts.ok).toBe(true);
@@ -113,11 +112,32 @@ describe.skipIf(!HAS_PYTHON)("scout_coord ↔ scout_coord.py", () => {
     db.close();
   });
 
+  it("resets as the script does when the split is the caller's alone", async () => {
+    const pyDb = join(root, "py", "jobs.db");
+    const tsDb = join(root, "ts", "jobs.db");
+    openJobsDb(pyDb).close();
+    const db = openJobsDb(tsDb);
+    const tool = createScoutCoordTool({ agent: "scout-1", db: () => db, dbPath: tsDb });
+    for (const [pyArgs, tsArgs] of [
+      [["assign", "scout-1", "--cerchi", "1"], { command: "assign", cerchi: "1" }],
+      [["reset"], { command: "reset" }],
+      [["show"], { command: "show" }],
+      [["history"], { command: "history" }],
+    ] as const) {
+      const py = python("scout_coord.py", [...pyArgs], { JHT_DB: pyDb });
+      expect(norm((await native(tool, tsArgs)).content), pyArgs.join(" ")).toBe(norm(py.stdout));
+    }
+    const pyView = openJobsDb(pyDb);
+    expect(dump(db, "scout_coordination")).toEqual(dump(pyView, "scout_coordination"));
+    pyView.close();
+    db.close();
+  });
+
   it("refuses a name that is not a Scout's with the script's message and writes nothing", async () => {
     const pyDb = join(root, "py", "jobs.db");
     openJobsDb(pyDb).close();
     const db = openJobsDb(":memory:");
-    const tool = createScoutCoordTool({ db: () => db, dbPath: ":memory:" });
+    const tool = createScoutCoordTool({ agent: "scout-1", db: () => db, dbPath: ":memory:" });
     const py = python("scout_coord.py", ["assign", "--help"], { JHT_DB: pyDb });
     const ts = await native(tool, { command: "assign", scout: "--help" });
     expect(py.status).toBe(3);
@@ -131,7 +151,7 @@ describe.skipIf(!HAS_PYTHON)("scout_coord ↔ scout_coord.py", () => {
     const tsDb = join(root, "ts", "jobs.db");
     openJobsDb(pyDb).close();
     const db = openJobsDb(tsDb);
-    const tool = createScoutCoordTool({ db: () => db, dbPath: tsDb });
+    const tool = createScoutCoordTool({ agent: "scout-1", db: () => db, dbPath: tsDb });
     for (const [pyArgs, tsArgs] of [
       [["doctor"], { command: "doctor" }],
       [["doctor", "--json"], { command: "doctor", json: true }],
@@ -266,14 +286,14 @@ describe("email_monitor", () => {
 
 describe("scout_coord — boundaries", () => {
   it("takes no path from the model, and the schema refuses one", () => {
-    const tool = createScoutCoordTool({ db: () => openJobsDb(":memory:"), dbPath: ":memory:" });
+    const tool = createScoutCoordTool({ agent: "scout-1", db: () => openJobsDb(":memory:"), dbPath: ":memory:" });
     expect(tool.spec.schema.safeParse({ command: "show", db: "/tmp/other.db" }).success).toBe(false);
     expect(tool.spec.schema.safeParse({ command: "drop table" }).success).toBe(false);
   });
 
   it("stores a hostile job id as data, never as SQL", async () => {
     const db = openJobsDb(":memory:");
-    const tool = createScoutCoordTool({ db: () => db, dbPath: ":memory:" });
+    const tool = createScoutCoordTool({ agent: "scout-1", db: () => db, dbPath: ":memory:" });
     const hostile = "x'); DROP TABLE scout_claims; --";
     expect((await native(tool, { command: "claim", job_id: hostile, scout: "scout-1" })).content).toBe("CLAIMED by scout-1");
     expect((await native(tool, { command: "check-claim", job_id: hostile })).content).toMatch(/^CLAIMED by scout-1 at /);
@@ -282,6 +302,7 @@ describe("scout_coord — boundaries", () => {
 
   it("reports an unusable database as a failed call, with the script's instruction not to make another", async () => {
     const tool = createScoutCoordTool({
+      agent: "scout-1",
       db: () => {
         throw new Error("unable to open database file");
       },
@@ -291,5 +312,111 @@ describe("scout_coord — boundaries", () => {
     expect(result.ok).toBe(false);
     expect(result.content).toContain("scout coordination unusable in /data/jobs.db: unable to open database file");
     expect(result.content).toContain("Do NOT create a database of your own");
+  });
+});
+
+describe("scout_coord is bound to the Scout that runs it (SICUREZZA D-2)", () => {
+  const setup = () => {
+    const db = openJobsDb(":memory:");
+    const as = (agent: string) => createScoutCoordTool({ agent, db: () => db, dbPath: ":memory:" });
+    return { db, one: as("scout-1"), two: as("scout-2") };
+  };
+
+  it("refuses to assign or claim in another Scout's name, and writes nothing", async () => {
+    const { db, one } = setup();
+    const assign = await native(one, { command: "assign", scout: "scout-2", fonti: "linkedin" });
+    const claim = await native(one, { command: "claim", job_id: "https://jobs.example/9", scout: "scout-2" });
+    for (const result of [assign, claim]) {
+      expect(result.ok).toBe(false);
+      expect(result.content).toContain("you are scout-1");
+      expect(result.content).toContain("'scout-2'");
+    }
+    expect(dump(db, "scout_coordination")).toEqual([]);
+    expect(dump(db, "scout_claims")).toEqual([]);
+  });
+
+  it("takes the caller's own name when none is given, in any case", async () => {
+    const { db, one } = setup();
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/9" })).content).toBe("CLAIMED by scout-1");
+    expect((await native(one, { command: "assign", scout: "SCOUT-1", cerchi: "1" })).content).toBe(
+      "Assigned: scout-1 → search_areas=1, sources=None",
+    );
+    expect(db.prepare("SELECT scout FROM scout_claims").all()).toEqual([{ scout: "scout-1" }]);
+    expect(db.prepare("SELECT scout FROM scout_coordination").all()).toEqual([{ scout: "scout-1" }]);
+  });
+
+  it("checks the name a claim is made in", async () => {
+    const { db, one } = setup();
+    const result = await native(one, { command: "claim", job_id: "https://jobs.example/9", scout: "--help" });
+    expect(result).toMatchObject({ ok: false, content: expect.stringContaining("'--help' is not a Scout name") });
+    expect(dump(db, "scout_claims")).toEqual([]);
+  });
+
+  it("resets only the caller's own split and old claims", async () => {
+    const { db, one, two } = setup();
+    await native(one, { command: "assign", cerchi: "1" });
+    await native(two, { command: "assign", cerchi: "2" });
+    const old = db.prepare("INSERT INTO scout_claims (job_id, scout, claimed_at) VALUES (?, ?, datetime('now', '-2 days'))");
+    old.run("https://jobs.example/old-1", "scout-1");
+    old.run("https://jobs.example/old-2", "scout-2");
+
+    expect((await native(one, { command: "reset" })).content).toBe("Session closed: 1 assignments archived.");
+    expect(db.prepare("SELECT scout FROM scout_coordination WHERE superseded_at IS NULL").all()).toEqual([{ scout: "scout-2" }]);
+    expect(db.prepare("SELECT job_id FROM scout_claims").all()).toEqual([{ job_id: "https://jobs.example/old-2" }]);
+  });
+
+  it("cannot be built for an agent that is not a Scout name", () => {
+    expect(() => createScoutCoordTool({ agent: "../capitano", db: () => openJobsDb(":memory:"), dbPath: ":memory:" })).toThrow();
+  });
+});
+
+describe("scout_coord: an expired claim is free again, without deleting anyone's claims", () => {
+  const setup = () => {
+    const db = openJobsDb(":memory:");
+    const as = (agent: string) => createScoutCoordTool({ agent, db: () => db, dbPath: ":memory:" });
+    const claimAt = db.prepare("INSERT INTO scout_claims (job_id, scout, claimed_at) VALUES (?, ?, datetime('now', ?))");
+    return { db, one: as("scout-1"), claimAt };
+  };
+
+  it("lets a Scout take a position whose claim expired on another Scout, and leaves every other claim alone", async () => {
+    const { db, one, claimAt } = setup();
+    claimAt.run("https://jobs.example/stale", "scout-2", "-25 hours");
+    claimAt.run("https://jobs.example/other-stale", "scout-2", "-3 days");
+    claimAt.run("https://jobs.example/live", "scout-2", "-23 hours");
+
+    expect((await native(one, { command: "check-claim", job_id: "https://jobs.example/stale" })).content).toBe("AVAILABLE");
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/stale" })).content).toBe("CLAIMED by scout-1");
+    expect((await native(one, { command: "check-claim", job_id: "https://jobs.example/live" })).content).toMatch(/^CLAIMED by scout-2 at /);
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/live" })).content).toMatch(/^ALREADY_CLAIMED by scout-2 at /);
+
+    const rows = db
+      .prepare("SELECT job_id, scout, claimed_at >= datetime('now', '-1 minute') AS fresh FROM scout_claims ORDER BY job_id")
+      .all();
+    expect(rows).toEqual([
+      { job_id: "https://jobs.example/live", scout: "scout-2", fresh: 0 },
+      // Not the caller's to delete: an expired claim nobody asked for stays, and stays ignored.
+      { job_id: "https://jobs.example/other-stale", scout: "scout-2", fresh: 0 },
+      { job_id: "https://jobs.example/stale", scout: "scout-1", fresh: 1 },
+    ]);
+  });
+
+  it("keeps a claim a peer made between the check and the write", async () => {
+    const real = openJobsDb(":memory:");
+    real.prepare("INSERT INTO scout_claims (job_id, scout, claimed_at) VALUES (?, ?, datetime('now', '-2 days'))").run("https://jobs.example/9", "scout-3");
+    // A peer renews the claim right after scout-1's SELECT, just before its write.
+    const racing = new Proxy(real, {
+      get(target, key) {
+        if (key !== "prepare") return Reflect.get(target, key);
+        return (sql: string) => {
+          if (sql.startsWith("INSERT INTO scout_claims")) {
+            target.prepare("UPDATE scout_claims SET scout = ?, claimed_at = CURRENT_TIMESTAMP WHERE job_id = ?").run("scout-2", "https://jobs.example/9");
+          }
+          return target.prepare(sql);
+        };
+      },
+    });
+    const one = createScoutCoordTool({ agent: "scout-1", db: () => racing, dbPath: ":memory:" });
+    expect((await native(one, { command: "claim", job_id: "https://jobs.example/9" })).content).toBe("ALREADY_CLAIMED (race condition)");
+    expect(real.prepare("SELECT scout FROM scout_claims").all()).toEqual([{ scout: "scout-2" }]);
   });
 });
