@@ -92,7 +92,13 @@ describe("a mock SCOUT run", () => {
     const scoutMd = await readFile(join(REPO_ROOT, "agents", "scout", "scout.md"), "utf8");
     const system = provider.requests[0]?.system ?? "";
     // The TUI identity, with what it runs through python3 pointing at the tools (T6).
-    expect(system.startsWith(rewritePythonSkills(scoutMd).trimEnd())).toBe(true);
+    const { createPathRewriter } = await import("../src/parity/prompt-paths.ts");
+    const paths = createPathRewriter({
+      appRoot: REPO_ROOT,
+      homeSkills: new Set(role.prompt.skills.map((s) => s.name)),
+      dedupLog: join(config.apiHome, "logs", "scout-dedup.log"),
+    });
+    expect(system.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
     expect(system).not.toMatch(/python3/);
     expect(system).toContain("# Running as an API agent");
     expect(system).toContain("skills/scout-coord/SKILL.md");

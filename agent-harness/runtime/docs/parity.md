@@ -54,6 +54,24 @@ reads:
    Everything else is the TUI text; `PARITY_NOTES` explains the tool calls.
    `tests/parity-run-role.test.ts` checks that the prompt and every `.md` in
    the home contain no `python3`.
+7. **Document paths point where the API agent can open them** (T10,
+   `src/parity/prompt-paths.ts`). The TUI text names files by the TUI
+   container's paths; in T5-bis the API SCOUT built
+   `/jht_home/agents/_skills/<x>/SKILL.md` from them and lost three rounds.
+   Now `agents/_skills/<x>/…` (bare, `/app/…` or `/jht_home/…`) becomes
+   `skills/<x>/…` for a skill in the home and `<appRoot>/agents/_skills/<x>/…`
+   otherwise; `agents/_manual/…` and `../_manual/…` (a link that is broken in
+   the TUI too) become `<appRoot>/agents/_manual/…`; `agents/_team/…` and
+   `../_team/…` become `<appRoot>/agents/_team/…` in the person's language
+   when the repo has it (the copy beside the home is another role's state to
+   the permission policy, so `read_file` would refuse it); `/app/` becomes
+   `<appRoot>/`; `/jht_home/jobs.db` becomes "the
+   team database (reach it only through the db tools)" and
+   `/jht_home/logs/scout-dedup.log` the harness's log. Left alone: paths under
+   `$JHT_HOME` that name the person's data or state the agent writes. The CLI
+   test resolves every document path of the prompt and of the home's
+   Markdown: each must exist, and `read_file` must open it under the SCOUT's
+   own permission policy.
 
 ### How it was checked (2026-09-19)
 
@@ -114,7 +132,7 @@ every statement is a constant with bound parameters.
 | `db_query.py check-url/position/positions/recent-activity` | `db_query` {args} | the words after the script name as `args`; same output byte for byte and same exit code (the four subcommands the SCOUT's skills call; the other 27 are other roles' and refused) |
 | `db_insert.py position` | `db_insert` {args} | same output, exit code and rows in `positions` and `position_state_transitions`: fields from the page flattened first, dedup and INSERT in one `BEGIN IMMEDIATE`, company id by name. `company`, `score`, `application`, `highlight` are other roles' and refused (SC-03). Two differences on purpose: `found_by` is the agent the runtime runs, not `--found-by` (D-5), and a DUPLICATE answer fences the existing row's company and title, which a page wrote (D-4) |
 | `db_update.py position <id> --status excluded --notes …` | `db_update` {args} | the SCOUT's one update, the duplicate recovery: same output, exit code and rows. **Narrower than the script on purpose**: only `--status excluded` and `--notes`, only on a position still `new` that this agent found (`found_by`, checked and in the UPDATE's WHERE, D-3); any other field, status or row is refused with the reason |
-| `scout_dedup.py check` | `scout_dedup` {args} | same JSON and exit code (10 = skip, an answer, not a failure); a skip is appended to `<apiHome>/logs/scout-dedup.log` in the script's format |
+| `scout_dedup.py check` | `scout_dedup` {args} | same JSON and exit code (10 = skip, an answer, not a failure); a skip is appended to `<apiHome>/logs/scout-dedup.log` in the script's format. The script has no `check-url`: asked for it, the tool answers argparse's error and then `check-url is a db_query subcommand: db_query check-url <url>` (T10) |
 | `email_monitor.py status/count/poll` | `email_monitor` {command, since_days?} | the script's output with no mailbox configured. No IMAP here and the credentials file is never opened; when it exists, `status` adds `note: imap-unavailable-in-api-runtime` |
 
 `tests/skills-parity.test.ts` and `tests/db-*.test.ts` run each script and

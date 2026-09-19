@@ -77,7 +77,11 @@ describe("npm run role -- --role scout (a product role)", () => {
 
     const scoutMd = await readFile(join(RUNTIME, "..", "..", "agents", "scout", "scout.md"), "utf8");
     const prompt = records.find((r) => r.type === "system_prompt")?.["text"] as string;
-    expect(prompt.startsWith(rewritePythonSkills(scoutMd).trimEnd())).toBe(true);
+    // The TUI identity through the two documented rewrites: python3 calls (T6) and document paths (T10).
+    const { createPathRewriter } = await import("../src/parity/prompt-paths.ts");
+    const homeSkills = new Set(await readdir(join(root, "api", "agents", "scout-1", "skills")));
+    const paths = createPathRewriter({ appRoot: join(RUNTIME, "..", ".."), homeSkills, dedupLog: join(root, "api", "logs", "scout-dedup.log") });
+    expect(prompt.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));
@@ -91,6 +95,35 @@ describe("npm run role -- --role scout (a product role)", () => {
       { title: "Mock Engineer", found_by: "scout-1", status: "new" },
     ]);
     db.close();
+
+    // T10: every document the prompt and the home's Markdown point at is a file this agent can open.
+    const { documentPaths, onDisk } = await import("../src/parity/prompt-paths.ts");
+    const { existsSync } = await import("node:fs");
+    const homeDir = join(root, "api", "agents", "scout-1");
+    const texts = [prompt];
+    for (const f of (await readdir(homeDir, { recursive: true })).filter((p) => p.endsWith(".md"))) {
+      texts.push(await readFile(join(homeDir, f), "utf8"));
+    }
+    const appRoot = join(RUNTIME, "..", "..");
+    const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, appRoot)))];
+    expect(referenced.length).toBeGreaterThan(20);
+    expect(referenced.filter((p) => !existsSync(onDisk(p, homeDir)))).toEqual([]);
+    // Existing is not enough: read_file must open each one under the SCOUT's own policy,
+    // the toolkit the run builds (a path in another role's state is refused).
+    const { loadConfig } = await import("../src/config.ts");
+    const { buildToolkit } = await import("../src/tools/toolkit.ts");
+    const { MockProvider } = await import("../src/core/provider/mock.ts");
+    const config = loadConfig({ JHT_API_HOME: join(root, "api") }, "scout-1");
+    const toolkit = await buildToolkit(config, { provider: new MockProvider([]), jobsDbFile: join(root, "api", "db", "jobs.db") });
+    const readFileTool = toolkit.tools.find((t) => t.spec.name === "read_file")!;
+    const refused: string[] = [];
+    for (const path of referenced) {
+      const decision = await toolkit.permissions.decide("read_file", readFileTool.classify({ path }));
+      if (!decision.allowed) refused.push(`${path}: ${decision.message ?? ""}`);
+    }
+    await toolkit.close();
+    expect(refused).toEqual([]);
+    for (const t of texts) expect(t).not.toMatch(/(?<![\w./-])(?:\/jht_home\/|\/app\/)?agents\/_(?:skills|manual|team)\//);
 
     // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.
     const home = join(root, "api", "agents", "scout-1");

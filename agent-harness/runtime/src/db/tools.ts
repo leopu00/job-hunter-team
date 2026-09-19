@@ -267,7 +267,12 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
   const scoutDedup = (argv: string[]): ScriptResult => {
     const sub = argv[0];
     if (sub === undefined) return argparseError("scout_dedup.py", "the following arguments are required: cmd");
-    if (sub !== "check") return argparseError("scout_dedup.py", `argument cmd: invalid choice: ${pyRepr(sub)} (choose from 'check')`);
+    if (sub !== "check") {
+      const error = argparseError("scout_dedup.py", `argument cmd: invalid choice: ${pyRepr(sub)} (choose from 'check')`);
+      // T10: a model reaching for db_query's check-url here is told where it is, in the same round.
+      if (sub === "check-url") error.stderr += "check-url is a db_query subcommand: db_query check-url <url>\n";
+      return error;
+    }
     const a = parseArgv(DEDUP_CHECK, argv.slice(1));
     const input = {
       url: a["url"] as string,
