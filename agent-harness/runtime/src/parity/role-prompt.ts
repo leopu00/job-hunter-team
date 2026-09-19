@@ -175,7 +175,13 @@ export function composeSystemPrompt(prompt: RolePrompt, parityNotes: string): st
  * prompt in `AGENTS.md`. Skills are replaced whole on every call, as the
  * launcher's `rm -rf` before copying does.
  */
-export async function materializeRoleHome(prompt: RolePrompt, homeDir: string, system: string): Promise<void> {
+export async function materializeRoleHome(
+  prompt: RolePrompt,
+  homeDir: string,
+  system: string,
+  /** Applied to every Markdown file copied (skills and team docs): how the API agent reads them. */
+  rewrite: (text: string) => string = (text) => text,
+): Promise<void> {
   const skillsDir = join(homeDir, HOME_SKILLS_DIR);
   await rm(skillsDir, { recursive: true, force: true });
   await mkdir(skillsDir, { recursive: true });
@@ -189,15 +195,27 @@ export async function materializeRoleHome(prompt: RolePrompt, homeDir: string, s
     for (const name of await readdir(dest)) {
       if (/^SKILL\..+\.md$/.test(name)) await rm(join(dest, name), { force: true });
     }
+    await rewriteMarkdown(dest, rewrite);
   }
 
   if (prompt.teamDocs.length > 0) {
     const teamDir = join(dirname(homeDir), "_team");
     await mkdir(teamDir, { recursive: true });
     for (const doc of prompt.teamDocs) await cp(doc.sourceFile, join(teamDir, doc.name));
+    await rewriteMarkdown(teamDir, rewrite);
   }
 
   await writeFile(join(homeDir, HOME_IDENTITY_FILE), system, "utf8");
+}
+
+async function rewriteMarkdown(dir: string, rewrite: (text: string) => string): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true, recursive: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const path = join(entry.parentPath, entry.name);
+    const text = await readFile(path, "utf8");
+    const next = rewrite(text);
+    if (next !== text) await writeFile(path, next, "utf8");
+  }
 }
 
 async function readSkill(name: string, sourceDir: string, locale: Locale): Promise<SkillEntry | null> {

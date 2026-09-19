@@ -22,6 +22,7 @@ import {
   guardShellTool,
   PARITY_NOTES,
   PauseRequest,
+  rewritePythonSkills,
   type AgentMessage,
   type Mailbox,
 } from "./jht-tools.ts";
@@ -65,9 +66,15 @@ export interface ProductRole {
 
 export async function prepareProductRole(options: ProductRoleOptions): Promise<ProductRole> {
   const locale = await resolveUserLocale({ jhtHome: options.jhtHome, ...(options.env ? { env: options.env } : {}) });
-  const prompt = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
+  const loaded = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
+  // T6: what the prompt tells the agent to run with python3 is a tool here.
+  const prompt = {
+    ...loaded,
+    identity: rewritePythonSkills(loaded.identity),
+    skills: loaded.skills.map((s) => ({ ...s, description: rewritePythonSkills(s.description) })),
+  };
   const systemPrompt = composeSystemPrompt(prompt, PARITY_NOTES);
-  await materializeRoleHome(prompt, options.homeDir, systemPrompt);
+  await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewritePythonSkills);
 
   const channels = join(options.apiHome, "channels");
   const mailbox = new FileMailbox(join(channels, "mailbox"));
@@ -85,6 +92,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     skills: prompt.skills.map((s) => s.name),
     jobsDb: options.jobsDb,
     jhtHome: options.jhtHome,
+    agent: options.agent,
+    dedupLog: join(options.apiHome, "logs", "scout-dedup.log"),
   });
 
   return {

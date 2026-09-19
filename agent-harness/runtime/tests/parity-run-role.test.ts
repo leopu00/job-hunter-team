@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { rewritePythonSkills } from "../src/parity/jht-tools.ts";
 
 const RUNTIME = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = promisify(execFile);
@@ -61,6 +62,12 @@ describe("npm run role -- --role scout (a product role)", () => {
       ["scout_coord", "accepted"],
       ["scout_coord", "accepted"],
       ["feedback_query", "accepted"],
+      // T6: checked and inserted; then the same ad again, skipped by the check and refused by the insert.
+      ["scout_dedup", "accepted"],
+      ["db_insert", "accepted"],
+      ["scout_dedup", "accepted"],
+      ["db_insert", "failed"],
+      ["db_query", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
@@ -70,10 +77,29 @@ describe("npm run role -- --role scout (a product role)", () => {
 
     const scoutMd = await readFile(join(RUNTIME, "..", "..", "agents", "scout", "scout.md"), "utf8");
     const prompt = records.find((r) => r.type === "system_prompt")?.["text"] as string;
-    expect(prompt.startsWith(scoutMd.trimEnd())).toBe(true);
+    expect(prompt.startsWith(rewritePythonSkills(scoutMd).trimEnd())).toBe(true);
+
+    // One position in the runtime's jobs.db, and the second attempt was told why.
+    const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));
+    expect(results[7]).toBe('{"action": "insert"}');
+    expect(results[8]).toMatch(/^Position inserted with ID: 1 \(company_id=NULL/);
+    expect(results[9]).toBe('{"action": "skip", "level": 1, "existing_id": 1, "match": "URL esatto"}\n(exit code 10)');
+    expect(results[10]).toMatch(/^\u26a0\ufe0f  DUPLICATE \(URL esatto\).*INSERT aborted\.\n\(exit code 1\)$/);
+    expect(results[11]).toMatch(/^FOUND: #1 .*Mock Ltd.* \[new\]$/);
+    const db = openJobsDb(join(root, "api", "db", "jobs.db"));
+    expect(db.prepare("SELECT title, found_by, status FROM positions").all()).toEqual([
+      { title: "Mock Engineer", found_by: "scout-1", status: "new" },
+    ]);
+    db.close();
+
+    // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.
+    const home = join(root, "api", "agents", "scout-1");
+    expect(prompt).not.toMatch(/python3/);
+    const markdown = (await readdir(home, { recursive: true })).filter((p) => p.endsWith(".md"));
+    expect(markdown.length).toBeGreaterThan(10);
+    for (const file of markdown) expect(await readFile(join(home, file), "utf8"), file).not.toMatch(/python3/);
 
     // The home a TUI spawn would find, and the CAPITANO's inbox.
-    const home = join(root, "api", "agents", "scout-1");
     expect(await readdir(join(home, "skills"))).toContain("scout-coord");
     expect(await readFile(join(home, "AGENTS.md"), "utf8")).toContain("# Running as an API agent");
     expect(await readFile(join(root, "api", "channels", "mailbox", "capitano.jsonl"), "utf8")).toContain('"from":"scout-1"');
