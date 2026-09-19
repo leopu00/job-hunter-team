@@ -60,8 +60,8 @@ const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   analista: ["ticket", "role_registry", "deadline_extract"],
   // T21: capitano.md C-06 reads the person's standing orders at every wake; the enrichment
   // policy is its to show (`set` is refused here: the profile is read-only), and the
-  // email check of C-17 runs without the skill listed.
-  capitano: ["team_directives", "enrichment_policy", "email_monitor"],
+  // email check of C-17 runs without the skill listed; C-15 drains the ticket queue, C-17 merges categories.
+  capitano: ["team_directives", "enrichment_policy", "email_monitor", "ticket", "role_registry"],
 };
 
 /** The script→tool overrides a role's text is rewritten with: whose tool a script is, for this role. */
@@ -106,7 +106,7 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   if (scripts.has("deadline_extract")) tools.push(createDeadlineExtractTool());
   if (db) {
     if (scripts.has("ticket")) tools.push(createTicketTool({ db: db.open, agent: options.agent }));
-    if (scripts.has("role_registry")) tools.push(createRoleRegistryTool({ db: db.open }));
+    if (scripts.has("role_registry")) tools.push(createRoleRegistryTool({ db: db.open, agent: options.agent }));
     if (listed.has("salary-estimate")) {
       tools.push(
         createSalaryEstimateTool({ db: db.open, ...(options.stateDir ? { cacheFile: join(options.stateDir, "cache", "salary_estimates.json") } : {}) }),

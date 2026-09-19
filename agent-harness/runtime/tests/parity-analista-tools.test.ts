@@ -142,6 +142,51 @@ describe("ticket against ticket.py, on tickets this agent holds", () => {
     expect(tickets(ourDb)).toEqual(tickets(pyDb));
   });
 
+  it.skipIf(skills === null)("drains the queue as the CAPITANO runs it: list-open, count-open, assign, for-position (T21)", () => {
+    // One fixed instant for both twins; the waiting times print in minutes.
+    const base = (openJobsDb(join(root, "clock.db")).prepare("SELECT datetime('now') AS n").get() as { n: string }).n;
+    const seed = (path: string) => {
+      const db = ticketDb(path);
+      const at = "UPDATE position_tickets SET created_at = datetime(?, ?), assigned_at = datetime(?, ?, 'localtime'), updated_at = datetime(?, ?, 'localtime') WHERE id = ?";
+      // #1 idle for ten hours: back to the queue. #2 assigned an hour ago: kept. #6 open for three days.
+      db.prepare(at).run(base, "-2 days", base, "-10 hours", base, "-10 hours", 1);
+      db.prepare(at).run(base, "-5 hours", base, "-1 hours", base, "-1 hours", 2);
+      db.prepare(at).run(base, "-150 minutes", base, "-2 hours", base, "-2 hours", 3);
+      db.prepare("UPDATE position_tickets SET created_at = datetime(?, '-3 days', '-4 hours') WHERE id = 6").run(base);
+      db.prepare("DELETE FROM position_tickets WHERE id = 5").run();
+      return db;
+    };
+    for (const idle of ["", "12", "x"]) {
+      const pyDb = seed(join(root, `py${idle}.db`));
+      const ourDb = seed(join(root, `ours${idle}.db`));
+      for (const args of [["count-open"], ["list-open"], ["list-open"], ["count-open"], ["assign", "6", "scrittore-2"], ["assign", "4", "x"], ["assign", "99", "x"], ["list-open"], ["for-position", "1"], ["for-position", "9"], ["show", "6"], ["assign", "x"]]) {
+        let ours;
+        try {
+          ours = ticketCommand(() => ourDb, "capitano", args, idle || undefined);
+        } catch (error) {
+          ours = { stdout: "", stderr: `${(error as Error).message}\n`, exitCode: 2 };
+        }
+        // No tmux server in TMUX_TMPDIR: the script's liveness is unknown, as the harness's is.
+        const py = runPython(skills!, ["ticket.py", ...args], { JHT_DB: join(root, `py${idle}.db`), TMUX_TMPDIR: root, JHT_TICKET_IDLE_HOURS: idle });
+        const label = `${idle} ${args.join(" ")}`;
+        if (py.status === 2) {
+          expect(ours.exitCode, label).toBe(2);
+          expect((ours.stderr ?? "").trim().split("\n").at(-1), label).toBe(py.stderr.trim().split("\n").at(-1));
+        } else {
+          expect({ stdout: ours.stdout, stderr: ours.stderr ?? "", exit: ours.exitCode }, label).toEqual({ stdout: py.stdout, stderr: py.stderr, exit: py.status });
+        }
+        expect(tickets(ourDb), label).toEqual(tickets(pyDb));
+      }
+    }
+  });
+
+  it("gives the CAPITANO the queue and not the answer", () => {
+    const db = ticketDb(join(root, "c.db"));
+    for (const sub of ["touch", "resolve", "open"]) {
+      expect(ticketCommand(() => db, "capitano", [sub, "1"]).stderr).toContain(`\`ticket ${sub}\` is not available to this agent`);
+    }
+  });
+
   it("touches and resolves only tickets assigned to this agent, and none of the Capitano's subcommands", () => {
     const db = ticketDb(join(root, "x.db"));
     const before = tickets(db);
@@ -179,7 +224,7 @@ function registryDb(path: string): Database {
 }
 
 const registry = (db: Database) => ({
-  families: db.prepare("SELECT user_id, name, status, support_count, promoted_at IS NOT NULL AS promoted FROM role_family_registry ORDER BY user_id, name").all(),
+  families: db.prepare("SELECT user_id, name, status, support_count, merged_into, promoted_at IS NOT NULL AS promoted FROM role_family_registry ORDER BY user_id, name").all(),
   positions: db.prepare("SELECT id, role_family, role_family_proposed FROM positions ORDER BY id").all(),
 });
 
@@ -224,6 +269,51 @@ describe("role_registry promote against role_registry.py", () => {
     expect(roleRegistry(() => db, "local", ["--user-id", "cand-2", "promote", "--name", "Sales", "--ids", "6"]).stderr).toContain("local candidate's registry");
     for (const sub of ["merge", "pass"]) {
       expect(roleRegistry(() => db, "local", [sub, "--into", "X", "--sources", "Y"]).stderr).toContain(`\`role_registry ${sub}\` is not available to this agent`);
+    }
+    expect(registry(db)).toEqual(before);
+  });
+});
+
+const MERGES: string[][] = [
+  ["merge", "--into", "Engineering", "--sources", "Backend", "Zeta"],
+  ["merge", "--into", " Backend ", "--sources", "Zeta", " Backend", "", "Old"],
+  ["--dry-run", "merge", "--into", "Engineering", "--sources", "Backend"],
+  ["merge", "--sources", "Backend", "Zeta", "--into", "Zeta"],
+  ["merge", "--so", "Backend", "--in", "It's"],
+  ["merge", "--sources=Backend", "--into=X"],
+  ["merge", "--into", "X", "--sources", "X", " X "],
+  ["merge", "--into", "  ", "--sources", "Backend"],
+  ["merge", "--into", "X", "--sources"],
+  ["merge", "--into", "X"],
+  ["merge", "--sources", "Backend"],
+  ["merge", "--into", "X", "--sources", "Backend", "--sources", "Zeta"],
+  ["merge", "--into", "X", "--sources", "Backend", "--dry-run"],
+  ["merge", "--into", "X", "--sources=A", "B"],
+  ["--user-id", "local", "merge", "--into", "X", "--sources", "Sales"],
+];
+
+describe("role_registry merge, as the CAPITANO runs it, against role_registry.py (T21)", () => {
+  it.skipIf(skills === null).each(MERGES.map((p) => [p.join(" "), p]))("%s", (_label, args) => {
+    const pyDb = registryDb(join(root, "py.db"));
+    const ourDb = registryDb(join(root, "ours.db"));
+    let ours;
+    try {
+      ours = roleRegistry(() => ourDb, "local", args as string[], ["merge"]);
+    } catch (error) {
+      ours = { stdout: "", stderr: `${(error as Error).message}\n`, exitCode: 2 };
+    }
+    const py = runPython(skills!, ["role_registry.py", ...(args as string[])], { JHT_DB: join(root, "py.db") });
+    const last = (text: string | undefined) => (text ?? "").trim().split("\n").at(-1);
+    expect([ours.exitCode, ours.stdout, last(ours.stderr)]).toEqual([py.status, py.stdout, last(py.stderr)]);
+    expect(registry(ourDb)).toEqual(registry(pyDb));
+  });
+
+  it("merges only in the local candidate's registry, and leaves promote to the ANALISTA", () => {
+    const db = registryDb(join(root, "x.db"));
+    const before = registry(db);
+    expect(roleRegistry(() => db, "local", ["--user-id", "cand-2", "merge", "--into", "X", "--sources", "Sales"], ["merge"]).stderr).toContain("local candidate's registry");
+    for (const sub of ["promote", "pass"]) {
+      expect(roleRegistry(() => db, "local", [sub, "--name", "X", "--ids", "1"], ["merge"]).stderr).toContain(`\`role_registry ${sub}\` is not available to this agent`);
     }
     expect(registry(db)).toEqual(before);
   });
