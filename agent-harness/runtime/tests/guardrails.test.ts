@@ -90,3 +90,62 @@ describe("Guardrails — charges", () => {
     expect(() => g.recordCharge(0.02)).toThrowError(expect.objectContaining({ code: "budget_exhausted" }));
   });
 });
+
+describe("Guardrails — the token limit leaves cached input to the budget (T9)", () => {
+  it("does not count input served from the cache", () => {
+    const g = new Guardrails({ limits: limits({ maxTotalTokens: 100 }), pricing: FREE });
+    // 1,000 in, 950 of them cached: 50 + 40 out = 90 counted.
+    expect(codeOf(() => g.recordUsage({ inputTokens: 1_000, cachedInputTokens: 950, outputTokens: 40 }))).toBe("no_error");
+    expect(codeOf(() => g.recordUsage({ inputTokens: 20, cachedInputTokens: 0, outputTokens: 0 }))).toBe("token_limit_reached");
+  });
+
+  it("counts cache writes, which are input the cache did not serve", () => {
+    const g = new Guardrails({ limits: limits({ maxTotalTokens: 100 }), pricing: FREE });
+    expect(codeOf(() => g.recordUsage({ inputTokens: 120, cachedInputTokens: 0, cacheWriteTokens: 110, outputTokens: 0 }))).toBe(
+      "token_limit_reached",
+    );
+  });
+
+  it("still stops on the budget, which prices every cached token", () => {
+    const g = new Guardrails({ limits: limits({ maxTotalTokens: 1_000, budgetUsd: 0.5 }), pricing: PRICEY });
+    expect(codeOf(() => g.recordUsage({ inputTokens: 1_000_000, cachedInputTokens: 1_000_000, outputTokens: 0 }))).toBe(
+      "budget_exhausted",
+    );
+  });
+});
+
+describe("a mock run with a million cached tokens (T9)", () => {
+  it("is not stopped by the token limit, as T5-bis was at round 16", async () => {
+    const { MockProvider } = await import("../src/core/provider/mock.ts");
+    const { RoleSession } = await import("../src/core/role-session.ts");
+    const { MemoryAuditLog } = await import("../src/core/audit.ts");
+    const { z } = await import("zod");
+    // T5-bis: ~31k tokens of context a round, 87 % of it cached. Twenty rounds of it:
+    // 620k input in all, 1M+ with the last rounds', far past the 400k limit if cache counted.
+    const round = { inputTokens: 55_000, cachedInputTokens: 52_000, outputTokens: 300 };
+    const script = [
+      ...Array.from({ length: 20 }, (_, i) => ({ toolCalls: [{ name: "noop", args: { i } }], usage: round })),
+      { text: "done", usage: round },
+    ];
+    const provider = new MockProvider(script);
+    const guardrails = new Guardrails({ limits: limits(), pricing: FREE });
+    const session = new RoleSession({
+      provider,
+      guardrails,
+      audit: new MemoryAuditLog(),
+      systemPrompt: "You are a test role.",
+      tools: [
+        {
+          spec: { name: "noop", description: "Does nothing.", schema: z.object({ i: z.number() }).strict() },
+          classify: () => ({ risk: "none", paths: [], summary: "noop" }),
+          execute: async () => ({ ok: true, content: "ok" }),
+        },
+      ],
+    });
+    const turn = await session.send("Go.");
+    expect(turn.text).toBe("done");
+    expect(turn.stats.usage.inputTokens).toBe(21 * 55_000);
+    expect(turn.stats.usage.cachedInputTokens).toBeGreaterThan(1_000_000);
+    expect(guardrails.state.steps).toBe(21);
+  });
+});
