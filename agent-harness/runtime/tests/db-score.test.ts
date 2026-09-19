@@ -119,10 +119,23 @@ describe("db_insert score, native", () => {
     expect(db.prepare("SELECT count(*) AS n FROM scores").get()).toEqual({ n: 0 });
   });
 
-  it("fails on a position that does not exist, as the foreign key does in the Python", async () => {
+  it("scores only a position in its queue, checked (S-1), and writes nothing else", async () => {
     const db = seeded(join(root, "f.db"));
-    const result = await scoreTool(db, jhtHome(VIABLE))(["score", "--position-id", "99", "--total", "10"]);
-    expect(result).toMatchObject({ ok: false, content: expect.stringContaining("FOREIGN KEY") });
+    const insert = scoreTool(db, jhtHome(VIABLE));
+    expect(await insert(["score", "--position-id", "99", "--total", "10"])).toMatchObject({
+      ok: false,
+      content: expect.stringContaining("SCORE REFUSED: position 99 does not exist."),
+    });
+    // Scored once while checked; then the position moves on and the score is frozen for the SCORER.
+    expect((await insert(SCORE)).ok).toBe(true);
+    for (const status of ["new", "scored", "writing", "ready", "applied", "excluded"]) {
+      db.prepare("UPDATE positions SET status = ? WHERE id = 1").run(status);
+      expect(await insert([...SCORE.slice(0, 4), "5"]), status).toMatchObject({
+        ok: false,
+        content: expect.stringContaining(`SCORE REFUSED: position 1 is '${status}', not 'checked'.`),
+      });
+    }
+    expect(db.prepare("SELECT position_id, total_score FROM scores").all()).toEqual([{ position_id: 1, total_score: 72 }]);
   });
 
   it("is the SCORER's alone: the SCOUT and the ANALISTA are refused", async () => {

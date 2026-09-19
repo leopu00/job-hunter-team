@@ -238,14 +238,17 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     }
     // An upsert, not REPLACE: a re-score keeps scores.id, the row's identity
     // towards the cloud, and deletes nothing (no tombstone for a live score).
-    options
-      .db()
+    // S-1: only on a position in the SCORER's queue (`checked`, as
+    // next-for-scorer reads it), in the same statement: the script would
+    // score or rewrite any position, one already in writing or applied too.
+    const db = options.db();
+    const written = db
       .prepare(
         `INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
                              salary_fit, experience_fit, strategic_fit,
                              breakdown, notes, scored_by, scored_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 strftime('%Y-%m-%d %H:%M:%f', 'now'))
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')
+         WHERE EXISTS (SELECT 1 FROM positions WHERE id = ? AND status = 'checked')
          ON CONFLICT(position_id) DO UPDATE SET
              total_score = excluded.total_score,
              stack_match = excluded.stack_match,
@@ -270,7 +273,16 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         sql(a["notes"]),
         // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
         options.agent,
+        sql(a["position_id"]),
       );
+    if (Number(written.changes) === 0) {
+      const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(sql(a["position_id"])) as { status: string } | undefined;
+      const why = row ? `is '${row.status}', not 'checked'` : "does not exist";
+      return {
+        stdout: `⚠\ufe0f  SCORE REFUSED: position ${a["position_id"]} ${why}. Score only the positions of your queue (db_query next-for-scorer).\n`,
+        exitCode: 1,
+      };
+    }
     return { stdout: `Score inserted for position ${a["position_id"]}: ${a["total"]}/100\n`, exitCode: 0 };
   };
 
