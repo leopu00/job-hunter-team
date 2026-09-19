@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { openJobsDb } from "../src/db/jobs-db.ts";
 
 const RUNTIME = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = promisify(execFile);
@@ -22,6 +24,10 @@ afterEach(async () => {
 
 /** `npm run role -- <args>`, as a person types it, on the mock and in a scratch home. */
 function role(...args: string[]) {
+  return roleWith({}, ...args);
+}
+
+function roleWith(env: Record<string, string>, ...args: string[]) {
   return run(process.execPath, ["--experimental-strip-types", "src/cli/run.ts", ...args], {
     cwd: RUNTIME,
     env: {
@@ -30,6 +36,7 @@ function role(...args: string[]) {
       JHT_API_HOME: join(root, "api"),
       JHT_HOME: join(root, "jht"),
       JHT_API_PROVIDER: "mock",
+      ...env,
     },
   });
 }
@@ -82,5 +89,34 @@ describe("npm run role -- --role scout (a product role)", () => {
     await expect(role("--role", "scout", "--turns", "0", "--quiet")).rejects.toMatchObject({
       stderr: expect.stringContaining("--turns must be a whole number above zero"),
     });
+  });
+});
+
+describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1)", () => {
+  it("keeps the file tools off the team database the run itself uses", async () => {
+    const dbFile = join(root, "jht", "db", "jobs.db");
+    const script = join(root, "script.json");
+    await writeFile(
+      script,
+      JSON.stringify([
+        { toolCalls: [{ name: "scout_coord", args: { command: "claim", job_id: "https://jobs.example/1", scout: "scout-1" } }] },
+        { toolCalls: [{ name: "write_file", args: { path: dbFile, content: "" } }] },
+        { text: "done" },
+      ]),
+    );
+    const { stdout } = await roleWith({ JHT_API_DB: dbFile }, "--role", "scout", "--agent", "scout-1", "--mock-script", script, "--quiet");
+    const records = (await readFile(stdout.trim(), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { type: string; [k: string]: unknown });
+    const tools = records.filter((r) => r.type === "tool_finished").map((r) => [r["name"], r["outcome"]]);
+    expect(tools).toEqual([
+      ["scout_coord", "accepted"],
+      ["write_file", "denied"],
+    ]);
+    // The claim is still there: nothing truncated the database.
+    const db = openJobsDb(dbFile);
+    expect(db.prepare("SELECT job_id FROM scout_claims").all()).toEqual([{ job_id: "https://jobs.example/1" }]);
+    db.close();
   });
 });

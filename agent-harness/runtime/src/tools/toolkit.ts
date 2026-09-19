@@ -38,7 +38,17 @@ const PLATFORM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
 
 export async function buildToolkit(
   config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile">,
-  options: { provider: ProviderPort; ask?: PermissionAsker | undefined; webFetch?: WebFetchOptions | undefined },
+  options: {
+    provider: ProviderPort;
+    ask?: PermissionAsker | undefined;
+    webFetch?: WebFetchOptions | undefined;
+    /**
+     * The team's jobs.db (`jobsDbPath`). Only the database tools may change
+     * it; the file tools treat it, and SQLite's -wal, -shm and -journal beside
+     * it, as another role's state, wherever it lives.
+     */
+    jobsDbFile?: string | undefined;
+  },
 ): Promise<Toolkit> {
   const { workdir } = config;
   const { provider } = options;
@@ -51,7 +61,10 @@ export async function buildToolkit(
 
   // Inside the runtime state, only this role's own folders are its to touch.
   const ownRoots = [workdir, config.agentHome];
-  const stateRoots = [config.apiHome];
+  // The database may live outside apiHome (JHT_API_DB on a VPS): its files are
+  // listed one by one, not its folder, which can be a JHT home the profile
+  // lives in too.
+  const stateRoots = [config.apiHome, ...(options.jobsDbFile ? jobsDbFiles(options.jobsDbFile) : [])];
 
   const mcp = config.mcpConfig ? await connectMcpFromFile(config.mcpConfig) : undefined;
 
@@ -70,4 +83,9 @@ export async function buildToolkit(
       await mcp?.close();
     },
   };
+}
+
+/** A SQLite database and the files it writes beside itself. */
+export function jobsDbFiles(path: string): string[] {
+  return [path, `${path}-wal`, `${path}-shm`, `${path}-journal`];
 }
