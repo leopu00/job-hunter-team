@@ -20,13 +20,46 @@ export interface DbRolePolicy {
   insert: readonly string[];
   /** db_update entities. */
   update: readonly string[];
+  /** What `db_update position` may change; absent when the role has no position update. */
+  position?: PositionUpdateRule;
+}
+
+/**
+ * The fields and status moves a role's `db_update position` may make. A move
+ * is checked against the row's status in the UPDATE's own WHERE, so two
+ * agents racing on one position cannot both move it.
+ */
+export interface PositionUpdateRule {
+  /** Flags it may pass (attribute names: `last_checked`); `"*"` for every flag of the script. */
+  fields: readonly string[] | "*";
+  /** Target status → the statuses it may come from. */
+  moves: Readonly<Record<string, readonly string[]>>;
+  /** Flags that only go with one target status: the SCORER's notes are its exclusion reason. */
+  onlyWith?: Readonly<Record<string, string>>;
+  /** Only rows this agent found (the SCOUT's duplicate recovery, D-3). */
+  ownRowsOnly?: boolean;
+  /** The statuses a row must be in for any update of this role, a move or not; absent: any. */
+  touches?: readonly string[];
+  /** Said when a call is refused: what this role's update is for. */
+  purpose: string;
 }
 
 const NONE: DbRolePolicy = { query: [], insert: [], update: [] };
 
 export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
   // SC-03: inserts positions, excludes its own duplicates, reads.
-  scout: { query: ["check-url", "position", "positions", "recent-activity"], insert: ["position"], update: ["position"] },
+  scout: {
+    query: ["check-url", "position", "positions", "recent-activity"],
+    insert: ["position"],
+    update: ["position"],
+    position: {
+      fields: ["status", "notes"],
+      moves: { excluded: ["new"] },
+      ownRowsOnly: true,
+      touches: ["new"],
+      purpose: `The SCOUT's only update is the duplicate recovery: db_update position <ID> --status excluded --notes "DUPLICATE of #<ORIGINAL_ID>" (skill position-insert).`,
+    },
+  },
   // T14, analista.md MAIN LOOP and RULE-08/12/13/14: the `new` queue and the on-demand
   // queues, the category registry, companies. Never scores or applications.
   analista: {
@@ -36,11 +69,32 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       "active-categories", "other-pile", "category-sizes",
     ],
     insert: [],
-    update: [],
+    update: ["position", "company"],
+    position: {
+      // Every field: the analysis writes notes, summary, location, salary estimate,
+      // category, liveness and office coordinates, and corrects what the Scout scraped.
+      fields: "*",
+      // new → checked | excluded is the analysis; a live position is excluded later only on
+      // proof it closed (RULE-14 care mode). Never back to new, never past the Scorer's states
+      // into the Scrittore's, never an application's.
+      moves: { checked: ["new", "checked"], excluded: ["new", "checked", "scored", "writing", "review", "ready", "excluded"] },
+      purpose: "The ANALISTA moves a position new → checked or excluded, and excludes a later one only on proof it closed (analista.md RULE-06/14).",
+    },
   },
   // T15 (FULLSTACK-1), scorer.md RULE-02/03/04/06: its queue and the position it scores.
-  // db_insert score: one row per position, behind profile_gate (T15).
-  scorer: { query: ["next-for-scorer", "position"], insert: ["score"], update: [] },
+  scorer: {
+    query: ["next-for-scorer", "position"],
+    // db_insert score: one row per position, behind profile_gate (T15).
+    insert: ["score"],
+    update: ["position"],
+    position: {
+      fields: ["status", "notes", "last_checked"],
+      moves: { scored: ["checked"], excluded: ["checked"] },
+      onlyWith: { notes: "excluded" },
+      touches: ["checked"],
+      purpose: "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06).",
+    },
+  },
 };
 
 /** `analista-2` → `analista`. */

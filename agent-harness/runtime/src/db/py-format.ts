@@ -150,6 +150,30 @@ export function pyInt(raw: string): number | null {
   return Number(out);
 }
 
+/** `float(str)`'s digits: Unicode decimal digits, one underscore allowed between two of them. */
+const PY_DIGITS = String.raw`\p{Nd}(?:_?\p{Nd})*`;
+const PY_FLOAT = new RegExp(String.raw`^[+-]?(?:(?:${PY_DIGITS}(?:\.(?:${PY_DIGITS})?)?|\.${PY_DIGITS})(?:[eE][+-]?${PY_DIGITS})?|inf(?:inity)?|nan)$`, "iu");
+
+/**
+ * Python's `float(str)` as argparse's `type=float` uses it: surrounding
+ * whitespace, `inf`/`infinity`/`nan` in any case, underscores between digits,
+ * any Unicode decimal digit; no hex, no `Infinity` spelled JavaScript's way
+ * only. Null when Python would raise ValueError.
+ */
+export function pyFloat(raw: string): number | null {
+  const text = raw.replace(INT_TRIM, "");
+  if (!PY_FLOAT.test(text)) return null;
+  const ascii = Array.from(text, (ch) => (/\p{Nd}/u.test(ch) ? String(digitValue(ch.codePointAt(0)!)) : ch))
+    .join("")
+    .replaceAll("_", "")
+    .toLowerCase();
+  const sign = ascii.startsWith("-") ? -1 : 1;
+  const body = ascii.replace(/^[+-]/, "");
+  if (body.startsWith("inf")) return sign * Infinity;
+  if (body === "nan") return NaN;
+  return sign * Number(body);
+}
+
 /**
  * The value of a Unicode decimal digit. The standard encodes each set of
  * decimal digits as a contiguous run starting at zero, and runs that touch

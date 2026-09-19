@@ -12,7 +12,7 @@
  * before it is shorter than argparse's, the one documented difference.
  */
 
-import { pyInt } from "./py-format.ts";
+import { pyFloat, pyInt } from "./py-format.ts";
 
 export type ArgType = "str" | "int" | "float";
 
@@ -176,10 +176,9 @@ function convert(
     if (n === null) fail(`${label}: invalid int value: ${pyRepr(raw)}`);
     value = n!;
   } else if (type === "float") {
-    const text = raw.trim();
-    const n = Number(text.replaceAll("_", ""));
-    if (text === "" || Number.isNaN(n)) fail(`${label}: invalid float value: ${pyRepr(raw)}`);
-    value = n;
+    const n = pyFloat(raw);
+    if (n === null) fail(`${label}: invalid float value: ${pyRepr(raw)}`);
+    value = n!;
   }
   if (choices && !choices.includes(String(value))) {
     const shown = choices.map((c) => `'${c}'`).join(", ");
