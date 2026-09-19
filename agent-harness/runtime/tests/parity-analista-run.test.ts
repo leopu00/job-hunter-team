@@ -129,6 +129,7 @@ describe("npm run role -- --role analista (T14)", () => {
     for (const f of (await readdir(home, { recursive: true })).filter((p) => p.endsWith(".md"))) texts.push(await readFile(join(home, f), "utf8"));
     for (const t of texts) {
       expect(t).not.toMatch(/python3/);
+      expect(t).not.toMatch(/jht-throttle/);
       expect(t).not.toMatch(/(?:\$\{?JHT_HOME\}?|\/jht_home|~\/\.jht)\/profile/);
     }
     // office-geocoding's Nominatim call is the ANALISTA's own safe_fetch, with its flags.

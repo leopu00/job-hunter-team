@@ -193,7 +193,7 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
     spec: {
       name: "throttle",
       description:
-        "Pause (what `throttle <your-name>` and the `jht-throttle*` commands do). The harness decides how " +
+        "Pause (what `throttle <your-name>` does in the TUI). The harness decides how " +
         "long and wakes you. Call it as the last thing you do: your turn ends here.",
       schema: z.object({ reason: z.string().max(200).optional() }).strict(),
     },
@@ -279,7 +279,7 @@ instructions name for talking and pausing are tools here:
 
 - \`jht-tmux-send <SESSION> "<msg>"\` → \`send_message\` (to, text)
 - \`jht-send "<msg>"\` → \`chat_reply\` (text)
-- \`throttle <you>\`, \`jht-throttle*\` → \`throttle\`, then end your turn
+- \`throttle <you>\` → \`throttle\`, then end your turn; a pending pause is the harness's, nothing to check or wait for
 - \`throttle-ack\` → nothing: the harness records your wake-up
 - \`jht-notify-user\`, \`jht-telegram-send\` → \`notify_user\`
 - \`jht-check-user-replies\` → \`check_user_replies\`
@@ -314,8 +314,9 @@ const REPLACED: Record<string, string> = {
   "jht-send": use("chat_reply"),
   throttle: use("throttle"),
   "jht-throttle": use("throttle"),
-  "jht-throttle-check": use("throttle"),
-  "jht-throttle-wait": use("throttle"),
+  // T21: a pending pause is the harness's; there is nothing to check or wait for.
+  "jht-throttle-check": "is not needed here: the harness keeps a pending pause itself. Go on with the task.",
+  "jht-throttle-wait": "is not needed here: the harness keeps a pending pause itself. Go on with the task.",
   "throttle-ack": "is not needed here: the harness records your wake-up itself.",
   "jht-notify-user": use("notify_user"),
   "jht-telegram-send": use("notify_user"),
@@ -399,6 +400,36 @@ export function rewritePythonSkills(
     // db-insert says `db-query check-url`: three runs in a row the SCOUT took it for a
     // scout_dedup subcommand. The tool is named where the text names the subcommand alone.
     .replace(/`(?:db-query )?check-url(?![\w-])/g, "`db_query check-url");
+}
+
+/** `jht-throttle`, `jht-throttle-check`, `jht-throttle-wait` as words, not inside a longer name. */
+const THROTTLE_COMMAND = /(?<![\w-])jht-throttle(-check|-wait)?(?![\w-])/;
+const CHECK_OR_WAIT = "nothing (the harness keeps a pending pause itself)";
+
+/**
+ * T21: the throttle commands as the API agent has them. The TUI prompts pause
+ * with `jht-throttle …` and, before every task, recover a pause the provider
+ * killed with `jht-throttle-check X || jht-throttle-wait X`. Here the pause is
+ * the `throttle` tool, and a pending pause lives in the harness, so the check
+ * and the wait are nothing to run: in the live chain the ANALISTA ran
+ * `jht-throttle-check` in the shell and lost a round to the guard's refusal.
+ */
+export function rewriteThrottleCommands(text: string): string {
+  const any = new RegExp(THROTTLE_COMMAND.source, "g");
+  return (
+    text
+      // An inline command: the pause is the tool; a check or a wait is nothing to do.
+      .replace(/`([^`\n]*)`/g, (whole, code: string) => {
+        if (!THROTTLE_COMMAND.test(code)) return whole;
+        return /(?<![\w-])jht-throttle(?![\w-])/.test(code) ? "`throttle {reason}`" : CHECK_OR_WAIT;
+      })
+      // A command line in a shell block.
+      .replace(/^([ \t]*)jht-throttle(-check|-wait)?(?![\w-])[^\n]*$/gm, (_line, indent: string, variant: string | undefined) =>
+        variant ? `${indent}# nothing to run: the harness keeps a pending pause itself` : `${indent}# the throttle tool {reason}, then end your turn`,
+      )
+      // Anywhere else, the name.
+      .replace(any, "throttle")
+  );
 }
 
 /** `python3 [flags] [path/]<script>.py` at a command position; the script's file name is captured. */

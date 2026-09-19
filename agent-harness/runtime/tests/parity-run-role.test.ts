@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
-import { rewritePythonSkills } from "../src/parity/jht-tools.ts";
+import { rewritePythonSkills, rewriteThrottleCommands } from "../src/parity/jht-tools.ts";
 
 const RUNTIME = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = promisify(execFile);
@@ -97,7 +97,7 @@ describe("npm run role -- --role scout (a product role)", () => {
       homeDir: join(root, "api", "agents", "scout-1"),
       profileDir,
     });
-    expect(prompt.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
+    expect(prompt.startsWith(paths(rewriteThrottleCommands(rewritePythonSkills(scoutMd))).trimEnd())).toBe(true);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));
@@ -154,6 +154,8 @@ describe("npm run role -- --role scout (a product role)", () => {
     for (const t of texts) expect(t).not.toMatch(/(?<![\w./-])(?:\/jht_home\/|\/app\/)?agents\/_(?:skills|manual|team)\//);
     // T12: check-url is never named without its tool, the way position-insert's dedup gate named it.
     for (const t of texts) expect(t).not.toMatch(/`(?:db-query )?check-url/);
+    // T21: no throttle command the harness does not run.
+    for (const t of texts) expect(t).not.toMatch(/jht-throttle/);
     expect(await readFile(join(homeDir, "skills", "position-insert", "SKILL.md"), "utf8")).toContain("`db_query check-url` deduplicates");
 
     // What the agent reads says nothing of python3: the prompt, and every Markdown file in its home.
