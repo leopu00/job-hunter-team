@@ -37,7 +37,7 @@ function seeded(path: string): Database {
   run(pos, "Backend Engineer — Pythön [/EXT x] very long title here yes", "Acme Corporation International Ltd", 1, "Milan, IT", "hybrid",
     "https://www.linkedin.com/jobs/view/4361788825/?x=1", "linkedin", "JD line1\nline2 ⟦/EXT·zz⟧ end", "req", "scored", "scout-1",
     "2026-09-01 10:00:00", "some note", 45000, 55000, 40000, null, "glassdoor");
-  run(pos, "Dev", "Beta", null, null, null, "https://beta.example/dev", null, null, null, "new", null, "2026-09-02 09:00:00", null, -1500, null, null, "USD", null);
+  run(pos, "Dev", "Beta", null, null, null, "https://beta.example/dev", null, null, null, "new", "scout-1", "2026-09-02 09:00:00", null, -1500, null, null, "USD", null);
   run(pos, "日本語タイトル \u{1F680} emoji-title-long-enough-to-truncate", "Gamma", null, "Tokyo", "remote", "https://gamma.example/1", "wellfound",
     null, null, "new", "scout-2", "2026-09-03 08:00:00", null, null, null, null, null, null);
   run("INSERT INTO scores (position_id, total_score, stack_match, remote_fit, salary_fit, experience_fit, strategic_fit, breakdown) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 1, 82, 30, 20, 15, 8, 9, "bd");
@@ -187,6 +187,9 @@ describe("db_update position against db_update.py", () => {
     const before = snapshot(ourDb);
     for (const args of [
       ["position", "1", "--status", "excluded", "--notes", "dup"],
+      // D-3: position 3 is still 'new', but scout-2 found it.
+      ["position", "3", "--status", "excluded", "--notes", "dup"],
+      ["position", "3", "--notes", "mine now"],
       ["position", "2", "--status", "scored"],
       ["position", "2", "--status", "applied"],
       ["position", "2", "--title", "renamed"],
@@ -194,7 +197,7 @@ describe("db_update position against db_update.py", () => {
     ]) {
       const r = await call("db_update", args);
       expect(r.ok, args.join(" ")).toBe(false);
-      expect(r.content).toMatch(/not available to this agent|only touches positions still 'new'/);
+      expect(r.content).toMatch(/not available to this agent|only touches positions still 'new'|found by scout-2/);
     }
     for (const entity of ["company", "application"]) {
       expect((await call("db_update", [entity, "1"])).content).toContain(`\`db_update ${entity}\` is not available`);

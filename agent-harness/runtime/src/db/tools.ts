@@ -23,7 +23,7 @@ import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
 import { dbQuery } from "./db-query.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
-import { EXTERNAL_INLINE_FIELDS, flattenExternalValue } from "./external-content.ts";
+import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
@@ -123,8 +123,11 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
       if (dup) {
         logSkip(dup, { url: a["url"] as string, company: a["company"] as string, title: a["title"] as string });
         db.exec("ROLLBACK");
+        // D-4: the existing row's company and title were written by a page; the
+        // Python prints them bare, we fence them as db_query does.
+        const fence = new Fence(options.nonce?.());
         return {
-          stdout: `⚠\ufe0f  DUPLICATE (${dup.matchType}): '${a["company"]} — ${a["title"]}' already exists as #${dup.row.id} (${dup.row.company} — ${dup.row.title}). INSERT aborted.\n`,
+          stdout: `⚠\ufe0f  DUPLICATE (${dup.matchType}): '${a["company"]} — ${a["title"]}' already exists as #${dup.row.id} (${fence.inline(dup.row.company)} — ${fence.inline(dup.row.title)}). INSERT aborted.\n`,
           exitCode: 1,
         };
       }
@@ -157,7 +160,8 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
           sql(a["source"]),
           sql(a["jd_text"]),
           sql(a["requirements"]),
-          sql(a["found_by"]),
+          // D-5: the finder is the agent the runtime runs, not what the model typed in --found-by.
+          options.agent,
           sql(a["deadline"]),
           sql(a["notes"]),
         );
@@ -165,7 +169,7 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
       // Python: JHT_AGENT_NAME or --found-by or 'unknown'. The harness always knows the agent.
       db.prepare(
         "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) VALUES (?, NULL, 'new', ?, ?)",
-      ).run(positionId, options.agent || (a["found_by"] as string | null) || "unknown", "initial INSERT");
+      ).run(positionId, options.agent, "initial INSERT");
       db.exec("COMMIT");
     } catch (error) {
       rollbackQuietly(db);
@@ -206,7 +210,18 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
     const db = options.db();
     db.exec("BEGIN IMMEDIATE");
     try {
-      const current = db.prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
+      const current = db.prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
+        | { status: string | null; found_by: string | null }
+        | undefined;
+      // D-3: a SCOUT recovers its own duplicates. Another Scout's position stays theirs.
+      if (current && current.found_by !== options.agent) {
+        db.exec("ROLLBACK");
+        return {
+          stdout: "",
+          stderr: `Position #${id} was found by ${current.found_by ?? "nobody recorded"}, not by you: the SCOUT only recovers its own duplicates.\n`,
+          exitCode: 1,
+        };
+      }
       if (current && current.status !== "new") {
         db.exec("ROLLBACK");
         return {
@@ -230,7 +245,8 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
       sets.push("last_actor = ?");
       params.push(options.agent);
       // The SET list is made of the constant fragments above; every value is bound.
-      const result = db.prepare(`UPDATE positions SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
+      // found_by in the WHERE too (D-3): the write itself cannot reach another agent's row.
+      const result = db.prepare(`UPDATE positions SET ${sets.join(", ")} WHERE id = ? AND found_by = ?`).run(...params, id, options.agent);
       if (Number(result.changes) === 0) {
         db.exec("ROLLBACK");
         return { stdout: `⚠\ufe0f  ERROR: no position found with id=${id}!\n`, exitCode: 1 };
