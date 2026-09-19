@@ -12,7 +12,7 @@ import { Guardrails } from "../src/core/guardrails.ts";
 import { MockProvider, type ScriptedTurn } from "../src/core/provider/mock.ts";
 import { RoleSession, type SessionEvent } from "../src/core/role-session.ts";
 import { prepareProductRole, runCycles, wakeMessage } from "../src/parity/product-role.ts";
-import { JHT_TOOL_NAMES, rewritePythonSkills } from "../src/parity/jht-tools.ts";
+import { JHT_TOOL_NAMES, rewritePythonSkills, rewriteThrottleCommands } from "../src/parity/jht-tools.ts";
 import { buildToolkit } from "../src/tools/toolkit.ts";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -100,7 +100,7 @@ describe("a mock SCOUT run", () => {
       homeDir: config.agentHome,
       profileDir: join(root, "jht", "profile"),
     });
-    expect(system.startsWith(paths(rewritePythonSkills(scoutMd)).trimEnd())).toBe(true);
+    expect(system.startsWith(paths(rewriteThrottleCommands(rewritePythonSkills(scoutMd))).trimEnd())).toBe(true);
     expect(system).not.toMatch(/python3/);
     expect(system).toContain("# Running as an API agent");
     expect(system).toContain(`${config.agentHome}/skills/scout-coord/SKILL.md`);

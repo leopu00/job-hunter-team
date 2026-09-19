@@ -476,6 +476,14 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
   });
 
+  it("takes --work-mode full_remote, the prompt's word, as the column's remote (T21)", async () => {
+    const { call, ourDb } = twins("analista-1");
+    const r = await call("db_update", ["position", "2", "--work-mode", "full_remote", "--loc-country", "Italy"]);
+    expect(r.content).toBe("Position 2 updated: loc_country=Italy, work_mode=remote");
+    expect(ourDb.prepare("SELECT work_mode FROM positions WHERE id = 2").get()).toEqual({ work_mode: "remote" });
+    expect((await call("db_update", ["position", "2", "--work-mode", "anywhere"])).content).toMatch(/invalid choice: 'anywhere' \(choose from 'onsite', 'hybrid', 'remote', 'full_remote'\)/);
+  });
+
   it("moves a position only new → checked | excluded, and excludes a later one, never an application's", async () => {
     const { call, ourDb } = twins("analista-1");
     ourDb.prepare("UPDATE positions SET status = 'applied' WHERE id = 6").run();

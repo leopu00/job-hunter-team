@@ -133,6 +133,9 @@ function guardRoleFamily(raw: string, active: string[]): { family: string; propo
 /** `update_position`, with the actor as `last_actor` and in the transition and history rows. */
 export function updatePosition(db: Database, a: Parsed, actor: string, userId: string, guard?: UpdateGuard): ScriptResult {
   const id = a["id"] as number;
+  // T21: the column's vocabulary is onsite | hybrid | remote (location-enrichment, the dashboard's
+  // filters); analista.md names the full-remote case with remote_type's word. Stored as the column's.
+  if (a["work_mode"] === "full_remote") a["work_mode"] = "remote";
   // normalize_external_inline_fields: the page's short fields stay one line.
   for (const f of EXTERNAL_INLINE_FIELDS) if (typeof a[f] === "string") a[f] = flattenExternalValue(a[f]);
   const out: string[] = [];

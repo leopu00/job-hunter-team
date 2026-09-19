@@ -15,6 +15,7 @@ import {
   PauseRequest,
   replacedCommand,
   rewritePythonSkills,
+  rewriteThrottleCommands,
 } from "../src/parity/jht-tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
 
@@ -236,6 +237,10 @@ describe("guardShellTool", () => {
 
     const ack = await guarded.execute({ command: "throttle-ack scout-1" }, context);
     expect(ack.content).toContain("not needed");
+    // T21: the check and the wait before a task are nothing to run; the pause is the tool.
+    const check = await guarded.execute({ command: "jht-throttle-check analista-1 || jht-throttle-wait analista-1" }, context);
+    expect(check.content).toBe("Error: `jht-throttle-check` is not needed here: the harness keeps a pending pause itself. Go on with the task. Nothing was run.");
+    expect((await guarded.execute({ command: "jht-throttle --agent analista-1" }, context)).content).toContain("`throttle`");
     const install = await guarded.execute({ command: "jht-install py requests" }, context);
     expect(install.content).toContain("not available");
     expect(ran).toEqual([]);
@@ -298,6 +303,22 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("Wrapper at `/app/shared/skills/db_insert.py`.")).toBe("Wrapper at `the db_insert tool`.");
     expect(rewritePythonSkills("- `shared/skills/web_scrape_robust.py`")).toBe("- `web_scrape_robust.py (not available in the API harness)`");
     expect(rewritePythonSkills("see my/shared/skills/x.py")).toBe("see my/shared/skills/x.py");
+  });
+
+  it("turns the throttle commands into the throttle tool, and the check and wait into nothing to run (T21)", () => {
+    // analista.md RULE-01b, the same in the SCORER's.
+    expect(rewriteThrottleCommands("BEFORE the task do `jht-throttle-check analista-N || jht-throttle-wait analista-N` (recovers any pending throttle), AFTER the task do `jht-throttle --agent analista-N [--reason \"...\"]` (duration from x).")).toBe(
+      "BEFORE the task do nothing (the harness keeps a pending pause itself) (recovers any pending throttle), AFTER the task do `throttle {reason}` (duration from x).",
+    );
+    // scout.md's shell block and the manual's.
+    expect(rewriteThrottleCommands("```bash\n  jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID\n  jht-throttle <seconds> --agent <your-name> [--reason \"...\"]\n```")).toBe(
+      "```bash\n  # nothing to run: the harness keeps a pending pause itself\n  # the throttle tool {reason}, then end your turn\n```",
+    );
+    expect(rewriteThrottleCommands("when calling `jht-throttle <N>`; do NOT re-launch `jht-throttle`, call `jht-throttle-check scorer-N`")).toBe(
+      "when calling `throttle {reason}`; do NOT re-launch `throttle {reason}`, call nothing (the harness keeps a pending pause itself)",
+    );
+    expect(rewriteThrottleCommands("allowed-tools: Bash(jht-throttle *), Bash(jht-throttle-check *)")).toBe("allowed-tools: Bash(throttle *), Bash(throttle *)");
+    for (const same of ["throttle-config", "the throttle skill", "my-jht-throttle-x"]) expect(rewriteThrottleCommands(same)).toBe(same);
   });
 
   it("uses a role's own tool for a script when the role has one (T14: the ANALISTA's safe_fetch)", () => {
