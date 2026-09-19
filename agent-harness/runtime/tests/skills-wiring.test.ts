@@ -20,7 +20,7 @@ import { RoleSession, type SessionEvent } from "../src/core/role-session.ts";
 import { jobsDbPath, openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { guardShellTool, PYTHON_SKILLS, replacedSkill } from "../src/parity/jht-tools.ts";
 import { prepareProductRole } from "../src/parity/product-role.ts";
-import { createSkillTools } from "../src/parity/skills/index.ts";
+import { createSkillTools, scriptOverrides } from "../src/parity/skills/index.ts";
 import type { ToolHandler } from "../src/tools/registry.ts";
 import { buildToolkit } from "../src/tools/toolkit.ts";
 
@@ -80,6 +80,18 @@ describe("which roles get which skill tools", () => {
     expect(names(["db-insert", "db-update"])).toEqual(["db_insert", "db_update", "scout_dedup"]);
     expect(names(["feedback-query"])).toEqual(["feedback_query"]);
     expect(names(["tmux-send", "throttle"])).toEqual([]);
+  });
+
+  it("gives the ANALISTA its scripts, and db_insert for companies without the skill listed (T14)", () => {
+    const skills = ["tmux-send", "db-query", "db-update", "throttle", "throttle-ack", "location-enrichment", "office-geocoding", "logo-extraction", "recheck-liveness", "chat-worker", "salary-estimate"];
+    const tools = createSkillTools({ skills, agent: "analista-2", jobsDb: db, profileDir: "/profile" }).map((t) => t.spec.name);
+    expect(tools).toEqual([
+      "db_query", "db_insert", "db_update", "recheck_liveness", "safe_fetch", "deadline_extract", "ticket", "role_registry", "salary_estimate", "logo_fetch", "enrichment_policy",
+    ]);
+    // A SCOUT with the same skills gets no ANALISTA script and no insert it does not list.
+    expect(createSkillTools({ skills: ["db-query"], agent: "scout-1", jobsDb: db }).map((t) => t.spec.name)).toEqual(["db_query"]);
+    expect(scriptOverrides(skills)).toEqual({ "safe_fetch.py": "safe_fetch" });
+    expect(scriptOverrides(["db-query"])).toEqual({});
   });
 
   it("offers no database tool when the runtime opened no database", () => {

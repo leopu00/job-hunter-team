@@ -24,6 +24,7 @@
 import { parseArgv, type CommandSpec } from "./argv.ts";
 import { extractLinkedinJobId } from "./dedup.ts";
 import { Fence, flattenExternalValue } from "./external-content.ts";
+import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import type { Database } from "./jobs-db.ts";
 import { pyFixed, pyJson, pyPad, pySlice, pyStr, pyTruthy } from "./py-format.ts";
 import type { ScriptResult } from "./tools.ts";
@@ -46,6 +47,11 @@ const QUEUES = {
   "next-for-recheck": "recheck",
   "next-for-categorize": "categorize",
   "next-for-salary-precise": "salary-precise",
+  // Care mode (RULE-14): assigned by the Capitano, gated by the enrichment policy.
+  "next-for-recheck-due": "recheck-due",
+  "next-for-recheck-weekly": "recheck-due",
+  "next-for-geocode-missing": "geocode-missing",
+  "next-for-logo-missing": "logo-missing",
 } as const;
 type QueueCommand = keyof typeof QUEUES;
 
@@ -65,6 +71,15 @@ const queueSpec = (name: string): CommandSpec => ({
 });
 const SPECS: Record<Ported, CommandSpec> = {
   ...(Object.fromEntries(Object.keys(QUEUES).map((q) => [q, queueSpec(q)])) as Record<QueueCommand, CommandSpec>),
+  ...Object.fromEntries(
+    ["next-for-recheck-due", "next-for-recheck-weekly"].map((q) => [
+      q,
+      {
+        ...queueSpec(q),
+        options: [...queueSpec(q).options!, { flag: "--min-score", type: "int", default: null }, { flag: "--older-than-days", type: "int", default: null }],
+      },
+    ]),
+  ),
   company: { prog: "db_query.py company", positionals: [{ name: "name" }], options: [JSON_FLAG] },
   companies: {
     prog: "db_query.py companies",
@@ -133,6 +148,8 @@ export interface DbQueryOptions {
   refuse: (sub: string | undefined) => ScriptResult;
   /** `local_user_id()`: whose category registry `active-categories` reads. */
   userId?: string;
+  /** The enrichment policy the care-mode queues obey; absent, they are off (nothing tells what the person allowed). */
+  policy?: EnrichmentPolicy | undefined;
 }
 
 export function dbQuery(db: () => Database, argv: string[], options: DbQueryOptions): ScriptResult {
@@ -279,7 +296,13 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
 
   if (name in QUEUES) {
     const limit = a["all"] ? 0 : (a["limit"] as number | null);
-    queue(db(), QUEUES[name as QueueCommand], sqlLimit(limit), Boolean(a["json"]), options.userId ?? "local", print);
+    const gate = {
+      userId: options.userId ?? "local",
+      policy: options.policy,
+      minScore: (a["min_score"] as number | null | undefined) ?? null,
+      olderThanDays: (a["older_than_days"] as number | null | undefined) ?? null,
+    };
+    queue(db(), QUEUES[name as QueueCommand], sqlLimit(limit), Boolean(a["json"]), gate, print);
     return done();
   }
 
@@ -586,11 +609,118 @@ function unverifiedStreak(db: Database, positionId: number): number {
  * SQL is the Python's text; the categorize queue's `IN` list is one `?` per
  * active name.
  */
-function queue(db: Database, role: string, lim: number, asJson: boolean, userId: string, print: (line?: string) => void): void {
+interface QueueGate {
+  userId: string;
+  policy: EnrichmentPolicy | undefined;
+  minScore: number | null;
+  olderThanDays: number | null;
+}
+
+/** `LAST_VERIFIED_SQL`: the last liveness check, whichever column recorded it. */
+const LAST_VERIFIED_SQL = "MAX(COALESCE(p.last_checked, ''), COALESCE(p.last_open_check, ''))";
+
+/** `_emit_disabled_queue`: a queue the policy turned off is a state, not an empty queue. */
+function disabledQueue(role: string, label: string, message: string, asJson: boolean, print: (line?: string) => void): void {
+  if (asJson) {
+    print(pyJson({ queue: role, label, enabled: false, total: 0, shown: 0, limit: null, rows: [] }, { ensureAscii: false }));
+  } else {
+    print(message);
+  }
+}
+
+function queue(db: Database, role: string, lim: number, asJson: boolean, gate: QueueGate, print: (line?: string) => void): void {
+  const userId = gate.userId;
   let sql: string;
-  let params: Array<string | number> = [];
+  let params: Array<string | number | boolean> = [];
   let label: string;
-  if (role === "analista") {
+  const careKind = { "recheck-due": "recheck_weekly", "geocode-missing": "geocode_missing", "logo-missing": "logo" } as const;
+  const careLabel = { "recheck-due": "Scheduled care-mode recheck", "geocode-missing": "Care-mode geocoding", "logo-missing": "Care-mode logo" } as const;
+  if (role in careKind) {
+    const kind = careKind[role as keyof typeof careKind];
+    const off = careLabel[role as keyof typeof careLabel];
+    // No policy to read is no permission: the queue is off, said so.
+    const reason = gate.policy ? (gate.policy.isEnabled(kind) ? "" : gate.policy.disabledReason(kind)) : "the enrichment policy cannot be read here";
+    if (reason) {
+      disabledQueue(role, off, `\n${off}: OFF — ${reason}.`, asJson, print);
+      return;
+    }
+  }
+  if (role === "recheck-due") {
+    const opts = gate.policy!.recheckOptions();
+    const minScore = gate.minScore ?? opts.min_score;
+    const days = gate.olderThanDays ?? opts.older_than_days;
+    sql = `
+            SELECT p.id, p.title, p.company, p.last_checked, p.expires_at, s.total_score,
+                   ${LAST_VERIFIED_SQL} AS last_verified,
+                   COUNT(*) OVER () AS _total
+            
+        FROM positions p
+        JOIN (SELECT position_id, MAX(total_score) AS total_score
+              FROM scores GROUP BY position_id) s ON s.position_id = p.id
+        WHERE p.status != 'excluded'
+          AND s.total_score >= ?
+          AND ${LAST_VERIFIED_SQL} < datetime('now', ?)
+    
+            ORDER BY last_verified ASC
+            LIMIT ?
+        `;
+    params = [minScore, `-${days} days`];
+    label = `Scheduled care-mode recheck (live, score>=${minScore}, not checked for >${days} days)`;
+  } else if (role === "geocode-missing") {
+    const opts = gate.policy!.geocodeOptions();
+    let scope = `
+        FROM positions p
+        WHERE p.status != 'excluded'
+          AND (p.office_lat IS NULL
+               OR p.office_geocoded IS NULL OR p.office_geocoded = 0)`;
+    if (opts.min_score !== null) {
+      scope += `
+          AND EXISTS (SELECT 1 FROM scores sg
+                      WHERE sg.position_id = p.id
+                        AND sg.total_score >= ?)`;
+      params.push(opts.min_score);
+    }
+    if (opts.non_remote_only) {
+      scope += `
+          AND LOWER(COALESCE(p.work_mode, '')) != 'remote'`;
+    }
+    sql = `
+            SELECT p.id, p.title, p.company, p.location, p.loc_city, p.loc_country_code,
+                   COUNT(*) OVER () AS _total
+            ${scope}
+            ORDER BY p.found_at DESC
+            LIMIT ?
+        `;
+    const ms = opts.min_score === null ? "" : `, score >= ${typeof opts.min_score === "boolean" ? (opts.min_score ? "True" : "False") : opts.min_score}`;
+    label = `Care-mode geocoding (live positions without office coordinates${ms}${opts.non_remote_only ? ", non-remote" : ""})`;
+  } else if (role === "logo-missing") {
+    const ms = gate.policy!.logoMinScore();
+    let scope = `
+        FROM companies c
+        JOIN positions p ON p.company_id = c.id AND p.status != 'excluded'
+        WHERE (c.logo_fetched IS NULL OR c.logo_fetched = 0)`;
+    if (ms !== null) {
+      scope += `
+          AND EXISTS (SELECT 1 FROM positions p2
+                      JOIN scores s2 ON s2.position_id = p2.id
+                      WHERE p2.company_id = c.id
+                        AND p2.status != 'excluded'
+                        AND s2.total_score >= ?)`;
+      params.push(ms);
+    }
+    sql = `
+            SELECT c.id, c.name AS company,
+                   COUNT(p.id) || ' live positions · '
+                     || COALESCE(c.website, 'NO WEBSITE (find it first)') AS title,
+                   COUNT(*) OVER () AS _total
+            ${scope}
+            GROUP BY c.id
+            ORDER BY COUNT(p.id) DESC, c.name ASC
+            LIMIT ?
+        `;
+    const shown = ms === null ? "" : `, best-score >= ${typeof ms === "boolean" ? (ms ? "True" : "False") : ms}`;
+    label = `Care-mode logo (companies with live positions and no logo${shown})`;
+  } else if (role === "analista") {
     sql = `
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
@@ -659,7 +789,9 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, userId:
         `;
     label = "Positions with a user-requested precise salary estimate";
   }
-  const { rows, declared, s } = select(db, sql, [...params, lim]);
+  // A bool threshold is Python's int 1 or 0 once bound.
+  const bound = params.map((p) => (typeof p === "boolean" ? Number(p) : p));
+  const { rows, declared, s } = select(db, sql, [...bound, lim]);
   const total = rows.length ? Number(rows[0]!["_total"]) : 0;
   const shown = rows.length;
   if (asJson) {

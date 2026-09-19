@@ -21,7 +21,9 @@ import { z } from "zod";
 
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
+import { insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
+import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
@@ -48,6 +50,8 @@ export interface DbToolsOptions {
   profilePath?: string;
   /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
   userId?: string;
+  /** The person's enrichment policy, which the care-mode queues obey. */
+  policy?: EnrichmentPolicy;
 }
 
 /** What a script run comes to: its output and its exit code. */
@@ -57,7 +61,7 @@ export interface ScriptResult {
   exitCode: number;
 }
 
-const ARGS = z
+export const ARGS = z
   .object({
     args: z
       .array(z.string().max(200_000))
@@ -128,6 +132,13 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       return refused("db_insert", entity, [...policy.insert]);
     }
     if (entity === "score") return insertScore(argv.slice(1));
+    if (entity === "company") {
+      const a = parseArgv(COMPANY_INSERT, argv.slice(1));
+      // SICUREZZA A-2: the row says who analyzed it, and that is this agent.
+      a["analyzed_by"] = options.agent;
+      return insertCompany(options.db(), a);
+    }
+    if (entity === "highlight") return insertHighlight(options.db(), parseArgv(HIGHLIGHT_INSERT, argv.slice(1)));
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -289,7 +300,12 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
   const dbUpdate = (argv: string[]): ScriptResult => {
     const entity = argv[0];
     if (entity === undefined || !policy.update.includes(entity)) return refused("db_update", entity, [...policy.update]);
-    if (entity === "company") return updateCompany(options.db(), parseArgv(COMPANY_UPDATE, argv.slice(1)), options.agent);
+    if (entity === "company") {
+      const a = parseArgv(COMPANY_UPDATE, argv.slice(1));
+      // SICUREZZA A-2, as D-5 for found_by: who analyzed the company is this agent, never an argument.
+      if (a["analyzed_by"] !== null) a["analyzed_by"] = options.agent;
+      return updateCompany(options.db(), a, options.agent);
+    }
     const rule = policy.position!;
     const a = parseArgv(POSITION_UPDATE, argv.slice(1));
     const id = a["id"] as number;
@@ -308,8 +324,21 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         return deny(`--${flag.replaceAll("_", "-")} goes only with --status ${target} for this agent. ${rule.purpose}`);
       }
     }
-    // Where the row must stand: the move's own sources, or the role's statuses for any update.
-    const from = pyTruthy(status) ? rule.moves[status!]! : rule.touches;
+    // Where the row must stand: the move's own sources, or the role's statuses for any update;
+    // and out of the later statuses when a flag is passed that those rows do not take.
+    const given = POSITION_UPDATE.options!.map((o) => destOf(o.flag)).filter((k) => a[k] !== null);
+    let from: readonly string[] | undefined = pyTruthy(status) ? rule.moves[status!]! : rule.touches;
+    const early = rule.later && given.filter((k) => !rule.later!.fields.includes(k));
+    if (rule.later && early && early.length > 0) {
+      const later = rule.later.statuses;
+      from = from?.filter((f) => !later.includes(f));
+      const row = options.db().prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
+      if (row && later.includes(row.status ?? "")) {
+        return deny(
+          `Position #${id} is '${row.status}': past the analysis this agent may change only ${rule.later.fields.filter((f) => !/^(action|outcome|evidence_|duration)/.test(f)).map((f) => `--${f.replaceAll("_", "-")}`).join(", ")}, not ${early.map((k) => `--${k.replaceAll("_", "-")}`).join(", ")}. ${rule.purpose}`,
+        );
+      }
+    }
     const current = options.db().prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
       | { status: string | null; found_by: string | null }
       | undefined;
@@ -372,6 +401,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
           allowed: policy.query,
           refuse: (sub) => refused("db_query", sub, [...policy.query]),
           ...(options.userId ? { userId: options.userId } : {}),
+          policy: options.policy,
         }),
     ),
     tool(
@@ -379,7 +409,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       "db_insert.py",
       policy.insert.includes("score")
         ? "Save your score for one position, right after evaluating it: db_insert score --position-id <ID> --total … (scorer.md). Refused when the candidate profile is empty."
-        : "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
+        : policy.insert.includes("position")
+          ? "Insert a position you found into the team's database, after the duplicate check (skill position-insert)."
+          : `Insert into the team's database: ${policy.insert.join(", ")}.`,
       dbInsert,
     ),
     tool(
@@ -424,7 +456,6 @@ const POSITION_INSERT: CommandSpec = {
 };
 
 /** The entities of `db_insert.py`, each written here by its own branch. */
-const INSERT_ENTITIES = new Set(["position", "score"]);
 
 /** `shared/skills/score_ranges.py`: the one source of the caps, as the Python validates them. */
 const SCORE_TOTAL_LIMIT = 100;
@@ -521,6 +552,35 @@ const POSITION_UPDATE: CommandSpec = {
   ],
 };
 
+const INSERT_ENTITIES = new Set(["position", "score", "company", "highlight"]);
+
+/** `db_insert.py company`'s arguments. */
+const COMPANY_INSERT: CommandSpec = {
+  prog: "db_insert.py company",
+  options: [
+    { flag: "--name", required: true },
+    { flag: "--website" },
+    { flag: "--hq-country" },
+    { flag: "--sector" },
+    { flag: "--size" },
+    { flag: "--glassdoor-rating", type: "float" },
+    { flag: "--red-flags" },
+    { flag: "--culture-notes" },
+    { flag: "--analyzed-by" },
+    { flag: "--verdict", choices: ["GO", "CAUTIOUS", "NO_GO"] },
+  ],
+};
+
+/** `db_insert.py highlight`'s arguments. */
+const HIGHLIGHT_INSERT: CommandSpec = {
+  prog: "db_insert.py highlight",
+  options: [
+    { flag: "--position-id", type: "int", required: true },
+    { flag: "--type", required: true, choices: ["pro", "con"] },
+    { flag: "--text", required: true },
+  ],
+};
+
 /** `db_update.py company`'s arguments. */
 const COMPANY_UPDATE: CommandSpec = {
   prog: "db_update.py company",
@@ -581,7 +641,7 @@ export function refused(tool: string, sub: string | undefined, allowed: string[]
 }
 
 /** Argument errors become argparse's exit 2; anything else is the script crashing, exit 1. */
-function guarded(run: () => ScriptResult): ScriptResult {
+export function guarded(run: () => ScriptResult): ScriptResult {
   try {
     return run();
   } catch (error) {
@@ -590,7 +650,7 @@ function guarded(run: () => ScriptResult): ScriptResult {
   }
 }
 
-function asExecution(result: ScriptResult, okCodes: number[]): ToolExecution {
+export function asExecution(result: ScriptResult, okCodes: number[]): ToolExecution {
   const text = `${result.stdout}${result.stderr ?? ""}`.trimEnd();
   const content = result.exitCode === 0 ? text : `${text}${text ? "\n" : ""}(exit code ${result.exitCode})`;
   return { ok: okCodes.includes(result.exitCode), content, details: { exitCode: result.exitCode } };
