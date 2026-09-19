@@ -35,16 +35,10 @@ import type {
   WebSearchRequest,
   WebSearchResult,
 } from "./port.ts";
+import { MAX_SEARCHES_PER_CALL } from "./port.ts";
 
 /** A single model call that takes longer than this is a stuck call, not a slow one. */
 const DEFAULT_TIMEOUT_MS = 120_000;
-
-/**
- * Searches one `webSearch` call may run. Each is billed (0.01 USD on OpenAI,
- * plus the result tokens at input price), and the key proxy on the VPS
- * refuses a request that does not cap them at exactly this.
- */
-const MAX_SEARCHES_PER_CALL = 1;
 
 /**
  * OpenAI keeps nothing between calls: `store: false`, so no request can point

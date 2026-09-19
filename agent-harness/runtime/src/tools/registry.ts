@@ -40,6 +40,8 @@ export interface ToolExecution {
   usage?: Usage;
   /** Spend that is not tokens, in USD, such as a per-search fee. */
   chargeUsd?: number;
+  /** Web searches the provider ran for this call, counted against the run's cap. */
+  webSearches?: number;
   /** Structured facts for the trace — exit code, resources. Never sent to the model. */
   details?: ToolDetails;
 }
@@ -50,6 +52,18 @@ export interface ToolContext {
   account: TurnAccount;
   /** Wall-clock time the run has left. */
   remainingMs: () => number;
+  /**
+   * What the run may still spend, for a tool that calls the provider itself.
+   * The runner always gives it; only a test calling a tool directly goes without.
+   */
+  budget?: RunBudget;
+}
+
+export interface RunBudget {
+  /** Web searches the run may still run (`JHT_API_MAX_WEB_SEARCHES`). */
+  webSearchesLeft(): number;
+  /** Whether a call that could cost up to `usage` plus `extraUsd` still fits. */
+  fits(usage: Usage, extraUsd: number): boolean;
 }
 
 export interface ToolHandler {
