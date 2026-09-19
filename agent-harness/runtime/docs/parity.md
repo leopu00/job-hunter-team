@@ -124,6 +124,12 @@ its replacement, without running anything.
 | `throttle-set`, `token-rate-now` | not mapped yet: CAPITANO only | — |
 | `jht-agent-contain` | not mapped yet: SENTINELLA only | — |
 
+Agent names are canonical everywhere they decide who is who
+(`src/core/agent-id.ts`): a bare role name is instance 1, as
+`start-agent.sh` numbers it, so `scout`, `scout-1` and `SCOUT-1` are one
+agent — one inbox, one "that is you", one owner of its rows in jobs.db
+(where rows an earlier run wrote as `scout` are still its own).
+
 None of the native tools asks a permission: each writes only into the
 harness's own channels, never a file of the person's, the network or a
 process. `send_message` takes an agent name (`^[A-Za-z][A-Za-z0-9_-]{0,39}$`),

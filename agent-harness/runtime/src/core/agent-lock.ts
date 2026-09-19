@@ -24,6 +24,7 @@
 import { closeSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
+import { agentInstanceId } from "./agent-id.ts";
 import { HarnessError } from "./errors.ts";
 
 /** A lock file this young with no readable content is being written, not abandoned. */
@@ -36,15 +37,7 @@ interface Holder {
   startedAt: string;
 }
 
-/**
- * The agent's canonical id: lowercase, and a bare name as instance 1
- * (`scout` → `scout-1`), as `start-agent.sh` numbers a role started without
- * an instance.
- */
-export function agentInstanceId(agent: string): string {
-  const name = agent.trim().toLowerCase();
-  return /-\d+$/.test(name) ? name : `${name}-1`;
-}
+export { agentInstanceId } from "./agent-id.ts";
 
 export class AgentLock {
   readonly path: string;

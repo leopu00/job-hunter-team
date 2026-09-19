@@ -25,6 +25,7 @@
  * Every statement is a constant with bound parameters.
  */
 
+import { agentAliases, agentInstanceId } from "../../core/agent-id.ts";
 import type { Database } from "../../db/jobs-db.ts";
 
 import { z } from "zod";
@@ -38,18 +39,8 @@ export const SCOUT_COORD_TOOL = "scout_coord";
 const SCOUT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const DB_ORIGIN = "jobs_db";
 
-/** The role's own name. A lone Scout runs as `scout` here and as SCOUT-1 in the TUI. */
+/** The role's own name: given as a name, it always means the caller. */
 const ROLE_NAME = "scout";
-
-/**
- * The Scout id an agent name stands for: lowercase, and the bare role name
- * as the TUI's first Scout, `scout-1`: `start-agent.sh scout` with no
- * instance starts instance 1, SCOUT-1, and that is the $MY_ID its prompt writes.
- */
-function scoutId(name: string): string {
-  const id = name.trim().toLowerCase();
-  return id === ROLE_NAME ? `${ROLE_NAME}-1` : id;
-}
 
 /**
  * A claim older than this is free again (the TUI's own 24 h, which its
@@ -88,15 +79,18 @@ type Args = z.infer<typeof schema>;
 
 export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
   const now = options.now ?? (() => new Date());
-  const me = scoutId(options.agent);
+  const me = agentInstanceId(options.agent);
   if (!SCOUT_NAME.test(me)) throw new Error(`scout_coord needs a Scout's name for its agent, not '${options.agent}'.`);
+  // This Scout's rows, however an earlier run of it signed them (`scout` before
+  // names were canonical): two names, bound, never built from input.
+  const [ownId, ownAlias = ownId] = agentAliases(me) as [string, string?];
 
   /**
    * The Scout a write is for: the caller, whether it named itself, used the
    * role name `scout`, or left the name out. Null for any other Scout.
    */
   const self = (scout: string | undefined): string | null =>
-    scout === undefined || scout.trim().toLowerCase() === ROLE_NAME || scoutId(scout) === me ? me : null;
+    scout === undefined || scout.trim().toLowerCase() === ROLE_NAME || agentInstanceId(scout) === me ? me : null;
   const notYours = (scout: string, what: string) =>
     usage(
       `you are ${me}: you can ${what} only in your own name, not '${scout}'. ` +
@@ -164,8 +158,8 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
       if (scout === null) return notYours(named!, "assign circles and sources");
       const db = open();
       const existing = db
-        .prepare("SELECT id FROM scout_coordination WHERE scout=? AND superseded_at IS NULL")
-        .get(scout) as Row | undefined;
+        .prepare("SELECT id FROM scout_coordination WHERE lower(scout) IN (?, ?) AND superseded_at IS NULL")
+        .get(ownId, ownAlias) as Row | undefined;
       const values = [cerchi ?? null, fonti ?? null, note ?? null] as const;
       if (existing) {
         // `started_at` is never touched: it is half of the (scout, started_at) unique key.
@@ -180,10 +174,10 @@ export function createScoutCoordTool(options: ScoutCoordOptions): ToolHandler {
       const db = open();
       // Only the caller's own split and claims: a Scout never closes a peer's.
       const updated = db
-        .prepare("UPDATE scout_coordination SET superseded_at=? WHERE superseded_at IS NULL AND scout=?")
-        .run(pyNowIso(now()), me).changes;
+        .prepare("UPDATE scout_coordination SET superseded_at=? WHERE superseded_at IS NULL AND lower(scout) IN (?, ?)")
+        .run(pyNowIso(now()), ownId, ownAlias).changes;
       // Claims older than a day go with the session.
-      db.prepare("DELETE FROM scout_claims WHERE claimed_at < datetime('now', '-24 hours') AND scout=?").run(me);
+      db.prepare("DELETE FROM scout_claims WHERE claimed_at < datetime('now', '-24 hours') AND lower(scout) IN (?, ?)").run(ownId, ownAlias);
       return ok([`Session closed: ${updated} assignments archived.`]);
     },
 

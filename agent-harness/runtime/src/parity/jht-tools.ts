@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 
 import { z } from "zod";
 
+import { agentInstanceId } from "../core/agent-id.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 
 /** An agent or session name: `SCOUT-1`, `capitano`. Never a path. */
@@ -136,9 +137,13 @@ export const JHT_TOOL_NAMES = ["send_message", "chat_reply", "throttle", "notify
 
 export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
   const now = options.now ?? Date.now;
-  const self = options.agent.toLowerCase();
   // `system` is the runtime's own voice in a turn (`wakeMessage`); no agent may sign as it.
-  if (self === "system") throw new Error('"system" is reserved for the runtime and cannot name an agent.');
+  if (options.agent.trim().toLowerCase() === "system") {
+    throw new Error('"system" is reserved for the runtime and cannot name an agent.');
+  }
+  // The canonical id: `scout` is scout-1 (agent-id.ts), so a message to either
+  // name is a message to itself.
+  const self = agentInstanceId(options.agent);
   const notifyLimit = options.notifyLimit ?? DEFAULT_NOTIFY_LIMIT;
   const notified: number[] = [];
 
@@ -158,8 +163,8 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
     classify: (args) => internal(`to ${(args as { to: string }).to}`),
     async execute(args) {
       const { to, text } = args as { to: string; text: string };
-      const target = to.toLowerCase();
-      if (target === self) return { ok: false, content: "Error: that is you. Messages go to another agent." };
+      const target = agentInstanceId(to);
+      if (target === self) return { ok: false, content: `Error: that is you (${self}). Messages go to another agent.` };
       await options.mailbox.send({ from: self, to: target, text, ts: now() });
       return { ok: true, content: `Delivered to ${target}.` };
     },
@@ -423,7 +428,10 @@ export class FileMailbox implements Mailbox {
   }
 
   async send(message: AgentMessage): Promise<void> {
-    await appendJsonLine(join(this.dir, `${message.to}.jsonl`), message);
+    // One inbox per agent, whatever name it was written to: SCOUT-1, scout-1
+    // and scout all land where scout-1 reads.
+    const to = agentInstanceId(message.to);
+    await appendJsonLine(join(this.dir, `${to}.jsonl`), { ...message, to });
   }
 
   /**
@@ -434,7 +442,7 @@ export class FileMailbox implements Mailbox {
    * the rest of the line, as a torn line is.
    */
   async drain(agent: string): Promise<AgentMessage[]> {
-    const to = agent.toLowerCase();
+    const to = agentInstanceId(agent);
     const lines = await drainJsonLines<Partial<AgentMessage>>(join(this.dir, `${to}.jsonl`));
     return lines.filter(
       (m): m is AgentMessage =>

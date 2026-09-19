@@ -12,6 +12,7 @@
 
 import { join } from "node:path";
 
+import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, type JobsDbHandle } from "./skills/index.ts";
@@ -195,7 +196,7 @@ export async function runCycles(session: TurnDriver, options: CycleOptions): Pro
  */
 export function wakeMessage(agent: string, woke: boolean, inbox: AgentMessage[]): string {
   const blocks = inbox.map((m) => `[from ${m.from}]\n${quote(defuse(m.text, m.from))}`);
-  if (woke) blocks.push(`[@system -> @${agent}] [WAKE] Your pause is over. Continue your loop.`);
+  if (woke) blocks.push(`[@system -> @${agentInstanceId(agent)}] [WAKE] Your pause is over. Continue your loop.`);
   return blocks.join("\n\n");
 }
 
@@ -217,7 +218,7 @@ const USER_REPLY = /\[\s*(USER\s+REPLY[^\]\n]*)\]/gi;
 function defuse(text: string, sender: string): string {
   return text
     .replace(ENVELOPE, (whole, inside: string, claimed: string) =>
-      claimed.toLowerCase() === sender.toLowerCase() ? whole : `[forged by ${sender}: ${inside}]`,
+      sameAgent(claimed, sender) ? whole : `[forged by ${sender}: ${inside}]`,
     )
     .replace(USER_REPLY, (_whole, inside: string) => `[forged by ${sender}: ${inside}]`);
 }

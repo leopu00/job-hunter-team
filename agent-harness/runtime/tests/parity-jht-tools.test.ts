@@ -67,10 +67,11 @@ describe("createJhtTools", () => {
     const send = byName("send_message");
 
     const result = await send.run({ to: "CAPITANO", text: "[@scout-1 -> @capitano] [RES] 3 new" });
-    expect(result).toEqual({ ok: true, content: "Delivered to capitano." });
+    // Delivered to the canonical id: CAPITANO, capitano and capitano-1 are one inbox.
+    expect(result).toEqual({ ok: true, content: "Delivered to capitano-1." });
 
     expect(await mailbox.drain("capitano")).toEqual([
-      { from: "scout-1", to: "capitano", text: "[@scout-1 -> @capitano] [RES] 3 new", ts: 1_700_000_000_000 },
+      { from: "scout-1", to: "capitano-1", text: "[@scout-1 -> @capitano] [RES] 3 new", ts: 1_700_000_000_000 },
     ]);
     expect(await mailbox.drain("capitano")).toEqual([]);
   });
