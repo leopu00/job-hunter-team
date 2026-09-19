@@ -301,6 +301,24 @@ describe("db_query against db_query.py", () => {
     }
   });
 
+  it.skipIf(skills === null)("the CAPITANO's pipeline reads: dashboard and the writers' queues (T21)", async () => {
+    const { pyDb, ourDb, call, py } = twins("capitano-1");
+    const queries = [
+      ["dashboard"], ["dashboard", "--json"], ["next-for-scrittore"], ["next-for-scrittore", "--json"], ["next-for-critico"], ["next-for-critico", "--json"],
+    ];
+    // Empty queues first, then one row in each, on both twins.
+    for (const args of queries) expectSame(await call("db_query", args), py("db_query.py", args));
+    for (const db of [pyDb, ourDb]) {
+      db.prepare("UPDATE positions SET status = 'scored', write_requested = 1, write_requested_at = '2026-09-14 10:00:00' WHERE id = 3").run();
+      db.prepare("UPDATE positions SET write_requested = 1, write_request_kind = 'cover_letter', write_requested_at = '2026-09-13 10:00:00' WHERE id = 1").run();
+      db.prepare("INSERT INTO scores (position_id, total_score) VALUES (6, 91)").run();
+      db.prepare("INSERT INTO applications (position_id, status, written_by) VALUES (6, 'review', 'scrittore-1')").run();
+      // Already judged: out of the CRITICO's queue.
+      db.prepare("INSERT INTO applications (position_id, status, written_by, critic_verdict) VALUES (4, 'review', 'scrittore-2', 'PASS')").run();
+    }
+    for (const args of [...queries, ["next-for-scrittore", "--limit", "1"]]) expectSame(await call("db_query", args), py("db_query.py", args));
+  });
+
   it("gives each role only its own reads", async () => {
     const db = seeded(join(root, "roles.db"));
     const run = async (agent: string, args: string[]) => {
@@ -314,7 +332,7 @@ describe("db_query against db_query.py", () => {
       ["analista-2", ["next-for-scrittore"]],
       ["scorer-1", ["next-for-analista"]],
       ["scorer-1", ["positions"]],
-      ["capitano-1", ["position", "1"]],
+      ["capitano-1", ["next-for-salary-precise"]],
     ] as const) {
       const r = await run(agent, [...args]);
       expect(r.ok, `${agent} ${args.join(" ")}`).toBe(false);

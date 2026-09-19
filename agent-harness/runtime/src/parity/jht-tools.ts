@@ -377,6 +377,10 @@ export const PYTHON_SKILLS: Record<string, string> = {
   "recheck_liveness.py": "recheck_liveness",
   "logo_fetch.py": "logo_fetch",
   "enrichment_policy.py": "enrichment_policy",
+  // T21, the CAPITANO's scripts.
+  "format_time.py": "format_time",
+  "captain_diary.py": "captain_diary",
+  "team_directives.py": "team_directives",
 };
 
 /** Scripts with no tool of their own but a native equivalent. */

@@ -145,7 +145,8 @@ The skills call `python3 /app/shared/skills/<x>.py`. The image carries no
 Python, so each script a role uses is a native tool, given only to a role
 whose `skills.list` names the skill (`src/parity/skills/index.ts`), or whose
 prompt runs the script without a skill listing it (the ANALISTA's `ticket`,
-`role_registry`, `deadline_extract`, and `db_insert` for companies). What
+`role_registry`, `deadline_extract`, and `db_insert` for companies; the
+CAPITANO's `team_directives`, `enrichment_policy`, `email_monitor`). What
 each role may run in the database, subcommand by subcommand and status by
 status, is one table, `src/db/role-policy.ts`: the TUI keeps that boundary in
 the prompt ("NEVER touch `scores`"), the harness in code. A
@@ -175,6 +176,10 @@ every statement is a constant with bound parameters.
 | `safe_fetch.py <url>` | `web_fetch` {url} | the SCORER's check that a posting is still open. `web_fetch` applies the same guard (every hop resolved and checked, private addresses refused) and returns readable text, not raw HTML: `\| grep -i 'expired'` in the prompt becomes reading the page (T15) |
 | `scout_dedup.py check` | `scout_dedup` {args} | same JSON and exit code (10 = skip, an answer, not a failure); a skip is appended to `<apiHome>/logs/scout-dedup.log` in the script's format. The script has no `check-url`: asked for it, the tool answers argparse's error and then `check-url is a db_query subcommand: db_query check-url <url>` (T10) |
 | `email_monitor.py status/count/poll` | `email_monitor` {command, since_days?} | the script's output with no mailbox configured. No IMAP here and the credentials file is never opened; when it exists, `status` adds `note: imap-unavailable-in-api-runtime` |
+| `db_query.py dashboard/next-for-scrittore/next-for-critico` | `db_query` {args} | the CAPITANO's pipeline reads (T21), same output and exit code, `--json` included. `next-for-scrittore` lists the CV and cover-letter requests as the script does; a `[JHT-CV-REWORK]` request needs `application_rework.py` (the CV's layout check, the send state) and does not show |
+| `format_time.py --now/--iso` | `format_time` {args} | the CAPITANO's clock (C-04 bis): same lines, the zone from `JHT_USER_TZ`, then `timezone:` in the profile, then UTC. The zone's name is Node's ICU where Python reads the system's tzdata: the same abbreviation for Europe, a numeric offset (`+04`) where ICU has none |
+| `captain_diary.py add/handoff/today` | `captain_diary` {args} | same files and lines (C-21). The diary is the team's state: `<JHT_API_HOME>/team/logs/`, never the profile, which is mounted read-only |
+| `team_directives.py active/list/show` | `team_directives` {args} | same lines (C-06), from `team_directives` in `jobs.db`. `add`, `edit`, `archive` are the person's: refused |
 
 `tests/skills-parity.test.ts` and `tests/db-*.test.ts` run each script and
 its tool on the same input and compare what they print and what they leave
