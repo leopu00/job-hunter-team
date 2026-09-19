@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
+import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
 import { createDbTools } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
 import { pythonSkills, runPython } from "./helpers/python-skills.ts";
@@ -117,7 +118,7 @@ function twins(agent = "scout-1") {
   const base = sqliteNow();
   const pyDb = seeded(pyPath, base);
   const ourDb = seeded(ourPath, base);
-  const tools = createDbTools({ db: () => ourDb, agent, nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
+  const tools = createDbTools({ db: () => ourDb, agent, policy: new EnrichmentPolicy(join(root, "profile")), nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
   const call = (name: string, args: string[]) => {
     const tool = tools.find((t) => t.spec.name === name) as ToolHandler;
     return tool.execute(tool.spec.schema.parse({ args }), context);
@@ -188,6 +189,61 @@ const QUERIES: string[][] = [
   ["positions", "--json=1"],
   ["check-url", "a", "b"],
 ];
+
+/**
+ * The care-mode queues under each shape of the policy: the Python reads the two
+ * files next to its jobs.db (root/profile), the tool reads the same folder.
+ */
+const CARE: Array<[string, Record<string, unknown> | null, Record<string, unknown> | string | null, string[]]> = [
+  ["no files", null, null, ["next-for-recheck-due"]],
+  ["no files", null, null, ["next-for-recheck-due", "--min-score", "60", "--older-than-days", "1", "--json"]],
+  ["no files", null, null, ["next-for-recheck-weekly", "--all"]],
+  ["no files", null, null, ["next-for-geocode-missing"]],
+  ["no files", null, null, ["next-for-logo-missing", "--json"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["next-for-logo-missing"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["next-for-geocode-missing", "--json"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["next-for-recheck-due"]],
+  ["float and bool thresholds", { logo: { min_score: 70.0 }, geocode_missing: { min_score: true }, recheck_weekly: { min_score: 99.5, older_than_days: false } }, null, ["next-for-logo-missing"]],
+  ["float and bool thresholds", { logo: { min_score: 70.0 }, geocode_missing: { min_score: true }, recheck_weekly: { min_score: 99.5, older_than_days: false } }, null, ["next-for-geocode-missing"]],
+  ["economy", { economy: true }, null, ["next-for-logo-missing"]],
+  ["economy", { economy: true }, null, ["next-for-recheck-due", "--json"]],
+  ["logo off", { logo: { enabled: false } }, null, ["next-for-logo-missing"]],
+  ["saving", null, { mode: "saving" }, ["next-for-geocode-missing"]],
+  ["saving, expired", null, { mode: "saving", mode_until: "2026-01-01T00:00:00Z" }, ["next-for-geocode-missing"]],
+  ["saving, until later", null, { mode: "saving", mode_until: "2099-01-01" }, ["next-for-geocode-missing"]],
+  ["legacy maintenance", null, { mode: "maintenance" }, ["next-for-logo-missing"]],
+  ["unknown mode", null, { mode: "turbo" }, ["next-for-recheck-due"]],
+  ["unreadable mode", null, "{not json", ["next-for-recheck-due", "--json"]],
+  ["broken policy", "{not json" as unknown as Record<string, unknown>, null, ["next-for-geocode-missing"]],
+];
+
+describe("the care-mode queues against db_query.py, under the enrichment policy", () => {
+  it.skipIf(skills === null).each(CARE.map(([label, policy, mode, args]) => [`${label}: ${args.join(" ")}`, policy, mode, args]))(
+    "%s",
+    async (_label, policy, mode, args) => {
+      const { call, py, ourDb, pyDb } = twins("analista-1");
+      mkdirSync(join(root, "profile"), { recursive: true });
+      const write = (file: string, value: unknown) =>
+        writeFileSync(join(root, "profile", file), typeof value === "string" ? value : JSON.stringify(value).replace(/:70(?=[,}])/, ":70.0"));
+      if (policy !== null) write("enrichment-policy.json", policy);
+      if (mode !== null) write("capitano-maintenance.json", mode);
+      for (const db of [ourDb, pyDb]) {
+        db.prepare("UPDATE companies SET logo_fetched = 0").run();
+        db.prepare("UPDATE positions SET last_checked = '2026-01-01 00:00:00' WHERE id = 1").run();
+        db.prepare("UPDATE positions SET status = 'scored', company_id = 1 WHERE id = 6").run();
+        db.prepare("INSERT INTO scores (position_id, total_score) VALUES (6, 76)").run();
+      }
+      expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
+    },
+  );
+
+  it("keeps the care-mode queues off when there is no policy to read", async () => {
+    const db = seeded(join(root, "np.db"));
+    const tool = createDbTools({ db: () => db, agent: "analista-1" }).find((t) => t.spec.name === "db_query")!;
+    const r = await tool.execute(tool.spec.schema.parse({ args: ["next-for-logo-missing"] }), context);
+    expect(r.content).toBe("\nCare-mode logo: OFF — the enrichment policy cannot be read here.");
+  });
+});
 
 /** The ANALISTA's reads (T14), each run by an analista against the Python. */
 const ANALISTA_QUERIES: string[][] = [

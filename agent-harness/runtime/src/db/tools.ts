@@ -23,6 +23,7 @@ import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
 import { insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
+import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
@@ -49,6 +50,8 @@ export interface DbToolsOptions {
   profilePath?: string;
   /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
   userId?: string;
+  /** The person's enrichment policy, which the care-mode queues obey. */
+  policy?: EnrichmentPolicy;
 }
 
 /** What a script run comes to: its output and its exit code. */
@@ -398,6 +401,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
           allowed: policy.query,
           refuse: (sub) => refused("db_query", sub, [...policy.query]),
           ...(options.userId ? { userId: options.userId } : {}),
+          policy: options.policy,
         }),
     ),
     tool(

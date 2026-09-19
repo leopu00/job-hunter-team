@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { deadlineExtract } from "../src/parity/skills/deadline-extract.ts";
+import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
+import { enrichmentPolicyCommand } from "../src/parity/skills/enrichment-policy.ts";
 import { roleRegistry } from "../src/parity/skills/role-registry.ts";
 import { salaryEstimate } from "../src/parity/skills/salary-estimate.ts";
 import { ticketCommand } from "../src/parity/skills/ticket.ts";
@@ -273,5 +275,35 @@ describe("salary_estimate against salary_estimate.py", () => {
     const db = openJobsDb(join(root, "s.db"));
     const r = salaryEstimate(["--seed-cache", "--stack", "x", "--seniority", "y", "--country", "IT", "--declared-min", "1", "--declared-max", "2"], { db: () => db, cacheFile: join(root, "c.json") });
     expect([r.exitCode, r.stderr]).toEqual([2, expect.stringContaining("not available to this agent")]);
+  });
+});
+
+const POLICIES: Array<[string, string | null, string | null, string[]]> = [
+  ["no files", null, null, ["show"]],
+  ["full", '{"economy": false, "logo": {"enabled": false, "min_score": 70}, "geocode_missing": {"min_score": null, "non_remote_only": false}, "recheck_weekly": {"min_score": 65, "older_than_days": 21}}', '{"mode": " care "}', ["show"]],
+  ["invalid values", '{"economy": "yes", "logo": {"min_score": 70.0}, "geocode_missing": {"min_score": 101}, "recheck_weekly": {"min_score": true, "older_than_days": 0}}', '{"mode": "harvest", "mode_until": "2026-01-01T10:00:00+02:00"}', ["show"]],
+  ["not a dict", "[1, 2]", "[]", ["show"]],
+  ["unknown mode", null, '{"mode": "maintenance", "mode_until": "not a date"}', ["show"]],
+  ["unicode", '{"logo": {"enabled": true}, "note": "é"}', '{"mode": "saving", "mode_until": "2099-12-31 23:59"}', ["show"]],
+  ["extra word", null, null, ["show", "x"]],
+  ["no command", null, null, []],
+  ["bad command", null, null, ["reset"]],
+];
+
+describe("enrichment_policy show against enrichment_policy.py", () => {
+  it.skipIf(skills === null).each(POLICIES.map(([label, pol, mode, args]) => [label, pol, mode, args]))("%s", (_label, pol, mode, args) => {
+    const profile = join(root, "profile");
+    mkdirSync(profile, { recursive: true });
+    if (pol !== null) writeFileSync(join(profile, "enrichment-policy.json"), pol as string);
+    if (mode !== null) writeFileSync(join(profile, "capitano-maintenance.json"), mode as string);
+    const ours = enrichmentPolicyCommand(new EnrichmentPolicy(profile), args as string[]);
+    const py = runPython(skills!, ["enrichment_policy.py", ...(args as string[])], { JHT_DB: join(root, "jobs.db") });
+    const last = (text: string | undefined) => (text ?? "").trim().split("\n").at(-1);
+    expect([ours.exitCode, ours.stdout, last(ours.stderr)]).toEqual([py.status, py.stdout, last(py.stderr)]);
+  });
+
+  it("never sets the policy", () => {
+    const r = enrichmentPolicyCommand(new EnrichmentPolicy(join(root, "profile")), ["set", "economy", "false"]);
+    expect([r.exitCode, r.stderr]).toEqual([2, expect.stringContaining("`enrichment_policy set` is not available to this agent")]);
   });
 });
