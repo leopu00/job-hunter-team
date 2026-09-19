@@ -163,7 +163,7 @@ describe("npm run role -- --role scout (a product role)", () => {
     // The home a TUI spawn would find, and the CAPITANO's inbox.
     expect(await readdir(join(home, "skills"))).toContain("scout-coord");
     expect(await readFile(join(home, "AGENTS.md"), "utf8")).toContain("# Running as an API agent");
-    expect(await readFile(join(root, "api", "channels", "mailbox", "capitano.jsonl"), "utf8")).toContain('"from":"scout-1"');
+    expect(await readFile(join(root, "api", "channels", "mailbox", "capitano-1.jsonl"), "utf8")).toContain('"from":"scout-1"');
   });
 
   it("refuses flags that belong to the other kind of role", async () => {

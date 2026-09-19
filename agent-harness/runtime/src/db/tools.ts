@@ -24,6 +24,7 @@ import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } f
 import { dbQuery } from "./db-query.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
+import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
@@ -57,7 +58,15 @@ const ARGS = z
 
 export const DB_TOOL_NAMES = ["db_query", "db_insert", "db_update", "scout_dedup"] as const;
 
-export function createDbTools(options: DbToolsOptions): ToolHandler[] {
+export function createDbTools(given: DbToolsOptions): ToolHandler[] {
+  // Rows carry the canonical id: an agent started as `scout` and later as
+  // `scout-1` finds its own positions both times (agent-id.ts).
+  const options: DbToolsOptions = { ...given, agent: agentInstanceId(given.agent) };
+  // Rows this agent owns, however an earlier run of it signed them. Exactly
+  // two names, bound as parameters: the canonical id, and for instance 1 the
+  // bare role name (a single-name agent repeats its id).
+  const [ownId, ownAlias = ownId] = agentAliases(options.agent) as [string, string?];
+  const owns = (foundBy: string | null) => foundBy !== null && [ownId, ownAlias].includes(foundBy.toLowerCase());
   const now = options.now ?? (() => new Date());
 
   const tool = (
@@ -214,7 +223,7 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
         | { status: string | null; found_by: string | null }
         | undefined;
       // D-3: a SCOUT recovers its own duplicates. Another Scout's position stays theirs.
-      if (current && current.found_by !== options.agent) {
+      if (current && !owns(current.found_by)) {
         db.exec("ROLLBACK");
         return {
           stdout: "",
@@ -246,7 +255,9 @@ export function createDbTools(options: DbToolsOptions): ToolHandler[] {
       params.push(options.agent);
       // The SET list is made of the constant fragments above; every value is bound.
       // found_by in the WHERE too (D-3): the write itself cannot reach another agent's row.
-      const result = db.prepare(`UPDATE positions SET ${sets.join(", ")} WHERE id = ? AND found_by = ?`).run(...params, id, options.agent);
+      const result = db
+        .prepare(`UPDATE positions SET ${sets.join(", ")} WHERE id = ? AND lower(found_by) IN (?, ?)`)
+        .run(...params, id, ownId, ownAlias);
       if (Number(result.changes) === 0) {
         db.exec("ROLLBACK");
         return { stdout: `⚠\ufe0f  ERROR: no position found with id=${id}!\n`, exitCode: 1 };
