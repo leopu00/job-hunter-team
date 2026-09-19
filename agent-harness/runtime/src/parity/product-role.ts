@@ -72,6 +72,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const locale = await resolveUserLocale({ jhtHome: options.jhtHome, ...(options.env ? { env: options.env } : {}) });
   const loaded = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
   const dedupLog = join(options.apiHome, "logs", "scout-dedup.log");
+  const profileDir = options.profileDir ?? join(options.jhtHome, "profile");
   // T6: what the prompt tells the agent to run with python3 is a tool here.
   // T10: and the documents it names are where this agent can open them.
   const paths = createPathRewriter({
@@ -79,7 +80,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     homeSkills: new Set(loaded.skills.map((s) => s.name)),
     dedupLog,
     homeDir: options.homeDir,
-    profileDir: options.profileDir ?? join(options.jhtHome, "profile"),
+    profileDir,
     locale,
   });
   const rewrite = (text: string) => paths(rewritePythonSkills(text));
@@ -109,6 +110,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     jobsDb: options.jobsDb,
     jhtHome: options.jhtHome,
     dedupLog,
+    profileDir,
   });
 
   return {

@@ -70,6 +70,7 @@ export function pyJson(value: unknown, options: { ensureAscii?: boolean; indent?
     if (v === null || v === undefined) return "null";
     if (v === true) return "true";
     if (v === false) return "false";
+    if (v instanceof PyFloat) return pyFloat(v.value);
     if (typeof v === "number") return Number.isInteger(v) ? String(v) : pyFloat(v);
     if (typeof v === "string") return str(v);
     const pad = indent === undefined ? "" : `\n${" ".repeat(indent * (depth + 1))}`;
@@ -101,4 +102,62 @@ function pyFloat(n: number): string {
 export function printed(lines: string[]): string {
   const text = lines.join("\n");
   return text === "" ? "(no output)" : text;
+}
+
+/**
+ * A Python float. `json.dumps` prints `1.0` for it where JavaScript cannot
+ * tell 1 from 1.0, so a value that is a float in the script is wrapped.
+ */
+export class PyFloat {
+  readonly value: number;
+  constructor(value: number) {
+    this.value = value;
+  }
+}
+
+/**
+ * `round(x, 3)`: the nearest multiple of 0.001, ties to even, as Python
+ * does it; `toFixed` would take the larger of a tie (0.0625 → 0.063, Python
+ * 0.062).
+ */
+export function pyRound3(x: number): number {
+  const scaled = x * 1000;
+  if (!Number.isInteger(scaled) && Number.isInteger(scaled * 2)) {
+    const floor = Math.floor(scaled);
+    return (floor % 2 === 0 ? floor : floor + 1) / 1000;
+  }
+  return Number(x.toFixed(3));
+}
+
+/**
+ * `datetime.fromisoformat` for the timestamps the skills read — SQLite's
+ * `YYYY-MM-DD HH:MM:SS`, ISO with `T`, fractions, `Z` or an offset — as
+ * epoch milliseconds; a time with no zone is UTC, as the script assumes.
+ * Null when Python could not read it.
+ */
+export function pyParseTs(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const raw = String(value).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?)?(Z|[+-]\d{2}:?\d{2})?$/.exec(raw);
+  if (!m) return null;
+  const [, y, mo, d, h = "0", mi = "0", s = "0", frac = "0", zone] = m;
+  const ms = Number((frac + "000000").slice(0, 6)) / 1000;
+  let t = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s), 0) + ms;
+  const probe = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (probe.getUTCMonth() !== Number(mo) - 1 || probe.getUTCDate() !== Number(d) || Number(h) > 23 || Number(mi) > 59 || Number(s) > 59) {
+    return null;
+  }
+  if (zone && zone !== "Z") {
+    const sign = zone[0] === "-" ? -1 : 1;
+    const digits = zone.slice(1).replace(":", "");
+    t -= sign * (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2, 4))) * 60_000;
+  }
+  return t;
+}
+
+/** `text[:n] + "…"` when longer than `n` code points, as the script's `_truncate`. */
+export function pyTruncate(value: unknown, maxChars: number | null | undefined): unknown {
+  if (value === null || value === undefined || maxChars === null || maxChars === undefined || maxChars <= 0) return value;
+  const chars = Array.from(String(value));
+  return chars.length <= maxChars ? String(value) : `${chars.slice(0, maxChars).join("")}…`;
 }
