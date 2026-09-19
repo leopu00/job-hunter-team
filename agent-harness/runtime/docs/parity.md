@@ -91,3 +91,25 @@ None of the native tools asks a permission: each writes only into the
 harness's own channels, never a file of the person's, the network or a
 process. `send_message` takes an agent name (`^[A-Za-z][A-Za-z0-9_-]{0,39}$`),
 never a path.
+
+## The run
+
+`prepareProductRole` (`src/parity/product-role.ts`) puts the two halves
+together for a `RoleSession`: the prompt and home above, the runtime's tools
+with `bash` guarded, and the native tools after them. `runCycles` does what
+tmux and the throttle engine do for a TUI agent:
+
+1. The first order goes in as a message, as the CAPITANO or the kick-off
+   would type it into the pane.
+2. The turn runs until the model answers without a tool call. A `throttle`
+   call tells it to end the turn, so the pause costs one short closing round.
+3. After a pause the process waits `pauseMs` (the caller's choice; the TUI's
+   engine takes it from the CAPITANO's config), then opens the next turn
+   with every inbox message, as the peer wrote it, followed by
+   `[@system -> @<agent>] [WAKE] Your pause is over. Continue your loop.`
+4. A turn that ends with no pause and nothing in the inbox ends the run: an
+   idle TUI agent waits at its prompt for free, an idle process does not.
+
+`tests/parity-scout-run.test.ts` runs the real SCOUT prompt this way on the
+mock provider: two turns, one pause, the CAPITANO's order delivered on wake,
+every call accepted, and no `bash` call at all.
