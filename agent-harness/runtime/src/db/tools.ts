@@ -349,6 +349,21 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       const move = pyTruthy(status) ? `to '${status}'` : "at all";
       return deny(`Position #${id} is '${current.status}': this agent updates it ${move} only from ${from.map((f) => `'${f}'`).join(" or ")}. ${rule.purpose}`);
     }
+    // A-3: past the analysis, a position is closed only on a recorded proof that it closed.
+    const closing = status === "excluded" || a["is_open"] === "false";
+    const proof =
+      a["action"] === "liveness_check" && a["outcome"] === "confirmed_closed" && (a["evidence_code"] !== null || pyTruthy(a["evidence_url"]));
+    if (rule.later && rule.laterCloseNeedsProof && closing && !proof) {
+      const later = rule.later.statuses;
+      const row = options.db().prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
+      if (row && later.includes(row.status ?? "")) {
+        return deny(
+          `Position #${id} is '${row.status}': past the analysis it is closed only on proof. Add --action liveness_check --outcome confirmed_closed and the evidence (--evidence-code <HTTP status> or --evidence-url <URL>) from recheck_liveness, or leave it open.`,
+        );
+      }
+      // Not in the WHERE either: a row that reached a later status meanwhile is not closed without proof.
+      from = from?.filter((f) => !later.includes(f));
+    }
     // The same conditions in the write itself: a row that changed hands or status meanwhile is not touched.
     const where: string[] = [];
     const params: Array<string | number> = [];
