@@ -150,6 +150,30 @@ export function pyInt(raw: string): number | null {
   return Number(out);
 }
 
+/** `float(str)`'s digits: Unicode decimal digits, one underscore allowed between two of them. */
+const PY_DIGITS = String.raw`\p{Nd}(?:_?\p{Nd})*`;
+const PY_FLOAT = new RegExp(String.raw`^[+-]?(?:(?:${PY_DIGITS}(?:\.(?:${PY_DIGITS})?)?|\.${PY_DIGITS})(?:[eE][+-]?${PY_DIGITS})?|inf(?:inity)?|nan)$`, "iu");
+
+/**
+ * Python's `float(str)` as argparse's `type=float` uses it: surrounding
+ * whitespace, `inf`/`infinity`/`nan` in any case, underscores between digits,
+ * any Unicode decimal digit; no hex, no `Infinity` spelled JavaScript's way
+ * only. Null when Python would raise ValueError.
+ */
+export function pyFloat(raw: string): number | null {
+  const text = raw.replace(INT_TRIM, "");
+  if (!PY_FLOAT.test(text)) return null;
+  const ascii = Array.from(text, (ch) => (/\p{Nd}/u.test(ch) ? String(digitValue(ch.codePointAt(0)!)) : ch))
+    .join("")
+    .replaceAll("_", "")
+    .toLowerCase();
+  const sign = ascii.startsWith("-") ? -1 : 1;
+  const body = ascii.replace(/^[+-]/, "");
+  if (body.startsWith("inf")) return sign * Infinity;
+  if (body === "nan") return NaN;
+  return sign * Number(body);
+}
+
 /**
  * The value of a Unicode decimal digit. The standard encodes each set of
  * decimal digits as a contiguous run starting at zero, and runs that touch
@@ -183,4 +207,45 @@ export function pySlice(text: string, start: number, end?: number): string {
 export function pyPad(text: string, width: number, align: "<" | ">"): string {
   const pad = Math.max(0, width - Array.from(text).length);
   return align === "<" ? text + " ".repeat(pad) : " ".repeat(pad) + text;
+}
+
+/**
+ * `f"{x:.{digits}f}"`: the double's exact decimal value rounded half to even,
+ * as Python formats it. `toFixed` rounds the tie up (3.25 → "3.3", Python
+ * "3.2"), so the digits are computed here: a finite double is m·2^e, which
+ * is m·5^-e / 10^-e when e < 0 — an exact decimal to round by hand.
+ */
+export function pyFixed(x: number, digits: number): string {
+  if (!Number.isFinite(x)) return Number.isNaN(x) ? "nan" : x > 0 ? "inf" : "-inf";
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, x);
+  const bits = view.getBigUint64(0);
+  const negative = bits >> 63n === 1n;
+  const rawExp = Number((bits >> 52n) & 0x7ffn);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const mantissa = rawExp === 0 ? fraction : fraction | (1n << 52n);
+  const exp = (rawExp === 0 ? 1 : rawExp) - 1075;
+  // The value as an integer `scaled` over 10^places.
+  let scaled: bigint;
+  let places: number;
+  if (exp >= 0) {
+    scaled = mantissa << BigInt(exp);
+    places = 0;
+  } else {
+    scaled = mantissa * 5n ** BigInt(-exp);
+    places = -exp;
+  }
+  let kept: bigint;
+  if (places <= digits) {
+    kept = scaled * 10n ** BigInt(digits - places);
+  } else {
+    const divisor = 10n ** BigInt(places - digits);
+    kept = scaled / divisor;
+    const rest = scaled % divisor;
+    const twice = rest * 2n;
+    if (twice > divisor || (twice === divisor && kept % 2n === 1n)) kept += 1n;
+  }
+  const text = kept.toString().padStart(digits + 1, "0");
+  const body = digits === 0 ? text : `${text.slice(0, -digits)}.${text.slice(-digits)}`;
+  return negative ? `-${body}` : body;
 }

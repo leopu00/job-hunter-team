@@ -22,9 +22,12 @@ import { z } from "zod";
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
 import { dbQuery } from "./db-query.ts";
+import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
+import { dbPolicyFor } from "./role-policy.ts";
+import { checkMinimumViableProfile } from "../parity/skills/profile-gate.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
@@ -38,6 +41,13 @@ export interface DbToolsOptions {
   now?: () => Date;
   /** The fence's nonce, for tests that compare with the Python. Absent: a new random one per call. */
   nonce?: () => string;
+  /**
+   * `candidate_profile.yml`, which `db_insert score` checks before it writes
+   * (profile_gate). Absent: no profile, so no score is written.
+   */
+  profilePath?: string;
+  /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
+  userId?: string;
 }
 
 /** What a script run comes to: its output and its exit code. */
@@ -68,6 +78,8 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
   const [ownId, ownAlias = ownId] = agentAliases(options.agent) as [string, string?];
   const owns = (foundBy: string | null) => foundBy !== null && [ownId, ownAlias].includes(foundBy.toLowerCase());
   const now = options.now ?? (() => new Date());
+  // What this agent's role may run, subcommand by subcommand (role-policy.ts).
+  const policy = dbPolicyFor(options.agent);
 
   const tool = (
     name: string,
@@ -112,7 +124,10 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
 
   const dbInsert = (argv: string[]): ScriptResult => {
     const entity = argv[0];
-    if (entity !== "position") return refused("db_insert", entity, ["position"]);
+    if (entity === undefined || !INSERT_ENTITIES.has(entity) || !policy.insert.includes(entity)) {
+      return refused("db_insert", entity, [...policy.insert]);
+    }
+    if (entity === "score") return insertScore(argv.slice(1));
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -194,85 +209,129 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     return { stdout: `Position inserted with ID: ${positionId}${cidInfo}\n`, exitCode: 0 };
   };
 
-  const dbUpdate = (argv: string[]): ScriptResult => {
-    const entity = argv[0];
-    if (entity !== "position") return refused("db_update", entity, ["position"]);
-    const a = parseArgv(POSITION_UPDATE, argv.slice(1));
-    const id = a["id"] as number;
-    // SC-03: the SCOUT's one update is marking its own duplicate excluded.
-    // The Python lets any caller set any field; this tool lets through only
-    // what the SCOUT's skill does, and says so.
-    const other = POSITION_UPDATE.options!.map((o) => destOf(o.flag)).filter((k) => k !== "status" && k !== "notes" && a[k] !== null);
-    if (other.length > 0 || (a["status"] !== null && a["status"] !== "excluded")) {
-      const what = other.length > 0 ? other.map((k) => `--${k.replaceAll("_", "-")}`).join(", ") : `--status ${a["status"]}`;
+  /** `db_insert.py score` (T15): the SCORER's verdict on one position. */
+  const insertScore = (argv: string[]): ScriptResult => {
+    const a = parseArgv(SCORE_INSERT, argv);
+    // The maintenance history (`--action rescore`) is the Mantenitore's, and
+    // scorer.md never passes it: a score here is a first score or a plain re-score.
+    if (a["action"] !== null && a["action"] !== undefined) {
+      return { stdout: "", stderr: "--action: not available to this agent. Score with db_insert score and no maintenance flags.\n", exitCode: 2 };
+    }
+    // profile_gate.py, before anything else, as insert_score runs it.
+    const gate = options.profilePath
+      ? checkMinimumViableProfile(options.profilePath)
+      : { ok: false, reason: "candidate profile is missing: the runtime has no profile folder" };
+    if (!gate.ok) {
       return {
-        stdout: "",
-        stderr: `${what}: not available to this agent. The SCOUT's only update is the duplicate recovery: db_update position <ID> --status excluded --notes "DUPLICATE of #<ORIGINAL_ID>" (skill position-insert).\n`,
+        stdout:
+          `⚠\ufe0f  SCORE REJECTED: ${gate.reason}.\n` +
+          "    The candidate profile is substantially empty: do not assign a score.\n" +
+          "    Leave the position in 'checked' and escalate to the Captain (RULE-T10 — do not invent).\n",
         exitCode: 1,
       };
     }
-    const status = a["status"] as string | null;
-    const notes = a["notes"] as string | null;
-    if (!pyTruthy(status) && !pyTruthy(notes)) return { stdout: "No fields to update.\n", exitCode: 0 };
-
-    const changed: string[] = [];
-    const db = options.db();
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      const current = db.prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
-        | { status: string | null; found_by: string | null }
-        | undefined;
-      // D-3: a SCOUT recovers its own duplicates. Another Scout's position stays theirs.
-      if (current && !owns(current.found_by)) {
-        db.exec("ROLLBACK");
-        return {
-          stdout: "",
-          stderr: `Position #${id} was found by ${current.found_by ?? "nobody recorded"}, not by you: the SCOUT only recovers its own duplicates.\n`,
-          exitCode: 1,
-        };
+    for (const [column, maximum] of [["total", SCORE_TOTAL_LIMIT], ...Object.entries(SCORE_COMPONENT_LIMITS)] as const) {
+      const value = a[column] as number | null | undefined;
+      if (value !== null && value !== undefined && (value < 0 || value > maximum)) {
+        return { stdout: `⚠\ufe0f  ERROR: ${column}=${value} is outside range [0-${maximum}]\n`, exitCode: 1 };
       }
-      if (current && current.status !== "new") {
-        db.exec("ROLLBACK");
-        return {
-          stdout: "",
-          stderr: `Position #${id} is '${current.status}': it has moved downstream, and the SCOUT only touches positions still 'new'.\n`,
-          exitCode: 1,
-        };
-      }
-      const sets: string[] = [];
-      const params: Array<string | number | null> = [];
-      if (pyTruthy(status)) {
-        sets.push("status = ?");
-        params.push(status);
-        changed.push(`status=${status}`);
-      }
-      if (pyTruthy(notes)) {
-        sets.push("notes = ?");
-        params.push(interpretEscapes(notes!));
-        changed.push(`notes=${pySlice(notes!, 0, 40)}...`);
-      }
-      sets.push("last_actor = ?");
-      params.push(options.agent);
-      // The SET list is made of the constant fragments above; every value is bound.
-      // found_by in the WHERE too (D-3): the write itself cannot reach another agent's row.
-      const result = db
-        .prepare(`UPDATE positions SET ${sets.join(", ")} WHERE id = ? AND lower(found_by) IN (?, ?)`)
-        .run(...params, id, ownId, ownAlias);
-      if (Number(result.changes) === 0) {
-        db.exec("ROLLBACK");
-        return { stdout: `⚠\ufe0f  ERROR: no position found with id=${id}!\n`, exitCode: 1 };
-      }
-      if (pyTruthy(status) && current?.status !== status) {
-        db.prepare(
-          "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) VALUES (?, ?, ?, ?, ?)",
-        ).run(id, current?.status ?? null, status, options.agent, notes);
-      }
-      db.exec("COMMIT");
-    } catch (error) {
-      rollbackQuietly(db);
-      throw error;
     }
-    return { stdout: `Position ${id} updated: ${changed.join(", ")}\n`, exitCode: 0 };
+    // An upsert, not REPLACE: a re-score keeps scores.id, the row's identity
+    // towards the cloud, and deletes nothing (no tombstone for a live score).
+    // S-1: only on a position in the SCORER's queue (`checked`, as
+    // next-for-scorer reads it), in the same statement: the script would
+    // score or rewrite any position, one already in writing or applied too.
+    const db = options.db();
+    const written = db
+      .prepare(
+        `INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
+                             salary_fit, experience_fit, strategic_fit,
+                             breakdown, notes, scored_by, scored_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')
+         WHERE EXISTS (SELECT 1 FROM positions WHERE id = ? AND status = 'checked')
+         ON CONFLICT(position_id) DO UPDATE SET
+             total_score = excluded.total_score,
+             stack_match = excluded.stack_match,
+             remote_fit = excluded.remote_fit,
+             salary_fit = excluded.salary_fit,
+             experience_fit = excluded.experience_fit,
+             strategic_fit = excluded.strategic_fit,
+             breakdown = excluded.breakdown,
+             notes = excluded.notes,
+             scored_by = excluded.scored_by,
+             scored_at = excluded.scored_at`,
+      )
+      .run(
+        sql(a["position_id"]),
+        sql(a["total"]),
+        sql(a["stack_match"]),
+        sql(a["remote_fit"]),
+        sql(a["salary_fit"]),
+        sql(a["experience_fit"]),
+        sql(a["strategic_fit"]),
+        sql(a["breakdown"]),
+        sql(a["notes"]),
+        // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
+        options.agent,
+        sql(a["position_id"]),
+      );
+    if (Number(written.changes) === 0) {
+      const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(sql(a["position_id"])) as { status: string } | undefined;
+      const why = row ? `is '${row.status}', not 'checked'` : "does not exist";
+      return {
+        stdout: `⚠\ufe0f  SCORE REFUSED: position ${a["position_id"]} ${why}. Score only the positions of your queue (db_query next-for-scorer).\n`,
+        exitCode: 1,
+      };
+    }
+    return { stdout: `Score inserted for position ${a["position_id"]}: ${a["total"]}/100\n`, exitCode: 0 };
+  };
+
+  const dbUpdate = (argv: string[]): ScriptResult => {
+    const entity = argv[0];
+    if (entity === undefined || !policy.update.includes(entity)) return refused("db_update", entity, [...policy.update]);
+    if (entity === "company") return updateCompany(options.db(), parseArgv(COMPANY_UPDATE, argv.slice(1)), options.agent);
+    const rule = policy.position!;
+    const a = parseArgv(POSITION_UPDATE, argv.slice(1));
+    const id = a["id"] as number;
+    const status = a["status"] as string | null;
+    const deny = (why: string): ScriptResult => ({ stdout: "", stderr: `${why}\n`, exitCode: 1 });
+    // The Python lets any caller set any field and any status; the role's rule
+    // lets through what its prompt does, and says why when it does not.
+    if (rule.fields !== "*") {
+      const allowed = rule.fields;
+      const other = POSITION_UPDATE.options!.map((o) => destOf(o.flag)).filter((k) => !allowed.includes(k) && a[k] !== null);
+      if (other.length > 0) return deny(`${other.map((k) => `--${k.replaceAll("_", "-")}`).join(", ")}: not available to this agent. ${rule.purpose}`);
+    }
+    if (pyTruthy(status) && !(status! in rule.moves)) return deny(`--status ${status}: not available to this agent. ${rule.purpose}`);
+    for (const [flag, target] of Object.entries(rule.onlyWith ?? {})) {
+      if (a[flag] !== null && status !== target) {
+        return deny(`--${flag.replaceAll("_", "-")} goes only with --status ${target} for this agent. ${rule.purpose}`);
+      }
+    }
+    // Where the row must stand: the move's own sources, or the role's statuses for any update.
+    const from = pyTruthy(status) ? rule.moves[status!]! : rule.touches;
+    const current = options.db().prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
+      | { status: string | null; found_by: string | null }
+      | undefined;
+    if (current && rule.ownRowsOnly && !owns(current.found_by)) {
+      return deny(`Position #${id} was found by ${current.found_by ?? "nobody recorded"}, not by you: the SCOUT only recovers its own duplicates.`);
+    }
+    if (current && from && !from.includes(current.status ?? "")) {
+      const move = pyTruthy(status) ? `to '${status}'` : "at all";
+      return deny(`Position #${id} is '${current.status}': this agent updates it ${move} only from ${from.map((f) => `'${f}'`).join(" or ")}. ${rule.purpose}`);
+    }
+    // The same conditions in the write itself: a row that changed hands or status meanwhile is not touched.
+    const where: string[] = [];
+    const params: Array<string | number> = [];
+    if (from) {
+      where.push(`AND status IN (${from.map(() => "?").join(", ")})`);
+      params.push(...from);
+    }
+    if (rule.ownRowsOnly) {
+      where.push("AND lower(found_by) IN (?, ?)");
+      params.push(ownId, ownAlias);
+    }
+    return updatePosition(options.db(), a, options.agent, options.userId ?? "local", { where: where.join(" "), params });
   };
 
   const scoutDedup = (argv: string[]): ScriptResult => {
@@ -306,19 +365,27 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     tool(
       "db_query",
       "db_query.py",
-      "Read the team's database: check-url, position, positions, recent-activity.",
-      (argv) => dbQuery(options.db, argv, options.nonce?.(), (sub) => refused("db_query", sub, ["check-url", "position", "positions", "recent-activity"])),
+      `Read the team's database: ${policy.query.join(", ")}.`,
+      (argv) =>
+        dbQuery(options.db, argv, {
+          nonce: options.nonce?.(),
+          allowed: policy.query,
+          refuse: (sub) => refused("db_query", sub, [...policy.query]),
+          ...(options.userId ? { userId: options.userId } : {}),
+        }),
     ),
     tool(
       "db_insert",
       "db_insert.py",
-      "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
+      policy.insert.includes("score")
+        ? "Save your score for one position, right after evaluating it: db_insert score --position-id <ID> --total … (scorer.md). Refused when the candidate profile is empty."
+        : "Insert a position you found into the team's database, after the duplicate check (skill position-insert).",
       dbInsert,
     ),
     tool(
       "db_update",
       "db_update.py",
-      "Mark a duplicate you inserted as excluded: position <ID> --status excluded --notes (skill position-insert).",
+      `Update the team's database: ${policy.update.map((e) => `${e} …`).join(", ")}. ${policy.position?.purpose ?? ""}`.trim(),
       dbUpdate,
     ),
     tool(
@@ -356,6 +423,45 @@ const POSITION_INSERT: CommandSpec = {
   ],
 };
 
+/** The entities of `db_insert.py`, each written here by its own branch. */
+const INSERT_ENTITIES = new Set(["position", "score"]);
+
+/** `shared/skills/score_ranges.py`: the one source of the caps, as the Python validates them. */
+const SCORE_TOTAL_LIMIT = 100;
+const SCORE_COMPONENT_LIMITS = {
+  stack_match: 40,
+  remote_fit: 25,
+  salary_fit: 20,
+  experience_fit: 10,
+  strategic_fit: 15,
+} as const;
+
+/** `db_insert.py score`'s arguments, flag for flag, maintenance flags included. */
+const SCORE_INSERT: CommandSpec = {
+  prog: "db_insert.py score",
+  options: [
+    { flag: "--position-id", type: "int", required: true },
+    { flag: "--total", type: "int", required: true },
+    { flag: "--stack-match", type: "int" },
+    { flag: "--remote-fit", type: "int" },
+    { flag: "--salary-fit", type: "int" },
+    { flag: "--experience-fit", type: "int" },
+    { flag: "--strategic-fit", type: "int" },
+    { flag: "--breakdown" },
+    { flag: "--pros" },
+    { flag: "--cons" },
+    { flag: "--notes" },
+    { flag: "--scored-by" },
+    { flag: "--action", choices: ["liveness_check", "geocode", "logo_fetch", "website_fetch", "jd_refresh", "exclude", "rescore"] },
+    { flag: "--outcome", choices: ["confirmed_open", "confirmed_closed", "inconclusive", "updated", "unchanged", "unreachable", "skipped", "failed"] },
+    { flag: "--evidence-kind", choices: ["http", "api", "manual", "none"] },
+    { flag: "--evidence-url" },
+    { flag: "--evidence-code", type: "int" },
+    { flag: "--evidence-hash" },
+    { flag: "--duration-ms", type: "int" },
+  ],
+};
+
 /** A parsed argument as a bound SQL value. Only `store_true` flags are booleans, and none reaches SQL. */
 function sql(value: string | number | boolean | null | undefined): string | number | null {
   return typeof value === "boolean" || value === undefined ? null : value;
@@ -377,11 +483,11 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--deadline" },
     { flag: "--title" },
     { flag: "--company" },
-    { flag: "--salary-declared-min" },
-    { flag: "--salary-declared-max" },
+    { flag: "--salary-declared-min", type: "int" },
+    { flag: "--salary-declared-max", type: "int" },
     { flag: "--salary-declared-currency" },
-    { flag: "--salary-estimated-min" },
-    { flag: "--salary-estimated-max" },
+    { flag: "--salary-estimated-min", type: "int" },
+    { flag: "--salary-estimated-max", type: "int" },
     { flag: "--salary-estimated-currency" },
     { flag: "--salary-estimated-source" },
     { flag: "--source" },
@@ -400,8 +506,8 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--work-country-code" },
     { flag: "--is-multi-location", choices: ["true", "false"] },
     { flag: "--location-notes" },
-    { flag: "--office-lat" },
-    { flag: "--office-lon" },
+    { flag: "--office-lat", type: "float" },
+    { flag: "--office-lon", type: "float" },
     { flag: "--office-address" },
     { flag: "--office-geocoded", choices: ["true", "false"] },
     { flag: "--office-verified", choices: ["true", "false"] },
@@ -409,9 +515,33 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--outcome", choices: ["confirmed_open", "confirmed_closed", "inconclusive", "updated", "unchanged", "unreachable", "skipped", "failed"] },
     { flag: "--evidence-kind", choices: ["http", "api", "manual", "none"] },
     { flag: "--evidence-url" },
-    { flag: "--evidence-code" },
+    { flag: "--evidence-code", type: "int" },
     { flag: "--evidence-hash" },
-    { flag: "--duration-ms" },
+    { flag: "--duration-ms", type: "int" },
+  ],
+};
+
+/** `db_update.py company`'s arguments. */
+const COMPANY_UPDATE: CommandSpec = {
+  prog: "db_update.py company",
+  positionals: [{ name: "name" }],
+  options: [
+    { flag: "--verdict", choices: ["GO", "CAUTIOUS", "NO_GO"] },
+    { flag: "--red-flags" },
+    { flag: "--culture-notes" },
+    { flag: "--hq-country" },
+    { flag: "--sector" },
+    { flag: "--size" },
+    { flag: "--glassdoor-rating", type: "float" },
+    { flag: "--analyzed-by" },
+    { flag: "--website" },
+    { flag: "--action", choices: MAINTENANCE_ACTIONS },
+    { flag: "--outcome", choices: MAINTENANCE_OUTCOMES },
+    { flag: "--evidence-kind", choices: EVIDENCE_KINDS },
+    { flag: "--evidence-url" },
+    { flag: "--evidence-code", type: "int" },
+    { flag: "--evidence-hash" },
+    { flag: "--duration-ms", type: "int" },
   ],
 };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseArgv, pyRepr } from "../src/db/argv.ts";
-import { interpretEscapes, pyFloatRepr, pyInt, pyJson, pyStrip, pythonIsoUtc } from "../src/db/py-format.ts";
+import { interpretEscapes, pyFixed, pyFloat, pyFloatRepr, pyInt, pyJson, pyStrip, pythonIsoUtc } from "../src/db/py-format.ts";
 import { pythonSkills, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
@@ -19,6 +19,21 @@ describe("Python formats", () => {
   it.skipIf(skills === null)("float repr", () => {
     expect(FLOATS.map(pyFloatRepr)).toEqual(python("repr(float(x))", FLOATS));
     expect([Infinity, -Infinity, NaN, -0].map(pyFloatRepr)).toEqual(["inf", "-inf", "nan", "-0.0"]);
+  });
+
+  it.skipIf(skills === null)("float() as argparse's type=float", () => {
+    const raws = [" 41.89 ", "1_0.5", "1__0", "_1", ".5", "5.", ".", "1e5", "1E-3", "1e", "inf", "-Infinity", "NaN", "0x10", "1,5", "", "+3", "\u0661.\u0662", "12.5\u00a0", "1_000e1_0", "1e_5"];
+    const py = runPython(skills!, ["-c", "import json,sys\nout=[]\nfor x in json.load(sys.stdin):\n  try: v=float(x); out.append(repr(v))\n  except ValueError: out.append(None)\nprint(json.dumps(out))"], {}, JSON.stringify(raws));
+    expect(raws.map((r) => { const v = pyFloat(r); return v === null ? null : pyFloatRepr(v); })).toEqual(JSON.parse(py.stdout));
+  });
+
+  it.skipIf(skills === null)("format(x, '.Nf'): exact value, ties to even", () => {
+    const values = [3.25, 3.35, 2.5, 0.125, 0.5, 1.5, -2.5, 4, 1e22, 5e-324, 0.05, 2.675, 123456.789, -0.001, 0.95, 9.995];
+    for (const digits of [0, 1, 2, 3]) {
+      expect(values.map((v) => pyFixed(v, digits)), `.${digits}f`).toEqual(python(`format(x, '.${digits}f')`, values));
+    }
+    // JSON cannot carry -0 to Python: format(-0.0, '.1f') is '-0.0'.
+    expect(pyFixed(-0, 1)).toBe("-0.0");
   });
 
   it.skipIf(skills === null)("int() as argparse's type=int, and str.strip()", () => {

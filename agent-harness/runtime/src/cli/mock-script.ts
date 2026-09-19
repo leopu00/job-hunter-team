@@ -121,6 +121,63 @@ export const PRODUCT_ROLE_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: identity, a peer message, a pause and a wake-up on the native tools." },
 ];
 
+/** The score of the SCORER's mock cycle, as scorer.md writes it. */
+const MOCK_SCORE = [
+  "score",
+  "--position-id", "1",
+  "--total", "72",
+  "--stack-match", "30",
+  "--remote-fit", "20",
+  "--salary-fit", "10",
+  "--experience-fit", "7",
+  "--strategic-fit", "5",
+  "--breakdown", "STACK: TypeScript, as asked\nREMOTE: hybrid, Milan",
+  "--notes", "Mock score.",
+  "--scored-by", "scorer-1",
+];
+
+/**
+ * The SCORER's rehearsal (T15): its queue, the feedback themes, the claim of
+ * the position, the score and `--status scored`, the report and a pause. It scores position #1, so the database
+ * needs one in `checked`, as the ANALISTA leaves it; on an empty one the queue
+ * is empty and the insert fails on the foreign key, which is what the script
+ * would do too.
+ */
+export const SCORER_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "My queue, and what the person liked and disliked so far.",
+    toolCalls: [
+      { name: "db_query", args: { args: ["next-for-scorer"] } },
+      { name: "feedback_query", args: { command: "themes" } },
+    ],
+  },
+  {
+    text: "Claim it, then read it.",
+    toolCalls: [
+      { name: "db_update", args: { args: ["position", "1", "--last-checked", "now"] } },
+      { name: "db_query", args: { args: ["position", "1"] } },
+    ],
+  },
+  {
+    text: "One position, scored and saved right away.",
+    toolCalls: [
+      { name: "db_insert", args: { args: MOCK_SCORE } },
+      { name: "db_update", args: { args: ["position", "1", "--status", "scored"] } },
+    ],
+  },
+  { toolCalls: [{ name: "send_message", args: { to: "capitano", text: "[RES] Mock cycle: 1 position scored, 72/100." } }] },
+  { toolCalls: [{ name: "throttle", args: { reason: "queue done" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: the queue, one score and a pause on the native tools." },
+];
+
+/** The rehearsal for a product role: the SCORER has its own, every other role plays the SCOUT's. */
+export function productRoleMockScript(role: string): ScriptedTurn[] {
+  return role === "scorer" ? SCORER_MOCK_SCRIPT : PRODUCT_ROLE_MOCK_SCRIPT;
+}
+
 /** A script from a JSON file: an array of `ScriptedTurn`. */
 export async function readMockScript(path: string): Promise<ScriptedTurn[]> {
   let raw: unknown;

@@ -55,7 +55,34 @@ function seeded(path: string, base = sqliteNow()): Database {
   run(tr, 3, "new", "checked", "scorer-1", null, base, "-1 minutes");
   // A REAL column holding an integral value: Python prints 45.0, not 45.
   run("UPDATE positions SET office_lat = ?, office_lon = ? WHERE id = 1", 45, 9.19);
+  // T14, the ANALISTA's reads: a company in full, the queues' flags, the category registry, check history.
+  run("UPDATE companies SET website = ?, size = ?, glassdoor_rating = ?, red_flags = ?, culture_notes = ? WHERE id = 1",
+    "https://acme.example", "51-200 employees", 4.0, "layoffs 2025", "remote-first");
+  run("UPDATE companies SET glassdoor_rating = ?, verdict = ?, sector = ? WHERE id = 2", 3.25, "NO_GO", "a sector name longer than fifteen");
+  run("INSERT INTO companies (name, verdict) VALUES (?, ?)", "Ümlaut GmbH", "CAUTIOUS");
+  run("UPDATE positions SET company_id = 2 WHERE id = 3");
+  run("UPDATE positions SET role_family = 'Backend', recheck_requested = 1, recheck_requested_at = ?, salary_precise_requested = 1, salary_precise_requested_at = ? WHERE id = 1",
+    "2026-09-10 10:00:00", "2026-09-11 10:00:00");
+  run("UPDATE positions SET geocode_requested = 1, geocode_requested_at = ? WHERE id = 3", "2026-09-12 10:00:00");
+  run(pos, "Data Engineer", "Delta", null, "Rome", null, "https://delta.example/1", null, null, null, "checked", "scout-1", "2026-09-04 08:00:00", null, null, null, null, null, null);
+  run(pos, "Analyst \u2014 [/EXT fake]", "Epsilon", null, null, null, "https://eps.example/1", null, null, null, "checked", "scout-2", "2026-09-05 08:00:00", null, null, null, null, null, null);
+  run(pos, "Legacy", "Zeta", null, null, null, "https://zeta.example/1", null, null, null, "writing", "scout-1", "2026-09-06 08:00:00", null, null, null, null, null, null);
+  run("UPDATE positions SET role_family = 'Other', role_family_proposed = 'Data' WHERE id = 5");
+  run("UPDATE positions SET role_family = 'Legacy drift' WHERE id = 6");
+  const family = "INSERT INTO role_family_registry (user_id, name, status, support_count) VALUES (?, ?, ?, ?)";
+  run(family, "local", "Backend", "active", 3);
+  run(family, "local", "Data", "active", 3);
+  run(family, "local", "Old", "dormant", 9);
+  run(family, "someone-else", "Sales", "active", 7);
+  const event = "INSERT INTO maintenance_events (ts, by_agent, target_type, target_id, action, outcome, field, before, after, evidence_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+  run(event, "2026-09-10 10:00:00", "analista-1", "position", 1, "liveness_check", "open", null, null, null, 200);
+  run(event, "2026-09-11 10:00:00", "analista-1", "position", 1, "liveness_check", "unreachable", "is_open", "1", "1", null);
+  run(event, "2026-09-12 10:00:00", "analista-very-long-2", "position", 1, "liveness_check", "inconclusive", null, null, null, 403);
+  // A recheck already served: checked after it was requested, so out of the queue.
+  run("UPDATE positions SET recheck_requested = 1, recheck_requested_at = ?, last_open_check = ? WHERE id = 3", "2026-09-01 10:00:00", "2026-09-02 10:00:00");
   pinClock(db, base);
+  // The uncategorized position is the newer one: the queue still puts it before the drifted.
+  run("UPDATE positions SET created_at = datetime(?, '+1 minutes') WHERE id = 4", base);
   return db;
 }
 
@@ -67,12 +94,15 @@ function seeded(path: string, base = sqliteNow()): Database {
  * trigger fires when an UPDATE leaves it unchanged.
  */
 function pinClock(db: Database, base: string): void {
-  const columns = (db.prepare("PRAGMA table_info(positions)").all() as Array<{ name: string; dflt_value: string | null }>)
-    .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
-    .map((c) => c.name);
-  for (const value of ["1970-01-01 00:00:00", base]) {
-    // Column names from the schema itself, never from input.
-    db.prepare(`UPDATE positions SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
+  // Companies too: `company --json` prints analyzed_at, created_at, updated_at (T14).
+  for (const table of ["positions", "companies"]) {
+    const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string; dflt_value: string | null }>)
+      .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
+      .map((c) => c.name);
+    for (const value of ["1970-01-01 00:00:00", base]) {
+      // Table and column names from the schema itself, never from input.
+      db.prepare(`UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
+    }
   }
 }
 
@@ -81,13 +111,13 @@ function sqliteNow(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
-function twins() {
+function twins(agent = "scout-1") {
   const pyPath = join(root, "py.db");
   const ourPath = join(root, "ours.db");
   const base = sqliteNow();
   const pyDb = seeded(pyPath, base);
   const ourDb = seeded(ourPath, base);
-  const tools = createDbTools({ db: () => ourDb, agent: "scout-1", nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
+  const tools = createDbTools({ db: () => ourDb, agent, nonce: () => NONCE, dedupLog: join(root, "ours-logs", "scout-dedup.log") });
   const call = (name: string, args: string[]) => {
     const tool = tools.find((t) => t.spec.name === name) as ToolHandler;
     return tool.execute(tool.spec.schema.parse({ args }), context);
@@ -96,7 +126,7 @@ function twins() {
     runPython(skills!, [script, ...args], {
       JHT_DB: pyPath,
       JHT_HOME: join(root, "py-home"),
-      JHT_AGENT_NAME: "scout-1",
+      JHT_AGENT_NAME: agent,
       JHT_EXTERNAL_CONTENT_NONCE: NONCE,
       COLUMNS: "80",
     });
@@ -159,7 +189,85 @@ const QUERIES: string[][] = [
   ["check-url", "a", "b"],
 ];
 
+/** The ANALISTA's reads (T14), each run by an analista against the Python. */
+const ANALISTA_QUERIES: string[][] = [
+  ["next-for-analista"],
+  ["next-for-analista", "--limit", "1"],
+  ["next-for-analista", "--limit", "0", "--json"],
+  ["next-for-analista", "--all"],
+  ["next-for-analista", "--json", "--limit", "1"],
+  ["next-for-recheck"],
+  ["next-for-recheck", "--json"],
+  ["next-for-categorize"],
+  ["next-for-categorize", "--json"],
+  ["next-for-salary-precise"],
+  ["next-for-geocoding", "--json"],
+  ["next-for-geocoding", "--limit", "-3"],
+  ["company", "acme"],
+  ["company", "Globex"],
+  ["company", "nobody"],
+  ["company", "acme", "--json"],
+  ["company", "nobody", "--json"],
+  ["company", "%"],
+  ["companies"],
+  ["companies", "--verdict", "NO_GO"],
+  ["companies", "--missing-glassdoor"],
+  ["companies", "--missing-verdict", "--json"],
+  ["companies", "--verdict", "BAD"],
+  ["stats"],
+  ["stats", "--json"],
+  ["check-history", "1"],
+  ["check-history", "2"],
+  ["check-history", "1", "--json"],
+  ["check-history", "99"],
+  ["active-categories"],
+  ["active-categories", "--json"],
+  ["active-categories", "someone-else"],
+  ["active-categories", "nobody", "--json"],
+  ["other-pile"],
+  ["other-pile", "--limit", "0"],
+  ["category-sizes"],
+  ["category-sizes", "--big", "0"],
+  ["category-sizes", "someone-else"],
+  ["next-for-analista", "--limit", "x"],
+];
+
 describe("db_query against db_query.py", () => {
+  it.skipIf(skills === null).each(ANALISTA_QUERIES.map((q) => [`analista: ${q.join(" ")}`, q]))("%s", async (_label, args) => {
+    const { call, py } = twins("analista-1");
+    expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
+  });
+
+  it.skipIf(skills === null)("next-for-scorer, as the SCORER runs it (T15)", async () => {
+    const { call, py } = twins("scorer-1");
+    for (const args of [["next-for-scorer"], ["next-for-scorer", "--json"]]) {
+      expectSame(await call("db_query", args), py("db_query.py", args));
+    }
+  });
+
+  it("gives each role only its own reads", async () => {
+    const db = seeded(join(root, "roles.db"));
+    const run = async (agent: string, args: string[]) => {
+      const tool = createDbTools({ db: () => db, agent }).find((t) => t.spec.name === "db_query")!;
+      return tool.execute(tool.spec.schema.parse({ args }), context);
+    };
+    for (const [agent, args] of [
+      ["scout-1", ["next-for-analista"]],
+      ["scout-1", ["company", "acme"]],
+      ["analista-1", ["next-for-scorer"]],
+      ["analista-2", ["next-for-scrittore"]],
+      ["scorer-1", ["next-for-analista"]],
+      ["scorer-1", ["positions"]],
+      ["capitano-1", ["position", "1"]],
+    ] as const) {
+      const r = await run(agent, [...args]);
+      expect(r.ok, `${agent} ${args.join(" ")}`).toBe(false);
+      expect(r.content).toContain(`\`db_query ${args[0]}\` is not available to this agent`);
+    }
+    expect((await run("analista-2", ["next-for-analista"])).ok).toBe(true);
+    expect((await run("scorer-1", ["next-for-scorer"])).ok).toBe(true);
+  });
+
   it.skipIf(skills === null).each(QUERIES.map((q) => [q.join(" ") || "(no args)", q]))("%s", async (_label, args) => {
     const { call, py } = twins();
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
@@ -223,12 +331,149 @@ describe("db_update position against db_update.py", () => {
     ]) {
       const r = await call("db_update", args);
       expect(r.ok, args.join(" ")).toBe(false);
-      expect(r.content).toMatch(/not available to this agent|only touches positions still 'new'|found by scout-2/);
+      expect(r.content).toMatch(/not available to this agent|only from 'new'|found by scout-2/);
     }
     for (const entity of ["company", "application"]) {
       expect((await call("db_update", [entity, "1"])).content).toContain(`\`db_update ${entity}\` is not available`);
     }
     expect(snapshot(ourDb)).toEqual(before);
+  });
+});
+
+/**
+ * Every row db_update may touch, with the clock left out: `_at` columns and `ts`
+ * as before, and a time written by `now` (datetime('now','localtime')) shown as
+ * `<now>`: twins written a second apart must still compare equal.
+ */
+function fullSnapshot(db: Database) {
+  const local = Date.now();
+  const clean = (rows: unknown[]) =>
+    (rows as Record<string, unknown>[]).map((r) =>
+      Object.fromEntries(
+        Object.entries(r)
+          .filter(([k]) => !/(_at|^ts)$/.test(k))
+          .map(([k, v]) => {
+            if (typeof v === "string" && /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(v) && Math.abs(new Date(v.replace(" ", "T")).getTime() - local) < 120_000) {
+              return [k, "<now>"];
+            }
+            return [k, v];
+          }),
+      ),
+    );
+  const all = (table: string) => clean(db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  return {
+    positions: all("positions"),
+    companies: all("companies"),
+    transitions: all("position_state_transitions"),
+    events: all("maintenance_events"),
+  };
+}
+
+const LONG = "a note that is well over forty characters long, to be cut";
+const ANALISTA_UPDATES: string[][] = [
+  ["position", "2", "--status", "checked", "--notes", "EXPERIENCE_REQUIRED: 3\\nSENIORITY_JD: mid", "--jd-summary", "**Backend** \\u2705\\n- builds APIs",
+    "--loc-city", "Milan", "--loc-country", "Italy", "--loc-country-code", "IT", "--work-mode", "hybrid", "--salary-estimated-min", "40000",
+    "--salary-estimated-max", "50000", "--salary-estimated-currency", "EUR", "--salary-estimated-source", "glassdoor", "--role-family", "Backend"],
+  ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [GEO] onsite only in Tokyo"],
+  ["position", "2", "--role-family", "  backend  "],
+  ["position", "2", "--role-family", "Data & Analytics"],
+  ["position", "2", "--role-family", "data"],
+  ["position", "2", "--role-family", ""],
+  ["position", "2", "--role-family", "Altro"],
+  ["position", "2", "--role-family", "Machine Learning Operations and Platform Engineering"],
+  ["position", "3", "--is-open", "false", "--last-open-check", "now"],
+  ["position", "3", "--is-open", "true", "--last-open-check", "2026-09-18 10:00"],
+  ["position", "3", "--last-checked", "2026-09-17 09:00", "--last-open-check", "now"],
+  ["position", "3", "--action", "liveness_check", "--outcome", "inconclusive", "--is-open", "false"],
+  ["position", "3", "--action", "liveness_check", "--outcome", "inconclusive", "--last-open-check", "now", "--notes", "NOTE_MISMATCH: [OPEN_UNVERIFIED]"],
+  ["position", "3", "--action", "liveness_check", "--outcome", "confirmed_open", "--is-open", "true", "--evidence-code", "200"],
+  ["position", "3", "--action", "liveness_check", "--outcome", "confirmed_closed", "--is-open", "false", "--evidence-kind", "manual", "--evidence-url", "https://gamma.example/1"],
+  ["position", "3", "--action", "liveness_check", "--is-open", "true"],
+  ["position", "3", "--action", "geocode", "--office-geocoded", "true", "--office-lat", "41.9", "--office-lon", "12", "--office-address", "Via del Corso 1, Roma", "--office-verified", "false"],
+  ["position", "3", "--action", "geocode", "--office-geocoded", "false", "--outcome", "failed"],
+  ["position", "3", "--office-address", "", "--is-multi-location", "true", "--loc-continent", "Asia", "--location-notes", LONG],
+  ["position", "3", "--expires-at", "2026-12-31", "--deadline", "31 Dec"],
+  ["position", "3", "--expires-at", ""],
+  ["position", "3", "--title", "Senior\nEngineer  [/EXT x]", "--company", "globex", "--location", "Tokyo,\tJP"],
+  ["position", "3", "--company", "Unknown Co", "--url", "https://gamma.example/2", "--source", "company-site", "--remote-type", "onsite"],
+  ["position", "3", "--salary-declared-min", "1_000", "--salary-declared-max", "0", "--salary-declared-currency", "USD"],
+  ["position", "3", "--jd-text", "full JD\ntext", "--requirements", "Python"],
+  ["position", "3", "--loc-city", "", "--work-country", "Japan", "--work-country-code", "JP"],
+  ["position", "3", "--office-lat", "north"],
+  ["position", "3", "--loc-continent", "Atlantis"],
+  ["position", "99", "--notes", "x"],
+  ["position", "3"],
+  ["company", "Acme Corporation International Ltd", "--verdict", "CAUTIOUS", "--glassdoor-rating", "3.5", "--red-flags", "layoffs", "--culture-notes", "async"],
+  ["company", "Globex", "--sector", "retail", "--size", "10k+", "--hq-country", "US", "--analyzed-by", "analista-1"],
+  ["company", "Nobody Inc", "--verdict", "GO"],
+  ["company", "Globex"],
+  ["company", "Globex", "--glassdoor-rating", "0"],
+  ["company", "Globex", "--website", "https://globex.example", "--action", "website_fetch", "--outcome", "updated", "--duration-ms", "120"],
+  ["company", "Globex", "--website", "https://globex.example", "--action", "website_fetch"],
+  ["company", "Globex", "--verdict", "MAYBE"],
+];
+
+describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () => {
+  it.skipIf(skills === null).each(ANALISTA_UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("analista-1");
+    expectSame(await call("db_update", args as string[]), py("db_update.py", args as string[]));
+    expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+  });
+
+  it("moves a position only new → checked | excluded, and excludes a later one, never an application's", async () => {
+    const { call, ourDb } = twins("analista-1");
+    ourDb.prepare("UPDATE positions SET status = 'applied' WHERE id = 6").run();
+    const before = fullSnapshot(ourDb);
+    for (const args of [
+      ["position", "1", "--status", "checked"],
+      ["position", "2", "--status", "scored"],
+      ["position", "2", "--status", "new"],
+      ["position", "2", "--status", "writing"],
+      ["position", "3", "--status", "applied"],
+      ["position", "6", "--status", "excluded", "--notes", "[SCADUTO]"],
+      ["application", "1", "--status", "ready"],
+    ]) {
+      const r = await call("db_update", args);
+      expect(r.ok, args.join(" ")).toBe(false);
+      expect(r.content, args.join(" ")).toMatch(/not available to this agent|only from/);
+    }
+    expect(fullSnapshot(ourDb)).toEqual(before);
+    // A scored position that closed can be excluded (RULE-14 care mode).
+    expect((await call("db_update", ["position", "1", "--status", "excluded", "--is-open", "false", "--last-open-check", "now", "--notes", "[SCADUTO] 404"])).ok).toBe(true);
+  });
+});
+
+const SCORER_UPDATES: string[][] = [
+  ["position", "4", "--last-checked", "now"],
+  ["position", "4", "--status", "scored"],
+  ["position", "5", "--status", "excluded", "--notes", "EXCLUDED: [STACK] no coding"],
+];
+
+describe("db_update, as the SCORER runs it, against db_update.py (T15)", () => {
+  it.skipIf(skills === null).each(SCORER_UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("scorer-1");
+    expectSame(await call("db_update", args as string[]), py("db_update.py", args as string[]));
+    expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+  });
+
+  it("claims and moves only checked positions, to scored or excluded, notes only with the exclusion", async () => {
+    const { call, ourDb } = twins("scorer-1");
+    const before = fullSnapshot(ourDb);
+    for (const args of [
+      ["position", "4", "--status", "scored", "--notes", "great"],
+      ["position", "4", "--notes", "just a note"],
+      ["position", "4", "--status", "checked"],
+      ["position", "4", "--jd-summary", "x"],
+      ["position", "2", "--status", "scored"],
+      ["position", "2", "--last-checked", "now"],
+      ["position", "1", "--status", "excluded", "--notes", "late"],
+      ["company", "Globex", "--verdict", "GO"],
+    ]) {
+      const r = await call("db_update", args);
+      expect(r.ok, args.join(" ")).toBe(false);
+      expect(r.content, args.join(" ")).toMatch(/not available to this agent|only from|goes only with --status excluded/);
+    }
+    expect(fullSnapshot(ourDb)).toEqual(before);
   });
 });
 

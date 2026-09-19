@@ -350,6 +350,9 @@ export const PYTHON_SKILLS: Record<string, string> = {
   "scout_coord.py": "scout_coord",
   "feedback_query.py": "feedback_query",
   "email_monitor.py": "email_monitor",
+  // T15: the SCORER checks whether a posting is still open. web_fetch is the
+  // same guard (every hop resolved and checked) and every role has it.
+  "safe_fetch.py": "web_fetch",
 };
 
 /** Scripts with no tool of their own but a native equivalent. */
