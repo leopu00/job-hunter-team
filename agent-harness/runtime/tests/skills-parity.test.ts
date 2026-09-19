@@ -456,3 +456,57 @@ describe("scout_coord and the role's own name (T9)", () => {
     expect(db.prepare("SELECT scout FROM scout_coordination").all()).toEqual([]);
   });
 });
+
+describe.skipIf(!HAS_PYTHON)("feedback_query recent and themes ↔ feedback_query.py (T15)", () => {
+  /** "YYYY-MM-DD HH:MM:SS", `days` before now: what SQLite's CURRENT_TIMESTAMP writes. */
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().replace("T", " ").slice(0, 19);
+
+  function seed(path: string) {
+    const db = openJobsDb(path);
+    for (const id of [1, 2, 3, 4, 5, 6]) db.prepare("INSERT INTO positions (id, title, company) VALUES (?, ?, ?)").run(id, `P${id}`, "Acme");
+    const add = db.prepare(
+      "INSERT INTO position_feedback (position_id, action, reason, comment, score, direction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+    add.run(1, "dislike", "troppo senior", "Richiesta troppo seniore — Lead role, see https://acme.example/x", 2, "less_like_this", ago(2));
+    add.run(2, "dislike", "Troppo Senior!", null, null, null, ago(3));
+    add.run(3, "hide", "too senior for me", "stipendio basso", null, null, ago(4));
+    add.run(3, "dislike", "stipendio troppo basso", null, 1, null, ago(1));
+    add.run(4, "like", "ottimo stack, remoto", "token=abc123 /home/me/notes.md", 5, "more_like_this", ago(5));
+    add.run(5, "dislike", "stipendio basso", null, null, null, ago(6));
+    add.run(5, "clear", null, null, null, null, ago(0.5)); // the vote on #5 was withdrawn
+    add.run(6, "dislike", "troppo senior", null, null, null, ago(45)); // outside a 30-day window
+    db.close();
+  }
+
+  it("prints the script's JSON for every flag the Scorer and the Mentor use", async () => {
+    const pyDb = join(root, "py", "jobs.db");
+    const tsDb = join(root, "ts", "jobs.db");
+    seed(pyDb);
+    seed(tsDb);
+    const db = openJobsDb(tsDb);
+    const tool = createFeedbackQueryTool({ db: () => db, jhtHome });
+    const ids = "1,2,3,4,5,6,99";
+    const cases: Array<[string[], Record<string, unknown>]> = [
+      [["recent", "--legacy-ids", ids], { command: "recent", legacy_ids: ids }],
+      [["recent", "--legacy-ids", ids, "--days", "0", "--text-chars", "10"], { command: "recent", legacy_ids: ids, days: 0, text_chars: 10 }],
+      [["recent", "--legacy-ids", ids, "--limit", "2"], { command: "recent", legacy_ids: ids, limit: 2 }],
+      [["themes", "--legacy-ids", ids], { command: "themes", legacy_ids: ids }],
+      [["themes", "--legacy-ids", ids, "--min-positions", "1", "--top", "10", "--exclude-legacy-id", "3"], { command: "themes", legacy_ids: ids, min_positions: 1, top: 10, exclude_legacy_id: ["3"] }],
+      [["themes", "--legacy-ids", ids, "--min-positions", "1", "--include-cleared", "--days", "0"], { command: "themes", legacy_ids: ids, min_positions: 1, include_cleared: true, days: 0 }],
+      [["themes", "--legacy-ids", ids, "--min-positions", "2", "--field", "reason"], { command: "themes", legacy_ids: ids, min_positions: 2, field: "reason" }],
+      [["themes", "--legacy-ids", ids, "--min-positions", "1", "--field", "comment"], { command: "themes", legacy_ids: ids, min_positions: 1, field: "comment" }],
+      [["themes", "--legacy-ids", "98,99"], { command: "themes", legacy_ids: "98,99" }],
+      [["themes", "--legacy-ids", "abc"], { command: "themes", legacy_ids: "abc" }],
+      // No legacy_ids: the aggregate is the cloud's, and this runtime has none.
+      [["recent", "--days", "30"], { command: "recent", days: 30 }],
+      [["themes", "--days", "30", "--min-positions", "1", "--top", "10", "--exclude-legacy-id", "42"], { command: "themes", days: 30, min_positions: 1, top: 10, exclude_legacy_id: ["42"] }],
+    ];
+    for (const [pyArgs, tsArgs] of cases) {
+      const py = python("feedback_query.py", pyArgs, { JHT_DB: pyDb });
+      const ts = await native(tool, tsArgs);
+      expect(ts.content, pyArgs.join(" ")).toBe(py.stdout);
+      expect(ts.ok, pyArgs.join(" ")).toBe(py.status === 0);
+    }
+    db.close();
+  });
+});
