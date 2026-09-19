@@ -27,7 +27,7 @@ const PAIRS: Array<[string, string]> = [
   ["frontend engineer (react)", "front-end engineer - react"],
   ["qa", "aq"],
   ["abcd", "bcda"],
-  ["👨‍👩‍👧 team lead", "team lead 👨‍👩‍👧"],
+  ["👨\u200d👩\u200d👧 team lead", "team lead 👨\u200d👩\u200d👧"],
   [long("ab cd ef ", 250), long("ab cd eg ", 260)],
   [long("the quick brown fox ", 300), long("the quick brown fox jumps ", 400)],
   ["x" + long("a", 250), long("a", 250) + "x"],
