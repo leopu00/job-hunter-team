@@ -85,9 +85,16 @@ reads:
    freely and refuses every write into it, in every mode
    (`readOnlyRoots`). `$JHT_USER_DIR` (the deliverables the TUI puts in the
    person's Documents: the CV, the cover letter, the review) becomes
-   `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user`, created with `cv/` and
-   `critiche/` before the role runs and writable by every role — unset, a CV
-   would have gone to `/cv/` (T25).
+   `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user` — unset, a CV would have gone
+   to `/cv/` (T25). With `run-team` it is one shared volume, and least
+   privilege holds it: `cv/` is the SCRITTORE's to write, `critiche/` the
+   CRITICO's, every role reads both and nobody writes the folder itself
+   (`src/parity/deliverables.ts`). A role creates its own subfolder and goes
+   on when it cannot, since where the launcher owns the tree the folders are
+   already there and the root is nobody's. The filesystem carries the same
+   rule (`user/` root-owned 0750, each subfolder setgid to its role): the
+   runtime's refusal is a sentence the agent can report, the modes are what
+   hold if it reaches for `bash`.
    Left alone: other paths under `$JHT_HOME`, which name
    state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
