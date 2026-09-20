@@ -90,7 +90,13 @@ reads:
    it sits beside what the **person already had**: 750 CVs and letters of
    their own, which reach the roles as another read-only root
    (`JHT_API_USER_HISTORY_DIR`, read freely, written by nobody, named in the
-   rendered prompt beside the deliverables). With `run-team` the
+   rendered prompt beside the deliverables). The two are **siblings, never
+   nested**: a read-only root wins over every own root whatever the mode, so
+   with the deliverables inside the history every CV would be refused — the
+   mount ashley ran for a day, safe but sterile, and the reason the agent
+   read said "the person's profile". A configuration that nests them now
+   stops at startup with that explained (`config.ts`), and the policy's
+   behaviour in both layouts is pinned in `tests/user-folders.test.ts`. With `run-team` the
    deliverables are one shared volume, and least privilege holds them: `cv/`
    is the SCRITTORE's to write, `critiche/` the CRITICO's, every role reads
    both and nobody writes the folder itself
