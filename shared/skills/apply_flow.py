@@ -78,7 +78,7 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin", "generic"})
+SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin", "generic", "workday"})
 GREENHOUSE_HOSTS = frozenset(
     {
         "job-boards.greenhouse.io",
@@ -3205,6 +3205,9 @@ def _recipe_class(platform: str):
         # A company's own careers form (HQ-FULLSTACK-2's apply_generic).
         module = _optional_module("apply_generic")
         return module.GenericRecipe if module is not None else None
+    if platform == "workday":
+        module = _optional_module("workday_apply")
+        return module.WorkdayRecipe if module is not None else None
     return {"ashby": AshbyRecipe, "greenhouse": GreenhouseRecipe, "lever": LeverRecipe}.get(platform)
 
 
@@ -4694,12 +4697,6 @@ class ApplicationFlow:
                     detection = replace(detection, platform="generic")
                 else:
                     LOG.error("[apply-flow] company-form recipe unavailable: %s", _OPTIONAL_IMPORT_ERRORS.get("apply_generic", "absent"))
-        if detection.platform == "workday" and not detection.conflict:
-            # A single-page app: blank when the flow first looks (1817, 14/09).
-            # The module waits for it and names the stop; it never clicks.
-            workday = _optional_module("workday_apply")
-            if workday is not None:
-                raise workday.stop_for(page)
         if detection.platform not in SUPPORTED_PLATFORMS:
             if not self._generic_application_controls(page):
                 self._assert_no_closed_notice(page)

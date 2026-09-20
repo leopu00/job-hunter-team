@@ -289,10 +289,18 @@ def _flow_block_reasons() -> set[str]:
     dove la spec vuole che si fermi.
     """
     src = (SKILLS_DIR / "apply_flow.py").read_text()
-    # The recipes that live in their own module stop the same flow.
-    recipes = (SKILLS_DIR / "linkedin_apply.py").read_text()
+    # The recipes and the shared account module live in their own files and
+    # stop the same flow: a gate that reads only two of them explains nothing
+    # about the others.  A renamed file must fail here, not go unread.
+    modules = ("linkedin_apply.py", "workday_apply.py", "apply_generic.py", "ats_account.py")
+    recipes = ""
+    for name in modules:
+        path = SKILLS_DIR / name
+        assert path.is_file(), f"il gate dei motivi cerca in {name}, che non esiste piu'"
+        recipes += path.read_text()
     reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src + recipes))
     reasons |= set(re.findall(r'FlowDeferred\(\s*"([a-z_]+)"', src + recipes))
+    reasons |= set(re.findall(r'AccountStop\(\s*"([a-z_]+)"', src + recipes))
     flow = _load("apply_flow_for_reasons", "apply_flow.py")
     if "{detection.platform}_dom_unrecognised" in src:
         reasons |= {f"{p}_dom_unrecognised" for p in flow.SUPPORTED_PLATFORMS}
