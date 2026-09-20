@@ -58,6 +58,11 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_MCP_CONFIG` | MCP servers to connect (Claude Code's JSON shape) |
 | `JHT_API_KEEP_HOME=1` | keep the role's home between runs |
 
+A 429 from the provider is its queue, not the run's end: the call is tried
+once more, after a wait that grows, carries jitter and obeys `retry-after`
+when the provider sends one. Nothing else is retried, and a refused attempt
+is served nothing, so it bills nothing and books nothing.
+
 A live run that cannot be priced, capped or recorded does not start. Every live
 run appends one line to the ledger however it ends — completed, failed or
 stopped — because the money it spent is spent. The mock writes nothing there.
