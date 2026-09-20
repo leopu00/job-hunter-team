@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "shared" / "skills"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import apply_generic  # noqa: E402
+import ats_account  # noqa: E402
 import oracle_ce_apply  # noqa: E402
 import verification_code  # noqa: E402
 from apply_flow import ApplicationFlow, BlockedHuman, FlowDeferred  # noqa: E402
@@ -266,6 +267,21 @@ def test_a_wrong_code_does_not_open_a_form_and_stops(browser, tmp_path, cv_path)
 )
 def test_the_pin_shape_is_exactly_six_digits(text, code):
     assert verification_code.code_in_text(text, "digits6") == code
+
+
+def test_the_pin_is_hidden_from_a_stop_screenshot(browser, tmp_path, cv_path):
+    """A stop can fire with the code still in the box, and the stop screenshot
+    is taken from the live page: the field must be one `secrets_hidden` hides."""
+    page = site(browser, first=CODE)
+    built = recipe(build_flow(tmp_path, cv_path))
+
+    built.enter_security_code(page, PIN)
+
+    with ats_account.secrets_hidden(page):
+        assert page.evaluate("() => getComputedStyle(document.getElementById('pin')).visibility") == "hidden"
+    assert page.evaluate("() => document.getElementById('pin').value") == PIN  # typed, only not shown
+    assert page.evaluate("() => getComputedStyle(document.getElementById('pin')).visibility") == "visible"
+
 
 
 # ── the application form, and steps the recipe does not know ─────────────────

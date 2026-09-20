@@ -79,7 +79,7 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
 SUPPORTED_PLATFORMS = frozenset(
-    {"ashby", "greenhouse", "lever", "linkedin", "generic", "workday", "oracle_ce"}
+    {"ashby", "greenhouse", "lever", "linkedin", "generic", "workday", "oracle_ce", "icims"}
 )
 GREENHOUSE_HOSTS = frozenset(
     {
@@ -2683,10 +2683,10 @@ class GreenhouseRecipe:
     def enter_security_code(cls, page, code: str) -> None:
         boxes = cls._security_code_boxes(page)
         if len(boxes) == 1:
-            boxes[0].fill(code)
+            _fill_secret(boxes[0], code)
         elif len(boxes) == len(code):
             for box, character in zip(boxes, code):
-                box.fill(character)
+                _fill_secret(box, character)
         else:
             raise BlockedHuman(
                 "greenhouse_verification_failed",
@@ -3182,6 +3182,20 @@ def linkedin_job_url(url: str) -> str:
     return url
 
 
+def _fill_secret(control: Any, value: str) -> None:
+    """Type a one-time code or a password and mark the field as a secret.
+
+    A stop can fire with the code still in the box, and the stop screenshot is
+    taken from the live page: a field nobody marked is a field `_secrets_hidden`
+    does not hide (SICUREZZA P2, 20/09). The marking comes first — a page that
+    cannot be marked is a page nothing is typed into.
+    """
+    module = _optional_module("ats_account")
+    attribute = getattr(module, "SECRET_ATTR", "data-jht-secret")
+    control.evaluate("(element, attr) => element.setAttribute(attr, '1')", attribute)
+    control.fill(value)
+
+
 @contextlib.contextmanager
 def _secrets_hidden(page: Any):
     """No screenshot ever shows a portal password (ats_account's rule).
@@ -3234,6 +3248,10 @@ def _recipe_class(platform: str):
         # Oracle Recruiting Cloud's candidate site, behind a company Apply (1944).
         module = _optional_module("oracle_ce_apply")
         return module.OracleCERecipe if module is not None else None
+    if platform == "icims":
+        # The iCIMS candidate portal, behind a company Apply (1843).
+        module = _optional_module("icims_apply")
+        return module.ICIMSRecipe if module is not None else None
     return {"ashby": AshbyRecipe, "greenhouse": GreenhouseRecipe, "lever": LeverRecipe}.get(platform)
 
 
