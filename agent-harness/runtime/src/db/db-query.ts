@@ -59,7 +59,7 @@ const QUEUES = {
 type QueueCommand = keyof typeof QUEUES;
 
 export const DB_QUERY_PORTED = [
-  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "dashboard",
+  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "dashboard", "application",
   "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
 ] as const;
 type Ported = (typeof DB_QUERY_PORTED)[number];
@@ -95,6 +95,7 @@ const SPECS: Record<Ported, CommandSpec> = {
   },
   stats: { prog: "db_query.py stats", options: [JSON_FLAG] },
   dashboard: { prog: "db_query.py dashboard", options: [JSON_FLAG] },
+  application: { prog: "db_query.py application", positionals: [{ name: "position_id", type: "int" }] },
   "check-history": { prog: "db_query.py check-history", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
   "active-categories": {
     prog: "db_query.py active-categories",
@@ -377,6 +378,48 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
       );
     }
     print(`\nTotal: ${rows.length} companies`);
+    return done();
+  }
+
+  if (name === "application") {
+    // The SCRITTORE's anti-rewrite gate (RULE-02): the exit code is the answer, and
+    // a verdict already written is final — 1 means skip, not failure.
+    const id = a["position_id"] as number;
+    const r = select(
+      db(),
+      `
+        SELECT a.status, a.critic_verdict, a.critic_score, a.critic_notes,
+               a.written_by, a.reviewed_by, a.written_at, a.critic_reviewed_at,
+               a.cv_path, a.cv_pdf_path, a.cl_path, a.cl_pdf_path,
+               a.applied, a.applied_at, a.applied_via,
+               p.title, p.company
+        FROM applications a
+        JOIN positions p ON p.id = a.position_id
+        WHERE a.position_id = ?
+    `,
+      [id],
+    );
+    const row = r.rows[0];
+    if (!row) {
+      print(`No application for position ${id}. PROCEED.`);
+      return done();
+    }
+    const orNa = (column: string) => (pyTruthy(row[column]) ? r.s(row, column) : "N/A");
+    print(`\n  APPLICATION for position #${id}: ${fence.inline(row["company"])} — ${fence.inline(row["title"])}`);
+    print(`  Status:        ${r.s(row, "status")}`);
+    print(`  Written by:    ${orNa("written_by")} (${orNa("written_at")})`);
+    print(`  Critic verdict:${pyTruthy(row["critic_verdict"]) ? r.s(row, "critic_verdict") : "PENDING"}`);
+    if (pyTruthy(row["critic_verdict"])) {
+      print(`  Critic score:  ${r.s(row, "critic_score")}`);
+      print(`  Reviewed by:   ${orNa("reviewed_by")} (${orNa("critic_reviewed_at")})`);
+      if (pyTruthy(row["critic_notes"])) print(`  Critic notes:  ${r.s(row, "critic_notes")}`);
+    }
+    if (pyTruthy(row["cv_pdf_path"])) print(`  CV PDF:        ${r.s(row, "cv_pdf_path")}`);
+    if (pyTruthy(row["applied"])) print(`  Sent:          ${r.s(row, "applied_at")} via ${orNa("applied_via")}`);
+    if (pyTruthy(row["critic_verdict"])) {
+      print("\n  ⛔ SKIP — the Critic's verdict is FINAL (RULE-02).");
+      return done(1);
+    }
     return done();
   }
 

@@ -37,6 +37,8 @@ export interface PromptPathOptions {
   homeDir: string;
   /** The person's profile folder, as the runtime has it. */
   profileDir: string;
+  /** Where the deliverables go (`$JHT_USER_DIR`): the CV, the cover letter, the review. */
+  userDir?: string;
   /** The person's locale: a team doc's `<name>.<locale>.md` wins over `<name>.md`, as the launcher copies it. */
   locale?: string;
 }
@@ -48,6 +50,10 @@ export function createPathRewriter(options: PromptPathOptions): (text: string) =
   const app = options.appRoot.replace(/\/+$/, "");
   const home = options.homeDir.replace(/\/+$/, "");
   const profileDir = options.profileDir.replace(/\/+$/, "");
+  const userDir = options.userDir?.replace(/\/+$/, "");
+  // T25: `$JHT_USER_DIR/cv/…`, `${JHT_USER_DIR}/critiche/…`. In the TUI it is the person's
+  // Documents folder; here the runtime's, and unset it would be the filesystem root.
+  const deliverables = /(?<![\w./-])(?:\$JHT_USER_DIR|\$\{JHT_USER_DIR(?::?-[^}]*)?\})(?![\w.-])/g;
   // `$JHT_HOME/profile`, `${JHT_HOME}`, `${JHT_HOME:-…}`, `/jht_home/profile`, `~/.jht/profile`.
   const profile = /(?<![\w./-])(?:\$JHT_HOME|\$\{JHT_HOME(?::?-[^}]*)?\}|\/jht_home|~\/\.jht)\/profile(?![\w.-])/g;
   const skillPath = new RegExp(String.raw`(?<![\w./-])(?:(?:/app|/jht_home)/)?agents/_skills/([A-Za-z0-9_-]+)(/${SEG})?`, "g");
@@ -69,6 +75,7 @@ export function createPathRewriter(options: PromptPathOptions): (text: string) =
       .replace(team, (_whole, file: string) => `${app}/agents/_team/${teamDoc(file)}`)
       .replace(/(?<![\w./-])\/app\//g, `${app}/`)
       .replace(profile, profileDir)
+      .replace(deliverables, () => userDir ?? "(no deliverables folder in the API harness)")
       .replace(/(?<![\w./-])\/jht_home\/logs\/scout-dedup\.log/g, options.dedupLog)
       .replace(/(?<![\w./-])\/jht_home\/jobs\.db/g, "the team database (reach it only through the db tools)");
 }

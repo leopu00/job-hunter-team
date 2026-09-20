@@ -10,6 +10,7 @@
  * pause ending or by a message arriving.
  */
 
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
@@ -17,6 +18,7 @@ import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } f
 import { createSpawnTools } from "../hub/spawn-tools.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
+import { blindReviewTools } from "./blind-review.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
@@ -51,6 +53,8 @@ export interface ProductRoleOptions {
   homeDir: string;
   /** The runtime's state root: channels live under it. */
   apiHome: string;
+  /** Where the deliverables go (`$JHT_USER_DIR`): `<apiHome>/user` unless the config says otherwise. */
+  userDir?: string | undefined;
   /** The user's JHT home, read for the locale. */
   jhtHome: string;
   /** The person's profile folder (`JHT_API_PROFILE_DIR`); `<jhtHome>/profile` when the runtime has none. */
@@ -82,6 +86,10 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const loaded = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
   const dedupLog = join(options.apiHome, "logs", "scout-dedup.log");
   const profileDir = options.profileDir ?? join(options.jhtHome, "profile");
+  // T25: the CV, the cover letter and the review are for the person. The folder exists
+  // before the role runs: a write to a missing one is the failure the SCRITTORE reports.
+  const userDir = options.userDir ?? join(options.apiHome, "user");
+  for (const sub of ["cv", "critiche"]) await mkdir(join(userDir, sub), { recursive: true });
   // T6: what the prompt tells the agent to run with python3 is a tool here.
   // T10: and the documents it names are where this agent can open them.
   const paths = createPathRewriter({
@@ -90,6 +98,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     dedupLog,
     homeDir: options.homeDir,
     profileDir,
+    userDir,
     locale,
   });
   const overrides = scriptOverrides(loaded.skills.map((s) => s.name));
@@ -133,7 +142,10 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     mailbox,
     pause,
     tools: (base) => [
-      ...base.map((tool) =>
+      ...(roleOf(options.agent) === "critico"
+        ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir })
+        : base
+      ).map((tool) =>
         tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool,
       ),
       ...native,

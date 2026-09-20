@@ -99,6 +99,7 @@ describe("a mock SCOUT run", () => {
       dedupLog: join(config.apiHome, "logs", "scout-dedup.log"),
       homeDir: config.agentHome,
       profileDir: join(root, "jht", "profile"),
+      userDir: join(config.apiHome, "user"),
     });
     expect(system.startsWith(paths(rewriteThrottleCommands(rewritePythonSkills(scoutMd))).trimEnd())).toBe(true);
     expect(system).not.toMatch(/python3/);

@@ -96,8 +96,14 @@ describe("npm run role -- --role scout (a product role)", () => {
       dedupLog: join(root, "api", "logs", "scout-dedup.log"),
       homeDir: join(root, "api", "agents", "scout-1"),
       profileDir,
+      userDir: join(root, "api", "user"),
     });
     expect(prompt.startsWith(paths(rewriteThrottleCommands(rewritePythonSkills(scoutMd))).trimEnd())).toBe(true);
+    // T25: the deliverables folder exists before the role runs, and the prompt names it,
+    // where an unset $JHT_USER_DIR would have sent a CV to the filesystem root.
+    expect(prompt).not.toMatch(/JHT_USER_DIR/);
+    expect(prompt).toContain(`deliverables in \`${join(root, "api", "user")}\``);
+    expect((await readdir(join(root, "api", "user"))).sort()).toEqual(["critiche", "cv"]);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));

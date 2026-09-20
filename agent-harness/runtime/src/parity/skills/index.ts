@@ -62,6 +62,9 @@ const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   // policy is its to show (`set` is refused here: the profile is read-only), and the
   // email check of C-17 runs without the skill listed; C-15 drains the ticket queue, C-17 merges categories.
   capitano: ["team_directives", "enrichment_policy", "email_monitor", "ticket", "role_registry"],
+  // T25: the CRITICO lists no database skill, and its prompt reads the application it was
+  // asked to review and the team's recent activity (critico.md, communication section).
+  critico: ["db_query"],
 };
 
 /** The script→tool overrides a role's text is rewritten with: whose tool a script is, for this role. */
@@ -86,7 +89,7 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   if (db) {
     const inserts = dbPolicyFor(options.agent).insert;
     const wanted = new Set<string>();
-    if (listed.has("db-query")) wanted.add("db_query");
+    if (listed.has("db-query") || scripts.has("db_query")) wanted.add("db_query");
     if (listed.has("db-insert") || inserts.some((e) => e !== "position")) wanted.add("db_insert");
     if (listed.has("db-insert") && inserts.includes("position")) wanted.add("scout_dedup");
     if (listed.has("db-update")) wanted.add("db_update");

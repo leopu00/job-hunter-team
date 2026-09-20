@@ -58,6 +58,14 @@ export interface Config {
   apiHome: string;
   /** The role's home: the folder a real spawn starts it in. Absolute. */
   agentHome: string;
+  /**
+   * What the team makes for the person — CVs, cover letters, reviews — which
+   * the TUI calls `$JHT_USER_DIR` and puts in their Documents folder (T11).
+   * Here it is the runtime's own (`JHT_API_USER_DIR`, default
+   * `<apiHome>/user`): every role may write there, none may write the
+   * profile. Absolute.
+   */
+  userDir: string;
   /** Where commands start and relative paths resolve. Absolute. */
   workdir: string;
   permissionMode: PermissionMode;
@@ -171,12 +179,14 @@ export function loadConfig(env: Env = process.env, role = "agent"): Config {
 function readLocal(
   env: Env,
   role: string,
-): Pick<Config, "role" | "profileDir" | "apiHome" | "agentHome" | "workdir" | "permissionMode" | "mcpConfig"> {
+): Pick<Config, "role" | "profileDir" | "apiHome" | "agentHome" | "userDir" | "workdir" | "permissionMode" | "mcpConfig"> {
   const cwd = process.cwd();
   const rawProfile = env["JHT_API_PROFILE_DIR"]?.trim();
   const profileDir = rawProfile ? resolveUserPath(rawProfile, cwd, homedir()) : undefined;
   const apiHome = resolveUserPath(env["JHT_API_HOME"]?.trim() || "~/.jht-api", cwd, homedir());
   const agentHome = join(apiHome, "agents", role);
+  const rawUserDir = env["JHT_API_USER_DIR"]?.trim();
+  const userDir = rawUserDir ? resolveUserPath(rawUserDir, cwd, homedir()) : join(apiHome, "user");
   // The agent starts in its own home, as a spawn would. JHT_API_WORKDIR is for
   // pointing it somewhere else on purpose, not the default.
   const rawWorkdir = env["JHT_API_WORKDIR"]?.trim();
@@ -192,7 +202,7 @@ function readLocal(
   }
   const rawMcp = env["JHT_API_MCP_CONFIG"]?.trim();
   const mcpConfig = rawMcp ? resolveUserPath(rawMcp, cwd, homedir()) : undefined;
-  return { role, apiHome, agentHome, workdir, permissionMode, ...(profileDir ? { profileDir } : {}), ...(mcpConfig ? { mcpConfig } : {}) };
+  return { role, apiHome, agentHome, userDir, workdir, permissionMode, ...(profileDir ? { profileDir } : {}), ...(mcpConfig ? { mcpConfig } : {}) };
 }
 
 /**
