@@ -14,7 +14,7 @@
  * first write.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -49,6 +49,28 @@ describe("the deliverables and the person's documents", () => {
       expect(String((error as Error).message), userDir).toMatch(/is inside JHT_API_USER_HISTORY_DIR/);
       expect(String((error as Error).message), userDir).toMatch(/mount the two as siblings/);
     }
+  });
+
+  it("follows a link into the history, where the policy would (P2-b)", () => {
+    const history = join(root, "jht_user");
+    mkdirSync(join(history, "out"), { recursive: true });
+    // A deliverables folder that is a link into the history IS the history: said here,
+    // where the reason fits, instead of at the first write the policy refuses.
+    symlinkSync(join(history, "out"), join(root, "jht_out"));
+    let error: unknown;
+    try {
+      loadConfig(env({ JHT_API_USER_HISTORY_DIR: history, JHT_API_USER_DIR: join(root, "jht_out") }), "scrittore-1");
+    } catch (caught) {
+      error = caught;
+    }
+    expect(isHarnessError(error) && error.code).toBe("config_invalid");
+    expect(String((error as Error).message)).toMatch(/is inside JHT_API_USER_HISTORY_DIR/);
+    // And a link that stays outside is a sibling, as it looks.
+    mkdirSync(join(root, "real_out"), { recursive: true });
+    symlinkSync(join(root, "real_out"), join(root, "linked_out"));
+    expect(
+      loadConfig(env({ JHT_API_USER_HISTORY_DIR: history, JHT_API_USER_DIR: join(root, "linked_out") }), "scrittore-1").userDir,
+    ).toBe(join(root, "linked_out"));
   });
 
   it("takes them as siblings, in either order on disk", () => {
