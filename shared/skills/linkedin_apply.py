@@ -800,17 +800,56 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
 
     PLATFORM = "linkedin"
     VENDOR = "LinkedIn"
-    MODAL = "[role=dialog].jobs-easy-apply-modal"
+    # The 2026 dialog is a NATIVE <dialog> with no role and generated classes
+    # (read on the box, 1842): [role=dialog] found nothing and Easy Apply
+    # stopped as linkedin_form_missing with the dialog open on screen.  Its
+    # stable marks are the SDUI screen name and the dialog test id; the old
+    # modal class stays for the layout that still has it.
+    MODAL = (
+        "dialog[open]:has([data-sdui-screen*='easyapply' i]), "
+        "dialog[open][data-testid='dialog']:has([data-testid='dialog-content']), "
+        "[role=dialog].jobs-easy-apply-modal"
+    )
     FORM = MODAL
-    FIELD_ENTRY = ".jobs-easy-apply-form-section__grouping"
-    SUBMIT = "[role=dialog].jobs-easy-apply-modal button[aria-label='Submit application']"
+    # A field is a label bound to a control, or a fieldset of choices; the
+    # option labels inside a fieldset are not fields of their own.
+    LEGACY_ENTRY = ".jobs-easy-apply-form-section__grouping"
+    FIELD_ENTRY = (
+        f"{LEGACY_ENTRY}, fieldset:has(legend), "
+        "div:has(> label[for]):not(fieldset div):not(:has(div:has(> label[for])))"
+    )
+    SUBMIT = "dialog[open] button:has-text('Submit application'), [role=dialog] button[aria-label='Submit application']"
     SUCCESS = ""
-    CONFIRMATION_MARKERS = ("application sent", "your application was sent")
+    CONFIRMATION_MARKERS = ("application sent", "your application was sent", "candidatura inviata")
+    # The footer buttons carry only their text now, in the interface language.
+    _NEXT_LABEL = re.compile(
+        r"^\s*(next|continue|avanti|continua|weiter|suivant|continuer|siguiente|continuar|próximo|volgende|ileri)\b", re.I
+    )
+    _REVIEW_LABEL = re.compile(r"^\s*(review|rivedi|verifica|revisione|überprüfen|prüfen|vérifier|revisar|rever|controleren)\b", re.I)
+    _SUBMIT_LABEL = re.compile(
+        r"^\s*(submit application|submit|invia candidatura|invia|bewerbung senden|absenden|envoyer la candidature|envoyer"
+        r"|enviar solicitud|enviar candidatura|enviar|verzenden|gönder)\b",
+        re.I,
+    )
+    _BACK_LABEL = re.compile(r"^\s*(back|previous|indietro|precedente|zurück|précédent|retour|atrás|anterior|voltar|terug)\b", re.I)
     _NEXT = "button[aria-label='Continue to next step']"
     _REVIEW = "button[aria-label='Review your application']"
     _SUBMIT_BUTTON = "button[aria-label='Submit application']"
     _FOLLOW = "input[type=checkbox][id*='follow-company']"
-    _ERRORS = (".artdeco-inline-feedback--error", "[role=alert]")
+    _FOLLOW_LABEL = re.compile(r"\b(follow|segui|folgen|suivre|seguir|volgen)\b", re.I)
+    _ERRORS = (".artdeco-inline-feedback--error", "[role=alert]", "[aria-invalid=true]")
+    # "Pagina 1/4", "Page 1 of 4": which step of how many the dialog shows.
+    _PAGE_OF = re.compile(r"\b(?:page|pagina|página|seite|síða)\s*(\d{1,2})\s*(?:/|of|di|de|von|sur|van)\s*(\d{1,2})\b", re.I)
+    # The question's own type, from LinkedIn's component key
+    # ("easyApplyFieldFocus_ea.q::<id>::PHONE_MOBILE::phoneNumber.validation").
+    _COMPONENT_FACTS = {
+        "PHONE_MOBILE": "phone",
+        "PHONE": "phone",
+        "EMAIL": "email",
+        "FIRST_NAME": "first name",
+        "LAST_NAME": "last name",
+        "CITY": "location",
+    }
     # Contact fields of the dialog by their label, to the profile_facts fact
     # they hold; the email and the phone country arrive filled from the
     # account and are kept as they are.
@@ -1053,9 +1092,45 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         if dialogs.count() != 1:
             raise BlockedHuman("linkedin_form_ambiguous", "The Easy Apply dialog is not exactly one dialog", step)
         dialog = dialogs.first
-        if dialog.locator(self.FIELD_ENTRY).count() != page.locator(self.FIELD_ENTRY).count():
+        if dialog.locator(self.LEGACY_ENTRY).count() != page.locator(self.LEGACY_ENTRY).count():
             raise BlockedHuman("application_field_outside_form", "An Easy Apply field sits outside the dialog", step)
         return dialog
+
+    def _buttons(self, dialog, label: re.Pattern[str], legacy: str = "") -> list:
+        """The dialog's visible buttons whose own name starts with `label`.
+
+        The 2026 footer buttons carry no aria-label and no test id: their name
+        is their text, in the interface language.  `legacy` keeps the old
+        aria-label selector working where it still exists.
+        """
+        found = []
+        if legacy:
+            matches = dialog.locator(legacy)
+            found.extend(matches.nth(i) for i in range(matches.count()) if matches.nth(i).is_visible())
+        if found:
+            return found
+        buttons = dialog.locator("button, [role=button]")
+        for index in range(buttons.count()):
+            button = buttons.nth(index)
+            if not button.is_visible():
+                continue
+            name = " ".join((button.get_attribute("aria-label") or button.inner_text() or "").split())
+            if label.search(name):
+                found.append(button)
+        return found
+
+    def _advance_button(self, dialog):
+        """The single Next/Review button of this step, or None."""
+        for label, legacy in ((self._REVIEW_LABEL, self._REVIEW), (self._NEXT_LABEL, self._NEXT)):
+            buttons = self._buttons(dialog, label, legacy)
+            if len(buttons) == 1:
+                return buttons[0]
+            if buttons:
+                return None
+        return None
+
+    def _submit_buttons(self, dialog) -> list:
+        return self._buttons(dialog, self._SUBMIT_LABEL, self._SUBMIT_BUTTON)
 
     def dom_match(self, page) -> bool:
         dialogs = page.locator(self.MODAL)
@@ -1063,7 +1138,9 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             return False
         dialog = dialogs.first
         return bool(
-            dialog.locator(f"{self._NEXT}, {self._REVIEW}, {self._SUBMIT_BUTTON}").count()
+            self._advance_button(dialog) is not None
+            or self._submit_buttons(dialog)
+            or dialog.locator(self.FIELD_ENTRY).count()
         )
 
     # ── the dialog, step by step ─────────────────────────────────────────────
@@ -1076,6 +1153,21 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 text = " ".join(found.first.inner_text().replace("\u00a0", " ").split())
                 return re.sub(r"\s*(\*|required)\s*$", "", text, flags=re.I).strip()
         return ""
+
+    def _component_fact(self, entry) -> str | None:
+        """The field's own type from LinkedIn's component key, whatever the label's language.
+
+        "easyApplyFieldFocus_ea.q::<id>::PHONE_MOBILE::phoneNumber.validation"
+        says this is the mobile phone even when the form reads "Teléfono móvil".
+        """
+        try:
+            key = entry.get_attribute("componentkey") or ""
+        except Exception:
+            return None
+        for marker, fact in self._COMPONENT_FACTS.items():
+            if f"::{marker}::" in key:
+                return fact
+        return None
 
     @staticmethod
     def _field_key(entry) -> str:
@@ -1104,7 +1196,7 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
                 continue
             label = self._label(entry)
             key = self._field_key(entry)
-            fact = self._CORE_LABELS.get(label.casefold())
+            fact = self._CORE_LABELS.get(label.casefold()) or self._component_fact(entry)
             if fact:
                 self._core_entry(page, entry, label, key, fact)
                 continue
@@ -1201,8 +1293,39 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             raise BlockedHuman("upload_rejected", "LinkedIn did not show this application's CV as attached", "upload_cv")
         self.cv_attached = True
 
+    def page_of(self, dialog) -> tuple[int, int] | None:
+        """(step, steps) from the dialog's own "Pagina 1/4", or None."""
+        try:
+            found = self._PAGE_OF.search(" ".join((dialog.inner_text() or "").split()))
+        except Exception:
+            return None
+        return (int(found.group(1)), int(found.group(2))) if found else None
+
+    def _rewind_to_first_step(self, page, dialog):
+        """A draft LinkedIn saved reopens at a later step: walk back, so every step is checked.
+
+        Without this the CV step could be skipped and the application sent
+        with whatever the draft holds.
+        """
+        for _ in range(MAX_MODAL_STEPS):
+            position = self.page_of(dialog)
+            if not position or position[0] <= 1:
+                return dialog
+            back = self._buttons(dialog, self._BACK_LABEL)
+            if len(back) != 1 or not back[0].is_enabled():
+                raise BlockedHuman(
+                    "linkedin_step_unrecognised",
+                    f"Easy Apply reopened a saved draft at step {position[0]} of {position[1]} with no Back button",
+                    "fill",
+                )
+            back[0].click(timeout=10_000)
+            page.wait_for_timeout(300)
+            dialog = self._form(page, "fill")
+        raise BlockedHuman("linkedin_step_unrecognised", "The Easy Apply draft did not go back to its first step", "fill")
+
     def fill_core(self, page) -> None:
         """Walk the dialog to its review: every step's contacts, CV and questions, then Next."""
+        dialog = self._rewind_to_first_step(page, self._form(page, "fill"))
         for step in range(1, MAX_MODAL_STEPS + 1):
             dialog = self._form(page, "fill")
             if self.session is not None and self.session.challenge(page):
@@ -1210,12 +1333,12 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
             self._work_step(page, dialog)
             if self.step_saved is not None:
                 self.step_saved(step)
-            if dialog.locator(self._SUBMIT_BUTTON).count():
+            if self._submit_buttons(dialog):
                 return
-            advance = dialog.locator(f"{self._REVIEW}, {self._NEXT}")
-            if advance.count() != 1 or not advance.first.is_visible() or not advance.first.is_enabled():
+            advance = self._advance_button(dialog)
+            if advance is None or not advance.is_enabled():
                 raise BlockedHuman("linkedin_step_unrecognised", "The Easy Apply step has no single Next or Review button", "fill")
-            advance.first.click(timeout=10_000)
+            advance.click(timeout=10_000)
             page.wait_for_timeout(300)
             if self._visible_error_text(self._form(page, "fill")):
                 raise BlockedHuman("form_error", "LinkedIn refused a step of the application", "fill")
@@ -1235,23 +1358,42 @@ class LinkedInEasyApplyRecipe(LeverRecipe):
         dialog = self._form(page, "review")
         if self._visible_error_text(dialog):
             raise BlockedHuman("form_error", "LinkedIn reports a form validation error", "review")
-        follow = dialog.locator(self._FOLLOW)
-        for index in range(follow.count()):
-            box = follow.nth(index)
+        for box in self._follow_boxes(dialog):
             if box.is_checked():
                 box.set_checked(False)
             if box.is_checked():
                 raise BlockedHuman("linkedin_follow_not_cleared", "The follow-the-company box could not be cleared", "review")
-        submit = dialog.locator(self._SUBMIT_BUTTON)
-        if submit.count() != 1 or not submit.first.is_visible() or not submit.first.is_enabled():
+        submit = self._submit_buttons(dialog)
+        if len(submit) != 1 or not submit[0].is_enabled():
             raise BlockedHuman("submit_unavailable", "Easy Apply Submit is missing, ambiguous, or disabled", "review")
+
+    def _follow_boxes(self, dialog) -> list:
+        """The "follow the company" checkboxes, by id or by the text of their label."""
+        boxes = dialog.locator(self._FOLLOW)
+        found = [boxes.nth(i) for i in range(boxes.count())]
+        if found:
+            return found
+        checkboxes = dialog.locator("input[type=checkbox]")
+        for index in range(checkboxes.count()):
+            box = checkboxes.nth(index)
+            name = " ".join((box.get_attribute("aria-label") or "").split())
+            identifier = box.get_attribute("id") or ""
+            if not name and identifier:
+                labels = dialog.locator(f"label[for='{identifier}']")
+                name = " ".join((labels.first.inner_text() or "").split()) if labels.count() else ""
+            if self._FOLLOW_LABEL.search(name):
+                found.append(box)
+        return found
 
     def submit(self, page) -> None:
         # The flow has saved submit_started and asked the gate again.  The
         # pause starts at the click, whatever LinkedIn answers.
         if self.session is not None:
             self.session.record_apply()
-        self._form(page, "submit").locator(self._SUBMIT_BUTTON).click(timeout=10_000)
+        submit = self._submit_buttons(self._form(page, "submit"))
+        if len(submit) != 1:
+            raise BlockedHuman("submit_unavailable", "Easy Apply Submit is missing or ambiguous at the click", "submit")
+        submit[0].click(timeout=10_000)
 
     @staticmethod
     def _challenge_reason(page) -> str:

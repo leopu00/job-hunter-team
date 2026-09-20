@@ -205,6 +205,8 @@ class Site:
     modern_nav: bool = False
     closed: bool = False
     easy_button: str | None = None
+    modern_modal: bool = False
+    modern_start_step: int = 0
     requests: list = field(default_factory=list)
 
     def install(self, page) -> None:
@@ -213,7 +215,10 @@ class Site:
             url = request.url
             self.requests.append(url)
             signed_in = "li_at=synthetic" in (request.all_headers().get("cookie") or "")
-            if url.startswith(JOB):
+            if url.startswith(JOB) and self.modern_modal and signed_in:
+                body = modern_job_page(question=self.question, reject_upload=self.reject_upload,
+                                       start_step=self.modern_start_step)
+            elif url.startswith(JOB):
                 body = job_page(signed_in, offsite=self.offsite, easy=self.easy, question=self.question,
                                 reject_upload=self.reject_upload, guest_offsite=self.guest_offsite,
                                 question_html=self.question_html, modern_nav=self.modern_nav,
@@ -1109,3 +1114,137 @@ def test_a_link_and_the_button_inside_it_are_one_easy_apply(page, cv_path: Path)
     recipe = linkedin_apply.LinkedInEasyApplyRecipe({}, cv_path)
 
     assert len(recipe._easy_apply(page)) == 1
+
+
+# ── the 2026 Easy Apply dialog, as read on the box (1842): native <dialog>, no role ──
+
+MODERN_MODAL_SCRIPT = r"""
+<script>
+window.submitCount = 0; window.followedAtSubmit = null;
+const steps = [
+  `<p>Informaci\u00f3n de contacto</p>
+   <div><label for="f-email"><div>Email*</div></label><select id="f-email" required><option value="a">candidate@example.invalid</option></select></div>
+   <div componentkey="easyApplyFieldFocus_ea.q::21794308617::PHONE_MOBILE::phoneNumber.validation">
+     <label for="f-phone"><div>Tel\u00e9fono m\u00f3vil*</div></label><input id="f-phone" type="tel" required></div>`,
+  `<div><label for="f-cv"><div>Curriculum</div></label><input id="f-cv" type="file"><span class="filename"></span></div>`,
+  `__QUESTION__`,
+  `<p>Rivedi la candidatura</p>
+   <div><label for="f-follow">Segui Example per restare aggiornato</label><input type="checkbox" id="f-follow" checked></div>`,
+];
+function footer(index) {
+  if (index === steps.length - 1) return `<footer><button type="button" componentkey="x">` +
+    `<span><span>Invia candidatura</span></span></button></footer>`;
+  if (index === steps.length - 2) return `<footer><button type="button"><span><span>Rivedi</span></span></button></footer>`;
+  return `<footer><button type="button"><span><span>Avanti</span></span></button></footer>`;
+}
+function back(index) {
+  return index === 0 ? `` : `<button type="button"><span><span>Indietro</span></span></button>`;
+}
+function render(index) {
+  const content = document.querySelector('[data-sdui-screen]');
+  content.innerHTML = `<p>Pagina ${index + 1}/${steps.length}</p>` + back(index) + steps[index] + footer(index);
+  const resume = content.querySelector('#f-cv');
+  if (resume) resume.addEventListener('change', e => {
+    if (!__REJECT_UPLOAD__) content.querySelector('.filename').textContent = e.target.files[0].name;
+  });
+  content.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+    const name = (button.innerText || '').trim();
+    if (name.startsWith('Invia')) {
+      window.submitCount += 1;
+      const box = content.querySelector('#f-follow');
+      window.followedAtSubmit = box ? box.checked : null;
+      document.querySelector('dialog').innerHTML = '<h2>Candidatura inviata</h2>';
+      return;
+    }
+    render(name.startsWith('Indietro') ? index - 1 : index + 1);
+  }));
+}
+document.querySelectorAll('[data-easy-apply-fixture]').forEach(control => control.addEventListener('click', () => {
+  if (document.querySelector('dialog')) return;
+  const dialog = document.createElement('dialog');
+  dialog.setAttribute('open', '');
+  dialog.setAttribute('data-testid', 'dialog');
+  dialog.setAttribute('aria-labelledby', 'dialog-header');
+  dialog.innerHTML = '<button type="button" aria-label="Chiudi"></button>' +
+    '<header id="dialog-header"><h2>Candidati per Example</h2></header>' +
+    '<div data-testid="dialog-content"><div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.easyapply.EasyApply"></div></div>';
+  document.body.appendChild(dialog);
+  render(__START_STEP__);
+}));
+</script>
+"""
+
+
+def modern_job_page(*, question: bool = True, reject_upload: bool = False, start_step: int = 0) -> str:
+    script = (
+        MODERN_MODAL_SCRIPT.replace("__QUESTION__", QUESTION if question else "<p>Nessuna domanda</p>")
+        .replace("__REJECT_UPLOAD__", "true" if reject_upload else "false")
+        .replace("__START_STEP__", str(start_step))
+    )
+    return (
+        '<html><body><header><a href="https://www.linkedin.com/mynetwork/">La mia rete</a>'
+        '<a href="https://www.linkedin.com/messaging/">Messaggistica</a></header><h1>Test Role</h1>'
+        + REAL_TOP_CARD_BUTTON
+        + script
+        + "</body></html>"
+    )
+
+
+
+
+def test_the_2026_dialog_is_recognised_and_walked_to_its_submit(page, home: Path, cv_path: Path):
+    """Live 14/09 (patch 28): the dialog was open and the recipe said it never opened."""
+    write_session(home)
+    recorded: list = []
+    site = Site(modern_modal=True, modern_nav=True)
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    assert page.evaluate("window.submitCount") == 1
+    assert page.evaluate("window.followedAtSubmit") is False, "the follow-the-company box is cleared"
+    assert len(recorded) == 1
+    assert checkpoint(home)["modal_step"] == 4
+
+
+def test_a_saved_draft_reopened_at_a_later_step_goes_back_to_the_first(page, home: Path, cv_path: Path):
+    write_session(home)
+    recorded: list = []
+    site = Site(modern_modal=True, modern_nav=True, modern_start_step=2)
+
+    result = run(build_flow(home, cv_path, recorded=recorded), page, site)
+
+    assert result.status == "applied", result
+    assert recorded[0]["receipt"].cv_sha256, "the CV step was walked, not skipped"
+
+
+def test_the_phone_field_is_known_by_its_component_key_whatever_the_language(page, home: Path, cv_path: Path):
+    """The form reads "Teléfono móvil"; the component key says PHONE_MOBILE."""
+    write_session(home)
+    site = Site(modern_modal=True, modern_nav=True)
+
+    result = run(build_flow(home, cv_path, answers={"are you comfortable commuting?": "Yes"}), page, site)
+
+    assert result.status == "applied", result
+    assert page.evaluate("window.submitCount") == 1
+
+
+def test_a_dialog_without_a_recognised_next_button_never_sends(page, home: Path, cv_path: Path):
+    write_session(home)
+    body = (
+        '<html><body><header><a href="https://www.linkedin.com/messaging/">M</a></header>'
+        + REAL_TOP_CARD_BUTTON
+        + "<script>document.querySelectorAll('[data-easy-apply-fixture]').forEach(c => c.addEventListener('click', () => {"
+        "const d = document.createElement('dialog'); d.setAttribute('open',''); d.setAttribute('data-testid','dialog');"
+        "d.innerHTML = '<div data-testid=\"dialog-content\"><div data-sdui-screen=\"com.linkedin.sdui.flagshipnav.jobs.easyapply.EasyApply\">'"
+        " + '<p>Pagina 1/4</p><div><label for=\"x\">Email*</label><select id=\"x\"><option value=\"a\">a</option></select></div>'"
+        " + '<footer><button type=\"button\">Qualcosa</button></footer></div>';"
+        "document.body.appendChild(d); }));</script></body></html>"
+    )
+    site = Site()
+    site.install(page)
+    page.route(JOB, lambda route: route.fulfill(status=200, content_type="text/html", body=body))
+
+    result = build_flow(home, cv_path).run(page=page, navigate=True)
+
+    assert (result.status, result.reason) == ("blocked_human", "linkedin_step_unrecognised")
