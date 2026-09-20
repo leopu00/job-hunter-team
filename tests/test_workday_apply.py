@@ -210,8 +210,14 @@ def test_an_open_posting_is_applied_to_through_its_account_step(page, tmp_path: 
     account = json.loads(saved.read_text())
     assert (account["email"], account["state"]) == ("candidate@example.invalid", "active")
     assert account["password"] == created["password"]
-    checkpoint = (tmp_path / "17.json").read_text()
-    assert account["password"] not in checkpoint
+    # The password lives in its own 0600 file and nowhere else the run wrote:
+    # not the checkpoint, not a receipt, not the round's summary.
+    elsewhere = [
+        path
+        for path in tmp_path.rglob("*")
+        if path.is_file() and path != saved and account["password"] in path.read_bytes().decode("utf-8", "ignore")
+    ]
+    assert elsewhere == []
 
 
 def test_a_saved_account_signs_in_instead_of_creating_a_second_one(page, tmp_path: Path, monkeypatch):
@@ -274,3 +280,30 @@ def test_the_password_field_is_marked_so_screenshots_hide_it(page, tmp_path: Pat
         assert page.evaluate(
             "() => document.querySelector('[data-automation-id=password]').style.visibility"
         ) == "hidden"
+
+
+def test_the_recipe_keeps_the_account_name_and_state_but_never_the_password(page, tmp_path: Path, monkeypatch):
+    """The recipe the run really used: repr() hides a password in a print, not in a dump."""
+    import workday_apply
+
+    built: list = []
+
+    class Watched(workday_apply.WorkdayRecipe):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            built.append(self)
+
+    monkeypatch.setattr(workday_apply, "WorkdayRecipe", Watched)
+
+    _flow, result = run(page, tmp_path, workday_app(), monkeypatch)
+
+    assert result.reason == "workday_step_unsupported"
+    password = json.loads(accounts_file(tmp_path).read_text())["password"]
+    assert built, "the flow built the Workday recipe"
+    recipe = built[-1]
+    assert recipe.account == {"tenant": recipe.tenant(), "state": "active"}
+    carried = json.dumps({name: repr(value) for name, value in vars(recipe).items()}, default=str)
+    assert password not in carried
+    assert not any(
+        isinstance(value, type(recipe.account)) and "password" in str(value) for value in vars(recipe).values()
+    )

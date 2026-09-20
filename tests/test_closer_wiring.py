@@ -292,7 +292,9 @@ def _flow_block_reasons() -> set[str]:
     # The recipes and the shared account module stop the same flow: the gate
     # reads every recipe module, plus the two that do not match the pattern, so
     # a recipe added tomorrow cannot keep its stops out of the skill and a
-    # renamed file fails here instead of going unread.
+    # renamed file fails here instead of going unread.  ats_account is named
+    # too: its AccountStop reasons reach the user through whichever recipe
+    # creates a candidate account.
     named = ("apply_generic.py", "ats_account.py")
     modules = sorted(SKILLS_DIR.glob("*_apply.py")) + [SKILLS_DIR / n for n in named]
     assert len(modules) >= 4, "nessun modulo di ricetta trovato: il gate non sta cercando niente"
