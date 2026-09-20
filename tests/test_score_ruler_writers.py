@@ -52,6 +52,12 @@ sys.path.insert(0, str(ROOT / "shared" / "skills"))
 WRITERS = {
     "shared/skills/_db.py": "schema",
     "shared/skills/db_insert.py": "valida",
+    # L'harness API (agent-harness/runtime) e' il secondo motore che scrive
+    # `scores`: gli agenti che girano sull'API invece che nella TUI passano di
+    # li'. Stessi due ruoli del prodotto — lo schema sono trigger, il tool
+    # valida — e sotto si dimostrano entrambi.
+    "agent-harness/runtime/src/db/schema.sql": "schema",
+    "agent-harness/runtime/src/db/tools.ts": "valida",
     "cli/src/commands/cloud.js": "specchio",
     "web/app/api/cloud-sync/push/route.ts": "specchio",
     "web/app/api/local/sync/route.ts": "specchio",
@@ -68,7 +74,18 @@ WRITE = re.compile(
     re.I,
 )
 # Dove NON si cerca: i test costruiscono database sintetici, l'archivio e' morto.
-SKIP = ("tests/", "archive/", "docs/", "desktop/app-payload/", ".git/")
+# `agent-harness/runtime/tests/` e' l'equivalente di `tests/` per l'harness —
+# database sintetici in cartelle temporanee, mai quello dell'utente — e va
+# nominato a parte perche' il prefisso `tests/` non lo copre. Escluso l'albero
+# dei test, non l'harness: i suoi sorgenti restano sorvegliati (sopra).
+SKIP = (
+    "tests/",
+    "agent-harness/runtime/tests/",
+    "archive/",
+    "docs/",
+    "desktop/app-payload/",
+    ".git/",
+)
 SEARCHED = ("*.py", "*.js", "*.ts", "*.tsx", "*.sql", "*.mjs")
 
 
@@ -140,17 +157,21 @@ def test_ogni_specchio_conta_cio_che_lascia_passare(path):
     )
 
 
-def test_i_trigger_dello_schema_non_toccano_una_dimensione():
-    """L'esenzione di `_db.py` si dimostra, non si dichiara.
+@pytest.mark.parametrize(
+    "path", sorted(p for p, ruolo in WRITERS.items() if ruolo == "schema")
+)
+def test_i_trigger_dello_schema_non_toccano_una_dimensione(path):
+    """L'esenzione degli schemi si dimostra, non si dichiara.
 
-    Le sue due scritture su `scores` sono trigger che rimettono a posto
+    Le scritture su `scores` di `_db.py` e dello schema dell'harness (che di
+    quello e' una copia) sono trigger che rimettono a posto
     `created_at`/`updated_at`. Se un domani un trigger toccasse una dimensione
     sarebbe uno scrittore a tutti gli effetti — e per giunta invisibile, perche'
     non compare in nessun chiamante.
     """
     from score_ranges import COMPONENT_LIMITS
 
-    body = (ROOT / "shared/skills/_db.py").read_text(encoding="utf-8")
+    body = (ROOT / path).read_text(encoding="utf-8")
     for statement in re.findall(r"UPDATE scores\s+SET(.*?)WHERE", body, re.S):
         toccate = set(re.findall(r"(\w+)\s*=", statement))
         fuori = toccate - {"created_at", "updated_at"}
@@ -171,6 +192,36 @@ def test_l_unico_writer_che_valida_copre_ogni_dimensione():
     assert "from score_ranges import" in body, (
         "i tetti sono tornati a essere scritti a mano dentro db_insert.py"
     )
+
+
+def test_il_writer_dell_harness_ha_lo_STESSO_righello_e_lo_copre_tutto():
+    """Il secondo motore ha una COPIA del righello: qui si dimostra uguale.
+
+    `agent-harness/runtime` gira in un'immagine senza `shared/`, quindi non
+    puo' importare `score_ranges.py`: i tetti sono ricopiati in TypeScript.
+    Una copia e' il modo in cui il righello si sdoppia in silenzio — e' gia'
+    successo fra il prompt dello Scorer e `db_insert.py`, con
+    `--experience-fit 20` contro un tetto di 10 per mesi. Quindi non basta che
+    l'harness validi «qualcosa»: deve validare le STESSE colonne con gli
+    STESSI numeri, e il giorno che il righello ne guadagna una, questo test
+    diventa rosso invece di lasciarla passare.
+    """
+    from score_ranges import COMPONENT_LIMITS, TOTAL_LIMIT
+
+    body = (ROOT / "agent-harness/runtime/src/db/tools.ts").read_text(encoding="utf-8")
+    totale = re.search(r"const SCORE_TOTAL_LIMIT = (\d+);", body)
+    blocco = re.search(r"const SCORE_COMPONENT_LIMITS = \{(.*?)\}", body, re.S)
+    assert totale and blocco, "i tetti dell'harness non si leggono piu': il gate non sorveglia piu' niente"
+    assert int(totale.group(1)) == TOTAL_LIMIT
+    assert {k: int(v) for k, v in re.findall(r"(\w+):\s*(\d+)", blocco.group(1))} == COMPONENT_LIMITS
+
+    # E la validazione gira su TUTTA la mappa, non su cinque righe scritte a
+    # mano: e' la stessa lezione del 2026-08-11 sul writer Python.
+    assert re.search(
+        r'for \(const \[column, maximum\] of \[\["total", SCORE_TOTAL_LIMIT\], '
+        r'\.\.\.Object\.entries\(SCORE_COMPONENT_LIMITS\)\]',
+        body,
+    ), "l'harness non valida piu' ogni dimensione del righello"
 
 
 def test_il_righello_rifiuta_davvero_invece_di_avvisare():
