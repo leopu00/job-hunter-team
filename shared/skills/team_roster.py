@@ -255,6 +255,10 @@ def record(role: str, instance=None, src: str = "", path: Path | None = None) ->
     })
     entry.setdefault("first_seen", now)
     entry.setdefault("respawns", [])
+    # Uno spawn riuscito chiude la serie di respawn falliti (vedi
+    # `_last_respawn_failed`): da qui una nuova sparizione torna a essere una
+    # sparizione, non un avvio che non riesce.
+    entry.pop("respawn_failed_at", None)
     if not contained:
         entry.pop("retired_at", None)
         entry.pop("retire_reason", None)
@@ -552,6 +556,48 @@ def _within_working_hours() -> bool:
             return True
 
 
+def _last_respawn(entry: dict):
+    last = None
+    for ts in entry.get("respawns", []) or []:
+        dt = _parse_iso(ts)
+        if dt and (last is None or dt > last):
+            last = dt
+    return last
+
+
+def _last_respawn_failed(entry: dict):
+    """Istante del respawn fallito se l'ULTIMO tentativo e' fallito, altrimenti None.
+
+    Due storie finiscono nello stesso stato — worker `active` senza sessione
+    poco dopo un respawn — e chiedono risposte opposte:
+
+    - **ricreato e poi sparito**: lo spawn e' riuscito e qualcuno (tipicamente
+      il Capitano) l'ha tolto di nuovo. La lettura "morto" era sbagliata e la
+      sonda a colpo singolo lo ritira: niente lotta col coordinatore;
+    - **respawn fallito**: la sessione non e' mai nata. Non c'e' nessuna
+      decisione altrui da rispettare, c'e' un agente che non parte — ed e'
+      proprio il caso che agent-watchdog.sh misura (agent-spawn-failures.tsv)
+      ed escala al Capitano e all'utente. Ritirarlo al primo fallimento
+      fermava la serie a 1 e l'escalation dei worker non scattava MAI.
+
+    Le distingue un fatto scritto nel roster stesso, non dedotto: il watchdog
+    chiama `mark-respawn-failed` quando start-agent.sh fallisce o la sessione
+    non risulta viva, e ogni spawn riuscito (`record`, `mark-respawn-ok`)
+    cancella il campo. Fallito = `respawn_failed_at` non piu' vecchio
+    dell'ultimo tentativo registrato (`mark-respawn` avviene PRIMA dello spawn,
+    il fallimento DOPO). Il registro TSV del watchdog non viene letto da qui:
+    formato e rotazione sono suoi, e un confine fra due linguaggi che nessuno
+    dei due possiede e' un confine che si rompe in silenzio.
+    """
+    failed = _parse_iso(entry.get("respawn_failed_at"))
+    if failed is None:
+        return None
+    last = _last_respawn(entry)
+    if last is not None and failed < last:
+        return None   # c'e' un tentativo piu' recente del fallimento noto
+    return failed
+
+
 def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
                    in_window: bool, halted: str,
                    activity_window_min: int = 90,
@@ -562,6 +608,15 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
 
     Ritorna `(entry|None, reason, mutations)` dove `mutations` e' la lista di
     sessioni da auto-ritirare (sonda gia' spesa e sparite di nuovo).
+
+    Un worker il cui ultimo respawn e' FALLITO (`_last_respawn_failed`) resta
+    candidato finche' non parte o qualcuno lo ritira: niente ritiro, niente
+    cancello di attivita' (un agente che non nasce non produce attivita', e
+    dopo 90 minuti la serie si sarebbe fermata da sola), e i suoi tentativi
+    non consumano il tetto globale, che esiste per non RICOSTRUIRE un team
+    smontato — un avvio fallito non ricostruisce niente, e contarlo farebbe
+    aspettare un'ora a ogni altro worker crashato. Il ritmo dei tentativi lo
+    decide il backoff di agent-watchdog.sh, come per i core.
     """
     retire_now = []
     if halted:
@@ -575,6 +630,8 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
     # (hard-freeze della Sentinella), non lo ricostruiamo un pezzo per tick.
     recent = 0
     for entry in state.get("agents", {}).values():
+        if _last_respawn_failed(entry) is not None:
+            continue
         for ts in entry.get("respawns", []) or []:
             dt = _parse_iso(ts)
             if dt and (now - dt).total_seconds() <= cap_window_sec:
@@ -591,11 +648,12 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
         if sess in alive:
             continue
 
-        last_resp = None
-        for ts in entry.get("respawns", []) or []:
-            dt = _parse_iso(ts)
-            if dt and (last_resp is None or dt > last_resp):
-                last_resp = dt
+        failed = _last_respawn_failed(entry)
+        if failed is not None:
+            candidates.append((failed, entry))
+            continue
+
+        last_resp = _last_respawn(entry)
         if last_resp is not None and (now - last_resp) <= timedelta(hours=cooldown_h):
             # Sonda gia' spesa: l'abbiamo ricreata e e' sparita di nuovo. La
             # lettura "morta" era sbagliata → si ritira da sola, niente loop.
@@ -646,6 +704,23 @@ def next_respawn(path: Path | None = None):
                 )
         save(state, path)
     return entry, reason
+
+
+def mark_respawn_outcome(session: str, failed: bool, path: Path | None = None) -> bool:
+    """Esito del respawn, scritto dal watchdog DOPO lo spawn (vedi
+    `_last_respawn_failed`). `failed=False` cancella il campo."""
+    sess = session.strip().upper()
+    state = load(path)
+    entry = state["agents"].get(sess)
+    if not entry:
+        return False
+    if failed:
+        entry["respawn_failed_at"] = _iso(_now())
+    elif "respawn_failed_at" in entry:
+        entry.pop("respawn_failed_at")
+    else:
+        return True
+    return save(state, path)
 
 
 def mark_respawn(session: str, path: Path | None = None) -> bool:
@@ -704,6 +779,13 @@ def main(argv=None) -> int:
 
     pm = sub.add_parser("mark-respawn", help="record a respawn attempt")
     pm.add_argument("session")
+
+    pmf = sub.add_parser("mark-respawn-failed",
+                         help="the last respawn did not produce a live session")
+    pmf.add_argument("session")
+
+    pmo = sub.add_parser("mark-respawn-ok", help="the last respawn produced a live session")
+    pmo.add_argument("session")
 
     args = p.parse_args(argv)
 
@@ -764,6 +846,9 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "mark-respawn":
         return 0 if mark_respawn(args.session) else 1
+    if args.cmd in ("mark-respawn-failed", "mark-respawn-ok"):
+        failed = args.cmd == "mark-respawn-failed"
+        return 0 if mark_respawn_outcome(args.session, failed) else 1
     if args.cmd == "list":
         print(json.dumps(load(), ensure_ascii=False, indent=2))
         return 0

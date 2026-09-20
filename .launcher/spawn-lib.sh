@@ -193,7 +193,9 @@ jht_spawn_kill_sessions() {
   existing=$(tmux ls 2>/dev/null | awk -F: '{print $1}' | grep -iE "$pattern" || true)
   for s in $existing; do
     echo "[$label] killing old session: $s"
-    tmux kill-session -t "$s" 2>/dev/null || true
+    # `=`: il nome viene da `tmux ls`, ma fra la lista e il kill puo' sparire;
+    # a quel punto un target nudo risolverebbe per prefisso su una sorella.
+    tmux kill-session -t "=$s" 2>/dev/null || true
   done
 }
 
@@ -426,6 +428,36 @@ jht_spawn_new_session() {
   return 1
 }
 
+# jht_spawn_tmux <argomenti tmux...>
+#   Un client tmux con un tetto di tempo e SENZA il fd 9 del flock di spawn.
+#   Per ogni chiamata eseguita mentre start-agent.sh tiene il lock
+#   (`locks/start-<SESSIONE>.lock`, fd 9): un send-keys verso un server
+#   incantato non ritorna, e finche' non ritorna il lock resta preso — ogni
+#   respawn successivo dello stesso agente muore in "concurrent spawn". Il tetto
+#   c'era sul guard di idempotenza e sulla new-session; i send-keys subito dopo
+#   ne erano privi, cioe' lo stesso lockout spostato di un client.
+#
+#   Tetto = JHT_SPAWN_TMUX_PROBE_SEC (5s): sono domande e tasti a cui un server
+#   sano risponde in millisecondi. `9>&-` sul comando intero: se il client
+#   sopravvive al SIGTERM del tetto (stato D su un bind mount), non si porta via
+#   il lock. rc invariato — 124 e' il tetto scattato, e lo diciamo su stderr
+#   perche' sotto `set -e` il chiamante esce senza scrivere altro.
+#   Senza jht_timeout (daemon-lib.sh non caricato) degrada al comando nudo,
+#   come jht_timeout stesso fa senza `timeout`/`gtimeout`.
+jht_spawn_tmux() {
+  local secs="${JHT_SPAWN_TMUX_PROBE_SEC:-5}" rc=0
+  case "$secs" in ''|*[!0-9]*) secs=5 ;; esac
+  if command -v jht_timeout >/dev/null 2>&1; then
+    jht_timeout "$secs" tmux "$@" 9>&- || rc=$?
+  else
+    tmux "$@" 9>&- || rc=$?
+  fi
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    echo "[spawn-lib] ERROR: 'tmux $1' did not return within ${secs}s (tmux server not answering) — giving up instead of holding the spawn lock" >&2
+  fi
+  return "$rc"
+}
+
 # jht_spawn_wait_repl <sessione> <cmd> <label> <ruolo> <logs_dir> <src>
 #   Verifica che il REPL sia EFFETTIVAMENTE partito prima che il chiamante
 #   inietti il prompt: se il CLI crasha al boot (auth assente, binario ko), il
@@ -435,11 +467,25 @@ jht_spawn_new_session() {
 #   ritenta).
 jht_spawn_wait_repl() {
   local session="$1" cmd="$2" label="$3" role="$4" logs_dir="$5" src="$6"
-  local repl_up=0 attempt=1 _i pane last_cmd ts_fail
+  local repl_up=0 attempt=1 _i _rc pane last_cmd ts_fail
+  # Target ancorati: la domanda "il REPL e' su?" posta a un nome nudo, con la
+  # sessione assente, risponderebbe col pane di una SORELLA per prefisso
+  # (CRITICO → CRITICO-S1) e dichiarerebbe partito un agente mai nato.
+  # `=NOME:` e non `=NOME`: display-message ha un target pane, e su quello `=`
+  # vale solo per la parte sessione (misurato su tmux 3.6).
   while : ; do
     for _i in $(seq 1 12); do
       sleep 1
-      pane=$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo "")
+      # Tetto per ogni domanda: gira col lock di spawn in mano. Un 124 vuol dire
+      # server incantato, e nessun poll successivo cambia l'esito: si esce
+      # subito invece di bruciare 24 domande da 5s l'una col lock preso.
+      _rc=0
+      pane=$(jht_spawn_tmux display-message -p -t "=$session:" '#{pane_current_command}' 2>/dev/null) || _rc=$?
+      if [ "$_rc" -eq 124 ] || [ "$_rc" -eq 137 ]; then
+        echo "[$label] ERROR: tmux did not answer within ${JHT_SPAWN_TMUX_PROBE_SEC:-5}s while waiting for the REPL of '$session' — spawn failed" >&2
+        jht_spawn_tmux kill-session -t "=$session" 2>/dev/null || true
+        return 1
+      fi
       case "$pane" in
         ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;  # shell o vuoto → non ancora su
         *) repl_up=1; break ;;                     # un processo gira → REPL up
@@ -447,18 +493,18 @@ jht_spawn_wait_repl() {
     done
     [ "$repl_up" -eq 1 ] && return 0
     if [ "$attempt" -ge 2 ]; then
-      last_cmd=$(tmux display-message -p -t "$session" '#{pane_current_command}' 2>/dev/null || echo "?")
+      last_cmd=$(jht_spawn_tmux display-message -p -t "=$session:" '#{pane_current_command}' 2>/dev/null || echo "?")
       echo "[$label] ERROR: REPL ($(jht_spawn_active_provider)) did not start after 2 attempts (pane=$last_cmd) — spawn failed" >&2
       ts_fail="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       printf '{"ts":"%s","session":"%s","role":"%s","event":"spawn_failed","reason":"repl_not_up","pane_cmd":"%s","src":"%s"}\n' \
         "$ts_fail" "$session" "$role" "$last_cmd" "$src" >> "$logs_dir/$role-actions.jsonl"
-      tmux kill-session -t "$session" 2>/dev/null || true
+      jht_spawn_tmux kill-session -t "=$session" 2>/dev/null || true
       return 1
     fi
     echo "[$label] REPL did not start (attempt $attempt) — retrying" >&2
-    tmux send-keys -t "$session" C-c 2>/dev/null || true
+    jht_spawn_tmux send-keys -t "$session" C-c 2>/dev/null || true
     sleep 1
-    tmux send-keys -t "$session" "$cmd" C-m
+    jht_spawn_tmux send-keys -t "$session" "$cmd" C-m
     attempt=$((attempt + 1))
   done
 }

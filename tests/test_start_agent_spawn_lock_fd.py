@@ -126,6 +126,7 @@ def test_the_container_branch_closes_the_fd_for_the_timeout_wrapper_too():
         line
         for _, line in _numbered(SESSION_LOCK_LINE)
         if "tmux new-session" in _unquoted(line) and "timeout" in line
+        and "$AGENT_DIR" in line  # il ramo container, non quello PowerShell
     )
     # In coda al COMANDO: dopo `9>&-` puo' restare solo il modo in cui l'rc
     # viene raccolto (`|| _ns_rc=$?`, `; then`), non un altro argomento.

@@ -8,9 +8,9 @@ partire un `kill-session` che su quell'rc ammazza la sessione di un ALTRO
 agente (team-rules T01: mai killare la sessione di un altro agente).
 
 Il messaggio deve anche stare in UNA riga e bastare a se': il chiamante
-principale (`cli/src/commands/team/start.js`) conserva solo l'ultima riga non
-vuota di stderr, quindi la diagnosi nativa di tmux, se resta una riga a se',
-non arriva mai ne' all'utente ne' al campo `error` in dashboard.
+principale (`cli/src/commands/team/start.js`) conserva una coda limitata di
+stderr, quindi la diagnosi nativa di tmux deve restare legata al proprio errore
+e non dipendere dalla presenza di righe precedenti.
 
 Cosa questa suite tiene fermo:
   1. l'rc viene catturato e discriminato, non collassato da un `if !`;
@@ -38,7 +38,9 @@ from pathlib import Path
 LAUNCHER = Path(__file__).resolve().parent.parent / ".launcher" / "start-agent.sh"
 SOURCE = LAUNCHER.read_text(encoding="utf-8")
 
-GUARD = 'jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session'
+# `-c "$AGENT_DIR"` identifica il ramo container: anche la new-session del ramo
+# PowerShell (WSL) ha ora il suo tetto, e non e' il blocco che questi test leggono.
+GUARD = 'jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR"'
 TIMED_OUT_BRANCH = "124|137)"
 WRAPPER_BRANCH = "125|126|127)"
 

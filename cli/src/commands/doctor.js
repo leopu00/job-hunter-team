@@ -128,7 +128,7 @@ async function checkDatabase() {
 
 function checkDeps() {
   const required = ['node', 'npm', 'tmux', 'git']
-  const optional = ['claude', 'pandoc', 'typst', 'python3']
+  const optional = ['claude', 'pandoc', 'wkhtmltopdf', 'typst', 'python3']
   const results = []
   for (const cmd of required) {
     const v = cmdVersion(cmd)

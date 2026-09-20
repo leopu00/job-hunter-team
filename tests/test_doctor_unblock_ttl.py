@@ -99,7 +99,12 @@ def save(s):
 
 
 def target(a):
-    return a[a.index("-t") + 1] if "-t" in a else ""
+    # Come tmux: `=NOME` (sessione) e `=NOME:` (finestra/pane) sono il nome
+    # ESATTO. Il doppio non riproduce il prefix matching del nome nudo.
+    t = a[a.index("-t") + 1] if "-t" in a else ""
+    if t.startswith("="):
+        t = t[1:].split(":", 1)[0]
+    return t
 
 
 def render(sess):
@@ -541,7 +546,8 @@ def test_07_five_expired_sessions_are_not_refreshed_in_the_same_tick(tmux_factor
     killed = [c[c.index("-t") + 1] for c in tmux.calls("kill-session")]
     assert len(killed) == 1, f"più di un refresh nello stesso tick: {killed}"
     # ordinate per età DECRESCENTE: la più vecchia per prima
-    assert killed == ["SCOUT-2"], killed
+    # ancorato (`=`): un kill non deve poter atterrare su una sorella per prefisso
+    assert killed == ["=SCOUT-2"], killed
     assert len(tmux.sessions()) == 4
 
 
@@ -713,6 +719,73 @@ def test_10d_a_second_disappearance_retires_the_entry_instead_of_looping():
         state, alive=set(), now=now, activity={"SCOUT-4": now}, in_window=True, halted="")[:3]
     assert entry is None
     assert retire == ["SCOUT-4"]
+
+
+def test_10d2_a_failed_respawn_is_not_a_spent_probe():
+    """La sonda si spende solo se lo spawn e' RIUSCITO. Un respawn fallito
+    resta candidato anche a attivita' scaduta: un agente che non nasce non
+    produce attivita', e la serie deve arrivare alle soglie del watchdog."""
+    now = _now()
+    tried = now - timedelta(hours=3)
+    state = {"agents": {"SCOUT-4": {"session": "SCOUT-4", "role": "scout", "instance": 4,
+                                    "status": "active",
+                                    "respawns": [_iso(tried)],
+                                    "respawn_failed_at": _iso(tried)}}}
+    entry, reason, retire = tr.decide_respawn(
+        state, alive=set(), now=now, activity={"SCOUT-4": now - timedelta(hours=4)},
+        in_window=True, halted="")
+    assert retire == []
+    assert reason == "respawn" and entry["session"] == "SCOUT-4"
+
+
+def test_10d3_a_failure_older_than_the_last_attempt_does_not_count():
+    """Un tentativo piu' recente del fallimento noto e' riuscito (o e' in volo):
+    se la sessione e' di nuovo sparita vale la sonda a colpo singolo."""
+    now = _now()
+    state = {"agents": {"SCOUT-4": {"session": "SCOUT-4", "role": "scout", "instance": 4,
+                                    "status": "active",
+                                    "respawns": [_iso(now - timedelta(minutes=20))],
+                                    "respawn_failed_at": _iso(now - timedelta(minutes=40))}}}
+    entry, reason, retire = tr.decide_respawn(
+        state, alive=set(), now=now, activity={"SCOUT-4": now}, in_window=True, halted="")
+    assert entry is None and retire == ["SCOUT-4"]
+
+
+def test_10d4_failed_attempts_do_not_consume_the_global_cap():
+    """Il tetto esiste per non RICOSTRUIRE un team smontato. Un worker che non
+    parte non ricostruisce niente: contarlo farebbe aspettare gli altri."""
+    now = _now()
+    recent = [_iso(now - timedelta(minutes=m)) for m in (1, 2, 3, 4)]
+    state = {"agents": {
+        "SCORER-2": {"session": "SCORER-2", "role": "scorer", "instance": 2,
+                     "status": "active", "respawns": recent,
+                     "respawn_failed_at": recent[0]},
+        "SCOUT-1": {"session": "SCOUT-1", "role": "scout", "instance": 1,
+                    "status": "active", "respawns": []},
+    }}
+    entry, reason, _ = tr.decide_respawn(
+        state, alive=set(), now=now,
+        activity={"SCORER-2": None, "SCOUT-1": now + timedelta(minutes=1)},
+        in_window=True, halted="")
+    assert reason == "respawn", reason
+    # e un respawn fallito non scavalca un halt
+    entry, reason, _ = tr.decide_respawn(state, alive=set(), now=now, activity={},
+                                         in_window=True, halted="halted")
+    assert entry is None and reason == "halt:halted"
+
+
+def test_10d5_a_successful_spawn_clears_the_failed_respawn(tmp_path):
+    path = tmp_path / "team-roster.json"
+    tr.record("scorer", 2, src="initial", path=path)
+    assert tr.mark_respawn("SCORER-2", path=path)
+    assert tr.mark_respawn_outcome("SCORER-2", failed=True, path=path)
+    assert tr.load(path)["agents"]["SCORER-2"]["respawn_failed_at"]
+    tr.record("scorer", 2, src="start-agent.sh", path=path)
+    assert "respawn_failed_at" not in tr.load(path)["agents"]["SCORER-2"]
+    assert tr.mark_respawn_outcome("SCORER-2", failed=True, path=path)
+    assert tr.mark_respawn_outcome("SCORER-2", failed=False, path=path)
+    assert "respawn_failed_at" not in tr.load(path)["agents"]["SCORER-2"]
+    assert tr.mark_respawn_outcome("NOPE-1", failed=True, path=path) is False
 
 
 def test_10e_a_halt_or_standby_flag_stops_every_respawn():

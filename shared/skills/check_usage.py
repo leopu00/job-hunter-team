@@ -36,6 +36,7 @@ Quando serve:
 DETERMINISTICO (niente LLM nel loop di parsing).
 """
 import importlib.util
+import os
 import re
 import subprocess
 import sys
@@ -129,6 +130,7 @@ def spawn_worker():
     try:
         r = subprocess.run(
             ["bash", START_AGENT_SH, "worker"],
+            env={**os.environ, "JHT_SPAWN_SRC": "check-usage"},
             capture_output=True, timeout=10,
         )
         return r.returncode == 0

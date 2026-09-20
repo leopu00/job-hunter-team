@@ -499,8 +499,35 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         print(f"[bridge V6] WARN write state: {e}", file=sys.stderr)
 
 
+# Tetto della domanda "esiste?": un server tmux che non risponde appendeva il
+# loop del bridge per sempre — niente tick, niente pacing, niente daily-cap —
+# senza una riga di log. Stesso ordine di grandezza delle altre chiamate tmux
+# di questo file (10s); variabile per i test.
+SESSION_EXISTS_TIMEOUT_S = 10
+
+
 def session_exists(s):
-    return subprocess.run(["tmux", "has-session", "-t", s], capture_output=True).returncode == 0
+    # `=` = exact match: senza, tmux risolve per prefisso e SENTINELLA morta
+    # risulterebbe viva finche' vive SENTINELLA-WORKER.
+    #
+    # Nessuna risposta = "non esiste": ogni chiamante la usa per decidere se
+    # mandare un messaggio, e mandarlo a un server che non risponde non
+    # arriverebbe comunque. Lo si dice su stderr (sentinel-bridge.log), perche'
+    # un "no" per timeout e un "no" vero non sono la stessa osservazione.
+    try:
+        return subprocess.run(
+            ["tmux", "has-session", "-t", f"={s}"],
+            capture_output=True, timeout=SESSION_EXISTS_TIMEOUT_S,
+        ).returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"[bridge V6] tmux has-session {s}: no answer within "
+              f"{SESSION_EXISTS_TIMEOUT_S}s — treating the session as absent",
+              file=sys.stderr)
+        return False
+    except OSError as e:
+        print(f"[bridge V6] tmux has-session {s}: {type(e).__name__} — "
+              "treating the session as absent", file=sys.stderr)
+        return False
 
 
 # ── Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]) ────────────────────
@@ -855,7 +882,7 @@ def _esc_all_sessions():
     paused = []
     for s in (l.strip() for l in out.splitlines() if l.strip()):
         try:
-            subprocess.run(["tmux", "send-keys", "-t", s, "Escape"],
+            subprocess.run(["tmux", "send-keys", "-t", f"={s}:", "Escape"],
                            capture_output=True, timeout=10)
             paused.append(s)
         except (subprocess.SubprocessError, OSError):
@@ -884,7 +911,7 @@ def _session_pane_signatures():
     for session in (ln.strip() for ln in out.stdout.splitlines() if ln.strip()):
         try:
             pane = subprocess.run(
-                ["tmux", "capture-pane", "-p", "-t", session, "-S", "-120"],
+                ["tmux", "capture-pane", "-p", "-t", f"={session}:", "-S", "-120"],
                 capture_output=True, timeout=10,
             )
         except (subprocess.SubprocessError, OSError):
@@ -900,7 +927,7 @@ def _esc_sessions(sessions):
     for session in sessions:
         try:
             res = subprocess.run(
-                ["tmux", "send-keys", "-t", session, "Escape"],
+                ["tmux", "send-keys", "-t", f"={session}:", "Escape"],
                 capture_output=True, timeout=10,
             )
         except (subprocess.SubprocessError, OSError):
@@ -2347,11 +2374,32 @@ def _kill_worker():
     """Killa SENTINELLA-WORKER in modo non bloccante."""
     try:
         subprocess.run(
-            ["tmux", "kill-session", "-t", WORKER_SESSION],
+            ["tmux", "kill-session", "-t", f"={WORKER_SESSION}"],
             capture_output=True, timeout=5,
         )
     except (subprocess.TimeoutExpired, OSError):
         pass
+
+
+def _worker_spawn_output_lines(value, limit=20):
+    """Return a bounded, display-safe tail from subprocess output."""
+    if isinstance(value, bytes):
+        value = value.decode(errors="replace")
+    lines = [line.strip() for line in str(value or "").splitlines() if line.strip()]
+    return [line[:500] for line in lines[-limit:]]
+
+
+def _log_worker_spawn_result(result, status=None):
+    """Write the launcher's captured worker output to the bridge daemon log.
+
+    start-agent launches this bridge with stdout/stderr redirected to
+    sentinel-bridge.log, so stderr here is durable and size-rotated.
+    """
+    rc = status if status is not None else getattr(result, "returncode", "unknown")
+    print(f"[bridge V5] worker spawn rc={rc}", file=sys.stderr)
+    for stream in ("stdout", "stderr"):
+        for line in _worker_spawn_output_lines(getattr(result, stream, None)):
+            print(f"[bridge V5] worker spawn {stream}: {line}", file=sys.stderr)
 
 
 def _try_claude_tui_parser():
@@ -2398,12 +2446,21 @@ def _try_claude_tui_parser():
     # Worker deve essere attivo. Se non lo è, spawn + 18s wait.
     if not cu.tmux_has_session(WORKER_SESSION):
         try:
-            subprocess.run(
+            spawn_result = subprocess.run(
                 ["bash", START_AGENT_SH, "worker"],
-                capture_output=True, timeout=10,
+                env={**os.environ, "JHT_SPAWN_SRC": "sentinel-bridge"},
+                capture_output=True, text=True, errors="replace", timeout=10,
             )
+            _log_worker_spawn_result(spawn_result)
             time.sleep(cu.WORKER_BOOT_WAIT_S)
-        except (subprocess.TimeoutExpired, OSError):
+        except subprocess.TimeoutExpired as exc:
+            _log_worker_spawn_result(exc, status="timeout")
+            return None
+        except OSError as exc:
+            print(
+                f"[bridge V5] worker spawn rc=os-error type={type(exc).__name__}",
+                file=sys.stderr,
+            )
             return None
         if not cu.tmux_has_session(WORKER_SESSION):
             return None

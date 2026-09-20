@@ -57,10 +57,23 @@ set -u
 export PATH="/app/agents/_tools:${PATH}"
 
 JHT_HOME="${JHT_HOME:-/jht_home}"
+_AGENT_WATCHDOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_DAEMON_LIB="${JHT_DAEMON_LIB:-$_AGENT_WATCHDOG_DIR/daemon-lib.sh}"
+if [ -f "$_DAEMON_LIB" ]; then
+  # Keep the watchdog evidence under the same bounded-log policy as the other
+  # launcher daemons. Sliced unit harnesses inject paths and lack this sibling.
+  source "$_DAEMON_LIB"
+else
+  jht_daemon_log() {
+    local dir="${JHT_LOGS_DIR:-${JHT_HOME:-/jht_home}/logs}"
+    mkdir -p "$dir" 2>/dev/null || true
+    printf '%s\n' "$dir/$1"
+  }
+fi
 CONFIG="$JHT_HOME/jht.config.json"
 JHT_BIN="/app/cli/bin/jht.js"
 INTERVAL_SEC="${JHT_AGENT_WATCHDOG_INTERVAL:-30}"
-LOG="$JHT_HOME/logs/agent-watchdog.log"
+LOG="${JHT_AGENT_WATCHDOG_LOG:-$(jht_daemon_log agent-watchdog.log)}"
 AGENTS=(assistente capitano mentor sentinella)
 # Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
 # il context window accumulato. Refresh deterministico, near-stateless.
@@ -82,7 +95,7 @@ PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_healt
 # SCOUT-1?" anche dopo che i messaggi al Capitano sono scorsi via.
 # Le tre dipendenze si iniettano nei test: il comportamento si prova con tmux,
 # spawner e sender finti, senza una macchina o una TUI vera.
-RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$JHT_HOME/logs/agent-recoveries.tsv}"
+RECOVERY_LOG="${JHT_AGENT_RECOVERY_LOG:-$(jht_daemon_log agent-recoveries.tsv)}"
 NODE_BIN="${JHT_NODE_BIN:-/usr/local/bin/node}"
 TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
 # Canale verso l'UTENTE: CLI Python deterministico (scrive in
@@ -109,7 +122,7 @@ INTENTIONAL_RECREATE_SESSION=""
 # Registro SEPARATO da RECOVERY_LOG di proposito: recovery_today_count() conta
 # le righe per sessione SENZA filtrare l'osservazione, quindi una terza colonna
 # nel TSV dei recuperi falsificherebbe il "Recovery #N" che il Capitano riceve.
-SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$JHT_HOME/logs/agent-spawn-failures.tsv}"
+SPAWN_FAILURE_LOG="${JHT_AGENT_SPAWN_FAILURE_LOG:-$(jht_daemon_log agent-spawn-failures.tsv)}"
 # Stato per-sessione: serie corrente + marcatori di escalation (che fanno anche
 # da cooldown). Directory iniettabile per poter esercitare l'anti-spam nei test.
 SPAWN_STATE_DIR="${JHT_SPAWN_STATE_DIR:-$JHT_HOME/logs}"
@@ -157,8 +170,26 @@ BRIDGE_ESCALATE_COOLDOWN_SEC="${JHT_BRIDGE_ESCALATE_COOLDOWN_SEC:-3600}"
 
 mkdir -p "$(dirname "$LOG")"
 
+_rotate_watchdog_log() {
+  [ -n "${JHT_AGENT_WATCHDOG_LOG:-}" ] \
+    || LOG="$(jht_daemon_log agent-watchdog.log)"
+}
+
+_rotate_recovery_log() {
+  [ -n "${JHT_AGENT_RECOVERY_LOG:-}" ] \
+    || RECOVERY_LOG="$(jht_daemon_log agent-recoveries.tsv)"
+}
+
+_rotate_spawn_failure_log() {
+  [ -n "${JHT_AGENT_SPAWN_FAILURE_LOG:-}" ] \
+    || SPAWN_FAILURE_LOG="$(jht_daemon_log agent-spawn-failures.tsv)"
+}
+
 log() {
   local ts
+  # The daemon lives as long as the container, so startup-only rotation is
+  # not a bound. Every real write rechecks the shared 5 MB threshold.
+  _rotate_watchdog_log
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "[$ts] $*" | tee -a "$LOG"
 }
@@ -209,10 +240,20 @@ is_session_alive() {
   # (kimi/Kimi/claude/codex/node/python/python3), la sessione è zombie
   # e va riavviata. La whitelist include 'node'/'python*' per
   # supportare CLI custom che usano runtime di base (rare ma possibili).
+  #
+  # Target ANCORATI (2026-09-13). tmux risolve un nome esatto, poi per
+  # PREFISSO: con SENTINELLA morta e SENTINELLA-WORKER viva, `has-session -t
+  # SENTINELLA` rispondeva "viva", il respawn non partiva mai, e il kill del
+  # ramo ZOMBIE poteva atterrare sulla sorella. Due forme, perche' `=` vale
+  # solo sulla parte SESSIONE del target:
+  #   - `=NOME`  per i comandi a target sessione (has-session, kill-session);
+  #   - `=NOME:` per quelli a target finestra/pane (list-panes, display-message,
+  #     capture-pane, send-keys). Misurato su tmux 3.6: `list-panes -t =NOME`
+  #     SENZA i due punti, con NOME assente, risponde con i pane della sorella.
   local session="$1"
-  tmux has-session -t "$session" 2>/dev/null || return 1
+  tmux has-session -t "=$session" 2>/dev/null || return 1
   local cmd
-  cmd=$(tmux list-panes -t "$session" -F '#{pane_current_command}' 2>/dev/null | head -1)
+  cmd=$(tmux list-panes -t "=$session:" -F '#{pane_current_command}' 2>/dev/null | head -1)
   case "$cmd" in
     [Kk]imi|claude|Claude|codex|Codex|node|python|python3) return 0 ;;
     *)
@@ -220,7 +261,7 @@ is_session_alive() {
       # qui per audit, il messaggio "session zombie — killing" è loud
       # apposta perché è un evento raro che vogliamo notare.
       log "agent $session: ZOMBIE detected (pane_current_command='$cmd') — killing session"
-      tmux kill-session -t "$session" 2>/dev/null || true
+      tmux kill-session -t "=$session" 2>/dev/null || true
       return 1
       ;;
   esac
@@ -232,10 +273,13 @@ recovery_today_count() {
   # campi sono prodotti solo qui (timestamp UTC, nome tmux, osservazione),
   # quindi il separatore non può entrare nei dati.
   local day="$1" session="$2"
-  [ -f "$RECOVERY_LOG" ] || { echo 0; return 0; }
+  local files=()
+  [ -f "$RECOVERY_LOG.old" ] && files+=("$RECOVERY_LOG.old")
+  [ -f "$RECOVERY_LOG" ] && files+=("$RECOVERY_LOG")
+  [ "${#files[@]}" -gt 0 ] || { echo 0; return 0; }
   awk -F '\t' -v day="$day" -v session="$session" \
     '$1 ~ ("^" day "T") && $2 == session { count += 1 } END { print count + 0 }' \
-    "$RECOVERY_LOG" 2>/dev/null
+    "${files[@]}" 2>/dev/null
 }
 
 record_recovery() {
@@ -243,6 +287,7 @@ record_recovery() {
   # scrittura fallisce non mandiamo un numero inventato al Capitano: log loud,
   # nessuna misura dichiarata completa.
   local session="$1" observation="$2" now day count
+  _rotate_recovery_log
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   day="${now%%T*}"
   mkdir -p "$(dirname "$RECOVERY_LOG")" 2>/dev/null || {
@@ -342,6 +387,7 @@ record_spawn_failure() {
   # non mandiamo a nessuno un numero inventato — log loud, nessuna misura
   # dichiarata completa.
   local session="$1" detail="$2" now ts count first last f
+  _rotate_spawn_failure_log
   now="$(date -u +%s)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   f="$SPAWN_STATE_DIR/spawn-streak-$(escalate_key "$session")"
@@ -525,7 +571,7 @@ ensure_agent() {
   fi
   log "agent $role: session $session is inactive — relaunching via jht team start"
   mark="$(spawn_log_offset)"
-  if "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
+  if JHT_SPAWN_SRC=agent-watchdog "$NODE_BIN" "$JHT_BIN" team start "$role" >>"$LOG" 2>&1; then
     # PRIMA della sonda: is_session_alive puo' scrivere la sua riga ZOMBIE nel
     # LOG, e attribuirla allo spawner sarebbe dichiarare una causa non
     # osservata su un messaggio che va al Capitano e all'utente.
@@ -559,7 +605,7 @@ ensure_agent() {
 session_age_h() {
   # Età della sessione tmux in ore intere (now - session_created).
   local session="$1" created now
-  created=$(tmux display-message -p -t "$session" '#{session_created}' 2>/dev/null) || return 1
+  created=$(tmux display-message -p -t "=$session:" '#{session_created}' 2>/dev/null) || return 1
   [ -z "$created" ] && return 1
   now=$(date -u +%s)
   echo $(( (now - created) / 3600 ))
@@ -580,7 +626,7 @@ maybe_refresh_sentinella() {
   age=$(session_age_h SENTINELLA) || return 0
   if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
     log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refreshing (kill+recreate) to clear the context"
-    if tmux kill-session -t SENTINELLA 2>/dev/null; then
+    if tmux kill-session -t =SENTINELLA 2>/dev/null; then
       INTENTIONAL_RECREATE_SESSION="SENTINELLA"
     fi
   fi
@@ -638,22 +684,36 @@ worker_kickoff() {
   ) >/dev/null 2>&1 &
 }
 
+mark_roster_respawn() {
+  # Esito del respawn nel ROSTER, accanto al registro dei fallimenti. Serve a
+  # team_roster.py per distinguere "ricreato e poi tolto di nuovo" (si ritira,
+  # sonda a colpo singolo) da "il respawn e' fallito" (resta candidato, e la
+  # serie arriva alle soglie di escalation qui sopra). Senza, il roster ritirava
+  # il worker al primo avvio fallito e per i worker l'escalation non scattava
+  # mai. Best-effort: un roster non scrivibile non deve fermare il watchdog.
+  local session="$1" outcome="$2"
+  [ -f "$ROSTER_TOOL" ] || return 0
+  JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" "mark-respawn-$outcome" "$session" >/dev/null 2>&1 || true
+}
+
 respawn_worker() {
   # start-agent.sh con lo STESSO numero d'istanza (il dado di
   # roll_worker_number è per gli spawn NUOVI, non per le ricreazioni).
   local role="$1" inst="$2" session="$3" recovery_kind="${4:-unexpected}" mark rc detail
   mark="$(spawn_log_offset)"
-  if JHT_HOME="$JHT_HOME" bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
+  if JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" "$role" "$inst" >>"$LOG" 2>&1; then
     # PRIMA della sonda, come in ensure_agent: la riga ZOMBIE di
     # is_session_alive non e' output dello spawner e non va attribuita a lui.
     detail="$(spawn_detail_since "$mark")"
     if ! is_session_alive "$session"; then
       log "worker $session: start reported OK but session is still inactive — recovery not recorded"
+      mark_roster_respawn "$session" failed
       observe_spawn_failure "$session" \
         "start reported rc=0 but the session was still inactive${detail:+ · $detail}" || true
       return 1
     fi
     log "worker $session: start OK and session verified alive"
+    mark_roster_respawn "$session" ok
     clear_spawn_failures "$session"
     worker_kickoff "$session" "$role"
     if [ "$recovery_kind" = "unexpected" ]; then
@@ -670,6 +730,7 @@ respawn_worker() {
     rc=$?
     detail="$(spawn_detail_since "$mark")"
     log "worker $session: start FAILED (rc=$rc) — retrying at the next tick"
+    mark_roster_respawn "$session" failed
     observe_spawn_failure "$session" "rc=$rc${detail:+ · $detail}" || true
     return 1
   fi
@@ -700,7 +761,7 @@ EOF
 $(session_role "$oldest")
 EOF
   log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (age only: context/PARKED/activity do NOT matter)"
-  if ! tmux kill-session -t "$oldest" 2>/dev/null; then
+  if ! tmux kill-session -t "=$oldest" 2>/dev/null; then
     return 0
   fi
   # I core li ricrea ensure_agent nello stesso tick (subito sotto nel loop);
@@ -821,7 +882,7 @@ maybe_respawn_bridges() {
   if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
     if bridge_flap_ok bridge; then
       log "bridge-watchdog: incomplete suite (dead: $PROC_DEAD_BRIDGE_SUITE) — respawning via start-agent.sh bridge"
-      JHT_HOME="$JHT_HOME" bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
+      JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" bridge >>"$LOG" 2>&1 \
         || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
       bridge_flap_record bridge
     else
@@ -846,7 +907,7 @@ maybe_respawn_bridges() {
     for _tg_role in $PROC_TG_MISSING; do
       if bridge_flap_ok "tg-bridge-$_tg_role"; then
         log "bridge-watchdog: tg-bridge[$_tg_role] missing (alive=${PROC_TG_ALIVE:-0}, expected=${PROC_TG_EXPECTED:-0}) — respawning that role only"
-        JHT_HOME="$JHT_HOME" bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
+        JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog bash "$START_AGENT" tg-bridge "$_tg_role" >>"$LOG" 2>&1 \
           || log "bridge-watchdog: respawn tg-bridge[$_tg_role] FAIL (rc=$?)"
         bridge_flap_record "tg-bridge-$_tg_role"
       else
@@ -886,12 +947,13 @@ capture_for_containment() {
   # sessione viva per 15 giorni contro una decisione esplicita di keep-down.
   #
   # L'esattezza voluta da chi ha scritto `=` resta, spostata dove e' valida:
-  # `list-panes` prende un target sessione (quindi `=` funziona) e ci da' il
-  # `pane_id`, che e' univoco per l'intero server tmux e non ammette
-  # risoluzione per prefisso. Se la sessione non esiste, list-panes fallisce e
-  # il percorso di errore e' quello di prima.
+  # `list-panes` ci da' il `pane_id`, che e' univoco per l'intero server tmux e
+  # non ammette risoluzione per prefisso. Il target di list-panes pero' e' una
+  # FINESTRA, non una sessione: `=NOME` senza i due punti, con NOME assente,
+  # restituisce i pane di una sorella (misurato su tmux 3.6) e la cattura
+  # finirebbe sulla sessione sbagliata. `=NOME:` fallisce, come deve.
   local pane_id
-  pane_id="$(tmux list-panes -t "=$session" -F '#{pane_id}' 2>/dev/null | head -1)"
+  pane_id="$(tmux list-panes -t "=$session:" -F '#{pane_id}' 2>/dev/null | head -1)"
   if [ -z "$pane_id" ]; then
     rm -f "$evidence" 2>/dev/null || true
     return 1
