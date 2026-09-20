@@ -135,7 +135,9 @@ class WorkdayRecipe:
         self.answer_origins: dict[str, str] = {}
         self.jht_home = Path.home() / ".jht"
         self.url = ""
-        self.credentials = None
+        # Only what may be written down: never the Credentials object, whose
+        # password would follow it into a checkpoint, a receipt or a notice.
+        self.account: dict[str, str] | None = None
         self.consent = None
         self.pre_submit_screenshot_path = ""
 
@@ -194,13 +196,10 @@ class WorkdayRecipe:
         tenant = self.tenant()
         try:
             saved = ats_account.load(self.jht_home, tenant)
-            if saved is not None:
-                self._sign_in(page, saved)
-            else:
-                self._create_account(page, tenant)
+            credentials = self._sign_in(page, saved) if saved is not None else self._create_account(page, tenant)
         except ats_account.AccountStop as stop:
             raise BlockedHuman(stop.reason, stop.detail, "detect") from None
-        self._assert_account_accepted(page)
+        self._assert_account_accepted(page, credentials)
 
     def _field(self, page, name: str, *, required: bool = True):
         control = page.locator(ACCOUNT_FIELDS[name])
@@ -219,7 +218,7 @@ class WorkdayRecipe:
         email = (contacts or {}).get("email") or self.profile.get("email")
         return str(email or "").strip()
 
-    def _sign_in(self, page, credentials) -> None:
+    def _sign_in(self, page, credentials):
         link = self._field(page, "sign_in_link", required=False)
         if link is not None and page.locator(ACCOUNT_FIELDS["verify"]).count():
             link.click(timeout=10_000)  # the page opened on Create Account
@@ -229,12 +228,13 @@ class WorkdayRecipe:
         submit = self._field(page, "sign_in_submit", required=False) or self._field(page, "create")
         submit.click(timeout=15_000)
         page.wait_for_timeout(1_500)
-        self.credentials = credentials
+        self.account = {"tenant": credentials.tenant, "state": credentials.state}
+        return credentials
 
-    def _create_account(self, page, tenant: str) -> None:
+    def _create_account(self, page, tenant: str):
         email = self._email()
         credentials = ats_account.create_pending(self.jht_home, tenant, email)
-        self.credentials = credentials
+        self.account = {"tenant": credentials.tenant, "state": credentials.state}
         self._field(page, "email").fill(credentials.email)
         ats_account.fill_secret(self._field(page, "password"), credentials.password)
         verify = self._field(page, "verify", required=False)
@@ -248,8 +248,9 @@ class WorkdayRecipe:
         self.consent = ats_account.consent_record(tenant, terms, self.url)
         self._field(page, "create").click(timeout=15_000)
         page.wait_for_timeout(1_500)
+        return credentials
 
-    def _assert_account_accepted(self, page) -> None:
+    def _assert_account_accepted(self, page, credentials) -> None:
         """The portal's answer to the account step: a stop, or the flow's next step."""
         errors = _text(page.locator(ERRORS).first) if page.locator(ERRORS).count() else ""
         if errors and ats_account.email_in_use(errors):
@@ -270,8 +271,9 @@ class WorkdayRecipe:
                 "Workday stayed on its account step after the account was submitted",
                 "detect",
             )
-        if self.credentials is not None:
-            self.credentials = ats_account.mark_active(self.jht_home, self.credentials)
+        if credentials is not None:
+            active = ats_account.mark_active(self.jht_home, credentials)
+            self.account = {"tenant": active.tenant, "state": active.state}
 
     # ── the steps after the account: not walked yet ──────────────────────────
 

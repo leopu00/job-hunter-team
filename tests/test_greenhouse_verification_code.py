@@ -22,9 +22,10 @@ sys.path.insert(0, str(ROOT / "shared" / "skills"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import _db  # noqa: E402
+import ats_account  # noqa: E402
 import application_answers  # noqa: E402
 import verification_code  # noqa: E402
-from apply_flow import FlowCheckpoint  # noqa: E402
+from apply_flow import FlowCheckpoint, GreenhouseRecipe  # noqa: E402
 from test_greenhouse_apply_flow import GREENHOUSE_URLS, build_flow, greenhouse_form, profile  # noqa: E402
 
 CODE = "Ab3dEf9h"
@@ -317,3 +318,20 @@ def test_the_real_bridge_hands_an_eight_character_code_to_the_flow(page, tmp_pat
 
     assert result.status == "applied", result
     assert CODE not in saved_text(tmp_path)
+
+
+def test_the_typed_code_is_hidden_from_a_stop_screenshot(page):
+    """A stop between typing the code and confirming it photographs the live
+    page: the boxes must be fields `secrets_hidden` hides (SICUREZZA P2, 20/09)."""
+    page.set_content(code_page())
+    page.evaluate("() => { document.querySelector('#security').hidden = false; }")
+
+    GreenhouseRecipe.enter_security_code(page, CODE)
+
+    typed = page.evaluate("() => Array.from(document.querySelectorAll('#boxes input')).map(b => b.value).join('')")
+    with ats_account.secrets_hidden(page):
+        shown = page.evaluate(
+            "() => Array.from(document.querySelectorAll('#boxes input')).map(b => getComputedStyle(b).visibility)"
+        )
+    assert typed == CODE  # typed, only not shown
+    assert shown == ["hidden"] * 8
