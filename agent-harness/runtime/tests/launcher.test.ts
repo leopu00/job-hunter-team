@@ -4,7 +4,7 @@
  * host's executor carries only fields the launcher set.
  */
 
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -236,10 +236,11 @@ describe("the base set (T24 run-team)", () => {
     { role: "capitano", instances: 1, delay_s: 5 },
   ];
   const withTeam = (extra: Partial<LauncherConfig> = {}) => launcher({ sessionUsd: 10, team: TEAM, ...extra });
+  /** The orders as the executor reads them: by `seq`, since two written in the same millisecond have no order. */
   const orders = () =>
     readdirSync(join(root, "spool", "requests"))
-      .map((f) => ({ file: f, ...JSON.parse(readFileSync(join(root, "spool", "requests", f), "utf8")) }))
-      .sort((a, b) => statSync(join(root, "spool", "requests", a.file)).mtimeMs - statSync(join(root, "spool", "requests", b.file)).mtimeMs);
+      .map((f) => JSON.parse(readFileSync(join(root, "spool", "requests", f), "utf8")) as Record<string, number | string>)
+      .sort((a, b) => (a["seq"] as number) - (b["seq"] as number));
 
   it("writes one order per member, in the configured order, each marked as team", () => {
     const l = withTeam();
@@ -248,6 +249,7 @@ describe("the base set (T24 run-team)", () => {
     expect(answer.started.map((a) => (a.ok ? a.agent : a.reason))).toEqual(["scout-1", "scout-2", "analista-1", "scorer-1", "capitano-1"]);
     const written = orders();
     expect(written.map((o) => o.agent)).toEqual(["scout-1", "scout-2", "analista-1", "scorer-1", "capitano-1"]);
+    expect(written.map((o) => o.seq)).toEqual([0, 1, 2, 3, 4]);
     expect(written.every((o) => o.kind === "team" && o.session === "s1" && o.max_minutes === 30)).toBe(true);
     // The CAPITANO is a member like the others, at its own cap, with the stagger the config asks for.
     expect(written.at(-1)).toMatchObject({ role: "capitano", cap_usd: 0.3, delay_s: 5, task: "Start your cycle." });

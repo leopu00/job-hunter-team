@@ -100,8 +100,10 @@ The team starts once per session: while a member is up, another
 is text of at most `taskChars` characters; it may hold anything, newlines
 included, and is only ever data. `kind` is `spawn` for a child of the
 CAPITANO and `team` for a member of the base set; `delay_s` appears only
-when the member asks to be staggered. Orders are written in the order they
-are to start, so the executor takes them oldest first.
+when the member asks to be staggered. A member also carries `seq`, 0 upward
+in the configured order, and **that** is the order it starts in: orders
+written in the same millisecond have no order of their own, by date or by
+name. A child has no `seq`; there is only ever one to start.
 
 **`stops/<spawn_id>`** — an empty file: the CAPITANO asked to stop that child.
 
