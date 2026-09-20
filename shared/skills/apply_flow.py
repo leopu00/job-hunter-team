@@ -39,7 +39,7 @@ import tempfile
 import time
 import urllib.parse
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
@@ -78,7 +78,9 @@ except ImportError:  # pragma: no cover - package-style import outside the CLI
 
 LOG = logging.getLogger("jht.apply_flow")
 CHECKPOINT_VERSION = 1
-SUPPORTED_PLATFORMS = frozenset({"ashby", "greenhouse", "lever", "linkedin", "generic", "workday"})
+SUPPORTED_PLATFORMS = frozenset(
+    {"ashby", "greenhouse", "lever", "linkedin", "generic", "workday", "oracle_ce"}
+)
 GREENHOUSE_HOSTS = frozenset(
     {
         "job-boards.greenhouse.io",
@@ -3180,6 +3182,26 @@ def linkedin_job_url(url: str) -> str:
     return url
 
 
+@contextlib.contextmanager
+def _secrets_hidden(page: Any):
+    """No screenshot ever shows a portal password (ats_account's rule).
+
+    Without the module, or on a page that cannot hide them, the screenshot is
+    still taken: these pages have no password field, and a stop without its
+    picture is worse.  A recipe that types a password checks the hiding itself.
+    """
+    module = _optional_module("ats_account")
+    if module is None:
+        yield
+        return
+    try:
+        with module.secrets_hidden(page):
+            yield
+    except module.AccountStop:
+        LOG.warning("[apply-flow] password fields could not be hidden before a screenshot")
+        yield
+
+
 def _optional_module(name: str):
     """A sibling skill module imported only when needed; None when it is absent."""
     import importlib
@@ -3208,6 +3230,10 @@ def _recipe_class(platform: str):
     if platform == "workday":
         module = _optional_module("workday_apply")
         return module.WorkdayRecipe if module is not None else None
+    if platform == "oracle_ce":
+        # Oracle Recruiting Cloud's candidate site, behind a company Apply (1944).
+        module = _optional_module("oracle_ce_apply")
+        return module.OracleCERecipe if module is not None else None
     return {"ashby": AshbyRecipe, "greenhouse": GreenhouseRecipe, "lever": LeverRecipe}.get(platform)
 
 
@@ -3841,7 +3867,8 @@ class ApplicationFlow:
             slug = re.sub(r"[^a-z0-9_]+", "_", str(reason).casefold()).strip("_")[:60] or "stop"
             target = directory / f"{self._stop_screenshot_prefix()}{stamp}-{slug}.png"
             temporary = directory / f".{target.name}.partial.png"
-            page.screenshot(path=str(temporary), full_page=True, timeout=10_000)
+            with _secrets_hidden(page):
+                page.screenshot(path=str(temporary), full_page=True, timeout=10_000)
             os.chmod(temporary, 0o600)
             os.replace(temporary, target)
             temporary = None
@@ -4187,7 +4214,8 @@ class ApplicationFlow:
         slug = hashlib.sha256(self.url.encode("utf-8")).hexdigest()[:12]
         screenshot = self.receipt_dir / f"{self.position_id}-{slug}-{time.time_ns()}.png"
         try:
-            page.screenshot(path=str(screenshot), full_page=True)
+            with _secrets_hidden(page):
+                page.screenshot(path=str(screenshot), full_page=True)
             screenshot.chmod(0o600)
         except Exception as exc:
             with contextlib.suppress(OSError):
@@ -4549,26 +4577,43 @@ class ApplicationFlow:
             return False
 
     def _verification_code(self, checkpoint: FlowCheckpoint, recipe) -> str:
-        """The site's code: from the user's mailbox when it is configured, otherwise on Telegram."""
+        """The code the site asks for after Submit."""
+        return self.site_verification_code(
+            recipe,
+            shape=getattr(recipe, "CODE_SHAPE", "alnum8"),
+            since=_parse_utc(checkpoint.submit_started_at),
+        )
+
+    def site_verification_code(
+        self, recipe, *, shape: str = "alnum8", stage: str = "submit", since: datetime | None = None
+    ) -> str:
+        """The site's one-time code: from the user's mailbox when it is configured, otherwise on Telegram.
+
+        Also used before the application, by a site that identifies the
+        candidate by email first (Oracle Recruiting Cloud, 1944).
+        """
         import verification_code
 
-        since = _parse_utc(checkpoint.submit_started_at) or datetime.now(timezone.utc)
+        since = since or datetime.now(timezone.utc) - timedelta(seconds=60)
         reader = getattr(self, "mailbox_reader", None)
         if reader is not None or verification_code.mailbox_configured():
             return verification_code.code_from_mailbox(
                 sender_domain=recipe.SECURITY_CODE_SENDERS,
                 since=since,
                 timeout_s=self.VERIFICATION_CODE_TIMEOUT_S,
+                shape=shape,
                 reader=reader,
                 poll_s=getattr(self, "mailbox_poll_s", 10.0),
             )
         return verification_code.code_from_telegram(
             service=recipe.PLATFORM,
-            site=recipe.PLATFORM.title(),
+            site=recipe.PLATFORM.replace("_", " ").title(),
             position_id=self.position_id,
             db_path=_resolve_db_path(self.db_path),
             jht_home=self._jht_home(),
             timeout_s=self.VERIFICATION_CODE_TIMEOUT_S,
+            shape=shape,
+            stage=stage,
             notifier=self.code_notifier,
         )
 

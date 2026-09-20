@@ -67,6 +67,11 @@ except ImportError:  # pragma: no cover - package import
     )
 
 try:
+    from apply_flow import _secrets_hidden as apply_flow_secrets_hidden
+except ImportError:  # pragma: no cover - package import
+    from shared.skills.apply_flow import _secrets_hidden as apply_flow_secrets_hidden  # type: ignore[no-redef]
+
+try:
     import cookie_consent
 except ImportError:  # pragma: no cover - package import
     from shared.skills import cookie_consent  # type: ignore[no-redef]
@@ -1212,7 +1217,8 @@ class GenericRecipe:
             target = Path(self.pre_submit_screenshot_path)
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(target), full_page=True)
+                with apply_flow_secrets_hidden(page):
+                    page.screenshot(path=str(target), full_page=True)
                 target.chmod(0o600)
             except Exception as exc:
                 raise BlockedHuman(

@@ -41,7 +41,13 @@ from typing import Any, Callable, Mapping
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 LOGIN_CODE_SOURCE_ACTION = "closer_login_code"
-CODE_SHAPES = {"alnum8": re.compile(r"[A-Za-z0-9]{8}")}
+CODE_SHAPES = {
+    "alnum8": re.compile(r"[A-Za-z0-9]{8}"),  # Greenhouse
+    "digits6": re.compile(r"[0-9]{6}"),  # Oracle Recruiting Cloud's one-time PIN
+}
+# The word a verification email uses right before the code, in the languages a
+# careers site writes to a candidate.
+_CODE_WORD = re.compile(r"\b(?:code|pin|codice|c[oó]digo|code de v[ée]rification|verifizierungscode|k[oó]d)\b", re.I)
 _TAG = re.compile(r"<[^>]+>")
 
 
@@ -72,7 +78,7 @@ def code_in_text(text: str, shape: str = "alnum8") -> str | None:
     pattern = CODE_SHAPES[shape]
     plain = " ".join(_TAG.sub(" ", str(text or "")).split())
     found = set()
-    for match in re.finditer(r"\bcode\b", plain, re.I):
+    for match in _CODE_WORD.finditer(plain):
         window = plain[match.end(): match.end() + 120]
         for token in re.findall(r"(?<![A-Za-z0-9])[A-Za-z0-9]+(?![A-Za-z0-9])", window):
             if pattern.fullmatch(token) and _looks_like_a_code(token):
@@ -195,6 +201,7 @@ def code_from_telegram(
     jht_home: Path,
     timeout_s: float,
     shape: str = "alnum8",
+    stage: str = "submit",
     notifier: Callable[..., str] | None = None,
     poll_s: float = 2.0,
 ) -> str:
@@ -237,10 +244,21 @@ def code_from_telegram(
             (LOGIN_CODE_SOURCE_ACTION, service),
         )
         conn.commit()
+    minutes = max(1, round(timeout_s / 60))
+    if stage == "identify":
+        # Before the application: the site identifies the candidate by email.
+        what = (
+            f"CLOSER is filling your application on {site}, and {site} emailed you a one-time code to confirm "
+            "it is you."
+        )
+    else:
+        what = (
+            f"CLOSER submitted your application on {site}, and {site} sent a verification code to your email "
+            "before it accepts it."
+        )
     message = (
-        f"CLOSER submitted your application on {site}, and {site} sent a verification code to your email "
-        "before it accepts it. Reply to this message with that code, within "
-        f"{max(1, round(timeout_s / 60))} minutes.\n"
+        f"{what} Reply to this message with that code, within "
+        f"{minutes} minutes.\n"
         f"Code request: {application_answers.answer_code(source_id)}"
     )
     try:

@@ -289,15 +289,16 @@ def _flow_block_reasons() -> set[str]:
     dove la spec vuole che si fermi.
     """
     src = (SKILLS_DIR / "apply_flow.py").read_text()
-    # The recipes and the shared account module live in their own files and
-    # stop the same flow: a gate that reads only two of them explains nothing
-    # about the others.  A renamed file must fail here, not go unread.
-    modules = ("linkedin_apply.py", "workday_apply.py", "apply_generic.py", "ats_account.py")
-    recipes = ""
-    for name in modules:
-        path = SKILLS_DIR / name
-        assert path.is_file(), f"il gate dei motivi cerca in {name}, che non esiste piu'"
-        recipes += path.read_text()
+    # The recipes and the shared account module stop the same flow: the gate
+    # reads every recipe module, plus the two that do not match the pattern, so
+    # a recipe added tomorrow cannot keep its stops out of the skill and a
+    # renamed file fails here instead of going unread.
+    named = ("apply_generic.py", "ats_account.py")
+    modules = sorted(SKILLS_DIR.glob("*_apply.py")) + [SKILLS_DIR / n for n in named]
+    assert len(modules) >= 4, "nessun modulo di ricetta trovato: il gate non sta cercando niente"
+    for path in modules:
+        assert path.is_file(), f"il gate dei motivi cerca in {path.name}, che non esiste piu'"
+    recipes = "\n".join(path.read_text() for path in modules if path.name != "apply_flow.py")
     reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src + recipes))
     reasons |= set(re.findall(r'FlowDeferred\(\s*"([a-z_]+)"', src + recipes))
     reasons |= set(re.findall(r'AccountStop\(\s*"([a-z_]+)"', src + recipes))
