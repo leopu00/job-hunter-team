@@ -4,7 +4,7 @@
  * host's executor carries only fields the launcher set.
  */
 
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -31,6 +31,7 @@ const CONFIG: LauncherConfig = {
   maxMinutes: 30,
   models: ["gpt-5.6-luna", "gpt-5-mini"],
   taskChars: 2_000,
+  spawnReserveUsd: 0,
 };
 
 let root: string;
@@ -77,6 +78,7 @@ describe("what the launcher starts", () => {
     expect(order).toEqual({
       spawn_id: answer.spawn_id,
       session: "s1",
+      kind: "spawn",
       role: "scout",
       agent: "scout-1",
       model: "gpt-5.6-luna",
@@ -225,9 +227,141 @@ describe("who stops what", () => {
   });
 });
 
+describe("the base set (T24 run-team)", () => {
+  // As the product's launcher starts it: the same composition, in this order.
+  const TEAM = [
+    { role: "scout", instances: 2 },
+    { role: "analista", instances: 1 },
+    { role: "scorer", instances: 1 },
+    { role: "capitano", instances: 1, delay_s: 5 },
+  ];
+  const withTeam = (extra: Partial<LauncherConfig> = {}) => launcher({ sessionUsd: 10, team: TEAM, ...extra });
+  const orders = () =>
+    readdirSync(join(root, "spool", "requests"))
+      .map((f) => ({ file: f, ...JSON.parse(readFileSync(join(root, "spool", "requests", f), "utf8")) }))
+      .sort((a, b) => statSync(join(root, "spool", "requests", a.file)).mtimeMs - statSync(join(root, "spool", "requests", b.file)).mtimeMs);
+
+  it("writes one order per member, in the configured order, each marked as team", () => {
+    const l = withTeam();
+    const answer = l.startTeam("host");
+    expect(answer.ok).toBe(true);
+    expect(answer.started.map((a) => (a.ok ? a.agent : a.reason))).toEqual(["scout-1", "scout-2", "analista-1", "scorer-1", "capitano-1"]);
+    const written = orders();
+    expect(written.map((o) => o.agent)).toEqual(["scout-1", "scout-2", "analista-1", "scorer-1", "capitano-1"]);
+    expect(written.every((o) => o.kind === "team" && o.session === "s1" && o.max_minutes === 30)).toBe(true);
+    // The CAPITANO is a member like the others, at its own cap, with the stagger the config asks for.
+    expect(written.at(-1)).toMatchObject({ role: "capitano", cap_usd: 0.3, delay_s: 5, task: "Start your cycle." });
+    expect(written.filter((o) => o.delay_s !== undefined)).toHaveLength(1);
+    // One piggy bank: four members at 0.4 and the CAPITANO's 0.3, counted once.
+    expect(listed(l, "host").left_usd).toBeCloseTo(10 - 1.9, 6);
+    expect(answer.left_usd).toBeCloseTo(10 - 1.9, 6);
+  });
+
+  it("does not spend the CAPITANO's spawns: the team is peers, and an extra child still starts", () => {
+    // One child at a time, one spawn in the session: the team must not use them up.
+    const l = withTeam({ maxActive: 1, maxSpawns: 1, roles: { ...CONFIG.roles, scrittore: { capUsd: 0.4, instances: 1 } } });
+    expect(l.startTeam("host").ok).toBe(true);
+    // No child may double a member that is already running.
+    expect(l.spawn("capitano-1", { role: "scout", cap_usd: 0.4, model: "gpt-5.6-luna", task: "More." })).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("all its 2 instance(s)"),
+    });
+    const extra = l.spawn("capitano-1", { role: "scrittore", cap_usd: 0.4, model: "gpt-5.6-luna", task: "Write the CV." });
+    expect(extra).toMatchObject({ ok: true, agent: "scrittore-1" });
+    // The second child is the CAPITANO's own limit talking, not the team's: one child at
+    // a time, and one spawn in the session, both counted over children alone.
+    expect(l.spawn("capitano-1", { role: "scorer", cap_usd: 0.4, model: "gpt-5.6-luna", task: "Again." })).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("1 children are running, the most at once is 1"),
+    });
+    report((extra as { spawn_id: string }).spawn_id, "failed", { exit_code: 1 });
+    expect(l.spawn("capitano-1", { role: "scorer", cap_usd: 0.4, model: "gpt-5.6-luna", task: "Again." })).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("This session has used its 1 spawns"),
+    });
+  });
+
+  it("keeps the CAPITANO's reserve out of the team's booking, and says when there is no room left", () => {
+    // The set costs 0.3 (captain) + 1.6: with 0.4 kept for a spawn, 2.2 is short by one member.
+    const tight = withTeam({ sessionUsd: 2.2, spawnReserveUsd: 0.4 });
+    const short = tight.startTeam("host");
+    expect(short.started.filter((a) => !a.ok).map((a) => (a.ok ? "" : a.reason))).toEqual([
+      expect.stringContaining("kept for the CAPITANO's spawns"),
+    ]);
+
+    // With room for the whole set and the reserve, the CAPITANO's extra child starts for real.
+    const l = withTeam({ sessionUsd: 2.3, spawnReserveUsd: 0.4, roles: { ...CONFIG.roles, scout: { capUsd: 0.4, instances: 3 } } });
+    const full = l.startTeam("host");
+    expect(full.started.every((a) => a.ok)).toBe(true);
+    expect(full.note).toBeUndefined();
+    expect(l.spawn("capitano-1", { role: "scout", cap_usd: 0.4, model: "gpt-5.6-luna", task: "One more." })).toMatchObject({ ok: true, agent: "scout-3" });
+
+    // When the set fills every instance, the answer says so instead of leaving it to be found later.
+    expect(withTeam({ sessionUsd: 10, session: "s9" }).startTeam("host").note).toContain("No room left for an extra spawn");
+  });
+
+  it("starts the team once per session, and again only when it is down", () => {
+    const l = withTeam();
+    const first = l.startTeam("host");
+    expect(l.startTeam("host")).toMatchObject({ ok: false, reason: expect.stringContaining("already up") });
+    for (const a of first.started) if (a.ok) report(a.spawn_id, "done", { exit_code: 0, spent_usd: 0.05 });
+    expect(l.startTeam("host").ok).toBe(true);
+  });
+
+  it("is not the CAPITANO's to stop, and needs a team in the configuration", () => {
+    const l = withTeam();
+    const started = l.startTeam("host");
+    const member = started.started[0];
+    if (!member?.ok) throw new Error("no member");
+    expect(l.stop("capitano-1", member.spawn_id)).toMatchObject({ ok: false, reason: expect.stringContaining("ask the operator") });
+    // Not even the caller that started it: a member of the base set is stopped by the host, not through here.
+    expect(l.stop("host", member.spawn_id)).toMatchObject({ ok: false, reason: expect.stringContaining("ask the operator") });
+    expect(launcher().startTeam("host")).toMatchObject({ ok: false, reason: expect.stringContaining("no team in its configuration") });
+  });
+
+  it("starts nothing while the operator's STOP is there", () => {
+    const l = withTeam();
+    writeFileSync(join(root, "STOP"), "");
+    expect(l.startTeam("host")).toMatchObject({ ok: false, reason: expect.stringContaining("STOP") });
+    expect(existsSync(join(root, "spool", "requests")) ? readdirSync(join(root, "spool", "requests")) : []).toEqual([]);
+  });
+});
+
 describe("through the hub", () => {
   const CAPITANO = "k".repeat(40);
   const SCOUT = "s".repeat(40);
+  const TEAM_TOKEN = "t".repeat(40);
+
+  it("starts the base set with the host's token only, and answers with the members", async () => {
+    const server = createHub({
+      tokens: new Map([[CAPITANO, "capitano-1"]]),
+      dbPath: join(root, "hub", "jobs.db"),
+      channelsDir: join(root, "hub", "channels"),
+      stateDir: join(root, "hub", "state"),
+      appRoot: REPO_ROOT,
+      launcher: launcher({ sessionUsd: 10, team: [{ role: "scout", instances: 2 }, { role: "capitano", instances: 1 }] }),
+      teamToken: TEAM_TOKEN,
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const post = (token: string, path: string, body: unknown) =>
+      fetch(`${url}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    try {
+      // The CAPITANO's token starts children, never the team.
+      expect((await post(CAPITANO, HUB_PATHS.teamStart, {})).status).toBe(403);
+      expect((await post("z".repeat(40), HUB_PATHS.teamStart, {})).status).toBe(403);
+      const started = await post(TEAM_TOKEN, HUB_PATHS.teamStart, {});
+      expect(started.status).toBe(200);
+      const answer = (await started.json()) as { ok: boolean; started: Array<{ ok: boolean; agent?: string }> };
+      expect(answer.ok).toBe(true);
+      expect(answer.started.map((a) => a.agent)).toEqual(["scout-1", "scout-2", "capitano-1"]);
+      // And the host's token does nothing else: it is not an agent.
+      expect((await post(TEAM_TOKEN, HUB_PATHS.spawnList, {})).status).toBe(401);
+      expect((await post(TEAM_TOKEN, HUB_PATHS.drain, {})).status).toBe(401);
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+  });
 
   it("takes spawns from the CAPITANO's token only, and the CAPITANO's runtime has the tools", async () => {
     const server = createHub({
@@ -262,6 +396,11 @@ describe("through the hub", () => {
       expect(answer).toMatchObject({ ok: true, content: expect.stringContaining('"agent": "scorer-1"') });
       const refused = await spawn.execute({ ...request, role: "capitano" }, { account: undefined as never, remainingMs: () => 60_000 });
       expect(refused).toMatchObject({ ok: false, content: expect.stringContaining("not a role the launcher starts") });
+
+      // T24: with no launcher token configured, even the host's token is refused.
+      expect((await post(CAPITANO, HUB_PATHS.teamStart, {})).status).toBe(403);
+      expect((await post(SCOUT, HUB_PATHS.teamStart, {})).status).toBe(403);
+      expect((await post(TEAM_TOKEN, HUB_PATHS.teamStart, {})).status).toBe(403);
 
       // No other role has them, and a CAPITANO without a hub has no way to start anyone.
       const scout = await prepareProductRole({ ...common, role: "scout", agent: "scout-1", homeDir: join(root, "api", "agents", "s"), hub: new HubClient({ url, token: SCOUT }) });
