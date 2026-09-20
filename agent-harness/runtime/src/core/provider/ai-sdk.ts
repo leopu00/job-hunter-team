@@ -10,6 +10,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
+  APICallError,
   generateText,
   stepCountIs,
   tool,
@@ -47,6 +48,30 @@ const DEFAULT_TIMEOUT_MS = 120_000;
  * VPS refuses any other shape.
  */
 const OPENAI_STATELESS = { store: false, include: ["reasoning.encrypted_content"] };
+
+/**
+ * The provider call, and at most one more when the provider said 429 (T27).
+ *
+ * 12 of 59 refusals in the live runs of 20/09 were upstream 429s, and each
+ * one ended a run with the money it had already spent. The SDK does retry a
+ * 429 by itself — twice, back to back, with no jitter and without reading
+ * `retry-after` — which is how six roles rebuild the very queue that caused
+ * the 429. So the SDK's own retrying is turned off (`maxRetries: 0`) and the
+ * runtime does it: **one** more attempt, only on 429, after a wait that
+ * grows with the attempt, is spread by jitter, and obeys the provider's
+ * `retry-after` when it sends one.
+ *
+ * A 429 is refused before the provider serves anything, so a second attempt
+ * bills nothing extra and books nothing extra: the attempts are sequential,
+ * one reservation at a time, and the round's worst case is unchanged.
+ */
+const MAX_ATTEMPTS = 2;
+
+/** First wait, doubled per attempt, before jitter. */
+const RETRY_BASE_MS = 2_000;
+
+/** However long the provider asks for, nobody waits more than this. */
+const RETRY_MAX_MS = 30_000;
 
 const SEARCH_SYSTEM =
   "Search the web for the query and report what you found: the facts that answer it, " +
@@ -89,7 +114,7 @@ export class AiSdkProvider implements ProviderPort {
     }
 
     try {
-      const result = await generateText({
+      const result = await attempt(() => generateText({
         model: this.#model,
         system: request.system,
         messages: request.messages.map(toModelMessage),
@@ -97,10 +122,12 @@ export class AiSdkProvider implements ProviderPort {
         ...(this.profile.providerId === "openai" ? { providerOptions: { openai: OPENAI_STATELESS } } : {}),
         // The loop belongs to the runtime. One model call per `generate`.
         stopWhen: stepCountIs(1),
+        // The retrying is the runtime's (`attempt`), not the SDK's.
+        maxRetries: 0,
         maxOutputTokens: request.maxOutputTokens ?? this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      });
+      }), request.signal);
 
       return {
         text: result.text,
@@ -133,7 +160,7 @@ export class AiSdkProvider implements ProviderPort {
       throw new HarnessError("model_incapable", `Model ${this.profile.modelId} is not declared as able to search the web.`);
     }
     try {
-      const result = await generateText({
+      const result = await attempt(() => generateText({
         model: this.#model,
         system: SEARCH_SYSTEM,
         prompt: request.query,
@@ -144,10 +171,11 @@ export class AiSdkProvider implements ProviderPort {
           : {}),
         // Server-side search runs inside this one call; there is no client step to loop over.
         stopWhen: stepCountIs(1),
+        maxRetries: 0,
         maxOutputTokens: this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      });
+      }), request.signal);
 
       const seen = new Set<string>();
       const sources: WebSearchResult["sources"] = [];
@@ -299,4 +327,53 @@ function searchToolSet(profile: ModelProfile): ToolSet {
     default:
       throw new HarnessError("model_incapable", `Provider '${profile.providerId}' has no web search.`);
   }
+}
+
+/**
+ * Runs `call`, and on a 429 waits and runs it once more. Everything else is
+ * raised as it comes: a 500, a timeout or a bad request is not a queue.
+ */
+export async function attempt<T>(call: () => Promise<T>, signal?: AbortSignal, sleep: (ms: number) => Promise<void> = wait): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await call();
+    } catch (error) {
+      const waitMs = retryAfterMs(error, n);
+      if (n >= MAX_ATTEMPTS || waitMs === null || signal?.aborted) throw error;
+      await sleep(waitMs);
+    }
+  }
+}
+
+/** The wait before another attempt, or null when the error is not a 429. */
+function retryAfterMs(error: unknown, attemptNumber = 1): number | null {
+  if (!is429(error)) return null;
+  const asked = retryAfterHeader(error);
+  // The provider's own figure when it sends one; otherwise a wait that grows
+  // with the attempt. Jitter either way: without it the roles that were
+  // refused together come back together, and the queue forms again.
+  const base = asked ?? RETRY_BASE_MS * 2 ** (attemptNumber - 1);
+  return Math.min(RETRY_MAX_MS, Math.round(base * (0.75 + Math.random() * 0.5)));
+}
+
+/** A 429 from the provider, however the SDK wrapped it. */
+function is429(error: unknown): boolean {
+  if (APICallError.isInstance(error) && error.statusCode === 429) return true;
+  const cause = (error as { cause?: unknown })?.cause;
+  const errors = (error as { errors?: unknown })?.errors;
+  if (Array.isArray(errors) && errors.some((e) => is429(e))) return true;
+  return cause !== undefined && cause !== error && is429(cause);
+}
+
+/** `retry-after`, in milliseconds, when the provider sent one in seconds. */
+function retryAfterHeader(error: unknown): number | null {
+  const headers = APICallError.isInstance(error) ? error.responseHeaders : undefined;
+  const raw = headers?.["retry-after"];
+  if (raw === undefined) return null;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : null;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((done) => setTimeout(done, ms));
 }

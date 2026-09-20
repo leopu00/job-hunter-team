@@ -8,11 +8,12 @@
  * what is faked is the HTTP call, nothing above it.
  */
 
+import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { AiSdkProvider } from "../src/core/provider/ai-sdk.ts";
+import { AiSdkProvider, attempt } from "../src/core/provider/ai-sdk.ts";
 import { isHarnessError } from "../src/core/errors.ts";
 import type { Message, ModelProfile, ToolSpec } from "../src/core/provider/port.ts";
 
@@ -465,5 +466,119 @@ describe("AiSdkProvider — cache writes (T1c)", () => {
     });
     const provider = new AiSdkProvider({ profile: { ...PROFILE, providerId: "openai" as const, modelId: "gpt-5.6-luna", capabilities: { ...PROFILE.capabilities, webSearch: true } }, model });
     expect((await provider.webSearch({ query: "q" })).usage.cacheWriteTokens).toBe(4_400);
+  });
+});
+
+/**
+ * T27: a 429 is the provider's queue, not the run's end. 12 refusals of 59
+ * in the live runs of 20/09 were upstream 429s, and each one ended a run
+ * with what it had already spent. These live here because this file is the
+ * only test the provider boundary lets import the AI SDK.
+ */
+
+function busy(headers?: Record<string, string>) {
+  return new APICallError({
+    message: "Too Many Requests",
+    url: "https://api.openai.example/v1/responses",
+    requestBodyValues: {},
+    statusCode: 429,
+    isRetryable: true,
+    ...(headers ? { responseHeaders: headers } : {}),
+  });
+}
+
+/** A provider whose first `calls` attempts fail with `error`. */
+function failing(times: number, error: () => unknown) {
+  let calls = 0;
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => {
+      calls += 1;
+      if (calls <= times) throw error();
+      return { content: [{ type: "text" as const, text: "done" }], finishReason: { unified: "stop" as const, raw: "stop" }, usage: USAGE, warnings: [] };
+    },
+  });
+  return { provider: new AiSdkProvider({ profile: PROFILE, model }), attempts: () => calls };
+}
+
+const GO = { system: "s", messages: [{ role: "user" as const, content: "x" }] };
+
+describe("a 429 from the provider", () => {
+  it("is tried once more, and the run goes on", async () => {
+    const { provider, attempts } = failing(1, () => busy());
+    const result = await provider.generate(GO);
+    expect(result.text).toBe("done");
+    expect(attempts()).toBe(2);
+  });
+
+  it("ends the call when the second attempt is refused too: one retry, not a loop", async () => {
+    const { provider, attempts } = failing(5, () => busy());
+    await expect(provider.generate(GO)).rejects.toMatchObject({ code: "provider_failed" });
+    expect(attempts()).toBe(2);
+  });
+
+  it("is the only error retried: anything else is raised as it comes", async () => {
+    for (const error of [
+      () => new Error("socket hang up"),
+      () => new APICallError({ message: "bad request", url: "u", requestBodyValues: {}, statusCode: 400 }),
+      () => new APICallError({ message: "server error", url: "u", requestBodyValues: {}, statusCode: 500, isRetryable: true }),
+    ]) {
+      const { provider, attempts } = failing(1, error);
+      await expect(provider.generate(GO)).rejects.toMatchObject({ code: "provider_failed" });
+      expect(attempts(), String(error())).toBe(1);
+    }
+  });
+});
+
+describe("the wait before the second attempt", () => {
+  const waits: number[] = [];
+  const sleep = async (ms: number) => void waits.push(ms);
+  const run = async (error: unknown, attempts = 2) => {
+    waits.length = 0;
+    let calls = 0;
+    await attempt(
+      async () => {
+        calls += 1;
+        if (calls < attempts) throw error;
+        return "ok";
+      },
+      undefined,
+      sleep,
+    ).catch(() => {});
+    return waits;
+  };
+
+  it("is around two seconds, spread by jitter so the refused roles do not come back together", async () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 40; i++) seen.add((await run(busy()))[0]!);
+    for (const ms of seen) expect(ms, `${ms}`).toBeGreaterThanOrEqual(1_500);
+    for (const ms of seen) expect(ms, `${ms}`).toBeLessThanOrEqual(2_500);
+    // Jitter: forty waits are not the same number.
+    expect(seen.size).toBeGreaterThan(20);
+  });
+
+  it("obeys the provider's retry-after, and never waits more than half a minute", async () => {
+    for (const ms of await run(busy({ "retry-after": "10" }))) {
+      expect(ms).toBeGreaterThanOrEqual(7_500);
+      expect(ms).toBeLessThanOrEqual(12_500);
+    }
+    expect((await run(busy({ "retry-after": "600" })))[0]).toBe(30_000);
+    // A header that is not a number is no instruction: the usual wait.
+    expect((await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]).toBeLessThanOrEqual(2_500);
+  });
+
+  it("does not wait when the run has already been abandoned", async () => {
+    const aborted = AbortSignal.abort();
+    let calls = 0;
+    await expect(
+      attempt(
+        async () => {
+          calls += 1;
+          throw busy();
+        },
+        aborted,
+        async (ms: number) => void waits.push(ms),
+      ),
+    ).rejects.toMatchObject({ statusCode: 429 });
+    expect(calls).toBe(1);
   });
 });
