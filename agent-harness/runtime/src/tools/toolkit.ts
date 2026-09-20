@@ -38,7 +38,7 @@ const PLATFORM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
 
 export async function buildToolkit(
   config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile"> &
-    Partial<Pick<Config, "userDir">>,
+    Partial<Pick<Config, "userDir" | "userHistoryDir">>,
   options: {
     provider: ProviderPort;
     ask?: PermissionAsker | undefined;
@@ -76,9 +76,10 @@ export async function buildToolkit(
     tools: [...createWorkspaceTools({ workdir, ownRoots, stateRoots }), createBashTool({ workdir }), ...web, ...(mcp?.tools ?? [])],
     permissions: new PermissionPolicy({
       mode: config.permissionMode,
-      freeReadRoots: [workdir, ...(config.profileDir ? [config.profileDir] : [])],
-      // The person's profile: every role reads it, none writes it (T10b).
-      readOnlyRoots: config.profileDir ? [config.profileDir] : [],
+      // The person's own folders are read freely and written by nobody: the profile
+      // (T10b) and, beside the deliverables, the documents they already had (T25).
+      freeReadRoots: [workdir, ...personal(config)],
+      readOnlyRoots: personal(config),
       ownRoots,
       stateRoots,
       ask: options.ask,
@@ -88,6 +89,11 @@ export async function buildToolkit(
       await mcp?.close();
     },
   };
+}
+
+/** The person's own folders: read by every role, written by none. */
+function personal(config: Partial<Pick<Config, "profileDir" | "userHistoryDir">>): string[] {
+  return [config.profileDir, config.userHistoryDir].filter((dir): dir is string => dir !== undefined);
 }
 
 /** A SQLite database and the files it writes beside itself. */

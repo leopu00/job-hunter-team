@@ -86,15 +86,26 @@ reads:
    (`readOnlyRoots`). `$JHT_USER_DIR` (the deliverables the TUI puts in the
    person's Documents: the CV, the cover letter, the review) becomes
    `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user` — unset, a CV would have gone
-   to `/cv/` (T25). With `run-team` it is one shared volume, and least
-   privilege holds it: `cv/` is the SCRITTORE's to write, `critiche/` the
-   CRITICO's, every role reads both and nobody writes the folder itself
+   to `/cv/` (T25). That folder is what the **team makes**, and on a real box
+   it sits beside what the **person already had**: 750 CVs and letters of
+   their own, which reach the roles as another read-only root
+   (`JHT_API_USER_HISTORY_DIR`, read freely, written by nobody, named in the
+   rendered prompt beside the deliverables). The two are **siblings, never
+   nested**: a read-only root wins over every own root whatever the mode, so
+   with the deliverables inside the history every CV would be refused — the
+   mount ashley ran for a day, safe but sterile, and the reason the agent
+   read said "the person's profile". A configuration that nests them now
+   stops at startup with that explained (`config.ts`), and the policy's
+   behaviour in both layouts is pinned in `tests/user-folders.test.ts`. With `run-team` the
+   deliverables are one shared volume, and least privilege holds them: `cv/`
+   is the SCRITTORE's to write, `critiche/` the CRITICO's, every role reads
+   both and nobody writes the folder itself
    (`src/parity/deliverables.ts`). A role creates its own subfolder and goes
-   on when it cannot, since where the launcher owns the tree the folders are
-   already there and the root is nobody's. The filesystem carries the same
-   rule (`user/` root-owned 0750, each subfolder setgid to its role): the
-   runtime's refusal is a sentence the agent can report, the modes are what
-   hold if it reaches for `bash`.
+   on when the mount refuses it, since where the launcher owns the tree the
+   folders are already there; any other failure is raised. The filesystem
+   carries the same rule (the deliverables root read-only, each subfolder
+   setgid to its role): the runtime's refusal is a sentence the agent can
+   report, the modes are what hold if it reaches for `bash`.
    Left alone: other paths under `$JHT_HOME`, which name
    state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
@@ -137,7 +148,7 @@ its replacement, without running anything.
 | `jht-notify-user`, `jht-telegram-send` | `notify_user` {text, kind?, position_id?} | `Notifier` port; `FileNotifier`: an outbox file. At most 5 per sliding hour (`notifyLimit`); past it the call fails and nothing is queued |
 | `jht-check-user-replies` | `check_user_replies` {} | `UserReplies` port; same output format as the TUI tool |
 | `jht-install` | refused: the image carries the dependencies | — |
-| `pandoc … --pdf-engine=wkhtmltopdf`, `pdftotext`, `pdf_layout_check.py`, `pdf_gen.py` | not mapped: no PDF in the harness | the `jht-api` image carries no pandoc, wkhtmltopdf or poppler, so S-05's render and its layout gate cannot run (T25). The CV and the cover letter are delivered as the markdown files in `<JHT_API_USER_DIR>/cv/`, `applications.cv_path` records them and `cv_pdf_path` stays empty; the CRITICO reviews the markdown. The shell guard answers `pandoc`, `wkhtmltopdf` and `pdftotext` with that, and the scripts are marked not available in the rendered text. When the image carries them, this row and the note in the prompt go away together |
+| `pandoc … --pdf-engine=wkhtmltopdf`, `pdftotext`, `pdffonts` | run where the box has them | **detected, not declared** (T25 follow-up). The harness refuses the PDF toolchain only where the executable is not on `PATH`: the image gained pandoc, wkhtmltopdf and poppler in T24-b, this table still said they were missing, and a SCRITTORE that had just seen `/usr/bin/pdftotext` with `command -v` was told poppler did not exist — it spent its whole cap looking for another way and delivered nothing. Where they are there, S-05 runs as written. Where they are not, the refusal says to deliver the markdown and report that no PDF was rendered. `pdf_layout_check.py` is Python and the image has no interpreter: it is still marked not available, and a native tool for it is open work |
 | `start-agent.sh`, `roll_worker_number.py`, `tmux …`, `jht-agent-contain` | `spawn_agent`, `list_agents`, `stop_agent` (the CAPITANO, with a hub) | the TUI's team is tmux sessions; here agents are containers the hub's launcher starts (T22), which picks the instance and holds every limit. The shell guard answers each with the tool to use and runs nothing; the rendered text names `spawn_agent` for `/app/.launcher/start-agent.sh` and marks the rest of `/app/.launcher/`, `/app/cli/bin/jht.js` and the hyphenated scripts (`throttle-config.py`, `agent-speed-table.py`) as not in the harness (T21). Without a hub the CAPITANO has no spawn |
 | `throttle-set`, `token-rate-now` | not mapped yet: CAPITANO only | — |
 | `jht-agent-contain` | not mapped yet: SENTINELLA only | — |

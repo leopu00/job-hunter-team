@@ -50,7 +50,8 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_HOME` | state root (default `~/.jht-api`) |
 | `JHT_API_WORKDIR` | where commands start |
 | `JHT_API_PROFILE_DIR` | the person's profile: the rendered prompt points at it, every role reads it, no tool writes in it |
-| `JHT_API_USER_DIR` | what the team makes for the person — `cv/`, `critiche/` — which the TUI puts in their Documents (`$JHT_USER_DIR`). Default `<JHT_API_HOME>/user`; every role may write there |
+| `JHT_API_USER_DIR` | what the team makes for the person — `cv/` (the SCRITTORE's), `critiche/` (the CRITICO's) — where the TUI has `$JHT_USER_DIR`. Default `<JHT_API_HOME>/user`; a role writes only its own subfolder |
+| `JHT_API_USER_HISTORY_DIR` | the person's own CVs and letters, **beside** the deliverables and never above them: read by every role, written by none. Absent on a box that has none |
 | `JHT_API_DB` | the team's `jobs.db` (default `<JHT_API_HOME>/db/jobs.db`), created with the product's schema if missing; reached only through the db tools |
 | `JHT_API_APP_ROOT` | the folder holding `agents/` (default this checkout; `/app` in the image) |
 | `JHT_HUB_URL` + `JHT_HUB_TOKEN` | the team's database and channels are `jht-hub`'s (`docs/hub.md`): this runtime opens neither. Loopback URL only. A CAPITANO on the hub gets `spawn_agent`, `stop_agent` and `list_agents` (`docs/launcher.md`) |

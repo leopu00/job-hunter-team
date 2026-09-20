@@ -116,7 +116,7 @@ async function main(): Promise<number> {
   const script = values["mock-script"]
     ? await readMockScript(values["mock-script"])
     : product
-      ? productRoleMockScript(values.role, config.userDir, config.profileDir ?? join(config.apiHome, "profile"))
+      ? productRoleMockScript(values.role, config.userDir, config.profileDir ?? join(config.apiHome, "profile"), config.userHistoryDir)
       : DEFAULT_MOCK_SCRIPT;
 
   const provider = await resolveProvider(config, script);
@@ -173,6 +173,7 @@ async function main(): Promise<number> {
       homeDir: config.agentHome,
       apiHome: config.apiHome,
       userDir: config.userDir,
+      ...(config.userHistoryDir ? { userHistoryDir: config.userHistoryDir } : {}),
       jhtHome: resolveUserPath(env["JHT_HOME"]?.trim() || "~/.jht", process.cwd(), homedir()),
       profileDir: config.profileDir,
       env,

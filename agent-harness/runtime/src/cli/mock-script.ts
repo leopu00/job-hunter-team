@@ -278,7 +278,7 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
  * it, records the application and hands it to the Critic. No PDF: the image
  * carries no pandoc, so the deliverable is the markdown (docs/parity.md).
  */
-export function scrittoreMockScript(userDir: string, profileDir: string): ScriptedTurn[] {
+export function scrittoreMockScript(userDir: string, profileDir: string, historyDir?: string): ScriptedTurn[] {
   const cv = `${userDir}/cv/CV_Candidate_1_acme.md`;
   return [
     { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
@@ -306,6 +306,18 @@ export function scrittoreMockScript(userDir: string, profileDir: string): Script
         },
       ],
     },
+    ...(historyDir === undefined
+      ? []
+      : [
+          {
+            // The person's own CVs: read them for the tone, never write among them.
+            text: "What the person wrote before, and what happens if I try to change it.",
+            toolCalls: [
+              { name: "read_file", args: { path: `${historyDir}/CV_2024.md` } },
+              { name: "write_file", args: { path: `${historyDir}/CV_2024.md`, content: "# replaced\n" } },
+            ],
+          },
+        ]),
     {
       text: "The application, and the CV recorded on it.",
       toolCalls: [
@@ -374,11 +386,11 @@ export function criticoMockScript(userDir: string, profileDir: string): Scripted
 }
 
 /** The rehearsal for a product role: the SCORER, the ANALISTA, the CAPITANO, the SCRITTORE and the CRITICO have their own, every other role plays the SCOUT's. */
-export function productRoleMockScript(role: string, userDir = ".", profileDir = "."): ScriptedTurn[] {
+export function productRoleMockScript(role: string, userDir = ".", profileDir = ".", historyDir?: string): ScriptedTurn[] {
   if (role === "scorer") return SCORER_MOCK_SCRIPT;
   if (role === "analista") return ANALISTA_MOCK_SCRIPT;
   if (role === "capitano") return CAPITANO_MOCK_SCRIPT;
-  if (role === "scrittore") return scrittoreMockScript(userDir, profileDir);
+  if (role === "scrittore") return scrittoreMockScript(userDir, profileDir, historyDir);
   if (role === "critico") return criticoMockScript(userDir, profileDir);
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
