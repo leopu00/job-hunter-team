@@ -80,6 +80,7 @@ const SEARCH_SYSTEM =
 
 export class AiSdkProvider implements ProviderPort {
   readonly profile: ModelProfile;
+  readonly #sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   #model: LanguageModel;
 
@@ -99,8 +100,15 @@ export class AiSdkProvider implements ProviderPort {
      * and without a network call. Production never passes it.
      */
     model?: LanguageModel | undefined;
+    /**
+     * The wait before the second attempt of a 429, for tests that must not
+     * sleep for real: a wait of seconds makes a test slow and, with jitter,
+     * unstable. Production never passes it.
+     */
+    sleep?: ((ms: number, signal?: AbortSignal) => Promise<void>) | undefined;
   }) {
     this.profile = options.profile;
+    this.#sleep = options.sleep ?? wait;
     this.#model =
       options.model ?? resolveModel(options.profile, options.openAICompatible, options.openAI, options.fetch);
   }
@@ -127,7 +135,7 @@ export class AiSdkProvider implements ProviderPort {
         maxOutputTokens: request.maxOutputTokens ?? this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      }), request.signal);
+      }), request.signal, this.#sleep);
 
       return {
         text: result.text,
@@ -175,7 +183,7 @@ export class AiSdkProvider implements ProviderPort {
         maxOutputTokens: this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      }), request.signal);
+      }), request.signal, this.#sleep);
 
       const seen = new Set<string>();
       const sources: WebSearchResult["sources"] = [];

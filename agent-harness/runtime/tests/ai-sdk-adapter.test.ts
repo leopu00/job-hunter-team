@@ -487,9 +487,14 @@ function busy(headers?: Record<string, string>) {
   });
 }
 
-/** A provider whose first `calls` attempts fail with `error`. */
+/**
+ * A provider whose first `times` attempts fail with `error`. It does not
+ * sleep: the wait's own size is measured below, on `attempt`, and a test
+ * that really waited seconds would be slow and, with jitter, unstable.
+ */
 function failing(times: number, error: () => unknown) {
   let calls = 0;
+  const waited: number[] = [];
   const model = new MockLanguageModelV4({
     doGenerate: async () => {
       calls += 1;
@@ -497,17 +502,23 @@ function failing(times: number, error: () => unknown) {
       return { content: [{ type: "text" as const, text: "done" }], finishReason: { unified: "stop" as const, raw: "stop" }, usage: USAGE, warnings: [] };
     },
   });
-  return { provider: new AiSdkProvider({ profile: PROFILE, model }), attempts: () => calls };
+  return {
+    provider: new AiSdkProvider({ profile: PROFILE, model, sleep: async (ms) => void waited.push(ms) }),
+    attempts: () => calls,
+    waited,
+  };
 }
 
 const GO = { system: "s", messages: [{ role: "user" as const, content: "x" }] };
 
 describe("a 429 from the provider", () => {
-  it("is tried once more, and the run goes on", async () => {
-    const { provider, attempts } = failing(1, () => busy());
+  it("is tried once more, after a wait, and the run goes on", async () => {
+    const { provider, attempts, waited } = failing(1, () => busy());
     const result = await provider.generate(GO);
     expect(result.text).toBe("done");
     expect(attempts()).toBe(2);
+    expect(waited).toHaveLength(1);
+    expect(waited[0]).toBeGreaterThan(0);
   });
 
   it("ends the call when the second attempt is refused too: one retry, not a loop", async () => {
