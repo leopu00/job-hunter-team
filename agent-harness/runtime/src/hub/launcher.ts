@@ -413,14 +413,24 @@ export class Launcher {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new LauncherStateError(`cannot be read (${(error as NodeJS.ErrnoException).code ?? "error"})`);
     }
     if (text !== undefined) {
-      let saved: State;
+      let json: unknown;
       try {
-        saved = StateSchema.parse(JSON.parse(text)) as State;
+        json = JSON.parse(text);
       } catch {
         throw new LauncherStateError("is not a launcher state");
       }
-      // Another session's state is the past: this session starts over.
-      if (saved.session === this.#config.session) state = saved;
+      const session = (json as { session?: unknown } | null)?.session;
+      if (typeof session !== "string") throw new LauncherStateError("is not a launcher state");
+      // Another session's state is the past, whatever shape it has: a state
+      // written by an older launcher must not block a new session, and a new
+      // session is how the operator starts over (T24, VPS).
+      if (session === this.#config.session) {
+        try {
+          state = StateSchema.parse(json) as State;
+        } catch {
+          throw new LauncherStateError("is not a launcher state");
+        }
+      }
     }
     let changed = false;
     const results = new Set(safeList(join(this.#spool, "results")));
