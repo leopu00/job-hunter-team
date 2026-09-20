@@ -18,6 +18,7 @@ import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } f
 import { createSpawnTools } from "../hub/spawn-tools.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
+import { blindReviewTools } from "./blind-review.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
@@ -141,7 +142,10 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     mailbox,
     pause,
     tools: (base) => [
-      ...base.map((tool) =>
+      ...(roleOf(options.agent) === "critico"
+        ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir })
+        : base
+      ).map((tool) =>
         tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool,
       ),
       ...native,

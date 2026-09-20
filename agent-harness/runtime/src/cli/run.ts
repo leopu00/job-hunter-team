@@ -116,7 +116,7 @@ async function main(): Promise<number> {
   const script = values["mock-script"]
     ? await readMockScript(values["mock-script"])
     : product
-      ? productRoleMockScript(values.role)
+      ? productRoleMockScript(values.role, config.userDir, config.profileDir ?? join(config.apiHome, "profile"))
       : DEFAULT_MOCK_SCRIPT;
 
   const provider = await resolveProvider(config, script);
