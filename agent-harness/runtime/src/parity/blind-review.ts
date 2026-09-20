@@ -13,11 +13,16 @@
  * plain text in the middle of what it must judge. Read through this, the
  * deliverables come back inside the same fence `db_query` puts a job
  * description in, with a nonce new to each call.
+ *
+ * Both judge the file a call would really touch, symlinks resolved, as the
+ * permission policy does: a link in the agent's home pointing at the profile
+ * is the profile (SICUREZZA CR-01a, the family of H-1).
  */
 
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { Fence } from "../db/external-content.ts";
+import { realPath, resolveUserPath } from "../tools/paths.ts";
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 
 export interface BlindReviewOptions {
@@ -39,10 +44,11 @@ const inside = (path: string, root: string) => path === root || path.startsWith(
 
 /** The file tools as the CRITICO gets them: no profile, and the document under review fenced. */
 export function blindReviewTools(tools: ToolHandler[], options: BlindReviewOptions): ToolHandler[] {
-  const profile = resolve(options.profileDir);
-  const cv = join(resolve(options.userDir), "cv");
-  const at = (path: string) => (isAbsolute(path) ? resolve(path) : resolve(options.workdir, path));
-  const fenced = new Set(["read_file"]);
+  const profile = realPath(options.profileDir);
+  const cv = join(realPath(options.userDir), "cv");
+  const at = (path: string) => realPath(resolveUserPath(path, options.workdir));
+  // What comes back holding the document's own words: `glob` returns names, not content.
+  const fenced = new Set(["read_file", "grep"]);
   const guarded = new Set(["read_file", "glob", "grep", "write_file", "edit_file"]);
 
   return tools.map((tool) => {
@@ -56,7 +62,9 @@ export function blindReviewTools(tools: ToolHandler[], options: BlindReviewOptio
           return { ok: false, content: `${tool.spec.name} ${given}: ${REFUSAL}` };
         }
         const result = (await tool.execute(args, context)) as ToolExecution;
-        if (!result.ok || target === undefined || !fenced.has(tool.spec.name) || !inside(target, cv)) return result;
+        // A grep is fenced when it can reach the deliverables at all, from inside or from above.
+        const reachesCv = target !== undefined && (inside(target, cv) || inside(cv, target));
+        if (!result.ok || !fenced.has(tool.spec.name) || !reachesCv) return result;
         const fence = new Fence(options.nonce?.());
         return { ...result, content: fence.block(result.content, "DOCUMENT_UNDER_REVIEW") };
       },
