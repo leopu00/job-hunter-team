@@ -11,6 +11,8 @@
  * compares the output and every row it touches.
  */
 
+import { readFileSync } from "node:fs";
+
 import type { Parsed } from "./argv.ts";
 import { flattenExternalValue, EXTERNAL_INLINE_FIELDS } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
@@ -435,3 +437,166 @@ export function updateCompany(db: Database, a: Parsed, actor: string): ScriptRes
     throw error;
   }
 }
+
+/**
+ * `update_application` for the fields the SCRITTORE writes (T25): the CV and
+ * cover-letter paths, the Critic's rounds and the application's own status.
+ *
+ * Not ported, on purpose: the send and its outcome (`--applied`,
+ * `--applied-at`, `--applied-via`, `--response`, `--response-at`,
+ * `--interview-round`), which move `positions` too and belong to the person
+ * and the Capitano (scrittore.md "DB boundaries"). Without them the script's
+ * `marks_applied`/`marks_response` branches cannot arise; what stays is its
+ * UPSERT, its refusal to replace the CV of an application already sent, and
+ * the schema's own trigger, which clears the Critic's verdict when
+ * `written_at` changes — the judgement was on the previous text (O-64).
+ */
+export function updateApplication(db: Database, a: Parsed, actor: string, checkpoint?: string): ScriptResult {
+  const id = a["position_id"] as number;
+  const sets: string[] = [];
+  const params: Value[] = [];
+  const set = (column: string, value: Value) => {
+    sets.push(`${column} = ?`);
+    params.push(value);
+  };
+  // `written_by`: the agent the runtime runs, as `found_by` for the SCOUT (D-5), and only
+  // where the writer's own fields move — a Critic's update never claims a CV it did not write.
+  const writerFieldsChanged = ["written_at", "cv_path", "cl_path", "cv_pdf_path", "cl_pdf_path"].some((k) => pyTruthy(a[k]));
+  if (writerFieldsChanged) set("written_by", actor);
+  for (const column of ["status", "critic_verdict", "critic_notes", "reviewed_by"]) {
+    if (pyTruthy(a[column])) set(column, a[column] as Value);
+  }
+  if (a["critic_score"] !== null && a["critic_score"] !== undefined) {
+    set("critic_score", a["critic_score"] as Value);
+    sets.push("critic_reviewed_at = datetime('now', 'localtime')");
+  }
+  if (a["critic_round"] !== null && a["critic_round"] !== undefined) set("critic_round", a["critic_round"] as Value);
+  if (pyTruthy(a["written_at"])) {
+    if (a["written_at"] === "now") sets.push("written_at = datetime('now', 'localtime')");
+    else set("written_at", a["written_at"] as Value);
+  }
+  for (const column of ["cv_path", "cl_path", "cv_pdf_path", "cl_pdf_path"]) {
+    if (pyTruthy(a[column])) set(column, a[column] as Value);
+  }
+  if (sets.length === 0) return { stdout: "No fields to update.\n", exitCode: 0 };
+
+  // [JHT-CV-REWORK] The CV of an application that went out is what the employer has: a
+  // later render must not replace it in the record. The send state is checked before the
+  // call and bound into the UPDATE, for a send that lands in between.
+  const guardsSentCv = pyTruthy(a["cv_pdf_path"]) || pyTruthy(a["cv_path"]);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (guardsSentCv) {
+      const blocker = sentBlocker(db, id, checkpoint);
+      if (blocker) {
+        db.exec("ROLLBACK");
+        return {
+          stdout: "",
+          stderr: `⚠️  CV UPDATE REJECTED (${blocker}): this application was sent or its send started, so its CV stays the one that went out.\n`,
+          exitCode: 1,
+        };
+      }
+    }
+    let where = "position_id = ?";
+    if (guardsSentCv) {
+      where += " AND COALESCE(applied, 0) != 1";
+      if (hasTable(db, "email_application_attempts")) {
+        where +=
+          " AND NOT EXISTS (SELECT 1 FROM email_application_attempts e WHERE e.position_id = applications.position_id AND e.state IN " +
+          "('send_started', 'send_outcome_unknown', 'receipt_incomplete', 'sent'))";
+      }
+    }
+    const changed = Number(db.prepare(`UPDATE applications SET ${sets.join(", ")} WHERE ${where}`).run(...params, id).changes);
+    if (changed === 0) {
+      const exists = db.prepare("SELECT 1 FROM applications WHERE position_id = ?").get(id) !== undefined;
+      if (guardsSentCv && exists) {
+        db.exec("ROLLBACK");
+        return {
+          stdout: "",
+          stderr: "⚠️  CV UPDATE REJECTED (send_started): the send started while the CV was being recorded, so its CV stays the one that went out.\n",
+          exitCode: 1,
+        };
+      }
+      if (db.prepare("SELECT 1 FROM positions WHERE id = ?").get(id) === undefined) {
+        db.exec("ROLLBACK");
+        return { stdout: `⚠️  position_id=${id} does not exist in positions. Aborting INSERT.\n`, exitCode: 0 };
+      }
+      // The UPSERT of the script: the same fields, plus `written_at` defaulted to now.
+      const columns = ["position_id"];
+      const placeholders = ["?"];
+      const values: Value[] = [id];
+      let at = 0;
+      for (const clause of sets) {
+        const [column, rhs] = clause.split("=").map((part) => part.trim()) as [string, string];
+        columns.push(column);
+        if (rhs === "?") {
+          placeholders.push("?");
+          values.push(params[at++]!);
+        } else {
+          placeholders.push(clause.slice(clause.indexOf("=") + 1).trim());
+        }
+      }
+      if (!columns.includes("written_at")) {
+        columns.push("written_at");
+        placeholders.push("datetime('now', 'localtime')");
+      }
+      db.prepare(`INSERT INTO applications (${columns.join(", ")}) VALUES (${placeholders.join(", ")})`).run(...values);
+      db.exec("COMMIT");
+      return { stdout: `Application for position ${id} CREATED (initial INSERT).\n`, exitCode: 0 };
+    }
+    db.exec("COMMIT");
+    return { stdout: `Application for position ${id} updated (${changed} row)\n`, exitCode: 0 };
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // Already closed.
+    }
+    throw error;
+  }
+}
+
+/**
+ * `application_rework.sent_blocker`: why this application's CV may not be
+ * replaced, or "". The browser checkpoint it reads third is a file of the
+ * TUI's send flow (`$JHT_HOME/…/<id>.json`); the harness sends nothing, and
+ * the file, when a person's box has one, is read the same way: unreadable
+ * counts as started, since it may hold a submit.
+ */
+function sentBlocker(db: Database, positionId: number, checkpoint?: string): string {
+  const row = db.prepare("SELECT applied FROM applications WHERE position_id = ?").get(positionId) as { applied: unknown } | undefined;
+  if (row && (row.applied === 1 || row.applied === true)) return "already_sent";
+  if (hasTable(db, "email_application_attempts")) {
+    const attempt = db
+      .prepare(
+        "SELECT state FROM email_application_attempts WHERE position_id = ? AND state IN " +
+          "('send_started', 'send_outcome_unknown', 'receipt_incomplete', 'sent') ORDER BY id DESC LIMIT 1",
+      )
+      .get(positionId) as { state: string } | undefined;
+    if (attempt) return "send_started";
+  }
+  if (checkpoint !== undefined && submitStarted(checkpoint)) return "submit_started";
+  return "";
+}
+
+/** `_browser_submit_started`: a checkpoint that holds a submit, or that cannot be read at all. */
+function submitStarted(path: string): boolean {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return true;
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return true;
+  const row = data as Record<string, unknown>;
+  return pyTruthy(row["submit_started"]) || pyTruthy(row["receipt"]);
+}
+
+const hasTable = (db: Database, name: string): boolean =>
+  db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;

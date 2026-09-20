@@ -22,6 +22,24 @@ export interface DbRolePolicy {
   update: readonly string[];
   /** What `db_update position` may change; absent when the role has no position update. */
   position?: PositionUpdateRule;
+  /** What `db_update application` may change; absent when the role has no application update. */
+  application?: ApplicationUpdateRule;
+}
+
+/**
+ * The fields and statuses a role's `db_update application` may write. As for
+ * a position, what is allowed is checked before the call and bound into the
+ * UPDATE's WHERE: the send and its outcome are nobody's here.
+ */
+export interface ApplicationUpdateRule {
+  /** Flags it may pass (attribute names: `cv_pdf_path`). */
+  fields: readonly string[];
+  /** The application statuses it may set. */
+  statuses: readonly string[];
+  /** A status it may set only together with these flags: `ready` takes the Critic's verdict. */
+  statusNeeds?: Readonly<Record<string, readonly string[]>>;
+  /** Said when a call is refused: what this role's update is for. */
+  purpose: string;
 }
 
 /**
@@ -110,6 +128,47 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       laterCloseNeedsProof: true,
       purpose: "The ANALISTA moves a position new → checked or excluded, and excludes a later one only on proof it closed (analista.md RULE-06/14).",
     },
+  },
+  // T25, scrittore.md: the user-requested CV, its application row and the final gate.
+  // It never touches scores, companies, highlights, the analysis notes, nor the send
+  // (applied/response), which are the person's and the CAPITANO's ("DB boundaries").
+  scrittore: {
+    query: ["next-for-scrittore", "position", "application", "recent-activity", "check-url"],
+    insert: ["application"],
+    update: ["position", "application"],
+    position: {
+      fields: ["status", "notes"],
+      moves: { writing: ["scored"], ready: ["writing"], excluded: ["scored", "writing"] },
+      onlyWith: { notes: "excluded" },
+      touches: ["scored", "writing"],
+      purpose:
+        "The SCRITTORE claims a position the person asked a CV for (--status writing), excludes it with " +
+        "the reason when the link is dead, and after the Critic's rounds moves it to ready or excluded " +
+        "(application-flow steps 3, 4 and 7).",
+    },
+    application: {
+      fields: [
+        "cv_path", "cv_pdf_path", "cl_path", "cl_pdf_path", "written_at",
+        "critic_verdict", "critic_score", "critic_round", "critic_notes", "reviewed_by", "status",
+      ],
+      statuses: ["draft", "review", "ready"],
+      // The single-writer rule (application-flow, bug #21): `ready` is the verdict's own call.
+      statusNeeds: { ready: ["critic_verdict"] },
+      purpose:
+        "The SCRITTORE owns its application: the CV and cover-letter paths, the Critic's rounds and the " +
+        "final ready. Marking it sent (--applied, --applied-at, --applied-via) or answered (--response) " +
+        "is the person's and the CAPITANO's.",
+    },
+  },
+  // T25, critico.md: a blind review, one per run. It writes NOTHING in the database —
+  // its verdict is a file under the deliverables and one [RES] to the Scrittore, which
+  // persists it (application-flow "single-writer rule", bug #21). `application` is the
+  // state it pulls; `next-for-critico` is how it finds the review it was asked for,
+  // where the TUI had it spawned with the request in hand.
+  critico: {
+    query: ["next-for-critico", "application", "position", "recent-activity"],
+    insert: [],
+    update: [],
   },
   // T21, capitano.md: the CAPITANO watches the pipeline and routes work; it writes no
   // position, score or application (C-10: "the Captain does not write CVs"). Its writes are
