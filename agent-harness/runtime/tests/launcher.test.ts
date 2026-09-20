@@ -185,6 +185,17 @@ describe("how much", () => {
     }
   });
 
+  it("ignores a state of another session, whatever an older launcher wrote in it", () => {
+    const stateFile = join(root, "state", "state.json");
+    mkdirSync(join(root, "state"), { recursive: true });
+    // A leftover from a trial session, in the shape the launcher had before `kind`.
+    writeFileSync(stateFile, JSON.stringify({ session: "prova-t22", spawns: [{ id: "a", agent: "scout-1", role: "scout", state: "queued" }] }));
+    expect(ask(launcher({ session: "s2" }), "scout")).toMatchObject({ ok: true, agent: "scout-1" });
+    // The same file under this session's name is another matter: it is this session's state, and it is unreadable.
+    writeFileSync(stateFile, JSON.stringify({ session: "s3", spawns: [{ id: "a", agent: "scout-1", role: "scout", state: "queued" }] }));
+    expect(ask(launcher({ session: "s3" }), "scout")).toMatchObject({ ok: false, reason: expect.stringContaining("nothing starts or stops") });
+  });
+
   it("starts over with a new session", () => {
     expect(ask(launcher({ sessionUsd: 0.7 }), "scout")).toMatchObject({ ok: true });
     expect(ask(launcher({ sessionUsd: 0.7 }), "scorer")).toMatchObject({ ok: false });

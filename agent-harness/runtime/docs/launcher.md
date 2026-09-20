@@ -69,7 +69,11 @@ The team starts once per session: while a member is up, another
 - The piggy bank: `captainUsd` + the caps of the children running + what the
   ended ones spent, as the executor measured it, must stay within
   `sessionUsd`. A child that ended with no measured spend stays at its cap.
-- A new `session` starts the counts and the piggy bank over.
+- A new `session` starts the counts and the piggy bank over: the launcher
+  ignores a state file left by another session, whatever shape an older
+  version wrote it in. Changing `session` is how the operator starts a run
+  over; the file of the session in progress is never ignored, and if it
+  cannot be read nothing starts (L-1).
 - A role that failed `maxFailures` times in the session is not started again.
 - `team` is the base set and its start order; each entry takes `instances`,
   and optionally `cap_usd` (default: the role's cap; the CAPITANO's is
