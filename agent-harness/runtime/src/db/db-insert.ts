@@ -40,3 +40,22 @@ export function insertHighlight(db: Database, a: Parsed): ScriptResult {
     exitCode: 0,
   };
 }
+
+/**
+ * `insert_application` (T25): the SCRITTORE's row for a position the person
+ * asked a CV for. The script's `INSERT OR REPLACE` is kept — the caller has
+ * already refused an existing row, which is what would be erased — and
+ * `--written-at` is bound as given, `'now'` included, exactly as the script
+ * does (the skill warns about it: application-flow step 5).
+ */
+export function insertApplication(db: Database, a: Parsed): ScriptResult {
+  db.prepare(
+    "INSERT OR REPLACE INTO applications (position_id, cv_path, cl_path, cv_pdf_path, cl_pdf_path, written_by, written_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(
+    a["position_id"] as number, a["cv_path"] as string | null, a["cl_path"] as string | null,
+    a["cv_pdf_path"] as string | null, a["cl_pdf_path"] as string | null,
+    (a["written_by"] as string | null) || null, a["written_at"] as string | null,
+  );
+  return { stdout: `Application inserted for position ${a["position_id"] as number}\n`, exitCode: 0 };
+}

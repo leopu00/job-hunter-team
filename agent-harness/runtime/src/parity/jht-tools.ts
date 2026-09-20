@@ -301,6 +301,8 @@ instructions name for talking and pausing are tools here:
 - \`jht-install\` → not available: the image carries the dependencies
 - \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\` → not here: agents are not tmux sessions. The
   CAPITANO starts, lists and stops them with \`spawn_agent\`, \`list_agents\`, \`stop_agent\`
+- \`pandoc\`, \`wkhtmltopdf\`, \`pdftotext\` → not here either: a CV is delivered as the markdown
+  file, and its PDF and layout gate wait for an image that carries them
 
 The Python skills your instructions run are tools too, named after the script:
 \`db_query\`, \`db_insert\`, \`db_update\`, \`scout_dedup\` take the words that follow the
@@ -343,6 +345,12 @@ const REPLACED: Record<string, string> = {
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
   "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
   "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
+  // T25: the CV's PDF. The image carries no pandoc, wkhtmltopdf or poppler, so S-05's
+  // render and its layout gate cannot run; the deliverable is the markdown.
+  pandoc:
+    "is not available here: the image has no pandoc, wkhtmltopdf or poppler. Deliver the CV as the markdown file in the deliverables folder, record its path with `db_update application --cv-path`, and say in your report that no PDF was rendered.",
+  wkhtmltopdf: "is not available here: see pandoc. The CV stays markdown in the API harness.",
+  pdftotext: "is not available here: the image has no poppler, so there is no PDF to measure.",
   tmux: "is not available here: agents are not tmux sessions. Write to one with `send_message`; the CAPITANO lists, starts and stops them with `list_agents`, `spawn_agent`, `stop_agent`.",
 };
 

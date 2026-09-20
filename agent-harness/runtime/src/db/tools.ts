@@ -21,13 +21,14 @@ import { z } from "zod";
 
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
-import { insertCompany, insertHighlight } from "./db-insert.ts";
+import { insertApplication, insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
-import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateCompany, updatePosition } from "./db-update.ts";
+import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateApplication, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
+import { AGENT_NAME } from "../parity/jht-tools.ts";
 import { dbPolicyFor } from "./role-policy.ts";
 import { checkMinimumViableProfile } from "../parity/skills/profile-gate.ts";
 import type { Database } from "./jobs-db.ts";
@@ -48,6 +49,12 @@ export interface DbToolsOptions {
    * (profile_gate). Absent: no profile, so no score is written.
    */
   profilePath?: string;
+  /**
+   * Where the browser send flow leaves its checkpoint for a position
+   * (`$JHT_HOME/.cache/apply-flow/<id>.json`), read before a CV is replaced.
+   * Absent: no such flow on this box, and the send state is the row's.
+   */
+  checkpoint?: (positionId: number) => string | undefined;
   /** The candidate the category registry is read for; `local`, as `_db.local_user_id()` without JHT_SUPABASE_USER_ID. */
   userId?: string;
   /** The person's enrichment policy, which the care-mode queues obey. */
@@ -139,6 +146,27 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       return insertCompany(options.db(), a);
     }
     if (entity === "highlight") return insertHighlight(options.db(), parseArgv(HIGHLIGHT_INSERT, argv.slice(1)));
+    if (entity === "application") {
+      const a = parseArgv(APPLICATION_INSERT, argv.slice(1));
+      // D-5: the CV's author is the agent the runtime runs, never an argument.
+      a["written_by"] = options.agent;
+      const id = a["position_id"] as number;
+      // The script's INSERT OR REPLACE would wipe a verdict, the send and created_at off a
+      // live row. The gate before it (`db_query application`) is what tells a new application
+      // from an existing one; here it is the write's own condition.
+      if (options.db().prepare("SELECT 1 FROM applications WHERE position_id = ?").get(id) !== undefined) {
+        return {
+          stdout: "",
+          stderr:
+            `⚠\ufe0f  APPLICATION EXISTS: position ${id} already has one, and inserting again would erase its ` +
+            "verdict, its paths and its send. Check it with `db_query application " +
+            `${id}` +
+            "` and change it with `db_update application`.\n",
+          exitCode: 1,
+        };
+      }
+      return insertApplication(options.db(), a);
+    }
     const a = parseArgv(POSITION_INSERT, argv.slice(1));
     for (const field of EXTERNAL_INLINE_FIELDS) {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
@@ -306,6 +334,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       if (a["analyzed_by"] !== null) a["analyzed_by"] = options.agent;
       return updateCompany(options.db(), a, options.agent);
     }
+    if (entity === "application") return updateApplicationGuarded(argv.slice(1));
     const rule = policy.position!;
     const a = parseArgv(POSITION_UPDATE, argv.slice(1));
     const id = a["id"] as number;
@@ -378,6 +407,39 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     return updatePosition(options.db(), a, options.agent, options.userId ?? "local", { where: where.join(" "), params });
   };
 
+  /**
+   * `db_update application` under the role's rule: the flags it may pass, the
+   * statuses it may set, and what a status needs beside it — the single-writer
+   * rule, where `ready` is the Critic's verdict and not the Writer's opinion.
+   */
+  const updateApplicationGuarded = (argv: string[]): ScriptResult => {
+    const rule = policy.application!;
+    const a = parseArgv(APPLICATION_UPDATE, argv);
+    const deny = (why: string): ScriptResult => ({ stdout: "", stderr: `${why}\n`, exitCode: 1 });
+    const given = APPLICATION_UPDATE.options!.map((o) => destOf(o.flag)).filter((k) => a[k] !== null);
+    const other = given.filter((k) => !rule.fields.includes(k));
+    if (other.length > 0) return deny(`${other.map((k) => `--${k.replaceAll("_", "-")}`).join(", ")}: not available to this agent. ${rule.purpose}`);
+    const status = a["status"] as string | null;
+    if (pyTruthy(status) && !rule.statuses.includes(status!)) return deny(`--status ${status}: not available to this agent. ${rule.purpose}`);
+    for (const [target, needs] of Object.entries(rule.statusNeeds ?? {})) {
+      if (status === target) {
+        const missing = needs.filter((k) => a[k] === null);
+        if (missing.length > 0) {
+          return deny(
+            `--status ${target} goes only with ${missing.map((k) => `--${k.replaceAll("_", "-")}`).join(", ")} for this agent: the verdict is what promotes an application, not the writing. ${rule.purpose}`,
+          );
+        }
+      }
+    }
+    // `reviewed_by` names the Critic, not the caller, so it stays an argument — but a name,
+    // as `send_message` takes one, never free text written into a row other agents read.
+    const reviewer = a["reviewed_by"] as string | null;
+    if (pyTruthy(reviewer) && !AGENT_NAME.safeParse(reviewer).success) {
+      return deny(`--reviewed-by ${pyRepr(reviewer!)}: not an agent name (such as critico-1 or CRITICO-S2).`);
+    }
+    return updateApplication(options.db(), a, options.agent, options.checkpoint?.(a["position_id"] as number));
+  };
+
   const scoutDedup = (argv: string[]): ScriptResult => {
     const sub = argv[0];
     if (sub === undefined) return argparseError("scout_dedup.py", "the following arguments are required: cmd");
@@ -418,6 +480,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
           ...(options.userId ? { userId: options.userId } : {}),
           policy: options.policy,
         }),
+      // `application` answers the SCRITTORE's anti-rewrite gate with its exit code: 1 means
+      // the Critic's verdict is already final, which is an answer, as scout_dedup's 10 is.
+      [0, 1],
     ),
     tool(
       "db_insert",
@@ -568,7 +633,43 @@ const POSITION_UPDATE: CommandSpec = {
   ],
 };
 
-const INSERT_ENTITIES = new Set(["position", "score", "company", "highlight"]);
+const INSERT_ENTITIES = new Set(["position", "score", "company", "highlight", "application"]);
+
+/** `db_insert.py application` (T25), the flags the SCRITTORE passes. */
+const APPLICATION_INSERT: CommandSpec = {
+  prog: "db_insert.py application",
+  mainProg: "db_insert.py",
+  options: [
+    { flag: "--position-id", type: "int", required: true },
+    { flag: "--cv-path" },
+    { flag: "--cl-path" },
+    { flag: "--cv-pdf-path" },
+    { flag: "--cl-pdf-path" },
+    { flag: "--written-by" },
+    { flag: "--written-at" },
+  ],
+};
+
+/** `db_update.py application` (T25). The send and the outcome are not here: nobody in the harness marks a CV sent. */
+const APPLICATION_UPDATE: CommandSpec = {
+  prog: "db_update.py application",
+  mainProg: "db_update.py",
+  positionals: [{ name: "position_id", type: "int" }],
+  options: [
+    { flag: "--status", choices: ["draft", "review", "ready", "approved", "applied", "response"] },
+    { flag: "--critic-verdict", choices: ["PASS", "NEEDS_WORK", "REJECT"] },
+    { flag: "--critic-score", type: "float" },
+    { flag: "--critic-notes" },
+    { flag: "--critic-round", type: "int" },
+    { flag: "--reviewed-by" },
+    { flag: "--written-by" },
+    { flag: "--written-at" },
+    { flag: "--cv-path" },
+    { flag: "--cl-path" },
+    { flag: "--cv-pdf-path" },
+    { flag: "--cl-pdf-path" },
+  ],
+};
 
 /** `db_insert.py company`'s arguments. */
 const COMPANY_INSERT: CommandSpec = {

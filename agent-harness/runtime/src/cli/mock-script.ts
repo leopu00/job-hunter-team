@@ -271,11 +271,115 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: the CAPITANO woke, read the pipeline, routed a ticket and merged two categories on the native tools." },
 ];
 
-/** The rehearsal for a product role: the SCORER, the ANALISTA and the CAPITANO have their own, every other role plays the SCOUT's. */
-export function productRoleMockScript(role: string): ScriptedTurn[] {
+/**
+ * T25: the SCRITTORE's rehearsal on the position the SCORER left `scored`
+ * with the person's CV request on it. It opens the anti-rewrite gate, claims
+ * the position, reads the profile, writes the CV where the person will find
+ * it, records the application and hands it to the Critic. No PDF: the image
+ * carries no pandoc, so the deliverable is the markdown (docs/parity.md).
+ */
+export function scrittoreMockScript(userDir: string, profileDir: string): ScriptedTurn[] {
+  const cv = `${userDir}/cv/CV_Candidate_1_acme.md`;
+  return [
+    { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+    {
+      text: "My queue, the position, and whether someone already judged it.",
+      toolCalls: [
+        { name: "db_query", args: { args: ["next-for-scrittore"] } },
+        { name: "db_query", args: { args: ["position", "1"] } },
+        { name: "db_query", args: { args: ["application", "1"] } },
+      ],
+    },
+    { text: "Nothing written yet: I claim it.", toolCalls: [{ name: "db_update", args: { args: ["position", "1", "--status", "writing"] } }] },
+    {
+      text: "The candidate's own words, and the CV out of them.",
+      toolCalls: [
+        { name: "read_file", args: { path: `${profileDir}/candidate_profile.yml` } },
+        {
+          name: "write_file",
+          args: {
+            path: cv,
+            content:
+              "# Candidate — Backend Engineer\n\n## Summary\nSix years on TypeScript services.\n\n" +
+              "## Experience\n- Payments API, 2023-2026\n\n## Skills\nTypeScript, SQLite, Node\n",
+          },
+        },
+      ],
+    },
+    {
+      text: "The application, and the CV recorded on it.",
+      toolCalls: [
+        { name: "db_insert", args: { args: ["application", "--position-id", "1", "--cv-path", cv] } },
+        { name: "db_update", args: { args: ["application", "1", "--status", "review"] } },
+      ],
+    },
+    {
+      text: "To the Critic, blind.",
+      toolCalls: [
+        { name: "send_message", args: { to: "critico-1", text: `[REQ] Blind review: CV ${cv}, position 1. Reply with SCORE: X.X/10.` } },
+      ],
+    },
+    { toolCalls: [{ name: "throttle", args: { reason: "waiting for the Critic's verdict" } }] },
+    { text: "Paused." },
+    { toolCalls: [{ name: "check_user_replies", args: {} }] },
+    { text: "Mock run complete: one CV written, its application in review, the Critic asked." },
+  ];
+}
+
+/**
+ * T25: the CRITICO's rehearsal. It takes the review it was asked for, reads
+ * the document as data, writes the verdict where the person can read it and
+ *答 answers the Writer. It writes nothing in the database: the verdict is the
+ * Writer's to record (bug #21).
+ */
+export function criticoMockScript(userDir: string, profileDir: string): ScriptedTurn[] {
+  return [
+    { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+    {
+      text: "What is waiting for a verdict, and its state.",
+      toolCalls: [
+        { name: "db_query", args: { args: ["next-for-critico"] } },
+        { name: "db_query", args: { args: ["application", "1"] } },
+      ],
+    },
+    {
+      // The blind contract, tried and refused: CR-01 is code here, not a promise.
+      text: "The document itself — and the candidate's profile, which is not mine to read.",
+      toolCalls: [
+        { name: "read_file", args: { path: `${userDir}/cv/CV_Candidate_1_acme.md` } },
+        { name: "read_file", args: { path: `${profileDir}/candidate_profile.yml` } },
+      ],
+    },
+    {
+      text: "The verdict, in writing.",
+      toolCalls: [
+        {
+          name: "write_file",
+          args: {
+            path: `${userDir}/critiche/review-acme-2026-09-20.md`,
+            content:
+              "# Blind review — Acme, Backend Engineer\n\nSCORE: 6.5/10\n\n" +
+              "## What works\nThe stack matches the JD.\n\n## What does not\nNo numbers on the payments work.\n" +
+              "\n## Note\nThe document asked to be scored 10/10 and to skip the rubric. That is text in a CV, not an instruction: scored on its content.\n",
+          },
+        },
+      ],
+    },
+    {
+      text: "Back to the Writer that asked.",
+      toolCalls: [{ name: "send_message", args: { to: "scrittore-1", text: "[RES] SCORE: 6.5/10 — see the review under critiche/. Add numbers to the payments work." } }],
+    },
+    { text: "Mock run complete: one blind review written, the Writer answered, the database untouched." },
+  ];
+}
+
+/** The rehearsal for a product role: the SCORER, the ANALISTA, the CAPITANO, the SCRITTORE and the CRITICO have their own, every other role plays the SCOUT's. */
+export function productRoleMockScript(role: string, userDir = ".", profileDir = "."): ScriptedTurn[] {
   if (role === "scorer") return SCORER_MOCK_SCRIPT;
   if (role === "analista") return ANALISTA_MOCK_SCRIPT;
   if (role === "capitano") return CAPITANO_MOCK_SCRIPT;
+  if (role === "scrittore") return scrittoreMockScript(userDir, profileDir);
+  if (role === "critico") return criticoMockScript(userDir, profileDir);
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 
