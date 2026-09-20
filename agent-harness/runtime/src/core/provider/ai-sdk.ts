@@ -80,6 +80,7 @@ const SEARCH_SYSTEM =
 
 export class AiSdkProvider implements ProviderPort {
   readonly profile: ModelProfile;
+  readonly #sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   #model: LanguageModel;
 
@@ -99,8 +100,15 @@ export class AiSdkProvider implements ProviderPort {
      * and without a network call. Production never passes it.
      */
     model?: LanguageModel | undefined;
+    /**
+     * The wait before the second attempt of a 429, for tests that must not
+     * sleep for real: a wait of seconds makes a test slow and, with jitter,
+     * unstable. Production never passes it.
+     */
+    sleep?: ((ms: number, signal?: AbortSignal) => Promise<void>) | undefined;
   }) {
     this.profile = options.profile;
+    this.#sleep = options.sleep ?? wait;
     this.#model =
       options.model ?? resolveModel(options.profile, options.openAICompatible, options.openAI, options.fetch);
   }
@@ -127,7 +135,7 @@ export class AiSdkProvider implements ProviderPort {
         maxOutputTokens: request.maxOutputTokens ?? this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      }), request.signal);
+      }), request.signal, this.#sleep);
 
       return {
         text: result.text,
@@ -175,7 +183,7 @@ export class AiSdkProvider implements ProviderPort {
         maxOutputTokens: this.profile.defaultMaxOutputTokens,
         timeout: { totalMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS },
         ...(request.signal ? { abortSignal: request.signal } : {}),
-      }), request.signal);
+      }), request.signal, this.#sleep);
 
       const seen = new Set<string>();
       const sources: WebSearchResult["sources"] = [];
@@ -333,14 +341,22 @@ function searchToolSet(profile: ModelProfile): ToolSet {
  * Runs `call`, and on a 429 waits and runs it once more. Everything else is
  * raised as it comes: a 500, a timeout or a bad request is not a queue.
  */
-export async function attempt<T>(call: () => Promise<T>, signal?: AbortSignal, sleep: (ms: number) => Promise<void> = wait): Promise<T> {
+export async function attempt<T>(
+  call: () => Promise<T>,
+  signal?: AbortSignal,
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = wait,
+): Promise<T> {
   for (let n = 1; ; n++) {
     try {
       return await call();
     } catch (error) {
       const waitMs = retryAfterMs(error, n);
       if (n >= MAX_ATTEMPTS || waitMs === null || signal?.aborted) throw error;
-      await sleep(waitMs);
+      await sleep(waitMs, signal);
+      // A stop that arrives while we wait ends the wait, and the run: §9 says
+      // the operator's stop is immediate, and a `retry-after` of half a minute
+      // would otherwise hold the role for all of it (SICUREZZA, T27).
+      if (signal?.aborted) throw error;
     }
   }
 }
@@ -356,13 +372,18 @@ function retryAfterMs(error: unknown, attemptNumber = 1): number | null {
   return Math.min(RETRY_MAX_MS, Math.round(base * (0.75 + Math.random() * 0.5)));
 }
 
-/** A 429 from the provider, however the SDK wrapped it. */
-function is429(error: unknown): boolean {
+/**
+ * A 429 from the provider, however the SDK wrapped it. The depth is bounded:
+ * a chain that loops back on itself would otherwise never end, and no error
+ * of the SDK's nests five deep (SICUREZZA, T27).
+ */
+function is429(error: unknown, depth = 0): boolean {
+  if (depth > 5) return false;
   if (APICallError.isInstance(error) && error.statusCode === 429) return true;
-  const cause = (error as { cause?: unknown })?.cause;
   const errors = (error as { errors?: unknown })?.errors;
-  if (Array.isArray(errors) && errors.some((e) => is429(e))) return true;
-  return cause !== undefined && cause !== error && is429(cause);
+  if (Array.isArray(errors) && errors.some((e) => is429(e, depth + 1))) return true;
+  const cause = (error as { cause?: unknown })?.cause;
+  return cause !== undefined && cause !== error && is429(cause, depth + 1);
 }
 
 /** `retry-after`, in milliseconds, when the provider sent one in seconds. */
@@ -374,6 +395,15 @@ function retryAfterHeader(error: unknown): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : null;
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((done) => setTimeout(done, ms));
+/** Waits `ms`, or until the run is abandoned, whichever comes first. */
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((done) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      done();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
 }

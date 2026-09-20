@@ -487,9 +487,14 @@ function busy(headers?: Record<string, string>) {
   });
 }
 
-/** A provider whose first `calls` attempts fail with `error`. */
+/**
+ * A provider whose first `times` attempts fail with `error`. It does not
+ * sleep: the wait's own size is measured below, on `attempt`, and a test
+ * that really waited seconds would be slow and, with jitter, unstable.
+ */
 function failing(times: number, error: () => unknown) {
   let calls = 0;
+  const waited: number[] = [];
   const model = new MockLanguageModelV4({
     doGenerate: async () => {
       calls += 1;
@@ -497,17 +502,23 @@ function failing(times: number, error: () => unknown) {
       return { content: [{ type: "text" as const, text: "done" }], finishReason: { unified: "stop" as const, raw: "stop" }, usage: USAGE, warnings: [] };
     },
   });
-  return { provider: new AiSdkProvider({ profile: PROFILE, model }), attempts: () => calls };
+  return {
+    provider: new AiSdkProvider({ profile: PROFILE, model, sleep: async (ms) => void waited.push(ms) }),
+    attempts: () => calls,
+    waited,
+  };
 }
 
 const GO = { system: "s", messages: [{ role: "user" as const, content: "x" }] };
 
 describe("a 429 from the provider", () => {
-  it("is tried once more, and the run goes on", async () => {
-    const { provider, attempts } = failing(1, () => busy());
+  it("is tried once more, after a wait, and the run goes on", async () => {
+    const { provider, attempts, waited } = failing(1, () => busy());
     const result = await provider.generate(GO);
     expect(result.text).toBe("done");
     expect(attempts()).toBe(2);
+    expect(waited).toHaveLength(1);
+    expect(waited[0]).toBeGreaterThan(0);
   });
 
   it("ends the call when the second attempt is refused too: one retry, not a loop", async () => {
@@ -564,6 +575,42 @@ describe("the wait before the second attempt", () => {
     expect((await run(busy({ "retry-after": "600" })))[0]).toBe(30_000);
     // A header that is not a number is no instruction: the usual wait.
     expect((await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]).toBeLessThanOrEqual(2_500);
+  });
+
+  it("ends the wait when the run is stopped during it, instead of sleeping on", async () => {
+    // A retry-after of ten minutes, capped at thirty seconds: a stop must not wait for it.
+    const stop = new AbortController();
+    let calls = 0;
+    const started = Date.now();
+    const running = attempt(
+      async () => {
+        calls += 1;
+        throw busy({ "retry-after": "600" });
+      },
+      stop.signal,
+    );
+    setTimeout(() => stop.abort(), 20);
+    await expect(running).rejects.toMatchObject({ statusCode: 429 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // And it did not slip in another attempt on the way out.
+    expect(calls).toBe(1);
+  });
+
+  it("does not follow an error chain that loops back on itself", async () => {
+    const a = new Error("a") as Error & { cause?: unknown };
+    const b = new Error("b") as Error & { cause?: unknown };
+    a.cause = b;
+    b.cause = a;
+    // It answers instead of walking the ring for ever; neither of these is a 429.
+    await expect(
+      attempt(
+        async () => {
+          throw a;
+        },
+        undefined,
+        async () => {},
+      ),
+    ).rejects.toBe(a);
   });
 
   it("does not wait when the run has already been abandoned", async () => {
