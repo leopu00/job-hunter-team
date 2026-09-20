@@ -1764,6 +1764,11 @@
       "path": "agent-harness/runtime/docs/parity.md",
       "description": "Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md",
+      "description": "Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log.",
+      "last_review": null
     }
   ]
 }

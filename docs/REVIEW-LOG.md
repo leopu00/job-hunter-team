@@ -146,7 +146,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
 | [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-14 | ✅ |
-| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-14 | ✅ |
+| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-20 | ✅ |
 | [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-09-14 | ✅ |
 
 
@@ -391,6 +391,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-3-registrazione-process-health.md) | Un daemon gestito da pid1 fuori dal registro di process_health.py muore invisibile a ogni canary: la checklist del precedente throttle-engine, file per file | — | 2026-09-01 | ✅ |
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md) | Diario scritto con >> invece di tee -a: l'unico del container che nessuno ruota e che docker logs non vede; il mkdir mancante invece non e' un difetto sul percorso reale | — | 2026-09-01 | ✅ |
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione | — | 2026-09-01 | ✅ |
+| [docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md](./internal/ops/2026-09-13-spawn-observability-live-test-plan.md) | Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log. | — | 2026-09-14 | ✅ |
 
 
 ## 🔒 docs/security
