@@ -1,0 +1,30 @@
+{
+  "name": "@jht/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "role": "node --experimental-strip-types --env-file-if-exists=.env src/cli/run.ts",
+    "monitor": "node --experimental-strip-types --env-file-if-exists=.env src/cli/monitor.ts",
+    "hub": "node --experimental-strip-types src/cli/hub.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4",
+    "@ai-sdk/openai": "^4",
+    "@ai-sdk/openai-compatible": "^3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ai": "^7",
+    "yaml": "2.9.0",
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.6",
+    "vitest": "^2"
+  }
+}

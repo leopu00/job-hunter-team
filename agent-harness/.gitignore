@@ -1,0 +1,14 @@
+# Secrets of the API harness. The provider key lives in a 0600 file outside
+# git; nothing matching these patterns is ever committed from agent-harness/.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*-key.txt
+secrets/
+
+# Per-run output: traces can quote tool results, so they stay local.
+.jht-api/
+runtime/node_modules/
+runtime/dist/

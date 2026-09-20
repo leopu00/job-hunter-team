@@ -1,0 +1,8 @@
+[project]
+name = "agent-harness"
+version = "0.1.0"
+description = "Agent loop written by hand — an exercise, not production code"
+requires-python = ">=3.14"
+dependencies = [
+    "openai>=2.15.0",
+]
