@@ -30,6 +30,7 @@ Eseguire con: pytest tests/test_scout_coord_db_path.py -v
 import importlib.util
 import json
 import os
+import re
 import sqlite3
 import stat
 import subprocess
@@ -283,6 +284,45 @@ def _extract_propagation(src):
     return src[start:end]
 
 
+# I client tmux che il ritaglio puo' usare, e che i test qui sotto sostituiscono.
+# `send_optional_env` non parla piu' con `tmux` nudo: passa da `jht_spawn_tmux`
+# (spawn-lib.sh), che mette un tetto di tempo e chiude il fd del lock. Fuori dal
+# ritaglio quella funzione non esiste, e il 2026-09-21 il test e' morto in
+# "jht_spawn_tmux: command not found", exit 127 — un rosso su master che non
+# diceva niente del comportamento sorvegliato.
+#
+# Sostituirli TUTTI e' l'unica strada: `jht_spawn_tmux` chiama `jht_timeout`,
+# che esegue `timeout 5 tmux ...` come comando ESTERNO, e un comando esterno non
+# vede una funzione di shell. Sorgere spawn-lib.sh qui dentro non
+# sostituirebbe niente: parlerebbe con il tmux vero della macchina.
+TMUX_CLIENTS = ('tmux', 'jht_spawn_tmux')
+
+
+def _stubs(calls):
+    """Ogni client tmux noto, ridotto a una riga nel file delle chiamate."""
+    return '\n'.join(
+        "%s() { printf '%%s\\n' \"$*\" >> %s; }" % (name, calls) for name in TMUX_CLIENTS
+    )
+
+
+def test_il_ritaglio_parla_solo_con_i_client_che_i_test_sostituiscono():
+    """Il guasto del 2026-09-21 in forma leggibile.
+
+    Se domani la propagazione passa a un terzo client, questo test lo dice —
+    invece di lasciare che il ritaglio muoia con "command not found" e un
+    numero 127 che non nomina niente.
+    """
+    ritaglio = _extract_propagation(_start_agent_src())
+    chiamate = re.findall(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s+send-keys\b', ritaglio, re.M)
+    assert chiamate, "il ritaglio non manda piu' nessun send-keys: il test non sorveglia piu' niente"
+    fuori = sorted(set(chiamate) - set(TMUX_CLIENTS))
+    assert not fuori, (
+        f"send_optional_env parla con {fuori}, che i test non sostituiscono: "
+        f"aggiungilo a TMUX_CLIENTS (e sappi che una funzione di shell non "
+        f"copre un client eseguito da `timeout`, cioe' da un processo esterno)."
+    )
+
+
 @pytest.mark.skipif(sys.platform == 'win32', reason='sandbox POSIX')
 @pytest.mark.parametrize('flavor,expected', [
     ('bash', "export JHT_SCOUT_COORD_DB='/shared/coord.db'"),
@@ -295,7 +335,7 @@ def test_optional_env_reaches_the_agent(tmp_path, flavor, expected):
     script = f"""
 set -euo pipefail
 SESSION=SCOUT-1
-tmux() {{ printf '%s\\n' "$*" >> {calls}; }}
+{_stubs(calls)}
 {_extract_propagation(_start_agent_src())}
 send_optional_env {flavor}
 """
@@ -313,7 +353,7 @@ def test_an_unset_optional_env_is_not_exported_empty(tmp_path):
     script = f"""
 set -euo pipefail
 SESSION=SCOUT-1
-tmux() {{ printf '%s\\n' "$*" >> {calls}; }}
+{_stubs(calls)}
 {_extract_propagation(_start_agent_src())}
 send_optional_env bash
 echo DONE
