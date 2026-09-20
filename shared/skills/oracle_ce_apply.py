@@ -39,9 +39,14 @@ except ImportError:  # pragma: no cover - package import
     from shared.skills import cookie_consent  # type: ignore[no-redef]
 
 try:
-    from apply_flow import BlockedHuman, FlowDeferred, _safe_label
+    from apply_flow import BlockedHuman, FlowDeferred, _fill_secret, _safe_label
 except ImportError:  # pragma: no cover - package import
-    from shared.skills.apply_flow import BlockedHuman, FlowDeferred, _safe_label  # type: ignore[no-redef]
+    from shared.skills.apply_flow import (  # type: ignore[no-redef]
+        BlockedHuman,
+        FlowDeferred,
+        _fill_secret,
+        _safe_label,
+    )
 
 try:
     from apply_generic import GenericRecipe
@@ -140,7 +145,9 @@ class OracleCERecipe(GenericRecipe):
         field = cls._visible(page, CODE_FIELD)
         if field is None:
             raise BlockedHuman("oracle_ce_code_field_missing", "The code screen has no field to type the code in", "submit")
-        field.fill(code)
+        # Marked as a secret: a stop with the PIN still in the box takes a
+        # screenshot, and an unmarked field is one nothing hides.
+        _fill_secret(field, code)
 
     @classmethod
     def clear_security_code(cls, page) -> None:
