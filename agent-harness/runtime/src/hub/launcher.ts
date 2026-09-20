@@ -378,11 +378,14 @@ export class Launcher {
     // The CAPITANO's cap is reserved from the first moment of the session and
     // counted once: its own order spends that reserve, it does not add to it,
     // so the money left does not jump when the team reaches the CAPITANO.
+    // Should it ever end having spent more than the reserve (its run's cap
+    // and the key proxy's are what stop it), the measured spend is what
+    // counts: a fixed reserve must not hide real money (SICUREZZA, T24).
+    const charge = (s: Spawn) => (s.state === "queued" || s.state === "running" ? s.capUsd : (s.spentUsd ?? s.capUsd));
+    const captain = state.spawns.filter((s) => s.role === "capitano").reduce((sum, s) => sum + charge(s), 0);
     return (
-      this.#config.captainUsd +
-      state.spawns
-        .filter((s) => s.role !== "capitano")
-        .reduce((sum, s) => sum + (s.state === "queued" || s.state === "running" ? s.capUsd : (s.spentUsd ?? s.capUsd)), 0)
+      Math.max(this.#config.captainUsd, captain) +
+      state.spawns.filter((s) => s.role !== "capitano").reduce((sum, s) => sum + charge(s), 0)
     );
   }
 

@@ -79,7 +79,9 @@ The team starts once per session: while a member is up, another
   to it, so the CAPITANO can still spawn an extra. The answer says plainly
   when no room is left for one, by money or by instances.
 - The CAPITANO's cap is reserved from the start of the session and counted
-  once: its own team order spends that reserve instead of adding to it.
+  once: its own team order spends that reserve instead of adding to it. If it
+  ends having spent more than the reserve, the measured spend is what counts:
+  a fixed reserve does not hide real money.
 - With the `STOP` file present (`JHT_LAUNCHER_STOP`, read-only in the hub),
   nothing starts.
 

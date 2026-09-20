@@ -300,6 +300,20 @@ describe("the base set (T24 run-team)", () => {
     expect(withTeam({ sessionUsd: 10, session: "s9" }).startTeam("host").note).toContain("No room left for an extra spawn");
   });
 
+  it("counts the CAPITANO's own spend when it passes the reserve", () => {
+    // Its reserve is 0.3 and the four other members hold 1.6.
+    const ended = (spentUsd: number, session: string) => {
+      const l = withTeam({ sessionUsd: 10, session });
+      const captain = l.startTeam("host").started.at(-1);
+      if (!captain?.ok) throw new Error("no captain");
+      report(captain.spawn_id, "done", { exit_code: 0, spent_usd: spentUsd });
+      return listed(l, "host").left_usd;
+    };
+    // Under the reserve, the reserve stands; over it, the money really spent is what counts.
+    expect(ended(0.1, "under")).toBeCloseTo(10 - 1.6 - 0.3, 6);
+    expect(ended(0.5, "over")).toBeCloseTo(10 - 1.6 - 0.5, 6);
+  });
+
   it("starts the team once per session, and again only when it is down", () => {
     const l = withTeam();
     const first = l.startTeam("host");
