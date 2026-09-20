@@ -215,6 +215,7 @@ export class Launcher {
     }
 
     const started: SpawnAnswer[] = [];
+    let seq = 0;
     for (const member of c.team) {
       for (let i = 0; i < member.instances; i++) {
         const answer = this.#start(state, "team", by, {
@@ -223,7 +224,8 @@ export class Launcher {
           model: member.model ?? c.models[0] ?? "",
           task: member.task ?? "Start your cycle.",
           ...(member.delay_s === undefined ? {} : { delay_s: member.delay_s }),
-        });
+        }, seq);
+        seq += 1;
         started.push(answer);
       }
     }
@@ -255,6 +257,8 @@ export class Launcher {
     kind: SpawnKind,
     by: string,
     request: { role: string; instance?: number | undefined; cap_usd: number; model: string; task: string; delay_s?: number | undefined },
+    /** A member's place in the base set. The executor starts by it, since two orders written in the same millisecond have no order at all. */
+    seq?: number,
   ): SpawnAnswer {
     const c = this.#config;
     const refuse = (reason: string): SpawnAnswer => ({ ok: false, reason });
@@ -328,6 +332,7 @@ export class Launcher {
         model: spawn.model,
         cap_usd: spawn.capUsd,
         max_minutes: c.maxMinutes,
+        ...(seq === undefined ? {} : { seq }),
         ...(request.delay_s === undefined ? {} : { delay_s: request.delay_s }),
         task: request.task,
       }),
