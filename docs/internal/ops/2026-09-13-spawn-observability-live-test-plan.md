@@ -121,11 +121,35 @@ processo holder resta vivo dopo `wait`.
 
 ## 3. La sorgente attraversa i chiamanti reali
 
-**Setup e causa.** Il punto 1 ha già esercitato `cli-team-start`. Per il watchdog,
-uccidere soltanto il worker sacrificabile senza ritirarlo dal roster: il watchdog
-deve ricrearlo. Questo è l'unico restart intenzionale del piano.
+**Setup e causa.** Il punto 1 ha già esercitato `cli-team-start`. Prima del kill,
+consegnare al worker sonda un messaggio tecnico privo di dati utente: è attività
+reale ricevuta e registrata tramite il trasporto normale, quindi soddisfa il gate
+dei 90 minuti senza inventare righe nel DB. Il worker è sacrificabile e il testo
+gli ordina di non iniziare lavoro. Solo dopo la consegna verificata lo si ferma
+senza `retire`, così il watchdog deve ricrearlo. Fare il test durante la finestra
+di lavoro, con team non halted/standby e tetto globale dei respawn disponibile.
 
 ```sh
+test_target="$(printf '%s' "$TEST_SESSION" | tr '[:upper:]' '[:lower:]')"
+docker exec "$JHT_CONTAINER" /app/agents/_skills/tmux-send/jht-tmux-send \
+  "$TEST_SESSION" \
+  "[@observability-probe -> @${test_target}] [INFO] Live observability probe: do not start work; acknowledge once and wait."
+
+# Il criterio usato dal roster deve vedere proprio la consegna appena fatta.
+docker exec -i -e TEST_SESSION="$TEST_SESSION" "$JHT_CONTAINER" python3 - <<'PY'
+import os
+import sys
+from datetime import datetime, timezone
+
+sys.path.insert(0, "/app")
+from shared.skills.team_roster import last_activity
+
+activity = last_activity(os.environ["TEST_SESSION"])
+assert activity is not None
+assert (datetime.now(timezone.utc) - activity).total_seconds() < 60
+print("PASS: probe worker has recent real message activity")
+PY
+
 before="$(docker exec "$JHT_CONTAINER" sh -c \
   "grep -c '\"session\":\"$TEST_SESSION\".*\"source\":\"agent-watchdog\"' /jht_home/logs/spawn-attempts.jsonl 2>/dev/null || true")"
 docker exec "$JHT_CONTAINER" tmux kill-session -t "=$TEST_SESSION"
@@ -140,36 +164,78 @@ while [ "$i" -lt 120 ]; do
 done
 test "$i" -lt 120
 
-docker exec "$JHT_CONTAINER" tmux show-environment -t '=CAPITANO' JHT_AGENT_NAME \
-  | grep -qx 'JHT_AGENT_NAME=CAPITANO'
-docker exec "$JHT_CONTAINER" sh -c \
-  "grep '\"source\":\"pid1' /jht_home/logs/spawn-attempts.jsonl | tail -1 >/dev/null"
+docker exec "$JHT_CONTAINER" python3 - <<'PY'
+import json
+from pathlib import Path
+
+rows = [
+    json.loads(line)
+    for line in Path("/jht_home/logs/spawn-attempts.jsonl").read_text().splitlines()
+    if line.strip()
+]
+sources = {str(row.get("source") or "") for row in rows}
+assert "cli-team-start" in sources
+assert "agent-watchdog" in sources
+assert {"pid1", "pid1-autostart"} & sources
+assert "unknown" not in sources
+print("PASS: real CLI, watchdog and pid1 spawn sources are attributed")
+PY
+
+# JHT_AGENT_NAME is exported by send-keys inside the pane shell, after tmux has
+# created the session. Therefore `tmux show-environment` is the wrong observer:
+# inspect process environments without printing their other variables.
+docker exec "$JHT_CONTAINER" python3 - <<'PY'
+from pathlib import Path
+
+needle = b"JHT_AGENT_NAME=CAPITANO"
+holders = []
+for env_path in Path("/proc").glob("[0-9]*/environ"):
+    try:
+        variables = env_path.read_bytes().split(b"\0")
+    except OSError:
+        continue
+    if needle in variables:
+        holders.append(env_path.parent.name)
+assert holders, "no Capitano process inherited JHT_AGENT_NAME"
+print("PASS: Capitano identity is present in a process environment")
+PY
 ```
 
 **Dove guardare.** Filtrare `spawn-attempts.jsonl` per `source`, senza stampare
-altri log. Il test del bridge del punto 6 aggiunge `sentinel-bridge`.
+altri log. Il test del bridge del punto 6 aggiunge `sentinel-bridge`. Se il
+messaggio non viene consegnato o `last_activity` non lo vede, fermarsi prima del
+kill: senza quel prerequisito la mancata ricreazione sarebbe il comportamento
+corretto del roster, non una prova sulla sorgente.
 
 **Passa se:** si osservano almeno `cli-team-start`, `agent-watchdog` e `pid1`/
-`pid1-autostart`; la sessione del Capitano esporta la propria identità e il punto 6
-produce `sentinel-bridge` sul provider Claude. **Fallisce se:** un percorso reale
-finisce come `unknown`.
+`pid1-autostart`; un processo del Capitano ha `JHT_AGENT_NAME=CAPITANO`; il punto
+6 produce `sentinel-bridge` sul provider Claude. **Fallisce se:** un percorso
+reale finisce come `unknown`. Una sessione tmux priva della variabile nel proprio
+environment non è un fallimento: l'identità vive nell'ambiente del processo che
+esegue il comando, non nel server tmux.
 
 **Esito:** _(da compilare)_
 
 ## 4. Kickoff e welcome sopravvivono al container
 
-**Setup e causa.** Usare l'avvio normale del team nell'immagine nuova e il worker
-creato al punto 1; non provocare un secondo welcome. Attendere fino a 30 secondi
-perché gli helper detached aprano i file.
+**Setup e causa.** Usare l'avvio normale del team nell'immagine nuova; non
+provocare un secondo welcome. Il launcher crea un kickoff persistente soltanto
+per i quattro ruoli core `ASSISTENTE`, `CAPITANO`, `MENTOR` e `SENTINELLA`.
+I worker numerati ricevono il primo ordine dal Capitano, oppure il resume da
+`worker_kickoff` dopo un recupero del watchdog: entrambi passano da
+`jht-tmux-send` e restano in `messages.jsonl`, non in `kickoff-WORKER.log`.
+Attendere fino a 30 secondi perché gli helper detached dei core aprano i file.
 
 ```sh
-i=0
-while [ "$i" -lt 30 ]; do
-  docker exec "$JHT_CONTAINER" test -s "/jht_home/logs/kickoff-${TEST_SESSION}.log" && break
-  sleep 1; i=$((i + 1))
+for session in ASSISTENTE CAPITANO MENTOR SENTINELLA; do
+  i=0
+  while [ "$i" -lt 30 ]; do
+    docker exec "$JHT_CONTAINER" test -s "/jht_home/logs/kickoff-${session}.log" && break
+    sleep 1; i=$((i + 1))
+  done
+  test "$i" -lt 30
+  docker exec "$JHT_CONTAINER" test ! -e "/tmp/kickoff-${session}.log"
 done
-test "$i" -lt 30
-docker exec "$JHT_CONTAINER" test ! -e "/tmp/kickoff-${TEST_SESSION}.log"
 
 for role in assistente capitano mentor; do
   docker exec "$JHT_CONTAINER" test -s "/jht_home/logs/welcome-watchdog-${role}.log"
@@ -177,9 +243,11 @@ for role in assistente capitano mentor; do
 done
 ```
 
-**Passa se:** i log esistono sotto `/jht_home/logs`, hanno una riga operativa e
-non vengono creati sotto `/tmp`. **Fallisce se:** esistono soltanto nel layer
-effimero o il file del kickoff non appare.
+**Passa se:** i quattro kickoff core e i tre welcome log esistono sotto
+`/jht_home/logs`, hanno una riga operativa e non vengono creati sotto `/tmp`.
+**Fallisce se:** esistono soltanto nel layer effimero o manca un file previsto
+per un ruolo core. L'assenza di `kickoff-SCOUT-N.log` è il comportamento atteso,
+non un fallimento.
 
 **Esito:** _(da compilare)_
 
