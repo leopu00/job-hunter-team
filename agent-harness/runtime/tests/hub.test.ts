@@ -278,7 +278,14 @@ describe("the hub's sweep of the launcher", () => {
   it("keeps taking in results while nobody calls, and stops with the hub", async () => {
     const { Launcher } = await import("../src/hub/launcher.ts");
     const swept: number[] = [];
-    const launcher = { sweep: () => swept.push(Date.now()), mayLaunch: Launcher.mayLaunch } as unknown as InstanceType<typeof Launcher>;
+    // The second sweep meets a disk that will not take the log: the hub must live on.
+    const launcher = {
+      sweep: () => {
+        swept.push(Date.now());
+        if (swept.length === 2) throw new Error("EACCES: permission denied, open 'launcher.log'");
+      },
+      mayLaunch: Launcher.mayLaunch,
+    } as unknown as InstanceType<typeof Launcher>;
     const server = createHub({
       tokens: new Map([[SCOUT, "scout-1"]]),
       dbPath: join(root, "hub", "jobs.db"),
@@ -290,11 +297,18 @@ describe("the hub's sweep of the launcher", () => {
     });
     await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
     await new Promise((done) => setTimeout(done, 40));
-    const during = swept.length;
-    expect(during).toBeGreaterThan(1);
+    expect(swept.length).toBeGreaterThan(2);
+    // Still serving after the failed sweep, and the next real call reports for itself.
+    const alive = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}${HUB_PATHS.drain}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${SCOUT}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(alive.status).toBe(200);
     await new Promise<void>((done) => server.close(() => done()));
-    await new Promise((done) => setTimeout(done, 20));
-    expect(swept.length).toBe(during);
+    const after = swept.length;
+    await new Promise((done) => setTimeout(done, 30));
+    expect(swept.length).toBe(after);
   });
 });
 
