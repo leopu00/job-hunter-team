@@ -19,6 +19,7 @@ import { createSpawnTools } from "../hub/spawn-tools.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
+import { DELIVERABLE_OWNERS, deliverableWriteGuard } from "./deliverables.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
@@ -86,10 +87,15 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const loaded = await loadRolePrompt({ appRoot: options.appRoot, role: options.role, locale });
   const dedupLog = join(options.apiHome, "logs", "scout-dedup.log");
   const profileDir = options.profileDir ?? join(options.jhtHome, "profile");
-  // T25: the CV, the cover letter and the review are for the person. The folder exists
-  // before the role runs: a write to a missing one is the failure the SCRITTORE reports.
+  // T25: the CV, the cover letter and the review are for the person. A role creates its
+  // own folder and no other, and goes on when it cannot: on a box where the launcher owns
+  // the tree (`user/` root-owned, `cv/` the writer's, `critiche/` the critic's), the folders
+  // are already there and the root is not this role's to write.
   const userDir = options.userDir ?? join(options.apiHome, "user");
-  for (const sub of ["cv", "critiche"]) await mkdir(join(userDir, sub), { recursive: true });
+  const ownDeliverable = DELIVERABLE_OWNERS[roleOf(options.agent)];
+  for (const dir of [userDir, ...(ownDeliverable ? [join(userDir, ownDeliverable)] : [])]) {
+    await mkdir(dir, { recursive: true }).catch(() => undefined);
+  }
   // T6: what the prompt tells the agent to run with python3 is a tool here.
   // T10: and the documents it names are where this agent can open them.
   const paths = createPathRewriter({
@@ -142,9 +148,9 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     mailbox,
     pause,
     tools: (base) => [
-      ...(roleOf(options.agent) === "critico"
-        ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir })
-        : base
+      ...deliverableWriteGuard(
+        roleOf(options.agent) === "critico" ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir }) : base,
+        { userDir, agent: options.agent, workdir: options.homeDir },
       ).map((tool) =>
         tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool,
       ),

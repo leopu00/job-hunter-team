@@ -708,7 +708,7 @@ describe("the SCRITTORE's application, against db_query.py and db_update.py (T25
     },
   );
 
-  it("runs the writer's sequence to ready, exactly as the script does", async () => {
+  it.skipIf(skills === null)("runs the writer's sequence to ready, exactly as the script does", async () => {
     const { call, py, pyDb, ourDb } = twins("scrittore-1");
     requested(pyDb, ourDb);
     for (const [tool, args] of [...SCRITTORE_CALLS, FINAL_GATE]) {
