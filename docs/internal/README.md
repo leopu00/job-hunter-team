@@ -216,6 +216,7 @@ Infra, deploy, lifecycle, accessi.
 | [`access-and-credentials.md`](ops/access-and-credentials.md) | Accessi e credenziali |
 | [`MAINTAINERS.md`](ops/MAINTAINERS.md) | Coordinamento maintainer: Supabase, Vercel, OAuth, code signing |
 | [`2026-09-01-spawn-fixes-container-test-plan.md`](ops/2026-09-01-spawn-fixes-container-test-plan.md) | Verifica su team vivo del batch di fix allo spawn: 10 test con procedura ed esito, cosa provocare a mano, cosa solo sulla VPS |
+| [`2026-09-13-spawn-observability-live-test-plan.md`](ops/2026-09-13-spawn-observability-live-test-plan.md) | Verifica su team vivo dell'osservabilita' dello spawn: cosa si guarda nei log e nelle prove prima di fidarsi del tracciamento |
 
 ## 🧪 prototypes/
 
