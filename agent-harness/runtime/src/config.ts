@@ -66,6 +66,12 @@ export interface Config {
    * profile. Absolute.
    */
   userDir: string;
+  /**
+   * The person's own documents (`JHT_API_USER_HISTORY_DIR`): the CVs and
+   * letters they wrote or collected, which the team reads and never changes.
+   * Absent where a box has none. Absolute.
+   */
+  userHistoryDir?: string;
   /** Where commands start and relative paths resolve. Absolute. */
   workdir: string;
   permissionMode: PermissionMode;
@@ -179,7 +185,7 @@ export function loadConfig(env: Env = process.env, role = "agent"): Config {
 function readLocal(
   env: Env,
   role: string,
-): Pick<Config, "role" | "profileDir" | "apiHome" | "agentHome" | "userDir" | "workdir" | "permissionMode" | "mcpConfig"> {
+): Pick<Config, "role" | "profileDir" | "apiHome" | "agentHome" | "userDir" | "userHistoryDir" | "workdir" | "permissionMode" | "mcpConfig"> {
   const cwd = process.cwd();
   const rawProfile = env["JHT_API_PROFILE_DIR"]?.trim();
   const profileDir = rawProfile ? resolveUserPath(rawProfile, cwd, homedir()) : undefined;
@@ -187,6 +193,21 @@ function readLocal(
   const agentHome = join(apiHome, "agents", role);
   const rawUserDir = env["JHT_API_USER_DIR"]?.trim();
   const userDir = rawUserDir ? resolveUserPath(rawUserDir, cwd, homedir()) : join(apiHome, "user");
+  const rawHistory = env["JHT_API_USER_HISTORY_DIR"]?.trim();
+  const userHistoryDir = rawHistory ? resolveUserPath(rawHistory, cwd, homedir()) : undefined;
+  // The two folders are siblings, never nested (SICUREZZA, 21/09). The person's documents
+  // are a read-only root, and that rule wins over every own root whatever the mode: with the
+  // deliverables inside them, every CV the SCRITTORE writes would be refused — safely, but
+  // with "this is the person's profile" as the reason and a whole live turn spent for
+  // nothing. A configuration that contradicts itself says so here, before the first write.
+  if (userHistoryDir && (userDir === userHistoryDir || userDir.startsWith(`${userHistoryDir}/`))) {
+    throw new HarnessError(
+      "config_invalid",
+      `JHT_API_USER_DIR (${userDir}) is inside JHT_API_USER_HISTORY_DIR (${userHistoryDir}). ` +
+        "The person's documents are read-only for every role, so nothing could be written there: " +
+        "mount the two as siblings — the deliverables in a folder of their own, the history beside it.",
+    );
+  }
   // The agent starts in its own home, as a spawn would. JHT_API_WORKDIR is for
   // pointing it somewhere else on purpose, not the default.
   const rawWorkdir = env["JHT_API_WORKDIR"]?.trim();
@@ -202,7 +223,7 @@ function readLocal(
   }
   const rawMcp = env["JHT_API_MCP_CONFIG"]?.trim();
   const mcpConfig = rawMcp ? resolveUserPath(rawMcp, cwd, homedir()) : undefined;
-  return { role, apiHome, agentHome, userDir, workdir, permissionMode, ...(profileDir ? { profileDir } : {}), ...(mcpConfig ? { mcpConfig } : {}) };
+  return { role, apiHome, agentHome, userDir, ...(userHistoryDir ? { userHistoryDir } : {}), workdir, permissionMode, ...(profileDir ? { profileDir } : {}), ...(mcpConfig ? { mcpConfig } : {}) };
 }
 
 /**

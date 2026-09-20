@@ -86,15 +86,26 @@ reads:
    (`readOnlyRoots`). `$JHT_USER_DIR` (the deliverables the TUI puts in the
    person's Documents: the CV, the cover letter, the review) becomes
    `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user` — unset, a CV would have gone
-   to `/cv/` (T25). With `run-team` it is one shared volume, and least
-   privilege holds it: `cv/` is the SCRITTORE's to write, `critiche/` the
-   CRITICO's, every role reads both and nobody writes the folder itself
+   to `/cv/` (T25). That folder is what the **team makes**, and on a real box
+   it sits beside what the **person already had**: 750 CVs and letters of
+   their own, which reach the roles as another read-only root
+   (`JHT_API_USER_HISTORY_DIR`, read freely, written by nobody, named in the
+   rendered prompt beside the deliverables). The two are **siblings, never
+   nested**: a read-only root wins over every own root whatever the mode, so
+   with the deliverables inside the history every CV would be refused — the
+   mount ashley ran for a day, safe but sterile, and the reason the agent
+   read said "the person's profile". A configuration that nests them now
+   stops at startup with that explained (`config.ts`), and the policy's
+   behaviour in both layouts is pinned in `tests/user-folders.test.ts`. With `run-team` the
+   deliverables are one shared volume, and least privilege holds them: `cv/`
+   is the SCRITTORE's to write, `critiche/` the CRITICO's, every role reads
+   both and nobody writes the folder itself
    (`src/parity/deliverables.ts`). A role creates its own subfolder and goes
-   on when it cannot, since where the launcher owns the tree the folders are
-   already there and the root is nobody's. The filesystem carries the same
-   rule (`user/` root-owned 0750, each subfolder setgid to its role): the
-   runtime's refusal is a sentence the agent can report, the modes are what
-   hold if it reaches for `bash`.
+   on when the mount refuses it, since where the launcher owns the tree the
+   folders are already there; any other failure is raised. The filesystem
+   carries the same rule (the deliverables root read-only, each subfolder
+   setgid to its role): the runtime's refusal is a sentence the agent can
+   report, the modes are what hold if it reaches for `bash`.
    Left alone: other paths under `$JHT_HOME`, which name
    state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's

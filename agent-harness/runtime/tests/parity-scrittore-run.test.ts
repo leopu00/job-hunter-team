@@ -36,6 +36,10 @@ describe("npm run role -- --role scrittore (T25)", () => {
     ).run();
     db.prepare("INSERT INTO scores (position_id, total_score) VALUES (1, 78)").run();
     db.close();
+    // The person's own documents: 750 of them on a real box, none of them the team's to change.
+    const historyDir = join(root, "person-documents");
+    await mkdir(historyDir, { recursive: true });
+    await writeFile(join(historyDir, "CV_2024.md"), "# The CV the person wrote in 2024\n");
     const profileDir = join(root, "person-profile");
     await mkdir(profileDir, { recursive: true });
     await writeFile(join(profileDir, "candidate_profile.yml"), "target_role: Backend Engineer\nyears: 6\n");
@@ -53,6 +57,7 @@ describe("npm run role -- --role scrittore (T25)", () => {
           JHT_API_HOME: join(root, "api"),
           JHT_HOME: join(root, "jht"),
           JHT_API_PROFILE_DIR: profileDir,
+          JHT_API_USER_HISTORY_DIR: historyDir,
           JHT_API_APP_ROOT: imageRoot,
           JHT_API_PROVIDER: "mock",
         },
@@ -71,6 +76,8 @@ describe("npm run role -- --role scrittore (T25)", () => {
       ["db_update", "accepted"],
       ["read_file", "accepted"],
       ["write_file", "accepted"],
+      ["read_file", "accepted"],
+      ["write_file", "denied"],
       ["db_insert", "accepted"],
       ["db_update", "accepted"],
       ["send_message", "accepted"],
@@ -81,7 +88,11 @@ describe("npm run role -- --role scrittore (T25)", () => {
     expect(results[1]).toMatch(/Positions with a user-requested CV, CV rework or cover letter \(1\)/);
     expect(results[3]).toBe("No application for position 1. PROCEED.");
     expect(results[4]).toBe("Position 1 updated: status=writing");
-    expect(results[7]).toBe("Application inserted for position 1");
+    // The history is read freely and written by nobody: the run's own permission policy says so.
+    expect(results[7]).toContain("The CV the person wrote in 2024");
+    expect(results[8]).toMatch(/not allowed|read-only|refused/i);
+    expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
+    expect(results[9]).toBe("Application inserted for position 1");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     // The deliverable is where the person will look for it, and the row points at it.
@@ -100,6 +111,9 @@ describe("npm run role -- --role scrittore (T25)", () => {
     const scrittoreMd = await readFile(join(RUNTIME, "..", "..", "agents", "scrittore", "scrittore.md"), "utf8");
     expect(prompt.slice(0, 200)).toBe(scrittoreMd.slice(0, 200));
     expect(prompt).toContain(join(root, "api", "user"));
+    // The prompt names both folders, and which one is the person's.
+    expect(prompt).toContain(`What the team makes goes in ${join(root, "api", "user")}`);
+    expect(prompt).toContain(`The person's own CVs and letters are in ${historyDir}: read them, never write there.`);
     expect(prompt).not.toMatch(/JHT_USER_DIR/);
     const home = join(root, "api", "agents", "scrittore-1");
     const texts = [prompt];
