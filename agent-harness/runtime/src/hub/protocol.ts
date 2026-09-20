@@ -19,6 +19,7 @@ export const HUB_PATHS = {
   spawn: "/v1/spawn",
   spawnStop: "/v1/spawn/stop",
   spawnList: "/v1/spawn/list",
+  teamStart: "/v1/team/start",
 } as const;
 
 /** Largest request body: a `db_insert position` with a long job description fits well below. */

@@ -13,6 +13,7 @@
  *   JHT_LAUNCHER_CONFIG the CAPITANO's launcher: its limits (docs/launcher.md). Absent: no spawns
  *   JHT_LAUNCHER_SPOOL  the folder shared with the host's executor
  *   JHT_LAUNCHER_STOP   the operator's STOP file, read-only
+ *   JHT_HUB_TEAM_TOKEN  the host's own token, for run-team: no role has it
  */
 
 import { readFileSync } from "node:fs";
@@ -20,6 +21,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Launcher, LauncherConfigSchema } from "../hub/launcher.ts";
+import { TOKEN } from "../hub/protocol.ts";
 import { createHub, loadTokens } from "../hub/server.ts";
 
 const CHECKOUT_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
@@ -51,6 +53,11 @@ const launcher = launcherConfig
       ...(process.env["JHT_LAUNCHER_STOP"]?.trim() ? { stopFile: process.env["JHT_LAUNCHER_STOP"].trim() } : {}),
     })
   : undefined;
+const teamToken = process.env["JHT_HUB_TEAM_TOKEN"]?.trim();
+if (teamToken !== undefined && !TOKEN.test(teamToken)) {
+  console.error("jht-hub: JHT_HUB_TEAM_TOKEN must be 32 to 256 characters of [A-Za-z0-9_-].");
+  process.exit(2);
+}
 const server = createHub({
   tokens,
   dbPath: required("JHT_HUB_DB"),
@@ -60,6 +67,7 @@ const server = createHub({
   ...(profileDir ? { profileDir } : {}),
   ...(jhtHome ? { jhtHome } : {}),
   ...(launcher ? { launcher } : {}),
+  ...(teamToken ? { teamToken } : {}),
 });
 // The loopback only: in the pod, every role reaches it; outside the pod, nothing does.
 server.listen(port, "127.0.0.1", () => {
