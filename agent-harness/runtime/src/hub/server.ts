@@ -236,7 +236,15 @@ export function createHub(options: HubOptions): Server {
   // The launcher learns what the executor reported when a call arrives; a
   // child that ends after the last call would keep its booking until then.
   const sweep = options.launcher
-    ? setInterval(() => options.launcher?.sweep(), options.sweepMs ?? DEFAULT_SWEEP_MS).unref()
+    ? setInterval(() => {
+        try {
+          options.launcher?.sweep();
+        } catch {
+          // A disk that will not take the log or the state is the next real
+          // call's to report: the hub holds the team's database and channels,
+          // and a throw here would end it from inside a timer nobody catches.
+        }
+      }, options.sweepMs ?? DEFAULT_SWEEP_MS).unref()
     : undefined;
   const serve = async (req: IncomingMessage, res: ServerResponse) => {
     try {
