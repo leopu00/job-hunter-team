@@ -196,6 +196,23 @@ describe("how much", () => {
     expect(ask(launcher({ session: "s3" }), "scout")).toMatchObject({ ok: false, reason: expect.stringContaining("nothing starts or stops") });
   });
 
+  it("takes in what the executor reported with nobody asking, so a booking comes back inside the session", () => {
+    const l = launcher({ sessionUsd: 1.1 });
+    const child = ask(l, "scout");
+    if (!child.ok) throw new Error(child.reason);
+    // The live run of 20/09: the child ends after the CAPITANO's last call.
+    report(child.spawn_id, "done", { exit_code: 0, spent_usd: 0.05 });
+    // Without the sweep the state would still read the file only on the next call.
+    l.sweep();
+    const state = JSON.parse(readFileSync(join(root, "state", "state.json"), "utf8")) as { spawns: Array<{ state: string; spentUsd?: number }> };
+    expect(state.spawns).toMatchObject([{ state: "done", spentUsd: 0.05 }]);
+    expect(listed(l, "host").left_usd).toBeCloseTo(1.1 - 0.3 - 0.05, 6);
+    // A state it cannot read is the next real call's to report, not the sweep's to throw on.
+    writeFileSync(join(root, "state", "state.json"), "{ torn");
+    expect(() => l.sweep()).not.toThrow();
+    expect(ask(l, "scorer")).toMatchObject({ ok: false, reason: expect.stringContaining("nothing starts or stops") });
+  });
+
   it("starts over with a new session", () => {
     expect(ask(launcher({ sessionUsd: 0.7 }), "scout")).toMatchObject({ ok: true });
     expect(ask(launcher({ sessionUsd: 0.7 }), "scorer")).toMatchObject({ ok: false });

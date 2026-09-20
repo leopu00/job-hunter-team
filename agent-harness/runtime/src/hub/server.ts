@@ -64,6 +64,8 @@ export interface HubOptions {
   notifyLimit?: { max: number; windowMs: number };
   /** Messages one agent may send in a window (HUB-3): a loop fills no inbox. */
   sendLimit?: { max: number; windowMs: number };
+  /** How often the launcher takes in the executor's results with nobody asking. */
+  sweepMs?: number;
   now?: () => number;
   /** The CAPITANO's launcher (SICUREZZA §9). Absent: no one spawns through this hub. */
   launcher?: Launcher;
@@ -100,6 +102,9 @@ class HttpError extends Error {
     this.status = status;
   }
 }
+
+/** Often enough that a child's booking comes back while its session runs, cheap enough to ignore. */
+const DEFAULT_SWEEP_MS = 5_000;
 
 /** A report or an order every minute for an hour; far below a loop. */
 export const DEFAULT_SEND_LIMIT = { max: 60, windowMs: 60 * 60_000 };
@@ -228,6 +233,11 @@ export function createHub(options: HubOptions): Server {
   const server = createServer((req, res) => {
     void serve(req, res);
   });
+  // The launcher learns what the executor reported when a call arrives; a
+  // child that ends after the last call would keep its booking until then.
+  const sweep = options.launcher
+    ? setInterval(() => options.launcher?.sweep(), options.sweepMs ?? DEFAULT_SWEEP_MS).unref()
+    : undefined;
   const serve = async (req: IncomingMessage, res: ServerResponse) => {
     try {
       if (req.method !== "POST") throw new HttpError(405, "POST only.");
@@ -251,7 +261,10 @@ export function createHub(options: HubOptions): Server {
       else reply(res, 500, { error: "The hub failed on this request." });
     }
   };
-  server.on("close", () => opened?.close());
+  server.on("close", () => {
+    if (sweep) clearInterval(sweep);
+    opened?.close();
+  });
   return server;
 }
 

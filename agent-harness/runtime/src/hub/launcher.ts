@@ -366,6 +366,22 @@ export class Launcher {
     };
   }
 
+  /**
+   * Takes in what the executor reported, with nobody asking. The state is
+   * read when a call arrives, and after the CAPITANO's last call none does:
+   * in the live run of 20/09 three children ended after the last call and
+   * their bookings stayed held until the session changed. The hub sweeps on
+   * a timer so the money comes back while the session is still running.
+   */
+  sweep(): void {
+    try {
+      this.#refresh();
+    } catch (error) {
+      // A state that cannot be read is the next real call's to report (L-1).
+      if (!(error instanceof LauncherStateError)) throw error;
+    }
+  }
+
   /** The state, or `refuse`'s answer, logged, when it cannot be read. */
   #readable<T>(refuse: (reason: string) => T): State | T {
     try {
