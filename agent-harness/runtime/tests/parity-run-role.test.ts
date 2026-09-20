@@ -103,7 +103,8 @@ describe("npm run role -- --role scout (a product role)", () => {
     // where an unset $JHT_USER_DIR would have sent a CV to the filesystem root.
     expect(prompt).not.toMatch(/JHT_USER_DIR/);
     expect(prompt).toContain(`deliverables in \`${join(root, "api", "user")}\``);
-    expect((await readdir(join(root, "api", "user"))).sort()).toEqual(["critiche", "cv"]);
+    // A role creates its own deliverables folder and no other: the SCOUT delivers none.
+    expect(await readdir(join(root, "api", "user"))).toEqual([]);
 
     // One position in the runtime's jobs.db, and the second attempt was told why.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));

@@ -53,13 +53,15 @@ export function blindReviewTools(tools: ToolHandler[], options: BlindReviewOptio
 
   return tools.map((tool) => {
     if (!guarded.has(tool.spec.name)) return tool;
+    // A search with no path searches the working folder, and is judged as if it said so
+    // (SICUREZZA, on 52f92691b): an undefined target must not mean "nothing to fence".
     return {
       ...tool,
       async execute(args, context) {
         const given = (args as { path?: string; pattern?: string }).path;
-        const target = given === undefined ? undefined : at(given);
+        const target = given === undefined ? (tool.spec.name === "read_file" ? undefined : at(".")) : at(given);
         if (target !== undefined && inside(target, profile)) {
-          return { ok: false, content: `${tool.spec.name} ${given}: ${REFUSAL}` };
+          return { ok: false, content: `${tool.spec.name} ${given ?? options.workdir}: ${REFUSAL}` };
         }
         const result = (await tool.execute(args, context)) as ToolExecution;
         // A grep is fenced when it can reach the deliverables at all, from inside or from above.
