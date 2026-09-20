@@ -274,6 +274,30 @@ describe("the channel files", () => {
   });
 });
 
+describe("the hub's sweep of the launcher", () => {
+  it("keeps taking in results while nobody calls, and stops with the hub", async () => {
+    const { Launcher } = await import("../src/hub/launcher.ts");
+    const swept: number[] = [];
+    const launcher = { sweep: () => swept.push(Date.now()), mayLaunch: Launcher.mayLaunch } as unknown as InstanceType<typeof Launcher>;
+    const server = createHub({
+      tokens: new Map([[SCOUT, "scout-1"]]),
+      dbPath: join(root, "hub", "jobs.db"),
+      channelsDir: join(root, "hub", "channels"),
+      stateDir: join(root, "hub", "state"),
+      appRoot: join(RUNTIME, "..", ".."),
+      launcher,
+      sweepMs: 5,
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    await new Promise((done) => setTimeout(done, 40));
+    const during = swept.length;
+    expect(during).toBeGreaterThan(1);
+    await new Promise<void>((done) => server.close(() => done()));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(swept.length).toBe(during);
+  });
+});
+
 describe("JHT_HUB_URL and JHT_HUB_TOKEN", () => {
   it("go together, on the loopback only, with a token of the hub's form", () => {
     expect(loadConfig({ JHT_HUB_URL: "http://127.0.0.1:8788", JHT_HUB_TOKEN: SCOUT }).hub).toEqual({ url: "http://127.0.0.1:8788", token: SCOUT });

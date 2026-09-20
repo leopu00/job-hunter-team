@@ -118,6 +118,11 @@ child's state changes:
 { "spawn_id": "3f9a0c1d2e4b5a67", "state": "done", "exit_code": 0, "spent_usd": 0.061 }
 ```
 
+The hub takes results in whenever a call arrives, and every few seconds on
+its own besides: in the live run of 20/09 three children ended after the
+CAPITANO's last call, and without the sweep their bookings would have stayed
+held for the rest of the session.
+
 `state` is `running` (started), then one of `done` (exit 0), `failed` (any
 other exit, or refused by the executor), `stopped` (by a stop file, the time
 limit, `STOP`, or its CAPITANO ending). `spent_usd` is the spend the key
