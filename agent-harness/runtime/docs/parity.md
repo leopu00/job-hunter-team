@@ -83,7 +83,12 @@ reads:
    prompt still said `$JHT_HOME/profile`, `JHT_HOME` was unset, and the SCOUT
    searched without the profile). The permission policy reads that folder
    freely and refuses every write into it, in every mode
-   (`readOnlyRoots`). Left alone: other paths under `$JHT_HOME`, which name
+   (`readOnlyRoots`). `$JHT_USER_DIR` (the deliverables the TUI puts in the
+   person's Documents: the CV, the cover letter, the review) becomes
+   `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user`, created with `cv/` and
+   `critiche/` before the role runs and writable by every role — unset, a CV
+   would have gone to `/cv/` (T25).
+   Left alone: other paths under `$JHT_HOME`, which name
    state the agent writes. The CLI
    test resolves every document path of the prompt and of the home's
    Markdown: each must exist, and `read_file` must open it under the SCOUT's
@@ -241,7 +246,8 @@ tmux and the throttle engine do for a TUI agent:
 
 From the command line (`JHT_API_APP_ROOT` defaults to this checkout, `/app`
 in the container; `JHT_HOME` to `~/.jht`, read for the locale;
-`JHT_API_PROFILE_DIR` is the profile the prompt points at):
+`JHT_API_PROFILE_DIR` is the profile the prompt points at, `JHT_API_USER_DIR`
+the deliverables folder):
 
 ```sh
 npm run role -- --role scout --agent scout-1 --turns 2 --pause-ms 0

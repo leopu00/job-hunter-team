@@ -37,7 +37,8 @@ const PLATFORM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
 };
 
 export async function buildToolkit(
-  config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile">,
+  config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile"> &
+    Partial<Pick<Config, "userDir">>,
   options: {
     provider: ProviderPort;
     ask?: PermissionAsker | undefined;
@@ -59,8 +60,10 @@ export async function buildToolkit(
   }
   web.push(createWebFetchTool(options.webFetch));
 
-  // Inside the runtime state, only this role's own folders are its to touch.
-  const ownRoots = [workdir, config.agentHome];
+  // Inside the runtime state, only this role's own folders are its to touch — plus what
+  // the team makes for the person (T25): the CV, the cover letter and the review are
+  // deliverables, written by one role and read by the next.
+  const ownRoots = [workdir, config.agentHome, ...(config.userDir ? [config.userDir] : [])];
   // The database may live outside apiHome (JHT_API_DB on a VPS): its files are
   // listed one by one, not its folder, which can be a JHT home the profile
   // lives in too.
