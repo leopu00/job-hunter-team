@@ -289,8 +289,11 @@ def _flow_block_reasons() -> set[str]:
     dove la spec vuole che si fermi.
     """
     src = (SKILLS_DIR / "apply_flow.py").read_text()
-    # The recipes that live in their own module stop the same flow.
-    recipes = (SKILLS_DIR / "linkedin_apply.py").read_text()
+    # The recipes that live in their own module stop the same flow: every one
+    # of them, or a recipe added tomorrow keeps its stops out of the skill.
+    modules = sorted(SKILLS_DIR.glob("*_apply.py")) + [SKILLS_DIR / "apply_generic.py"]
+    assert len(modules) >= 3, "nessun modulo di ricetta trovato: il gate non sta cercando niente"
+    recipes = "\n".join(path.read_text() for path in modules if path.name != "apply_flow.py")
     reasons = set(re.findall(r'BlockedHuman\(\s*"([a-z_]+)"', src + recipes))
     reasons |= set(re.findall(r'FlowDeferred\(\s*"([a-z_]+)"', src + recipes))
     flow = _load("apply_flow_for_reasons", "apply_flow.py")
