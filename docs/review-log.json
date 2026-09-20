@@ -1734,6 +1734,36 @@
       "path": "agents/_skills/email-application-flow/SKILL.md",
       "description": "📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta",
       "last_review": null
+    },
+    {
+      "path": "agent-harness/README.md",
+      "description": "Harness agenti a consumo API: cosa contiene la cartella e come si usa (inglese).",
+      "last_review": null
+    },
+    {
+      "path": "agent-harness/TODO.md",
+      "description": "Esercizio sul ciclo di un agente: difetti aperti del prototipo Python e come verificarli (inglese).",
+      "last_review": null
+    },
+    {
+      "path": "agent-harness/runtime/README.md",
+      "description": "Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run.",
+      "last_review": null
+    },
+    {
+      "path": "agent-harness/runtime/docs/hub.md",
+      "description": "Broker jht-hub: tiene database e canali, un token per ruolo, e le regole dei tool stanno li.",
+      "last_review": null
+    },
+    {
+      "path": "agent-harness/runtime/docs/launcher.md",
+      "description": "Lanciatore: come il CAPITANO chiede un agente, come l'host lo avvia e quali limiti decide il lanciatore.",
+      "last_review": null
+    },
+    {
+      "path": "agent-harness/runtime/docs/parity.md",
+      "description": "Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce.",
+      "last_review": null
     }
   ]
 }

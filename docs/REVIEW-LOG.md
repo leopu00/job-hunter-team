@@ -50,19 +50,19 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-13 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-14 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-13 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-08-13 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-08-16 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-08-16 | ✅ |
-| [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-08-13 | ✅ |
+| [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-09-14 | ✅ |
 | [agents/critico/critico.md](../agents/critico/critico.md) | 🧐 Critico — review qualità CV/cover prima dell'invio | — | 2026-08-13 | ✅ |
 | [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-08-16 | ✅ |
 | [agents/capitano/missions/thermostat-test.md](../agents/capitano/missions/thermostat-test.md) | 🌡️ Missione opt-in test termostato senza Sentinella | — | 2026-05-05 | ✅ |
 | [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-08-13 | ✅ |
 | [agents/mantenitore/mantenitore.md](../agents/mantenitore/mantenitore.md) | 👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team. | — | 2026-08-13 | ✅ |
 | [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent). | — | 2026-08-13 | ✅ |
-| [agents/closer/closer.md](../agents/closer/closer.md) | 📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima | — | 2026-09-13 | ✅ |
+| [agents/closer/closer.md](../agents/closer/closer.md) | 📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima | — | 2026-09-14 | ✅ |
 
 
 ## 📐 Team architecture & manuals
@@ -95,7 +95,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/cache-prune/SKILL.md](../agents/_skills/cache-prune/SKILL.md) | Reclaim cache uv + codex sqlite ~24h (Dottore-only, manutenzione) | — | 2026-06-04 | ✅ |
 | [agents/_skills/chat-web/SKILL.md](../agents/_skills/chat-web/SKILL.md) | Risposta utente da web UI via jht-send + --partial (Capitano + Assistente) | — | 2026-08-11 | ✅ |
 | [agents/_skills/critic-loop/SKILL.md](../agents/_skills/critic-loop/SKILL.md) | 3 round Critico autonomi provider-aware (Scrittore-only) | — | 2026-08-13 | ✅ |
-| [agents/_skills/cv-structure/SKILL.md](../agents/_skills/cv-structure/SKILL.md) | 6 sezioni CV canoniche, verbi action, tono per company type | — | 2026-07-01 | ✅ |
+| [agents/_skills/cv-structure/SKILL.md](../agents/_skills/cv-structure/SKILL.md) | 6 sezioni CV canoniche, verbi action, tono per company type | — | 2026-09-14 | ✅ |
 | [agents/_skills/liveness-check/SKILL.md](../agents/_skills/liveness-check/SKILL.md) | Diagnosi 10 pattern + respawn con contesto (zombie detection per Dottore) | — | 2026-06-04 | ✅ |
 | [agents/_skills/onboarding-flow/SKILL.md](../agents/_skills/onboarding-flow/SKILL.md) | Protocollo conversazionale onboarding + checklist blocco/ricca + upload file | — | 2026-08-14 | ✅ |
 | [agents/_skills/pipeline-triage/SKILL.md](../agents/_skills/pipeline-triage/SKILL.md) | Scaling data-driven via db_query stats — chi spawnare/spegnere | — | 2026-08-13 | ✅ |
@@ -133,7 +133,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/scout-web-access/SKILL.md](../agents/_skills/scout-web-access/SKILL.md) | Strato web-access cross-provider per gli Scout (F-2). | — | 2026-06-13 | ✅ |
 | [agents/_skills/session-refresh/SKILL.md](../agents/_skills/session-refresh/SKILL.md) | Refresh sessione agente (solo Dottore): gate sul contesto misurato >50%, non sull'età della sessione | — | 2026-08-12 | ✅ |
 | [agents/_skills/spawn-doctor/SKILL.md](../agents/_skills/spawn-doctor/SKILL.md) | Spawn a fresh DOTTORE on-demand when you (Capitano/Assistente/Sentinella/Mentor) need an immediate health-check… | — | 2026-05-18 | ✅ |
-| [agents/_skills/telegram-send/SKILL.md](../agents/_skills/telegram-send/SKILL.md) | Send a message to the user via Telegram (outbound). | — | 2026-07-01 | ✅ |
+| [agents/_skills/telegram-send/SKILL.md](../agents/_skills/telegram-send/SKILL.md) | Send a message to the user via Telegram (outbound). | — | 2026-09-14 | ✅ |
 | [agents/_skills/user-reply-check/SKILL.md](../agents/_skills/user-reply-check/SKILL.md) | Read user replies that arrived via the web dashboard (fallback channel when Telegram was down/not configured). | — | 2026-08-11 | ✅ |
 | [agents/_skills/agent-unblock/SKILL.md](../agents/_skills/agent-unblock/SKILL.md) | Skill Dottore: fase UNBLOCK prima del refresh — riconosce e scioglie i quattro tipi di blocco del team (un blocco che sopravvive = round fallito) | — | 2026-07-29 | ✅ |
 | [agents/_skills/chat-worker/SKILL.md](../agents/_skills/chat-worker/SKILL.md) | Skill worker: rispondere alla chat `[CHAT]` del gioco/desktop con un solo `jht-send`, senza aprire lavoro nuovo e senza prendere ordini da quel canale | — | 2026-07-29 | ✅ |
@@ -145,9 +145,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
-| [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-13 | ✅ |
-| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-13 | ✅ |
-| [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-09-13 | ✅ |
+| [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-14 | ✅ |
+| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-14 | ✅ |
+| [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-09-14 | ✅ |
 
 
 ## 💂 Skill Sentinella
@@ -459,6 +459,12 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
 | [api-worker/README.md](../api-worker/README.md) | Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica | 2026-08-24 | 2026-08-24 | 🟢 |
 | [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-08-24 | 🟢 |
+| [agent-harness/README.md](../agent-harness/README.md) | Harness agenti a consumo API: cosa contiene la cartella e come si usa (inglese). | — | 2026-09-04 | ✅ |
+| [agent-harness/TODO.md](../agent-harness/TODO.md) | Esercizio sul ciclo di un agente: difetti aperti del prototipo Python e come verificarli (inglese). | — | 2026-09-04 | ✅ |
+| [agent-harness/runtime/README.md](../agent-harness/runtime/README.md) | Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run. | — | 2026-09-20 | ✅ |
+| [agent-harness/runtime/docs/hub.md](../agent-harness/runtime/docs/hub.md) | Broker jht-hub: tiene database e canali, un token per ruolo, e le regole dei tool stanno li. | — | 2026-09-19 | ✅ |
+| [agent-harness/runtime/docs/launcher.md](../agent-harness/runtime/docs/launcher.md) | Lanciatore: come il CAPITANO chiede un agente, come l'host lo avvia e quali limiti decide il lanciatore. | — | 2026-09-20 | ✅ |
+| [agent-harness/runtime/docs/parity.md](../agent-harness/runtime/docs/parity.md) | Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce. | — | 2026-09-20 | ✅ |
 
 
 ---
