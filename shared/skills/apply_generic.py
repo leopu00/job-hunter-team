@@ -814,14 +814,18 @@ class GenericRecipe:
             from ats_detect import detect_ats
         except ImportError:  # pragma: no cover - package import
             from shared.skills.ats_detect import detect_ats
-        platform = detect_ats(target).platform
+        detection = detect_ats(target)
+        platform = detection.platform
         try:
             import apply_flow
         except ImportError:  # pragma: no cover - package import
             from shared.skills import apply_flow  # type: ignore[no-redef]
         host = urllib.parse.urlsplit(target).hostname or "?"
         handoff = getattr(apply_flow, "PlatformHandoff", None)
-        if handoff is not None and platform in getattr(apply_flow, "SUPPORTED_PLATFORMS", ()) and platform != PLATFORM:
+        # The company's Apply leads to a known ATS host (iCIMS, Oracle Recruiting
+        # Cloud, Workday…): that is where the application lives, not an untrusted
+        # redirect; the flow uses its recipe or names it as unsupported.
+        if handoff is not None and detection.url_match and platform not in {"unknown", PLATFORM, "linkedin"}:
             # The flow validates the destination (https, a recipe, one handoff
             # per run) and restarts there through the gate.
             raise handoff(target, f"company Apply leads to {platform} ({host})")

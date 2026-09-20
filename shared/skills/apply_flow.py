@@ -4763,8 +4763,15 @@ class ApplicationFlow:
         except ValueError:
             parsed = urllib.parse.SplitResult("", "", "", "", "")
         host = (parsed.hostname or "").casefold()
-        if count > 1:
-            allowed, why = False, "a second handoff in one run (handoff_loop)"
+        destination = detect_ats(target) if host else None
+        # A known ATS host: its recipe applies, or the stop names it (ats_unsupported).
+        known_ats = bool(
+            destination and destination.url_match and destination.platform not in {"unknown", "generic", "linkedin"}
+        )
+        if count > 2 or (count == 2 and not (checkpoint.platform == "generic" and known_ats)):
+            # One handoff, or the chain board → company site → that company's ATS
+            # (1843, 1944, 14/09: LinkedIn → careers.axa.com → iCIMS).
+            allowed, why = False, "a further handoff in one run (handoff_loop)"
         elif parsed.scheme != "https" or not host or _any_linkedin_host(host):
             allowed, why = False, "the handed-over address is not an HTTPS page outside the board"
         elif checkpoint.platform == "linkedin":
@@ -4772,9 +4779,8 @@ class ApplicationFlow:
             # recipe detection picks (a known ATS or the company form).
             allowed, why = True, ""
         else:
-            platform = detect_ats(target).platform
-            allowed = platform in SUPPORTED_PLATFORMS and platform not in {"generic", "linkedin"}
-            why = "" if allowed else "the handed-over address is not a platform with a recipe"
+            allowed = known_ats
+            why = "" if allowed else "the handed-over address is not a known application platform"
         if not allowed:
             raise BlockedHuman("application_redirect_untrusted", f"Handoff refused: {why}", "detect")
         checkpoint.handoff_url = target
