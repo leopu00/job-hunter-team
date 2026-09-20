@@ -19,7 +19,7 @@ import { createSpawnTools } from "../hub/spawn-tools.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
-import { DELIVERABLE_OWNERS, deliverableWriteGuard } from "./deliverables.ts";
+import { deliverableDir, deliverableWriteGuard } from "./deliverables.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
@@ -56,6 +56,8 @@ export interface ProductRoleOptions {
   apiHome: string;
   /** Where the deliverables go (`$JHT_USER_DIR`): `<apiHome>/user` unless the config says otherwise. */
   userDir?: string | undefined;
+  /** The person's own documents, read-only, named in the rendered prompt when a box has them. */
+  userHistoryDir?: string | undefined;
   /** The user's JHT home, read for the locale. */
   jhtHome: string;
   /** The person's profile folder (`JHT_API_PROFILE_DIR`); `<jhtHome>/profile` when the runtime has none. */
@@ -92,9 +94,13 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   // the tree (`user/` root-owned, `cv/` the writer's, `critiche/` the critic's), the folders
   // are already there and the root is not this role's to write.
   const userDir = options.userDir ?? join(options.apiHome, "user");
-  const ownDeliverable = DELIVERABLE_OWNERS[roleOf(options.agent)];
-  for (const dir of [userDir, ...(ownDeliverable ? [join(userDir, ownDeliverable)] : [])]) {
-    await mkdir(dir, { recursive: true }).catch(() => undefined);
+  const ownDeliverable = deliverableDir(userDir, options.agent);
+  for (const dir of [userDir, ...(ownDeliverable ? [ownDeliverable] : [])]) {
+    // Only the refusals a locked mount gives are swallowed (SICUREZZA): anything else —
+    // a file where the folder should be, a full disk — is the run's problem, said now.
+    await mkdir(dir, { recursive: true }).catch((error: NodeJS.ErrnoException) => {
+      if (!["EACCES", "EPERM", "EROFS"].includes(error.code ?? "")) throw error;
+    });
   }
   // T6: what the prompt tells the agent to run with python3 is a tool here.
   // T10: and the documents it names are where this agent can open them.
@@ -114,7 +120,12 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     identity: rewrite(loaded.identity),
     skills: loaded.skills.map((s) => ({ ...s, description: rewrite(s.description) })),
   };
-  const systemPrompt = composeSystemPrompt(prompt, PARITY_NOTES, options.homeDir);
+  // T25: where the deliverables go, and where the person's own documents are. The TUI has
+  // one folder for both; here the team writes beside the history and never into it.
+  const notes = options.userHistoryDir
+    ? `${PARITY_NOTES}\nWhat the team makes goes in ${userDir} (\`cv/\` is the Scrittore's, \`critiche/\` the Critico's).\nThe person's own CVs and letters are in ${options.userHistoryDir}: read them, never write there.`
+    : PARITY_NOTES;
+  const systemPrompt = composeSystemPrompt(prompt, notes, options.homeDir);
   await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");
