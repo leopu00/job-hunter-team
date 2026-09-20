@@ -28,7 +28,7 @@ import type {
 import type { Pricing } from "./core/usage.ts";
 import type { HubSettings } from "./hub/client.ts";
 import { TOKEN } from "./hub/protocol.ts";
-import { resolveUserPath } from "./tools/paths.ts";
+import { realPath, resolveUserPath } from "./tools/paths.ts";
 
 const PROVIDER_IDS: ProviderId[] = ["mock", "anthropic", "openai", "openai-compatible"];
 
@@ -200,7 +200,14 @@ function readLocal(
   // deliverables inside them, every CV the SCRITTORE writes would be refused — safely, but
   // with "this is the person's profile" as the reason and a whole live turn spent for
   // nothing. A configuration that contradicts itself says so here, before the first write.
-  if (userHistoryDir && (userDir === userHistoryDir || userDir.startsWith(`${userHistoryDir}/`))) {
+  // Judged on the folders themselves, links resolved, as the permission policy judges a
+  // path (SICUREZZA P2-b): a deliverables folder that is a link into the history is the
+  // history, and would be refused at the first write instead of here, where it can be said.
+  const nested = userHistoryDir !== undefined && (() => {
+    const [out, history] = [realPath(userDir), realPath(userHistoryDir)];
+    return out === history || out.startsWith(`${history}/`);
+  })();
+  if (userHistoryDir && nested) {
     throw new HarnessError(
       "config_invalid",
       `JHT_API_USER_DIR (${userDir}) is inside JHT_API_USER_HISTORY_DIR (${userHistoryDir}). ` +
