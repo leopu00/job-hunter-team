@@ -67,6 +67,11 @@ export interface HubOptions {
   now?: () => number;
   /** The CAPITANO's launcher (SICUREZZA §9). Absent: no one spawns through this hub. */
   launcher?: Launcher;
+  /**
+   * The host's own token, kept apart from the roles' (T24): with it, and only
+   * with it, `run-team` starts the base set. No role has it.
+   */
+  teamToken?: string;
   /** Test seam: the tools of an agent, instead of the ones its role lists. */
   toolsFor?: (agent: string, db: () => Database) => Promise<ToolHandler[]>;
 }
@@ -106,10 +111,14 @@ export function createHub(options: HubOptions): Server {
   // Compared as digests, in constant time, against every token: which one
   // matched, or how much of one, does not show in the timing.
   const known = [...options.tokens].map(([token, agent]) => ({ digest: digest(token), agent }));
-  const agentOf = (header: string | undefined): string => {
+  const teamDigest = options.teamToken === undefined ? undefined : digest(options.teamToken);
+  const tokenOf = (header: string | undefined): string => {
     const token = /^Bearer (\S+)$/.exec(header ?? "")?.[1];
     if (!token || !TOKEN.test(token)) throw new HttpError(401, "A role's token is required.");
-    const offered = digest(token);
+    return token;
+  };
+  const agentOf = (header: string | undefined): string => {
+    const offered = digest(tokenOf(header));
     let agent: string | undefined;
     for (const k of known) if (timingSafeEqual(k.digest, offered)) agent = k.agent;
     if (!agent) throw new HttpError(401, "Unknown token.");
@@ -224,9 +233,19 @@ export function createHub(options: HubOptions): Server {
       if (req.method !== "POST") throw new HttpError(405, "POST only.");
       const path = req.url ?? "";
       if (!Object.values(HUB_PATHS).includes(path as never)) throw new HttpError(404, "No such operation.");
-      const agent = agentOf(req.headers.authorization);
       const body = await readBody(req);
-      reply(res, 200, await handle(path, agent, body));
+      // The team's start is the host's, not an agent's: its token is another
+      // file, and a role's token never matches it.
+      if (path === HUB_PATHS.teamStart) {
+        const launcher = options.launcher;
+        if (!launcher) throw new HttpError(503, "This hub has no launcher.");
+        const offered = digest(tokenOf(req.headers.authorization));
+        if (!teamDigest || !timingSafeEqual(teamDigest, offered)) throw new HttpError(403, "The team is started with the host's own token.");
+        parse(EmptyRequest, body);
+        reply(res, 200, launcher.startTeam("host"));
+        return;
+      }
+      reply(res, 200, await handle(path, agentOf(req.headers.authorization), body));
     } catch (error) {
       if (error instanceof HttpError) reply(res, error.status, { error: error.message });
       else reply(res, 500, { error: "The hub failed on this request." });

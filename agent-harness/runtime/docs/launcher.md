@@ -21,6 +21,26 @@ CAPITANO's: the tree is one level deep. A refusal comes back with its reason,
 so the CAPITANO can ask again within the limits: a cap above the role's is
 refused, never lowered.
 
+## The base set: `run-team` (T24)
+
+The product's launcher starts the base team and the CAPITANO coordinates
+whoever it finds up; `spawn_agent` is for the extras. Here the same thing:
+`run.sh run-team` on the host asks the hub on `POST /v1/team/start` with the
+**host's own token** (`JHT_HUB_TEAM_TOKEN`, a file of its own, no role has
+it: a role's token gets 403, and the host's token is not an agent and can do
+nothing else). The hub books the whole set against the one piggy bank,
+applies §9, and writes one order per member in the configured order.
+
+A member is a **peer, not a child**:
+- it does not spend the CAPITANO's `maxActive`, `maxSpawns` or `maxFailures`;
+- it holds its instance, so no child of the CAPITANO can double it;
+- `kind` in its order is `team`, so the executor lets it outlive the
+  CAPITANO; a child (`kind: "spawn"`) still dies with it;
+- it is not the CAPITANO's to stop: `stop_agent` refuses a member, which the
+  host stops with `run.sh team-stop`.
+The team starts once per session: while a member is up, another
+`/v1/team/start` is refused with the members' names.
+
 ## Configuration (`JHT_LAUNCHER_CONFIG`, set by the operator)
 
 ```json
@@ -34,7 +54,14 @@ refused, never lowered.
   "maxFailures": 3,
   "maxMinutes": 30,
   "models": ["gpt-5.6-luna", "gpt-5-mini"],
-  "taskChars": 2000
+  "taskChars": 2000,
+  "spawnReserveUsd": 0.4,
+  "team": [
+    { "role": "scout", "instances": 2 },
+    { "role": "analista", "instances": 1 },
+    { "role": "scorer", "instances": 1 },
+    { "role": "capitano", "instances": 1, "delay_s": 5, "task": "Start your cycle." }
+  ]
 }
 ```
 
@@ -44,6 +71,17 @@ refused, never lowered.
   `sessionUsd`. A child that ended with no measured spend stays at its cap.
 - A new `session` starts the counts and the piggy bank over.
 - A role that failed `maxFailures` times in the session is not started again.
+- `team` is the base set and its start order; each entry takes `instances`,
+  and optionally `cap_usd` (default: the role's cap; the CAPITANO's is
+  `captainUsd`), `model` (default: the first allowed), `task` (default
+  `Start your cycle.`) and `delay_s`, the stagger the executor waits.
+- `spawnReserveUsd` is money `run-team` may not take: the set is refused down
+  to it, so the CAPITANO can still spawn an extra. The answer says plainly
+  when no room is left for one, by money or by instances.
+- The CAPITANO's cap is reserved from the start of the session and counted
+  once: its own team order spends that reserve instead of adding to it. If it
+  ends having spent more than the reserve, the measured spend is what counts:
+  a fixed reserve does not hide real money.
 - With the `STOP` file present (`JHT_LAUNCHER_STOP`, read-only in the hub),
   nothing starts.
 
@@ -53,13 +91,17 @@ refused, never lowered.
 0640), one per accepted spawn:
 
 ```json
-{ "spawn_id": "3f9a0c1d2e4b5a67", "session": "2026-09-20-a", "role": "scorer", "agent": "scorer-1",
-  "model": "gpt-5-mini", "cap_usd": 0.2, "max_minutes": 30, "task": "Score the queue.\nOne at a time." }
+{ "spawn_id": "3f9a0c1d2e4b5a67", "session": "2026-09-20-a", "kind": "spawn", "role": "scorer",
+  "agent": "scorer-1", "model": "gpt-5-mini", "cap_usd": 0.2, "max_minutes": 30,
+  "task": "Score the queue.\nOne at a time." }
 ```
 
 `spawn_id` is 16 lowercase hex characters. `agent` is `<role>-<n>`. `task`
 is text of at most `taskChars` characters; it may hold anything, newlines
-included, and is only ever data.
+included, and is only ever data. `kind` is `spawn` for a child of the
+CAPITANO and `team` for a member of the base set; `delay_s` appears only
+when the member asks to be staggered. Orders are written in the order they
+are to start, so the executor takes them oldest first.
 
 **`stops/<spawn_id>`** — an empty file: the CAPITANO asked to stop that child.
 
@@ -90,8 +132,10 @@ own figure. No other field is accepted; a malformed result is ignored.
    (`roles/<id>/base/task/<spawn_id>.md`, 0600, the child's uid) and runs
    `run.sh live <role> <model> <cap_usd> --agent <agent> --task-file …`
    as an argument list.
-4. Stops a child at `max_minutes`, on `stops/<spawn_id>`, or when the
-   CAPITANO that started it ends: no child outlives its parent.
+4. Stops a child (`kind: "spawn"`) at `max_minutes`, on `stops/<spawn_id>`,
+   or when the CAPITANO that started it ends: no child outlives its parent.
+   A member of the team (`kind: "team"`) is a peer: it ends only on its own
+   `stops/<spawn_id>`, `max_minutes`, `STOP`, or `run.sh team-stop`.
 5. Writes `results/<spawn_id>.json` when the child starts and when it ends,
    and a line in its host log for every order, refusal and end.
 
