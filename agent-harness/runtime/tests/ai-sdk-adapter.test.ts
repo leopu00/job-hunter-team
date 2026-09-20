@@ -566,6 +566,42 @@ describe("the wait before the second attempt", () => {
     expect((await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]).toBeLessThanOrEqual(2_500);
   });
 
+  it("ends the wait when the run is stopped during it, instead of sleeping on", async () => {
+    // A retry-after of ten minutes, capped at thirty seconds: a stop must not wait for it.
+    const stop = new AbortController();
+    let calls = 0;
+    const started = Date.now();
+    const running = attempt(
+      async () => {
+        calls += 1;
+        throw busy({ "retry-after": "600" });
+      },
+      stop.signal,
+    );
+    setTimeout(() => stop.abort(), 20);
+    await expect(running).rejects.toMatchObject({ statusCode: 429 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // And it did not slip in another attempt on the way out.
+    expect(calls).toBe(1);
+  });
+
+  it("does not follow an error chain that loops back on itself", async () => {
+    const a = new Error("a") as Error & { cause?: unknown };
+    const b = new Error("b") as Error & { cause?: unknown };
+    a.cause = b;
+    b.cause = a;
+    // It answers instead of walking the ring for ever; neither of these is a 429.
+    await expect(
+      attempt(
+        async () => {
+          throw a;
+        },
+        undefined,
+        async () => {},
+      ),
+    ).rejects.toBe(a);
+  });
+
   it("does not wait when the run has already been abandoned", async () => {
     const aborted = AbortSignal.abort();
     let calls = 0;
