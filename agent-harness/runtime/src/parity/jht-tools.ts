@@ -26,8 +26,9 @@
  * turns it on. The file implementations below are what the mock runs use.
  */
 
+import { accessSync, constants } from "node:fs";
 import { appendFile, mkdir, readFile, rename, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 import { z } from "zod";
 
@@ -301,8 +302,6 @@ instructions name for talking and pausing are tools here:
 - \`jht-install\` → not available: the image carries the dependencies
 - \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\` → not here: agents are not tmux sessions. The
   CAPITANO starts, lists and stops them with \`spawn_agent\`, \`list_agents\`, \`stop_agent\`
-- \`pandoc\`, \`wkhtmltopdf\`, \`pdftotext\` → not here either: a CV is delivered as the markdown
-  file, and its PDF and layout gate wait for an image that carries them
 
 The Python skills your instructions run are tools too, named after the script:
 \`db_query\`, \`db_insert\`, \`db_update\`, \`scout_dedup\` take the words that follow the
@@ -345,14 +344,40 @@ const REPLACED: Record<string, string> = {
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
   "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
   "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
-  // T25: the CV's PDF. The image carries no pandoc, wkhtmltopdf or poppler, so S-05's
-  // render and its layout gate cannot run; the deliverable is the markdown.
+  // T25: the CV's PDF. These three are refused ONLY where the image does not carry them
+  // (`DETECTED` below): the image gained them in T24-b, the table still said they were
+  // missing, and a SCRITTORE that had just seen `/usr/bin/pdftotext` with `command -v`
+  // was told poppler did not exist — it spent its whole cap looking for another way.
   pandoc:
     "is not available here: the image has no pandoc, wkhtmltopdf or poppler. Deliver the CV as the markdown file in the deliverables folder, record its path with `db_update application --cv-path`, and say in your report that no PDF was rendered.",
   wkhtmltopdf: "is not available here: see pandoc. The CV stays markdown in the API harness.",
   pdftotext: "is not available here: the image has no poppler, so there is no PDF to measure.",
+  pdffonts: "is not available here: the image has no poppler, so a PDF's fonts cannot be checked.",
   tmux: "is not available here: agents are not tmux sessions. Write to one with `send_message`; the CAPITANO lists, starts and stops them with `list_agents`, `spawn_agent`, `stop_agent`.",
 };
+
+/**
+ * Commands the harness refuses only when the box really lacks them: the PDF
+ * toolchain, which an image may or may not carry. Everything else in
+ * `REPLACED` is gone by construction (tmux, the launcher, the TUI wrappers),
+ * and saying so costs nothing; saying it of a binary that is installed costs
+ * an agent its whole turn.
+ */
+const DETECTED = new Set(["pandoc", "wkhtmltopdf", "pdftotext", "pdffonts"]);
+
+/** Whether `name` is an executable on PATH, as `command -v` answers. */
+export function onPath(name: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  for (const dir of (env["PATH"] ?? "").split(delimiter)) {
+    if (!dir) continue;
+    try {
+      accessSync(join(dir, name), constants.X_OK);
+      return true;
+    } catch {
+      // Not here; try the next folder, as a shell would.
+    }
+  }
+  return false;
+}
 
 const COMMAND_AT = new RegExp(
   String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?(` +
@@ -363,9 +388,15 @@ const COMMAND_AT = new RegExp(
     String.raw`)(?=\s|$|[;&|)])`,
 );
 
-/** The replaced command a shell line runs, if any. */
-export function replacedCommand(command: string): string | null {
-  return COMMAND_AT.exec(command)?.[1] ?? null;
+/**
+ * The replaced command a shell line runs, if any. A command of `DETECTED` is
+ * replaced only where the box does not have it: the person's box decides,
+ * not this table.
+ */
+export function replacedCommand(command: string, has: (name: string) => boolean = onPath): string | null {
+  const found = COMMAND_AT.exec(command)?.[1] ?? null;
+  if (found === null) return null;
+  return DETECTED.has(found) && has(found) ? null : found;
 }
 
 /**

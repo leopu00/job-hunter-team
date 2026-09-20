@@ -1,3 +1,4 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +14,7 @@ import {
   JHT_TOOL_NAMES,
   PARITY_NOTES,
   PauseRequest,
+  onPath,
   replacedCommand,
   rewritePythonSkills,
   rewriteThrottleCommands,
@@ -279,6 +281,35 @@ describe("replacedCommand", () => {
     expect(replacedCommand("n=$(tmux capture-pane -t ANALISTA-1 -p | tail -5)")).toBe("tmux");
     expect(replacedCommand("jht-agent-contain SCOUT-1 && echo ok")).toBe("jht-agent-contain");
     expect(replacedCommand("tmux-send x")).toBeNull();
+  });
+
+  it("reads the box's own PATH, and an executable is one that runs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "jht-path-"));
+    try {
+      writeFileSync(join(dir, "pandoc"), "#!/bin/sh\n", { mode: 0o644 });
+      writeFileSync(join(dir, "wkhtmltopdf"), "#!/bin/sh\n", { mode: 0o755 });
+      const env = { PATH: `${dir}:/nowhere` } as NodeJS.ProcessEnv;
+      // A file that is not executable is not a command, as `command -v` sees it.
+      expect(onPath("pandoc", env)).toBe(false);
+      expect(onPath("wkhtmltopdf", env)).toBe(true);
+      expect(onPath("pdftotext", env)).toBe(false);
+      expect(onPath("wkhtmltopdf", { PATH: "" } as NodeJS.ProcessEnv)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses the PDF toolchain only where the box has none (T25 follow-up)", () => {
+    const has = (name: string) => ["pandoc", "wkhtmltopdf", "pdftotext"].includes(name);
+    const none = () => false;
+    for (const command of ["pandoc cv.md -o cv.pdf --pdf-engine=wkhtmltopdf", "pdftotext -bbox-layout cv.pdf -", "wkhtmltopdf a.html a.pdf"]) {
+      // The image gained them in T24-b; a table that still said "missing" cost a whole turn.
+      expect(replacedCommand(command, has), command).toBeNull();
+      expect(replacedCommand(command, none), command).not.toBeNull();
+    }
+    // What is gone by construction stays gone, installed or not.
+    expect(replacedCommand("tmux kill-session -t X", () => true)).toBe("tmux");
+    expect(replacedCommand("jht-tmux-send SCOUT-1 hi", () => true)).toBe("jht-tmux-send");
   });
 
   it("ignores the names inside arguments and longer names", () => {
