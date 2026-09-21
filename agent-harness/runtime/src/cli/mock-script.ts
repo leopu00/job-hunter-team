@@ -346,6 +346,22 @@ export function scrittoreMockScript(userDir: string, profileDir: string, history
     { text: "", toolCalls: [{ name: "read_file", args: { path: `${profileDir}/candidate_profile.yml` } }] },
     { text: "Blind review done, on the CV alone. SCORE: 6.5/10." },
     {
+      // The review loop is in-process (T33): the Critic is a subagent of this
+      // Writer, so the verdict comes back here — and has to reach the person,
+      // which is what `save_review` is for. On the live chain of 21/09 nobody
+      // wrote it and `critiche/` stayed empty with the verdict already given.
+      text: "The Critic's round, and its verdict where the person reads it.",
+      toolCalls: [
+        {
+          name: "save_review",
+          args: {
+            position_id: 1,
+            text: "# Blind review — Acme, Backend Engineer\n\nSCORE: 6.5/10\n\nNo numbers on the payments work.\n",
+          },
+        },
+      ],
+    },
+    {
       text: "To the Critic, blind.",
       toolCalls: [
         { name: "send_message", args: { to: "critico-1", text: `[REQ] Blind review: CV ${cv}, position 1. Reply with SCORE: X.X/10.` } },

@@ -188,7 +188,12 @@ instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
 # Il runner sorveglia se stesso: il 21/09 `run.sh test gate` eseguiva 4 test su
 # 66 e stampava TEST OK, perche' godot si prendeva lo stdin del ciclo che legge
 # QUESTA matrice. Questo test rompe il conto apposta e pretende il rosso.
-matrix_guard|python|gate|any|-|tools/run_matrix_guard_selftest.py|MATRIX-GUARD-TEST PASS
+# `posix` perche' il soggetto e' `run.sh`: il test lo lancia con `bash` e un
+# PATH POSIX minimo. Su Windows il gate non passa da run.sh ma da run.ps1, che
+# legge la matrice in un array (nessuno stdin da rubare) e quindi non ha il
+# difetto sorvegliato qui; lanciarlo lo stesso misurava un bash che non e'
+# quello del gate — il 21/09 quattro casi su quattro rossi in CI.
+matrix_guard|python|gate|posix|-|tools/run_matrix_guard_selftest.py|MATRIX-GUARD-TEST PASS
 
 # ----------------------------------------------------------------- gate: scena
 vps_contract|run|gate|any|JHT_VPS_CONTRACT_TEST=1|--quit-after 3|VPS-CONTRACT-TEST PASS

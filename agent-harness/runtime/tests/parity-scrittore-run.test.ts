@@ -18,6 +18,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { reviewFileName } from "../src/hub/review.ts";
 import { ENGINE, PANDOC } from "../src/parity/skills/render-pdf.ts";
 import { onPath } from "../src/parity/jht-tools.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
@@ -93,6 +94,8 @@ describe("npm run role -- --role scrittore (T25)", () => {
       // first move is the candidate's profile — refused, by the fence.
       ["read_file", "failed"],
       ["agent", "accepted"],
+      // T34: and its verdict reaches the person, written by the hub.
+      ["save_review", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
@@ -117,6 +120,15 @@ describe("npm run role -- --role scrittore (T25)", () => {
     expect(results[13]).toMatch(/SCORE: 6\.5\/10/);
     expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
+
+    // T33: the verdict reached the person. The loop that ends without this leaves
+    // `critiche/` empty with a review that exists only in the trace, which is the
+    // defect this asserts against — no file here, no green.
+    const reviews = await readdir(join(root, "api", "user", "critiche"));
+    // Named after the COMPANY on the row, by the hub's own function: the role
+    // side does not spell the name a second time (T34).
+    expect(reviews).toEqual([reviewFileName("Acme", new Date().toISOString().slice(0, 10))]);
+    expect(await readFile(join(root, "api", "user", "critiche", reviews[0]!), "utf8")).toContain("SCORE: 6.5/10");
 
     // The deliverable is where the person will look for it, and the row points at it.
     const cvDir = join(root, "api", "user", "cv");
