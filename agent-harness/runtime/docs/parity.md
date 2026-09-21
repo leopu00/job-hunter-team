@@ -324,12 +324,40 @@ is host-side, and it is worth naming rather than quietly leaving out:
 - **the tick.** In the TUI a Python bridge samples usage every five minutes
   and types `[BRIDGE TICK] usage=… proj=… status=…` into the SENTINELLA's
   pane; there is no pane here, and no bridge. The harness **recomposes the
-  tick** from the numbers it already keeps — what the proxy accounts per role
-  and per run (spend, requests, the cap it enforces) — and hands it to the
-  role as **the turn's input**, never as a tool. Never as a tool on purpose: a
-  tool would let the role ask for a tick again and again, which is spend for
-  nothing, and the thing being ported is its DECISION (silence or advice, and
-  which throttle), not the pipe that delivers the numbers;
+  tick** from the numbers it already keeps — the team's spend ledger, one line
+  per live run — and hands it to the role as **the turn's input**, never as a
+  tool. Never as a tool on purpose: a tool would let the role ask for a tick
+  again and again, which is spend for nothing, and the thing being ported is
+  its DECISION (silence or advice, and which throttle), not the pipe that
+  delivers the numbers. A `--task` given by hand still wins: that is how a
+  person asks it something.
+
+  The arithmetic is the skills' own — `(TARGET − usage) / ore_al_reset` with
+  TARGET 92 unless one was computed (`decision-throttle`), the proj→state
+  bands, the S-05 ladder from `proj` to `suggested_throttle_s` with the freeze
+  past 200%, and the reset-edge guard of the last half hour, where the
+  projection is diagnostic and nothing brakes on it. Two things are decided
+  here and worth naming: a window that has just opened has **no velocity**
+  (dividing a first burst by a few seconds reads as a catastrophe, which is
+  how the old prompt produced EMERGENZA on five consecutive windows, S-04),
+  and what this runtime cannot know is **named in the line** — the weekly
+  axis, the day's ceiling, each agent's cadence — with the prompt's own
+  instruction to report it. A tick that quietly left them out would read as
+  "all clear on the weekly", the exact mistake S-07 exists to end.
+
+  **Where the window comes from** (MASTER, 21/09), because the percentages
+  mean nothing without one: **with the hub** it is the session the launcher
+  already keeps — it opens when the team starts, closes when it ends, and
+  carries its own cap and what it has spent, so nothing is declared twice.
+  **Without the hub** it is three variables declared by whoever starts the
+  run: `JHT_API_WINDOW_START`, `JHT_API_WINDOW_HOURS`, `JHT_API_WINDOW_USD`;
+  half a declaration is no declaration. There is deliberately **no third
+  source**: a five-hour block anchored at midnight would be deterministic and
+  arbitrary, and invented data that looks measured is worse than data that is
+  missing — the SENTINELLA would advise on it. When neither source is there
+  the tick says `status=FINESTRA-NON-DICHIARATA`, carries the dollars the
+  ledger really holds (never a percentage of a budget nobody declared) and
+  tells the role to report that the pacing is not measurable yet;
 - **the freeze.** `freeze_team.py` sends Escape twice to every tmux session
   but the coordinators', and `soft_pause_team.py` writes a pause into each
   pane. An API role has neither. The equivalent — stop the roles — is the

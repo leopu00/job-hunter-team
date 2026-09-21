@@ -44,6 +44,7 @@ import { HarnessError, isHarnessError } from "../core/errors.ts";
 import { Guardrails } from "../core/guardrails.ts";
 import { AgentLock } from "../core/agent-lock.ts";
 import { appendLedger } from "../core/ledger.ts";
+import { roleOf } from "../db/role-policy.ts";
 import { resolveProvider } from "../core/provider/resolve.ts";
 import { RoleSession } from "../core/role-session.ts";
 import { JsonlTrace, sampleProcess, traceThen, type TraceSink } from "../core/trace.ts";
@@ -112,7 +113,17 @@ async function main(): Promise<number> {
   const lock = AgentLock.acquire({ dir: join(config.apiHome, "locks"), agent: config.role, runId });
   process.once("exit", () => lock.release());
 
-  const task = values["task-file"] ? (await readFile(values["task-file"], "utf8")).trim() : (values.task ?? "Start.");
+  // T37: the SENTINELLA is woken by a tick, not by a task. In the TUI a bridge
+  // types it into its pane; here the harness composes it from the team's
+  // ledger and hands it over as the turn's INPUT — never as a tool, which
+  // would let the role ask for a tick again and again for nothing. A `--task`
+  // given by hand still wins: that is how a person asks it something.
+  const asked = values["task-file"] ? (await readFile(values["task-file"], "utf8")).trim() : values.task;
+  // Loaded only for the role that is woken by a tick: every other run — and
+  // every refusal of a wrong flag — pays nothing for it.
+  const task =
+    asked ??
+    (roleOf(values.role) === "sentinella" ? await sentinellaTick(config.ledger) : "Start.");
   const script = values["mock-script"]
     ? await readMockScript(values["mock-script"])
     : product
@@ -275,6 +286,12 @@ function positiveInt(raw: string, flag: string, zeroOk = false): number {
  * the first model call so that a run that fails half-way is recorded too:
  * the money it spent is spent.
  */
+/** T37-3: the tick that wakes the SENTINELLA, or the reason there is no window. */
+async function sentinellaTick(ledger: string | undefined): Promise<string> {
+  const { tickForTurn, windowFromEnv } = await import("../parity/sentinel-tick.ts");
+  return tickForTurn({ ledger, now: new Date(), window: windowFromEnv(process.env) });
+}
+
 function ledgerWriter(config: Config, runId: string, guardrails: Guardrails): (note: string) => void {
   let written = false;
   return (note) => {

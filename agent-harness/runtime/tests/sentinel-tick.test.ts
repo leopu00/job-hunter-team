@@ -19,7 +19,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { appendLedger, LEDGER_HEADER } from "../src/core/ledger.ts";
 
-import { computeTick, readLedgerSpend, renderTick, suggestedThrottle, tickFromLedger, tickStatus, type SpendRow, type TickInput } from "../src/parity/sentinel-tick.ts";
+import {
+  computeTick,
+  readLedgerSpend,
+  renderTick,
+  suggestedThrottle,
+  tickForTurn,
+  tickFromLedger,
+  tickStatus,
+  windowFromEnv,
+  type SpendRow,
+  type TickInput,
+} from "../src/parity/sentinel-tick.ts";
 
 const START = new Date("2026-09-21T09:00:00Z");
 const END = new Date("2026-09-21T14:00:00Z");
@@ -201,5 +212,63 @@ describe("the window read off the team's ledger", () => {
     });
     expect(text).toContain("usage=60% proj=150% status=CRITICO");
     expect(text).toContain("agenti: scout=25%/h share 83.3% analista=5%/h share 16.7%");
+  });
+});
+
+describe("where the window comes from (MASTER, 21/09)", () => {
+  const declared = {
+    JHT_API_WINDOW_START: "2026-09-21T09:00:00Z",
+    JHT_API_WINDOW_HOURS: "5",
+    JHT_API_WINDOW_USD: "1",
+  };
+
+  it("takes the three declared variables, whole", () => {
+    expect(windowFromEnv(declared)).toEqual({ start: START, end: END, budgetUsd: 1 });
+  });
+
+  it("half a declaration is no declaration: never a default to fill the gap", () => {
+    for (const missing of ["JHT_API_WINDOW_START", "JHT_API_WINDOW_HOURS", "JHT_API_WINDOW_USD"]) {
+      expect(windowFromEnv({ ...declared, [missing]: undefined })).toBeNull();
+    }
+    expect(windowFromEnv({ ...declared, JHT_API_WINDOW_HOURS: "0" })).toBeNull();
+    expect(windowFromEnv({ ...declared, JHT_API_WINDOW_USD: "-3" })).toBeNull();
+    expect(windowFromEnv({ ...declared, JHT_API_WINDOW_START: "last tuesday" })).toBeNull();
+    expect(windowFromEnv({})).toBeNull();
+  });
+
+  it("with no window the turn says so, and carries dollars instead of invented percentages", () => {
+    const root = mkdtempSync(join(tmpdir(), "jht-tick-nowindow-"));
+    try {
+      const ledger = join(root, "spesa.tsv");
+      for (const [role, usd] of [["scout", 0.12], ["analista", 0.03]] as [string, number][]) {
+        appendLedger(ledger, {
+          at: new Date("2026-09-21T10:30:00Z"),
+          role,
+          model: "anthropic/claude-sonnet-5",
+          usage: { inputTokens: 10, outputTokens: 1 },
+          costUsd: usd,
+          runId: `run-${role}`,
+          note: "completed",
+        });
+      }
+      const text = tickForTurn({ ledger, now: new Date("2026-09-21T11:00:00Z"), window: null });
+      expect(text).toContain("status=FINESTRA-NON-DICHIARATA");
+      // Nothing that looks like a measure it does not have.
+      expect(text).not.toMatch(/usage=\d/);
+      expect(text).not.toMatch(/proj=\d/);
+      expect(text).not.toMatch(/suggested_throttle_s=\d/);
+      // What is known: the dollars, per agent, largest first.
+      expect(text).toContain("totale 0.1500$");
+      expect(text).toContain("per agente scout=0.1200$ analista=0.0300$");
+      expect(text).toContain("finché la finestra non è dichiarata");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("with a window it is the tick, and the ledger it cannot read is still not a guess", () => {
+    const text = tickForTurn({ ledger: join(tmpdir(), "nope-", "spesa.tsv"), now: new Date("2026-09-21T11:00:00Z"), window: { start: START, end: END, budgetUsd: 1 } });
+    expect(text).toContain("usage=0% proj=0% status=OK");
+    expect(text).toContain("nessuno ha speso in questa finestra");
   });
 });

@@ -226,3 +226,79 @@ export function tickFromLedger(options: {
   };
   return renderTick(computeTick(input), input);
 }
+
+/**
+ * Where the window comes from (MASTER, 21/09).
+ *
+ * The tick's percentages only mean something against a window: when it
+ * opened, when it resets, what it may spend. That is not a constant this file
+ * may choose — a made-up default would be a number the SENTINELLA then
+ * advises on, and it would look measured because it sits in a line that looks
+ * like the bridge's. So there are exactly two sources, and no third:
+ *
+ * - **with the hub**: the window IS the session the launcher already keeps —
+ *   it opens when the team starts and closes when it ends, with its own cap
+ *   and what it has spent. Nothing to declare twice;
+ * - **without**: three variables declared by whoever starts the run
+ *   (`JHT_API_WINDOW_START`, `JHT_API_WINDOW_HOURS`, `JHT_API_WINDOW_USD`).
+ *
+ * A 5-hour block anchored at midnight would be deterministic and arbitrary,
+ * which is the worst of the two: invented data that looks true is worse than
+ * data that is missing. When neither source is there the tick says so, and
+ * the role works without it.
+ */
+export interface Window {
+  start: Date;
+  end: Date;
+  budgetUsd: number;
+}
+
+/** The window from the environment, or nothing when it is not declared whole. */
+export function windowFromEnv(env: Record<string, string | undefined>): Window | null {
+  const start = env["JHT_API_WINDOW_START"];
+  const hours = Number(env["JHT_API_WINDOW_HOURS"]);
+  const budget = Number(env["JHT_API_WINDOW_USD"]);
+  if (!start || !Number.isFinite(hours) || hours <= 0 || !Number.isFinite(budget) || budget <= 0) return null;
+  const opened = new Date(start);
+  if (Number.isNaN(opened.getTime())) return null;
+  return { start: opened, end: new Date(opened.getTime() + hours * HOUR_MS), budgetUsd: budget };
+}
+
+/**
+ * What the role receives at the start of its turn: the tick when there is a
+ * window, and when there is none the reason, with the spend that IS known.
+ * Absolute dollars, never a percentage of a budget nobody declared.
+ */
+export function tickForTurn(options: { ledger?: string | undefined; now: Date; window: Window | null; target?: number }): string {
+  if (options.window) {
+    return tickFromLedger({
+      ledger: options.ledger ?? "",
+      now: options.now,
+      windowStart: options.window.start,
+      windowEnd: options.window.end,
+      budgetUsd: options.window.budgetUsd,
+      ...(options.target === undefined ? {} : { target: options.target }),
+    });
+  }
+  // The last 5 hours are what the ledger can still answer for — a horizon for
+  // reading the rows, never a window to compute a percentage against.
+  const since = new Date(options.now.getTime() - 5 * HOUR_MS);
+  const rows = options.ledger ? readLedgerSpend(options.ledger, since, options.now) : [];
+  const spent = rows.reduce((total, row) => total + row.usd, 0);
+  const byAgent = new Map<string, number>();
+  for (const row of rows) byAgent.set(row.agent, (byAgent.get(row.agent) ?? 0) + row.usd);
+  const agents = [...byAgent.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([agent, usd]) => `${agent}=${usd.toFixed(4)}$`)
+    .join(" ");
+  return (
+    `[BRIDGE TICK] ts=${hhmmss(options.now)} status=FINESTRA-NON-DICHIARATA src=harness.\n` +
+    `Nessuno ha dichiarato la finestra (con l'hub è la sessione del lanciatore; senza, ` +
+    `JHT_API_WINDOW_START/HOURS/USD), quindi qui NON ci sono usage%, proj% né throttle ` +
+    `suggerito: sarebbero inventati. Quello che si sa davvero, dalle ultime 5 ore del ` +
+    `registro di spesa: totale ${spent.toFixed(4)}$` +
+    `${agents === "" ? ", nessun agente ha speso" : `, per agente ${agents}`}.\n` +
+    `Riferisci al CAPITANO che il pacing non è misurabile finché la finestra non è dichiarata, ` +
+    `e nel frattempo lavora su quello che vedi (S-06: ciò che manca si dice, non si deduce).`
+  );
+}
