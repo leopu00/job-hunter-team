@@ -542,11 +542,68 @@ const PYTHON_AT = new RegExp(
   "g",
 );
 
+/** Any `python` at a command position, script or not: `python3 -c …`, a REPL, a file. */
+const PYTHON_ANY = new RegExp(String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?python3?(?:\.\d+)?(?=\s|$|[;&|)])`);
+
 /** The replaced Python skill a shell line runs, if any. */
 export function replacedSkill(command: string): string | null {
   for (const match of command.matchAll(PYTHON_AT)) {
     const script = match[1] ?? "";
     if (Object.hasOwn(PYTHON_SKILLS, script)) return script;
+  }
+  return null;
+}
+
+/**
+ * The shared skills with no tool of their own, and what the harness has in
+ * their place (T37-3 follow-up). Until 21/09 only the scripts WITH a tool
+ * were refused: every other `python3` went to the shell and came back as
+ * `command not found`, exit 127 — a live mock run on the VPS died that way on
+ * `freeze_team.py`. A model that reads "command not found" learns nothing and
+ * tries the next path; one that reads "stopping the team is the hub's" stops
+ * trying. The refusal is the only teaching this boundary does.
+ */
+const PYTHON_NO_TOOL: Record<string, string> = {
+  "freeze_team.py":
+    "sends Escape to tmux panes, and an API role has none: stopping the team is the hub's, with an identity of its own. " +
+    "Tell the CAPITANO what you would have frozen and why (sentinella.md INVIOLABLE RULE 6 is about the message being lost, not about the panes).",
+  "soft_pause_team.py":
+    "writes a pause into every pane, and there are no panes here. It is the soft level, so it goes through the agent who decides: ask the CAPITANO.",
+  "check_usage.py":
+    "opens a provider's TUI in a second tmux session and reads the rendered screen; neither exists here. Your numbers arrive with the tick that woke you.",
+  "weekly_pace.py": "is the bridge's computation, never a role's: the verdict reaches you inside the tick.",
+  "usage_record.py": "writes a sample into the bridge's log, which this runtime does not keep: the harness records what a run spends by itself.",
+  "throttle.py": "is the pause, and the pause is the `throttle` tool.",
+  "throttle_engine.py": "is the pause, and the pause is the `throttle` tool.",
+  "rate_budget.py": "reads the bridge's snapshot; there is no bridge here. The numbers you have are the ones in your tick.",
+};
+
+/**
+ * What the shell must answer for a Python call, or `null` when the line runs
+ * no Python at all. The image carries no interpreter, so every one of these
+ * would have died as `command not found`: the difference is whether the model
+ * learns what to use instead.
+ */
+export function pythonRefusal(command: string, overrides: Readonly<Record<string, string>> = {}): string | null {
+  const replaced = replacedSkill(command);
+  if (replaced !== null) {
+    return `Error: \`python3 …/${replaced}\` does not exist here. Use the \`${overrides[replaced] ?? PYTHON_SKILLS[replaced]}\` tool instead. Nothing was run.`;
+  }
+  for (const match of command.matchAll(PYTHON_AT)) {
+    const script = match[1] ?? "";
+    const instead = PYTHON_NO_TOOL[script];
+    if (instead !== undefined) return `Error: \`${script}\` ${instead} Nothing was run.`;
+    return (
+      `Error: \`${script}\` cannot run here: the image carries no Python, so there is no interpreter for it — ` +
+      `a shell would answer \`command not found\` and nothing else. If it is one of the team's shared skills, ` +
+      `it has a native tool or it is not available at all; say in your report which one you needed. Nothing was run.`
+    );
+  }
+  if (PYTHON_ANY.test(command)) {
+    return (
+      "Error: there is no Python in this image — no interpreter, no REPL, no `-c`. Every shared skill a role needs " +
+      "is a native tool with the script's own arguments. Nothing was run."
+    );
   }
   return null;
 }
@@ -566,13 +623,8 @@ export function guardShellTool(
     spec: shell.spec,
     classify: (args) => shell.classify(args),
     async execute(args, context) {
-      const skill = replacedSkill(commandOf(args));
-      if (skill !== null) {
-        return {
-          ok: false,
-          content: `Error: \`python3 …/${skill}\` does not exist here. Use the \`${overrides[skill] ?? PYTHON_SKILLS[skill]}\` tool instead. Nothing was run.`,
-        };
-      }
+      const python = pythonRefusal(commandOf(args), overrides);
+      if (python !== null) return { ok: false, content: python };
       const found = replacedCommand(commandOf(args));
       if (found === null) return shell.execute(args, context);
       return { ok: false, content: `Error: \`${found}\` ${REPLACED[found]} Nothing was run.` };

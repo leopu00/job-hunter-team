@@ -250,10 +250,22 @@ describe("guardShellTool", () => {
 
   it("lets every other command through", async () => {
     ran.length = 0;
-    // A skill with no native tool still goes to the shell (T6 made db_query.py one of the guarded ones).
-    const result = await guarded.execute({ command: "python3 /app/shared/skills/linkedin_check.py" }, context);
+    const result = await guarded.execute({ command: "ls -la /app/shared/skills" }, context);
     expect(result).toEqual({ ok: true, content: "ran" });
-    expect(ran).toEqual(["python3 /app/shared/skills/linkedin_check.py"]);
+    expect(ran).toEqual(["ls -la /app/shared/skills"]);
+  });
+
+  // Until 21/09 a script with no native tool went to the shell and came back
+  // as `command not found`, exit 127 — the image has no interpreter, so the
+  // call could only ever fail, and it failed without saying anything. The
+  // boundary now answers it: this test used to assert the opposite, and what
+  // changed is the product, not the test's aim.
+  it("answers a python call nobody ported instead of letting it die in the shell", async () => {
+    ran.length = 0;
+    const result = await guarded.execute({ command: "python3 /app/shared/skills/linkedin_check.py" }, context);
+    expect(result.ok).toBe(false);
+    expect(String(result.content)).toContain("the image carries no Python");
+    expect(ran).toEqual([]);
   });
 });
 

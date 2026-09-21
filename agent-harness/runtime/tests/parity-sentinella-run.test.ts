@@ -108,7 +108,12 @@ describe("npm run role -- --role sentinella (T37)", () => {
     expect(results[1]).toContain("VERDETTO: SFORO");
     expect(results[2]).toContain('"active": false');
     expect(results[2]).toContain('"state": "off"');
-    expect(results[3]).toMatch(/freeze_team\.py/);
+    // The WORDS of the refusal, not the name of the script: the name is in a
+    // shell's own `command not found` too, which is how this assertion used to
+    // pass while the call was really dying with 127 (VPS's mock run, 21/09).
+    expect(results[3]).toContain("stopping the team is the hub's");
+    expect(results[3]).toContain("Nothing was run");
+    expect(results[3]).not.toMatch(/command not found|127/);
     expect(results[4]).toBe("Delivered to capitano-1.");
     expect(results[5]).toContain("RULE #0");
     expect(results[5]).toMatch(/Nothing was sent/);
