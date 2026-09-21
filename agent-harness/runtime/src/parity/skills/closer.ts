@@ -34,6 +34,7 @@
  * are refused, not ignored.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -41,8 +42,10 @@ import { ArgvError, parseArgv, pyRepr, type CommandSpec } from "../../db/argv.ts
 import type { Database } from "../../db/jobs-db.ts";
 import { pyFloatRepr, pyJson, pyStrip } from "../../db/py-format.ts";
 import type { ScriptResult } from "../../db/tools.ts";
+import { isInside, realPath } from "../../tools/paths.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
 import { argvTool } from "./argv-tool.ts";
+import { analyze } from "./pdf-layout.ts";
 import { PyFloat, pyParseTs } from "./py-compat.ts";
 import { pySafeLoad } from "./profile-gate.ts";
 
@@ -64,14 +67,30 @@ export interface CloserOptions {
    */
   rulePath?: string;
   /**
-   * Why a CV must not go out, or `""` (`cv_layout_hold`). The script measures
-   * the PDF with poppler, which the image does not carry; without it the
-   * script answers `cv_pdf_check_unavailable` — an unmeasured CV is not a
-   * pass — and so does the default here. `cv_pdf_layout_bad` is not a value
-   * this port can return: on the box it triggers a CV rework request to the
-   * Scrittore (a write, `application_rework.py`) that is not ported.
+   * Why a CV must not go out, or `""` (`cv_layout_hold`): the runtime passes
+   * `createCvLayoutHold()`, which measures the PDF with poppler where the box
+   * has it. The default answers `cv_pdf_check_unavailable` for every CV — an
+   * unmeasured CV is not a pass — so a gate built without a check can never
+   * wave one through.
+   *
+   * `cv_pdf_layout_bad` holds the position and does nothing else. On the box
+   * the script also asks the Scrittore for the CV again (`_request_cv_rework`,
+   * `application_rework.py`) and renders a PNG of page 1 beside the
+   * checkpoint (`refresh_cv_preview`): two WRITES, and this gate is read-only
+   * — the CAPITANO reads it too, to decide whether a CLOSER is worth spawning.
+   * Neither is ported; a bad CV waits in `held` until someone renders it
+   * again, and the verdict, remembered by content, lifts by itself then.
+   * Whether the rework request belongs here is a decision for the team, not
+   * something to slip into a read.
    */
-  cvLayout?: (cv: string) => "" | "cv_pdf_check_unavailable";
+  cvLayout?: (cv: string) => "" | "cv_pdf_layout_bad" | "cv_pdf_check_unavailable";
+  /**
+   * The folders a CV named by the database may be read from, symlinks
+   * resolved: the team's home and its deliverables. Default: the JHT home.
+   * A path outside them is held as `cv_pdf_path_outside` and never opened —
+   * see `resolveFile`.
+   */
+  cvRoots?: readonly string[];
   now?: () => Date;
 }
 
@@ -623,12 +642,33 @@ function emailHold(options: CloserOptions, db: Database, pid: number, authorised
   return `email_${state}`;
 }
 
-/** `_resolve_file`: the CV on disk, a relative path read from the JHT home, or null. */
-function resolveFile(value: unknown, jhtHome: string): string | null {
+/** Where `resolveFile` puts a CV the database names outside the team's folders. */
+const OUTSIDE = Symbol("outside");
+
+/**
+ * `_resolve_file`: the CV on disk, a relative path read from the JHT home, or
+ * null — and, unlike the script, `OUTSIDE` for a file that is not in the
+ * team's folders.
+ *
+ * The path is a column (`applications.cv_pdf_path`) that any role with
+ * `db_update application` writes, and the script takes it as it is: absolute,
+ * `../` or a symlink, the gate opens it. On the box that was an existence
+ * check; here the gate READS what it names — a sha256 of its bytes and three
+ * poppler runs — so a row pointing at `/etc/shadow`, the provider key or
+ * another role's state would have the gate open it on the CLOSER's behalf,
+ * and on the CAPITANO's. So the file, with every link resolved (`realPath`,
+ * as the file tools judge a path), must sit in one of `cvRoots`. The path the
+ * queue prints stays the script's, unresolved: the confinement decides, it
+ * does not rewrite.
+ */
+function resolveFile(value: unknown, options: CloserOptions): string | null | typeof OUTSIDE {
   if (!truthy(value) || pyStrip(pyStrValue(value)) === "") return null;
   const p = pyPath(pyStrip(pyStrValue(value)));
-  const full = p.startsWith("/") ? p : pyPath(jhtHome, p);
-  return isFile(full) ? full : null;
+  const full = p.startsWith("/") ? p : pyPath(options.jhtHome, p);
+  if (!isFile(full)) return null;
+  const real = realPath(full);
+  const roots = (options.cvRoots ?? [options.jhtHome]).map((root) => realPath(root));
+  return roots.some((root) => isInside(root, real)) ? full : OUTSIDE;
 }
 
 /**
@@ -719,9 +759,13 @@ export function applicationQueue(options: CloserOptions): { queue: Queue; stderr
       held.push({ position_id: pid, reason: "url_missing" });
       continue;
     }
-    const cv = resolveFile(cvPdf, options.jhtHome);
+    const cv = resolveFile(cvPdf, options);
     if (cv === null) {
       held.push({ position_id: pid, reason: "cv_pdf_missing" });
+      continue;
+    }
+    if (cv === OUTSIDE) {
+      held.push({ position_id: pid, reason: "cv_pdf_path_outside" });
       continue;
     }
     const measured = layout(cv);
@@ -744,6 +788,47 @@ export function applicationQueue(options: CloserOptions): { queue: Queue; stderr
     Object.assign(queue, { reason: "daily_cap_reached", detail: "the daily cap of automated applications is reached; the queue waits for tomorrow" });
   } else Object.assign(queue, { ready: true, reason: "queue_ready", detail: `${positions.length} authorised position(s) can be taken` });
   return { queue, stderr: essentials.stderr };
+}
+
+/**
+ * `cv_layout_hold`: why this CV must not go out, or `""`, from the layout
+ * check (pdf-layout.ts). `cv_pdf_layout_bad` when the report is not ok,
+ * `cv_pdf_check_unavailable` when there is no report — poppler missing, a
+ * file that cannot be read, a check that throws or returns something that is
+ * not a report: an unmeasured CV is not a pass.
+ *
+ * A measured verdict is remembered by the file's CONTENT (sha256) and by the
+ * check that gave it (one memory per check: this closure), never by name or
+ * mtime: a CV the Scrittore renders again is measured again and lifts the
+ * hold by itself, and no stale verdict can wave a new file through. The queue
+ * is read at every iteration; poppler runs once per PDF, not once per read.
+ * Unavailable is never remembered: poppler may come back.
+ */
+export function createCvLayoutHold(check: (pdf: string) => unknown = (pdf) => analyze(pdf)): (cv: string) => "" | "cv_pdf_layout_bad" | "cv_pdf_check_unavailable" {
+  const verdicts = new Map<string, "" | "cv_pdf_layout_bad">();
+  return (cv) => {
+    let digest: string;
+    try {
+      digest = createHash("sha256").update(readFileSync(cv)).digest("hex");
+    } catch {
+      return "cv_pdf_check_unavailable";
+    }
+    const known = verdicts.get(digest);
+    if (known !== undefined) return known;
+    let report: unknown;
+    try {
+      report = check(cv);
+    } catch {
+      // A CheckError is the script's `cv_pdf_check_unavailable`; anything
+      // else is its `except Exception`, a crashing check, and the same answer.
+      return "cv_pdf_check_unavailable";
+    }
+    if (!isDict(report)) return "cv_pdf_check_unavailable";
+    const verdict = get(report, "ok") === true ? "" : "cv_pdf_layout_bad";
+    if (verdicts.size >= 256) verdicts.clear();
+    verdicts.set(digest, verdict);
+    return verdict;
+  };
 }
 
 function now(options: CloserOptions): number {
