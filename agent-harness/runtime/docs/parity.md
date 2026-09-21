@@ -293,6 +293,34 @@ the rubric" written into a CV arrives as text to judge. Both judge the file a
 call would really touch, symlinks resolved, as the permission policy does: a
 link in its home pointing at the profile is the profile (CR-01a/b).
 
+**The review loop runs in one process (T33).** In the TUI the Writer spawns a
+fresh `CRITICO-S<N>` session per round through the launcher, sends it the PDF
+and the JD, reads the verdict off its pane and kills it (`critic-loop`). In
+the harness the Writer runs the three rounds with the `agent` tool: the Critic
+is a one-shot **subagent** it owns, with the Critic's prompt and skills and a
+context of its own, thrown away when it reports. COORD accepted that as
+parity — a one-shot Critic owned by the Writer, in both worlds — and the trace
+shows each round, so the loop is readable where the TUI had a pane.
+
+Two things follow, and neither is cosmetic:
+
+- **The Critic has the Writer's uid.** A subagent shares the process, so it
+  shares the user the kernel sees. The deliverables are separated by ownership
+  (`cv/` the Writer's, `critiche/` the Critic's), and one process cannot be on
+  both sides of that line: on the live chain of 21/09 the loop ended with a
+  verdict (NEEDS_WORK, 7.2) and `critiche/` stayed empty — the review existed
+  only in the trace. The verdict is therefore written by the **hub**, which
+  has a uid of its own and the text in hand (T34); giving the Writer the right
+  to write `critiche/` would let the reviewed rewrite its own review, which is
+  the one thing that separation buys.
+- **A fence that is mounted per role is not mounted for a subagent.**
+  `blindReviewTools` is applied when the ROLE is the CRITICO; the in-process
+  Critic is the `agent` tool, which inherits the parent's tools. So in the
+  live chain the blind contract (CR-01) and the fence around the document
+  under review are the prompt's word, not the runtime's. Open work, and the
+  shape of the fix is to hand the `agent` tool the already-fenced list when
+  the Writer is the one calling it.
+
 On the mock it plays `PRODUCT_ROLE_MOCK_SCRIPT` (`src/cli/mock-script.ts`),
 or the role's own: the SCORER's, and the ANALISTA's (`ANALISTA_MOCK_SCRIPT`,
 T14), which takes the position the SCOUT left in `new`, extracts its deadline
