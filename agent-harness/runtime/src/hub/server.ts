@@ -176,7 +176,7 @@ export function createHub(options: HubOptions): Server {
         profileDir: options.profileDir,
         stateDir: options.stateDir,
         // The CLOSER's gate measures the CV the SCRITTORE rendered into the deliverables.
-        ...(options.userDir ? { cvDirs: [options.userDir] } : {}),
+        ...(options.userDir ? { cvDirs: [join(options.userDir, "cv")] } : {}),
       };
       // Only what needs the database runs here: the rest stays in the role.
       const without = new Set(createSkillTools(common).map((t) => t.spec.name));

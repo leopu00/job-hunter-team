@@ -178,7 +178,9 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
     // can be READY — without a check every CV is `cv_pdf_check_unavailable` and the CLOSER
     // never reaches the send it has to refuse. The CV is read only from the team's home and
     // its deliverables: its path is a column, and a column is not a fence (closer.ts, resolveFile).
-    const cvRoots = [jhtHome, ...(options.userDir ? [options.userDir] : []), ...(options.cvDirs ?? [])];
+    // The CV folders only: the deliverables' `cv/`, where the SCRITTORE renders,
+    // and the hub's own (SICUREZZA T39-3: the JHT home holds the person's credentials).
+    const cvRoots = [...(options.userDir ? [join(options.userDir, "cv")] : []), ...(options.cvDirs ?? [])];
     const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile"), cvRoots, cvLayout: createCvLayoutHold() };
     if (listed.has("apply-authorization") || scripts.has("apply_gate")) tools.push(createApplyGateTool(closer));
     if (listed.has("apply-flow")) tools.push(createApplicationAnswersTool(closer));

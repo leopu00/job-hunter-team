@@ -106,7 +106,10 @@ function ours(tool: typeof applyGate, sequence: string[][], seed: Seed, extra: P
   fresh(seed);
   const db = openJobsDb(dbPath);
   try {
-    const options: CloserOptions = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), rulePath: RULE, ...extra };
+    // The CV folders the fixtures write to. The script confines nothing, so these
+    // are the roots under which both sides must agree; the confinement itself
+    // is held in parity-pdf-layout.test.ts (SICUREZZA T39-3: never the home).
+    const options: CloserOptions = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), rulePath: RULE, cvRoots: [join(home, "cv"), join(home, "abs")], ...extra };
     const runs = sequence.map((args): Run => {
       const r: ScriptResult = guarded(() => tool(args, options));
       return [r.stdout, r.stderr ?? "", r.exitCode];
@@ -571,7 +574,7 @@ describe("what the CLOSER's tools refuse, and what they never write", () => {
   beforeEach(() => {
     mkdirSync(join(home, "profile"), { recursive: true });
     db = openJobsDb(dbPath);
-    options = { db: () => db, jhtHome: home, profileDir: join(home, "profile") };
+    options = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), cvRoots: [join(home, "cv")] };
   });
   afterEach(() => db.close());
 

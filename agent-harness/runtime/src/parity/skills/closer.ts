@@ -665,10 +665,19 @@ function resolveFile(value: unknown, options: CloserOptions): string | null | ty
   if (!truthy(value) || pyStrip(pyStrValue(value)) === "") return null;
   const p = pyPath(pyStrip(pyStrValue(value)));
   const full = p.startsWith("/") ? p : pyPath(options.jhtHome, p);
-  if (!isFile(full)) return null;
-  const real = realPath(full);
-  const roots = (options.cvRoots ?? [options.jhtHome]).map((root) => realPath(root));
-  return roots.some((root) => isInside(root, real)) ? full : OUTSIDE;
+  // SICUREZZA (T39-3): the roots are the CV folders, never the home they sit
+  // in. Under the JHT home the product keeps the person's secrets —
+  // `credentials/ats-accounts/<tenant>.json` (portal passwords),
+  // `credentials/email_monitor.json` (the IMAP login) — and this path comes
+  // from a column a model writes. With the home as a root, a row naming one of
+  // those files had the gate hash it and run poppler on it. The gate must be
+  // able to open a CV, not the house the CV lives in. No roots: nothing opens.
+  const roots = (options.cvRoots ?? []).map((root) => realPath(root));
+  // Confined BEFORE any stat: answering "missing" for a path outside and
+  // "outside" for one that exists would be an oracle of what exists on the
+  // box. `realPath` resolves a path that does not exist as well.
+  if (!roots.some((root) => isInside(root, realPath(full)))) return OUTSIDE;
+  return isFile(full) ? full : null;
 }
 
 /**

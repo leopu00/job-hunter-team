@@ -228,7 +228,7 @@ describe("the CV path the database names", () => {
       db: () => db,
       jhtHome: home,
       profileDir: join(home, "profile"),
-      cvRoots: [home, join(root, "out")],
+      cvRoots: [join(home, "cv"), join(root, "out")],
       cvLayout: (cv) => {
         measured.push(cv);
         return "";
@@ -267,13 +267,45 @@ describe("the CV path the database names", () => {
     expect(measured).toEqual([]);
   });
 
-  it("with no roots given, the JHT home is the only one", () => {
+  // SICUREZZA's probe (T39-3): under the JHT home the product keeps the
+  // person's secrets, and this path comes from a column a model writes. With
+  // the home as a root, a row naming a credentials file had the gate hash it
+  // and run poppler on it. The roots are the CV folders, not the house.
+  it("a file under the JHT home that is not a CV — the person's credentials — is outside, and never opened", () => {
+    for (const secret of ["credentials/ats-accounts/icims_acme.json", "credentials/email_monitor.json", "credentials/linkedin.json"]) {
+      mkdirSync(join(home, secret, ".."), { recursive: true });
+      writeFileSync(join(home, secret), '{"password": "not for the gate"}');
+      db.exec("DELETE FROM applications; DELETE FROM positions;");
+      seed(secret);
+      expect(queue().held).toEqual([{ position_id: 1, reason: "cv_pdf_path_outside" }]);
+      db.exec("DELETE FROM applications; DELETE FROM positions;");
+      seed(join(home, secret));
+      expect(queue().held).toEqual([{ position_id: 1, reason: "cv_pdf_path_outside" }]);
+    }
+    expect(measured).toEqual([]);
+  });
+
+  it("with no roots given, nothing opens — not even a file under the home", () => {
     const { cvRoots: _dropped, ...bare } = options;
     options = bare;
-    mkdirSync(join(root, "out"), { recursive: true });
-    writeFileSync(join(root, "out", "CV.pdf"), "x");
-    seed(join(root, "out", "CV.pdf"));
+    writeFileSync(join(home, "cv", "CV.pdf"), "x");
+    seed(join(home, "cv", "CV.pdf"));
     expect(queue().held).toEqual([{ position_id: 1, reason: "cv_pdf_path_outside" }]);
+    expect(measured).toEqual([]);
+  });
+
+  it("is not an oracle of what exists: outside is outside whether or not the file is there", () => {
+    // Confined before any stat. A path outside answers `outside` exists or not;
+    // only a path inside the CV folders can answer `missing`.
+    for (const path of [join(root, "nowhere", "a.pdf"), "/etc/does-not-exist.pdf", join(root, "elsewhere-real.pdf")]) {
+      if (path.endsWith("elsewhere-real.pdf")) writeFileSync(path, "x");
+      db.exec("DELETE FROM applications; DELETE FROM positions;");
+      seed(path);
+      expect(queue().held).toEqual([{ position_id: 1, reason: "cv_pdf_path_outside" }]);
+    }
+    db.exec("DELETE FROM applications; DELETE FROM positions;");
+    seed(join(home, "cv", "not-there.pdf"));
+    expect(queue().held).toEqual([{ position_id: 1, reason: "cv_pdf_missing" }]);
   });
 });
 
@@ -287,7 +319,7 @@ describe("the gate as the runtime builds it: poppler measures the CV", () => {
     };
   };
 
-  it("the roots are the JHT home, `userDir` and the hub's `cvDirs`: a CV elsewhere is never opened", async () => {
+  it("the roots are the deliverables' `cv/` and the hub's `cvDirs`, never the JHT home: a CV elsewhere is never opened", async () => {
     const home = join(root, "jht");
     mkdirSync(join(root, "hub-out", "cv"), { recursive: true });
     mkdirSync(home, { recursive: true });
