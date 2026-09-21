@@ -89,6 +89,10 @@ describe("npm run role -- --role scrittore (T25)", () => {
       ["write_file", "denied"],
       ["db_insert", "accepted"],
       ["db_update", "accepted"],
+      // T35: the CRITICO of the critic-loop runs in here as a subagent, and its
+      // first move is the candidate's profile — refused, by the fence.
+      ["read_file", "failed"],
+      ["agent", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
@@ -101,8 +105,17 @@ describe("npm run role -- --role scrittore (T25)", () => {
     expect(results[7]).toMatch(RENDERS ? /^Rendered .*\.md to .*\.pdf — \d+ bytes\./ : /This box has no PDF toolchain/);
     expect(results[8]).toContain("The CV the person wrote in 2024");
     expect(results[9]).toMatch(/not allowed|read-only|refused/i);
-    expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
     expect(results[10]).toBe("Application inserted for position 1");
+    // The SCRITTORE reads the candidate's profile freely: it writes from it.
+    expect(results[5]).toContain("target_role: Backend Engineer");
+    // T35: the subagent asked for the candidate's profile and was told why it
+    // may not have it — by the blind fence (CR-01), not by the permission
+    // policy, and the SCRITTORE that started it read that same file freely at
+    // index 5. A child that inherited its parent's tools would have read it.
+    expect(results[12]).toMatch(/the review is blind/i);
+    expect(results[12]).toMatch(/CR-01/);
+    expect(results[13]).toMatch(/SCORE: 6\.5\/10/);
+    expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     // The deliverable is where the person will look for it, and the row points at it.
