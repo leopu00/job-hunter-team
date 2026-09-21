@@ -94,6 +94,8 @@ jobs:
       # lascerebbe l'audit rosso senza dirne il motivo.
       - name: Install the portrait audit's dependency
         shell: bash
+        env:
+          PILLOW_VERSION: "12.1.1"
         run: |
           set -euo pipefail
           if ! python3 -c "import PIL" 2>/dev/null; then
@@ -104,7 +106,16 @@ jobs:
             # il venv di Windows espone `python`, quello POSIX `python3`
             py="$venv/$bin/python3"
             [ -x "$py" ] || py="$venv/$bin/python"
-            "$py" -m pip install --disable-pip-version-check --quiet Pillow
+            # Versione FISSA: un `pip install Pillow` nudo fa entrare in
+            # silenzio qualunque rilascio nuovo, e il giorno che uno rompe
+            # l'audit il rosso esce dove non si guarda. Col pin a rompersi e'
+            # il PASSO, che e' il posto giusto (SICUREZZA, 21/09).
+            "$py" -m pip install --disable-pip-version-check --quiet "Pillow==$PILLOW_VERSION"
+            # ⚠️ Da qui in poi questa cartella e' in testa al PATH di TUTTI i
+            # passi successivi: `python`, `python3` e `pip` sono quelli del
+            # venv. Qui e' voluto e innocuo (eredita i site-packages di
+            # sistema), ma chi aggiunge un passo python lo eredita senza
+            # saperlo: vale la pena saperlo prima di stupirsi.
             echo "$venv/$bin" >> "$GITHUB_PATH"
             export PATH="$venv/$bin:$PATH"
           fi
