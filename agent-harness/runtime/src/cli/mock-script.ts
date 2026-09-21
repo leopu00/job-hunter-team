@@ -293,6 +293,14 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
 export const CLOSER_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
   {
+    // STEP 1: the queue is the only source of work (CL-04). Here it answers
+    // "not ready" — the position is held, because nothing can measure the CV's
+    // layout in this image — and the rest of this run is what a model that
+    // tries anyway runs into.
+    text: "The queue first: the gate decides what may go out.",
+    toolCalls: [{ name: "apply_gate", args: { args: ["queue", "--json"] } }],
+  },
+  {
     text: "The position the person authorised, and what was written for it.",
     toolCalls: [
       { name: "db_query", args: { args: ["position", "1"] } },

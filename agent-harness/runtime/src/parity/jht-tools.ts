@@ -452,6 +452,9 @@ export const PYTHON_SKILLS: Record<string, string> = {
   // T37, the SENTINELLA's two file-only reads.
   "bridge_mailbox.py": "bridge_mailbox",
   "burn_intent.py": "burn_intent",
+  // T39, the CLOSER's queue read and the answers it works out (the sending subcommands are refused inside).
+  "apply_gate.py": "apply_gate",
+  "application_answers.py": "application_answers",
 };
 
 /** Scripts with no tool of their own but a native equivalent. */
@@ -592,11 +595,6 @@ const PYTHON_NO_TOOL: Record<string, string> = {
   "ats_account.py":
     "creates a candidate account on an employer's portal and stores its password on the host. No browser and no credential store here.",
   "verification_code.py": "reads the person's IMAP inbox for a one-time code: there is no mailbox here.",
-  "apply_gate.py":
-    "is the authorisation gate, and it is NOT ported yet (T39, piece two): without it you cannot read your queue here. " +
-    "Say so in your report — never treat a queue you cannot read as an empty one, and never pick a position yourself (CL-04).",
-  "application_answers.py":
-    "saves the answers you work out, and it is NOT ported yet (T39, piece two). Until it is, an answer you cannot save is one you must not invent (CL-01): say which key was missing.",
   "closer_notices.py":
     "collects the round's stops into ONE message to the person: here that message is the `notify_user` tool, one for the whole round, never one per position.",
 };

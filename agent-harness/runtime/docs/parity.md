@@ -322,6 +322,8 @@ this image has none of what they need:
 | creates a candidate account on an employer's portal (`ats_account.py`) | **no** — no browser, no credential store |
 | reads the person's inbox for a one-time code (`verification_code.py`) | **no** — no mailbox |
 | reads its queue and the rows behind it (`db_query position/application`) | **yes** |
+| reads the authorisation gate: consent, one position's verdict, the queue (`apply_gate.py consent/position/queue`) | **yes** — `apply_gate`, byte for byte; the daily-cap reservation of the send path is not ported |
+| works out the essential facts and saves the answers it infers (`application_answers.py essentials/list/save`) | **yes** — `application_answers`; `ask` and `essentials --ask` are refused (the question and its returning reply have no path here) |
 | tells the person, once for the whole round | **yes**, through `notify_user` |
 | reports to the CAPITANO | **yes**, through `send_message` |
 
@@ -338,11 +340,18 @@ CAPITANO gets the `[BLOCKED]`, and the position is left exactly as it was —
 authorisation included. `tests/parity-closer-run.test.ts` asserts the rows are
 byte for byte the ones that were there before.
 
-Not ported yet, and named in the refusals so the role reports the gap instead
-of working around it: `apply_gate.py` (the authorisation gate: its queue read
-is piece two) and `application_answers.py` (the answers it works out). Until
-they are, an unreadable queue is not an empty one (CL-04) and an answer it
-cannot save is one it must not invent (CL-01).
+The gate and the answers are ported as tools (T39, piece two,
+`src/parity/skills/closer.ts`), judged against the scripts in
+`tests/parity-closer-tools.test.ts`. The gate fails closed as the script does
+— a missing or broken config, an absent consent, an unreadable rule each say
+NO with a stable reason, and an unreadable queue is `queue_unreadable`, never
+`queue_empty` (CL-04). Two things differ by construction: the image has no
+poppler, so a CV cannot be measured and every position that has one is held
+`cv_pdf_check_unavailable` — what the script answers on a box without poppler
+— and the rule file is a copy shipped with the runtime, held byte for byte
+against `shared/cloud/apply-request-rule.json`. `save` writes only
+`application_answers`, and never over an answer the person gave
+(`user_answer_kept`, CL-01).
 
 **The SENTINELLA advises one agent, and here that is a fence (T37).** Its
 prompt opens with RULE #0 — "DO NOT talk to other agents except the Capitano"

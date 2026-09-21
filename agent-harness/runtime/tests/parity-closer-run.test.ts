@@ -83,6 +83,8 @@ describe("npm run role -- --role closer (T39)", () => {
     const finished = records.filter((r) => r.type === "tool_finished");
     expect(finished.map((r) => [r["name"], r["outcome"]])).toEqual([
       ["read_file", "accepted"],
+      // The gate answers with exit 1 = "not ready": an answer, not a failure.
+      ["apply_gate", "accepted"],
       ["db_query", "accepted"],
       ["db_query", "accepted"],
       // The flow: the one action that would leave the box.
@@ -95,6 +97,11 @@ describe("npm run role -- --role closer (T39)", () => {
       ["check_user_replies", "accepted"],
     ]);
     const results = finished.map((r) => String(r["result"]));
+    // A real queue now, read by the real gate: consent is off (no config for
+    // this person), so nothing is ready — fail closed, never an empty queue.
+    expect(results[1]).toContain('"ready": false');
+    // Every index below moved by one: the gate is the first thing the role reads.
+    results.splice(1, 1);
     // The refusal teaches, in the role's own words: what is missing, and the rule that follows from it.
     expect(results[3]).toContain("no browser");
     expect(results[3]).toContain("no receipt, no `applied`");
