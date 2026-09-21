@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { importCandidateProfile2026 } from "./candidate-profile-import.js";
 import { ApiTeamRunner } from "./team-runner.js";
 import type { ApiTeamProgress } from "./team-runner.js";
-import { SyntheticJobSource } from "./tools.js";
+import { SyntheticJobSource, syntheticCatalogueNow } from "./tools.js";
 
 type CliOptions = {
   live: boolean;
@@ -44,7 +44,10 @@ async function main(): Promise<void> {
     readJson(options.modelPath),
     readJson(options.jobsPath),
   ]);
-  const now = () => new Date();
+  // Offline the clock is the catalogue's, not the machine's: see
+  // `syntheticCatalogueNow`. A live run is the real world, so it keeps the
+  // real clock.
+  const now = options.live ? () => new Date() : syntheticCatalogueNow(jobs);
   const result = await new ApiTeamRunner({
     workspaceDir: options.workspaceDir,
     candidate: importCandidateProfile2026(candidateRaw, {

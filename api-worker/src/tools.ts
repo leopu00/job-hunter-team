@@ -94,6 +94,29 @@ export interface ScoutJobSource {
   read(input: ReadJobInput): Promise<ReadJobResult | null>;
 }
 
+/**
+ * The reference instant for a run on the synthetic catalogue: the most recent
+ * `postedAt` in it, never the wall clock.
+ *
+ * The freshness window (`postedWithinDays`, and `assertFresh` behind it) is a
+ * sliding one, and the fixture's dates are fixed — so an offline run judged
+ * against today's date slowly loses its own catalogue. On 21/09 that is exactly
+ * what happened: five vacancies were inside the window on the 20th, three on
+ * the 21st, and `team-cli` failed with TARGET_COUNT_NOT_MET on a repository
+ * where nothing about it had changed. A dated fixture read against the clock is
+ * a test with an expiry date, and this is where the expiry is removed.
+ */
+export function syntheticCatalogueNow(rawJobs: unknown): () => Date {
+  const jobs = JobCatalogSchema.parse(rawJobs);
+  const latest = jobs.reduce(
+    (newest, job) => Math.max(newest, new Date(job.postedAt).getTime()),
+    Number.NEGATIVE_INFINITY,
+  );
+  if (!Number.isFinite(latest)) throw new Error("empty synthetic catalogue");
+  const at = new Date(latest);
+  return () => at;
+}
+
 export class SyntheticJobSource implements ScoutJobSource {
   private readonly jobs: CatalogJob[];
 
