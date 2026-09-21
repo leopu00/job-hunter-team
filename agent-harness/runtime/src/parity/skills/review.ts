@@ -27,15 +27,21 @@
  * A review never overwrites the one before it (critico.md forbids it: the
  * Writer may still be reading it), which is why the three rounds of one day
  * leave three files.
+ *
+ * Both roads lead to the SAME function, `saveReview` in src/hub/review.ts:
+ * the hub calls it over the socket, `npm run role` calls it here. A second
+ * implementation would mean a second spelling of the file name, and the
+ * guardian that looks for a verdict's review by name (`reviewsFor`) would
+ * start announcing missing files that are on disk under the other name.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
+import type { Database } from "../../db/jobs-db.ts";
 import type { HubClient } from "../../hub/client.ts";
 import { HUB_PATHS } from "../../hub/protocol.ts";
+import { MAX_REVIEW_CHARS, saveReview } from "../../hub/review.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
 
 export interface ReviewToolOptions {
@@ -43,43 +49,23 @@ export interface ReviewToolOptions {
   userDir: string;
   /** With a hub, the review is written there, by a user of its own (T34). */
   hub?: HubClient | undefined;
+  /** Without a hub: the company of the position being judged comes from here. */
+  db?: (() => Database) | undefined;
   /** Test seam: the day the file is named after. */
   now?: () => Date;
 }
 
-const MAX_REVIEW_CHARS = 40_000;
-
+/** The position and the text, and nothing that could choose a path or a name. */
 const schema = z
   .object({
     position_id: z.number().int().positive(),
+    // The ceiling is the hub's: one number, so a review the tool accepts is
+    // never one the hub then refuses.
     text: z.string().min(1).max(MAX_REVIEW_CHARS),
   })
   .strict();
 
-/** `review-<company>-<date>.md`, as blind-review names it: lowercase, no spaces, no path. */
-export function reviewFileName(company: string, day: string): string {
-  const slug = company
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-  return `review-${slug || "azienda"}-${day}.md`;
-}
-
-/** The first free name: `-v2`, `-v3`… A review never replaces the one the Writer may be reading. */
-export function freeReviewPath(dir: string, name: string, exists = existsSync): string {
-  const base = name.replace(/\.md$/, "");
-  let candidate = join(dir, name);
-  for (let version = 2; exists(candidate); version++) {
-    candidate = join(dir, `${base}-v${version}.md`);
-  }
-  return candidate;
-}
-
 export function createSaveReviewTool(options: ReviewToolOptions): ToolHandler {
-  const day = () => (options.now?.() ?? new Date()).toISOString().slice(0, 10);
   return {
     spec: {
       name: "save_review",
@@ -110,14 +96,25 @@ export function createSaveReviewTool(options: ReviewToolOptions): ToolHandler {
           return { ok: false, content: `The review was not saved: ${error instanceof Error ? error.message : String(error)}` };
         }
       }
-      const dir = join(options.userDir, "critiche");
+      // No hub: no second uid to protect anything from, but the same writer,
+      // so the name and the refusals are the hub's, not a copy of them.
+      if (!options.db) {
+        return { ok: false, content: "The review was not saved: no hub and no database, so nothing can name the file." };
+      }
       try {
-        mkdirSync(dir, { recursive: true });
-        const path = freeReviewPath(dir, reviewFileName(`position-${a.position_id}`, day()));
-        writeFileSync(path, text, "utf8");
-        return { ok: true, content: `Review saved to ${path}` };
+        const written = saveReview(options.db(), {
+          userDir: options.userDir,
+          positionId: a.position_id,
+          text,
+          ...(options.now ? { now: options.now } : {}),
+        });
+        if (!written.ok || !written.path) {
+          return { ok: false, content: `The review was not saved: ${written.error ?? "refused"}` };
+        }
+        return { ok: true, content: `Review saved to ${written.path}` };
       } catch (error) {
         // The folder belongs to the Critic on a real box: say so, do not swallow it.
+        const dir = join(options.userDir, "critiche");
         return { ok: false, content: `The review could not be saved in ${dir}: ${(error as Error).message}` };
       }
     },

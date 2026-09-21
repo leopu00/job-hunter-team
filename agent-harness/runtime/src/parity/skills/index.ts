@@ -133,8 +133,16 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   // tools and the Writer's uid. The verdict still has to reach the person, and it does not
   // travel through the file tools: they refuse `critiche/` to the Writer, and must keep
   // refusing it — otherwise the reviewed could rewrite its own review.
-  if (options.userDir && ["scrittore", "critico"].includes(roleOf(options.agent))) {
-    tools.push(createSaveReviewTool({ userDir: options.userDir, ...(options.hub ? { hub: options.hub } : {}) }));
+  // The company that names the file is read from the row: with a hub it reads it,
+  // here the database does. Without either there is nothing to name the file with.
+  if (options.userDir && (options.hub || db) && ["scrittore", "critico"].includes(roleOf(options.agent))) {
+    tools.push(
+      createSaveReviewTool({
+        userDir: options.userDir,
+        ...(db ? { db: db.open } : {}),
+        ...(options.hub ? { hub: options.hub } : {}),
+      }),
+    );
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
   // T30: the CV's PDF. The renderer is a tool and never a shell command — its

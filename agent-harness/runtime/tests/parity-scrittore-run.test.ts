@@ -18,6 +18,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { reviewFileName } from "../src/hub/review.ts";
 import { ENGINE, PANDOC } from "../src/parity/skills/render-pdf.ts";
 import { onPath } from "../src/parity/jht-tools.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
@@ -124,7 +125,9 @@ describe("npm run role -- --role scrittore (T25)", () => {
     // `critiche/` empty with a review that exists only in the trace, which is the
     // defect this asserts against — no file here, no green.
     const reviews = await readdir(join(root, "api", "user", "critiche"));
-    expect(reviews).toEqual([expect.stringMatching(/^review-position-1-\d{4}-\d{2}-\d{2}\.md$/)]);
+    // Named after the COMPANY on the row, by the hub's own function: the role
+    // side does not spell the name a second time (T34).
+    expect(reviews).toEqual([reviewFileName("Acme", new Date().toISOString().slice(0, 10))]);
     expect(await readFile(join(root, "api", "user", "critiche", reviews[0]!), "utf8")).toContain("SCORE: 6.5/10");
 
     // The deliverable is where the person will look for it, and the row points at it.
