@@ -21,6 +21,7 @@ export const HUB_PATHS = {
   spawnList: "/v1/spawn/list",
   teamStart: "/v1/team/start",
   userRequest: "/v1/user/write-request",
+  review: "/v1/review",
 } as const;
 
 /** Largest request body: a `db_insert position` with a long job description fits well below. */
@@ -48,6 +49,14 @@ export const EmptyRequest = z.object({}).strict();
  * T28: what the PERSON asks for, sent by the host with the team's own token.
  * No role has that token, and no role has a tool that sets the flag.
  */
+/**
+ * T34: the CRITICO's review, which the hub writes into `critiche/` with its
+ * own uid. The model gives the text and the position; the path is the hub's.
+ */
+export const ReviewRequest = z
+  .object({ position_id: z.number().int().positive(), text: z.string().min(1).max(40_000) })
+  .strict();
+
 export const UserWriteRequest = z
   .object({
     position_id: z.number().int().positive(),

@@ -11,11 +11,11 @@
  * - the command is the one a person would type, end to end.
  */
 
-import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -148,9 +148,18 @@ describe("the request itself", () => {
     // The person asks; the team does not ask for itself. `db_update position`
     // never had the column, and this keeps it that way: a new writer has to
     // be added here on purpose.
-    const sources = execFileSyncLines(["git", "grep", "-l", "--untracked", "write_requested", "--", "src"]);
-    expect(sources.sort()).toEqual(["src/cli/user.ts", "src/db/db-query.ts", "src/db/schema.sql", "src/db/write-request.ts"]);
-    for (const file of sources) {
+    //
+    // The census reads the source TREE, not git's index: `git grep` would have
+    // been shorter, and it made this test the one red of a run inside the
+    // image, where there is no repository (429 tests, 1 failed, 21/09). A
+    // check on what ships must run where it ships — and walking the tree also
+    // sees a file nobody has added yet, which `git grep` without `--untracked`
+    // would have missed.
+    const files = sourceFiles();
+    expect(files.length, "no sources read: the census is broken, not clean").toBeGreaterThan(20);
+    const writers = files.filter((file) => readFileSync(join(RUNTIME, file), "utf8").includes("write_requested"));
+    expect(writers.sort()).toEqual(["src/cli/user.ts", "src/db/db-query.ts", "src/db/schema.sql", "src/db/write-request.ts"]);
+    for (const file of writers) {
       if (file === "src/db/write-request.ts" || file === "src/db/schema.sql") continue;
       // Everywhere else the column is read or spoken about, never set: what a
       // statement looks like is `SET write_requested` or a bound `= ?`.
@@ -273,9 +282,9 @@ describe("npm run user", () => {
   });
 });
 
-/** `git grep -l` from the runtime, as a list of paths. */
-function execFileSyncLines([file, ...args]: string[]): string[] {
-  return execFileSync(file!, args, { cwd: RUNTIME, encoding: "utf8" })
-    .split("\n")
-    .filter((line) => line.trim() !== "");
+/** Every file under `src/`, as a path relative to the runtime. No git, so it reads the same in the image. */
+function sourceFiles(): string[] {
+  return readdirSync(join(RUNTIME, "src"), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(RUNTIME, join(entry.parentPath, entry.name)));
 }

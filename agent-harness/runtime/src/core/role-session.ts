@@ -66,8 +66,15 @@ export interface RoleSessionOptions {
   workdir?: string | undefined;
   /** The operating system in words, for the subagents' brief. */
   platform?: string | undefined;
-  /** Adds the `agent` tool: subagents with the same tools and a fresh context. */
+  /** Adds the `agent` tool: subagents with a fresh context, and the tools below. */
   subagents?: boolean | undefined;
+  /**
+   * The tools a subagent gets (T35). A child is not the parent: where a role
+   * builds its children their own toolkit — the CRITICO of the live
+   * critic-loop reviews blind, fence included — it passes it here. Without
+   * it a subagent gets the session's own tools, as before.
+   */
+  subagentTools?: ToolHandler[] | undefined;
   /** Adds the `todo_write` tool. */
   todos?: boolean | undefined;
   /** Receives every `SessionEvent` as it happens. */
@@ -117,7 +124,7 @@ export class RoleSession {
         ...(options.platform ? [`The machine runs ${options.platform}.`] : []),
         ...(workdir ? [`The working folder is ${workdir}.`] : []),
       ];
-      builtIns.push(createAgentTool({ deps: this.#deps, tools: base, permissions, context }));
+      builtIns.push(createAgentTool({ deps: this.#deps, tools: options.subagentTools ?? base, permissions, context }));
     }
     if (options.todos) builtIns.push(createTodoTool((todos) => emit({ type: "todos_updated", todos })));
 
