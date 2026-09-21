@@ -281,11 +281,16 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
  * SMTP send — and none of them exists in this image. So what this run shows
  * is exactly what the role does when sending is not possible, which its own
  * prompt already answers: the flow cannot run, there is no receipt, and
- * without a receipt nothing is marked `applied` (CL-02). It reads the
- * position, tries the flow, is told why it cannot, tries to write the sent
- * state anyway — refused, because that is not a rule here but an absence —
- * tells the person once for the whole round, reports to the CAPITANO and
- * leaves the queue alone.
+ * without a receipt nothing is marked `applied` (CL-02).
+ *
+ * It starts from a queue that is READY — consent on, a position the person
+ * flagged from a user channel, a CV whose layout poppler measured and passed
+ * (T39, piece three) — because a queue that is never ready rehearses nothing:
+ * the role would stop at step 1 and the refusal below would never be met. It
+ * reads the position, tries the flow, is told why it cannot, tries to write
+ * the sent state anyway — refused, because that is not a rule here but an
+ * absence — tells the person once for the whole round, reports to the
+ * CAPITANO and leaves the queue alone.
  *
  * What it must NOT do is in here too: no second attempt on the same position
  * (CL-03), no picking a position of its own (CL-04).
@@ -293,15 +298,16 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
 export const CLOSER_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
   {
-    // STEP 1: the queue is the only source of work (CL-04). Here it answers
-    // "not ready" — the position is held, because nothing can measure the CV's
-    // layout in this image — and the rest of this run is what a model that
-    // tries anyway runs into.
+    // STEP 1: the queue is the only source of work (CL-04). It answers READY:
+    // position 1 is authorised and its CV passed the layout check — so what
+    // follows is the role doing its job, and meeting the one step that cannot
+    // happen here. (On a box without poppler the CV is unmeasured and held;
+    // the rest of the run is then what a model that tries anyway runs into.)
     text: "The queue first: the gate decides what may go out.",
     toolCalls: [{ name: "apply_gate", args: { args: ["queue", "--json"] } }],
   },
   {
-    text: "The position the person authorised, and what was written for it.",
+    text: "The queue is ready. The position the person authorised, and what was written for it.",
     toolCalls: [
       { name: "db_query", args: { args: ["position", "1"] } },
       { name: "db_query", args: { args: ["application", "1"] } },

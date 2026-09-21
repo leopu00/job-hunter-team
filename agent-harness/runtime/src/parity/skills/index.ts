@@ -14,7 +14,7 @@ import type { Database } from "../../db/jobs-db.ts";
 import { dbPolicyFor, roleOf } from "../../db/role-policy.ts";
 import { createDbTools } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
-import { createApplicationAnswersTool, createApplyGateTool } from "./closer.ts";
+import { createApplicationAnswersTool, createApplyGateTool, createCvLayoutHold } from "./closer.ts";
 import { createEmailMonitorTool } from "./email-monitor.ts";
 import { createFeedbackQueryTool } from "./feedback-query.ts";
 import { createCaptainTools } from "./captain.ts";
@@ -61,6 +61,12 @@ export interface SkillToolsOptions {
   userDir?: string | undefined;
   /** With a hub, the verdict is written there, by a user of its own (T34). */
   hub?: HubClient | undefined;
+  /**
+   * More folders a CV the CLOSER's gate measures may live in, beside the JHT
+   * home and `userDir`: the hub's deliverables, which the hub does not pass as
+   * `userDir` (that would move the review tools onto it).
+   */
+  cvDirs?: readonly string[] | undefined;
   /** Where a relative path a tool is given resolves: the role's home. */
   workdir?: string | undefined;
   /** Test seam for the network tools: a scripted resolver and transport. */
@@ -168,7 +174,14 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   // would name a tool it does not have.
   if (db && (listed.has("apply-authorization") || listed.has("apply-flow") || scripts.has("apply_gate"))) {
     const jhtHome = options.jhtHome ?? join(options.stateDir ?? ".", "jht");
-    const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile") };
+    // T39, piece three: the CV's layout is measured, where the box has poppler, so the queue
+    // can be READY — without a check every CV is `cv_pdf_check_unavailable` and the CLOSER
+    // never reaches the send it has to refuse. The CV is read only from the team's home and
+    // its deliverables: its path is a column, and a column is not a fence (closer.ts, resolveFile).
+    // The CV folders only: the deliverables' `cv/`, where the SCRITTORE renders,
+    // and the hub's own (SICUREZZA T39-3: the JHT home holds the person's credentials).
+    const cvRoots = [...(options.userDir ? [join(options.userDir, "cv")] : []), ...(options.cvDirs ?? [])];
+    const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile"), cvRoots, cvLayout: createCvLayoutHold() };
     if (listed.has("apply-authorization") || scripts.has("apply_gate")) tools.push(createApplyGateTool(closer));
     if (listed.has("apply-flow")) tools.push(createApplicationAnswersTool(closer));
   }

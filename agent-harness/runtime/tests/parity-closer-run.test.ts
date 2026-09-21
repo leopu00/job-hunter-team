@@ -8,6 +8,14 @@
  * thing that matters most about porting it: **what it does when sending is
  * not possible**, and what it must not do instead.
  *
+ * The run starts from a queue that is READY, as the role's day starts on a
+ * real box: the person's consent on, a position they flagged from a user
+ * channel, and a CV whose layout poppler measures and passes. A queue that is
+ * never ready (as before the layout check was ported) rehearses nothing: the
+ * role stops at step 1, and the refusal is never met. On a box without
+ * poppler the CV cannot be measured and the queue says so — the rest of the
+ * run is then what a model that tries anyway runs into, and asserted alike.
+ *
  * The three facts asserted below, in the role's own vocabulary:
  *   CL-02  no receipt, no `applied` — and here the sent state cannot be
  *          written at all: those flags are not ported (db-update.ts), so the
@@ -26,11 +34,24 @@ import { promisify } from "node:util";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { openJobsDb } from "../src/db/jobs-db.ts";
+import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
+import { onPath } from "../src/parity/jht-tools.ts";
 import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
+import { passingCv } from "./helpers/pdf-fixtures.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const run = promisify(execFile);
+/** Poppler is detected, as the gate detects it: without it no CV is measured and no queue is ready. */
+const poppler = onPath("pdftotext") && onPath("pdffonts");
+
+/** Every row the CLOSER could touch, whole: the send state, the authorisation, the cap, the answers, the questions. */
+const snapshot = (db: Database) =>
+  Object.fromEntries(
+    ["positions", "applications", "apply_cap_reservations", "application_answers", "pending_user_messages"].map((table) => [
+      table,
+      db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+    ]),
+  );
 
 let root: string;
 beforeEach(async () => {
@@ -41,17 +62,22 @@ afterEach(async () => {
 });
 
 describe("npm run role -- --role closer (T39)", () => {
-  it("cannot send, says so once, and leaves the position exactly as it was", async () => {
+  it("reaches a READY queue, cannot send, says so once, and leaves every row exactly as it was", async () => {
+    // The person's consent, where the gate reads it: their config under the JHT home.
+    await mkdir(join(root, "jht"), { recursive: true });
+    await writeFile(join(root, "jht", "jht.config.json"), JSON.stringify({ applications: { auto_apply: { enabled: true, mode: "authorised", max_per_day: 5 } } }));
+    // The CV the SCRITTORE rendered, in the deliverables (JHT_API_USER_DIR defaults to <api>/user).
+    const cv = join(root, "api", "user", "cv", "CV_Acme.pdf");
+    await mkdir(join(root, "api", "user", "cv"), { recursive: true });
+    await writeFile(cv, passingCv());
+
     const db = openJobsDb(join(root, "api", "db", "jobs.db"));
     db.prepare(
-      "INSERT INTO positions (title, company, url, status, found_by, apply_requested, apply_requested_by) " +
-        "VALUES ('Backend Engineer', 'Acme', 'https://jobs.example/1', 'ready', 'scout-1', 1, 'user_web')",
+      "INSERT INTO positions (title, company, url, status, found_by, apply_requested, apply_requested_at, apply_requested_by) " +
+        "VALUES ('Backend Engineer', 'Acme', 'https://jobs.example/1', 'ready', 'scout-1', 1, '2026-09-21 09:00:00', 'user_web')",
     ).run();
-    db.prepare("INSERT INTO applications (position_id, status, written_by, cv_pdf_path) VALUES (1, 'ready', 'scrittore-1', '/jht_out/cv/CV.pdf')").run();
-    const before = {
-      position: db.prepare("SELECT status, apply_requested FROM positions WHERE id = 1").get(),
-      application: db.prepare("SELECT status, applied, applied_at, applied_via FROM applications WHERE position_id = 1").get(),
-    };
+    db.prepare("INSERT INTO applications (position_id, status, written_by, cv_pdf_path) VALUES (1, 'ready', 'scrittore-1', ?)").run(cv);
+    const before = snapshot(db);
     db.close();
 
     const profileDir = join(root, "person-profile");
@@ -97,22 +123,32 @@ describe("npm run role -- --role closer (T39)", () => {
       ["check_user_replies", "accepted"],
     ]);
     const results = finished.map((r) => String(r["result"]));
-    // A real queue now, read by the real gate: consent is off (no config for
-    // this person), so nothing is ready — fail closed, never an empty queue.
-    expect(results[1]).toContain('"ready": false');
+    // The real gate on a real queue: consent on, the position authorised by the
+    // person, the CV measured by poppler and passed — READY, with the position in it.
+    if (poppler) {
+      expect(results[1]).toContain('"ready": true');
+      expect(results[1]).toContain('"reason": "queue_ready"');
+      expect(results[1]).toContain(`"positions": [{"position_id": 1, "url": "https://jobs.example/1", "cv_pdf_path": "${cv}"}]`);
+    } else {
+      // No poppler on this box: the CV is unmeasured, and an unmeasured CV is not a pass.
+      expect(results[1]).toContain('"ready": false');
+      expect(results[1]).toContain('"reason": "cv_pdf_check_unavailable"');
+    }
     // Every index below moved by one: the gate is the first thing the role reads.
     results.splice(1, 1);
-    // The refusal teaches, in the role's own words: what is missing, and the rule that follows from it.
-    expect(results[3]).toContain("no browser");
-    expect(results[3]).toContain("no receipt, no `applied`");
+    // The refusal teaches, in the role's own words: what is missing, and the
+    // rule that follows from it. Words of the refusal, not the script's name —
+    // the name is also in any shell's "command not found".
+    expect(results[3]).toContain("This image has no browser, so there is no way to send an application from here and no receipt can exist.");
+    expect(results[3]).toContain("CL-02 holds: no receipt, no `applied`");
+    expect(results[3]).toContain("never write the sent state yourself");
     expect(results[3]).not.toMatch(/command not found|127/);
     expect(results[4]).toMatch(/applied|not available|refused|Error/i);
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
-    // Nothing moved: not the state, not the authorisation, not a send.
+    // Nothing moved: not the state, not the authorisation, not a slot of the cap, not a send.
     const after = openJobsDb(join(root, "api", "db", "jobs.db"));
-    expect(after.prepare("SELECT status, apply_requested FROM positions WHERE id = 1").get()).toEqual(before.position);
-    expect(after.prepare("SELECT status, applied, applied_at, applied_via FROM applications WHERE position_id = 1").get()).toEqual(before.application);
+    expect(snapshot(after)).toEqual(before);
     after.close();
 
     // The person heard about it once, for the whole round.

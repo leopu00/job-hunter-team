@@ -346,11 +346,34 @@ The gate and the answers are ported as tools (T39, piece two,
 `tests/parity-closer-tools.test.ts`. The gate fails closed as the script does
 — a missing or broken config, an absent consent, an unreadable rule each say
 NO with a stable reason, and an unreadable queue is `queue_unreadable`, never
-`queue_empty` (CL-04). Two things differ by construction: the image has no
-poppler, so a CV cannot be measured and every position that has one is held
-`cv_pdf_check_unavailable` — what the script answers on a box without poppler
-— and the rule file is a copy shipped with the runtime, held byte for byte
-against `shared/cloud/apply-request-rule.json`. `save` writes only
+`queue_empty` (CL-04). The rule file is a copy shipped with the runtime, held
+byte for byte against `shared/cloud/apply-request-rule.json`.
+
+**The CV's layout is measured here too (T39, piece three).**
+`pdf_layout_check.analyze` is ported in `src/parity/skills/pdf-layout.ts`,
+report for report against `--json`; poppler is detected on the box, never
+declared, and where it is missing a CV is held `cv_pdf_check_unavailable`, as
+the script holds it. Three differences, all on purpose:
+
+- **a failed CV does NOT go back to the SCRITTORE by itself.** In the product
+  the gate that finds `cv_pdf_layout_bad` also opens a rework request for the
+  Writer (`_request_cv_rework`) — a write, from what is otherwise a read. Here
+  the gate stays a pure reader (the CAPITANO reads it too): the position is
+  held `cv_pdf_layout_bad` and nothing more. When a rework is needed, it is
+  asked by the one who decides — the CAPITANO — not by the gate (MASTER,
+  21/09). This is a declared difference, not a missing piece;
+- **the CV's path is confined.** It comes from the database, and the script
+  takes any absolute path, `../` or link. That was an existence check; here
+  the gate READS the file (a hash and three poppler runs, for the CLOSER and
+  the CAPITANO), so the path must resolve — links followed — inside the CV
+  folders: the deliverables' `cv/` and the hub's own. **Never the team's home**
+  (SICUREZZA): the product keeps the person's credentials there — portal
+  passwords, the IMAP login — and this path comes from a column a model
+  writes. Anything else is held `cv_pdf_path_outside` and the file is never
+  opened; the check comes before any `stat`, so the answer cannot tell what
+  exists on the box. The script has no such reason;
+- the page-1 preview the script renders for a failed CV is not made: it is a
+  write, and there is no dashboard here to show it. `save` writes only
 `application_answers`, and never over an answer the person gave
 (`user_answer_kept`, CL-01).
 
