@@ -72,6 +72,11 @@ describe("npm run role -- --role sentinella (T37)", () => {
           JHT_API_PROFILE_DIR: profileDir,
           JHT_API_APP_ROOT: imageRoot,
           JHT_API_PROVIDER: "mock",
+          // The window the tick is computed against, declared as whoever
+          // starts the run declares it (T37-3, MASTER's call).
+          JHT_API_WINDOW_START: "2026-09-21T09:00:00Z",
+          JHT_API_WINDOW_HOURS: "5",
+          JHT_API_WINDOW_USD: "1",
         },
       },
     );
@@ -93,6 +98,13 @@ describe("npm run role -- --role sentinella (T37)", () => {
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
     ]);
+    // T37-3: it was woken by a tick, not by a task — and the tick names what
+    // no bridge here computes, so its absence is not read as calm.
+    const woke = records.find((r) => r.type === "message_in")?.["text"] as string;
+    expect(woke).toContain("[BRIDGE TICK]");
+    expect(woke).toContain("src=harness.");
+    expect(woke).toContain("missing=weekly,daily,cadenza");
+
     const results = finished.map((r) => String(r["result"]));
     expect(results[1]).toContain("VERDETTO: SFORO");
     expect(results[2]).toContain('"active": false');
