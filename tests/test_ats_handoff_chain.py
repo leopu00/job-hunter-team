@@ -25,6 +25,12 @@ from ats_detect import detect_ats  # noqa: E402
 ICIMS = "https://careers-es-example.icims.com/jobs/24335/login"
 ORACLE = "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7406/apply/email"
 COMPANY = "https://careers.example.com/jobs/24335"
+# An ATS the detector names by its host and for which no recipe exists. Until
+# 20/09 this test used iCIMS, and the iCIMS recipe (backend-4) turned its
+# premise false: the flow went into the recipe and stopped on
+# icims_step_unrecognised. The example must be an ATS that stays unsupported,
+# and `test_the_example_ats_really_has_no_recipe` fails the day it gains one.
+NO_RECIPE_ATS = "https://jobs.smartrecruiters.com/ExampleCo/743999-engineer"
 
 
 @pytest.mark.parametrize(
@@ -152,8 +158,8 @@ def test_the_company_apply_to_an_ats_without_a_recipe_stops_naming_it(browser, t
 
     monkeypatch.setattr(safe_fetch, "resolve_public_address", lambda *_a, **_k: None)
     pages = {
-        COMPANY: f'<html><body><h1>Engineer</h1><a href="{ICIMS}">Apply</a></body></html>',
-        ICIMS: '<html><body><iframe id="icims_content_iframe" src="about:blank"></iframe></body></html>',
+        COMPANY: f'<html><body><h1>Engineer</h1><a href="{NO_RECIPE_ATS}">Apply</a></body></html>',
+        NO_RECIPE_ATS: "<html><body><h1>Engineer</h1><p>Apply with SmartRecruiters</p></body></html>",
     }
     page = browser.new_page()
     page.route("**/*", lambda route: route.fulfill(
@@ -169,4 +175,11 @@ def test_the_company_apply_to_an_ats_without_a_recipe_stops_naming_it(browser, t
     import json
 
     saved = json.loads((tmp_path / "93.json").read_text())
-    assert saved["handoff_url"] == ICIMS
+    assert saved["handoff_url"] == NO_RECIPE_ATS
+
+
+def test_the_example_ats_really_has_no_recipe():
+    # The test above is only about an ATS without a recipe while this holds.
+    detected = detect_ats(NO_RECIPE_ATS)
+    assert detected.url_match and detected.platform == "smartrecruiters"
+    assert detected.platform not in apply_flow.SUPPORTED_PLATFORMS
