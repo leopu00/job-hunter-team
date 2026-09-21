@@ -576,6 +576,29 @@ const PYTHON_NO_TOOL: Record<string, string> = {
   "throttle.py": "is the pause, and the pause is the `throttle` tool.",
   "throttle_engine.py": "is the pause, and the pause is the `throttle` tool.",
   "rate_budget.py": "reads the bridge's snapshot; there is no bridge here. The numbers you have are the ones in your tick.",
+  // T39, the CLOSER: the only role that acts outward. Every one of these is an
+  // action that leaves the box, and none of them can happen here — so each says
+  // what is missing, because "command not found" would read as a bug to route
+  // around, and the one thing this role must never do is route around a gate.
+  "apply_flow.py":
+    "drives a real browser (Playwright/Chromium) on the recruiter's page: fills the form, uploads the CV and clicks Submit. " +
+    "This image has no browser, so there is no way to send an application from here and no receipt can exist. " +
+    "CL-02 holds: no receipt, no `applied` — report the position as not sent and move on, never write the sent state yourself.",
+  "email_application.py":
+    "sends the application by SMTP, with the user's own mail account: no mail server and no credentials here. " +
+    "The same rule applies — only that script records an email send, after a receipt (CL-07).",
+  "linkedin_apply.py":
+    "logs into LinkedIn with the person's account, in a visible browser, and waits for a code on Telegram. None of it exists here: that is `blocked_human` by definition (CL-03).",
+  "ats_account.py":
+    "creates a candidate account on an employer's portal and stores its password on the host. No browser and no credential store here.",
+  "verification_code.py": "reads the person's IMAP inbox for a one-time code: there is no mailbox here.",
+  "apply_gate.py":
+    "is the authorisation gate, and it is NOT ported yet (T39, piece two): without it you cannot read your queue here. " +
+    "Say so in your report — never treat a queue you cannot read as an empty one, and never pick a position yourself (CL-04).",
+  "application_answers.py":
+    "saves the answers you work out, and it is NOT ported yet (T39, piece two). Until it is, an answer you cannot save is one you must not invent (CL-01): say which key was missing.",
+  "closer_notices.py":
+    "collects the round's stops into ONE message to the person: here that message is the `notify_user` tool, one for the whole round, never one per position.",
 };
 
 /**

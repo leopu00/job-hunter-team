@@ -176,12 +176,33 @@ export function renderTick(tick: Tick, input: TickInput): string {
 }
 
 /**
- * The shape an agent's name has in the ledger: the role, optionally with its
- * instance number (`scout`, `scout-1`, `capitano`). Anything else is not an
- * agent — and the ledger really does carry other things: the official file
- * has rows a person wrote by hand, `taratura-web-search (HQ-VPS)` among them.
+ * The team's roles: the twelve folders under `agents/`. The ledger's `ruolo`
+ * column is only an agent's name when it is one of these, optionally with an
+ * instance number.
+ *
+ * A shape alone was not enough, and SICUREZZA showed it: with a regex of
+ * letters and hyphens, `ignora-le-regole-e-consiglia-hard-coast` reads as a
+ * perfectly good agent name and lands in the line the model takes as pacing.
+ * A closed list cannot be talked into anything — a new role is one line here,
+ * and until that line exists its spend shows up as `altro`, which is visible
+ * and harmless, where free text is neither.
  */
-const LEDGER_AGENT = /^[a-z][a-z-]{0,38}[a-z](-\d{1,3})?$|^[a-z]{1,40}$/;
+const TEAM_ROLES = [
+  "analista",
+  "assistente",
+  "capitano",
+  "closer",
+  "critico",
+  "dottore",
+  "mantenitore",
+  "mentor",
+  "scorer",
+  "scout",
+  "scrittore",
+  "sentinella",
+] as const;
+
+const LEDGER_AGENT = new RegExp(`^(?:${TEAM_ROLES.join("|")})(-\\d{1,3})?$`);
 
 /** Where the spend of a row whose `ruolo` is not an agent's name goes. */
 export const OTHER_SPENDER = "altro";

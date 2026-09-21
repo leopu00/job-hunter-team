@@ -271,6 +271,74 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Mock run complete: the CAPITANO woke, read the pipeline, routed a ticket and merged two categories on the native tools." },
 ];
 
+
+/**
+ * T39: the CLOSER's rehearsal, and it is a rehearsal of a REFUSAL.
+ *
+ * This is the only role that acts outward: it sends the applications the
+ * person authorised, one position at a time. Every one of those actions
+ * leaves the box — a browser on the recruiter's form, an upload, a Submit, an
+ * SMTP send — and none of them exists in this image. So what this run shows
+ * is exactly what the role does when sending is not possible, which its own
+ * prompt already answers: the flow cannot run, there is no receipt, and
+ * without a receipt nothing is marked `applied` (CL-02). It reads the
+ * position, tries the flow, is told why it cannot, tries to write the sent
+ * state anyway — refused, because that is not a rule here but an absence —
+ * tells the person once for the whole round, reports to the CAPITANO and
+ * leaves the queue alone.
+ *
+ * What it must NOT do is in here too: no second attempt on the same position
+ * (CL-03), no picking a position of its own (CL-04).
+ */
+export const CLOSER_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "The position the person authorised, and what was written for it.",
+    toolCalls: [
+      { name: "db_query", args: { args: ["position", "1"] } },
+      { name: "db_query", args: { args: ["application", "1"] } },
+    ],
+  },
+  {
+    text: "The flow, as the skill says to run it.",
+    toolCalls: [
+      {
+        name: "bash",
+        args: { command: "python3 /app/shared/skills/apply_flow.py --position-id 1 --url https://jobs.example/1 --profile /jht_home/profile/candidate_profile.yml --cv /jht_out/cv/CV.pdf" },
+      },
+    ],
+  },
+  {
+    text: "No browser here, so no receipt. I record neither the send nor a state I cannot prove.",
+    toolCalls: [{ name: "db_update", args: { args: ["application", "1", "--applied-at", "now", "--applied-via", "agent_closer"] } }],
+  },
+  {
+    text: "Refused, and rightly. One message for the whole round, then the report.",
+    toolCalls: [
+      {
+        name: "notify_user",
+        args: {
+          kind: "notification",
+          position_id: 1,
+          text: "Acme, Backend Engineer: not sent. This box has no browser, so the form cannot be filled and no receipt can exist — the position stays authorised and untouched.",
+        },
+      },
+    ],
+  },
+  {
+    toolCalls: [
+      {
+        name: "send_message",
+        args: { to: "capitano", text: "[@closer-1 -> @capitano] [BLOCKED] CLOSER apply_flow unavailable in this image: no browser, no receipt, nothing sent. Position 1 left as it was." },
+      },
+    ],
+  },
+  { toolCalls: [{ name: "throttle", args: { reason: "queue closed: nothing can be sent from here" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: nothing was sent, nothing was marked sent, and the person was told once." },
+];
+
 /**
  * T37: the SENTINELLA's rehearsal on a tick it must act on.
  *
@@ -543,6 +611,7 @@ export function productRoleMockScript(role: string, userDir = ".", profileDir = 
   if (role === "scrittore") return scrittoreMockScript(userDir, profileDir, historyDir);
   if (role === "critico") return criticoMockScript(userDir, profileDir);
   if (role === "sentinella") return SENTINELLA_MOCK_SCRIPT;
+  if (role === "closer") return CLOSER_MOCK_SCRIPT;
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 

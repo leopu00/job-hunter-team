@@ -185,6 +185,19 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
     insert: [],
     update: [],
   },
+  // T39, closer.md: the only role that acts outward, and the one whose write is
+  // the most irreversible — an application leaves the box under the person's name.
+  // It READS its queue and the rows behind it; the only thing it writes is the
+  // answers it works out, and that goes through `application_answers`, never here.
+  // The sent state is not in this table on purpose and could not be: `--applied`,
+  // `--applied-at` and `--applied-via` are not ported at all (db-update.ts), so in
+  // this harness NO role can mark an application sent. CL-02 — "no receipt, no
+  // applied" — is not a rule to obey here, it is a thing that cannot be done.
+  closer: {
+    query: ["position", "application", "recent-activity"],
+    insert: [],
+    update: [],
+  },
   // T37, sentinella.md RULE #0 ("DO NOT modify code, config, files, git"): the SENTINELLA
   // does not touch the database at all — not a read, not a write. Its whole data layer is
   // the bridges' JSONL under the team's home, and what it produces is one piece of advice
