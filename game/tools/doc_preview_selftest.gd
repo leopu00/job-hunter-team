@@ -130,6 +130,31 @@ func _init() -> void:
 	var f := FileAccess.open(pdf_path, FileAccess.WRITE)
 	f.store_string(MINI_PDF)
 	f.close()
+	# ── i percorsi di pdftoppm vanno per sistema ──
+	# Su Windows i tre candidati POSIX fissi non potevano nascere e il gate
+	# riempiva il log di «Could not create child process»: qui si pretende
+	# che la lista dipenda dal sistema e che il PATH del processo conti.
+	if DocRender.pdftoppm_exe_name("Windows") != "pdftoppm.exe":
+		failures.append("pdftoppm:windows_exe_name")
+	if DocRender.pdftoppm_exe_name("Linux") != "pdftoppm":
+		failures.append("pdftoppm:posix_exe_name")
+	var win_dirs := DocRender.pdftoppm_search_dirs(
+			"Windows", "C:\\poppler\\bin;C:\\Windows\\system32")
+	for dir in win_dirs:
+		if dir.begins_with("/"):
+			failures.append("pdftoppm:posix_path_on_windows:" + dir)
+	if not win_dirs.has("C:\\poppler\\bin"):
+		failures.append("pdftoppm:windows_path_ignored")
+	var mac_dirs := DocRender.pdftoppm_search_dirs("macOS", "/usr/bin")
+	for prefix in ["/opt/homebrew/bin", "/usr/local/bin"]:
+		if not mac_dirs.has(prefix):
+			failures.append("pdftoppm:missing_brew_prefix:" + prefix)
+	var linux_dirs := DocRender.pdftoppm_search_dirs("Linux", "/usr/bin:/usr/local/bin")
+	if linux_dirs.has("/opt/homebrew/bin"):
+		failures.append("pdftoppm:brew_prefix_outside_macos")
+	if not linux_dirs.has("/usr/bin"):
+		failures.append("pdftoppm:linux_path_ignored")
+
 	var result := DocRender.rasterize_pdf(pdf_path,
 			cache.path_join("jht-selftest-page"))
 	var pages: Array = result["pages"]
@@ -141,7 +166,12 @@ func _init() -> void:
 			if img.load(pages[0]) != OK or img.get_width() < 50:
 				failures.append("raster:png_invalid")
 	else:
-		print("[doc-preview-test] nessun renderer pdf locale: raster saltata")
+		# Salto dichiarato, non errore: su un sistema senza poppler il PDF
+		# non si rasterizza, e il test lo dice invece di tentare il lancio.
+		print("[doc-preview-test] SALTATA la rasterizzazione: %s non e' in nessuna "
+				% DocRender.pdftoppm_exe_name(OS.get_name())
+				+ "cartella del PATH su %s, e sips esiste solo su macOS"
+				% OS.get_name())
 
 	if failures.is_empty():
 		print("DOC-PREVIEW-TEST PASS")

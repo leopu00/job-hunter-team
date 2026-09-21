@@ -59,31 +59,65 @@ static func _inline(line: String, bold: RegEx, emph: RegEx, white: String,
 	var rendered := bold.sub(line, "[b][color=%s]$1[/color][/b]" % white, true)
 	return emph.sub(rendered, "[color=%s]$1[/color]" % bright, true)
 
+## ── Dove sta pdftoppm: si CERCA, non si lancia a vuoto ───────────────
+## Fino al 21/09 i candidati erano tre percorsi POSIX fissi provati su
+## ogni sistema: su Windows nessuno dei tre puo' nascere e ogni tentativo
+## lasciava a schermo «Could not create child process: \opt\homebrew\bin\
+## pdftoppm», cioe' un rumore che somiglia a un guasto e non lo e'. Qui il
+## binario si cerca nel filesystem: un candidato che non esiste non diventa
+## mai un processo, e i prefissi di brew restano dove brew esiste.
+static func pdftoppm_exe_name(os_name: String) -> String:
+	return "pdftoppm.exe" if os_name == "Windows" else "pdftoppm"
+
+## Le cartelle da guardare, nell'ordine: prima il PATH del processo, poi —
+## solo su macOS — i due prefissi di brew, perche' un'app lanciata dal
+## Finder riceve il PATH ridotto di launchd e brew non ci compare.
+static func pdftoppm_search_dirs(os_name: String, path_env: String) -> PackedStringArray:
+	var dirs := PackedStringArray()
+	for raw_dir in path_env.split(";" if os_name == "Windows" else ":", false):
+		var dir := raw_dir.strip_edges()
+		if dir != "" and not dirs.has(dir):
+			dirs.append(dir)
+	if os_name == "macOS":
+		for prefix in ["/opt/homebrew/bin", "/usr/local/bin"]:
+			if not dirs.has(prefix):
+				dirs.append(prefix)
+	return dirs
+
+## "" quando il binario non c'e': il chiamante salta la rasterizzazione
+## invece di provare a eseguire un percorso che non esiste.
+static func find_pdftoppm() -> String:
+	var exe := pdftoppm_exe_name(OS.get_name())
+	for dir in pdftoppm_search_dirs(OS.get_name(), OS.get_environment("PATH")):
+		var candidate := dir.path_join(exe)
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
+
 ## ── Rasterizzazione PDF locale ───────────────────────────────────────
 ## pdftoppm (tutte le pagine) con fallback sips su macOS (solo pagina 1).
-## Le GUI su macOS non ereditano il PATH di brew: si provano i percorsi
-## noti. Ritorna {pages: Array[String], first_page_only: bool}.
+## Ritorna {pages: Array[String], first_page_only: bool}.
 static func rasterize_pdf(pdf_local: String, out_prefix: String) -> Dictionary:
 	# pulizia dei residui del giro precedente
 	for i in range(1, RASTER_MAX_PAGES + 1):
 		for candidate in page_names(out_prefix, i):
 			DirAccess.remove_absolute(candidate)
 	var out: Array = []
-	for exe in ["pdftoppm", "/opt/homebrew/bin/pdftoppm", "/usr/local/bin/pdftoppm"]:
-		if OS.execute(exe, ["-png", "-r", RASTER_DPI, pdf_local, out_prefix],
-				out, true) == 0:
-			var pages: Array = []
-			for i in range(1, RASTER_MAX_PAGES + 1):
-				var found := ""
-				for candidate in page_names(out_prefix, i):
-					if FileAccess.file_exists(candidate):
-						found = candidate
-						break
-				if found == "":
+	var exe := find_pdftoppm()
+	if exe != "" and OS.execute(exe, ["-png", "-r", RASTER_DPI, pdf_local, out_prefix],
+			out, true) == 0:
+		var pages: Array = []
+		for i in range(1, RASTER_MAX_PAGES + 1):
+			var found := ""
+			for candidate in page_names(out_prefix, i):
+				if FileAccess.file_exists(candidate):
+					found = candidate
 					break
-				pages.append(found)
-			if not pages.is_empty():
-				return {"pages": pages, "first_page_only": false}
+			if found == "":
+				break
+			pages.append(found)
+		if not pages.is_empty():
+			return {"pages": pages, "first_page_only": false}
 	if OS.get_name() == "macOS":
 		var png := out_prefix + "-sips.png"
 		DirAccess.remove_absolute(png)
@@ -98,11 +132,7 @@ static func page_names(prefix: String, page: int) -> Array:
 
 ## Un renderer pdf locale esiste? (sips è di sistema su macOS)
 static func has_renderer() -> bool:
-	var out: Array = []
-	for exe in ["pdftoppm", "/opt/homebrew/bin/pdftoppm", "/usr/local/bin/pdftoppm"]:
-		if OS.execute(exe, ["-v"], out, true) == 0:
-			return true
-	return OS.get_name() == "macOS"
+	return find_pdftoppm() != "" or OS.get_name() == "macOS"
 
 ## ── Apertura PDF attestata e reveal ──────────────────────────────────
 

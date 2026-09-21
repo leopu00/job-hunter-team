@@ -84,8 +84,31 @@ jobs:
       # 21/09 senza Pillow usciva 0 dicendo SKIP: dieci ritratti mancanti erano
       # rossi in locale e invisibili qui. Ora l'audit e' rosso se non puo'
       # girare, quindi la libreria va installata prima dei test.
+      # Il `python3` del runner macOS e' quello di Homebrew, che dal 21/09
+      # rifiuta l'installazione di sistema (PEP 668, `externally-managed-
+      # environment`): li' il posto giusto e' un venv, che e' anche la via che
+      # Homebrew stesso indica. `--system-site-packages` perche' gli altri
+      # selftest python devono continuare a vedere quello che vedevano prima.
+      # Il passo finisce SEMPRE con l'import: e' l'effetto che conta, non il
+      # comando — un `pip install` riuscito in un python che i test non usano
+      # lascerebbe l'audit rosso senza dirne il motivo.
       - name: Install the portrait audit's dependency
-        run: python3 -m pip install --disable-pip-version-check --quiet Pillow
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! python3 -c "import PIL" 2>/dev/null; then
+            venv="${RUNNER_TEMP}/jht-pillow-venv"
+            bin="bin"
+            [ "${RUNNER_OS}" = "Windows" ] && bin="Scripts"
+            python3 -m venv --system-site-packages "$venv"
+            # il venv di Windows espone `python`, quello POSIX `python3`
+            py="$venv/$bin/python3"
+            [ -x "$py" ] || py="$venv/$bin/python"
+            "$py" -m pip install --disable-pip-version-check --quiet Pillow
+            echo "$venv/$bin" >> "$GITHUB_PATH"
+            export PATH="$venv/$bin:$PATH"
+          fi
+          python3 -c "import PIL, sys; print('Pillow', PIL.__version__, 'in', sys.executable)"
 
       - name: Import and parse project
         run: godot --headless --path game --import
