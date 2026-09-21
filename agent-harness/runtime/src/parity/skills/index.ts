@@ -21,6 +21,7 @@ import { createDeadlineExtractTool } from "./deadline-extract.ts";
 import { createEnrichmentPolicyTool } from "./enrichment-policy.ts";
 import { createLogoFetchTool } from "./logo-fetch.ts";
 import { createRecheckLivenessTool } from "./recheck-liveness.ts";
+import { createRenderPdfTool } from "./render-pdf.ts";
 import { createRoleRegistryTool } from "./role-registry.ts";
 import { createSafeFetchTool } from "./safe-fetch.ts";
 import { createSalaryEstimateTool } from "./salary-estimate.ts";
@@ -48,6 +49,10 @@ export interface SkillToolsOptions {
   profileDir?: string | undefined;
   /** The runtime's state root: the salary cache is read from `<stateDir>/cache/`. */
   stateDir?: string | undefined;
+  /** The deliverables folder (`JHT_API_USER_DIR`): what `render_pdf` reads and writes. */
+  userDir?: string | undefined;
+  /** Where a relative path a tool is given resolves: the role's home. */
+  workdir?: string | undefined;
   /** Test seam for the network tools: a scripted resolver and transport. */
   client?: SafeHttpsClient;
 }
@@ -118,6 +123,11 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
     if (listed.has("logo-extraction")) tools.push(createLogoFetchTool({ db: db.open, client, policy }));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
+  // T30: the CV's PDF. The renderer is a tool and never a shell command — its
+  // arguments are the runtime's (SICUREZZA §10). Only the SCRITTORE lists the skill.
+  if (listed.has("cv-structure") && options.userDir) {
+    tools.push(createRenderPdfTool({ userDir: options.userDir, agent: options.agent, workdir: options.workdir ?? options.userDir }));
+  }
   // T21, the CAPITANO's own scripts. Its diary is the team's state, in the runtime's
   // state root: never the person's profile, which the runtime mounts read-only.
   if (listed.has("format-time") || listed.has("captain-diary") || scripts.has("team_directives")) {

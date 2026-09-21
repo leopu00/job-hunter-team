@@ -2,8 +2,11 @@
  * T25: `npm run role -- --role scrittore` on the mock, as a person types it.
  * The SCRITTORE takes the position the person asked a CV for, opens the
  * anti-rewrite gate, claims it, reads the profile, writes the CV where the
- * person will find it, records the application and hands it to the Critic.
- * No PDF: the image carries no pandoc, and the prompt it runs on says so.
+ * person will find it, renders the PDF, records the application and hands it
+ * to the Critic. T30: the render is `render_pdf`, whose arguments are the
+ * runtime's — where the box has no toolchain the call fails with the sentence
+ * that keeps the markdown as the deliverable, so this run asserts whichever
+ * of the two this box is.
  */
 
 import { execFile } from "node:child_process";
@@ -15,7 +18,12 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { ENGINE, PANDOC } from "../src/parity/skills/render-pdf.ts";
+import { onPath } from "../src/parity/jht-tools.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
+
+/** Whether this box can really render: the image can, a laptop usually cannot. */
+const RENDERS = onPath(PANDOC) && onPath(ENGINE);
 
 const run = promisify(execFile);
 
@@ -76,6 +84,7 @@ describe("npm run role -- --role scrittore (T25)", () => {
       ["db_update", "accepted"],
       ["read_file", "accepted"],
       ["write_file", "accepted"],
+      ["render_pdf", RENDERS ? "accepted" : "failed"],
       ["read_file", "accepted"],
       ["write_file", "denied"],
       ["db_insert", "accepted"],
@@ -89,15 +98,17 @@ describe("npm run role -- --role scrittore (T25)", () => {
     expect(results[3]).toBe("No application for position 1. PROCEED.");
     expect(results[4]).toBe("Position 1 updated: status=writing");
     // The history is read freely and written by nobody: the run's own permission policy says so.
-    expect(results[7]).toContain("The CV the person wrote in 2024");
-    expect(results[8]).toMatch(/not allowed|read-only|refused/i);
+    expect(results[7]).toMatch(RENDERS ? /^Rendered .*\.md to .*\.pdf — \d+ bytes\./ : /This box has no PDF toolchain/);
+    expect(results[8]).toContain("The CV the person wrote in 2024");
+    expect(results[9]).toMatch(/not allowed|read-only|refused/i);
     expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
-    expect(results[9]).toBe("Application inserted for position 1");
+    expect(results[10]).toBe("Application inserted for position 1");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     // The deliverable is where the person will look for it, and the row points at it.
     const cvDir = join(root, "api", "user", "cv");
-    expect(await readdir(cvDir)).toEqual(["CV_Candidate_1_acme.md"]);
+    // The PDF is beside the markdown wherever the box can make one.
+    expect((await readdir(cvDir)).sort()).toEqual(RENDERS ? ["CV_Candidate_1_acme.md", "CV_Candidate_1_acme.pdf"] : ["CV_Candidate_1_acme.md"]);
     expect(await readFile(join(cvDir, "CV_Candidate_1_acme.md"), "utf8")).toContain("# Candidate — Backend Engineer");
     const after = openJobsDb(join(root, "api", "db", "jobs.db"));
     expect(after.prepare("SELECT status FROM positions WHERE id = 1").get()).toEqual({ status: "writing" });

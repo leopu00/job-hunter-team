@@ -148,6 +148,9 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     dedupLog,
     profileDir,
     stateDir: options.apiHome,
+    // T30: `render_pdf` reads the markdown a role wrote here and writes the PDF beside it.
+    userDir,
+    workdir: options.homeDir,
   };
   const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.

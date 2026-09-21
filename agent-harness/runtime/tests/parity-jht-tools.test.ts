@@ -299,13 +299,20 @@ describe("replacedCommand", () => {
     }
   });
 
-  it("refuses the PDF toolchain only where the box has none (T25 follow-up)", () => {
+  it("refuses poppler only where the box has none (T25 follow-up)", () => {
     const has = (name: string) => ["pandoc", "wkhtmltopdf", "pdftotext"].includes(name);
     const none = () => false;
-    for (const command of ["pandoc cv.md -o cv.pdf --pdf-engine=wkhtmltopdf", "pdftotext -bbox-layout cv.pdf -", "wkhtmltopdf a.html a.pdf"]) {
+    for (const command of ["pdftotext -bbox-layout cv.pdf -", "pdffonts cv.pdf"]) {
       // The image gained them in T24-b; a table that still said "missing" cost a whole turn.
-      expect(replacedCommand(command, has), command).toBeNull();
+      // Poppler measures a PDF, it does not make one: nothing replaces it.
+      expect(replacedCommand(command, has), command).toBe(has(command.split(" ")[0]!) ? null : command.split(" ")[0]);
       expect(replacedCommand(command, none), command).not.toBeNull();
+    }
+    // T30: the renderer is different — the command itself is the hole, so it is
+    // answered with `render_pdf` whether or not the box carries it.
+    for (const box of [has, none]) {
+      expect(replacedCommand("pandoc cv.md -o cv.pdf --pdf-engine=wkhtmltopdf", box)).toBe("pandoc");
+      expect(replacedCommand("wkhtmltopdf a.html a.pdf", box)).toBe("wkhtmltopdf");
     }
     // What is gone by construction stays gone, installed or not.
     expect(replacedCommand("tmux kill-session -t X", () => true)).toBe("tmux");

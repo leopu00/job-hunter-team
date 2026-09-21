@@ -275,8 +275,10 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
  * T25: the SCRITTORE's rehearsal on the position the SCORER left `scored`
  * with the person's CV request on it. It opens the anti-rewrite gate, claims
  * the position, reads the profile, writes the CV where the person will find
- * it, records the application and hands it to the Critic. No PDF: the image
- * carries no pandoc, so the deliverable is the markdown (docs/parity.md).
+ * it, renders the PDF the company receives, records the application and hands
+ * it to the Critic. T30: the render is a tool with a fixed argument vector —
+ * where a box has no pandoc or wkhtmltopdf the call says so, and the markdown
+ * stays the deliverable (docs/parity.md).
  */
 export function scrittoreMockScript(userDir: string, profileDir: string, historyDir?: string): ScriptedTurn[] {
   const cv = `${userDir}/cv/CV_Candidate_1_acme.md`;
@@ -305,6 +307,10 @@ export function scrittoreMockScript(userDir: string, profileDir: string, history
           },
         },
       ],
+    },
+    {
+      text: "And the PDF the company receives.",
+      toolCalls: [{ name: "render_pdf", args: { source: cv, title: "CV Candidate" } }],
     },
     ...(historyDir === undefined
       ? []
