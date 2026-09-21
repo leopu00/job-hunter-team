@@ -6,6 +6,8 @@
  *   JHT_HUB_DB          the team's jobs.db
  *   JHT_HUB_CHANNELS    the folder of mailbox/, replies/ and notify.jsonl
  *   JHT_HUB_STATE       the hub's own state (salary cache, scout-dedup.log)
+ *   JHT_HUB_USER_DIR    the deliverables (`out/`): the hub writes the CRITICO's review in
+ *                       its `critiche/` with its own uid (T34). Absent: `/v1/review` is 503
  *   JHT_HUB_PORT        port on 127.0.0.1 (default 8788)
  *   JHT_API_APP_ROOT    the folder holding agents/ (default this checkout; /app in the image)
  *   JHT_API_PROFILE_DIR the person's profile, read-only
@@ -43,6 +45,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 const tokens = loadTokens(required("JHT_HUB_TOKENS"));
 const profileDir = process.env["JHT_API_PROFILE_DIR"]?.trim();
 const jhtHome = process.env["JHT_HOME"]?.trim();
+const userDir = process.env["JHT_HUB_USER_DIR"]?.trim();
 // The launcher is on only when the operator gives it a configuration (SICUREZZA §9).
 const launcherConfig = process.env["JHT_LAUNCHER_CONFIG"]?.trim();
 const launcher = launcherConfig
@@ -66,6 +69,7 @@ const server = createHub({
   appRoot: process.env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT,
   ...(profileDir ? { profileDir } : {}),
   ...(jhtHome ? { jhtHome } : {}),
+  ...(userDir ? { userDir } : {}),
   ...(launcher ? { launcher } : {}),
   ...(teamToken ? { teamToken } : {}),
 });

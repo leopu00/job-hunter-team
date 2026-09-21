@@ -18,6 +18,7 @@ POSTs, JSON in and out, each with a role's token in `Authorization: Bearer`:
 | `/v1/mailbox/drain` `{}` | empties the caller's inbox, and only the caller's |
 | `/v1/notify` `{kind, text, positionId?}` | appends to `notify.jsonl`, at most 5 per hour per agent (kept here too, not only in the role) |
 | `/v1/replies/take` `{}` | the person's replies to the caller |
+| `/v1/review` `{position_id, text}` | writes the CRITICO's review in `<JHT_HUB_USER_DIR>/critiche/`, **with the hub's own uid** (T34). In-process the Critic carries the SCRITTORE's, which may not write there — and opening that folder to it would let the reviewed rewrite its own review. Only the SCRITTORE and the CRITICO may ask (403 otherwise), the company is read from the database and cut to a slug so no character of the path comes from the model, the finished path is checked to be inside the deliverables, and a review never replaces the one before it (`-v2`, `-v3`: the ordinal is the round order). Answers the path written. Without `JHT_HUB_USER_DIR`: 503 |
 
 Two paths are the HOST's, not a role's, and take the team's own token
 (`JHT_HUB_TEAM_TOKEN`), which is in another file and matches no role's:
