@@ -176,6 +176,17 @@ export function renderTick(tick: Tick, input: TickInput): string {
 }
 
 /**
+ * The shape an agent's name has in the ledger: the role, optionally with its
+ * instance number (`scout`, `scout-1`, `capitano`). Anything else is not an
+ * agent — and the ledger really does carry other things: the official file
+ * has rows a person wrote by hand, `taratura-web-search (HQ-VPS)` among them.
+ */
+const LEDGER_AGENT = /^[a-z][a-z-]{0,38}[a-z](-\d{1,3})?$|^[a-z]{1,40}$/;
+
+/** Where the spend of a row whose `ruolo` is not an agent's name goes. */
+export const OTHER_SPENDER = "altro";
+
+/**
  * The window's rows out of the team's ledger (`data ruolo … usd …`).
  *
  * The file is a TSV every live run appends to, written by runs that may still
@@ -202,7 +213,14 @@ export function readLedgerSpend(path: string, from: Date, to: Date): SpendRow[] 
     const usd = Number(fields[6]);
     if (Number.isNaN(at.getTime()) || !Number.isFinite(usd)) continue;
     if (at < from || at > to) continue;
-    rows.push({ agent: fields[1]!, usd, at });
+    // SICUREZZA (T37-3, P2): this field is interpolated into the line the
+    // model receives as its turn's input, so a `ruolo` that is not an agent's
+    // name would be free text inside what reads as pacing — aimed at the role
+    // that advises the one who decides. It is NOT dropped, though: the dollars
+    // are real whoever wrote them, and a budget guard that undercounts spend
+    // errs on the wrong side. The money stays, the name becomes `altro`.
+    const agent = fields[1]!;
+    rows.push({ agent: LEDGER_AGENT.test(agent) ? agent : OTHER_SPENDER, usd, at });
   }
   return rows;
 }
