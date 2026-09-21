@@ -8,6 +8,7 @@
   },
   "scripts": {
     "role": "node --experimental-strip-types --env-file-if-exists=.env src/cli/run.ts",
+    "user": "node --experimental-strip-types --env-file-if-exists=.env src/cli/user.ts",
     "monitor": "node --experimental-strip-types --env-file-if-exists=.env src/cli/monitor.ts",
     "hub": "node --experimental-strip-types src/cli/hub.ts",
     "typecheck": "tsc --noEmit",
