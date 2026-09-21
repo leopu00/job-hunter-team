@@ -340,6 +340,60 @@ export const CLOSER_MOCK_SCRIPT: ScriptedTurn[] = [
 ];
 
 /**
+ * T40: the MENTOR's daily pass. It is read-only by its own M-04 — "never
+ * db_insert.py / db_update.py, never the profile" — and silent by M-01, and
+ * both are fences here rather than habits. It wakes on the person's replies,
+ * reads their name from the profile, walks the sets it watches (the
+ * exclusions, the outcome funnel of what was sent, the reasons the person
+ * types) and counts before it speaks (M-02, M-05).
+ *
+ * What it must NOT do is in here too, and is refused: moving a position it is
+ * judging, and telling the SCOUT what to search — the person's reasons are
+ * spoken to the person, "never to the Scout" (mentor-patterns, Pattern F).
+ * Its word reaches the person through `chat_reply`, the tool `jht-send` is here.
+ */
+export function mentorMockScript(profileDir: string): ScriptedTurn[] {
+  return [
+    { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+    { text: "What the person said while I was away.", toolCalls: [{ name: "check_user_replies", args: {} }] },
+    { text: "Their name, and what they aim at.", toolCalls: [{ name: "read_file", args: { path: `${profileDir}/candidate_profile.yml` } }] },
+    {
+      text: "The sets, not the points: what was excluded, what came back from what was sent, what they wrote.",
+      toolCalls: [
+        { name: "db_query", args: { args: ["positions", "--status", "excluded"] } },
+        { name: "db_query", args: { args: ["applications", "--days", "0"] } },
+        { name: "feedback_query", args: { command: "themes" } },
+      ],
+    },
+    {
+      // M-04, tried and refused: the pipeline it judges is not its to move.
+      text: "Position 2 is plainly out of reach. I would mark it.",
+      toolCalls: [{ name: "db_update", args: { args: ["position", "2", "--status", "excluded", "--notes", "ESCLUSA: [SENIORITY] mentor"] } }],
+    },
+    {
+      // Pattern F: the person's reasons go to the person, never to the Scout.
+      text: "And tell the Scout to stop bringing senior roles.",
+      toolCalls: [{ name: "send_message", args: { to: "scout-1", text: "[@mentor -> @scout-1] [REQ] Stop searching senior roles." } }],
+    },
+    {
+      text: "Refused, and rightly: I suggest, the person decides. The number, to them.",
+      toolCalls: [
+        {
+          name: "chat_reply",
+          args: {
+            text: "A Person, I have counted. Two of the three positions excluded this month were excluded for seniority. Is the target still senior?",
+          },
+        },
+      ],
+    },
+    { toolCalls: [{ name: "throttle", args: { reason: "daily pass done; silence until the next one" } }] },
+    { text: "Paused." },
+    { toolCalls: [{ name: "check_user_replies", args: {} }] },
+    { text: "Mock run complete: records read, nothing written, one number to the person and nothing to the workers." },
+  ];
+}
+
+/**
  * T37: the SENTINELLA's rehearsal on a tick it must act on.
  *
  * Its turn starts with the mailbox — a verdict that never reached a pane is
@@ -612,6 +666,7 @@ export function productRoleMockScript(role: string, userDir = ".", profileDir = 
   if (role === "critico") return criticoMockScript(userDir, profileDir);
   if (role === "sentinella") return SENTINELLA_MOCK_SCRIPT;
   if (role === "closer") return CLOSER_MOCK_SCRIPT;
+  if (role === "mentor") return mentorMockScript(profileDir);
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 

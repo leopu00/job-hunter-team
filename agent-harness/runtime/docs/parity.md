@@ -292,6 +292,7 @@ npm run role -- --role critico --agent critico-1 --turns 2 --pause-ms 0
 npm run role -- --role assistente --agent assistente-1 --turns 2 --pause-ms 0
 npm run role -- --role sentinella --agent sentinella-1 --turns 2 --pause-ms 0
 npm run role -- --role closer --agent closer-1 --turns 2 --pause-ms 0
+npm run role -- --role mentor --agent mentor-1 --turns 2 --pause-ms 0
 npm run monitor -- --last
 ```
 
@@ -343,6 +344,36 @@ of working around it: `apply_gate.py` (the authorisation gate: its queue read
 is piece two) and `application_answers.py` (the answers it works out). Until
 they are, an unreadable queue is not an empty one (CL-04) and an answer it
 cannot save is one it must not invent (CL-01).
+
+**The MENTOR reads, and speaks to the person (T40).** It is the one voice
+with the standing to tell the person "it is a craft you lack, not a
+position", and that standing rests on two things its prompt says of itself:
+it only reads (M-04: never `db_insert` / `db_update`, never the profile), and
+the reasons the person types are spoken back to the person, "never to the
+Scout" (`mentor-patterns`, Pattern F). Here both are fences:
+
+| What the prompt says | Here |
+|---|---|
+| read-only in the database (M-04) | its DB policy reads positions, applications, the board and recent activity; no write tool is built for it at all (`db-update` is not in its skills) |
+| never modifies the profile | the profile is writable by the ASSISTENTE only (`profileWritables`) |
+| escalation, rare, to the Capitano; the DOTTORE via `spawn-doctor` | `PEER_POLICY`: the CAPITANO and the DOTTORE, nobody else — a message to a worker is refused with the rule |
+| the outcome funnel of what was sent (Pattern D) | `db_query applications`, ported for this role byte for byte with `db_query.py` (`tests/db-query.test.ts`) |
+| the person's reasons (Pattern F) | `feedback_query`; with no cloud lane `recent`/`themes` answer `no-signal:cloud-disabled`, as the script does with the cloud off |
+| `jht-send` for its three formats | `chat_reply` |
+
+`tests/parity-mentor-run.test.ts` runs the daily pass on the mock: it reads
+the sets and counts, tries to mark a position and to tell the SCOUT what to
+search — both refused — and says one number to the person. The rows and the
+profile are byte for byte the ones that were there before.
+
+Not ported, and why: the welcome handshake (`[WELCOME-USER]`,
+`mentor-welcomed.flag` in the profile) is the TUI's bridge dispatching a
+marker into a pane, and the flag lives in a folder this role cannot write.
+And three commands its `mentor-patterns` skill documents do not exist in
+`db_query.py` either — `positions --limit/--order-by`, `scores`,
+`applications --critic-score-max` — so Patterns A, C and E fail in the TUI as
+they do here, with the same argparse error. That is a product defect, not a
+harness one, and is reported as such.
 
 **The SENTINELLA advises one agent, and here that is a fence (T37).** Its
 prompt opens with RULE #0 — "DO NOT talk to other agents except the Capitano"
