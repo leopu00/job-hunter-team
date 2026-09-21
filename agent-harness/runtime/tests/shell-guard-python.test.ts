@@ -15,6 +15,10 @@
  * the defect passed under a test of mine that asserted just that.
  */
 
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { guardShellTool, pythonRefusal } from "../src/parity/jht-tools.ts";
@@ -36,13 +40,26 @@ function shell(): { tool: ToolHandler; ran: string[] } {
   return { tool, ran };
 }
 
-const guarded = (overrides: Record<string, string> = {}) => {
+/**
+ * A PATH with no interpreter on it, and one with an interpreter on it. The
+ * refusal is the same on both; only its REASON may differ, and these two make
+ * the difference visible instead of leaving it to whatever box runs the suite
+ * — this Mac has a `python3`, the image does not.
+ */
+const noPython = { PATH: mkdtempSync(join(tmpdir(), "no-python-")) };
+const withPython = (() => {
+  const dir = mkdtempSync(join(tmpdir(), "with-python-"));
+  writeFileSync(join(dir, "python3"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  return { PATH: dir };
+})();
+
+const guarded = (overrides: Record<string, string> = {}, env: NodeJS.ProcessEnv = noPython) => {
   const { tool, ran } = shell();
-  return { guard: guardShellTool(tool, (a) => (a as { command: string }).command, overrides), ran };
+  return { guard: guardShellTool(tool, (a) => (a as { command: string }).command, overrides, env), ran };
 };
 
-const run = (command: string, overrides: Record<string, string> = {}) => {
-  const { guard, ran } = guarded(overrides);
+const run = (command: string, overrides: Record<string, string> = {}, env: NodeJS.ProcessEnv = noPython) => {
+  const { guard, ran } = guarded(overrides, env);
   return guard.execute({ command }, context).then((r) => ({ ...r, ran }));
 };
 
@@ -105,8 +122,8 @@ describe("any other Python at all", () => {
     const r = await run("grep -rn python3 README.md");
     expect(r.ok).toBe(true);
     expect(r.ran).toEqual(["grep -rn python3 README.md"]);
-    expect(pythonRefusal("ls -la /app/shared/skills")).toBeNull();
-    expect(pythonRefusal("echo 'python3 is not here'")).toBeNull();
+    expect(pythonRefusal("ls -la /app/shared/skills", {}, noPython)).toBeNull();
+    expect(pythonRefusal("echo 'python3 is not here'", {}, noPython)).toBeNull();
   });
 
   it("a python hidden after a separator is still a python", async () => {
@@ -116,6 +133,37 @@ describe("any other Python at all", () => {
       "echo $(python3 -c 'print(1)')",
     ]) {
       expect((await run(command)).ok).toBe(false);
+    }
+  });
+});
+
+/**
+ * The refusal is a constant, the REASON is a measurement (21/09, rilievo di
+ * SICUREZZA on 8fad63768). The two closing messages asserted a fact about the
+ * box — "the image carries no Python". True of today's image, measured; false
+ * on a development box, and false the day an image ships an interpreter. A
+ * model handed a reason it can check and find wrong has been given a door, not
+ * a wall. Same shape as the PDF toolchain, where the rule we took was
+ * "detected, not declared".
+ */
+describe("the reason for refusing python is measured, not asserted", () => {
+  it("refuses either way: the script has a tool, wherever Python is", () => {
+    for (const env of [noPython, withPython]) {
+      const refusal = pythonRefusal("python3 /app/shared/skills/db_query.py stats", {}, env);
+      expect(refusal).toContain("db_query");
+      expect(refusal).toContain("Nothing was run.");
+    }
+  });
+
+  it("says the interpreter is missing only where it is missing", () => {
+    for (const command of ["python3 /app/shared/skills/unknown_script.py", "python3 -c 'print(1)'"]) {
+      expect(pythonRefusal(command, {}, noPython)).toContain("no Python");
+
+      const present = pythonRefusal(command, {}, withPython) ?? "";
+      expect(present).toContain("Nothing was run.");
+      expect(present).not.toContain("no Python");
+      expect(present).not.toContain("there is no interpreter");
+      expect(present).toContain("does not run Python");
     }
   });
 });

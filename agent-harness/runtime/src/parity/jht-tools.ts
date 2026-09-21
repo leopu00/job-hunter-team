@@ -580,11 +580,19 @@ const PYTHON_NO_TOOL: Record<string, string> = {
 
 /**
  * What the shell must answer for a Python call, or `null` when the line runs
- * no Python at all. The image carries no interpreter, so every one of these
- * would have died as `command not found`: the difference is whether the model
- * learns what to use instead.
+ * no Python at all. The refusal itself never depends on the box — the shared
+ * skills are replaced by tools wherever they are — but the REASON does, and it
+ * is measured, not asserted (the rule we took from the PDF toolchain): today's
+ * image carries no interpreter, a development box or the next image may. A
+ * model told "there is no Python here" on a box that has it receives a reason
+ * that is false, and a false reason is an invitation to go round it.
  */
-export function pythonRefusal(command: string, overrides: Readonly<Record<string, string>> = {}): string | null {
+export function pythonRefusal(
+  command: string,
+  overrides: Readonly<Record<string, string>> = {},
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const interpreter = onPath("python3", env) || onPath("python", env);
   const replaced = replacedSkill(command);
   if (replaced !== null) {
     return `Error: \`python3 …/${replaced}\` does not exist here. Use the \`${overrides[replaced] ?? PYTHON_SKILLS[replaced]}\` tool instead. Nothing was run.`;
@@ -594,15 +602,20 @@ export function pythonRefusal(command: string, overrides: Readonly<Record<string
     const instead = PYTHON_NO_TOOL[script];
     if (instead !== undefined) return `Error: \`${script}\` ${instead} Nothing was run.`;
     return (
-      `Error: \`${script}\` cannot run here: the image carries no Python, so there is no interpreter for it — ` +
-      `a shell would answer \`command not found\` and nothing else. If it is one of the team's shared skills, ` +
-      `it has a native tool or it is not available at all; say in your report which one you needed. Nothing was run.`
+      `Error: \`${script}\` cannot run here: ` +
+      (interpreter
+        ? "this role does not run Python at all — every shared skill it needs is a native tool with the script's own arguments. "
+        : "the image carries no Python, so there is no interpreter for it — a shell would answer `command not found` and nothing else. ") +
+      `If it is one of the team's shared skills, it has a native tool or it is not available at all; ` +
+      `say in your report which one you needed. Nothing was run.`
     );
   }
   if (PYTHON_ANY.test(command)) {
     return (
-      "Error: there is no Python in this image — no interpreter, no REPL, no `-c`. Every shared skill a role needs " +
-      "is a native tool with the script's own arguments. Nothing was run."
+      (interpreter
+        ? "Error: this role does not run Python here — not a script, not a REPL, not `-c`. "
+        : "Error: there is no Python in this image — no interpreter, no REPL, no `-c`. ") +
+      "Every shared skill a role needs is a native tool with the script's own arguments. Nothing was run."
     );
   }
   return null;
@@ -618,12 +631,14 @@ export function guardShellTool(
   commandOf: (args: unknown) => string,
   /** The role's own tools for scripts, as its text was rewritten with (`rewritePythonSkills`). */
   overrides: Readonly<Record<string, string>> = {},
+  /** The box the refusal describes: measured, never assumed (see `pythonRefusal`). */
+  env: NodeJS.ProcessEnv = process.env,
 ): ToolHandler {
   return {
     spec: shell.spec,
     classify: (args) => shell.classify(args),
     async execute(args, context) {
-      const python = pythonRefusal(commandOf(args), overrides);
+      const python = pythonRefusal(commandOf(args), overrides, env);
       if (python !== null) return { ok: false, content: python };
       const found = replacedCommand(commandOf(args));
       if (found === null) return shell.execute(args, context);
