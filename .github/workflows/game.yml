@@ -80,6 +80,13 @@ jobs:
           use-dotnet: false
           include-templates: true
 
+      # `audit_instance_portraits.py` e' un gate e ha bisogno di Pillow. Fino al
+      # 21/09 senza Pillow usciva 0 dicendo SKIP: dieci ritratti mancanti erano
+      # rossi in locale e invisibili qui. Ora l'audit e' rosso se non puo'
+      # girare, quindi la libreria va installata prima dei test.
+      - name: Install the portrait audit's dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet Pillow
+
       - name: Import and parse project
         run: godot --headless --path game --import
 

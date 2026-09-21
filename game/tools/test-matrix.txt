@@ -185,6 +185,10 @@ title_artifact_contract|python|gate|any|-|tools/title_artifact_contract_selftest
 artifact_fetch|python|gate|posix|-|tools/artifact_fetch_selftest.py|ARTIFACT-FETCH-SECURITY-TEST PASS
 character_sheets|python|gate|any|-|tools/audit_character_sheets.py|-
 instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
+# Il runner sorveglia se stesso: il 21/09 `run.sh test gate` eseguiva 4 test su
+# 66 e stampava TEST OK, perche' godot si prendeva lo stdin del ciclo che legge
+# QUESTA matrice. Questo test rompe il conto apposta e pretende il rosso.
+matrix_guard|python|gate|any|-|tools/run_matrix_guard_selftest.py|MATRIX-GUARD-TEST PASS
 
 # ----------------------------------------------------------------- gate: scena
 vps_contract|run|gate|any|JHT_VPS_CONTRACT_TEST=1|--quit-after 3|VPS-CONTRACT-TEST PASS
