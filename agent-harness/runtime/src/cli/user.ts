@@ -22,12 +22,13 @@
  *                                      with no hub running.
  */
 
+import { homedir } from "node:os";
 import { parseArgs } from "node:util";
 
 import { jobsDbPath, openJobsDb } from "../db/jobs-db.ts";
 import { requestWrite, type WriteRequestKind, type WriteRequestResult } from "../db/write-request.ts";
 import { HUB_PATHS } from "../hub/protocol.ts";
-import { loadConfig } from "../config.ts";
+import { resolveUserPath } from "../tools/paths.ts";
 
 const COMMANDS: Record<string, WriteRequestKind> = { cv: "cv", "cover-letter": "cover_letter", cover_letter: "cover_letter" };
 
@@ -56,10 +57,15 @@ const result = hubUrl && teamToken ? await throughHub(hubUrl, teamToken) : here(
 console.log(JSON.stringify(result));
 process.exit(result.ok ? 0 : 1);
 
-/** Straight into the database, the way the dashboard does on a person's own box. */
+/**
+ * Straight into the database, the way the dashboard does on a person's own
+ * box. The home is resolved here and not with `loadConfig`: this command
+ * spends nothing and starts no role, and it must work in a box whose
+ * provider settings would stop a run (a model set without `JHT_API_LIVE`).
+ */
 function here(): WriteRequestResult {
-  const config = loadConfig({ role: "capitano" });
-  const db = openJobsDb(jobsDbPath(process.env, config.apiHome));
+  const apiHome = resolveUserPath(process.env["JHT_API_HOME"]?.trim() || "~/.jht-api", process.cwd(), homedir());
+  const db = openJobsDb(jobsDbPath(process.env, apiHome));
   try {
     return requestWrite(db, positionId, mode, kind!);
   } finally {

@@ -243,8 +243,16 @@ describe("npm run user", () => {
     expect(refused).toMatchObject({ code: 1 });
     expect(JSON.parse((refused as { stdout: string }).stdout.trim())).toMatchObject({ ok: false, status_code: "BAD_STATUS" });
 
+    // A box whose provider settings would stop a run still takes the person's
+    // request: this command starts no role and spends nothing.
+    const gated = await run("node", ["--experimental-strip-types", "--no-warnings", "src/cli/user.ts", "cv", "4"], {
+      cwd: RUNTIME,
+      env: { ...env, JHT_API_PROVIDER: "openai", JHT_API_MODEL: "gpt-5.6-luna", JHT_API_LIVE: "" },
+    });
+    expect(JSON.parse(gated.stdout.trim())).toMatchObject({ ok: true, id: 4, current: 1 });
+
     // And the CAPITANO now sees the position in the writer's queue.
-    expect(db.prepare("SELECT id FROM positions WHERE write_requested = 1").all()).toEqual([{ id: 1 }]);
+    expect(db.prepare("SELECT id FROM positions WHERE write_requested = 1").all()).toEqual([{ id: 1 }, { id: 4 }]);
     db.close();
   });
 
