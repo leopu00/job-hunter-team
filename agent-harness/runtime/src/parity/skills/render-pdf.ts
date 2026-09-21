@@ -38,12 +38,17 @@
  *   on this image, which says it on stderr. A flag that exists and does nothing
  *   is exactly why the fences above do not rely on it.
  *
- * And one fence that is not a flag: what pandoc produces is stripped of the
- * elements that can only fetch or run something (`safeHtml`). It is the only
- * layer that does not depend on the engine's switches — the two above were
- * silently ignored — and it also keeps hostile HTML from failing the render:
- * a blocked `<iframe>` makes wkhtmltopdf exit 1 (`about:blank`,
- * ProtocolUnknownError) on a PDF that is otherwise perfectly good.
+ * **The fence that holds against the network is the proxy.** What pandoc
+ * produces is also stripped of the elements that can only fetch or run
+ * something (`safeHtml`), but that is a second layer, not the defence: it is a
+ * regex, and it keeps `<style>` on purpose because `cv-structure/SKILL.md`
+ * relies on it — so a remote `@import` inside a `<style>` walks straight
+ * through it, which SICUREZZA measured (21/09). The dead proxy is what stops
+ * that one too. Whoever drops `--proxy` because "the stripping covers it"
+ * reopens the hole. What the stripping is good for: it does not depend on a
+ * switch the engine may ignore, and it keeps hostile HTML from failing an
+ * otherwise good render — a blocked `<iframe>` makes wkhtmltopdf exit 1
+ * (`about:blank`, ProtocolUnknownError).
  *
  * Two steps instead of `--pdf-engine`, on purpose: with pandoc driving the
  * engine the engine's argv is pandoc's to build, and what reaches wkhtmltopdf
@@ -97,9 +102,10 @@ const DEAD_PROXY = "http://127.0.0.1:1";
  * only job is to fetch or to run something. A CV needs none of them — its own
  * `<style>` block, which `cv-structure/SKILL.md` relies on, stays.
  *
- * This is a third layer under two fences, not a sanitiser to lean on: what it
- * misses is a reference the engine refuses anyway, which costs a render and
- * never a secret.
+ * A regex over HTML, and a layer UNDER the two fences, never one to lean on:
+ * the `<style>` it keeps may hold `@import url(http://…)`, which it does not
+ * see and `--proxy` does stop. What it misses is a reference the engine
+ * refuses anyway, and that costs a render, never a secret.
  */
 const RUNS_OR_FETCHES = /script|iframe|object|embed|applet|frame|frameset|link|base|img|audio|video|source|track|input/.source;
 const PAIRED = new RegExp(String.raw`<\s*(script|iframe|object|applet|frame|frameset)\b[^>]*>[\s\S]*?<\s*/\s*\1\s*>`, "gi");
