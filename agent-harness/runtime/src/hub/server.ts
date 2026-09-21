@@ -34,6 +34,7 @@ import { DEFAULT_NOTIFY_LIMIT, FileMailbox, FileNotifier, FileUserReplies } from
 import { loadRolePrompt } from "../parity/role-prompt.ts";
 import { createSkillTools } from "../parity/skills/index.ts";
 import { requestWrite } from "../db/write-request.ts";
+import { peerRefusal } from "../parity/peers.ts";
 import { reviewsFor, saveReview, verdictPosition } from "./review.ts";
 import type { ToolContext, ToolHandler } from "../tools/registry.ts";
 import {
@@ -240,6 +241,13 @@ export function createHub(options: HubOptions): Server {
         const request = parse(SendRequest, body);
         const to = agentInstanceId(request.to);
         if (!agents.has(to)) throw new HttpError(404, `No agent ${to} on this team. Agents: ${[...agents].sort().join(", ")}.`);
+        // T37 (SICUREZZA, on the SENTINELLA's RULE #0): who may write to whom
+        // is decided here too, from the TOKEN. In the role the same table is a
+        // gate the model is asked to respect; a role that reaches the hub with
+        // `bash` and this checkout would walk around it. The sender is never
+        // the body's to name, and neither is the exception.
+        const refusal = peerRefusal(agent, to);
+        if (refusal !== null) throw new HttpError(403, refusal);
         const at = within(sent, agent, sendLimit, "Message");
         // The sender is the token's agent, whatever the role's runtime believes it is.
         await mailbox.send({ from: agent, to, text: request.text, ts: at });

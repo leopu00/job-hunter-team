@@ -14,7 +14,7 @@ POSTs, JSON in and out, each with a role's token in `Authorization: Bearer`:
 | Path | Does |
 | --- | --- |
 | `/v1/tool` `{name, args}` | runs one of the caller's database tools: the tools `createSkillTools` builds with the database for the caller's role (its `skills.list`, read by the hub), with the same code and `role-policy.ts`. Tools that do not need the database stay in the role; asking the hub for one is a 403. One of them reaches the web: `logo_fetch` (the ANALISTA's `logo-extraction`) needs the database, so it runs here, through the same `SafeHttpsClient` guard as in the role (every hop resolved, private and loopback addresses refused) |
-| `/v1/mailbox/send` `{to, text}` | appends to `to`'s inbox, `from` set to the token's agent |
+| `/v1/mailbox/send` `{to, text}` | appends to `to`'s inbox, `from` set to the token's agent. **Who may write to whom is checked here too** (T37): the SENTINELLA's RULE #0 — the CAPITANO it advises and the DOTTORE it escalates to, nobody else — is the same table the role's own tool uses (`parity/peers.ts`), applied to the agent the TOKEN names. In the role it is a gate the model is asked to respect; a role that reaches the hub with `bash` and this checkout would walk around it. A pair that is not allowed is a 403 carrying the rule's own sentence, so the model can report "I could not reach X" instead of failing silently |
 | `/v1/mailbox/drain` `{}` | empties the caller's inbox, and only the caller's |
 | `/v1/notify` `{kind, text, positionId?}` | appends to `notify.jsonl`, at most 5 per hour per agent (kept here too, not only in the role) |
 | `/v1/replies/take` `{}` | the person's replies to the caller |
