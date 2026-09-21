@@ -34,6 +34,7 @@ import { z } from "zod";
 
 import { agentInstanceId } from "../core/agent-id.ts";
 import type { ToolHandler } from "../tools/registry.ts";
+import { RENDER_PDF_TOOL } from "./skills/render-pdf.ts";
 
 /** An agent or session name: `SCOUT-1`, `capitano`. Never a path. */
 export const AGENT_NAME = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,39}$/, "an agent name such as SCOUT-1 or capitano");
@@ -300,6 +301,8 @@ instructions name for talking and pausing are tools here:
 - \`jht-notify-user\`, \`jht-telegram-send\` → \`notify_user\`
 - \`jht-check-user-replies\` → \`check_user_replies\`
 - \`jht-install\` → not available: the image carries the dependencies
+- \`pandoc … --pdf-engine=wkhtmltopdf …\` → \`render_pdf\` (source, title, output): the renderer's
+  arguments are the harness's, so no markdown can make it read a file or fetch an address
 - \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\` → not here: agents are not tmux sessions. The
   CAPITANO starts, lists and stops them with \`spawn_agent\`, \`list_agents\`, \`stop_agent\`
 
@@ -344,26 +347,29 @@ const REPLACED: Record<string, string> = {
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
   "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
   "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
-  // T25: the CV's PDF. These three are refused ONLY where the image does not carry them
-  // (`DETECTED` below): the image gained them in T24-b, the table still said they were
-  // missing, and a SCRITTORE that had just seen `/usr/bin/pdftotext` with `command -v`
-  // was told poppler did not exist — it spent its whole cap looking for another way.
-  pandoc:
-    "is not available here: the image has no pandoc, wkhtmltopdf or poppler. Deliver the CV as the markdown file in the deliverables folder, record its path with `db_update application --cv-path`, and say in your report that no PDF was rendered.",
-  wkhtmltopdf: "is not available here: see pandoc. The CV stays markdown in the API harness.",
+  // T30 (SICUREZZA §10): the renderer is a WebKit, and the markdown it renders is written
+  // from scraped job ads. The command is never the agent's — `render_pdf` runs both
+  // programs with a fixed argument vector — whether or not the box carries them.
+  pandoc: `${use(RENDER_PDF_TOOL)} It renders the markdown with the skill's page size, margins and layout, and with the flags that keep a job ad's HTML from reading a local file or fetching an address.`,
+  wkhtmltopdf: `${use(RENDER_PDF_TOOL)} See pandoc: the engine is the runtime's to start, not yours.`,
+  // T25: poppler measures a PDF, it does not make one, so these two are refused ONLY where
+  // the image does not carry them (`DETECTED` below): the image gained them in T24-b, the
+  // table still said they were missing, and a SCRITTORE that had just seen
+  // `/usr/bin/pdftotext` with `command -v` was told poppler did not exist — it spent its
+  // whole cap looking for another way.
   pdftotext: "is not available here: the image has no poppler, so there is no PDF to measure.",
   pdffonts: "is not available here: the image has no poppler, so a PDF's fonts cannot be checked.",
   tmux: "is not available here: agents are not tmux sessions. Write to one with `send_message`; the CAPITANO lists, starts and stops them with `list_agents`, `spawn_agent`, `stop_agent`.",
 };
 
 /**
- * Commands the harness refuses only when the box really lacks them: the PDF
- * toolchain, which an image may or may not carry. Everything else in
- * `REPLACED` is gone by construction (tmux, the launcher, the TUI wrappers),
- * and saying so costs nothing; saying it of a binary that is installed costs
- * an agent its whole turn.
+ * Commands the harness refuses only when the box really lacks them: poppler,
+ * which an image may or may not carry. Everything else in `REPLACED` is gone
+ * by construction (tmux, the launcher, the TUI wrappers) or has a tool that
+ * replaces it wherever it exists (`render_pdf`), and saying so costs nothing;
+ * saying it of a binary that is installed costs an agent its whole turn.
  */
-const DETECTED = new Set(["pandoc", "wkhtmltopdf", "pdftotext", "pdffonts"]);
+const DETECTED = new Set(["pdftotext", "pdffonts"]);
 
 /** Whether `name` is an executable on PATH, as `command -v` answers. */
 export function onPath(name: string, env: NodeJS.ProcessEnv = process.env): boolean {

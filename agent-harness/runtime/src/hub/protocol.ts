@@ -20,6 +20,7 @@ export const HUB_PATHS = {
   spawnStop: "/v1/spawn/stop",
   spawnList: "/v1/spawn/list",
   teamStart: "/v1/team/start",
+  userRequest: "/v1/user/write-request",
 } as const;
 
 /** Largest request body: a `db_insert position` with a long job description fits well below. */
@@ -42,6 +43,18 @@ export const NotifyRequest = z
   .strict();
 
 export const EmptyRequest = z.object({}).strict();
+
+/**
+ * T28: what the PERSON asks for, sent by the host with the team's own token.
+ * No role has that token, and no role has a tool that sets the flag.
+ */
+export const UserWriteRequest = z
+  .object({
+    position_id: z.number().int().positive(),
+    mode: z.enum(["on", "off"]).default("on"),
+    kind: z.enum(["cv", "cover_letter"]).default("cv"),
+  })
+  .strict();
 
 export interface ToolResponse {
   ok: boolean;
