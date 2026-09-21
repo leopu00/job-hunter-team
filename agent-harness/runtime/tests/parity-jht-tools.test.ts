@@ -260,11 +260,19 @@ describe("guardShellTool", () => {
   // call could only ever fail, and it failed without saying anything. The
   // boundary now answers it: this test used to assert the opposite, and what
   // changed is the product, not the test's aim.
+  //
+  // It asserts the part of the refusal that holds on ANY box. The sentence
+  // about the interpreter is measured from PATH, so asserting it here — where
+  // `guarded` runs against the real environment — would only be asking whether
+  // the machine running the suite has a `python3`. That half is proved on both
+  // kinds of box in shell-guard-python.test.ts.
   it("answers a python call nobody ported instead of letting it die in the shell", async () => {
     ran.length = 0;
     const result = await guarded.execute({ command: "python3 /app/shared/skills/linkedin_check.py" }, context);
     expect(result.ok).toBe(false);
-    expect(String(result.content)).toContain("the image carries no Python");
+    expect(String(result.content)).toContain("`linkedin_check.py` cannot run here");
+    expect(String(result.content)).toContain("say in your report which one you needed");
+    expect(String(result.content)).toContain("Nothing was run.");
     expect(ran).toEqual([]);
   });
 });
