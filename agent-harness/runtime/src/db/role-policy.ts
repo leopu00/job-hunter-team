@@ -11,6 +11,8 @@
  * `analista`), the same rule `start-agent.sh` names sessions by.
  */
 
+import { join } from "node:path";
+
 import { agentInstanceId } from "../core/agent-id.ts";
 
 export interface DbRolePolicy {
@@ -209,14 +211,35 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
 };
 
 /**
- * The one role that writes the person's profile (T38). `candidate_profile.yml`
- * and the narrative summaries are the ASSISTENTE's work — it is the only agent
- * that talks to the person and the only one allowed to write down what they
- * said. For every other role that folder is read-only, and this is where the
- * exception is written, once, instead of in each tool that builds a policy.
+ * What the ASSISTENTE writes inside the person's profile folder (T38, P2 of
+ * SICUREZZA). Not the folder: the files.
+ *
+ * On a real box that folder holds more than the profile — dated backups,
+ * `applications/`, `audits/`, control flags of other roles, and scripts the
+ * TUI skills run from there. Write access to the whole folder would have given
+ * this role three powers nobody asked for: rewriting a script another role
+ * executes, flipping a control flag, and overwriting the person's own backups.
+ * Today none of them is live here (nothing runs from the profile and the image
+ * has no interpreter), but the permission is written in the runtime, and the
+ * runtime is what ends up where those things do exist.
+ *
+ * The list is what the role's own prompt and skills write, counted in them:
+ * the profile, the four narrative summaries, the folder where an uploaded
+ * document is archived, and its two named flags — `ready.flag` is the "go to
+ * dashboard" button, `welcomed.flag` the Telegram welcome handshake
+ * (assistente.md § welcome). `inbox/` is left out on purpose: there the
+ * tg-bridge writes and this role reads.
  */
-export function writesProfile(agent: string): boolean {
-  return roleOf(agent) === "assistente";
+export const PROFILE_WRITABLE: readonly string[] = ["candidate_profile.yml", "ready.flag", "welcomed.flag", "summaries", "sources"];
+
+/**
+ * The paths of the profile folder this agent may write, absolute. Empty for
+ * every role but the ASSISTENTE: it is the only agent that talks to the person
+ * and the only one allowed to write down what they said.
+ */
+export function profileWritables(profileDir: string, agent: string): string[] {
+  if (roleOf(agent) !== "assistente") return [];
+  return PROFILE_WRITABLE.map((name) => join(profileDir, name));
 }
 
 /** `analista-2` → `analista`. */

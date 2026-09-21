@@ -61,6 +61,7 @@ export class PermissionPolicy {
   readonly mode: PermissionMode;
   #freeReadRoots: string[];
   #readOnlyRoots: string[];
+  #writable: string[];
   #scope: StateScope;
   #ask: PermissionAsker | undefined;
   #alwaysAllowed = new Set<string>();
@@ -80,11 +81,18 @@ export class PermissionPolicy {
     stateRoots?: string[] | undefined;
     /** Folders no tool writes in, whatever the mode or the person's answer. */
     readOnlyRoots?: string[] | undefined;
+    /**
+     * The few paths inside a read-only root that this role does write (T38:
+     * the ASSISTENTE's own files in the person's profile). Files or folders,
+     * named one by one — never the root itself, or the root would not be one.
+     */
+    writable?: string[] | undefined;
     ask?: PermissionAsker | undefined;
   }) {
     this.mode = options.mode;
     this.#freeReadRoots = options.freeReadRoots.map(realPath);
     this.#readOnlyRoots = (options.readOnlyRoots ?? []).map(realPath);
+    this.#writable = (options.writable ?? []).map(realPath);
     this.#scope = {
       ownRoots: (options.ownRoots ?? options.freeReadRoots).map(realPath),
       stateRoots: (options.stateRoots ?? []).map(realPath),
@@ -95,7 +103,12 @@ export class PermissionPolicy {
   async decide(toolName: string, access: ToolAccess): Promise<PermissionDecision> {
     if (access.risk === "none") return { allowed: true, asked: false };
     if (access.risk === "write") {
-      const refused = access.paths.find((p) => this.#readOnlyRoots.some((root) => isInside(root, p)));
+      // T38: a read-only root may hold a few files this role does write — the
+      // ASSISTENTE's profile inside the person's folder. The exception is a
+      // list of PATHS, not the folder: everything else in there stays refused.
+      const refused = access.paths.find(
+        (p) => this.#readOnlyRoots.some((root) => isInside(root, p)) && !this.#writable.some((allowed) => isInside(allowed, p)),
+      );
       if (refused !== undefined) return { allowed: false, asked: false, message: readOnly(refused) };
     }
     const sensitive = access.paths.some((p) => isSensitivePath(p) || isOthersState(p, this.#scope));

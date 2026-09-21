@@ -126,28 +126,32 @@ describe("npm run role -- --role assistente (T38)", () => {
     expect(prompt).not.toMatch(/validate_profile\.py/);
   });
 
+  it("writes in the profile folder only what it fills in, not what lives there beside it", async () => {
+    // SICUREZZA's P2: on a real box that folder holds dated backups,
+    // `applications/`, `audits/`, control flags of other roles and scripts the
+    // TUI runs from there. The permission is a list of paths, so the profile
+    // the person dictated is writable and the rest of the folder is not.
+    const mine = ["candidate_profile.yml", "ready.flag", "welcomed.flag", "summaries/about.md", "sources/cv-2024.pdf"];
+    const theirs = [
+      "ats_liveness_sweep.py", // a script another role runs from here
+      "auto-report-disabled.flag", // a control flag that is not this role's
+      "candidate_profile.yml.2026-09-20.bak", // the person's own backup
+      "applications/1.json",
+      "audits/2026-09.md",
+      "inbox/cv.pdf", // the tg-bridge writes here; this role reads
+    ];
+    for (const name of mine) expect(await writeAs("assistente-1", name), name).toMatchObject({ allowed: true });
+    for (const name of theirs) {
+      const refused = await writeAs("assistente-1", name);
+      expect(refused.allowed, name).toBe(false);
+      expect(refused.said, name).toMatch(/is the person's own/);
+    }
+  });
+
   it("gives that profile to no other role: the same write from a SCOUT is refused", async () => {
     // The counter-proof of the exception, at the layer that grants it. A
     // permission given by FOLDER instead of by ROLE would pass both of these.
-    const write = async (agent: string) => {
-      const toolkit = await buildToolkit(
-        {
-          role: agent,
-          workdir: join(root, "api", "agents", agent),
-          agentHome: join(root, "api", "agents", agent),
-          apiHome: join(root, "api"),
-          profileDir,
-          userHistoryDir: historyDir,
-          permissionMode: "auto",
-          profile: MOCK_PROFILE,
-        },
-        { provider: new MockProvider([]) },
-      );
-      const tool = toolkit.tools.find((handler) => handler.spec.name === "write_file")!;
-      const args = tool.spec.schema.parse({ path: join(profileDir, "candidate_profile.yml"), content: "name: Someone Else\n" });
-      const decision = await toolkit.permissions.decide("write_file", tool.classify(args));
-      return decision.allowed ? { allowed: true, said: (await tool.execute(args, CONTEXT)).content } : { allowed: false, said: decision.message ?? "" };
-    };
+    const write = (agent: string) => writeAs(agent, "candidate_profile.yml");
 
     expect(await write("assistente-1")).toMatchObject({ allowed: true });
     const scout = await write("scout-1");
@@ -157,3 +161,25 @@ describe("npm run role -- --role assistente (T38)", () => {
     expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
   });
 });
+
+/** One `write_file` into the profile folder, judged by that agent's own policy. */
+async function writeAs(agent: string, name: string): Promise<{ allowed: boolean; said: string }> {
+  const toolkit = await buildToolkit(
+    {
+      role: agent,
+      workdir: join(root, "api", "agents", agent),
+      agentHome: join(root, "api", "agents", agent),
+      apiHome: join(root, "api"),
+      profileDir,
+      userHistoryDir: historyDir,
+      permissionMode: "auto",
+      profile: MOCK_PROFILE,
+    },
+    { provider: new MockProvider([]) },
+  );
+  const tool = toolkit.tools.find((handler) => handler.spec.name === "write_file")!;
+  const args = tool.spec.schema.parse({ path: join(profileDir, name), content: "x\n" });
+  const decision = await toolkit.permissions.decide("write_file", tool.classify(args));
+  await toolkit.close();
+  return { allowed: decision.allowed, said: decision.message ?? "" };
+}
