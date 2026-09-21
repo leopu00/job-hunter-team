@@ -197,7 +197,27 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       purpose: "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06).",
     },
   },
+  // T38, assistente.md: the one role that talks to the person. It reads the
+  // database to answer them ("how many positions are ready?") and writes
+  // NOTHING there — its own line says so: "The Assistente never writes to the
+  // DB". What it does write is the person's profile, which is not in here.
+  assistente: {
+    query: ["dashboard", "recent-activity", "stats", "positions", "position", "applications", "application"],
+    insert: [],
+    update: [],
+  },
 };
+
+/**
+ * The one role that writes the person's profile (T38). `candidate_profile.yml`
+ * and the narrative summaries are the ASSISTENTE's work — it is the only agent
+ * that talks to the person and the only one allowed to write down what they
+ * said. For every other role that folder is read-only, and this is where the
+ * exception is written, once, instead of in each tool that builds a policy.
+ */
+export function writesProfile(agent: string): boolean {
+  return roleOf(agent) === "assistente";
+}
 
 /** `analista-2` → `analista`. */
 export function roleOf(agent: string): string {

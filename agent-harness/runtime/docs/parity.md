@@ -83,7 +83,13 @@ reads:
    prompt still said `$JHT_HOME/profile`, `JHT_HOME` was unset, and the SCOUT
    searched without the profile). The permission policy reads that folder
    freely and refuses every write into it, in every mode
-   (`readOnlyRoots`). `$JHT_USER_DIR` (the deliverables the TUI puts in the
+   (`readOnlyRoots`) — **with one exception, the ASSISTENTE** (T38): it is the
+   only role that talks to the person and the only one that writes down what
+   they said, so for it the profile is its own folder and the read-only root
+   left is the person's history. The exception is by ROLE and not by folder
+   (`writesProfile` in `role-policy.ts`), and the run test checks both halves:
+   the ASSISTENTE's write of `candidate_profile.yml` goes through, the same
+   write from a SCOUT is refused. `$JHT_USER_DIR` (the deliverables the TUI puts in the
    person's Documents: the CV, the cover letter, the review) becomes
    `JHT_API_USER_DIR`, or `<JHT_API_HOME>/user` — unset, a CV would have gone
    to `/cv/` (T25). That folder is what the **team makes**, and on a real box
@@ -204,6 +210,8 @@ every statement is a constant with bound parameters.
 | `safe_fetch.py` (office-geocoding) | `safe_fetch` {args} | for a role whose skills pass `--user-agent`/`--status` (the ANALISTA): same status line and exit codes (1 refused, 2 failed); https only, every hop through the guard; the body reaches the model inside the external-content markers. Other roles keep `web_fetch` (row above) |
 | `logo_fetch.py` | `logo_fetch` {args} | same search order, validation, JSON and `companies` row, on 21 cases over one scripted web; the refusal's words are the guard's. `--force` bypasses the spending brake and is refused |
 | `db_insert.py score` | `db_insert` {args} | the SCORER's write (T15): same output, exit code and `scores` row. `profile_gate.py` first, ported in `profile-gate.ts` and judged against the script on 44 profiles (the YAML read as PyYAML reads it), on `candidate_profile.yml` in the runtime's profile folder; then the caps of `score_ranges.py`; then the upsert that keeps `scores.id`. Two differences on purpose: `scored_by` is the agent the runtime runs (as D-5), and `--action` with the maintenance history is the Mantenitore's and refused. Only the SCORER may write a score (`role-policy.ts`) |
+| `validate_profile.py <path> [--strict] [--json]` | `validate_profile` {args} | the ASSISTENTE's gate (T38, A-02: every write of `candidate_profile.yml` is followed by it). Same checks, same WARN/ERROR lines, same `VALID_PROFILE`/`INVALID_PROFILE` and exit code, judged against the script on 24 profiles × 3 flag sets — the YAML read as PyYAML reads it (`pySafeLoad`, the reader the score's gate uses: one reader, not two). Narrower than the script on one point: it reads the person's profile folder and the agent's own, nothing else, so a validator cannot become a file reader with a nice name. The `python3 -c 'import yaml; yaml.safe_load(...)'` of A-02 is rewritten to this tool in the rendered prompt |
+| `profile_review.py`, `rate_budget.py` | not available in the API harness | **open work, declared** (T38). `profile_review.py` stages a CV-extracted change and confirms it with a compare-and-swap that the person approves **in the desktop UI**: there is no UI here, so the staging half has no other end. `rate_budget.py` is the ASSISTENTE's rarest path (`plan` only, "if the user asks how the team is doing"). Both keep the generic refusal, which names them and says there is no interpreter; the ASSISTENTE writes the profile directly, as `profile-yaml` has it do, and validates with the tool above |
 | `safe_fetch.py <url>` | `web_fetch` {url} | the SCORER's check that a posting is still open. `web_fetch` applies the same guard (every hop resolved and checked, private addresses refused) and returns readable text, not raw HTML: `\| grep -i 'expired'` in the prompt becomes reading the page (T15) |
 | `scout_dedup.py check` | `scout_dedup` {args} | same JSON and exit code (10 = skip, an answer, not a failure); a skip is appended to `<apiHome>/logs/scout-dedup.log` in the script's format. The script has no `check-url`: asked for it, the tool answers argparse's error and then `check-url is a db_query subcommand: db_query check-url <url>` (T10) |
 | `email_monitor.py status/count/poll` | `email_monitor` {command, since_days?} | the script's output with no mailbox configured. No IMAP here and the credentials file is never opened; when it exists, `status` adds `note: imap-unavailable-in-api-runtime` |
@@ -278,6 +286,7 @@ npm run role -- --role scout --agent scout-1 --turns 2 --pause-ms 0
 npm run role -- --role analista --agent analista-1 --turns 2 --pause-ms 0
 npm run role -- --role scrittore --agent scrittore-1 --turns 2 --pause-ms 0
 npm run role -- --role critico --agent critico-1 --turns 2 --pause-ms 0
+npm run role -- --role assistente --agent assistente-1 --turns 2 --pause-ms 0
 npm run monitor -- --last
 ```
 
