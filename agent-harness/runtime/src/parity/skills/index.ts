@@ -22,6 +22,7 @@ import { createEnrichmentPolicyTool } from "./enrichment-policy.ts";
 import { createLogoFetchTool } from "./logo-fetch.ts";
 import { createRecheckLivenessTool } from "./recheck-liveness.ts";
 import { createRenderPdfTool } from "./render-pdf.ts";
+import { createValidateProfileTool } from "./validate-profile.ts";
 import { createRoleRegistryTool } from "./role-registry.ts";
 import { createSaveReviewTool } from "./review.ts";
 import { createSafeFetchTool } from "./safe-fetch.ts";
@@ -156,6 +157,13 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
     tools.push(...createSentinelTools({ jhtHome: options.jhtHome ?? join(options.stateDir ?? ".", "jht") }));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
+  // T38: the ASSISTENTE writes the person's profile, and its rule A-02 says
+  // every write is followed by this validation. `profile-schema` is the
+  // canonical schema, `profile-yaml` the write-and-validate loop: either one
+  // names the validator.
+  if ((listed.has("profile-schema") || listed.has("profile-yaml")) && options.profileDir) {
+    tools.push(createValidateProfileTool({ profileDir: options.profileDir, workdir: options.workdir ?? options.profileDir }));
+  }
   // T30: the CV's PDF. The renderer is a tool and never a shell command — its
   // arguments are the runtime's (SICUREZZA §10). Only the SCRITTORE lists the skill.
   if (listed.has("cv-structure") && options.userDir) {

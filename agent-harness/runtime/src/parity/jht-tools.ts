@@ -435,6 +435,8 @@ export const PYTHON_SKILLS: Record<string, string> = {
   // T15: the SCORER checks whether a posting is still open. web_fetch is the
   // same guard (every hop resolved and checked) and every role has it.
   "safe_fetch.py": "web_fetch",
+  // T38, the ASSISTENTE's profile gate (A-02).
+  "validate_profile.py": "validate_profile",
   // T14, the ANALISTA's scripts.
   "deadline_extract.py": "deadline_extract",
   "ticket.py": "ticket",
@@ -473,6 +475,13 @@ export function rewritePythonSkills(
 ): string {
   const skills = { ...PYTHON_SKILLS, ...overrides };
   return text
+    // T38: A-02 of the ASSISTENTE is a python3 one-liner, not a script —
+    // "every Write/Edit of candidate_profile.yml is ALWAYS followed by Python
+    // validation (`python3 -c 'import yaml; yaml.safe_load(...)'`)". The
+    // general rule below would leave "(no Python interpreter in the API
+    // harness) -c 'import yaml…'", which tells the one role that writes the
+    // profile to do nothing in particular. Here that validation has a tool.
+    .replace(/python3(?:\.\d+)?\s+-c\s+(['"]).*?yaml\.safe_load.*?\1/gs, "the validate_profile tool")
     .replace(PYTHON_SCRIPT_TEXT, (_whole, script: string) => {
       const tool = skills[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ?? `${script} (not available in the API harness)`;

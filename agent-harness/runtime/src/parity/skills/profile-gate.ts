@@ -38,6 +38,29 @@ const PY_FLOAT =
 
 const PY_STRIP = new RegExp(`^[${PY_SPACE}]+|[${PY_SPACE}]+$`, "gu");
 
+/**
+ * A YAML document as `yaml.safe_load` builds it, for every port that reads the
+ * person's profile — the score's gate and the ASSISTENTE's validator. One
+ * reader, because two would drift and the file they read is the same file.
+ *
+ * YAML 1.1 (`yes` is true), integers apart from floats (`experience_years:
+ * 5.0` is not an int), the last of two equal keys, and anything `safe_load`
+ * could not construct refused: the parser only warns about an unknown tag
+ * (`!!python/object`, `!custom`), so a warning throws here.
+ */
+export function pySafeLoad(text: string): unknown {
+  const doc = parseDocument(text, { version: "1.1", intAsBigInt: true, uniqueKeys: false, merge: true, prettyErrors: false });
+  const problem = doc.errors[0] ?? doc.warnings[0];
+  if (problem) throw problem;
+  visit(doc, {
+    Scalar(_key, node) {
+      if (!isScalar(node)) return;
+      if (node.tag === undefined && typeof node.value === "number" && !PY_FLOAT.test(node.source ?? "")) node.value = node.source;
+    },
+  });
+  return doc.toJS({ maxAliasCount: 100 });
+}
+
 export interface ProfileGateResult {
   ok: boolean;
   /** Empty when `ok`. */
@@ -95,18 +118,7 @@ export function checkMinimumViableProfile(path: string): ProfileGateResult {
 
   let data: unknown;
   try {
-    const doc = parseDocument(text, { version: "1.1", intAsBigInt: true, uniqueKeys: false, merge: true, prettyErrors: false });
-    // safe_load refuses what it cannot construct (`!!python/object`, `!custom`):
-    // the parser only warns about an unknown tag, so a warning refuses here too.
-    const problem = doc.errors[0] ?? doc.warnings[0];
-    if (problem) throw problem;
-    visit(doc, {
-      Scalar(_key, node) {
-        if (!isScalar(node)) return;
-        if (node.tag === undefined && typeof node.value === "number" && !PY_FLOAT.test(node.source ?? "")) node.value = node.source;
-      },
-    });
-    data = doc.toJS({ maxAliasCount: 100 });
+    data = pySafeLoad(text);
   } catch (error) {
     return fail(`candidate profile could not be parsed (invalid YAML): ${error instanceof Error ? error.message : String(error)}`);
   }

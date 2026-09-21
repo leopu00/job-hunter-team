@@ -154,7 +154,10 @@ describe("npm run role -- --role scout (a product role)", () => {
       const args = { path: join(profileDir, "candidate_profile.yml"), content: "x", old_string: "engineer", new_string: "x" };
       const decision = await toolkit.permissions.decide(name, tool.classify(args));
       expect(decision.allowed, name).toBe(false);
-      expect(decision.message, name).toMatch(/person's profile/);
+      // The refusal names the file it refused (T38: the message is no longer a
+      // fixed sentence about "the profile", because for the ASSISTENTE the
+      // profile is writable and the history is not).
+      expect(decision.message, name).toMatch(/candidate_profile\.yml is the person's own/);
     }
     await toolkit.close();
     expect(refused).toEqual([]);
