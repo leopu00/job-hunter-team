@@ -319,6 +319,31 @@ describe("db_query against db_query.py", () => {
     for (const args of [...queries, ["next-for-scrittore", "--limit", "1"]]) expectSame(await call("db_query", args), py("db_query.py", args));
   });
 
+  it.skipIf(skills === null)("applications, the MENTOR's Pattern D, as the script prints it (T40)", async () => {
+    const { pyDb, ourDb, call, py } = twins("mentor-1");
+    const queries = [
+      ["applications"], ["applications", "--json"], ["applications", "--days", "0"], ["applications", "--days", "0", "--json"], ["applications", "--applied", "false"],
+      ["applications", "--applied", "true", "--order-by", "response_at:asc", "--limit", "2"], ["applications", "--order-by", "bogus"],
+      ["applications", "--order-by", "applied_at:sideways"], ["applications", "--applied", "maybe"], ["applications", "--limit", "0", "--days", "-3"],
+    ];
+    // Nothing sent yet: the empty funnel and the sample floor, on both twins.
+    for (const args of queries) expectSame(await call("db_query", args), py("db_query.py", args));
+    for (const db of [pyDb, ourDb]) {
+      const sent = db.prepare(
+        "INSERT INTO applications (position_id, status, applied, applied_at, applied_via, response, response_at, interview_round) " +
+          "VALUES (?, 'applied', 1, datetime('now', ?), ?, ?, ?, ?)",
+      );
+      sent.run(2, "-5 days", "email", null, null, null);
+      sent.run(3, "-45 days", "linkedin", null, null, null);
+      sent.run(4, "-10 days", null, "interview", "2026-09-15", 2);
+      // Written with a derived word, and with a word nobody planned: both must show.
+      sent.run(5, "-3 days", "email", "pending", null, null);
+      sent.run(6, "-400 days", "email", "an outcome nobody planned for", null, null);
+      db.prepare("UPDATE applications SET applied = 1, applied_at = datetime('now', '-2 days') WHERE position_id = 1").run();
+    }
+    for (const args of queries) expectSame(await call("db_query", args), py("db_query.py", args));
+  });
+
   it("gives each role only its own reads", async () => {
     const db = seeded(join(root, "roles.db"));
     const run = async (agent: string, args: string[]) => {

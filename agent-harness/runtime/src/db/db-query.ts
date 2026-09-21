@@ -26,7 +26,7 @@ import { extractLinkedinJobId } from "./dedup.ts";
 import { Fence, flattenExternalValue } from "./external-content.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import type { Database } from "./jobs-db.ts";
-import { pyFixed, pyJson, pyPad, pySlice, pyStr, pyTruthy } from "./py-format.ts";
+import { pyFixed, pyJson, pyPad, pySlice, pyStr, pyStrip, pyTruthy } from "./py-format.ts";
 import type { ScriptResult } from "./tools.ts";
 
 /** Every subcommand of db_query.py, in its order: argparse names them all in its errors. */
@@ -60,7 +60,7 @@ type QueueCommand = keyof typeof QUEUES;
 
 export const DB_QUERY_PORTED = [
   "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "dashboard", "application",
-  "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
+  "applications", "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
 ] as const;
 type Ported = (typeof DB_QUERY_PORTED)[number];
 
@@ -68,6 +68,19 @@ type Ported = (typeof DB_QUERY_PORTED)[number];
 const DEFAULT_QUEUE_LIMIT = 20;
 
 const JSON_FLAG = { flag: "--json", storeTrue: true } as const;
+
+/**
+ * `applications`, the MENTOR's Pattern D (T40): the outcome funnel of what was
+ * sent. `ghosted` is derived here and only here — nobody writes it — which is
+ * why the constants are the script's, value for value.
+ */
+const GHOST_AFTER_DAYS = 30;
+const APPLICATIONS_WINDOW_DAYS = 60;
+const DEFAULT_APPLICATIONS_LIMIT = 30;
+const MENTOR_SAMPLE_FLOOR = 10;
+/** The sort whitelist: `--order-by` comes from a prompt, not from a menu. */
+const APPLICATIONS_ORDER_COLUMNS = ["applied_at", "response_at", "written_at", "created_at", "updated_at"];
+const DERIVED_BUCKETS = ["ghosted", "pending"];
 const queueSpec = (name: string): CommandSpec => ({
   prog: `db_query.py ${name}`,
   options: [{ flag: "--limit", type: "int", default: null }, { flag: "--all", storeTrue: true }, JSON_FLAG],
@@ -96,6 +109,16 @@ const SPECS: Record<Ported, CommandSpec> = {
   stats: { prog: "db_query.py stats", options: [JSON_FLAG] },
   dashboard: { prog: "db_query.py dashboard", options: [JSON_FLAG] },
   application: { prog: "db_query.py application", positionals: [{ name: "position_id", type: "int" }] },
+  applications: {
+    prog: "db_query.py applications",
+    options: [
+      { flag: "--applied", choices: ["true", "false"] },
+      { flag: "--days", type: "int", default: APPLICATIONS_WINDOW_DAYS },
+      { flag: "--order-by", default: "applied_at:desc" },
+      { flag: "--limit", type: "int", default: DEFAULT_APPLICATIONS_LIMIT },
+      JSON_FLAG,
+    ],
+  },
   "check-history": { prog: "db_query.py check-history", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
   "active-categories": {
     prog: "db_query.py active-categories",
@@ -423,6 +446,132 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     return done();
   }
 
+  if (name === "applications") {
+    const order = parseOrderBy(a["order_by"] as string | null);
+    if (typeof order === "string") return { stdout: "", stderr: `db_query.py applications: ${order}\n`, exitCode: 2 };
+    const [column, direction] = order;
+    const applied = a["applied"] === null || a["applied"] === undefined ? null : a["applied"] === "true";
+    const days = (a["days"] as number | null) ?? 0;
+    const window = days > 0 ? days : 0;
+    // The window is measured on the send, not on the row: written in March, sent yesterday, is yesterday's.
+    const windowSql = window > 0 ? " AND julianday('now') - julianday(a.applied_at) <= ?" : "";
+    const windowParams = window > 0 ? [window] : [];
+    const sentWhere = `a.applied = 1 AND a.applied_at IS NOT NULL${windowSql}`;
+    const funnelRows = select(
+      db(),
+      `
+        SELECT COALESCE(
+                   NULLIF(TRIM(a.response), ''),
+                   CASE WHEN julianday('now') - julianday(a.applied_at) > ?
+                        THEN 'ghosted' ELSE 'pending' END
+               ) AS bucket,
+               COUNT(*) AS cnt
+          FROM applications a
+         WHERE ${sentWhere}
+         GROUP BY bucket
+         ORDER BY cnt DESC
+        `,
+      [GHOST_AFTER_DAYS, ...windowParams],
+    ).rows;
+    const sent = Number(select(db(), `SELECT COUNT(*) AS n FROM applications a WHERE ${sentWhere}`, windowParams).rows[0]!["n"]);
+    const writtenDerived = Number(
+      select(
+        db(),
+        `
+        SELECT COUNT(*) AS n FROM applications a
+         WHERE ${sentWhere}
+           AND LOWER(TRIM(COALESCE(a.response, ''))) IN (${DERIVED_BUCKETS.map(() => "?").join(",")})
+        `,
+        [...windowParams, ...DERIVED_BUCKETS],
+      ).rows[0]!["n"],
+    );
+    // `round(cnt / sent, 4)`: the exact double rounded half to even, as a float.
+    const funnel = funnelRows.map((r) => {
+      const count = Number(r["cnt"]);
+      return { outcome: String(r["bucket"]), count, rate: sent ? Number(pyFixed(count / sent, 4)) : 0 };
+    });
+    const where = ["1=1"];
+    const params: Array<string | number> = [];
+    if (applied !== null) {
+      where.push("a.applied = ?");
+      params.push(applied ? 1 : 0);
+    }
+    if (window > 0 && applied !== false) {
+      where.push("julianday('now') - julianday(a.applied_at) <= ?");
+      params.push(window);
+    }
+    const limit = a["limit"] as number | null;
+    const list = select(
+      db(),
+      `
+        SELECT a.position_id, a.status, a.applied, a.applied_at, a.applied_via,
+               a.response, a.response_at, a.interview_round,
+               p.title, p.company, p.status AS position_status
+          FROM applications a
+          JOIN positions p ON p.id = a.position_id
+         WHERE ${where.join(" AND ")}
+         ORDER BY a.${column} ${direction}
+         LIMIT ?
+        `,
+      [...params, limit === null ? DEFAULT_APPLICATIONS_LIMIT : limit > 0 ? limit : -1],
+    );
+    if (a["json"]) {
+      print(
+        pyJson(
+          {
+            window_days: window,
+            ghost_after_days: GHOST_AFTER_DAYS,
+            sent,
+            sample_floor: MENTOR_SAMPLE_FLOOR,
+            enough_sample: sent >= MENTOR_SAMPLE_FLOOR,
+            response_written_as_derived: writtenDerived,
+            funnel: funnel.map((f) => ({ outcome: f.outcome, count: f.count, rate: { value: f.rate, declared: "REAL" } })),
+            applications: list.rows.map((r) => cells(r, list.declared)),
+          },
+          { ensureAscii: false },
+        ),
+      );
+      return done();
+    }
+    print(`\n  APPLICATIONS — ${sent} sent in ${window > 0 ? `the last ${window} days` : "all time"}`);
+    print("\n  Outcome funnel (Mentor Pattern D):");
+    if (!funnel.length) print("    (nothing sent in this window)");
+    const labelWidth = Math.max(14, ...funnel.map((f) => Array.from(f.outcome).length));
+    for (const f of funnel) {
+      const note =
+        f.outcome === "ghosted"
+          ? `  (no response, sent more than ${GHOST_AFTER_DAYS} days ago)`
+          : f.outcome === "pending"
+            ? `  (no response yet, within ${GHOST_AFTER_DAYS} days)`
+            : "";
+      print(`    ${pyPad(f.outcome, labelWidth, "<")} ${pyPad(String(f.count), 4, ">")}  ${pyPad(pyFixed(f.rate * 100, 1), 5, ">")}%${note}`);
+    }
+    if (sent < MENTOR_SAMPLE_FLOOR) {
+      print(`\n  ⚠ Sample too small: Pattern D speaks from ${MENTOR_SAMPLE_FLOOR} sent applications (${sent} here).`);
+    }
+    if (writtenDerived) {
+      print(
+        `\n  ⚠ ${writtenDerived} row(s) carry '${DERIVED_BUCKETS.join("/")}' written INTO \`response\`: ` +
+          "written and derived outcomes are being counted in the same bucket.",
+      );
+    }
+    if (list.rows.length) {
+      print(`\n  Applications (${list.rows.length}):`);
+      for (const r of list.rows) {
+        const company = pySlice(flattenExternalValue(r["company"]), 0, 20);
+        const title = pySlice(flattenExternalValue(r["title"]), 0, 28);
+        const sentAt = pyTruthy(r["applied_at"]) ? `sent ${list.s(r, "applied_at")}` : "not sent";
+        const via = pyTruthy(r["applied_via"]) ? ` via ${list.s(r, "applied_via")}` : "";
+        const outcome = pyTruthy(r["response"])
+          ? ` → ${list.s(r, "response")} (${pyTruthy(r["response_at"]) ? list.s(r, "response_at") : "N/A"})`
+          : "";
+        const round = pyTruthy(r["interview_round"]) ? ` [round ${list.s(r, "interview_round")}]` : "";
+        print(`    #${pyPad(list.s(r, "position_id"), 5, "<")} ${pyPad(company, 20, "<")} ${pyPad(title, 28, "<")} ${sentAt}${via}${outcome}${round}`);
+      }
+    }
+    return done();
+  }
+
   if (name === "dashboard") {
     const statuses = select(
       db(),
@@ -721,6 +870,36 @@ const COMPANY_POSITIONS_SQL = `
 /** A row as `dict(row)` for `pyJson`: each value with its column's declared type. */
 function cells(row: Row, declared: Record<string, string | null>): Record<string, { value: unknown; declared: string | null }> {
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [k, { value: v, declared: declared[k] ?? null }]));
+}
+
+/**
+ * `parse_order_by`: `applied_at:desc` → `["applied_at", "DESC"]`, or the
+ * script's ValueError text. An unknown column is refused, never replaced by
+ * the default: a sort ignored in silence reads the wrong thirty rows as the
+ * most recent ones.
+ */
+function parseOrderBy(orderBy: string | null): [string, string] | string {
+  const raw = pyStrip(orderBy ?? "");
+  const at = raw.indexOf(":");
+  const column = (at === -1 ? raw : raw.slice(0, at)) || "applied_at";
+  const direction = ((at === -1 ? "" : raw.slice(at + 1)) || "desc").toLowerCase();
+  if (!APPLICATIONS_ORDER_COLUMNS.includes(column)) {
+    return `unknown --order-by column ${pyStrRepr(column)}; allowed: ${APPLICATIONS_ORDER_COLUMNS.join(", ")}`;
+  }
+  if (direction !== "asc" && direction !== "desc") return `unknown --order-by direction ${pyStrRepr(direction)}; use asc or desc`;
+  return [column, direction.toUpperCase()];
+}
+
+/** `repr(str)` for the text an agent typed: single quotes unless it holds one and no double. */
+function pyStrRepr(text: string): string {
+  const quote = text.includes("'") && !text.includes('"') ? '"' : "'";
+  const body = text
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r")
+    .replaceAll("\t", "\\t")
+    .replaceAll(quote, `\\${quote}`);
+  return `${quote}${body}${quote}`;
 }
 
 /** `_sql_limit`: unset is the default, 0 or less is no limit (`LIMIT -1`). */

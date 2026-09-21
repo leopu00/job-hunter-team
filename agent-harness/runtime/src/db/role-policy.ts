@@ -198,6 +198,17 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
     insert: [],
     update: [],
   },
+  // T40, mentor.md M-04 ("Read-only. Never db_insert.py / db_update.py") and its
+  // `mentor-patterns` skill: it watches SETS of records — the latest positions,
+  // the exclusions, the outcome funnel of what was sent (Pattern D) — and reads
+  // the board before stating a number (M-05). It writes nothing, anywhere: the
+  // one voice that tells the person to stop and learn a craft must not be able
+  // to move the pipeline it is judging.
+  mentor: {
+    query: ["positions", "position", "applications", "application", "dashboard", "stats", "recent-activity"],
+    insert: [],
+    update: [],
+  },
   // T37, sentinella.md RULE #0 ("DO NOT modify code, config, files, git"): the SENTINELLA
   // does not touch the database at all — not a read, not a write. Its whole data layer is
   // the bridges' JSONL under the team's home, and what it produces is one piece of advice
