@@ -26,6 +26,7 @@ import { createValidateProfileTool } from "./validate-profile.ts";
 import { createRoleRegistryTool } from "./role-registry.ts";
 import { createSaveReviewTool } from "./review.ts";
 import { createSafeFetchTool } from "./safe-fetch.ts";
+import { createSentinelTools } from "./sentinel.ts";
 import { createSalaryEstimateTool } from "./salary-estimate.ts";
 import { createScoutCoordTool } from "./scout-coord.ts";
 import { createTicketTool } from "./ticket.ts";
@@ -78,6 +79,11 @@ const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   // T25: the CRITICO lists no database skill, and its prompt reads the application it was
   // asked to review and the team's recent activity (critico.md, communication section).
   critico: ["db_query"],
+  // T37: the SENTINELLA's prompt drains the bridge mailbox at the start of the turn and
+  // reads the person's spending derogation before a daily brake (S-10). Neither is in its
+  // `skills.list`: the mailbox became its own in the push→pull change of 2026-06-25, and
+  // `burn_intent` is quoted in the prompt itself.
+  sentinella: ["bridge_mailbox", "burn_intent"],
 };
 
 /** The script→tool overrides a role's text is rewritten with: whose tool a script is, for this role. */
@@ -144,6 +150,11 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
         ...(options.hub ? { hub: options.hub } : {}),
       }),
     );
+  }
+  // T37: the SENTINELLA's two file-only reads. Both live under the team's home, so a run
+  // without one has nothing to read and says so, as the scripts do.
+  if (scripts.has("bridge_mailbox") || scripts.has("burn_intent")) {
+    tools.push(...createSentinelTools({ jhtHome: options.jhtHome ?? join(options.stateDir ?? ".", "jht") }));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
   // T38: the ASSISTENTE writes the person's profile, and its rule A-02 says

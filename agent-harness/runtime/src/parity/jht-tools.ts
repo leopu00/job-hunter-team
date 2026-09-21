@@ -33,6 +33,7 @@ import { delimiter, dirname, join } from "node:path";
 import { z } from "zod";
 
 import { agentInstanceId } from "../core/agent-id.ts";
+import { allowedPeers, peerRefusal } from "./peers.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { RENDER_PDF_TOOL } from "./skills/render-pdf.ts";
 
@@ -168,12 +169,21 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
   // the person's, no network, no process — so none needs a permission.
   const internal = (summary: string) => ({ risk: "none" as const, paths: [], summary });
 
+  // T37: when the role's prompt names its only peers, the tool says so too —
+  // a fence the model meets as a refusal it did not expect teaches it nothing.
+  const peers = allowedPeers(options.agent);
+  const peerLine =
+    peers === null
+      ? " `to` is the session or agent name, e.g. CAPITANO or SCOUT-2."
+      : ` You write to the ${peers.map((r) => r.toUpperCase()).join(" and to the ")}, and to nobody else: another name is refused.`;
+
   const sendMessage: ToolHandler = {
     spec: {
       name: "send_message",
       description:
-        "Send a message to another agent of the team (what `jht-tmux-send <SESSION> \"<msg>\"` does). " +
-        "`to` is the session or agent name, e.g. CAPITANO or SCOUT-2. Keep the team's envelope at the " +
+        "Send a message to another agent of the team (what `jht-tmux-send <SESSION> \"<msg>\"` does)." +
+        peerLine +
+        " Keep the team's envelope at the " +
         "start of `text`, e.g. `[@scout-1 -> @capitano] [RES] ...`.",
       schema: z.object({ to: AGENT_NAME, text: z.string().min(1).max(MAX_MESSAGE_CHARS) }).strict(),
     },
@@ -182,6 +192,10 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
       const { to, text } = args as { to: string; text: string };
       const target = agentInstanceId(to);
       if (target === self) return { ok: false, content: `Error: that is you (${self}). Messages go to another agent.` };
+      // T37: a role whose prompt names its only peers gets that as a fence, not
+      // as a sentence it is trusted to obey (src/parity/peers.ts).
+      const refusal = peerRefusal(options.agent, target);
+      if (refusal !== null) return { ok: false, content: refusal };
       await options.mailbox.send({ from: self, to: target, text, ts: now() });
       return { ok: true, content: `Delivered to ${target}.` };
     },
@@ -435,6 +449,9 @@ export const PYTHON_SKILLS: Record<string, string> = {
   "format_time.py": "format_time",
   "captain_diary.py": "captain_diary",
   "team_directives.py": "team_directives",
+  // T37, the SENTINELLA's two file-only reads.
+  "bridge_mailbox.py": "bridge_mailbox",
+  "burn_intent.py": "burn_intent",
 };
 
 /** Scripts with no tool of their own but a native equivalent. */

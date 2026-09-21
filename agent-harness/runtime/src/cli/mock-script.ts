@@ -272,6 +272,59 @@ export const CAPITANO_MOCK_SCRIPT: ScriptedTurn[] = [
 ];
 
 /**
+ * T37: the SENTINELLA's rehearsal on a tick it must act on.
+ *
+ * Its turn starts with the mailbox — a verdict that never reached a pane is
+ * still there — and, because what it is about to send is a DAILY brake, with
+ * the one read its prompt demands before that order: has the person suspended
+ * this very ceiling (S-10)? Then it advises the CAPITANO, and only the
+ * CAPITANO: the message it tries to send straight to the worker that is
+ * burning is refused, which is the fence of this role (RULE #0). The freeze
+ * it would reach for in the TUI is a tmux command and says so here: stopping
+ * the team is the hub's, not a role's (T37-2).
+ *
+ * "You ADVISE, he DECIDES": nothing in this run touches the database, and
+ * nothing stops a worker.
+ */
+export const SENTINELLA_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    text: "The verdicts no pane received, and whether the daily ceiling is suspended.",
+    toolCalls: [
+      { name: "bridge_mailbox", args: { args: ["drain"] } },
+      { name: "burn_intent", args: { args: ["status", "--json"] } },
+    ],
+  },
+  {
+    text: "The team is over the day's budget and nobody suspended it: I freeze first, then tell him.",
+    toolCalls: [{ name: "bash", args: { command: "python3 /app/shared/skills/freeze_team.py" } }],
+  },
+  {
+    text: "No panes here. The advice goes to the Capitano, with the numbers.",
+    toolCalls: [
+      {
+        name: "send_message",
+        args: {
+          to: "capitano",
+          text:
+            "[@sentinella -> @capitano] [WEEKLY-PACE] SFORO GIORNALIERO: today 22% of the weekly vs budget 15% (cap 20%), " +
+            "no derogation live. Top-burn: scout-1 41% share / cadence 0.15. I suggest HARD-COAST: no new spawns, max " +
+            "throttle on the autonomous workers, drain only. Throttle: 600s (`throttle 600 --agent scout-1`, timeout: 630). You decide.",
+        },
+      },
+    ],
+  },
+  {
+    text: "And a word straight to the worker that is burning.",
+    toolCalls: [{ name: "send_message", args: { to: "scout-1", text: "[@sentinella -> @scout-1] [REQ] Slow down." } }],
+  },
+  { text: "Refused, and rightly: I advise, he decides.", toolCalls: [{ name: "throttle", args: { reason: "waiting for the next tick" } }] },
+  { text: "Paused." },
+  { toolCalls: [{ name: "check_user_replies", args: {} }] },
+  { text: "Mock run complete: mailbox drained, derogation read, one piece of advice to the Capitano and nothing else." },
+];
+
+/**
  * T25: the SCRITTORE's rehearsal on the position the SCORER left `scored`
  * with the person's CV request on it. It opens the anti-rewrite gate, claims
  * the position, reads the profile, writes the CV where the person will find
@@ -489,6 +542,7 @@ export function productRoleMockScript(role: string, userDir = ".", profileDir = 
   if (role === "capitano") return CAPITANO_MOCK_SCRIPT;
   if (role === "scrittore") return scrittoreMockScript(userDir, profileDir, historyDir);
   if (role === "critico") return criticoMockScript(userDir, profileDir);
+  if (role === "sentinella") return SENTINELLA_MOCK_SCRIPT;
   return PRODUCT_ROLE_MOCK_SCRIPT;
 }
 
