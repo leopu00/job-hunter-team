@@ -1,0 +1,54 @@
+/* COPY of shared/skills/pdf_layout_base.css at 1284f13a3 — do not edit here.
+ * The image carries no `shared/` (jhthq/vps/ashley-api/Containerfile), so the
+ * renderer ships its own layout. `tests/render-pdf.test.ts` holds the two
+ * together against git, as the score ruler is held against score_ranges.py.
+ */
+/* pdf_layout_base.css — v2 — base layout for every CV / cover-letter PDF.
+ *
+ * Why: pandoc's standalone HTML template caps the body at `max-width: 36em`,
+ * centres it and pads it by 50px. wkhtmltopdf renders that literally, so a CV
+ * with a 9.3pt <style> came out as a ~41% column in the middle of an A4 sheet
+ * (application 2067), and wkhtmltopdf ignores `@page` margins, so the .md
+ * cannot fix it from inside. The real page margins are passed to wkhtmltopdf
+ * by the render command (-V margin-*).
+ *
+ * Loaded with `pandoc -c` + `--self-contained`: given a stylesheet, pandoc's
+ * template leaves its built-in styles out (measured on pandoc 2.17: that alone
+ * takes the column from 41% to the full page), and the reset below keeps the
+ * body full width if a template or pandoc version brings them back. The
+ * markdown's own <style> comes later: a CV may restyle fonts and spacing, but
+ * it starts from the full usable width.
+ * Visual gate: shared/skills/pdf_layout_check.py.
+ */
+
+/* v2 — printed size. wkhtmltopdf 0.12.6 with an unpatched Qt shrinks the page
+ * by ~0.744: a 9.3pt body printed at 6.92pt, full width but unreadable. The
+ * zoom undoes it for everything in the .md, titles included, so a CSS point
+ * prints as about one point. Qt rounds glyphs to steps of 0.58pt: measured on
+ * a 9.3pt body, zoom 1.30 → 9.22pt, 1.35 → 9.80pt. The gate wants ≥ 9.5pt.
+ * zoom scales the CSS box, not the sheet: the column stays full width. */
+html { zoom: 1.35; }
+
+html, body {
+  max-width: none !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+}
+
+body {
+  font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.35;
+  color: #222;
+  hyphens: auto;
+}
+
+/* pandoc prints `title` metadata as a visible header: the CV's own `# Name`
+ * is the header. The render command uses `pagetitle`, this is the safety net. */
+header#title-block-header { display: none !important; }
+
+img { max-width: 100%; }
+table { width: 100%; border-collapse: collapse; }
+pre, code { white-space: pre-wrap; }
