@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MOCK_PROFILE, MockProvider } from "../src/core/provider/mock.ts";
 import { openJobsDb } from "../src/db/jobs-db.ts";
 import { buildToolkit } from "../src/tools/toolkit.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const CONTEXT = { account: undefined as never, remainingMs: () => 60_000 };
@@ -124,7 +125,7 @@ describe("npm run role -- --role assistente (T38)", () => {
     // A-02 names the validator, and it is a tool here, not a script.
     expect(prompt).toMatch(/validate_profile\b/);
     expect(prompt).not.toMatch(/validate_profile\.py/);
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 
   it("writes in the profile folder only what it fills in, not what lives there beside it", async () => {
     // SICUREZZA's P2: on a real box that folder holds dated backups,
@@ -146,7 +147,7 @@ describe("npm run role -- --role assistente (T38)", () => {
       expect(refused.allowed, name).toBe(false);
       expect(refused.said, name).toMatch(/is the person's own/);
     }
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 
   it("gives that profile to no other role: the same write from a SCOUT is refused", async () => {
     // The counter-proof of the exception, at the layer that grants it. A
@@ -159,7 +160,7 @@ describe("npm run role -- --role assistente (T38)", () => {
     expect(scout.said).toMatch(/read-only|not allowed|protected/i);
     // And the history is nobody's to write, the ASSISTENTE included.
     expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });
 
 /** One `write_file` into the profile folder, judged by that agent's own policy. */

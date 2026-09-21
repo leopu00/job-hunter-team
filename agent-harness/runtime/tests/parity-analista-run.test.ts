@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
 import { documentPaths, onDisk } from "../src/parity/prompt-paths.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const run = promisify(execFile);
@@ -140,5 +141,5 @@ describe("npm run role -- --role analista (T14)", () => {
     // The profile's own state files (enrichment-policy.json) may be absent by contract: absent is the defaults.
     const optional = (p: string) => p.startsWith(`${profileDir}/`) && !p.endsWith("/candidate_profile.yml");
     expect(referenced.filter((p) => !optional(p) && !existsSync(onDisk(p, home)))).toEqual([]);
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
@@ -179,7 +180,7 @@ describe("npm run role -- --role scout (a product role)", () => {
     expect(await readdir(join(home, "skills"))).toContain("scout-coord");
     expect(await readFile(join(home, "AGENTS.md"), "utf8")).toContain("# Running as an API agent");
     expect(await readFile(join(root, "api", "channels", "mailbox", "capitano-1.jsonl"), "utf8")).toContain('"from":"scout-1"');
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 
   it("refuses flags that belong to the other kind of role", async () => {
     await expect(role("--role", "scout", "--skills", "x", "--quiet")).rejects.toMatchObject({
@@ -191,7 +192,7 @@ describe("npm run role -- --role scout (a product role)", () => {
     await expect(role("--role", "scout", "--turns", "0", "--quiet")).rejects.toMatchObject({
       stderr: expect.stringContaining("--turns must be a whole number above zero"),
     });
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });
 
 describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1)", () => {
@@ -220,7 +221,7 @@ describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1
     const db = openJobsDb(dbFile);
     expect(db.prepare("SELECT job_id FROM scout_claims").all()).toEqual([{ job_id: "https://jobs.example/1" }]);
     db.close();
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });
 
 describe("npm run role and a running agent of the same id (SICUREZZA P2)", () => {
@@ -239,5 +240,5 @@ describe("npm run role and a running agent of the same id (SICUREZZA P2)", () =>
     await rm(join(locks, "scout-1.lock"));
     await role("--role", "scout", "--agent", "scout-2", "--quiet");
     expect(await readdir(locks)).toEqual([]);
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });

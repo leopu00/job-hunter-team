@@ -21,6 +21,7 @@ import { openJobsDb } from "../src/db/jobs-db.ts";
 import { reviewFileName } from "../src/hub/review.ts";
 import { ENGINE, PANDOC } from "../src/parity/skills/render-pdf.ts";
 import { onPath } from "../src/parity/jht-tools.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 /** Whether this box can really render: the image can, a laptop usually cannot. */
@@ -159,5 +160,5 @@ describe("npm run role -- --role scrittore (T25)", () => {
       expect(t).not.toMatch(/jht-throttle/);
     }
     expect(texts.join("\n")).toContain("pdf_layout_check.py (not available in the API harness)");
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });

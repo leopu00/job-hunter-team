@@ -20,6 +20,7 @@ import { HubClient, HubMailbox } from "../src/hub/client.ts";
 import { HUB_PATHS } from "../src/hub/protocol.ts";
 import { createHub, loadTokens } from "../src/hub/server.ts";
 import { prepareProductRole } from "../src/parity/product-role.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const REPO_ROOT = join(RUNTIME, "..", "..");
@@ -273,7 +274,7 @@ describe("a role on the hub", () => {
     expect(await new HubMailbox(new HubClient({ url, token: ANALISTA })).drain("x")).toEqual([]);
     const inbox = (await readFile(join(root, "hub", "channels", "mailbox", "capitano-1.jsonl"), "utf8")).trim();
     expect(JSON.parse(inbox)).toMatchObject({ from: "scorer-1", to: "capitano-1" });
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });
 
 describe("the channel files", () => {
