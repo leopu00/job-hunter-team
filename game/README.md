@@ -72,6 +72,27 @@ branch by branch, and `JHT_GFX_TEST` / `JHT_WORLD_TEXT_TEST` /
 A profile forced through the environment also freezes the watcher: otherwise
 every benchmark converges on the same step the calibration picked.
 
+## Running the gate on your own machine
+
+`tools/run.sh test gate` runs the whole list in `tools/test-matrix.txt` and
+refuses a pass it could not finish. If it says `MATRICE LETTA A META'`, a test
+took the loop's stdin, the list ended early and the run proves nothing. That
+happened on 2026-09-21 on one developer machine, where the gate stopped after
+the fourth test and still printed `TEST OK` — 4 of 66. **CI was reading the
+whole list all along**, on every runner: the silence was local, and the guard
+exists so a local run cannot claim more than it did.
+
+**Run it with a clean home.** Several tests drive the office against a team and
+a provider, and a real `~/.jht` — a machine already set up, a saved session, a
+language preference — puts them somewhere the tests do not expect. On
+2026-09-21 `doctor` and `comic_chat` were red on one machine and green on all
+three CI runners; with an empty home they pass locally too. The defect was the
+home, not the game:
+
+```sh
+HOME="$(mktemp -d)" bash tools/run.sh test gate
+```
+
 ## Native exports
 
 Install the Godot 4.7 export templates, then run from `game/`:
