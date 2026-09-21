@@ -14,6 +14,7 @@ import type { Database } from "../../db/jobs-db.ts";
 import { dbPolicyFor, roleOf } from "../../db/role-policy.ts";
 import { createDbTools } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
+import { createApplicationAnswersTool, createApplyGateTool } from "./closer.ts";
 import { createEmailMonitorTool } from "./email-monitor.ts";
 import { createFeedbackQueryTool } from "./feedback-query.ts";
 import { createCaptainTools } from "./captain.ts";
@@ -75,7 +76,7 @@ const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   // T21: capitano.md C-06 reads the person's standing orders at every wake; the enrichment
   // policy is its to show (`set` is refused here: the profile is read-only), and the
   // email check of C-17 runs without the skill listed; C-15 drains the ticket queue, C-17 merges categories.
-  capitano: ["team_directives", "enrichment_policy", "email_monitor", "ticket", "role_registry"],
+  capitano: ["team_directives", "enrichment_policy", "email_monitor", "ticket", "role_registry", "apply_gate"],
   // T25: the CRITICO lists no database skill, and its prompt reads the application it was
   // asked to review and the team's recent activity (critico.md, communication section).
   critico: ["db_query"],
@@ -155,6 +156,21 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   // without one has nothing to read and says so, as the scripts do.
   if (scripts.has("bridge_mailbox") || scripts.has("burn_intent")) {
     tools.push(...createSentinelTools({ jhtHome: options.jhtHome ?? join(options.stateDir ?? ".", "jht") }));
+  }
+  // T39: the CLOSER's gate and its answers. `apply-authorization` is the skill that runs the
+  // gate, `apply-flow` the one whose allowed-tools name the answers, and only the CLOSER lists
+  // them. Both need the database: its queue is the positions the person flagged, its answers a
+  // table of it. The consent is the person's config under their JHT home, as the scripts read it.
+  // The CAPITANO reads the same gate, and only reads it: capitano.md runs
+  // `apply_gate.py queue` to decide whether a CLOSER is worth spawning at all.
+  // The tool is read-only by construction (no slot is reserved, nothing is sent),
+  // so the second reader costs nothing — and without it the CAPITANO's prompt
+  // would name a tool it does not have.
+  if (db && (listed.has("apply-authorization") || listed.has("apply-flow") || scripts.has("apply_gate"))) {
+    const jhtHome = options.jhtHome ?? join(options.stateDir ?? ".", "jht");
+    const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile") };
+    if (listed.has("apply-authorization") || scripts.has("apply_gate")) tools.push(createApplyGateTool(closer));
+    if (listed.has("apply-flow")) tools.push(createApplicationAnswersTool(closer));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
   // T38: the ASSISTENTE writes the person's profile, and its rule A-02 says
