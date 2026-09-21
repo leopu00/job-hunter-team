@@ -22,6 +22,10 @@ jobs:
   api-worker:
     name: API worker — format, types, offline tests
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     if: github.event_name != 'schedule'
 
     steps:
@@ -51,6 +55,10 @@ jobs:
   vitest:
     name: vitest — tests/js
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     # Il cron esiste solo per `smoke`: le suite del codice non hanno motivo di
     # rigirare a vuoto ogni notte sullo stesso commit.
     if: github.event_name != 'schedule'
@@ -115,6 +123,10 @@ jobs:
   migration-gate:
     name: Supabase migrations — immutable history + PostgreSQL 16
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     services:
       postgres:
@@ -176,6 +188,10 @@ jobs:
   pytest:
     name: pytest — agents, skills, sync
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     if: github.event_name != 'schedule'
     # Migration 074 is exercised on PostgreSQL itself: parsing SQL or mocking
     # Supabase cannot prove composite FKs, RLS privileges, row locks or a full
@@ -280,6 +296,10 @@ jobs:
   e2e:
     name: e2e — welcome wizard, demo mode, social metadata
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     # Senza i segreti dell'account di test l'area riservata non è raggiungibile
     # e i test si skipperebbero in silenzio: meglio non far partire il job.
     if: github.repository == 'leopu00/job-hunter-team' && github.event_name != 'schedule'
@@ -478,6 +498,10 @@ jobs:
   smoke:
     name: smoke — produzione (post-deploy)
     runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
     if: >-
       github.repository == 'leopu00/job-hunter-team' &&
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
