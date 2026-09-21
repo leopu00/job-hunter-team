@@ -183,6 +183,17 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
     insert: [],
     update: [],
   },
+  // T37, sentinella.md RULE #0 ("DO NOT modify code, config, files, git"): the SENTINELLA
+  // does not touch the database at all — not a read, not a write. Its whole data layer is
+  // the bridges' JSONL under the team's home, and what it produces is one piece of advice
+  // to the CAPITANO, who is the one that queries anything ("you ADVISE, he DECIDES").
+  // Written out although an absent role may already do nothing: an unwritten rule is one
+  // no test can hold, and this is the role whose defect would be reaching where it must not.
+  sentinella: {
+    query: [],
+    insert: [],
+    update: [],
+  },
   // T15 (FULLSTACK-1), scorer.md RULE-02/03/04/06: its queue and the position it scores.
   scorer: {
     query: ["next-for-scorer", "position"],

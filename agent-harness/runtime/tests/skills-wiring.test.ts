@@ -110,6 +110,20 @@ describe("which roles get which skill tools", () => {
     await expect(readdir(profileDir)).rejects.toThrow();
   });
 
+  it("gives the SENTINELLA its two file reads and NOTHING that touches the database (T37)", async () => {
+    const list = await readFile(join(REPO_ROOT, "agents", "sentinella", "skills.list"), "utf8");
+    const skills = list.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+    // Its real skills.list: tmux-send, rate-budget, throttle, throttle-ack, spawn-doctor.
+    expect(skills.length).toBeGreaterThan(0);
+    const tools = createSkillTools({ skills, agent: "sentinella-1", jobsDb: db, jhtHome: join(root, "jht") });
+    expect(tools.map((t) => t.spec.name)).toEqual(["bridge_mailbox", "burn_intent"]);
+    // The database is open and it still gets no tool that reaches it: the watcher
+    // advises on numbers the bridges leave it, and the CAPITANO is the one who queries.
+    expect(tools.map((t) => t.spec.name).filter((n) => n.startsWith("db_"))).toEqual([]);
+    // And nobody else inherits them by being in the same run.
+    expect(createSkillTools({ skills, agent: "capitano", jobsDb: db }).map((t) => t.spec.name)).not.toContain("bridge_mailbox");
+  });
+
   it("offers no database tool when the runtime opened no database", () => {
     expect(names(["scout-coord", "feedback-query", "email-monitor"], false)).toEqual(["email_monitor"]);
   });

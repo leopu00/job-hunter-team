@@ -19,6 +19,7 @@ npm run role -- --role analista --agent analista-1 --turns 2   # the ANALISTA (T
 npm run role -- --role capitano --agent capitano --turns 2    # the CAPITANO, without spawning (T21)
 npm run role -- --role scrittore --agent scrittore-1 --turns 2 # the CV, in markdown (T25)
 npm run role -- --role critico --agent critico-1 --turns 2    # its blind review (T25)
+npm run role -- --role sentinella --agent sentinella-1 --turns 2 # the budget watcher, advising only the CAPITANO (T37)
 npm run role -- --role demo --prompt path/to/prompt.md --task "Start."
 npm run monitor        # follow live runs; --list, --last, <run-id>, --verbose
 ```
