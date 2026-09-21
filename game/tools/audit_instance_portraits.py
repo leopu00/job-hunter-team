@@ -7,20 +7,27 @@ import hashlib
 from pathlib import Path
 import sys
 
-# Pillow non è installato ovunque: il runner Windows della CI non ce l'ha, e
-# un audit che *non può* girare non è un audit fallito — è un audit assente.
-# Facendolo cadere come errore, il 2026-07-30 ha bloccato una release per una
-# libreria mancante invece che per un asset sbagliato. Esce 0 dicendo perché,
-# e i due leg che Pillow ce l'hanno continuano a controllare davvero.
+# Un cancello che non puo' girare NON e' un cancello verde: il 21/09 questo
+# audit era rosso in locale su dieci file e muto in CI, perche' senza Pillow
+# usciva 0 dicendo "SKIP". Ora fallisce chiuso, e la CI installa Pillow: se
+# manca, il rosso dice cosa installare invece di nascondere cosa manca.
 try:
     from PIL import Image
 except ModuleNotFoundError:
-    print("SKIP: Pillow non disponibile su questa macchina — audit non eseguito")
-    raise SystemExit(0)
+    print(
+        "FAIL: Pillow non e' installato, quindi questo audit non puo' girare.\n"
+        "  - installalo con `python3 -m pip install Pillow` (in CI lo fa il workflow)\n"
+        "  - un audit che non gira non prova niente: qui e' rosso, non saltato",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 ROLES = ("scout", "analista", "scorer", "scrittore", "critico")
 EMOTIONS = ("neutro", "pensieroso")
+# Il ruolo porta anche l'espressione che le cartelle d'istanza del lead non
+# avevano, ed e' la ragione per cui quelle cartelle sono state tolte.
+ROLE_EMOTIONS = ("neutro", "pensieroso", "caldo")
 LEAD_INSTANCE = {
     "scout": 2,
     "analista": 2,
@@ -72,10 +79,26 @@ def main() -> int:
     checked = 0
 
     for role in ROLES:
+        lead = LEAD_INSTANCE[role]
         for number in range(1, 7):
+            # Il ritratto d'istanza del LEAD non esiste per scelta (78a8a0e07,
+            # 17/08): era una copia byte-identica di quello di ruolo e, avendo
+            # solo due espressioni, impediva il fallback su full_caldo.
+            # ComicChat.portrait_slug() ripiega sul ruolo, che li' e' la
+            # risposta giusta. Chi lo ricreasse tornerebbe a quel difetto.
+            instance_dir = root / f"{role}-{number}"
+            if number == lead:
+                if instance_dir.is_dir():
+                    failed += 1
+                    print(
+                        f"FAIL {instance_dir}: e' la postazione del lead, che ripiega sul "
+                        f"ritratto di ruolo {root / role} — questa cartella e' stata rimossa "
+                        "apposta il 17/08 (78a8a0e07) perche' copriva le espressioni in piu'"
+                    )
+                continue
             for emotion in EMOTIONS:
                 checked += 1
-                path = root / f"{role}-{number}" / f"full_{emotion}.png"
+                path = instance_dir / f"full_{emotion}.png"
                 errors = audit_portrait(path)
                 if errors:
                     failed += 1
@@ -83,21 +106,25 @@ def main() -> int:
                     for error in errors:
                         print(f"  - {error}")
 
-        lead = LEAD_INSTANCE[role]
-        for emotion in EMOTIONS:
-            generic = root / role / f"full_{emotion}.png"
-            instance = root / f"{role}-{lead}" / f"full_{emotion}.png"
-            if generic.is_file() and instance.is_file() and digest(generic) != digest(instance):
+        # La cartella di ruolo e' cio' su cui il lead ripiega: deve portare le
+        # espressioni che la chat usa, comprese quelle che l'istanza non aveva.
+        for emotion in ROLE_EMOTIONS:
+            checked += 1
+            path = root / role / f"full_{emotion}.png"
+            errors = audit_portrait(path)
+            if errors:
                 failed += 1
-                print(
-                    f"FAIL {instance}: la variante a non coincide con il ritratto "
-                    f"principale {generic}"
-                )
+                print(f"FAIL {path} (ritratto di ruolo, il lead ripiega qui)")
+                for error in errors:
+                    print(f"  - {error}")
 
     if failed:
         print(f"\n{checked} ritratti controllati, {failed} errori")
         return 1
-    print(f"PASS: {checked} ritratti per istanza, formato/alpha/import/lead corretti")
+    print(
+        f"PASS: {checked} ritratti controllati (istanze dei worker + ritratto di ruolo), "
+        "formato/alpha/import corretti e nessuna cartella d'istanza per i lead"
+    )
     return 0
 
 

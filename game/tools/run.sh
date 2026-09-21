@@ -29,7 +29,10 @@ cd "$GAME_DIR"
 
 MODE="${1:-boot}"
 TIER="${2:-all}"
-MATRIX="$GAME_DIR/tools/test-matrix.txt"
+# Il selftest della guardia (tools/run_matrix_guard_selftest.py) passa una
+# matrice finta: e' l'unico modo di provare che un giro incompleto va rosso
+# senza rompere quella vera.
+MATRIX="${JHT_TEST_MATRIX:-$GAME_DIR/tools/test-matrix.txt}"
 
 # Esegue una riga della matrice. Ritorna 0/1; l'output del test finisce su
 # stderr SOLO se fallisce, altrimenti il log del gate sarebbe illeggibile.
@@ -39,17 +42,23 @@ matrix_run_one() {
 	# forma `||`: sotto `set -e` una lista `&&` che fallisce fa uscire
 	[ "$envs" != "-" ] || envs=""
 	[ "$target" = "-" ] || extra="$target"
+	# `</dev/null` NON e' decorazione: il ciclo che chiama questa funzione legge
+	# la matrice da stdin (`done < "$MATRIX"`), e godot si prende quel file
+	# descriptor. Il 21/09, su macOS, il gate si fermava dopo il QUARTO test e
+	# stampava "TEST OK": 4 su 66, con 62 test che nessuno eseguiva e nessun
+	# rosso da nessuna parte. Un cancello che non legge tutta la sua lista
+	# passa per il motivo sbagliato.
 	case "$kind" in
 		script)
 			out="$(env JHT_NOVPS=1 $envs godot --headless \
-				--script "res://$target" 2>&1)" || rc=$?
+				--script "res://$target" 2>&1 </dev/null)" || rc=$?
 			;;
 		run)
 			# shellcheck disable=SC2086  # env e args sono token voluti
-			out="$(env JHT_NOVPS=1 $envs godot --headless $extra . 2>&1)" || rc=$?
+			out="$(env JHT_NOVPS=1 $envs godot --headless $extra . 2>&1 </dev/null)" || rc=$?
 			;;
 		python)
-			out="$(python3 "$target" 2>&1)" || rc=$?
+			out="$(python3 "$target" 2>&1 </dev/null)" || rc=$?
 			;;
 		*)
 			echo "[run.sh] kind sconosciuto '$kind' in test-matrix.txt" >&2
@@ -72,11 +81,15 @@ matrix_run_one() {
 matrix_run() {
 	local want="$1"
 	local id kind tier platform envs target marker
-	local ran=0 failed=0 skipped=0 failed_ids=""
+	local ran=0 failed=0 skipped=0 failed_ids="" declared=0
 	if [ ! -f "$MATRIX" ]; then
 		echo "[run.sh] tools/test-matrix.txt assente: nessun test da eseguire" >&2
 		return 1
 	fi
+	# Quante righe di test dichiara la matrice: a fine giro ran+skipped deve
+	# tornare. Senza questo conto, un test che si porta via lo stdin del ciclo
+	# fa finire la lista a meta' e il runner dice "TEST OK" lo stesso.
+	declared="$(grep -cve '^[[:space:]]*$' -e '^[[:space:]]*#' "$MATRIX")"
 	while IFS='|' read -r id kind tier platform envs target marker; do
 		case "$id" in ''|'#'*) continue ;; esac
 		if [ "$want" != "all" ] && [ "$want" != "$tier" ]; then
@@ -97,6 +110,11 @@ matrix_run() {
 		echo "[run.sh] tier '$want' non seleziona nessun test (gate|watch|all)" >&2
 		return 1
 	fi
+	if [ "$((ran + skipped))" -ne "$declared" ]; then
+		echo "[run.sh] MATRICE LETTA A META': $((ran + skipped))/$declared righe viste." >&2
+		echo "[run.sh] Un test si e' preso lo stdin del ciclo: nessun esito e' attendibile." >&2
+		return 1
+	fi
 	if [ "$failed" -ne 0 ]; then
 		echo "[run.sh] TEST KO — $failed/$ran falliti:$failed_ids" >&2
 		return 1
@@ -108,17 +126,22 @@ matrix_run() {
 # mai due istanze sullo stesso progetto (cache corrotta garantita), e mai
 # in parallelo a un ALTRO worktree: due finestre confondono i test utente
 # e lo shot ruba il focus col suo osascript (incrocio del 18:16, 11/07)
-if pgrep -f "godot --path.*job-hunter-team" >/dev/null 2>&1 \
-		|| pgrep -fl "godot" | grep -q "godot --path \.$" 2>/dev/null; then
-	echo "[run.sh] c'è già un godot del progetto (anche altro worktree): chiudilo prima (pkill -x godot)" >&2
-	exit 2
-fi
+# Con una matrice finta (JHT_TEST_MATRIX) si sta collaudando QUESTO script, non
+# il gioco: niente Godot da importare, e nessun motivo di pretendere che non ne
+# giri un altro.
+if [ -z "${JHT_TEST_MATRIX:-}" ]; then
+	if pgrep -f "godot --path.*job-hunter-team" >/dev/null 2>&1 \
+			|| pgrep -fl "godot" | grep -q "godot --path \.$" 2>/dev/null; then
+		echo "[run.sh] c'è già un godot del progetto (anche altro worktree): chiudilo prima (pkill -x godot)" >&2
+		exit 2
+	fi
 
-echo "[run.sh] import risorse/cache classi…" >&2
-if ! IMPORT_OUT="$(JHT_NOVPS=1 godot --headless --import . 2>&1)"; then
-	printf '%s\n' "$IMPORT_OUT" >&2
-	echo "[run.sh] IMPORT KO" >&2
-	exit 1
+	echo "[run.sh] import risorse/cache classi…" >&2
+	if ! IMPORT_OUT="$(JHT_NOVPS=1 godot --headless --import . 2>&1)"; then
+		printf '%s\n' "$IMPORT_OUT" >&2
+		echo "[run.sh] IMPORT KO" >&2
+		exit 1
+	fi
 fi
 
 case "$MODE" in

@@ -2131,8 +2131,34 @@ func _guided_onboarding_selftest() -> void:
 			await get_tree().process_frame
 	TourGuide._done = original_tour_done
 	shown_portraits.sort()
-	check.call(shown_portraits == ["scout-1", "scout-2"],
+	# Cosa deve valere davvero: due postazioni, due facce diverse, e nessun
+	# worker che ripiega sul ruolo. Prima qui c'era l'elenco esatto
+	# ["scout-1","scout-2"], scritto il 07/08; il 17/08 il commit 78a8a0e07 ha
+	# rimosso APPOSTA i ritratti d'istanza dei lead (copie byte-identiche del
+	# ritratto di ruolo, e con due sole espressioni impedivano il fallback su
+	# full_caldo), quindi il lead ripiega sul ruolo ed e' la risposta voluta.
+	# L'elenco esatto ha continuato a chiedere un file che nessuno vuole piu'.
+	var distinct := {}
+	for portrait in shown_portraits:
+		distinct[portrait] = true
+	check.call(distinct.size() == shown_portraits.size(),
 			"due Scout dello showroom condividono il ritratto: %s" \
+			% JSON.stringify(shown_portraits))
+	# Il lead e' l'unico che puo' mostrare il ritratto di ruolo. Se office.gd
+	# torna a passare la chiave grezza (il difetto P0 del 07/08) qui escono
+	# due "scout" e questa riga diventa rossa.
+	var on_role := 0
+	var on_desk := 0
+	for portrait in shown_portraits:
+		if portrait == "scout":
+			on_role += 1
+		elif portrait.begins_with("scout-"):
+			on_desk += 1
+	check.call(on_role <= 1,
+			"piu' di uno Scout ripiega sul ritratto di ruolo (chiave grezza?): %s" \
+			% JSON.stringify(shown_portraits))
+	check.call(on_desk >= 1,
+			"nessuno Scout mostra il ritratto della propria postazione: %s" \
 			% JSON.stringify(shown_portraits))
 	ScriptedOnboarding.reset_for_test()
 	check.call(ScriptedOnboarding.messages("assistente").size() == 1,
