@@ -82,6 +82,14 @@ export interface ProductRole {
   pause: PauseRequest;
   /** The runtime's tools with the shell guarded, followed by the native `_tools`. */
   tools(base: ToolHandler[]): ToolHandler[];
+  /**
+   * The tools a SUBAGENT of this role gets (T35). Not the parent's array: a
+   * child is built its own, because the fence a child needs is not the
+   * parent's. The live critic-loop runs the CRITICO inside the SCRITTORE's
+   * process, and a child that inherited the SCRITTORE's tools would review
+   * with the candidate's profile open — blind by prompt, not by fence.
+   */
+  subagentTools(base: ToolHandler[]): ToolHandler[];
 }
 
 export async function prepareProductRole(options: ProductRoleOptions): Promise<ProductRole> {
@@ -156,21 +164,34 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
   if (hub && roleOf(options.agent) === "capitano") skills.push(...createSpawnTools(hub));
 
+  /**
+   * The role's tools, `blind` when the reader of them must not see the
+   * candidate: the CRITICO always, and every subagent of the SCRITTORE,
+   * because in the live chain that subagent IS the critic (T35).
+   */
+  const build = (base: ToolHandler[], blind: boolean): ToolHandler[] => [
+    ...deliverableWriteGuard(blind ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir }) : base, {
+      userDir,
+      agent: options.agent,
+      workdir: options.homeDir,
+    }).map((tool) => (tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool)),
+    ...native,
+    ...skills,
+  ];
+  const isCritic = roleOf(options.agent) === "critico";
+  // A subagent of the SCRITTORE is the CRITICO of the critic-loop: it reviews
+  // blind, and the fence says so instead of the prompt asking for it. Every
+  // other role's subagent gets what the role itself has — no more, since the
+  // child is built from the same base, and no less.
+  const blindChild = isCritic || roleOf(options.agent) === "scrittore";
+
   return {
     prompt,
     systemPrompt,
     mailbox,
     pause,
-    tools: (base) => [
-      ...deliverableWriteGuard(
-        roleOf(options.agent) === "critico" ? blindReviewTools(base, { profileDir, userDir, workdir: options.homeDir }) : base,
-        { userDir, agent: options.agent, workdir: options.homeDir },
-      ).map((tool) =>
-        tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool,
-      ),
-      ...native,
-      ...skills,
-    ],
+    tools: (base) => build(base, isCritic),
+    subagentTools: (base) => build(base, blindChild),
   };
 }
 

@@ -332,6 +332,20 @@ export function scrittoreMockScript(userDir: string, profileDir: string, history
       ],
     },
     {
+      // T35: the critic-loop runs the CRITICO inside this process, as a
+      // subagent. It must review blind — and the fence, not the prompt, is
+      // what makes it so: its first move here is the profile, refused.
+      text: "The Critic, in this process, blind.",
+      toolCalls: [
+        {
+          name: "agent",
+          args: { description: "blind review", prompt: `Review the CV at ${cv} against the job description and report SCORE: X.X/10.` },
+        },
+      ],
+    },
+    { text: "", toolCalls: [{ name: "read_file", args: { path: `${profileDir}/candidate_profile.yml` } }] },
+    { text: "Blind review done, on the CV alone. SCORE: 6.5/10." },
+    {
       // The review loop is in-process (T33): the Critic is a subagent of this
       // Writer, so the verdict comes back here — and has to reach the person,
       // which is what `save_review` is for. On the live chain of 21/09 nobody

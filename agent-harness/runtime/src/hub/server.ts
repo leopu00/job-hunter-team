@@ -34,6 +34,7 @@ import { DEFAULT_NOTIFY_LIMIT, FileMailbox, FileNotifier, FileUserReplies } from
 import { loadRolePrompt } from "../parity/role-prompt.ts";
 import { createSkillTools } from "../parity/skills/index.ts";
 import { requestWrite } from "../db/write-request.ts";
+import { reviewsFor, saveReview, verdictPosition } from "./review.ts";
 import type { ToolContext, ToolHandler } from "../tools/registry.ts";
 import {
   EmptyRequest,
@@ -41,6 +42,7 @@ import {
   MAX_BODY_BYTES,
   NotifyRequest,
   SendRequest,
+  ReviewRequest,
   TOKEN,
   ToolRequest,
   UserWriteRequest,
@@ -63,6 +65,12 @@ export interface HubOptions {
   stateDir: string;
   /** `$JHT_HOME`, as the feedback display reads it. */
   jhtHome?: string;
+  /**
+   * The deliverables folder (`JHT_API_USER_DIR`). The hub writes the CRITICO's
+   * review in its `critiche/` with its own uid (T34); without it, `/v1/review`
+   * answers 503 instead of pretending.
+   */
+  userDir?: string;
   notifyLimit?: { max: number; windowMs: number };
   /** Messages one agent may send in a window (HUB-3): a loop fills no inbox. */
   sendLimit?: { max: number; windowMs: number };
@@ -183,6 +191,18 @@ export function createHub(options: HubOptions): Server {
     return tool;
   };
 
+  /** The warning a verdict without its review file carries back, or "". */
+  const reviewMissing = (args: unknown, name: string): string => {
+    const position = verdictPosition(name, args);
+    if (position === null || !options.userDir) return "";
+    const row = db().prepare("SELECT company FROM positions WHERE id = ?").get(position) as { company: string | null } | undefined;
+    if (!row || reviewsFor(options.userDir, row.company ?? "").length > 0) return "";
+    return (
+      `\n⚠️  The verdict is recorded and no review file is in critiche/ for position ${position}. ` +
+      "The review is what the person reads: save it with `save_review` (position_id, text) and say its path in your report."
+    );
+  };
+
   const handle = async (path: string, agent: string, body: unknown): Promise<unknown> => {
     switch (path) {
       case HUB_PATHS.tool: {
@@ -192,7 +212,29 @@ export function createHub(options: HubOptions): Server {
         if (!args.success) return { ok: false, content: `Error: invalid arguments for ${request.name}: ${formatIssues(args.error)}` } satisfies ToolResponse;
         const context: ToolContext = { account: new TurnAccount(now), remainingMs: () => 120_000 };
         const result = await tool.execute(args.data, context);
-        return { ok: result.ok, content: result.content, ...(result.details ? { details: result.details } : {}) } satisfies ToolResponse;
+        // T34: a verdict recorded with no review file beside it is the shape
+        // of the live chain of 21/09 — the judgement existed only in the
+        // trace. The database write stands (it did happen), and the answer
+        // says the file is missing, in the same breath, instead of leaving it
+        // to be noticed later by nobody.
+        const missing = result.ok ? reviewMissing(args.data, request.name) : "";
+        return {
+          ok: result.ok,
+          content: result.content + missing,
+          ...(result.details ? { details: result.details } : {}),
+        } satisfies ToolResponse;
+      }
+      // T34: the review of the CRITICO, written by the hub because in-process
+      // that role carries the SCRITTORE's uid and `critiche/` is not its to
+      // write. Only the two roles of the review loop may ask.
+      case HUB_PATHS.review: {
+        if (!options.userDir) throw new HttpError(503, "This hub has no deliverables folder: the review cannot be written.");
+        const role = roleOf(agent);
+        if (role !== "critico" && role !== "scrittore") {
+          throw new HttpError(403, `A review is saved by the CRITICO of the review loop, not by ${agent}.`);
+        }
+        const request = parse(ReviewRequest, body);
+        return saveReview(db(), { userDir: options.userDir, positionId: request.position_id, text: request.text });
       }
       case HUB_PATHS.send: {
         const request = parse(SendRequest, body);

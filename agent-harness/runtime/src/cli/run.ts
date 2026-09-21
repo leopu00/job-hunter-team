@@ -193,6 +193,9 @@ async function main(): Promise<number> {
     audit,
     systemPrompt,
     tools: role ? role.tools(toolkit.tools) : toolkit.tools,
+    // T35: a subagent of a product role gets a toolkit built for a child, not
+    // the parent's — the critic-loop's CRITICO runs in here.
+    ...(role ? { subagentTools: role.subagentTools(toolkit.tools) } : {}),
     permissions: toolkit.permissions,
     workdir: config.workdir,
     platform: toolkit.platform,
