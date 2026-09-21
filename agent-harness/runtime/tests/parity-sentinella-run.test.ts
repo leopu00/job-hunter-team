@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
 import { documentPaths, onDisk } from "../src/parity/prompt-paths.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const run = promisify(execFile);
@@ -147,5 +148,5 @@ describe("npm run role -- --role sentinella (T37)", () => {
     const referenced = [...new Set(texts.flatMap((t) => documentPaths(t, imageRoot, [home, profileDir])))];
     const optional = (p: string) => p.startsWith(`${profileDir}/`) && !p.endsWith("/candidate_profile.yml");
     expect(referenced.filter((p) => !optional(p) && !existsSync(onDisk(p, home)))).toEqual([]);
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });

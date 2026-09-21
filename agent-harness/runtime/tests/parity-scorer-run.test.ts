@@ -14,6 +14,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const run = promisify(execFile);
@@ -98,7 +99,7 @@ describe("npm run role -- --role scorer (T15)", () => {
     expect(prompt).not.toMatch(/python3|safe_fetch\.py/);
     expect(prompt).toContain("web_fetch 'URL'");
     expect(prompt).toContain("db_insert score");
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 
   it("writes no score when the person's profile is missing, and says why", async () => {
     const { finished } = await scorerRun(null);
@@ -107,5 +108,5 @@ describe("npm run role -- --role scorer (T15)", () => {
     const db = openJobsDb(join(root, "api", "db", "jobs.db"));
     expect(db.prepare("SELECT count(*) AS n FROM scores").get()).toEqual({ n: 0 });
     db.close();
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });

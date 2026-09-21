@@ -1,5 +1,9 @@
 /**
- * A test that needs something the image has not must SKIP there, not fail.
+ * The rules a test file must follow that only a RUN can teach, checked here so
+ * they are not remembered. Two families, both of which have already cost a red
+ * that meant nothing.
+ *
+ * ## A test that needs something the image has not must SKIP there, not fail.
  *
  * Two such things, and the same rule for both:
  * - **python3**: the image carries none, and about ninety comparisons skip
@@ -18,6 +22,16 @@
  * broken check, not a pass. (A test may also drop the dependency instead of
  * skipping — the census now reads the source tree — and then it simply
  * stops being counted here.)
+ *
+ * ## A test that starts the runtime as a process must say how long it may take.
+ *
+ * `npm run role` spawned for real costs one to three seconds on an idle
+ * machine, against vitest's 5 s default — and the whole suite runs those in
+ * parallel with everything else. On 21/09 `parity-scrittore-run` timed out on
+ * the first run of the merged suite and passed twice on its own: a test that
+ * passes or fails with the LOAD lies in the direction that costs most, a red
+ * nobody believes. So every test in a file that starts the CLI carries
+ * `CLI_RUN_TIMEOUT_MS` (helpers/cli.ts), and this refuses one that does not.
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -53,7 +67,7 @@ function tests(source: string): Array<{ head: string; body: string }> {
 
 /** Every test file but this one. */
 async function testFiles(): Promise<string[]> {
-  const self = "python-parity-skips.test.ts";
+  const self = "test-hygiene.test.ts";
   const files = (await readdir(HERE)).filter((f) => f.endsWith(".test.ts") && f !== self);
   expect(files.length).toBeGreaterThan(10);
   return files;
@@ -89,5 +103,31 @@ describe("the parity tests", () => {
     // A test that runs `git` anything: the image has the binary and not the
     // repository, so the command errs rather than answering.
     expect(await withoutSkip(/["'`]git["'`]\s*,/, 2)).toEqual([]);
+  });
+});
+
+describe("the tests that start the runtime as a process", () => {
+  it("say how long they may take, every one of them", async () => {
+    // A test needs the timeout when IT starts the CLI — or when its file
+    // starts it outside any test, in a helper every test there calls. A
+    // body-by-body scan alone would have missed the two files that hide the
+    // spawn in a helper; a per-file rule alone would have put a 30 s timeout
+    // on the nineteen hub tests that start no process at all.
+    const missing: string[] = [];
+    let checked = 0;
+    for (const file of await testFiles()) {
+      const source = await readFile(join(HERE, file), "utf8");
+      if (!source.includes("src/cli/run.ts")) continue;
+      const blocks = tests(source);
+      const outside = blocks.reduce((rest, block) => rest.replace(block.body, ""), source);
+      const everyTest = outside.includes("src/cli/run.ts");
+      for (const { head, body } of blocks) {
+        if (!everyTest && !body.includes("src/cli/run.ts")) continue;
+        checked++;
+        if (!body.includes("CLI_RUN_TIMEOUT_MS")) missing.push(`${file}: ${head.trim().slice(0, 90)}`);
+      }
+    }
+    expect(checked, "no test starts the CLI: the scan is broken, not clean").toBeGreaterThanOrEqual(8);
+    expect(missing).toEqual([]);
   });
 });

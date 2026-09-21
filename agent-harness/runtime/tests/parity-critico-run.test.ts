@@ -15,6 +15,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb } from "../src/db/jobs-db.ts";
+import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const run = promisify(execFile);
@@ -105,5 +106,5 @@ describe("npm run role -- --role critico (T25)", () => {
     const criticoMd = await readFile(join(RUNTIME, "..", "..", "agents", "critico", "critico.md"), "utf8");
     expect(prompt.slice(0, 200)).toBe(criticoMd.slice(0, 200));
     expect(prompt).not.toMatch(/python3/);
-  });
+  }, CLI_RUN_TIMEOUT_MS);
 });
