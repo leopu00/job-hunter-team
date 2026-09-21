@@ -475,7 +475,68 @@ export function criticoMockScript(userDir: string, profileDir: string): Scripted
 }
 
 /** The rehearsal for a product role: the SCORER, the ANALISTA, the CAPITANO, the SCRITTORE and the CRITICO have their own, every other role plays the SCOUT's. */
+/**
+ * T38: the ASSISTENTE's rehearsal. It is the one role that talks to the
+ * person, and the one that writes their profile: it picks up what they said,
+ * reads the profile, writes what they told it, validates the write (A-02),
+ * answers on the channel the message came from, and hands the operational part
+ * to the CAPITANO. It touches the person's own documents only to prove it
+ * cannot: the history stays read-only for every role, this one included.
+ */
+export function assistenteMockScript(profileDir: string, historyDir?: string): ScriptedTurn[] {
+  const profile = `${profileDir}/candidate_profile.yml`;
+  return [
+    { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+    { text: "What the person said while I was away.", toolCalls: [{ name: "check_user_replies", args: {} }] },
+    { text: "Their profile as it stands.", toolCalls: [{ name: "read_file", args: { path: profile } }] },
+    {
+      // The write no other role may make, and the validation that always follows it.
+      text: "What they just told me, written down.",
+      toolCalls: [
+        {
+          name: "write_file",
+          args: {
+            path: profile,
+            content:
+              "name: A Person\ntarget_role: Backend Engineer\nlocation: Roma, Italia\n" +
+              "experience_years: 6\nhas_degree: true\nseniority_target: mid\n" +
+              "skills:\n  primary:\n    - TypeScript\n    - SQLite\nlanguages:\n" +
+              "  - language: Italiano\n    level: madrelingua\n",
+          },
+        },
+      ],
+    },
+    { text: "And checked, before I say anything to them.", toolCalls: [{ name: "validate_profile", args: { args: [profile] } }] },
+    ...(historyDir === undefined
+      ? []
+      : [
+          {
+            // The person's own documents: read for the tone, never changed.
+            text: "What they wrote themselves, and what happens if I try to change it.",
+            toolCalls: [
+              { name: "read_file", args: { path: `${historyDir}/CV_2024.md` } },
+              { name: "write_file", args: { path: `${historyDir}/CV_2024.md`, content: "# replaced\n" } },
+            ],
+          },
+        ]),
+    { text: "Where the team is, to answer their question.", toolCalls: [{ name: "db_query", args: { args: ["dashboard"] } }] },
+    {
+      text: "The answer, in their words, and the order in the team's.",
+      toolCalls: [
+        { name: "chat_reply", args: { text: "I have added your experience to your profile — the left panel is up to date." } },
+        { name: "send_message", args: { to: "capitano-1", text: "[@assistente -> @capitano] [REQ] The person asked for the pipeline status." } },
+      ],
+    },
+    { toolCalls: [{ name: "throttle", args: { reason: "waiting for the person's next message" } }] },
+    { text: "Paused." },
+    // The second cycle, as the loop wakes it: the person's answer first.
+    { toolCalls: [{ name: "check_user_replies", args: {} }] },
+    { text: "Mock run complete: the profile is written and valid, the person answered, the Capitano asked." },
+  ];
+}
+
 export function productRoleMockScript(role: string, userDir = ".", profileDir = ".", historyDir?: string): ScriptedTurn[] {
+  if (role === "assistente") return assistenteMockScript(profileDir, historyDir);
   if (role === "scorer") return SCORER_MOCK_SCRIPT;
   if (role === "analista") return ANALISTA_MOCK_SCRIPT;
   if (role === "capitano") return CAPITANO_MOCK_SCRIPT;

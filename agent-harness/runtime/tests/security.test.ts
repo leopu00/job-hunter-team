@@ -286,6 +286,7 @@ describe("jobs.db outside apiHome (SICUREZZA D-1): only the database tools touch
 
     const toolkit = await buildToolkit(
       {
+        role: "scout-1",
         workdir: agentHome,
         agentHome,
         apiHome,

@@ -10,6 +10,7 @@
 import { platform } from "node:os";
 
 import type { Config } from "../config.ts";
+import { profileWritables } from "../db/role-policy.ts";
 import { PermissionPolicy, type PermissionAsker } from "../core/permissions.ts";
 import type { ProviderPort } from "../core/provider/port.ts";
 import { createBashTool } from "./bash.ts";
@@ -37,7 +38,7 @@ const PLATFORM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
 };
 
 export async function buildToolkit(
-  config: Pick<Config, "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile"> &
+  config: Pick<Config, "role" | "workdir" | "agentHome" | "apiHome" | "profileDir" | "permissionMode" | "mcpConfig" | "profile"> &
     Partial<Pick<Config, "userDir" | "userHistoryDir">>,
   options: {
     provider: ProviderPort;
@@ -63,7 +64,13 @@ export async function buildToolkit(
   // Inside the runtime state, only this role's own folders are its to touch — plus what
   // the team makes for the person (T25): the CV, the cover letter and the review are
   // deliverables, written by one role and read by the next.
-  const ownRoots = [workdir, config.agentHome, ...(config.userDir ? [config.userDir] : [])];
+  // T38: and, for the ASSISTENTE alone, the few files it writes inside the
+  // person's profile — it is the only role that talks to them and the only one
+  // that writes down what they said. The folder itself stays read-only for
+  // everyone, this role included (SICUREZZA P2): what is writable is a list of
+  // paths, so a script or a control flag that lives in there is not.
+  const writable = config.profileDir === undefined ? [] : profileWritables(config.profileDir, config.role);
+  const ownRoots = [workdir, config.agentHome, ...(config.userDir ? [config.userDir] : []), ...(writable.length > 0 ? [config.profileDir!] : [])];
   // The database may live outside apiHome (JHT_API_DB on a VPS): its files are
   // listed one by one, not its folder, which can be a JHT home the profile
   // lives in too.
@@ -80,6 +87,7 @@ export async function buildToolkit(
       // (T10b) and, beside the deliverables, the documents they already had (T25).
       freeReadRoots: [workdir, ...personal(config)],
       readOnlyRoots: personal(config),
+      writable,
       ownRoots,
       stateRoots,
       ask: options.ask,

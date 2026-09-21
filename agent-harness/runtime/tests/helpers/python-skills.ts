@@ -9,7 +9,7 @@
  * everywhere else.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -48,21 +48,23 @@ export interface PyRun {
   status: number;
 }
 
-/** Runs a script from the extracted skills, the way an agent would. Never throws on a non-zero exit. */
+/**
+ * Runs a script from the extracted skills, the way an agent would. Never
+ * throws on a non-zero exit.
+ *
+ * `spawnSync`, not `execFileSync`: the latter hands back stderr only when the
+ * command fails, so a script that exits 0 with a warning on stderr looked
+ * silent to every comparison here (21/09, found by the profile validator's
+ * WARN lines). A parity test that cannot see a warning cannot check one.
+ */
 export function runPython(skills: string, args: string[], env: Record<string, string> = {}, input?: string): PyRun {
-  try {
-    const stdout = execFileSync("python3", args, {
-      cwd: skills,
-      env: { PATH: process.env["PATH"] ?? "", PYTHONIOENCODING: "utf-8", ...env },
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      ...(input === undefined ? {} : { input }),
-    });
-    return { stdout, stderr: "", status: 0 };
-  } catch (error) {
-    const e = error as { stdout?: string; stderr?: string; status?: number };
-    return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", status: e.status ?? -1 };
-  }
+  const run = spawnSync("python3", args, {
+    cwd: skills,
+    env: { PATH: process.env["PATH"] ?? "", PYTHONIOENCODING: "utf-8", ...env },
+    encoding: "utf8",
+    ...(input === undefined ? {} : { input }),
+  });
+  return { stdout: run.stdout ?? "", stderr: run.stderr ?? "", status: run.status ?? -1 };
 }
 
 function works(command: string, args: string[]): boolean {

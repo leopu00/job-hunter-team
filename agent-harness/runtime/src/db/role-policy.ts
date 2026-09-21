@@ -11,6 +11,8 @@
  * `analista`), the same rule `start-agent.sh` names sessions by.
  */
 
+import { join } from "node:path";
+
 import { agentInstanceId } from "../core/agent-id.ts";
 
 export interface DbRolePolicy {
@@ -208,7 +210,48 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       purpose: "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06).",
     },
   },
+  // T38, assistente.md: the one role that talks to the person. It reads the
+  // database to answer them ("how many positions are ready?") and writes
+  // NOTHING there — its own line says so: "The Assistente never writes to the
+  // DB". What it does write is the person's profile, which is not in here.
+  assistente: {
+    query: ["dashboard", "recent-activity", "stats", "positions", "position", "applications", "application"],
+    insert: [],
+    update: [],
+  },
 };
+
+/**
+ * What the ASSISTENTE writes inside the person's profile folder (T38, P2 of
+ * SICUREZZA). Not the folder: the files.
+ *
+ * On a real box that folder holds more than the profile — dated backups,
+ * `applications/`, `audits/`, control flags of other roles, and scripts the
+ * TUI skills run from there. Write access to the whole folder would have given
+ * this role three powers nobody asked for: rewriting a script another role
+ * executes, flipping a control flag, and overwriting the person's own backups.
+ * Today none of them is live here (nothing runs from the profile and the image
+ * has no interpreter), but the permission is written in the runtime, and the
+ * runtime is what ends up where those things do exist.
+ *
+ * The list is what the role's own prompt and skills write, counted in them:
+ * the profile, the four narrative summaries, the folder where an uploaded
+ * document is archived, and its two named flags — `ready.flag` is the "go to
+ * dashboard" button, `welcomed.flag` the Telegram welcome handshake
+ * (assistente.md § welcome). `inbox/` is left out on purpose: there the
+ * tg-bridge writes and this role reads.
+ */
+export const PROFILE_WRITABLE: readonly string[] = ["candidate_profile.yml", "ready.flag", "welcomed.flag", "summaries", "sources"];
+
+/**
+ * The paths of the profile folder this agent may write, absolute. Empty for
+ * every role but the ASSISTENTE: it is the only agent that talks to the person
+ * and the only one allowed to write down what they said.
+ */
+export function profileWritables(profileDir: string, agent: string): string[] {
+  if (roleOf(agent) !== "assistente") return [];
+  return PROFILE_WRITABLE.map((name) => join(profileDir, name));
+}
 
 /** `analista-2` → `analista`. */
 export function roleOf(agent: string): string {

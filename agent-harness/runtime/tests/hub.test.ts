@@ -27,6 +27,7 @@ const SCOUT = "s".repeat(40);
 const SCORER = "c".repeat(40);
 const ANALISTA = "a".repeat(40);
 const CAPITANO = "k".repeat(40);
+const SENTINELLA = "n".repeat(40);
 
 let root: string;
 let url: string;
@@ -50,6 +51,7 @@ beforeEach(async () => {
       [SCORER, "scorer-1"],
       [ANALISTA, "analista-1"],
       [CAPITANO, "capitano-1"],
+      [SENTINELLA, "sentinella-1"],
     ]),
     dbPath: join(root, "hub", "jobs.db"),
     channelsDir: join(root, "hub", "channels"),
@@ -176,6 +178,23 @@ describe("the channels", () => {
     // The fourth in the window is refused; another sender has its own count.
     expect(await send(SCOUT, "analista")).toMatchObject({ status: 429 });
     expect(await send(SCORER, "analista")).toMatchObject({ status: 200 });
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(join(root, "hub", "channels", "mailbox"))).sort()).toEqual(["analista-1.jsonl", "capitano-1.jsonl"]);
+  });
+
+  it("holds the SENTINELLA's RULE #0 at the hub, where a shell cannot walk around it (T37)", async () => {
+    const send = (token: string, to: string) => raw(HUB_PATHS.send, { token, body: JSON.stringify({ to, text: "x" }) });
+    // Its two peers: the CAPITANO it advises, the DOTTORE it escalates to.
+    expect(await send(SENTINELLA, "capitano-1")).toMatchObject({ status: 200 });
+    // Anyone else, refused by the hub itself — the table is the same one the
+    // role's own tool uses, and here the sender comes from the token.
+    for (const to of ["scout-1", "scorer-1", "analista-1"]) {
+      const refused = await send(SENTINELLA, to);
+      expect(refused.status, to).toBe(403);
+      expect(String(refused.body["error"]), to).toMatch(/SENTINELLA writes to the CAPITANO and the DOTTORE/);
+    }
+    // And no other role gained a limit it did not have.
+    expect(await send(SCOUT, "analista-1")).toMatchObject({ status: 200 });
     const { readdir } = await import("node:fs/promises");
     expect((await readdir(join(root, "hub", "channels", "mailbox"))).sort()).toEqual(["analista-1.jsonl", "capitano-1.jsonl"]);
   });
