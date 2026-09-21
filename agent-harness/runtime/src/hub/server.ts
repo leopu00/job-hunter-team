@@ -33,6 +33,7 @@ import { roleOf } from "../db/role-policy.ts";
 import { DEFAULT_NOTIFY_LIMIT, FileMailbox, FileNotifier, FileUserReplies } from "../parity/jht-tools.ts";
 import { loadRolePrompt } from "../parity/role-prompt.ts";
 import { createSkillTools } from "../parity/skills/index.ts";
+import { requestWrite } from "../db/write-request.ts";
 import type { ToolContext, ToolHandler } from "../tools/registry.ts";
 import {
   EmptyRequest,
@@ -42,6 +43,7 @@ import {
   SendRequest,
   TOKEN,
   ToolRequest,
+  UserWriteRequest,
   type ToolResponse,
 } from "./protocol.ts";
 import { Launcher, SpawnRequest, StopRequest } from "./launcher.ts";
@@ -252,6 +254,16 @@ export function createHub(options: HubOptions): Server {
       const path = req.url ?? "";
       if (!Object.values(HUB_PATHS).includes(path as never)) throw new HttpError(404, "No such operation.");
       const body = await readBody(req);
+      // T28: the person's own request, from the host. The hub is the only
+      // process that opens jobs.db during a run, so the operator's command
+      // goes through it — with the team's token, which no role has.
+      if (path === HUB_PATHS.userRequest) {
+        const offered = digest(tokenOf(req.headers.authorization));
+        if (!teamDigest || !timingSafeEqual(teamDigest, offered)) throw new HttpError(403, "A CV is requested by the person, with the host's own token.");
+        const request = parse(UserWriteRequest, body);
+        reply(res, 200, requestWrite(db(), request.position_id, request.mode, request.kind));
+        return;
+      }
       // The team's start is the host's, not an agent's: its token is another
       // file, and a role's token never matches it.
       if (path === HUB_PATHS.teamStart) {

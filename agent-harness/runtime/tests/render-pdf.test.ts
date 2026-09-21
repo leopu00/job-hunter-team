@@ -262,6 +262,15 @@ describe("the HTML the engine is given", () => {
     }
   });
 
+  it("leaves a remote @import inside the CV's own style, which is why the proxy is the fence", () => {
+    // SICUREZZA measured it (21/09): `<style>@import url(http://…)</style>`
+    // fetches, deny flags and stripping notwithstanding. The `<style>` stays
+    // because cv-structure needs it; what stops the request is `--proxy` at a
+    // closed port, which `engineArgs` passes. Written here so that dropping
+    // the proxy because "the stripping covers it" is not an easy mistake.
+    expect(safeHtml('<style>@import url("http://host/x.css");</style>')).toContain("@import");
+  });
+
   it("takes each of them out even with no closing tag", () => {
     // A tag that is never closed is the shape PAIRED cannot see: each name is
     // named here, so dropping one from the list is red.

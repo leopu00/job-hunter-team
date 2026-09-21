@@ -19,6 +19,14 @@ POSTs, JSON in and out, each with a role's token in `Authorization: Bearer`:
 | `/v1/notify` `{kind, text, positionId?}` | appends to `notify.jsonl`, at most 5 per hour per agent (kept here too, not only in the role) |
 | `/v1/replies/take` `{}` | the person's replies to the caller |
 
+Two paths are the HOST's, not a role's, and take the team's own token
+(`JHT_HUB_TEAM_TOKEN`), which is in another file and matches no role's:
+
+| Path | Does |
+| --- | --- |
+| `/v1/team/start` `{}` | starts the base team through the launcher (T24) |
+| `/v1/user/write-request` `{position_id, mode?, kind?}` | the PERSON asks for a CV or a cover letter — what the dashboard button and `/cv <id>` on Telegram do (T28). The guards are `write_request.py`'s, and the answer is its JSON. The operator types `npm run user -- cv <id>`; no role has a tool that sets `write_requested`, and a role's token here is a 403 |
+
 The agent is the token's, never a field of the request: a body with an extra
 field is refused (400). `to` is an agent name (`SCOUT-1`, `capitano`), and
 every channel file is named after a canonical id checked just before the path
