@@ -89,6 +89,7 @@ describe("npm run role -- --role scrittore (T25)", () => {
       ["write_file", "denied"],
       ["db_insert", "accepted"],
       ["db_update", "accepted"],
+      ["save_review", "accepted"],
       ["send_message", "accepted"],
       ["throttle", "accepted"],
       ["check_user_replies", "accepted"],
@@ -104,6 +105,13 @@ describe("npm run role -- --role scrittore (T25)", () => {
     expect(await readFile(join(historyDir, "CV_2024.md"), "utf8")).toBe("# The CV the person wrote in 2024\n");
     expect(results[10]).toBe("Application inserted for position 1");
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
+
+    // T33: the verdict reached the person. The loop that ends without this leaves
+    // `critiche/` empty with a review that exists only in the trace, which is the
+    // defect this asserts against — no file here, no green.
+    const reviews = await readdir(join(root, "api", "user", "critiche"));
+    expect(reviews).toEqual([expect.stringMatching(/^review-position-1-\d{4}-\d{2}-\d{2}\.md$/)]);
+    expect(await readFile(join(root, "api", "user", "critiche", reviews[0]!), "utf8")).toContain("SCORE: 6.5/10");
 
     // The deliverable is where the person will look for it, and the row points at it.
     const cvDir = join(root, "api", "user", "cv");

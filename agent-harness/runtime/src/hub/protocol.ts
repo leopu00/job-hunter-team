@@ -21,6 +21,9 @@ export const HUB_PATHS = {
   spawnList: "/v1/spawn/list",
   teamStart: "/v1/team/start",
   userRequest: "/v1/user/write-request",
+  // T34: the hub writes the Critic's verdict with a uid of its own, since
+  // in-process the Critic has the Writer's (docs/parity.md).
+  review: "/v1/review",
 } as const;
 
 /** Largest request body: a `db_insert position` with a long job description fits well below. */

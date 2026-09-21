@@ -23,10 +23,12 @@ import { createLogoFetchTool } from "./logo-fetch.ts";
 import { createRecheckLivenessTool } from "./recheck-liveness.ts";
 import { createRenderPdfTool } from "./render-pdf.ts";
 import { createRoleRegistryTool } from "./role-registry.ts";
+import { createSaveReviewTool } from "./review.ts";
 import { createSafeFetchTool } from "./safe-fetch.ts";
 import { createSalaryEstimateTool } from "./salary-estimate.ts";
 import { createScoutCoordTool } from "./scout-coord.ts";
 import { createTicketTool } from "./ticket.ts";
+import type { HubClient } from "../../hub/client.ts";
 import { SafeHttpsClient } from "../../../../../api-worker/src/safe-http.ts";
 
 /** The team database, opened by the runtime. No tool chooses the file. */
@@ -49,8 +51,13 @@ export interface SkillToolsOptions {
   profileDir?: string | undefined;
   /** The runtime's state root: the salary cache is read from `<stateDir>/cache/`. */
   stateDir?: string | undefined;
-  /** The deliverables folder (`JHT_API_USER_DIR`): what `render_pdf` reads and writes. */
+  /**
+   * The deliverables folder (`JHT_API_USER_DIR`): what `render_pdf` reads and
+   * writes, and where the Critic's verdict goes (`critiche/`, T33).
+   */
   userDir?: string | undefined;
+  /** With a hub, the verdict is written there, by a user of its own (T34). */
+  hub?: HubClient | undefined;
   /** Where a relative path a tool is given resolves: the role's home. */
   workdir?: string | undefined;
   /** Test seam for the network tools: a scripted resolver and transport. */
@@ -121,6 +128,13 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
       );
     }
     if (listed.has("logo-extraction")) tools.push(createLogoFetchTool({ db: db.open, client, policy }));
+  }
+  // T33: the review loop runs in-process, so the Critic is a subagent with the Writer's
+  // tools and the Writer's uid. The verdict still has to reach the person, and it does not
+  // travel through the file tools: they refuse `critiche/` to the Writer, and must keep
+  // refusing it — otherwise the reviewed could rewrite its own review.
+  if (options.userDir && ["scrittore", "critico"].includes(roleOf(options.agent))) {
+    tools.push(createSaveReviewTool({ userDir: options.userDir, ...(options.hub ? { hub: options.hub } : {}) }));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
   // T30: the CV's PDF. The renderer is a tool and never a shell command — its
