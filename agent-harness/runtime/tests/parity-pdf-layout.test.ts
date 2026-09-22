@@ -348,6 +348,38 @@ describe("the gate as the runtime builds it: poppler measures the CV", () => {
     expect(await held({ userDir: join(root, "hub-out") })).toEqual([{ position_id: 1, reason: "cv_pdf_check_unavailable" }]);
   });
 
+  // SICUREZZA, after piece three: the credentials test above hands the roots in
+  // itself, so it proves `resolveFile` and not the code that builds the roots.
+  // Putting the JHT home back among them in skills/index.ts — where the product
+  // really builds them — left the whole suite green. This one goes through
+  // `createSkillTools`, the real wiring, and the reason tells the two apart: a
+  // credentials file the gate MEASURED would answer `cv_pdf_check_unavailable`
+  // (it is not a PDF); one it refused before opening answers `outside`.
+  it("through the runtime's own wiring, the person's credentials under the home are outside, and never measured", async () => {
+    const home = join(root, "jht");
+    const userDir = join(root, "out");
+    mkdirSync(join(home, "credentials", "ats-accounts"), { recursive: true });
+    mkdirSync(join(userDir, "cv"), { recursive: true });
+    writeFileSync(join(home, "jht.config.json"), JSON.stringify({ applications: { auto_apply: { enabled: true } } }));
+    const secrets = ["credentials/ats-accounts/icims_acme.json", "credentials/email_monitor.json"];
+    for (const secret of secrets) writeFileSync(join(home, secret), '{"password": "not for the gate"}');
+    const dbPath = join(root, "jobs.db");
+    const reasons: string[] = [];
+    for (const cv of [...secrets, ...secrets.map((s) => join(home, s))]) {
+      rmSync(dbPath, { force: true });
+      const db = openJobsDb(dbPath);
+      db.prepare(
+        "INSERT INTO positions (id, title, company, url, status, found_by, apply_requested, apply_requested_at, apply_requested_by) " +
+          "VALUES (1, 'T', 'Acme', 'https://x.example/1', 'ready', 'scout-1', 1, '2026-09-20 10:00:00', 'user_web')",
+      ).run();
+      db.prepare("INSERT INTO applications (position_id, status, written_by, cv_pdf_path) VALUES (1, 'ready', 'scrittore-1', ?)").run(cv);
+      db.close();
+      const queue = build(home, userDir, dbPath);
+      reasons.push(...(await queue()).held.map((h) => h.reason));
+    }
+    expect(reasons).toEqual(["cv_pdf_path_outside", "cv_pdf_path_outside", "cv_pdf_path_outside", "cv_pdf_path_outside"]);
+  });
+
   it.skipIf(!poppler)("a CV that passes makes the queue READY; one that fails holds it; no poppler holds it, and is not remembered", async () => {
     const home = join(root, "jht");
     const userDir = join(root, "out");
