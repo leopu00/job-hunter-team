@@ -11,17 +11,22 @@
  *   npm run monitor -- <run>        replay one run (id, id prefix or path), then follow it if live
  *   npm run monitor -- --last       replay the most recent run
  *   npm run monitor -- --verbose    full prompt, arguments, outputs and process samples
+ *   npm run monitor -- --dashboard  the whole team on one screen, redrawn every second
+ *                                   (--window=<min> only runs of the last minutes; --once one frame;
+ *                                   --no-bell no bell on a new result)
  *
  * Read-only: it opens trace files and nothing else.
  */
 
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import type { TraceLine } from "../core/trace.ts";
 import { resolveUserPath } from "../tools/paths.ts";
+import { runDashboard } from "./dashboard.ts";
 import { c, countNames, dur, int, TraceView, usd, width } from "./render.ts";
+import { Tail } from "./tail.ts";
 
 const POLL_MS = 250;
 const SCAN_MS = 1_000;
@@ -136,39 +141,6 @@ function list(): void {
   console.log(`\n  ${c.dim(`${files.length} runs · ${logsDir}`)}\n`);
 }
 
-/** Reads what has been appended to a file since the last call, line by line. */
-class Tail {
-  readonly file: string;
-  #offset = 0;
-  #partial = "";
-  constructor(file: string) {
-    this.file = file;
-  }
-
-  read(): Record_[] {
-    const size = statSync(this.file).size;
-    if (size <= this.#offset) return [];
-    const fd = openSync(this.file, "r");
-    try {
-      const buffer = Buffer.alloc(size - this.#offset);
-      readSync(fd, buffer, 0, buffer.length, this.#offset);
-      this.#offset = size;
-      const text = this.#partial + buffer.toString("utf8");
-      const lines = text.split("\n");
-      this.#partial = lines.pop() ?? "";
-      return lines.filter(Boolean).flatMap((line) => {
-        try {
-          return [JSON.parse(line) as Record_];
-        } catch {
-          return [];
-        }
-      });
-    } finally {
-      closeSync(fd);
-    }
-  }
-}
-
 const TAG_COLORS = [c.cyan, c.magenta, c.yellow, c.blue, c.green];
 
 /**
@@ -244,7 +216,10 @@ function findRun(query: string): string | undefined {
 
 const positional = args.filter((a) => !a.startsWith("--"));
 
-if (args.includes("--list")) {
+if (args.includes("--dashboard")) {
+  const window = Number(args.find((a) => a.startsWith("--window="))?.slice("--window=".length));
+  runDashboard({ logsDir, traceFiles, ...(Number.isFinite(window) && window > 0 ? { windowMin: window } : {}), once: args.includes("--once"), bell: !args.includes("--no-bell") });
+} else if (args.includes("--list")) {
   list();
 } else if (args.includes("--last") || positional.length > 0) {
   const file = args.includes("--last") ? traceFiles().sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs).at(-1) : findRun(positional[0] ?? "");
