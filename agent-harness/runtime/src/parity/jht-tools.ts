@@ -344,7 +344,7 @@ function use(tool: string): string {
  * or no place in an API agent at all. Matched at a command position: at the
  * start, or after `;`, `&&`, `||`, `|`, `(` or `$(`.
  */
-const REPLACED: Record<string, string> = {
+export const REPLACED_REASONS: Record<string, string> = {
   "jht-tmux-send": use("send_message"),
   "jht-send": use("chat_reply"),
   throttle: use("throttle"),
@@ -409,7 +409,7 @@ export function onPath(name: string, env: NodeJS.ProcessEnv = process.env): bool
 
 const COMMAND_AT = new RegExp(
   String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?(` +
-    Object.keys(REPLACED)
+    Object.keys(REPLACED_REASONS)
       .sort((a, b) => b.length - a.length)
       .map((c) => c.replaceAll("-", "\\-"))
       .join("|") +
@@ -697,7 +697,7 @@ export function guardShellTool(
       if (python !== null) return { ok: false, content: python };
       const found = replacedCommand(commandOf(args));
       if (found === null) return shell.execute(args, context);
-      return { ok: false, content: `Error: \`${found}\` ${REPLACED[found]} Nothing was run.` };
+      return { ok: false, content: `Error: \`${found}\` ${REPLACED_REASONS[found]} Nothing was run.` };
     },
   };
 }

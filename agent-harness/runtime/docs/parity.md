@@ -378,6 +378,38 @@ the script holds it. Three differences, all on purpose:
 `application_answers`, and never over an answer the person gave
 (`user_answer_kept`, CL-01).
 
+**Seven roles have no shell here (T42).** `bash` reached every role because it
+is in the base toolkit, not because a prompt asked for it — and it is the
+widest tool there is: it touches every file the process's uid can, and no
+policy of this runtime stands in between (measured 23/09: 84 deletions
+attempted, 84 done, the person's profile and the team's database included,
+while `write_file` on that same profile was denied).
+
+So the question was put to the prompts. For each role: its own text plus the
+SKILL.md files its `skills.list` really loads, only the blocks declared as
+shell, minus every command that is already a native tool or a refusal pointing
+at one. What was left is the shell that role would lose:
+
+| Role | Shell here | Why |
+|---|---|---|
+| ANALISTA | **no** | nothing left: every command its skills name is a tool |
+| SCORER | **no** | nothing left |
+| CRITICO | **no** | nothing left |
+| CLOSER | **no** | nothing left |
+| MENTOR | **no** | one line, `spawn-doctor.sh`: starting a role is the hub's, and only the CAPITANO reaches it |
+| SENTINELLA | **no** | the same line, and its whole part is to advise the CAPITANO |
+| SCOUT | **no** | five `echo` of its own diagnostics, which belong in what it reports |
+| CAPITANO | yes | the MASTER's decision: its residue is spawning, which it does through the hub |
+| ASSISTENTE · SCRITTORE · DOTTORE · MANTENITORE | yes, for now | their residue (profile flags, work area cleanup, `df`/`du`) is not measured yet |
+
+Taking a tool away is the part that goes wrong quietly — a role that loses
+something it used stops and does not say so — so the seven do not meet silence
+or "unknown tool": the call is refused with a sentence that names **where that
+power went**, the same shape as the `python3` refusals, and the same sentence
+is in their notes before they try. `tests/no-shell.test.ts` runs each of the
+seven against a turn that reaches for the shell and then reports: the refusal
+must name the power and the round must still close.
+
 **The MANTENITORE keeps the infra, and here there is no infra to keep (T41).**
 It is the one role whose object of work IS the box: the life-support daemons,
 the disk, the dependencies, the panes' locale, the monitoring histories it
