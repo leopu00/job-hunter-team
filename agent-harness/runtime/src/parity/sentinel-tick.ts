@@ -208,6 +208,16 @@ const LEDGER_AGENT = new RegExp(`^(?:${TEAM_ROLES.join("|")})(-\\d{1,3})?$`);
 export const OTHER_SPENDER = "altro";
 
 /**
+ * The ledger's `ruolo` field as a name that can be trusted: an agent of the
+ * team, or `altro`. Exported because it is the closed list itself that is the
+ * guarantee, and a second reader of the ledger (the DOTTORE's analytics, T41)
+ * must ask the same question of a field rather than keep a list of its own.
+ */
+export function ledgerAgentName(field: string): string {
+  return LEDGER_AGENT.test(field) ? field : OTHER_SPENDER;
+}
+
+/**
  * The window's rows out of the team's ledger (`data ruolo … usd …`).
  *
  * The file is a TSV every live run appends to, written by runs that may still
@@ -240,8 +250,7 @@ export function readLedgerSpend(path: string, from: Date, to: Date): SpendRow[] 
     // that advises the one who decides. It is NOT dropped, though: the dollars
     // are real whoever wrote them, and a budget guard that undercounts spend
     // errs on the wrong side. The money stays, the name becomes `altro`.
-    const agent = fields[1]!;
-    rows.push({ agent: LEDGER_AGENT.test(agent) ? agent : OTHER_SPENDER, usd, at });
+    rows.push({ agent: ledgerAgentName(fields[1]!), usd, at });
   }
   return rows;
 }

@@ -190,6 +190,8 @@ async function main(): Promise<number> {
       env,
       jobsDb,
       hub,
+      // T41: only a live run has a ledger, and only a live run has runs to count.
+      ...(config.ledger ? { ledger: config.ledger } : {}),
     });
     systemPrompt = role.systemPrompt.trimEnd();
   } else {

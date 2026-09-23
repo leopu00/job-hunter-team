@@ -62,6 +62,11 @@ export interface ProductRoleOptions {
   jhtHome: string;
   /** The person's profile folder (`JHT_API_PROFILE_DIR`); `<jhtHome>/profile` when the runtime has none. */
   profileDir?: string | undefined;
+  /**
+   * The team's spend ledger (`JHT_API_LEDGER`), when this run has one: the
+   * DOTTORE counts a window's runs off it (T41). A mock run has none.
+   */
+  ledger?: string | undefined;
   env?: Record<string, string | undefined>;
   /**
    * The team's jobs.db, opened by the runtime. The Python skills that read or
@@ -159,6 +164,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     // T30: `render_pdf` reads the markdown a role wrote here and writes the PDF beside it.
     userDir,
     workdir: options.homeDir,
+    // T41: the ledger the DOTTORE's analytics reads. Absent on a mock run.
+    ...(options.ledger ? { ledger: options.ledger } : {}),
   };
   const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
