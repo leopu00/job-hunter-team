@@ -96,6 +96,14 @@ export interface GenerateResult {
   reasoning?: Reasoning[];
   /** Provider-side facts about the call, for the trace. */
   response?: ResponseMeta;
+  /**
+   * Present only when the call was refused with a 429 and tried again: how
+   * many attempts it took and how long was spent waiting between them. The
+   * loop takes that time OUT of the round's duration — waiting for an
+   * upstream queue is not work, and a trace that counted it as work would
+   * show a rate limit as a slow model (MASTER, 23/09).
+   */
+  backoff?: { attempts: number; waitedMs: number };
 }
 
 /**

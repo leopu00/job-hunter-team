@@ -89,7 +89,12 @@ function list(): void {
     console.log(`\n  No runs yet in ${logsDir}\n`);
     return;
   }
-  const head = ["agent", "run", "status", "started", "time", "rounds", "tools", "search", "tok in", "tok out", "$ total", "model"];
+  // `429` is the time this run spent waiting for the upstream account's rate
+  // limit to clear — reported apart from `time`, which is work. Reading one as
+  // the other has already sent the team looking for a slow model twice
+  // (MASTER, 23/09), and with five or six agents at once this is the wall the
+  // rehearsals of 23/09 kept hitting, not the budget.
+  const head = ["agent", "run", "status", "started", "time", "429", "rounds", "tools", "search", "tok in", "tok out", "$ total", "model"];
   const rows = files.map((file) => {
     const records = readRecords(file);
     const started = records.find((r) => r.type === "run_started");
@@ -102,6 +107,7 @@ function list(): void {
     const cost = rounds.reduce((a, r) => a + (r.type === "round_finished" ? r.costUsd : 0), 0);
     // T19: the searches the provider ran, as each web_search call recorded them.
     const searches = records.reduce((a, r) => a + (r.type === "tool_finished" && typeof r.details?.webSearches === "number" ? r.details.webSearches : 0), 0);
+    const waited = rounds.reduce((a, r) => a + (r.type === "round_finished" ? (r.backoff?.waitedMs ?? 0) : 0), 0);
     const status = statusOf(records);
     return [
       basename(dirname(file)),
@@ -109,6 +115,7 @@ function list(): void {
       STATUS_PAINT[status](status),
       first ? new Date(first.ts).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "medium" }) : "",
       first && last ? dur(Date.parse(last.ts) - Date.parse(first.ts)) : "",
+      waited ? c.dim(dur(waited)) : c.dim("–"),
       int(rounds.length),
       tools.length ? `${tools.length} ${c.dim(`(${countNames(tools)})`)}` : c.dim("–"),
       searches ? int(searches) : c.dim("–"),
@@ -120,7 +127,7 @@ function list(): void {
   });
   const all = [head, ...rows];
   const w = head.map((_, i) => Math.max(...all.map((r) => width(r[i] ?? ""))));
-  const right = new Set([4, 5, 7, 8, 9, 10]);
+  const right = new Set([4, 5, 6, 8, 9, 10, 11]);
   const row = (r: string[]) => `  ${r.map((s, i) => (right.has(i) ? " ".repeat(w[i]! - width(s)) + s : s + " ".repeat(w[i]! - width(s)))).join("  ")}`;
   console.log();
   console.log(row(head.map((h) => c.bold(h))));

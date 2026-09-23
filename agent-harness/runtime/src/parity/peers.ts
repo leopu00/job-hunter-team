@@ -43,6 +43,19 @@ export const PEER_POLICY: Readonly<Record<string, readonly string[]>> = {
   // destructive action to the CAPITANO, who decides. Its `skills.list` names no
   // other correspondent, and M-01 keeps it away from the agents themselves.
   mantenitore: ["capitano"],
+  /**
+   * T41, SICUREZZA P2 and the MASTER's decision (23/09): the DOTTORE speaks
+   * only to the CAPITANO.
+   *
+   * In the TUI it writes to everyone, and it has to: it interviews each session
+   * before recreating it and kicks the agent off again afterwards. Here it
+   * interviews nobody — there are no sessions to refresh and no agents to
+   * revive, so its old addressees are a set that does not exist. What is left is
+   * an archivist that reports what it measured, and the one who decides what to
+   * do about it is the CAPITANO. A role that may write to every peer is one more
+   * channel into every model, held open for a use that no longer exists.
+   */
+  dottore: ["capitano"],
 };
 
 /** Where each fenced role's rule is written, for the refusal to cite it. */
@@ -50,6 +63,7 @@ const PEER_RULE: Readonly<Record<string, string>> = {
   sentinella: "sentinella.md RULE #0",
   mentor: "mentor.md, skill index: escalation goes to the Capitano",
   mantenitore: "mantenitore.md: you propose, the Capitano decides",
+  dottore: "dottore.md: here it is an archivist, and its report goes to the Capitano",
 };
 
 /** The roles `agent` may write to, or `null` when it may write to anyone. */

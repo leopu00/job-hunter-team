@@ -282,6 +282,36 @@ tmux and the throttle engine do for a TUI agent:
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
 
+**The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
+rehearsals of the whole team on `ashley` ended on the account's rate limit and
+not on money (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`): in the
+last one **13 of 59 requests came back 429**, five agents of six died, the
+CAPITANO among them, and the team stopped after 56 seconds having spent less
+than a third of its cap. The AI SDK's own retrying is off (`maxRetries: 0`) and
+the runtime does it, only on a 429:
+
+- **four attempts**, with waits of ≈2.5 s, 5 s, 10 s, spread by jitter so the
+  roles refused together do not come back together. The base is 2.5 s because
+  the refused calls came back from upstream in **635-1685 ms** and every wait
+  jitter can produce must clear the slowest refusal — a 2 s base can wait
+  1540 ms, which lands inside the window that was already refusing;
+- **`retry-after` obeyed** when the provider sends one, capped at 30 s per wait
+  (`retry-after: 600` is not obeyed to the letter) and 45 s of waiting per call;
+- **no wait crosses the call's own budget**, which the loop sets to the lesser
+  of the step timeout and what the run has left on the wall clock. A role asleep
+  is a role alive, and the launcher's piggy bank holds its booking meanwhile: a
+  run near its ceiling refuses instead of sleeping past it;
+- **the refusal says whose limit it was.** `provider_rate_limited`, a code of
+  its own, with a sentence naming the upstream account's rate limit, the
+  attempts, the waiting, and that a refused call bills nothing — so the money is
+  untouched. The ledger's note carries that code too. Reading an upstream 429 as
+  one of our own limits has already cost two diagnoses;
+- **the waiting is not work.** `GenerateResult.backoff` carries the attempts and
+  the milliseconds waited; the round's `durationMs` has them subtracted, the
+  audit trail records `backoffMs` beside the duration, and `npm run monitor`
+  shows a `429` column. A round whose duration swallowed a six-second wait reads
+  as a slow model, and a slow model is looked for in the wrong place.
+
 From the command line (`JHT_API_APP_ROOT` defaults to this checkout, `/app`
 in the container; `JHT_HOME` to `~/.jht`, read for the locale;
 `JHT_API_PROFILE_DIR` is the profile the prompt points at, `JHT_API_USER_DIR`
@@ -566,6 +596,14 @@ is the most dangerous permission the team has, and the reason it exists in the
 TUI — a context that bloats, an Enter that hangs — does not exist here. If a
 stuck run ever shows up it is added then, from the hub, with the rule the team
 already has for `freeze_team`: the role asks, the launcher decides.
+
+**It writes only to the CAPITANO** (SICUREZZA P2, MASTER 23/09). In the TUI it
+writes to every session and has to: it interviews each one before recreating it
+and kicks it off again afterwards. Here it interviews nobody, so the set of
+peers it used to need does not exist — and a role that may still write to every
+peer is one more channel into every model, held open for a use that is gone.
+`PEER_POLICY` names it beside the SENTINELLA and the MENTOR, and the refusal
+tells it to go through the CAPITANO, who decides.
 
 What is gone, and why, so nobody ports it back:
 

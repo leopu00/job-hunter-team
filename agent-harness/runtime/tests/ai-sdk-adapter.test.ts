@@ -521,10 +521,71 @@ describe("a 429 from the provider", () => {
     expect(waited[0]).toBeGreaterThan(0);
   });
 
-  it("ends the call when the second attempt is refused too: one retry, not a loop", async () => {
-    const { provider, attempts } = failing(5, () => busy());
-    await expect(provider.generate(GO)).rejects.toMatchObject({ code: "provider_failed" });
-    expect(attempts()).toBe(2);
+  /**
+   * Retuned on the VPS's third rehearsal (23/09): 13 of 59 requests came back
+   * 429 and five agents of six died, so one retry was not a backoff, it was a
+   * shrug. Four attempts, and then a refusal that says WHOSE limit it was —
+   * reading an upstream 429 as one of ours has cost the team two diagnoses.
+   */
+  it("tries four times, then refuses saying it was the upstream account's limit and not ours", async () => {
+    const { provider, attempts, waited } = failing(9, () => busy());
+    const error = await provider.generate(GO).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "provider_rate_limited" });
+    expect(attempts()).toBe(4);
+    // Growing, each one clear of the slowest refusal measured upstream (1685 ms).
+    expect(waited).toHaveLength(3);
+    for (const ms of waited) expect(ms).toBeGreaterThan(1_685);
+    expect(waited[1]).toBeGreaterThan(waited[0]!);
+    expect(waited[2]).toBeGreaterThan(waited[1]!);
+    const said = String((error as Error).message);
+    expect(said).toContain("HTTP 429");
+    expect(said).toContain("UPSTREAM account's rate limit");
+    expect(said).toContain("NOT a limit of this harness");
+    expect(said).toContain("A refused call bills nothing");
+    expect(said).toContain("4 attempts");
+  });
+
+  it("reports the waiting apart from the call, so the trace never counts it as work", async () => {
+    const { provider } = failing(2, () => busy());
+    const result = await provider.generate(GO);
+    expect(result.backoff).toMatchObject({ attempts: 3 });
+    expect(result.backoff!.waitedMs).toBeGreaterThan(3_000);
+    // A call that was never refused carries no backoff at all.
+    const { provider: clean } = failing(0, () => busy());
+    expect((await clean.generate(GO)).backoff).toBeUndefined();
+  });
+
+  /**
+   * The ceiling that matters most: the loop gives each call the lesser of the
+   * step timeout and what the run has left on the wall clock, and a wait may
+   * not cross it. The launcher's piggy bank holds a booking for as long as a
+   * role is alive, and a role asleep is a role alive — so a run near its
+   * ceiling refuses instead of sleeping past it.
+   */
+  it("does not sleep past the budget of the call it was given", async () => {
+    const { provider, attempts } = failing(9, () => busy());
+    const error = await provider.generate({ ...GO, timeoutMs: 1_000 }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "provider_rate_limited" });
+    expect(attempts()).toBe(1);
+    expect(String((error as Error).message)).toContain("no room left in this call's own budget");
+  });
+
+  it("stops waiting once the waits of one call add up to the runtime's ceiling", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const error = await attempt(
+      async () => {
+        calls += 1;
+        // Half a minute asked for, every time: two of them are already the ceiling.
+        throw busy({ "retry-after": "30" });
+      },
+      { sleep: async (ms: number) => void waits.push(ms) },
+    ).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "provider_rate_limited" });
+    expect(waits).toEqual([30_000]);
+    expect(calls).toBe(2);
+    expect(String((error as Error).message)).toContain("45000 ms this runtime waits per call");
+    expect(String((error as Error).message)).toContain("did send a `retry-after`");
   });
 
   it("is the only error retried: anything else is raised as it comes", async () => {
@@ -552,17 +613,23 @@ describe("the wait before the second attempt", () => {
         if (calls < attempts) throw error;
         return "ok";
       },
-      undefined,
-      sleep,
+      { sleep },
     ).catch(() => {});
     return waits;
   };
 
-  it("is around two seconds, spread by jitter so the refused roles do not come back together", async () => {
+  /**
+   * The lower end is the number that matters: the refused calls of 23/09 came
+   * back from upstream in 635-1685 ms, so a wait shorter than the slowest
+   * refusal lands in the same window that was already refusing. Every wait
+   * jitter can produce must clear it — a 2 s base did not (1540 ms), which is
+   * why the base is 2.5 s.
+   */
+  it("is around two and a half seconds, spread by jitter so the refused roles do not come back together", async () => {
     const seen = new Set<number>();
     for (let i = 0; i < 40; i++) seen.add((await run(busy()))[0]!);
-    for (const ms of seen) expect(ms, `${ms}`).toBeGreaterThanOrEqual(1_500);
-    for (const ms of seen) expect(ms, `${ms}`).toBeLessThanOrEqual(2_500);
+    for (const ms of seen) expect(ms, `${ms}`).toBeGreaterThan(1_685);
+    for (const ms of seen) expect(ms, `${ms}`).toBeLessThanOrEqual(3_125);
     // Jitter: forty waits are not the same number.
     expect(seen.size).toBeGreaterThan(20);
   });
@@ -587,7 +654,7 @@ describe("the wait before the second attempt", () => {
         calls += 1;
         throw busy({ "retry-after": "600" });
       },
-      stop.signal,
+      { signal: stop.signal },
     );
     setTimeout(() => stop.abort(), 20);
     await expect(running).rejects.toMatchObject({ statusCode: 429 });
@@ -607,8 +674,7 @@ describe("the wait before the second attempt", () => {
         async () => {
           throw a;
         },
-        undefined,
-        async () => {},
+        { sleep: async () => {} },
       ),
     ).rejects.toBe(a);
   });
@@ -622,8 +688,7 @@ describe("the wait before the second attempt", () => {
           calls += 1;
           throw busy();
         },
-        aborted,
-        async (ms: number) => void waits.push(ms),
+        { signal: aborted, sleep: async (ms: number) => void waits.push(ms) },
       ),
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(calls).toBe(1);

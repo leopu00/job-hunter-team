@@ -111,6 +111,47 @@ describe("the SENTINELLA's peers (T37)", () => {
   });
 });
 
+/**
+ * T41, SICUREZZA P2: the DOTTORE's addressees, now that it revives nobody.
+ *
+ * In the TUI it writes to every session, and it must: it interviews each one
+ * before recreating it. Here it interviews nobody, so the set it used to write
+ * to does not exist — and a role that can still write to everyone is one more
+ * channel into every model, kept open for a use that is gone (MASTER, 23/09).
+ */
+describe("the DOTTORE's peers (T41)", () => {
+  const report = (tool: ToolHandler, to: string) =>
+    tool.execute(tool.spec.schema.parse({ to, text: `[@dottore -> @${to}] [REPORT] scorer-1: window empty` }), context);
+
+  it("delivers its report to the CAPITANO, whatever instance", async () => {
+    const { send, mailbox } = sender("dottore");
+    expect(await report(send, "capitano")).toMatchObject({ ok: true });
+    expect(await report(send, "CAPITANO-1")).toMatchObject({ ok: true });
+    // `dottore` with no number is `dottore-1`, as the launcher names a singleton.
+    expect((await mailbox.drain("capitano-1")).map((m) => m.from)).toEqual(["dottore-1", "dottore-1"]);
+  });
+
+  it("refuses every other agent — the ones it used to revive included — and sends nothing", async () => {
+    const { send, mailbox } = sender("dottore");
+    for (const name of ["scout-1", "scorer-1", "analista-2", "scrittore-1", "sentinella-1", "assistente-1", "mentor-1"]) {
+      const refused = await report(send, name);
+      expect(refused.ok, name).toBe(false);
+      expect(refused.content).toContain(name);
+      expect(refused.content).toMatch(/Nothing was sent/);
+      expect(refused.content).toMatch(/through the CAPITANO/);
+      expect(await mailbox.drain(name)).toEqual([]);
+    }
+  });
+
+  it("is shown the fence in the tool's own description, not left to meet it", () => {
+    const { send } = sender("dottore-1");
+    expect(send.spec.description).toContain("CAPITANO");
+    expect(allowedPeers("dottore-1")).toEqual(["capitano"]);
+    expect(peerRefusal("dottore-1", "capitano-2")).toBeNull();
+    expect(peerRefusal("dottore", "scout-1")).not.toBeNull();
+  });
+});
+
 describe("the mailbox file after a refusal", () => {
   it("has no line at all: a refused message is not a delivered one", async () => {
     const { send } = sender("sentinella");
