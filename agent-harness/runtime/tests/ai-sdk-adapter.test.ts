@@ -570,22 +570,36 @@ describe("a 429 from the provider", () => {
     expect(String((error as Error).message)).toContain("no room left in this call's own budget");
   });
 
+  /**
+   * The ceiling on the waits of one call. Asserted as a RANGE and over twenty
+   * runs, not as a number: a `retry-after: 30` is jittered before the 30 s cap
+   * clips it, so the wait lands anywhere in 22.5-30 s. The first version of this
+   * test asserted `[30_000]` and passed whenever the jitter happened to land at
+   * or above 1.0 — green about two runs in three, red on master for the MASTER
+   * (26331 against 30000). A random path is not measured by one run.
+   */
   it("stops waiting once the waits of one call add up to the runtime's ceiling", async () => {
-    const waits: number[] = [];
-    let calls = 0;
-    const error = await attempt(
-      async () => {
-        calls += 1;
-        // Half a minute asked for, every time: two of them are already the ceiling.
-        throw busy({ "retry-after": "30" });
-      },
-      { sleep: async (ms: number) => void waits.push(ms) },
-    ).catch((e: unknown) => e);
-    expect(error).toMatchObject({ code: "provider_rate_limited" });
-    expect(waits).toEqual([30_000]);
-    expect(calls).toBe(2);
-    expect(String((error as Error).message)).toContain("45000 ms this runtime waits per call");
-    expect(String((error as Error).message)).toContain("did send a `retry-after`");
+    for (let i = 0; i < 20; i++) {
+      const waits: number[] = [];
+      let calls = 0;
+      const error = await attempt(
+        async () => {
+          calls += 1;
+          // Half a minute asked for, every time: two of them are past the 45 s ceiling.
+          throw busy({ "retry-after": "30" });
+        },
+        { sleep: async (ms: number) => void waits.push(ms) },
+      ).catch((e: unknown) => e);
+      expect(error).toMatchObject({ code: "provider_rate_limited" });
+      // One wait taken, jittered under the per-wait cap; the second would cross
+      // the total, so it is not taken and the call is refused instead.
+      expect(waits).toHaveLength(1);
+      expect(waits[0]).toBeGreaterThanOrEqual(22_500);
+      expect(waits[0]).toBeLessThanOrEqual(30_000);
+      expect(calls).toBe(2);
+      expect(String((error as Error).message)).toContain("45000 ms this runtime waits per call");
+      expect(String((error as Error).message)).toContain("did send a `retry-after`");
+    }
   });
 
   it("is the only error retried: anything else is raised as it comes", async () => {
@@ -639,9 +653,15 @@ describe("the wait before the second attempt", () => {
       expect(ms).toBeGreaterThanOrEqual(7_500);
       expect(ms).toBeLessThanOrEqual(12_500);
     }
+    // Ten minutes asked for: jitter cannot bring it under the cap, so it is the cap.
     expect((await run(busy({ "retry-after": "600" })))[0]).toBe(30_000);
-    // A header that is not a number is no instruction: the usual wait.
-    expect((await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]).toBeLessThanOrEqual(2_500);
+    // A header that is not a number is no instruction: the usual wait, jitter and all
+    // (2.5 s ± 25 % — the bound moved with the base, and this line did not, 23/09).
+    for (let i = 0; i < 20; i++) {
+      const usual = (await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]!;
+      expect(usual, `${usual}`).toBeGreaterThan(1_685);
+      expect(usual, `${usual}`).toBeLessThanOrEqual(3_125);
+    }
   });
 
   it("ends the wait when the run is stopped during it, instead of sleeping on", async () => {
