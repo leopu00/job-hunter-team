@@ -39,6 +39,7 @@ import { stdin, stdout } from "node:process";
 import type { TraceLine } from "../core/trace.ts";
 import { roleOf } from "../db/role-policy.ts";
 import { c, dur, int, usd } from "./render.ts";
+import { hubAccess, onStartKey, readStarts, readTeamPlan, startAndRecord, startPageLines, startsFile, type StartStep } from "./start-page.ts";
 import { Tail } from "./tail.ts";
 
 /** A run with no event for this long has stopped writing: a live one samples its process every 5 s. */
@@ -57,9 +58,9 @@ export const SPARK_CELL_MS = 15_000;
  */
 const ROSTER = ["capitano", "scout", "analista", "scorer", "scrittore", "critico", "assistente", "mentor", "sentinella"];
 
-export const PAGES = ["agents", "results", "money"] as const;
+export const PAGES = ["agents", "results", "money", "start"] as const;
 export type Page = (typeof PAGES)[number];
-const PAGE_TITLE: Record<Page, string> = { agents: "🟢 AGENTS", results: "🔔 RESULTS", money: "💰 MONEY" };
+const PAGE_TITLE: Record<Page, string> = { agents: "🟢 AGENTS", results: "🔔 RESULTS", money: "💰 MONEY", start: "▶ START" };
 
 const COLOR = c.dim("x") !== "x";
 const fg = (n: number) => (s: string) => (COLOR ? `\x1b[38;5;${n}m${s}\x1b[39m` : s);
@@ -319,8 +320,11 @@ export class Board {
     }
   }
 
-  /** The screen at `now` on `page`: at most `rows` lines, none wider than `cols`. */
-  frame(now: number, size: { cols: number; rows: number }, header: string, page: Page = "agents"): string[] {
+  /**
+   * The screen at `now` on `page`: at most `rows` lines, none wider than `cols`.
+   * The START page is not the board's: its lines come from `start-page.ts`.
+   */
+  frame(now: number, size: { cols: number; rows: number }, header: string, page: Page = "agents", startLines: string[] = []): string[] {
     const W = Math.max(30, size.cols);
     const H = Math.max(6, size.rows);
     const out: string[] = [];
@@ -330,9 +334,16 @@ export class Board {
     add(this.#banner(runs, now, W));
     add(this.#tabs(page, W));
     if (H >= 30) add(c.dim(` ${header}`));
-    const footer = H >= 16 ? c.dim(" ←/→ or 1 2 3: pages · q: quit") : "";
+    const footer = H >= 16 ? c.dim(" ←/→ or 1 2 3 4: pages · q: quit") : "";
     const room = H - out.length - (footer ? 1 : 0);
-    const body = page === "agents" ? this.#agentsPage(runs, now, W, room) : page === "results" ? this.#resultsPage(now, room) : this.#moneyPage(runs, now, W, room);
+    const body =
+      page === "agents"
+        ? this.#agentsPage(runs, now, W, room)
+        : page === "results"
+          ? this.#resultsPage(now, room)
+          : page === "money"
+            ? this.#moneyPage(runs, now, W, room)
+            : startLines;
     for (const line of body.slice(0, room)) add(line);
     if (footer) {
       while (out.length < H - 1) out.push("");
@@ -754,6 +765,12 @@ function clipTo(s: string, n: number): string {
  */
 export function runDashboard(options: { logsDir: string; traceFiles: () => string[]; windowMin?: number; once: boolean; bell?: boolean; page?: Page }): void {
   const board = new Board();
+  // The START page: its plan and the hub's address are read at every draw, so
+  // the page shows the configuration as it is now, never as it was.
+  const starts = startsFile(options.logsDir);
+  let step: StartStep = { step: "idle" };
+  const startBody = (interactive: boolean) =>
+    page === "start" ? startPageLines(readTeamPlan(process.env["JHT_LAUNCHER_CONFIG"]?.trim()), hubAccess(), step, readStarts(starts), interactive) : [];
   const tails = new Map<string, Tail>();
   const header = `${options.logsDir} · ${options.windowMin ? `runs of the last ${options.windowMin} min` : "each agent's latest run"}`;
   let page: Page = options.page ?? "agents";
@@ -782,7 +799,7 @@ export function runDashboard(options: { logsDir: string; traceFiles: () => strin
   const size = () => ({ cols: stdout.columns ?? 120, rows: stdout.rows ?? 40 });
   if (options.once || !stdout.isTTY) {
     pump(Date.now());
-    for (const line of board.frame(Date.now(), size(), header, page)) console.log(line);
+    for (const line of board.frame(Date.now(), size(), header, page, startBody(false))) console.log(line);
     return;
   }
 
@@ -800,7 +817,7 @@ export function runDashboard(options: { logsDir: string; traceFiles: () => strin
   const draw = () => {
     const now = Date.now();
     pump(now);
-    const lines = board.frame(now, size(), header, page);
+    const lines = board.frame(now, size(), header, page, startBody(true));
     const bell = options.bell !== false && board.bells > rung ? "\x07" : "";
     rung = board.bells;
     stdout.write(`${bell}\x1b[H${lines.map((l) => `${l}\x1b[K`).join("\n")}\x1b[J`);
@@ -808,6 +825,8 @@ export function runDashboard(options: { logsDir: string; traceFiles: () => strin
 
   // Keys: the arrows and tab move between pages, a digit goes to one, q leaves.
   // Raw mode takes ctrl-c away from the terminal, so it is read here too.
+  // On the START page, s asks and y confirms: two keys, never one, and this
+  // handler is the only place a start can come from.
   if (stdin.isTTY) {
     stdin.setRawMode(true);
     stdin.resume();
@@ -815,10 +834,31 @@ export function runDashboard(options: { logsDir: string; traceFiles: () => strin
       const key = data.toString("utf8");
       const at = PAGES.indexOf(page);
       if (key === "q" || key === "\x03") process.exit(0);
-      else if (key === "\x1b[C" || key === "\t" || key === "l") page = PAGES[(at + 1) % PAGES.length]!;
+      if (page === "start") {
+        const plan = readTeamPlan(process.env["JHT_LAUNCHER_CONFIG"]?.trim());
+        const hub = hubAccess();
+        const ready = plan.ok && !("reason" in hub);
+        const next = onStartKey(step, key, ready);
+        step = next.step;
+        if (next.start && plan.ok && !("reason" in hub)) {
+          draw();
+          void startAndRecord(plan, hub, starts).then((outcome) => {
+            step = { step: "answered", outcome };
+            draw();
+          });
+          return;
+        }
+        if (next.consumed) {
+          draw();
+          return;
+        }
+      }
+      if (key === "\x1b[C" || key === "\t" || key === "l") page = PAGES[(at + 1) % PAGES.length]!;
       else if (key === "\x1b[D" || key === "\x1b[Z" || key === "h") page = PAGES[(at + PAGES.length - 1) % PAGES.length]!;
       else if (/^[1-9]$/.test(key) && Number(key) <= PAGES.length) page = PAGES[Number(key) - 1]!;
       else return;
+      // Leaving the START page drops a confirmation left pending there.
+      if (page !== "start" && step.step === "confirm") step = { step: "idle" };
       draw();
     });
   }

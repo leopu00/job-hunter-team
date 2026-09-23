@@ -115,6 +115,18 @@ cells in tmux and in Terminal.app alike, measured; the roles' own joined
 emoji do not, so the roles keep coloured badges. `--page=<name>` opens on a
 page, `--no-bell` silences it, `--window=<min>` keeps only recent runs.
 
+The fourth page, START, is the one place of the dashboard that can spend: it
+starts the base team the way `run-team` does, with one `POST /v1/team/start`
+and the host's own token (`JHT_HUB_TEAM_TOKEN_FILE`, or `JHT_HUB_TEAM_TOKEN`;
+`JHT_HUB_URL` on the loopback). It shows the team as `JHT_LAUNCHER_CONFIG`
+states it, member by member, and the most it can cost, that file's
+`sessionUsd`; `s` asks, `y` confirms, and nothing else starts it — only from
+an interactive terminal, never by itself, never again on its own. The
+launcher's answer is shown as it came, refusals included. Who started, and
+what they were shown, goes to `logs/dashboard-starts.jsonl` before the call,
+the answer after it. With the configuration or the hub out of reach, the page
+says why and starts nothing.
+
 ## What the live runs cost (T5, 2026-09-19)
 
 SCOUT, one turn per run, on `gpt-5.6-luna` through the key proxy. The figures
