@@ -98,6 +98,11 @@ To read a run, `run.sh monitor --last` (or `--list`, `<run-id>`, `--verbose`)
 replays its trace. That is the same view as `npm run monitor`, from the
 `~/.jht-api` volume and read-only. The trace has the rendered system prompt,
 every tool call with its outcome, the token counts and the cost.
+`run.sh monitor --dashboard` shows the whole team on one screen, redrawn
+every second: each agent's state, what it is doing now, rounds, tools,
+searches, tokens and spend against its run's cap, the piggy bank as the hub
+last answered the CAPITANO, and the latest events. A figure no trace carries
+(the piggy bank's size, the key proxy's ceiling) is shown as `—`.
 
 ## What the live runs cost (T5, 2026-09-19)
 
