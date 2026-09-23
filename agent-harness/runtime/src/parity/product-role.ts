@@ -144,8 +144,11 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const hub = options.hub;
   const mailbox = hub ? new HubMailbox(hub) : new FileMailbox(join(channels, "mailbox"));
   const pause = new PauseRequest();
+  // T42b: the game's buttons belong to the roles whose `skills.list` carries them.
+  const replyOptions = loaded.skills.some((skill) => skill.name === "game-reply-options");
   const native = createJhtTools({
     agent: options.agent,
+    replyOptions,
     homeDir: options.homeDir,
     mailbox,
     notifier: hub ? new HubNotifier(hub) : new FileNotifier(join(channels, "notify.jsonl")),

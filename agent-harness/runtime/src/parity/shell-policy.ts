@@ -92,7 +92,11 @@ const GENERAL =
 export function shellRefusal(agent: string, command: string, env: NodeJS.ProcessEnv = process.env): string {
   const role = roleOf(agent);
   const first = command.trim().split(/\s+/u)[0] ?? "";
-  const noShell = `And there is no shell for the ${role.toUpperCase()} here in any case: ${WHERE_IT_WENT[role] ?? GENERAL}`;
+  // The tail is deliberately NOT the role's own `WHERE_IT_WENT`: that sentence
+  // answers "where did MY shell commands go", and here the model asked about a
+  // different command and has just been told. A refusal that answers the
+  // question nobody asked is worse than a blunt one (MASTER, review of T42).
+  const noShell = `And there is no shell for the ${role.toUpperCase()} here in any case: every command your instructions name is a tool, or it is not available at all.`;
   const python = pythonRefusal(command, {}, env);
   if (python !== null) return `${python} ${noShell}`.replace(/ {2,}/gu, " ");
   const replaced = replacedCommand(command);

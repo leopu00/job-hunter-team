@@ -344,7 +344,11 @@ describe("replacedCommand", () => {
   it("ignores the names inside arguments and longer names", () => {
     expect(replacedCommand("grep throttle scout.md")).toBeNull();
     expect(replacedCommand("echo 'use jht-send later'")).toBeNull();
-    expect(replacedCommand("throttle-set scout 600")).toBeNull();
+    // `throttle-set` is a command of its own since T42a (five roles' skills name
+    // it): what this line holds is that a longer name is not swallowed by a
+    // shorter one, which is why it now uses a name nobody has.
+    expect(replacedCommand("throttle-setup scout 600")).toBeNull();
+    expect(replacedCommand("throttle-set scout 600")).toBe("throttle-set");
     expect(replacedCommand("python3 throttle_engine.py check")).toBeNull();
   });
 });

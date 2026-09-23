@@ -396,11 +396,24 @@ at one. What was left is the shell that role would lose:
 | SCORER | **no** | nothing left |
 | CRITICO | **no** | nothing left |
 | CLOSER | **no** | nothing left |
-| MENTOR | **no** | one line, `spawn-doctor.sh`: starting a role is the hub's, and only the CAPITANO reaches it |
+| MENTOR | **no** | two lines: `spawn-doctor.sh` (starting a role is the hub's, and only the CAPITANO reaches it) and `jht-reply-options`, now the `reply_options` tool |
 | SENTINELLA | **no** | the same line, and its whole part is to advise the CAPITANO |
 | SCOUT | **no** | five `echo` of its own diagnostics, which belong in what it reports |
 | CAPITANO | yes | the MASTER's decision: its residue is spawning, which it does through the hub |
 | ASSISTENTE · SCRITTORE · DOTTORE · MANTENITORE | yes, for now | their residue (profile flags, work area cleanup, `df`/`du`) is not measured yet |
+
+**A refusal has to answer the question that was asked.** The first version of
+this change told a MENTOR reaching for `jht-reply-options` about spawning a
+DOTTORE, because that was the only shell line the measurement had found in its
+skills — an answer to a different question, which is worse than a blunt no. The
+measurement had missed it: `game-reply-options` is in the role's `skills.list`
+and not in its prompt, and the two sources have to be crossed, always. So the
+specific reason always comes first (the `python3` and `REPLACED` tables), the
+"no shell" tail is neutral, and the buttons themselves are now a tool —
+measured first: `jht-reply-options` was not on PATH in this image, so a role
+WITH a shell got `command not found`, exit 127, and the game's buttons were
+already lost before anyone lost `bash` (`reply_options`, T42b; the same line
+`jht-send` writes, with `choices[]`).
 
 Taking a tool away is the part that goes wrong quietly — a role that loses
 something it used stops and does not say so — so the seven do not meet silence

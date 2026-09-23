@@ -130,6 +130,8 @@ export class PauseRequest {
 }
 
 export interface JhtToolsOptions {
+  /** T42b: the game's reply buttons, for the roles that load `game-reply-options`. */
+  replyOptions?: boolean;
   /** This agent's name, as its peers address it: `scout-1`. */
   agent: string;
   /** The agent's home, where `chat.jsonl` lives as it does for `jht-send`. */
@@ -152,6 +154,9 @@ export interface JhtToolsOptions {
 export const DEFAULT_NOTIFY_LIMIT = { max: 5, windowMs: 60 * 60_000 };
 
 export const JHT_TOOL_NAMES = ["send_message", "chat_reply", "throttle", "notify_user", "check_user_replies"] as const;
+
+/** The tools only the roles whose `skills.list` carries them get (T42b: `game-reply-options`). */
+export const SKILL_TOOL_NAMES = ["reply_options"] as const;
 
 export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
   const now = options.now ?? Date.now;
@@ -217,6 +222,48 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
       const line = { role: "assistant", text, ts: now() / 1000, done: !partial };
       await appendJsonLine(file, line);
       return { ok: true, content: `Sent ${text.length} chars to the web chat.` };
+    },
+  };
+
+  /**
+   * T42b: the game's reply buttons (`jht-reply-options`, skill
+   * `game-reply-options`, loaded by the MENTOR, the ASSISTENTE and the
+   * CAPITANO). The script writes ONE line into the same `chat.jsonl` as
+   * `jht-send`, with `choices[]` beside the text, and the game renders them as
+   * buttons while free text stays available.
+   *
+   * It is a tool here because measured it was nothing: `jht-reply-options` is
+   * not on PATH in this image, so a role with a shell got `command not found`,
+   * exit 127 — the silent kind of failure this harness exists to remove. The
+   * limits are the script's own (2 to 5 choices, 4000 chars of prompt, 240 a
+   * label) and `done` is true because the script's line is the turn's last.
+   */
+  const replyOptions: ToolHandler = {
+    spec: {
+      name: "reply_options",
+      description:
+        "Close your turn in the person's game chat with 2 to 5 clickable choices (what `jht-reply-options` does). " +
+        "The buttons are generated for this exact conversation, never a fixed tree, and this is the LAST message of the turn: " +
+        "do not follow it with `chat_reply`, or the buttons disappear under the newer reply.",
+      schema: z
+        .object({
+          prompt: z.string().min(1).max(4000),
+          choices: z.array(z.string().min(1).max(240)).min(2).max(5),
+        })
+        .strict(),
+    },
+    classify: () => internal("web chat"),
+    async execute(args) {
+      const { prompt, choices } = args as { prompt: string; choices: string[] };
+      const file = join(options.homeDir, "chat.jsonl");
+      await appendJsonLine(file, {
+        role: "assistant",
+        text: prompt,
+        ts: now() / 1000,
+        done: true,
+        choices: choices.map((label, index) => ({ id: `reply-${index + 1}`, label, value: label })),
+      });
+      return { ok: true, content: `Sent the reply and ${choices.length} choices to the game chat.` };
     },
   };
 
@@ -294,7 +341,7 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
     },
   };
 
-  return [sendMessage, chatReply, throttle, notifyUser, checkUserReplies];
+  return [sendMessage, chatReply, throttle, notifyUser, checkUserReplies, ...(options.replyOptions ? [replyOptions] : [])];
 }
 
 /**
@@ -314,6 +361,7 @@ instructions name for talking and pausing are tools here:
 - \`throttle-ack\` → nothing: the harness records your wake-up
 - \`jht-notify-user\`, \`jht-telegram-send\` → \`notify_user\`
 - \`jht-check-user-replies\` → \`check_user_replies\`
+- \`jht-reply-options\` → \`reply_options\` (prompt, choices): the game's buttons, and the turn's last message
 - \`jht-install\` → not available: the image carries the dependencies
 - \`pandoc … --pdf-engine=wkhtmltopdf …\` → \`render_pdf\` (source, title, output): the renderer's
   arguments are the harness's, so no markdown can make it read a file or fetch an address
@@ -356,6 +404,11 @@ export const REPLACED_REASONS: Record<string, string> = {
   "jht-notify-user": use("notify_user"),
   "jht-telegram-send": use("notify_user"),
   "jht-check-user-replies": use("check_user_replies"),
+  // T42b, skill `game-reply-options`: it was not on PATH here, so a role with a
+  // shell got `command not found` and lost the buttons without knowing why.
+  "jht-reply-options": use("reply_options"),
+  // T42a: five roles' skills name the TUI's alias for the pause.
+  "throttle-set": use("throttle"),
   "jht-install": "is not available here: the image carries every dependency. Report what is missing instead.",
   // T21, the CAPITANO's team (FULLSTACK-1's launcher, T22): agents are containers the hub
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
