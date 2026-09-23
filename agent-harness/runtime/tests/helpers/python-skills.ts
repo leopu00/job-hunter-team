@@ -60,7 +60,16 @@ export interface PyRun {
 export function runPython(skills: string, args: string[], env: Record<string, string> = {}, input?: string): PyRun {
   const run = spawnSync("python3", args, {
     cwd: skills,
-    env: { PATH: process.env["PATH"] ?? "", PYTHONIOENCODING: "utf-8", ...env },
+    // The child must live in the SAME zone as the test process, or a script
+    // that asks the clock for "today" answers about a different day and the
+    // comparison measures the zone instead of the port (24/09: with TZ=UTC in
+    // vitest and none here, the two halves of the daily cap disagreed).
+    env: {
+      PATH: process.env["PATH"] ?? "",
+      PYTHONIOENCODING: "utf-8",
+      ...(process.env["TZ"] === undefined ? {} : { TZ: process.env["TZ"] }),
+      ...env,
+    },
     encoding: "utf8",
     ...(input === undefined ? {} : { input }),
   });

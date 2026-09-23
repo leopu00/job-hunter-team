@@ -162,6 +162,21 @@ describe("doctor_analytics (T41)", () => {
     expect(parsed((await analytics(["scout-1", WINDOW])).content)["produced"]).toEqual({ found: 2 });
   });
 
+  /**
+   * A window with no zone is UTC, as the column is. Asserted by comparing the
+   * two spellings of the same instant, which makes the test say the same thing
+   * in every zone: with the window read as LOCAL time, a box at -04:00 counted
+   * other rows than the script (24/09, `TZ=America/New_York`).
+   */
+  it("reads a window with no zone as UTC, not as the machine's local time", async () => {
+    position("scout-1", "2026-09-23 07:00:00");
+    position("scout-1", "2026-09-23 05:00:00", "Early Engineer");
+    const zoneless = parsed((await analytics(["scout-1", "2026-09-23 06:00:00"])).content)["produced"];
+    const explicit = parsed((await analytics(["scout-1", "2026-09-23T06:00:00Z"])).content)["produced"];
+    expect(zoneless).toEqual({ found: 1 });
+    expect(zoneless).toEqual(explicit);
+  });
+
   it("says so instead of guessing when the window is not a date at all", async () => {
     position("scout-1", "2026-09-23 08:00:00");
     const out = parsed((await analytics(["scout-1", "last Tuesday"])).content);

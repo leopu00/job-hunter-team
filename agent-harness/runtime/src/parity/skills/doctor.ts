@@ -127,12 +127,26 @@ function parseSession(session: string): { role: string; instance: number | null 
  * date at all is passed through with a note instead of being invented.
  */
 function sqlTimestamp(sinceIso: string, notes: string[]): string {
-  const at = new Date(sinceIso);
+  const at = parseInstant(sinceIso);
   if (Number.isNaN(at.getTime())) {
     notes.push(`since '${sinceIso}' is not a date: the window is compared as the text it is, which may match nothing`);
     return sinceIso;
   }
   return at.toISOString().replace("T", " ").slice(0, 19);
+}
+
+/**
+ * A window's start as an instant. **A timestamp with no zone is UTC**, because
+ * that is what the column holds and what the team writes: `new Date("2026-09-23
+ * 06:00:00")` reads it as LOCAL, and on a box at -04:00 that moved the window
+ * four hours and counted other rows than the script did (found 24/09 by running
+ * the suite under `TZ=America/New_York`, the third defect of the day from two
+ * shapes of time meeting). An explicit `Z` or offset is obeyed as written.
+ */
+function parseInstant(text: string): Date {
+  const trimmed = text.trim();
+  const zoned = /(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(trimmed);
+  return new Date(zoned ? trimmed : `${trimmed.replace(" ", "T")}Z`);
 }
 
 /** The columns of `table`, empty when there is no such table. The script's defensive read. */
@@ -237,7 +251,7 @@ export function collectAnalytics(options: DoctorToolsOptions, session: string, s
   const now = (options.now ?? (() => new Date()))();
   const notes: string[] = [];
   const { role, instance } = parseSession(session);
-  const since = new Date(sinceIso);
+  const since = parseInstant(sinceIso);
   if (Number.isNaN(since.getTime())) notes.push(`since '${sinceIso}' is not a date the window can start at → the runs are not filtered by it`);
   // The three things a pane gave and nothing here does. Said once, as data:
   // a zero would read as "measured and none", which is the lie this whole
