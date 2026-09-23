@@ -296,6 +296,7 @@ npm run role -- --role assistente --agent assistente-1 --turns 2 --pause-ms 0
 npm run role -- --role sentinella --agent sentinella-1 --turns 2 --pause-ms 0
 npm run role -- --role closer --agent closer-1 --turns 2 --pause-ms 0
 npm run role -- --role mentor --agent mentor-1 --turns 2 --pause-ms 0
+npm run role -- --role mantenitore --agent mantenitore-1 --turns 2 --pause-ms 0
 npm run monitor -- --last
 ```
 
@@ -379,6 +380,73 @@ the script holds it. Three differences, all on purpose:
   write, and there is no dashboard here to show it. `save` writes only
 `application_answers`, and never over an answer the person gave
 (`user_answer_kept`, CL-01).
+
+**The MANTENITORE keeps the infra, and here there is no infra to keep (T41).**
+It is the one role whose object of work IS the box: the life-support daemons,
+the disk, the dependencies, the panes' locale, the monitoring histories it
+archives. An agent here is a run, not a pane, and the box it runs in is one
+round's — so of the twenty-two functions of its prompt and its
+`maintainer-sweep` skill, fifteen have nothing to act on. Each is refused by
+name, and **each refusal says where that power went**, because a role that
+only hears "no" looks for another way in and this is the role that must never
+work around a gate:
+
+| What the sweep does in the TUI | Here |
+|---|---|
+| canaries the life-support daemons (`process_health.py`) and respawns the bridge suite | **no** — no detached daemons; what starts, lists and stops a run is the hub's launcher, and only the CAPITANO reaches it |
+| checks the cloud sync cursors (`sync_health.py`), clears the push quarantine (`jht cloud quarantine`) | **no** — no cloud lane here, and that write is nobody's in this runtime |
+| reads the RAM/CPU history a bridge samples (`host_vitals.py`), measures the team's disk with `df` | **no** — the file is a bridge's and the disk would be the wrong box: this container is one run's |
+| decodes every pane to tell a cosmetic locale defect from corrupted data (`locale_health.py`) | **no** — there are no panes; the transport is JSON |
+| archives the histories older than 30 days and, under pressure, **deletes** the oldest zips (`log_archive.py run`) | **no** — no tool of its own archives or prunes; it reports instead (and see the measurement below) |
+| installs and consolidates dependencies (`jht-install`) | **no** — the image carries them; what is missing is reported, not installed |
+| garbage-collects the temp files of killed sessions | lists and **proposes**; nothing is removed |
+| smoke-tests the mission-critical tools (`tool_health.py`: browser, LinkedIn) | **yes, on a different object** — see below |
+| escalates to the CAPITANO, proposes every destructive action | **yes**, `send_message`, and the CAPITANO is the only peer it may write to (`PEER_POLICY`) |
+| appends one line per sweep to its logbook | **yes**, in the team's folder, bounded |
+
+Two differences are deliberate and are declared here rather than hidden in
+the code:
+
+1. **`tool_health` measures a different object, and it MEASURES.** The script
+   smoke-tests the product's critical tools; the tool here reports what *this
+   box* carries — every line with its evidence, `missing` only after the PATH
+   walk that failed and with the number of folders searched. What the process
+   cannot observe (the life-support processes, the team's disk, the cloud) is
+   `unknown` with the reason, and never counts as missing. This is the rule
+   that cost us two defects in two days — a Python refusal that asserted "no
+   Python in this image" and a paragraph here that called poppler absent on a
+   box that had it: **detected, not declared**. `tests/maintainer-tools.test.ts`
+   runs the same call against two boxes and holds that the answer follows the
+   box.
+2. **No tool of this role archives, prunes or deletes — and that is not yet a
+   fence.** In the TUI the single-writer rule is a sentence it obeys — propose,
+   the Capitano decides — with one pre-authorised exception, the archiver that
+   prunes. Here the orphan GC lists and the archive is proposed, because no
+   tool does either.
+
+   That is the shape of the role, not a boundary, and the difference matters:
+   **every role carries `bash`.** Measured on 23/09 across all twelve ported
+   roles — `rm -rf` on seven targets, 84 attempts, 84 successes: the person's
+   profile, their own CVs, another role's deliverables, `jobs.db`, the
+   monitoring histories, the message channels, and a file outside every
+   declared root. In the same run, `write_file` on the profile is denied by
+   the policy while `bash rm` on that same file succeeds; the same `rm` inside
+   a folder the process cannot write fails. **The policy stops the file tools
+   and does not touch the shell; the filesystem stops the shell** — the CV
+   roots' lesson, measured again: the boundary belongs in the mount.
+
+   So `tests/parity-mantenitore-run.test.ts` ends by reaching for the shell and
+   asserts what really happens: the file goes. The files no tool touched are
+   still there, byte for byte; the one the shell took is not. When the mount
+   closes this, that assertion turns red and has to be read — which is why it
+   is written down instead of claiming a boundary we do not have
+   (`agents-hq/piani/MISURA-BASH-E-CONFINE.md`).
+
+Its logbook carries the captain diary's bounds (CAP-1), for the same reason:
+a logbook outlives the session, so a role steered by injected text could leave
+a "finding" the next round inherits at wake. A line is at most 1000
+characters, a reread is the last 14 rounds within 8 KiB, quoted, and says
+whose words they are.
 
 **The MENTOR reads, and speaks to the person (T40).** It is the one voice
 with the standing to tell the person "it is a craft you lack, not a

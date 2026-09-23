@@ -268,9 +268,11 @@ describe("guardShellTool", () => {
   // kinds of box in shell-guard-python.test.ts.
   it("answers a python call nobody ported instead of letting it die in the shell", async () => {
     ran.length = 0;
-    const result = await guarded.execute({ command: "python3 /app/shared/skills/linkedin_check.py" }, context);
+    // A script with no tool AND no refusal of its own: `linkedin_check.py` had
+    // this part until T41 gave it a named one (it is the MANTENITORE's canary).
+    const result = await guarded.execute({ command: "python3 /app/shared/skills/ats_detect.py" }, context);
     expect(result.ok).toBe(false);
-    expect(String(result.content)).toContain("`linkedin_check.py` cannot run here");
+    expect(String(result.content)).toContain("`ats_detect.py` cannot run here");
     expect(String(result.content)).toContain("say in your report which one you needed");
     expect(String(result.content)).toContain("Nothing was run.");
     expect(ran).toEqual([]);

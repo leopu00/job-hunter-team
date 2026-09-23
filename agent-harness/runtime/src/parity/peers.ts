@@ -39,12 +39,17 @@ export const PEER_POLICY: Readonly<Record<string, readonly string[]>> = {
   // mentor that could write to the workers would turn a reflection into a
   // search instruction, which its skill forbids in so many words.
   mentor: ["capitano", "dottore"],
+  // T41, mantenitore.md: single-writer — it repairs the infra and PROPOSES every
+  // destructive action to the CAPITANO, who decides. Its `skills.list` names no
+  // other correspondent, and M-01 keeps it away from the agents themselves.
+  mantenitore: ["capitano"],
 };
 
 /** Where each fenced role's rule is written, for the refusal to cite it. */
 const PEER_RULE: Readonly<Record<string, string>> = {
   sentinella: "sentinella.md RULE #0",
   mentor: "mentor.md, skill index: escalation goes to the Capitano",
+  mantenitore: "mantenitore.md: you propose, the Capitano decides",
 };
 
 /** The roles `agent` may write to, or `null` when it may write to anyone. */

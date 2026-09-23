@@ -373,6 +373,9 @@ const REPLACED: Record<string, string> = {
   // whole cap looking for another way.
   pdftotext: "is not available here: the image has no poppler, so there is no PDF to measure.",
   pdffonts: "is not available here: the image has no poppler, so a PDF's fonts cannot be checked.",
+  // T41, `cloud-push-quarantine`: `jht cloud quarantine retry|resolve` writes to the
+  // cloud in the team's name. The CLI is not in this image, and that write is not a role's.
+  jht: "is the product's CLI and is not in this image. Anything it would change in the cloud is not a role's to change: report what you found instead.",
   tmux: "is not available here: agents are not tmux sessions. Write to one with `send_message`; the CAPITANO lists, starts and stops them with `list_agents`, `spawn_agent`, `stop_agent`.",
 };
 
@@ -385,18 +388,23 @@ const REPLACED: Record<string, string> = {
  */
 const DETECTED = new Set(["pdftotext", "pdffonts"]);
 
-/** Whether `name` is an executable on PATH, as `command -v` answers. */
-export function onPath(name: string, env: NodeJS.ProcessEnv = process.env): boolean {
+/** The path `command -v` would print for `name`, or null: the box's own answer, measured. */
+export function pathOf(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
   for (const dir of (env["PATH"] ?? "").split(delimiter)) {
     if (!dir) continue;
     try {
       accessSync(join(dir, name), constants.X_OK);
-      return true;
+      return join(dir, name);
     } catch {
       // Not here; try the next folder, as a shell would.
     }
   }
-  return false;
+  return null;
+}
+
+/** Whether `name` is an executable on PATH, as `command -v` answers. */
+export function onPath(name: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return pathOf(name, env) !== null;
 }
 
 const COMMAND_AT = new RegExp(
@@ -452,6 +460,10 @@ export const PYTHON_SKILLS: Record<string, string> = {
   // T37, the SENTINELLA's two file-only reads.
   "bridge_mailbox.py": "bridge_mailbox",
   "burn_intent.py": "burn_intent",
+  // T41, the MANTENITORE. The script smoke-tests the product's critical tools
+  // (browser, LinkedIn); the tool here measures the tools THIS box carries —
+  // a different object, declared as a difference in docs/parity.md.
+  "tool_health.py": "tool_health",
   // T39, the CLOSER's queue read and the answers it works out (the sending subcommands are refused inside).
   "apply_gate.py": "apply_gate",
   // T41, the DOTTORE's analytics: the same window, measured from what this runtime has.
@@ -617,6 +629,28 @@ const PYTHON_NO_TOOL: Record<string, string> = {
   "proc-kill.py":
     "kills a process of the container so pid1 respawns it. An API role has no processes of the team to reach, and stopping or " +
     "restarting a role is the hub's with an identity of its own — the DOTTORE does not have it (MASTER, 23/09).",
+  // T41, the MANTENITORE: the one role whose object of work is the box. Almost
+  // none of its sweep exists here, and a refusal that only said "no" would leave
+  // the role hunting for another way in — so each one names where that power went.
+  "process_health.py":
+    "canaries the container's life-support daemons (sentinel/pacing/heartbeat bridges, pid1's children). " +
+    "None of them exists here: an agent is a run, not a pane, and nothing is launched detached. " +
+    "What starts, lists and stops a run is the hub's launcher, and only the CAPITANO reaches it (`spawn_agent`, `list_agents`, `stop_agent`).",
+  "sync_health.py":
+    "reads the cloud sync cursors and the daemon's log; this runtime has no cloud lane and no sync daemon, so there are no cursors to read. " +
+    "Report that you could not check it — an unreadable check is not a healthy one.",
+  "host_vitals.py":
+    "summarises RAM and CPU samples a bridge writes to `vitals.jsonl`; there is no bridge here and no such file. " +
+    "What a run costs and how long it took is the harness's own record, not a role's to sample.",
+  "locale_health.py":
+    "decodes a `capture-pane` of every live session to tell a cosmetic locale defect from corrupted data. There are no panes here: " +
+    "the transport is JSON, and a byte that does not decode fails where it is read, not in a pane.",
+  "log_archive.py":
+    "cuts the monitoring histories older than 30 days into weekly zips and, under space pressure, DELETES the oldest ones. " +
+    "Those files belong to the host that runs the team, not to a role, and no tool of yours archives or prunes them. " +
+    "If something must be archived, say so in your report and let the person decide: proposing is the whole of your part here.",
+  "linkedin_check.py":
+    "drives a browser against LinkedIn; there is none here, and the verification it does cannot happen. Measure what this box carries with the `tool_health` tool instead.",
   "closer_notices.py":
     "collects the round's stops into ONE message to the person: here that message is the `notify_user` tool, one for the whole round, never one per position.",
 };

@@ -18,6 +18,7 @@ import { createApplicationAnswersTool, createApplyGateTool, createCvLayoutHold }
 import { createEmailMonitorTool } from "./email-monitor.ts";
 import { createFeedbackQueryTool } from "./feedback-query.ts";
 import { createCaptainTools } from "./captain.ts";
+import { createMaintainerTools } from "./maintainer.ts";
 import { createDeadlineExtractTool } from "./deadline-extract.ts";
 import { createDoctorTools } from "./doctor.ts";
 import { createEnrichmentPolicyTool } from "./enrichment-policy.ts";
@@ -99,6 +100,9 @@ const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   // `skills.list`: the mailbox became its own in the push→pull change of 2026-06-25, and
   // `burn_intent` is quoted in the prompt itself.
   sentinella: ["bridge_mailbox", "burn_intent"],
+  // T41: the MANTENITORE's sweep runs `tool_health.py` from the skill's allowed-tools,
+  // not from `skills.list`, and its logbook is a path in the prompt rather than a script.
+  mantenitore: ["tool_health", "maintainer_logbook"],
 };
 
 /** The script→tool overrides a role's text is rewritten with: whose tool a script is, for this role. */
@@ -135,6 +139,11 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
       ...(policy ? { policy } : {}),
     });
     tools.push(...dbTools.filter((t) => wanted.has(t.spec.name)));
+  }
+  // T41: the MANTENITORE measures this box and writes one line per round, in the
+  // team's folder — the captain's diary's own root, never the person's profile.
+  if (scripts.has("tool_health")) {
+    tools.push(...createMaintainerTools({ teamDir: join(options.stateDir ?? options.jhtHome ?? ".", "team") }));
   }
   // T14: the ANALISTA's scripts.
   const client = options.client ?? new SafeHttpsClient();

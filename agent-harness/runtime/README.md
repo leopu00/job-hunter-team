@@ -22,6 +22,7 @@ npm run role -- --role critico --agent critico-1 --turns 2    # its blind review
 npm run role -- --role sentinella --agent sentinella-1 --turns 2 # the budget watcher, advising only the CAPITANO (T37)
 npm run role -- --role closer --agent closer-1 --turns 2      # the only role that acts outward — and here cannot (T39)
 npm run role -- --role mentor --agent mentor-1 --turns 2      # reads the records as sets, speaks only to the person (T40)
+npm run role -- --role mantenitore --agent mantenitore-1 --turns 2 # the infra role, where there is no infra to touch (T41)
 npm run role -- --role demo --prompt path/to/prompt.md --task "Start."
 npm run monitor        # follow live runs; --list, --last, <run-id>, --verbose
 ```
