@@ -209,6 +209,10 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
     insert: [],
     update: [],
   },
+  // T41, mantenitore.md: its `skills.list` names no database skill at all — its
+  // object of work is the infrastructure, and here the infrastructure is not its
+  // to touch either. It reads nothing and writes nothing in the team's database.
+  mantenitore: { query: [], insert: [], update: [] },
   // T37, sentinella.md RULE #0 ("DO NOT modify code, config, files, git"): the SENTINELLA
   // does not touch the database at all — not a read, not a write. Its whole data layer is
   // the bridges' JSONL under the team's home, and what it produces is one piece of advice
