@@ -529,6 +529,14 @@ TUI — a context that bloats, an Enter that hangs — does not exist here. If a
 stuck run ever shows up it is added then, from the hub, with the rule the team
 already has for `freeze_team`: the role asks, the launcher decides.
 
+**It writes only to the CAPITANO** (SICUREZZA P2, MASTER 23/09). In the TUI it
+writes to every session and has to: it interviews each one before recreating it
+and kicks it off again afterwards. Here it interviews nobody, so the set of
+peers it used to need does not exist — and a role that may still write to every
+peer is one more channel into every model, held open for a use that is gone.
+`PEER_POLICY` names it beside the SENTINELLA and the MENTOR, and the refusal
+tells it to go through the CAPITANO, who decides.
+
 What is gone, and why, so nobody ports it back:
 
 - **the UNBLOCK phase** (`agent_unblock.py`, the role's own first step). Its
