@@ -13,10 +13,12 @@
  *   npm run monitor -- --verbose    full prompt, arguments, outputs and process samples
  *   npm run monitor -- --dashboard  the whole team on one screen, redrawn every second
  *                                   (--window=<min> only runs of the last minutes; --once one frame;
- *                                   --no-bell no bell on a new result; --page=agents|results|money
- *                                   the page to open on; ←/→ or 1 2 3 move between them, q quits)
+ *                                   --no-bell no bell on a new result; --page=agents|results|money|start
+ *                                   the page to open on; ←/→ or 1 2 3 4 move between them, q quits)
  *
- * Read-only: it opens trace files and nothing else.
+ * Read-only: it opens trace files and nothing else — but for the dashboard's
+ * START page, the one place that asks the hub to start the team, on the
+ * conditions `start-page.ts` sets out.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
