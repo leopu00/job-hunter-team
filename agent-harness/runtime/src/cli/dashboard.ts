@@ -150,7 +150,9 @@ export class Board {
         run.model = record.modelId;
         run.budgetUsd = record.budgetUsd;
         run.startedAt = at;
-        if (typeof record.limits["maxWebSearches"] === "number") run.maxWebSearches = record.limits["maxWebSearches"];
+        // A line written by another branch or an older runtime may lack a field the type
+        // requires: the field stays blank, the screen stays up (SICUREZZA, P2).
+        if (typeof record.limits?.["maxWebSearches"] === "number") run.maxWebSearches = record.limits["maxWebSearches"];
         feed(`${c.green("▶")} started · ${record.providerId}/${record.modelId} · run cap ${usd(record.budgetUsd)}`);
         return;
       case "message_in":
@@ -164,8 +166,9 @@ export class Board {
         return;
       case "round_finished":
         run.rounds.delete(record.agent ?? "");
-        run.tokIn += record.usage.inputTokens;
-        run.tokOut += record.usage.outputTokens;
+        run.tokIn += record.usage?.inputTokens ?? 0;
+        run.tokOut += record.usage?.outputTokens ?? 0;
+        if (!record.run) return;
         run.steps = record.run.steps;
         run.spentUsd = record.run.costUsd;
         run.spentAsOf = `round ${record.run.steps}`;

@@ -83,6 +83,19 @@ describe("the dashboard leaves empty what no trace carries", () => {
   });
 });
 
+describe("a line from another version does not take the screen down", () => {
+  it("draws a run_started without limits and a round without its run totals, leaving their figures blank", () => {
+    const board = new Board();
+    const { limits: _limits, ...old } = started("scout-1", 0.4) as TraceLine & { limits?: unknown };
+    board.handle("scout-1", old as TraceLine);
+    const { run: _run, usage: _usage, ...bare } = round("scout-1", 1_000, 1, 0.2) as TraceLine & { run?: unknown; usage?: unknown };
+    board.handle("scout-1", bare as TraceLine);
+    const text = frame(board, 2_000);
+    expect(nodeOf(text, "scout-1")).toContain("— / $0.4000");
+    expect(factsOf(text, "scout-1")).not.toMatch(/search \d/);
+  });
+});
+
 describe("the piggy bank is the hub's last answer to the CAPITANO", () => {
   it("takes left_usd from a spawn the hub accepted, and says whose answer and how old", () => {
     const board = new Board();
