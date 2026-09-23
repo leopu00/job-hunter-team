@@ -23,7 +23,10 @@ export type AuditEvent =
       usage: Usage;
       costUsd: number;
       toolCallNames: string[];
+      /** The work, without the time spent waiting on an upstream 429. */
       durationMs: number;
+      /** Milliseconds waited on a 429 before the call went through; absent when none. */
+      backoffMs?: number;
     }
   | { type: "tool_rejected"; toolName: string; reason: "schema_invalid" }
   | { type: "tool_denied"; toolName: string; risk: ToolRisk; asked: boolean }

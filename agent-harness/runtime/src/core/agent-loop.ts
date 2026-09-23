@@ -73,6 +73,14 @@ export type AgentEvent =
       text: string;
       toolCalls: { id: string; name: string; args: unknown }[];
       response?: ResponseMeta;
+      /**
+       * Present only when the provider refused with a 429 and the runtime
+       * waited: the attempts it took and the milliseconds spent waiting. That
+       * time is NOT in `durationMs` — waiting for an upstream queue is not
+       * work, and a trace that counted it as work would read a rate limit as a
+       * slow model (MASTER, 23/09).
+       */
+      backoff?: { attempts: number; waitedMs: number };
       /** Run totals after this round, against the limits. */
       run: { steps: number; toolCalls: number; totalTokens: number; costUsd: number; webSearches: number; remainingMs: number };
       agent?: string;
@@ -232,7 +240,9 @@ export async function runRound(
     // A call may not outlive what the run has left on the wall clock.
     timeoutMs: Math.min(STEP_TIMEOUT_MS, guardrails.remainingMs()),
   });
-  const durationMs = now() - startedAt;
+  // The wall time of the call, minus what was spent waiting for the provider's
+  // queue: the round's duration is the work, and the waiting is reported beside it.
+  const durationMs = now() - startedAt - (result.backoff?.waitedMs ?? 0);
   guardrails.observeInput(inputChars, result.usage.inputTokens);
   const stepCost = guardrails.costOf(result.usage);
   request.account.record(result.usage, stepCost);
@@ -262,6 +272,7 @@ export async function runRound(
     text: result.text,
     toolCalls: result.toolCalls,
     ...(result.response ? { response: result.response } : {}),
+    ...(result.backoff ? { backoff: result.backoff } : {}),
     run: {
       steps: run.steps,
       toolCalls: run.toolCalls,
@@ -281,6 +292,7 @@ export async function runRound(
     costUsd: stepCost,
     toolCallNames: result.toolCalls.map((c) => c.name),
     durationMs,
+    ...(result.backoff ? { backoffMs: result.backoff.waitedMs } : {}),
   });
   if (breach !== undefined) throw breach;
 
