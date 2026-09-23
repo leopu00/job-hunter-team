@@ -156,13 +156,23 @@ async function main(): Promise<number> {
 
   // A real spawn starts the agent in a clean home holding only its identity
   // and skills. JHT_API_KEEP_HOME=1 keeps what earlier runs left there.
+  //
+  // T43: unless the executor prepared that home and mounted it read-only. Then
+  // nothing here touches it — not the emptying, not the marker, not the skills
+  // copy: every one of those writes is what makes a read-only mount fail to
+  // start (the EBUSY VPS measured), and the point of the mount is that this
+  // process cannot change what it is about to read. It is checked instead,
+  // file by file, in `verifyPreparedHome`.
+  const homePrepared = process.env["JHT_API_HOME_PREPARED"] === "1";
   const freshHome = process.env["JHT_API_KEEP_HOME"]?.trim() !== "1";
-  await prepareAgentHome({
-    dir: config.agentHome,
-    role: config.role,
-    fresh: freshHome,
-    ...(values.skills ? { skillsSource: values.skills } : {}),
-  });
+  if (!homePrepared) {
+    await prepareAgentHome({
+      dir: config.agentHome,
+      role: config.role,
+      fresh: freshHome,
+      ...(values.skills ? { skillsSource: values.skills } : {}),
+    });
+  }
 
   // The team database: its path is the runtime's, fixed here, never a tool
   // argument. Opened on first use, so a cycle that never touches it never
@@ -178,6 +188,8 @@ async function main(): Promise<number> {
     const hub = config.hub ? new HubClient(config.hub) : undefined;
     jobsDb = hub ? undefined : { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
     role = await prepareProductRole({
+      // The executor's switch, never the role's: it is set on the container.
+      homePrepared,
       appRoot: resolveUserPath(env["JHT_API_APP_ROOT"]?.trim() || CHECKOUT_ROOT, process.cwd(), homedir()),
       role: values.role,
       agent: config.role,
@@ -214,7 +226,10 @@ async function main(): Promise<number> {
     todos: true,
     onEvent: sink,
   });
-  await writeIdentity(config.agentHome, session.systemPrompt);
+  // The identity is already on disk when the executor prepared the home, and
+  // was checked against this prompt: writing it again would be the one write
+  // the read-only mount is there to prevent.
+  if (!homePrepared) await writeIdentity(config.agentHome, session.systemPrompt);
 
   await audit.write({
     type: "run_started",

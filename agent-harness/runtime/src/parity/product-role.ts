@@ -40,11 +40,18 @@ import {
   composeSystemPrompt,
   loadRolePrompt,
   materializeRoleHome,
+  verifyPreparedHome,
   resolveUserLocale,
   type RolePrompt,
 } from "./role-prompt.ts";
 
 export interface ProductRoleOptions {
+  /**
+   * T43: the home was laid out by the executor, with another uid, and is
+   * mounted read-only. The switch belongs to whoever starts the container
+   * (`JHT_API_HOME_PREPARED`): a role cannot set it for its own process.
+   */
+  homePrepared?: boolean;
   /** The repo holding `agents/` — `/app` in the container. */
   appRoot: string;
   /** The role's folder under `agents/`: `scout`. */
@@ -138,7 +145,11 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     : PARITY_NOTES;
   const roleNotes = shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`;
   const systemPrompt = composeSystemPrompt(prompt, roleNotes, options.homeDir);
-  await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
+  // T43: with a home the executor prepared (and mounted read-only), the runtime
+  // checks it instead of rebuilding it — rebuilding is exactly what makes the
+  // read-only mount fail, and what a process cannot be trusted to do to itself.
+  if (options.homePrepared) await verifyPreparedHome(prompt, options.homeDir, systemPrompt, rewrite);
+  else await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");
   const hub = options.hub;

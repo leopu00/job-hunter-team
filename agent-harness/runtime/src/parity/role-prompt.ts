@@ -214,6 +214,69 @@ export async function materializeRoleHome(
   await writeFile(join(homeDir, HOME_IDENTITY_FILE), system, "utf8");
 }
 
+/**
+ * The home the executor prepared, checked instead of rebuilt (T43).
+ *
+ * The boundary this serves is not in the runtime and cannot be: the role's
+ * own process is what lays out its home today (`materializeRoleHome` runs
+ * inside the container, with the role's uid), so a mount of `AGENTS.md` and
+ * `skills/` as read-only makes the role fail to start — the `rm -rf` before
+ * the copy dies with EBUSY, which is what VPS measured. A process does not
+ * defend itself from itself: the layout has to be done OUTSIDE, by a uid that
+ * is not the role's, and then mounted.
+ *
+ * This function is the runtime's half of that: with a home already prepared,
+ * it rebuilds nothing and instead checks that what is on disk is EXACTLY what
+ * this role should be reading — the composed system prompt, and every skill
+ * as the rewrite leaves it, with no extra skill folder. On any difference the
+ * role does NOT start and the error names the file: a run with a prompt
+ * nobody verified is precisely what the mount is there to prevent, and a
+ * silent fallback to rebuilding would hand it back.
+ *
+ * The switch is the executor's (`JHT_API_HOME_PREPARED`, set on the container
+ * it starts): a role cannot turn it on for its own process. And turning it on
+ * without the files being right buys nothing — the run stops.
+ */
+export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, system: string, rewrite: (text: string) => string): Promise<void> {
+  const fail = (message: string): never => {
+    throw new HarnessError(
+      "config_invalid",
+      `The home at ${homeDir} was declared already prepared (JHT_API_HOME_PREPARED), but ${message}. ` +
+        "This role will not run on a prompt nobody verified: either the executor's copy is stale, or it is not the one for this role. " +
+        "Nothing was rewritten here — a prepared home is read, never repaired.",
+    );
+  };
+  // The marker the runtime writes on a home it made: with a prepared home it is
+  // the executor's, and its absence means this folder is not a role's home at all.
+  const marker = await readText(join(homeDir, ".jht-api-agent"));
+  if (marker === null) fail("it carries no .jht-api-agent marker: the executor did not lay it out, or not here");
+  const identity = await readText(join(homeDir, HOME_IDENTITY_FILE));
+  if (identity === null) fail(`${HOME_IDENTITY_FILE} is missing`);
+  if (identity !== system) {
+    fail(`${HOME_IDENTITY_FILE} is not the prompt this role composes (${[...(identity ?? "")].length} characters on disk, ${[...system].length} expected)`);
+  }
+
+  const skillsDir = join(homeDir, HOME_SKILLS_DIR);
+  const expected = new Map(prompt.skills.map((skill) => [skill.name, skill]));
+  let present: string[];
+  try {
+    present = (await readdir(skillsDir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return void fail(`${HOME_SKILLS_DIR}/ is missing`);
+  }
+  // A folder nobody expected is text this role would read as its own instructions.
+  const extra = present.filter((name) => !expected.has(name)).sort();
+  if (extra.length > 0) fail(`${HOME_SKILLS_DIR}/ carries skills this role does not load: ${extra.join(", ")}`);
+  for (const [name, skill] of expected) {
+    const path = join(skillsDir, name, "SKILL.md");
+    const onDisk = await readText(path);
+    if (onDisk === null) fail(`${HOME_SKILLS_DIR}/${name}/SKILL.md is missing`);
+    const source = await readText(skill.sourceFile);
+    if (source === null) fail(`the image has no ${skill.name} to check ${HOME_SKILLS_DIR}/${name}/SKILL.md against`);
+    if (onDisk !== rewrite(source ?? "")) fail(`${HOME_SKILLS_DIR}/${name}/SKILL.md is not what this role should read`);
+  }
+}
+
 async function rewriteMarkdown(dir: string, rewrite: (text: string) => string): Promise<void> {
   for (const entry of await readdir(dir, { withFileTypes: true, recursive: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
