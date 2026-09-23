@@ -99,16 +99,21 @@ To read a run, `run.sh monitor --last` (or `--list`, `<run-id>`, `--verbose`)
 replays its trace. That is the same view as `npm run monitor`, from the
 `~/.jht-api` volume and read-only. The trace has the rendered system prompt,
 every tool call with its outcome, the token counts and the cost.
-`run.sh monitor --dashboard` draws the whole team on one screen, redrawn
-every second and fitted to the pane, full screen or a corner: whether the team
-is working or idle, one bar splitting the money among the runs (each share as
-wide as its cap, filled as far as it has spent), the team as a tree (who
-spawned whom, who wrote to whom, what each one is doing now), the results — a
-new position, a score, a CV, a word to the person — each ringing the bell tmux
-shows on the window, and the latest events. Idle, it shows how each agent's
-last run ended. A figure no trace carries (the piggy bank's size, the key
-proxy's ceiling) is shown as `—`. `--no-bell` silences it; `--window=<min>`
-keeps only recent runs.
+`run.sh monitor --dashboard` is a TUI of the whole team, redrawn every second
+and fitted to the pane, full screen or a corner, in three pages (←/→ or 1 2 3,
+q to quit): AGENTS, every role of the product always in its place — a role
+with no trace is a row switched off — with its state, activity over the last
+minutes, spend against its run's cap, what it is doing now, who spawned it
+and who it wrote to; RESULTS, a new position, a score, a CV, a word to the
+person or a failure, each ringing the bell tmux shows on the window, and the
+latest events; MONEY, the piggy bank as the hub last answered the CAPITANO,
+one bar splitting the money among the runs, each run's spend over time, the
+waits on a 429 and every answer the launcher gave the CAPITANO. Idle, it
+shows how each agent's last run ended. A figure no trace carries (the piggy
+bank's size, the key proxy's ceiling) is shown as `—`. Its emoji take two
+cells in tmux and in Terminal.app alike, measured; the roles' own joined
+emoji do not, so the roles keep coloured badges. `--page=<name>` opens on a
+page, `--no-bell` silences it, `--window=<min>` keeps only recent runs.
 
 ## What the live runs cost (T5, 2026-09-19)
 

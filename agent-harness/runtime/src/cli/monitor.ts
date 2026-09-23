@@ -13,7 +13,8 @@
  *   npm run monitor -- --verbose    full prompt, arguments, outputs and process samples
  *   npm run monitor -- --dashboard  the whole team on one screen, redrawn every second
  *                                   (--window=<min> only runs of the last minutes; --once one frame;
- *                                   --no-bell no bell on a new result)
+ *                                   --no-bell no bell on a new result; --page=agents|results|money
+ *                                   the page to open on; ←/→ or 1 2 3 move between them, q quits)
  *
  * Read-only: it opens trace files and nothing else.
  */
@@ -24,7 +25,7 @@ import { basename, dirname, join } from "node:path";
 
 import type { TraceLine } from "../core/trace.ts";
 import { resolveUserPath } from "../tools/paths.ts";
-import { runDashboard } from "./dashboard.ts";
+import { PAGES, runDashboard } from "./dashboard.ts";
 import { c, countNames, dur, int, TraceView, usd, width } from "./render.ts";
 import { Tail } from "./tail.ts";
 
@@ -218,7 +219,15 @@ const positional = args.filter((a) => !a.startsWith("--"));
 
 if (args.includes("--dashboard")) {
   const window = Number(args.find((a) => a.startsWith("--window="))?.slice("--window=".length));
-  runDashboard({ logsDir, traceFiles, ...(Number.isFinite(window) && window > 0 ? { windowMin: window } : {}), once: args.includes("--once"), bell: !args.includes("--no-bell") });
+  const page = PAGES.find((p) => args.includes(`--page=${p}`));
+  runDashboard({
+    logsDir,
+    traceFiles,
+    ...(Number.isFinite(window) && window > 0 ? { windowMin: window } : {}),
+    ...(page ? { page } : {}),
+    once: args.includes("--once"),
+    bell: !args.includes("--no-bell"),
+  });
 } else if (args.includes("--list")) {
   list();
 } else if (args.includes("--last") || positional.length > 0) {
