@@ -98,11 +98,16 @@ To read a run, `run.sh monitor --last` (or `--list`, `<run-id>`, `--verbose`)
 replays its trace. That is the same view as `npm run monitor`, from the
 `~/.jht-api` volume and read-only. The trace has the rendered system prompt,
 every tool call with its outcome, the token counts and the cost.
-`run.sh monitor --dashboard` shows the whole team on one screen, redrawn
-every second: each agent's state, what it is doing now, rounds, tools,
-searches, tokens and spend against its run's cap, the piggy bank as the hub
-last answered the CAPITANO, and the latest events. A figure no trace carries
-(the piggy bank's size, the key proxy's ceiling) is shown as `—`.
+`run.sh monitor --dashboard` draws the whole team on one screen, redrawn
+every second and fitted to the pane, full screen or a corner: whether the team
+is working or idle, one bar splitting the money among the runs (each share as
+wide as its cap, filled as far as it has spent), the team as a tree (who
+spawned whom, who wrote to whom, what each one is doing now), the results — a
+new position, a score, a CV, a word to the person — each ringing the bell tmux
+shows on the window, and the latest events. Idle, it shows how each agent's
+last run ended. A figure no trace carries (the piggy bank's size, the key
+proxy's ceiling) is shown as `—`. `--no-bell` silences it; `--window=<min>`
+keeps only recent runs.
 
 ## What the live runs cost (T5, 2026-09-19)
 

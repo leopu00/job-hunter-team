@@ -12,7 +12,8 @@
  *   npm run monitor -- --last       replay the most recent run
  *   npm run monitor -- --verbose    full prompt, arguments, outputs and process samples
  *   npm run monitor -- --dashboard  the whole team on one screen, redrawn every second
- *                                   (--window=<min> runs to show, default 120; --once one frame)
+ *                                   (--window=<min> only runs of the last minutes; --once one frame;
+ *                                   --no-bell no bell on a new result)
  *
  * Read-only: it opens trace files and nothing else.
  */
@@ -209,8 +210,8 @@ function findRun(query: string): string | undefined {
 const positional = args.filter((a) => !a.startsWith("--"));
 
 if (args.includes("--dashboard")) {
-  const window = Number(args.find((a) => a.startsWith("--window="))?.slice("--window=".length) ?? "120");
-  runDashboard({ logsDir, traceFiles, windowMin: Number.isFinite(window) && window > 0 ? window : 120, once: args.includes("--once") });
+  const window = Number(args.find((a) => a.startsWith("--window="))?.slice("--window=".length));
+  runDashboard({ logsDir, traceFiles, ...(Number.isFinite(window) && window > 0 ? { windowMin: window } : {}), once: args.includes("--once"), bell: !args.includes("--no-bell") });
 } else if (args.includes("--list")) {
   list();
 } else if (args.includes("--last") || positional.length > 0) {
