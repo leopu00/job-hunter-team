@@ -394,7 +394,7 @@ work around a gate:
 | checks the cloud sync cursors (`sync_health.py`), clears the push quarantine (`jht cloud quarantine`) | **no** — no cloud lane here, and that write is nobody's in this runtime |
 | reads the RAM/CPU history a bridge samples (`host_vitals.py`), measures the team's disk with `df` | **no** — the file is a bridge's and the disk would be the wrong box: this container is one run's |
 | decodes every pane to tell a cosmetic locale defect from corrupted data (`locale_health.py`) | **no** — there are no panes; the transport is JSON |
-| archives the histories older than 30 days and, under pressure, **deletes** the oldest zips (`log_archive.py run`) | **no** — and see below: it has no tool that removes a file |
+| archives the histories older than 30 days and, under pressure, **deletes** the oldest zips (`log_archive.py run`) | **no** — no tool of its own archives or prunes; it reports instead (and see the measurement below) |
 | installs and consolidates dependencies (`jht-install`) | **no** — the image carries them; what is missing is reported, not installed |
 | garbage-collects the temp files of killed sessions | lists and **proposes**; nothing is removed |
 | smoke-tests the mission-critical tools (`tool_health.py`: browser, LinkedIn) | **yes, on a different object** — see below |
@@ -415,13 +415,29 @@ the code:
    box that had it: **detected, not declared**. `tests/maintainer-tools.test.ts`
    runs the same call against two boxes and holds that the answer follows the
    box.
-2. **The role has no tool that removes a file.** In the TUI the single-writer
-   rule is a sentence it obeys — propose, the Capitano decides — with one
-   pre-authorised exception, the archiver that prunes. Here deleting is not a
-   rule but an absence, the same shape as the CLOSER and `applied`: the orphan
-   GC lists, the archive is proposed, and `tests/parity-mantenitore-run.test.ts`
-   seeds the files a TUI sweep would have taken and asserts they are all still
-   there, byte for byte, when the run ends.
+2. **No tool of this role archives, prunes or deletes — and that is not yet a
+   fence.** In the TUI the single-writer rule is a sentence it obeys — propose,
+   the Capitano decides — with one pre-authorised exception, the archiver that
+   prunes. Here the orphan GC lists and the archive is proposed, because no
+   tool does either.
+
+   That is the shape of the role, not a boundary, and the difference matters:
+   **every role carries `bash`.** Measured on 23/09 across all twelve ported
+   roles — `rm -rf` on seven targets, 84 attempts, 84 successes: the person's
+   profile, their own CVs, another role's deliverables, `jobs.db`, the
+   monitoring histories, the message channels, and a file outside every
+   declared root. In the same run, `write_file` on the profile is denied by
+   the policy while `bash rm` on that same file succeeds; the same `rm` inside
+   a folder the process cannot write fails. **The policy stops the file tools
+   and does not touch the shell; the filesystem stops the shell** — the CV
+   roots' lesson, measured again: the boundary belongs in the mount.
+
+   So `tests/parity-mantenitore-run.test.ts` ends by reaching for the shell and
+   asserts what really happens: the file goes. The files no tool touched are
+   still there, byte for byte; the one the shell took is not. When the mount
+   closes this, that assertion turns red and has to be read — which is why it
+   is written down instead of claiming a boundary we do not have
+   (`agents-hq/piani/MISURA-BASH-E-CONFINE.md`).
 
 Its logbook carries the captain diary's bounds (CAP-1), for the same reason:
 a logbook outlives the session, so a role steered by injected text could leave

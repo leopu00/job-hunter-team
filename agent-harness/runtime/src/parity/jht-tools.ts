@@ -625,8 +625,8 @@ const PYTHON_NO_TOOL: Record<string, string> = {
     "the transport is JSON, and a byte that does not decode fails where it is read, not in a pane.",
   "log_archive.py":
     "cuts the monitoring histories older than 30 days into weekly zips and, under space pressure, DELETES the oldest ones. " +
-    "Those files belong to the host that runs the team, not to a role: in this harness you have no tool that removes a file at all. " +
-    "If something must be archived, say so in your report and let the person decide.",
+    "Those files belong to the host that runs the team, not to a role, and no tool of yours archives or prunes them. " +
+    "If something must be archived, say so in your report and let the person decide: proposing is the whole of your part here.",
   "linkedin_check.py":
     "drives a browser against LinkedIn; there is none here, and the verification it does cannot happen. Measure what this box carries with the `tool_health` tool instead.",
   "closer_notices.py":

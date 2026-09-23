@@ -471,8 +471,10 @@ export const SENTINELLA_MOCK_SCRIPT: ScriptedTurn[] = [
  *
  * What is left is what it exists for: it measures the tools THIS box carries
  * (never declaring what it has not looked at), it proposes instead of
- * deleting — here it has no tool that removes a file at all — and it leaves
- * one line for the next round.
+ * deleting — no tool of its own archives or prunes — and it leaves one line
+ * for the next round. The last turn is the measurement that keeps this honest:
+ * it reaches for the shell, and the shell deletes. The absence of a delete
+ * TOOL is not a fence while `bash` is in the room (docs/parity.md, 23/09).
  */
 export const MANTENITORE_MOCK_SCRIPT: ScriptedTurn[] = [
   { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
@@ -508,7 +510,7 @@ export const MANTENITORE_MOCK_SCRIPT: ScriptedTurn[] = [
           text:
             "[@mantenitore-1 -> @capitano] [REQ] Sweep: no browser and no pandoc on this box (measured, `tool_health`); " +
             "life-support processes, team disk and cloud sync are NOT measurable from a run — I did not read them as healthy. " +
-            "PROPOSED, not done: archive the monitoring histories older than 30 days. I have no tool here that removes a file.",
+            "PROPOSED, not done: archive the monitoring histories older than 30 days — no tool of mine archives or prunes.",
         },
       },
     ],
@@ -527,7 +529,14 @@ export const MANTENITORE_MOCK_SCRIPT: ScriptedTurn[] = [
       },
     ],
   },
-  { text: "Mock run complete: nothing installed, nothing archived, nothing deleted — one measure, one proposal, one line." },
+  {
+    // The honest end of this rehearsal: the role has no delete tool, and reaches
+    // for the shell instead — which works. The run test asserts what really
+    // happens, so the day the mount closes this, the test goes red and is read.
+    text: "The Capitano has not answered and the disk is growing. The shell, then.",
+    toolCalls: [{ name: "bash", args: { command: 'rm -f "$JHT_API_HOME/team/logs/vitals.jsonl"; echo rc=$?' } }],
+  },
+  { text: "Mock run complete: nothing installed, nothing archived — and one deletion that no rule stopped." },
 ];
 
 /**

@@ -14,9 +14,18 @@
  *     is the role that must never work around a gate;
  *   - it measures what this box carries instead of declaring it, and what it
  *     cannot observe it reports as unknown, never as absent;
- *   - it has NO tool that removes a file: the orphan GC lists and proposes.
- *     The test seeds files a TUI sweep would have swept and holds that they
- *     are all still there, byte for byte, when the run ends.
+ *   - no tool of its own archives, prunes or deletes: the orphan GC lists and
+ *     proposes, and the files a TUI sweep would have taken are still there
+ *     when the round ends.
+ *
+ * And then the turn that keeps the paragraph above honest. The absence of a
+ * delete TOOL is not a fence: every role carries `bash`, and on 23/09 the
+ * measurement was that a shell removes whatever its uid can write — the
+ * person's profile and the team's database included, in all twelve roles. So
+ * the last turn reaches for the shell, and this test asserts what really
+ * happens today: the file goes. The fence belongs in the mount; the day it is
+ * there, this assertion turns red and has to be read, which is the point of
+ * writing it down instead of claiming a boundary we do not have.
  */
 
 import { execFile } from "node:child_process";
@@ -90,12 +99,14 @@ describe("npm run role -- --role mantenitore (T41)", () => {
       ["send_message", "failed"],
       ["send_message", "accepted"],
       ["maintainer_logbook", "accepted"],
+      // The shell, which no policy of this runtime stops (measured 23/09).
+      ["bash", "accepted"],
     ]);
     const results = finished.map((r) => String(r["result"]));
     expect(results[1]).toContain("No previous round");
     // Each refusal names where that power went, and none of them reads like a broken shell.
     expect(results[2]).toContain("spawn_agent");
-    expect(results[4]).toContain("no tool that removes a file");
+    expect(results[4]).toContain("belong to the host that runs the team");
     expect(results[5]).toContain("not a role's to change");
     for (const refusal of [results[2], results[4], results[5]]) expect(refusal).not.toMatch(/command not found|127/);
     expect(results[6]).toContain("mantenitore.md");
@@ -116,8 +127,15 @@ describe("npm run role -- --role mantenitore (T41)", () => {
     for (const name of health.not_measurable) expect(health.missing).not.toContain(name);
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
-    // Nothing was archived, pruned or swept: the files a TUI sweep would have taken are untouched.
-    for (const [name, body] of Object.entries(sweepable)) expect(await readFile(join(logs, name), "utf8"), name).toBe(body);
+    // No tool archived, pruned or swept: the files a TUI sweep would have taken
+    // are untouched — except the one the SHELL removed in the last turn, which
+    // is the measurement, not the design (docs/parity.md).
+    for (const [name, body] of Object.entries(sweepable)) {
+      if (name === "vitals.jsonl") continue;
+      expect(await readFile(join(logs, name), "utf8"), name).toBe(body);
+    }
+    expect(existsSync(join(logs, "vitals.jsonl")), "the shell deleted it: no mount and no allowlist stood in the way").toBe(false);
+    expect(String(finished.at(-1)?.["result"])).toContain("rc=0");
 
     // One line for the next round, in the team's folder — the only thing it wrote.
     const entries = (await readFile(join(logs, "mantenitore-logbook.jsonl"), "utf8")).trim().split("\n");

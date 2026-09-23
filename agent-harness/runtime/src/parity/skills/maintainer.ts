@@ -27,9 +27,11 @@
  * reread is the last `TAIL_ENTRIES` within `TAIL_BYTES`, quoted, and says
  * whose words they are.
  *
- * It writes nothing else, anywhere: no archive, no prune, no delete. The
- * orphan GC of the TUI lists and proposes here, because this role has no tool
- * that removes a file at all (`docs/parity.md`).
+ * Neither tool archives, prunes or deletes: the orphan GC of the TUI lists and
+ * proposes here. That is the shape of the role, not yet a fence — every role
+ * carries `bash`, and a shell removes whatever its uid can write (measured
+ * 23/09, `docs/parity.md`). The boundary belongs in the mount, and until it is
+ * there this says what the tools do, not what the role cannot do.
  */
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
