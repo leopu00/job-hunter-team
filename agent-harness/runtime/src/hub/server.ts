@@ -269,7 +269,8 @@ export function createHub(options: HubOptions): Server {
         return { replies: await replies.take(agent) };
       case HUB_PATHS.spawn:
       case HUB_PATHS.spawnStop:
-      case HUB_PATHS.spawnList: {
+      case HUB_PATHS.spawnList:
+      case HUB_PATHS.spawnLimits: {
         // Only a CAPITANO starts or stops children; a child never does, so the tree is one deep.
         if (!Launcher.mayLaunch(agent)) throw new HttpError(403, "Only the CAPITANO starts or stops agents.");
         const launcher = options.launcher;
@@ -277,6 +278,9 @@ export function createHub(options: HubOptions): Server {
         if (path === HUB_PATHS.spawn) return launcher.spawn(agent, parse(SpawnRequest, body));
         if (path === HUB_PATHS.spawnStop) return launcher.stop(agent, parse(StopRequest, body).spawn_id);
         parse(EmptyRequest, body);
+        // The limits are the rules this launcher will hold the caller to, and
+        // nothing else about it: no paths, no tokens, no other session.
+        if (path === HUB_PATHS.spawnLimits) return launcher.limits();
         return launcher.list(agent);
       }
       default:

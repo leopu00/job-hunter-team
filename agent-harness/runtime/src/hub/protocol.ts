@@ -19,6 +19,8 @@ export const HUB_PATHS = {
   spawn: "/v1/spawn",
   spawnStop: "/v1/spawn/stop",
   spawnList: "/v1/spawn/list",
+  /** The launcher's own limits, so the CAPITANO's first attempt is already inside them. */
+  spawnLimits: "/v1/spawn/limits",
   teamStart: "/v1/team/start",
   userRequest: "/v1/user/write-request",
   // T34: the hub writes the Critic's verdict with a uid of its own, since
