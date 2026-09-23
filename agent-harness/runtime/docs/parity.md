@@ -411,6 +411,51 @@ the script holds it. Three differences, all on purpose:
 `application_answers`, and never over an answer the person gave
 (`user_answer_kept`, CL-01).
 
+**Seven roles have no shell here (T42).** `bash` reached every role because it
+is in the base toolkit, not because a prompt asked for it — and it is the
+widest tool there is: it touches every file the process's uid can, and no
+policy of this runtime stands in between (measured 23/09: 84 deletions
+attempted, 84 done, the person's profile and the team's database included,
+while `write_file` on that same profile was denied).
+
+So the question was put to the prompts. For each role: its own text plus the
+SKILL.md files its `skills.list` really loads, only the blocks declared as
+shell, minus every command that is already a native tool or a refusal pointing
+at one. What was left is the shell that role would lose:
+
+| Role | Shell here | Why |
+|---|---|---|
+| ANALISTA | **no** | nothing left: every command its skills name is a tool |
+| SCORER | **no** | nothing left |
+| CRITICO | **no** | nothing left |
+| CLOSER | **no** | nothing left |
+| MENTOR | **no** | two lines: `spawn-doctor.sh` (starting a role is the hub's, and only the CAPITANO reaches it) and `jht-reply-options`, now the `reply_options` tool |
+| SENTINELLA | **no** | the same line, and its whole part is to advise the CAPITANO |
+| SCOUT | **no** | five `echo` of its own diagnostics, which belong in what it reports |
+| CAPITANO | yes | the MASTER's decision: its residue is spawning, which it does through the hub |
+| ASSISTENTE · SCRITTORE · DOTTORE · MANTENITORE | yes, for now | their residue (profile flags, work area cleanup, `df`/`du`) is not measured yet |
+
+**A refusal has to answer the question that was asked.** The first version of
+this change told a MENTOR reaching for `jht-reply-options` about spawning a
+DOTTORE, because that was the only shell line the measurement had found in its
+skills — an answer to a different question, which is worse than a blunt no. The
+measurement had missed it: `game-reply-options` is in the role's `skills.list`
+and not in its prompt, and the two sources have to be crossed, always. So the
+specific reason always comes first (the `python3` and `REPLACED` tables), the
+"no shell" tail is neutral, and the buttons themselves are now a tool —
+measured first: `jht-reply-options` was not on PATH in this image, so a role
+WITH a shell got `command not found`, exit 127, and the game's buttons were
+already lost before anyone lost `bash` (`reply_options`, T42b; the same line
+`jht-send` writes, with `choices[]`).
+
+Taking a tool away is the part that goes wrong quietly — a role that loses
+something it used stops and does not say so — so the seven do not meet silence
+or "unknown tool": the call is refused with a sentence that names **where that
+power went**, the same shape as the `python3` refusals, and the same sentence
+is in their notes before they try. `tests/no-shell.test.ts` runs each of the
+seven against a turn that reaches for the shell and then reports: the refusal
+must name the power and the round must still close.
+
 **The MANTENITORE keeps the infra, and here there is no infra to keep (T41).**
 It is the one role whose object of work IS the box: the life-support daemons,
 the disk, the dependencies, the panes' locale, the monitoring histories it

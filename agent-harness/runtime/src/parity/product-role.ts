@@ -21,6 +21,7 @@ import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
 import { deliverableDir, deliverableWriteGuard } from "./deliverables.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
+import { hasShell, noShellTool, NO_SHELL_NOTE } from "./shell-policy.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
   createJhtTools,
@@ -135,18 +136,24 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   };
   // T25: where the deliverables go, and where the person's own documents are. The TUI has
   // one folder for both; here the team writes beside the history and never into it.
+  // T42: a role with no shell is told so, in the notes it reads every round.
+  const shell = hasShell(options.agent);
   const notes = options.userHistoryDir
     ? `${PARITY_NOTES}\nWhat the team makes goes in ${userDir} (\`cv/\` is the Scrittore's, \`critiche/\` the Critico's).\nThe person's own CVs and letters are in ${options.userHistoryDir}: read them, never write there.`
     : PARITY_NOTES;
-  const systemPrompt = composeSystemPrompt(prompt, notes, options.homeDir);
+  const roleNotes = shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`;
+  const systemPrompt = composeSystemPrompt(prompt, roleNotes, options.homeDir);
   await materializeRoleHome(prompt, options.homeDir, systemPrompt, rewrite);
 
   const channels = join(options.apiHome, "channels");
   const hub = options.hub;
   const mailbox = hub ? new HubMailbox(hub) : new FileMailbox(join(channels, "mailbox"));
   const pause = new PauseRequest();
+  // T42b: the game's buttons belong to the roles whose `skills.list` carries them.
+  const replyOptions = loaded.skills.some((skill) => skill.name === "game-reply-options");
   const native = createJhtTools({
     agent: options.agent,
+    replyOptions,
     homeDir: options.homeDir,
     mailbox,
     notifier: hub ? new HubNotifier(hub) : new FileNotifier(join(channels, "notify.jsonl")),
@@ -181,7 +188,18 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
       userDir,
       agent: options.agent,
       workdir: options.homeDir,
-    }).map((tool) => (tool.spec.name === "bash" ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides) : tool)),
+    })
+      // T42: the seven roles whose instructions name no shell command of their own
+      // keep no shell — and are not left to find out by themselves. The tool
+      // answers with where those commands went, as the `python3` refusals do:
+      // "unknown tool" would teach the model to look for another way in.
+      .map((tool) =>
+        tool.spec.name === "bash"
+          ? shell
+            ? guardShellTool(tool, (args) => (args as { command: string }).command, overrides)
+            : noShellTool(tool, options.agent)
+          : tool,
+      ),
     ...native,
     ...skills,
   ];
