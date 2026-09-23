@@ -193,6 +193,21 @@ function position(db: Database, p: PositionSeed): void {
   );
 }
 
+/**
+ * A send of TODAY, in the shape the cap's own SQL compares it against.
+ *
+ * The cap counts `date(applied_at) = date('now', 'localtime')`: the column is
+ * read as it is stored and the day is the LOCAL one. A seed written with
+ * `new Date().toISOString()` is UTC, so between local midnight and the UTC one
+ * the two dates are different days and the row is not counted — which is why
+ * CL-06 was red only at night (found by FULLSTACK-3, reproduced on master at
+ * 00:21 CEST, 24/09). Both sides read the same literal, and the date comes from
+ * the database itself, so the seed says the same thing at any hour and in any
+ * zone. That the product's SQL compares two shapes of time at all is a defect
+ * of its own, measured and pinned below.
+ */
+const localToday = (db: Database): string => (db.prepare("SELECT date('now', 'localtime') AS d").get() as { d: string }).d;
+
 /** An application row with a CV on disk. `cv` relative is relative to the JHT home, as the script reads it. */
 function application(db: Database, positionId: number, cv: string | null = `cv/CV-${positionId}.pdf`, applied = 0, via: string | null = null): void {
   if (cv !== null) {
@@ -205,7 +220,7 @@ function application(db: Database, positionId: number, cv: string | null = `cv/C
     cv,
     applied,
     via,
-    applied ? new Date().toISOString().replace("T", " ").slice(0, 19) : null,
+    applied ? `${localToday(db)} 10:00:00` : null,
   );
 }
 
