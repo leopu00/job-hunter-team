@@ -15,7 +15,8 @@ import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } from "../hub/client.ts";
-import { createSpawnTools } from "../hub/spawn-tools.ts";
+import { createSpawnTools, type SpawnLimits } from "../hub/spawn-tools.ts";
+import { HUB_PATHS } from "../hub/protocol.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
@@ -176,7 +177,14 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   };
   const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
-  if (hub && roleOf(options.agent) === "capitano") skills.push(...createSpawnTools(hub));
+  // The launcher's limits are read once, at boot, and named in the tool's description: the
+  // allowlist and the cap window were costing two or three refused rounds per delegation
+  // (VPS, five live rounds). A hub that cannot answer leaves the description saying so —
+  // an unread limit is never a guessed one.
+  if (hub && roleOf(options.agent) === "capitano") {
+    const limits = await hub.post<SpawnLimits>(HUB_PATHS.spawnLimits, {}).catch(() => undefined);
+    skills.push(...createSpawnTools(hub, limits));
+  }
 
   /**
    * The role's tools, `blind` when the reader of them must not see the

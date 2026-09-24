@@ -180,6 +180,40 @@ export class Launcher {
     return roleOf(agent) === "capitano";
   }
 
+  /**
+   * The constraints a caller must respect, read from the config that REFUSES
+   * on them — `#start` above checks `c.models`, `c.roles[role]`, `c.taskChars`,
+   * `c.maxActive` and `c.maxSpawns`, and these are those same fields. One
+   * source on purpose: a second list copied into a tool's description would
+   * diverge one day, and a description that lies is worse than no description.
+   *
+   * Why it exists (VPS's count over five live rounds, 23-24/09): the CAPITANO
+   * asks for `sonnet` every round and the allowlist turns it down, then gets
+   * the cap wrong, then gets it right — 5 refusals for the model, 4 for the
+   * cap, 2 for instances or spawns. The first NINE are requests paid for to be
+   * told a rule that could have been read first, and in the fifth round, with a
+   * 0.12 USD cap, the CAPITANO never reached a delegation at all: it ran out
+   * before. The rule now travels with the tool.
+   */
+  limits(): {
+    session: string;
+    models: string[];
+    roles: Record<string, { cap_usd: number; instances: number }>;
+    max_active: number;
+    max_spawns: number;
+    task_chars: number;
+  } {
+    const c = this.#config;
+    return {
+      session: c.session,
+      models: [...c.models],
+      roles: Object.fromEntries(Object.entries(c.roles).map(([role, r]) => [role, { cap_usd: r.capUsd, instances: r.instances }])),
+      max_active: c.maxActive,
+      max_spawns: c.maxSpawns,
+      task_chars: c.taskChars,
+    };
+  }
+
   /** The CAPITANO's own child: `spawn`, counted against its limits. */
   spawn(by: string, request: z.infer<typeof SpawnRequest>): SpawnAnswer {
     const refuse = (reason: string): SpawnAnswer => {
