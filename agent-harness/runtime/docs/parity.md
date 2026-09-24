@@ -120,6 +120,22 @@ reads:
    `write_file` and `edit_file`. It renders from a copy of `agents/` alone, the
    image's layout, so a path into the checkout's `shared/` cannot pass.
 
+8. **The CAPITANO is told which models exist HERE** (B-05, 24/09). Its team
+   table gives each role a model — Sonnet for seven of them, Opus for three,
+   Codex for the Dottore — and the table is *true*: those are the CLIs the
+   product's tmux sessions run on. It is not true of this harness, and a model
+   follows its prompt over a tool's description: the CAPITANO asked for
+   `sonnet` in **every** one of five live rounds and the launcher refused it
+   every time (VPS's count off `launcher.log`, 23-24/09), which is two or three
+   paid rounds per delegation. The prompt is **not** edited — the TUI needs it
+   as it is — so the difference goes where every other one goes, the parity
+   notes the role reads each round: the table is named for what it is, and the
+   launcher's allowed models are listed beside it. The list comes from
+   `Launcher.limits()`, the same source as `spawn_agent`'s own description
+   (`allowedModelsLine`): one renderer, because two lists that contradict each
+   other is the defect being fixed. Without a hub there is no launcher, no
+   spawn and no note — an unread limit is never a guessed one.
+
 ### How it was checked (2026-09-19)
 
 On the reference TUI box, read only: the `scout-1` folder of a running team

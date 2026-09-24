@@ -37,6 +37,16 @@ export interface SpawnLimits {
  * very fields `#start` refuses on, so the sentence below cannot drift from the
  * check: there is one list, not two.
  */
+/**
+ * The allowed models, in one sentence — read by BOTH the tool's description and
+ * the CAPITANO's parity note (B-05). One renderer on purpose: the defect being
+ * fixed is two sources that contradict each other, and a note copied by hand
+ * beside a description would be the same defect one layer up.
+ */
+export function allowedModelsLine(limits: SpawnLimits | undefined): string {
+  return limits ? `${limits.models.join(", ")}` : "";
+}
+
 function limitsSentence(limits: SpawnLimits | undefined): string {
   if (!limits) {
     // Never invented: an unread limit is said to be unread.
@@ -50,7 +60,7 @@ function limitsSentence(limits: SpawnLimits | undefined): string {
     .join("; ");
   return (
     `The launcher's FIXED limits, as it will check them — a first attempt inside these is not turned down for any of them. ` +
-    `Models allowed: ${limits.models.join(", ")} (any other is refused). Roles: ${roles || "none configured"}. ` +
+    `Models allowed: ${allowedModelsLine(limits)} (any other is refused). Roles: ${roles || "none configured"}. ` +
     `At most ${limits.max_active} children running at once, ${limits.max_spawns} spawns in the session, ` +
     `and a task of at most ${limits.task_chars} characters. A cap above its window is refused, not lowered for you. ` +
     // SICUREZZA, before the merge (24/09): the sentence above must not promise more than the
