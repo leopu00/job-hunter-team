@@ -49,10 +49,21 @@ function limitsSentence(limits: SpawnLimits | undefined): string {
     .map(([role, r]) => `${role} cap_usd in (0, ${r.cap_usd}], up to ${r.instances} at once`)
     .join("; ");
   return (
-    `The launcher's own limits, as it will check them — first attempt inside these and nothing is wasted. ` +
+    `The launcher's FIXED limits, as it will check them — a first attempt inside these is not turned down for any of them. ` +
     `Models allowed: ${limits.models.join(", ")} (any other is refused). Roles: ${roles || "none configured"}. ` +
     `At most ${limits.max_active} children running at once, ${limits.max_spawns} spawns in the session, ` +
-    `and a task of at most ${limits.task_chars} characters. A cap above its window is refused, not lowered for you.`
+    `and a task of at most ${limits.task_chars} characters. A cap above its window is refused, not lowered for you. ` +
+    // SICUREZZA, before the merge (24/09): the sentence above must not promise more than the
+    // launcher keeps. Inside every fixed limit it still refuses for the session's MONEY
+    // (`used + charge + reserve > sessionUsd`), for a role that failed too often, and for the
+    // operator's STOP. With the session nearly spent — 1.70 USD left on the night this was
+    // written — the money is the likeliest refusal of all, so a model told "nothing is wasted"
+    // would spend the very round we set out to save. No figure here: the money moves, and a
+    // number frozen into a description is the lie this tool exists to avoid.
+    `These are the fixed ones. The session's MONEY is not fixed: a cap inside its window is ` +
+    `still refused when what the session has left cannot cover it — ask \`list_agents\` first, ` +
+    `its \`left_usd\` is what remains. A role that has failed too often in this session, and the ` +
+    `operator's STOP, refuse too.`
   );
 }
 

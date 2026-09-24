@@ -458,6 +458,17 @@ describe("through the hub", () => {
       expect(said).toContain("analista cap_usd in (0, 0.4], up to 1 at once");
       expect(said).toContain("At most 3 children running at once, 6 spawns in the session");
       expect(said).toContain("task of at most 2000 characters");
+      // SICUREZZA: the fixed limits are named as FIXED, and what is not fixed is named too.
+      // A description that promised "nothing is wasted" would spend the round it set out to
+      // save the first time the session's money ran short — the likeliest refusal of all.
+      expect(said).toContain("The session's MONEY is not fixed");
+      expect(said).toContain("`list_agents`");
+      expect(said).toContain("left_usd");
+      expect(said).toContain("failed too often");
+      expect(said).toContain("operator's STOP");
+      // And no figure for the money: it moves, and a frozen number would be the lie.
+      expect(said).not.toMatch(/left_usd is [0-9]/);
+      expect(said).not.toContain("nothing is wasted");
       // `sonnet` is what it asked for in every live round, and it is not in the sentence.
       expect(said).not.toContain("sonnet");
 
