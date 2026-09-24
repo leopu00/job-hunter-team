@@ -8,6 +8,7 @@ import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
 import { createDbTools } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
+import { crossSecondBoundary } from "./helpers/clock.ts";
 import { pythonSkills, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
@@ -84,6 +85,13 @@ function seeded(path: string, base = sqliteNow()): Database {
   pinClock(db, base);
   // The uncategorized position is the newer one: the queue still puts it before the drifted.
   run("UPDATE positions SET created_at = datetime(?, '+1 minutes') WHERE id = 4", base);
+  // And the clock again, on the column that UPDATE just touched. `updated_at` has a
+  // touch trigger that READS the clock, so any write after the pin puts the machine's
+  // current second back into the row: two twins seeded either side of a second tick
+  // then differ by one second, and `positions --json` prints it. That is the flake the
+  // MASTER caught on a merge, and the fourth of its kind in a day — a seed has to FIX
+  // the time, never read it, and the fixing has to come after the last write.
+  pinClock(db, base, ["updated_at"]);
   return db;
 }
 
@@ -94,12 +102,14 @@ function seeded(path: string, base = sqliteNow()): Database {
  * FULLSTACK-1 saw once). Through a sentinel first, since updated_at's touch
  * trigger fires when an UPDATE leaves it unchanged.
  */
-function pinClock(db: Database, base: string): void {
+function pinClock(db: Database, base: string, only?: readonly string[]): void {
   // Companies too: `company --json` prints analyzed_at, created_at, updated_at (T14).
   for (const table of ["positions", "companies"]) {
     const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string; dflt_value: string | null }>)
       .filter((c) => c.name !== "found_at" && /CURRENT_TIMESTAMP|strftime|datetime/i.test(c.dflt_value ?? ""))
+      .filter((c) => only === undefined || only.includes(c.name))
       .map((c) => c.name);
+    if (columns.length === 0) continue;
     for (const value of ["1970-01-01 00:00:00", base]) {
       // Table and column names from the schema itself, never from input.
       db.prepare(`UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")}`).run(...columns.map(() => value));
@@ -287,6 +297,19 @@ const ANALISTA_QUERIES: string[][] = [
   ["category-sizes", "someone-else"],
   ["next-for-analista", "--limit", "x"],
 ];
+
+describe("the seed's clock (the flake that keeps coming back)", () => {
+  it("gives two twins the same times even when they are built either side of a second", () => {
+    const base = sqliteNow();
+    const times = (db: Database) =>
+      ["positions", "companies"].map((table) => JSON.stringify(db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).match(/\d{4}-\d\d-\d\d \d\d:\d\d:\d\d/gu));
+    const first = times(seeded(join(root, "twin-a.db"), base));
+    // Cross the tick on purpose: on CI it happens by itself, once in a while,
+    // and then a comparison of the two databases fails on a single second.
+    crossSecondBoundary();
+    expect(times(seeded(join(root, "twin-b.db"), base))).toEqual(first);
+  });
+});
 
 describe("db_query against db_query.py", () => {
   it.skipIf(skills === null).each(ANALISTA_QUERIES.map((q) => [`analista: ${q.join(" ")}`, q]))("%s", async (_label, args) => {
