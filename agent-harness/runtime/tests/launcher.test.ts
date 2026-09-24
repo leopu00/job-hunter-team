@@ -469,6 +469,19 @@ describe("through the hub", () => {
       // And no figure for the money: it moves, and a frozen number would be the lie.
       expect(said).not.toMatch(/left_usd is [0-9]/);
       expect(said).not.toContain("nothing is wasted");
+
+      /**
+       * B-05: the same list in the PROMPT, because the model follows the prompt.
+       * `capitano.md` gives each role a model — Sonnet for seven of them — and
+       * that table is true of the product's tmux team and not of here, which is
+       * why five live rounds died on `sonnet`. The prompt is not touched; the
+       * difference goes in the parity notes it reads every round, from the same
+       * source as the description above.
+       */
+      expect(captain.systemPrompt).toContain("the launcher allows exactly these models: gpt-5.6-luna, gpt-5-mini");
+      expect(captain.systemPrompt).toContain("That table is the product's tmux team");
+      // The prompt's own table is still there, unedited: the note explains it, it does not hide it.
+      expect(captain.systemPrompt).toMatch(/\| Sonnet \|/);
       // `sonnet` is what it asked for in every live round, and it is not in the sentence.
       expect(said).not.toContain("sonnet");
 
@@ -509,6 +522,9 @@ describe("through the hub", () => {
       expect(said).toContain("scorer cap_usd in (0, 0.12], up to 2 at once");
       expect(said).not.toContain("gpt-5.6-luna");
       expect(said).toContain("At most 1 children running at once");
+      // B-05, one source: the note follows the same config as the description.
+      expect(withHub.systemPrompt).toContain("the launcher allows exactly these models: gpt-5.6-terra");
+      expect(withHub.systemPrompt).not.toContain("allows exactly these models: gpt-5.6-luna");
     } finally {
       await new Promise<void>((done) => server.close(() => done()));
     }
@@ -520,6 +536,8 @@ describe("through the hub", () => {
     expect(blind).toContain("could not be read just now");
     expect(blind).toContain("read the refusal");
     expect(blind).not.toMatch(/cap_usd in \(0,/);
+    // And no model is named in the prompt either: an unread limit is never a guessed one.
+    expect(deaf.systemPrompt).not.toContain("the launcher allows exactly these models");
   });
 
   it("takes spawns from the CAPITANO's token only, and the CAPITANO's runtime has the tools", async () => {
