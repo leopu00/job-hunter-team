@@ -135,6 +135,17 @@ reads:
    (`allowedModelsLine`): one renderer, because two lists that contradict each
    other is the defect being fixed. Without a hub there is no launcher, no
    spawn and no note — an unread limit is never a guessed one.
+   **The same field twice, and the instance is the other one** (B-06, 24/09):
+   the prompt tells the CAPITANO to roll a die for a worker's number and pass it
+   (`roll_worker_number.py`, a script this harness does not have), and the
+   description's `up to 2 at once` — a COUNT — was read as the next number to
+   ask for. Eight of the fourteen refusals of those rounds were an index,
+   including the FOURTH analista with none running and two allowed. So the note
+   says there is no die and no number to pass, the tool's schema says to leave
+   `instance` out, and both name the indices each role really has
+   (`allowedIndicesLine`, the same source). `roll_worker_number.py` in the
+   rendered text no longer becomes `spawn_agent` — which read as a command that
+   returns a number — but "nothing: the launcher picks the instance itself".
 
 ### How it was checked (2026-09-19)
 

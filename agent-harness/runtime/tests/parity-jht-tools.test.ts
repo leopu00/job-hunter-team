@@ -359,7 +359,13 @@ describe("rewritePythonSkills", () => {
     expect(rewritePythonSkills("run `python3 $APP/shared/skills/db_insert.py position \\`")).toBe("run `db_insert position \\`");
     expect(rewritePythonSkills("python3 -u /app/shared/skills/scout_coord.py show")).toBe("scout_coord show");
     expect(rewritePythonSkills("python3 /app/shared/skills/throttle_engine.py check x")).toBe("throttle check x");
-    expect(rewritePythonSkills("N=$(python3 /app/shared/skills/roll_worker_number.py scorer)")).toBe("N=$(spawn_agent scorer)");
+    // B-06: it used to become `spawn_agent`, and capitano.md's line then read "Roll the
+    // dice: `N=$(spawn_agent <role>)` … and pass `$N`" — an instruction to choose an index
+    // and hand it over, which is what eight of fourteen live refusals were. Here the
+    // launcher picks it, so the die is named as nothing to run.
+    expect(rewritePythonSkills("N=$(python3 /app/shared/skills/roll_worker_number.py scorer)")).toBe(
+      "N=$(nothing: the launcher picks the instance itself scorer)",
+    );
     // T21: the TUI's machinery the CAPITANO's text names.
     expect(rewritePythonSkills("python3 /app/shared/skills/agent-speed-table.py --since-min 60")).toBe("agent-speed-table.py (not available in the API harness) --since-min 60");
     expect(rewritePythonSkills("via `throttle-config.py` (Bash(python3 /app/shared/skills/throttle-config.py *))")).toBe(

@@ -15,7 +15,7 @@ import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } from "../hub/client.ts";
-import { allowedModelsLine, createSpawnTools, type SpawnLimits } from "../hub/spawn-tools.ts";
+import { allowedIndicesLine, allowedModelsLine, createSpawnTools, type SpawnLimits } from "../hub/spawn-tools.ts";
 import { HUB_PATHS } from "../hub/protocol.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
@@ -156,12 +156,22 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
       ? await options.hub.post<SpawnLimits>(HUB_PATHS.spawnLimits, {}).catch(() => undefined)
       : undefined;
   const models = allowedModelsLine(spawnLimits);
+  const indices = allowedIndicesLine(spawnLimits);
   const modelNote = models
     ? `\n\nThe team table in your instructions gives each role a model (Sonnet, Opus, Codex). That table is the ` +
       `product's tmux team, and it is true of it: those are the CLIs those sessions run on. It is not true here. ` +
       `In this harness the launcher allows exactly these models: ${models}. A \`spawn_agent\` call naming any other ` +
       `is refused before anything starts, whatever the table says — the tool's description carries the same list, ` +
-      `and both read the launcher's own configuration.`
+      `and both read the launcher's own configuration.` +
+      // B-06: the same shape again, in the instance field. The prompt tells it to roll a
+      // die for the number and pass it (`roll_worker_number`), and eight of fourteen
+      // refusals were an index nobody could have granted — once the fourth analista with
+      // none running. The die does not exist here, and the count of instances is not a
+      // counter to advance.
+      `\n\nYour instructions also tell you to roll a die for a worker's number and pass it. There is no die here and ` +
+      `no number to pass: the launcher assigns the index, taking the first free one, so leave \`instance\` out of ` +
+      `\`spawn_agent\` unless a specific one must be reused — ${indices}. How many of a role may run together is a ` +
+      `count, never the next index to ask for.`
     : "";
   const notes = options.userHistoryDir
     ? `${PARITY_NOTES}\nWhat the team makes goes in ${userDir} (\`cv/\` is the Scrittore's, \`critiche/\` the Critico's).\nThe person's own CVs and letters are in ${options.userHistoryDir}: read them, never write there.`
