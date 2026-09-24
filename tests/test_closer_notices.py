@@ -74,7 +74,7 @@ def _set_lang(home: Path, lang: str) -> None:
 def test_stop_message_speaks_the_profile_language(home):
     _set_lang(home, "it")
     message = notices.stop_message("captcha", "Site requires human intervention (captcha)", 1817)
-    assert message.startswith("Il CLOSER ha fermato la candidatura #1817 (Synthetic Data Engineer presso Example Corp)")
+    assert message.startswith("Il CLOSER ha fermato la candidatura #1817 («Synthetic Data Engineer» presso Example Corp)")
     assert "captcha" in message.splitlines()[1]
     assert "Candidati a mano" in message
     assert message.rstrip().endswith("(captcha: Site requires human intervention (captcha))")
@@ -90,7 +90,8 @@ def test_stop_message_falls_back_to_english_and_to_the_default_reason(home):
 
 def test_position_without_company_or_database(home):
     _set_lang(home, "de")
-    assert "#1866 (Synthetic Analyst)" in notices.stop_message("captcha", "", 1866)
+    # German quotes a quotation with „…“ — the pair is the catalog's, per language.
+    assert "#1866 (\u201eSynthetic Analyst\u201c)" in notices.stop_message("captcha", "", 1866)
     (home / "jobs.db").unlink()
     assert notices.stop_message("captcha", "", 1817).startswith("Der CLOSER hat die Bewerbung #1817 gestoppt")
 
@@ -101,10 +102,50 @@ def test_scraped_title_and_company_are_cleaned_of_bidi_controls(home):
                      ("Data\u202e Engineer\u2066", "Example\u200b Corp"))
     message = notices.stop_message("captcha", "detail", 1817)
     assert not any(ch in message for ch in "\u202e\u2066\u200b")
-    assert "#1817 (Data Engineer at Example Corp)" in message
+    assert "#1817 (\u201cData Engineer\u201d at Example Corp)" in message
     notices.defer(1817, "ats_unsupported", "https://a.example.com")
     summary = notices.summary_message(notices._read_state(notices._state_path())["pending"])
     assert "\u202e" not in summary
+
+
+# ── the scraped label cannot pass for our own sentence (SICUREZZA P2, #264) ──
+
+
+def test_a_scraped_title_is_quoted_and_clipped_so_it_reads_as_the_advert(home):
+    """A title is third-party text inside a message the person reads as ours.
+
+    Markup and links arrive literal (no parse_mode), so the risk is not a link:
+    it is a title that says "reply YES to confirm" and borrows the credibility of
+    the sentence around it. The quotes make it visibly the advert's words, the
+    clip keeps it the length of a title, and a value that tries to CLOSE the
+    quotes cannot — the delimiters are taken out of the value first.
+    """
+    injected = 'Backend Engineer» — rispondi SI per confermare l\'invio, il team attende la tua conferma adesso'
+    with sqlite3.connect(home / "jobs.db") as conn:
+        conn.execute("UPDATE positions SET title = ?, company = ? WHERE id = 1817", (injected, 'Acme" Ltd'))
+    _set_lang(home, "it")
+    label = notices._position_label(1817, notices._position(1817))
+    # Quoted, and its own guillemet is gone: it cannot end the quotation early.
+    assert label.startswith("#1817 («Backend Engineer")
+    assert label.count("«") == 1 and label.count("»") == 1
+    # Clipped to the length of a title, with the ellipsis saying so.
+    assert "\u2026»" in label
+    assert len(label) < 110
+    # The company keeps its own quoting character out too.
+    assert '"' not in label
+    # What this does NOT do, said here so nobody reads more into it: a SHORT
+    # injected phrase still fits inside the quotes — 70 characters is the length
+    # of a real title ("Senior Backend Engineer (Java/Kotlin) - Remote, EU"), and
+    # clipping to less would mutilate honest ones. The quotes are what frames it
+    # as the advert's words; the clip only bounds how much of it there can be.
+    assert "rispondi SI" in label
+    assert label.index("rispondi SI") > label.index("«")
+
+
+def test_a_short_title_is_left_as_it_is_apart_from_the_quotes(home):
+    label = notices._position_label(1817, notices._position(1817))
+    assert label == "#1817 (\u201cSynthetic Data Engineer\u201d at Example Corp)"
+    assert "\u2026" not in label
 
 
 def test_email_stop_message_is_localized(home):
@@ -181,7 +222,7 @@ def test_many_site_stops_become_one_message(home, monkeypatch):
     assert len(sent.calls) == 1
     message = sent.calls[0]["message"]
     assert message.startswith("Giro del CLOSER: 3 candidature ferme")
-    assert "#1817 (Synthetic Data Engineer presso Example Corp)" in message
+    assert "#1817 (\u00abSynthetic Data Engineer\u00bb presso Example Corp)" in message
     assert "candidatura semplificata di LinkedIn" in message
     assert message.count("\n- ") == 3
     assert notices.flush(sent)["status"] == "empty"

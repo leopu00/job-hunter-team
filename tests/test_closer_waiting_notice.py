@@ -123,7 +123,8 @@ def test_one_message_for_the_whole_list_with_the_days_and_not_the_reason(home):
     assert re.search(r"\b[a-z]+_[a-z_]+\b", message) is None, message
     assert "Nessuna può partire senza di te" in message
     # And the positions are named as the person knows them.
-    assert "#1817 (Synthetic Data Engineer presso Example Corp)" in message
+    # The scraped title is quoted, so it reads as the advert's words (P2 #264).
+    assert "#1817 («Synthetic Data Engineer» presso Example Corp)" in message
     # The payload carries the ids, for the dashboard's side of it.
     assert notifier.calls[0]["payload"] == {"position_ids": [1817, 1845, 1866]}
 

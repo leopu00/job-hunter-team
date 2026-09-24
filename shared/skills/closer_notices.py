@@ -185,11 +185,38 @@ def _position(position_id: int) -> dict[str, str]:
     return found
 
 
+# SICUREZZA P2 (#264, 24/09): the title and the company are SCRAPED, and they
+# travel inside a message the person reads as ours. Markup and links arrive
+# literal today (no parse_mode), but a title can read "reply YES to confirm" and
+# borrow our credibility from the sentence around it. So the title is clipped and
+# quoted — the quotes are the catalogs' own, per language — and a value that
+# tries to close them cannot: the delimiters are taken out of it first.
+TITLE_CHARS = 70
+COMPANY_CHARS = 40
+#: Every pair a catalog quotes with, plus the plain ones: removed from the value.
+QUOTE_CHARS = "\"'«»„“”‟‚‘’`\u2033\u2036"
+
+
+def _clip(value: str, limit: int) -> str:
+    """The value, without quoting characters, no longer than `limit`.
+
+    Not a sanitiser — `flatten_to_one_line` already took the bidi and format
+    characters out. This is about the SHAPE of the sentence: a job title is a
+    handful of words, and anything longer is prose that wants to be read as ours.
+    """
+    text_value = "".join(ch for ch in (value or "") if ch not in QUOTE_CHARS).strip()
+    if len(text_value) <= limit:
+        return text_value
+    return text_value[: limit - 1].rstrip() + "\u2026"
+
+
 def _position_label(position_id: int, facts: Mapping[str, str]) -> str:
-    if facts.get("title") and facts.get("company"):
-        return text("closer.position.full", id=position_id, title=facts["title"], company=facts["company"])
-    if facts.get("title"):
-        return text("closer.position.title", id=position_id, title=facts["title"])
+    title = _clip(facts.get("title", ""), TITLE_CHARS)
+    company = _clip(facts.get("company", ""), COMPANY_CHARS)
+    if title and company:
+        return text("closer.position.full", id=position_id, title=title, company=company)
+    if title:
+        return text("closer.position.title", id=position_id, title=title)
     return text("closer.position.bare", id=position_id)
 
 
