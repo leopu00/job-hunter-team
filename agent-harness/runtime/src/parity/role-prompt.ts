@@ -17,7 +17,7 @@
  * those.
  */
 
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import { HarnessError } from "../core/errors.ts";
@@ -212,6 +212,149 @@ export async function materializeRoleHome(
   }
 
   await writeFile(join(homeDir, HOME_IDENTITY_FILE), system, "utf8");
+}
+
+/**
+ * The home the executor prepared, checked instead of rebuilt (T43).
+ *
+ * The boundary this serves is not in the runtime and cannot be: the role's
+ * own process is what lays out its home today (`materializeRoleHome` runs
+ * inside the container, with the role's uid), so a mount of `AGENTS.md` and
+ * `skills/` as read-only makes the role fail to start — the `rm -rf` before
+ * the copy dies with EBUSY, which is what VPS measured. A process does not
+ * defend itself from itself: the layout has to be done OUTSIDE, by a uid that
+ * is not the role's, and then mounted.
+ *
+ * This function is the runtime's half of that: with a home already prepared,
+ * it rebuilds nothing and instead checks that what is on disk is EXACTLY what
+ * this role should be reading — the composed system prompt, and every skill
+ * as the rewrite leaves it, with no extra skill folder. On any difference the
+ * role does NOT start and the error names the file: a run with a prompt
+ * nobody verified is precisely what the mount is there to prevent, and a
+ * silent fallback to rebuilding would hand it back.
+ *
+ * The switch is the executor's (`JHT_API_HOME_PREPARED`, set on the container
+ * it starts): a role cannot turn it on for its own process. And turning it on
+ * without the files being right buys nothing — the run stops.
+ */
+export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, system: string, rewrite: (text: string) => string): Promise<void> {
+  const fail = (message: string): never => {
+    throw new HarnessError(
+      "config_invalid",
+      `The home at ${homeDir} was declared already prepared (JHT_API_HOME_PREPARED), but ${message}. ` +
+        "This role will not run on a prompt nobody verified: either the executor's copy is stale, or it is not the one for this role. " +
+        "Nothing was rewritten here — a prepared home is read, never repaired.",
+    );
+  };
+  // The marker the runtime writes on a home it made: with a prepared home it is
+  // the executor's, and its absence means this folder is not a role's home at all.
+  const marker = await readText(join(homeDir, ".jht-api-agent"));
+  if (marker === null) fail("it carries no .jht-api-agent marker: the executor did not lay it out, or not here");
+  const identity = await readText(join(homeDir, HOME_IDENTITY_FILE));
+  if (identity === null) fail(`${HOME_IDENTITY_FILE} is missing`);
+  if (identity !== system) {
+    fail(`${HOME_IDENTITY_FILE} is not the prompt this role composes (${[...(identity ?? "")].length} characters on disk, ${[...system].length} expected)`);
+  }
+
+  // The skills folder is compared as a TREE, not looked up by the names we
+  // expect. SICUREZZA broke the first version twice, and both holes had the
+  // same shape: a check that asks "is what I expect here?" instead of "is what
+  // is here what it should be?" — an allowlist with gaps. A skill folder added
+  // as a SYMLINK slipped through (`isDirectory()` is false for a link, so it
+  // was not even counted), and so did an extra file INSIDE an expected skill,
+  // because only SKILL.md was compared while those folders also carry scripts
+  // and translations. Every node is compared now: name, KIND (a symlink is
+  // never a folder) and bytes, in both directions.
+  const skillsDir = join(homeDir, HOME_SKILLS_DIR);
+  const found = await snapshotTree(skillsDir);
+  if (found === null) return void fail(`${HOME_SKILLS_DIR}/ is missing`);
+  const wanted = new Map<string, TreeNode>();
+  for (const skill of prompt.skills) {
+    const tree = await snapshotTree(skill.sourceDir);
+    if (tree === null) return void fail(`the image has no ${skill.name} to check ${HOME_SKILLS_DIR}/${skill.name}/ against`);
+    wanted.set(skill.name, { kind: "dir" });
+    for (const [rel, node] of expectedSkillTree(tree, skill, rewrite)) wanted.set(`${skill.name}/${rel}`, node);
+  }
+
+  for (const [path, node] of [...found].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const want = wanted.get(path);
+    if (want === undefined) fail(`${HOME_SKILLS_DIR}/ carries ${describe(node)} this role does not load: ${path}`);
+    if (want!.kind !== node.kind) fail(`${HOME_SKILLS_DIR}/${path} is ${describe(node)} where this role's skill has ${describe(want!)}`);
+    if (node.kind === "file" && !node.bytes!.equals(want!.bytes!)) fail(`${HOME_SKILLS_DIR}/${path} is not what this role should read`);
+    if (node.kind === "link" && node.target !== want!.target) fail(`${HOME_SKILLS_DIR}/${path} points somewhere else`);
+  }
+  for (const path of [...wanted.keys()].sort()) {
+    if (!found.has(path)) fail(`${HOME_SKILLS_DIR}/${path} is missing`);
+  }
+}
+
+/** A node of a tree as it is on disk: what it IS, not what it resolves to. */
+interface TreeNode {
+  kind: "file" | "dir" | "link" | "other";
+  bytes?: Buffer;
+  target?: string;
+}
+
+function describe(node: TreeNode): string {
+  return node.kind === "link" ? "a symbolic link" : node.kind === "dir" ? "a folder" : node.kind === "file" ? "a file" : "something that is neither a file nor a folder";
+}
+
+/**
+ * Every node under `dir`, by path relative to it, read with `lstat`: a symbolic
+ * link is a link here, never the folder or the file it points at. That is the
+ * difference that let an extra skill in — and the reason a tree has to be walked
+ * rather than queried for the names one expects.
+ */
+async function snapshotTree(dir: string): Promise<Map<string, TreeNode> | null> {
+  const out = new Map<string, TreeNode>();
+  const walk = async (current: string, prefix: string): Promise<void> => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) {
+        out.set(rel, { kind: "link", target: await readlink(path) });
+      } else if (entry.isDirectory()) {
+        out.set(rel, { kind: "dir" });
+        await walk(path, rel);
+      } else if (entry.isFile()) {
+        out.set(rel, { kind: "file", bytes: await readFile(path) });
+      } else {
+        out.set(rel, { kind: "other" });
+      }
+    }
+  };
+  try {
+    await walk(dir, "");
+  } catch {
+    return null;
+  }
+  return out;
+}
+
+/**
+ * The tree `materializeRoleHome` leaves for one skill, derived from the source
+ * the same way it derives it: everything copied, the localized SKILL.<locale>.md
+ * put in place of SKILL.md and the variants dropped, and the rewrite applied to
+ * every Markdown file — so what the check compares against is the layout the
+ * runtime itself would have written, not a list of names kept by hand.
+ */
+function expectedSkillTree(source: Map<string, TreeNode>, skill: SkillEntry, rewrite: (text: string) => string): Map<string, TreeNode> {
+  const out = new Map<string, TreeNode>();
+  const localized = skill.sourceFile !== join(skill.sourceDir, "SKILL.md") ? basename(skill.sourceFile) : null;
+  for (const [rel, node] of source) {
+    // The locale variants are removed from the home, top level only, as the copy does.
+    if (/^SKILL\..+\.md$/.test(rel)) continue;
+    let next = node;
+    if (rel === "SKILL.md" && localized !== null) {
+      const from = source.get(localized);
+      if (from !== undefined) next = from;
+    }
+    if (next.kind === "file" && rel.endsWith(".md")) {
+      next = { kind: "file", bytes: Buffer.from(rewrite(next.bytes!.toString("utf8")), "utf8") };
+    }
+    out.set(rel, next);
+  }
+  return out;
 }
 
 async function rewriteMarkdown(dir: string, rewrite: (text: string) => string): Promise<void> {

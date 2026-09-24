@@ -427,6 +427,44 @@ the script holds it. Three differences, all on purpose:
 `application_answers`, and never over an answer the person gave
 (`user_answer_kept`, CL-01).
 
+**A home the executor prepared is read, not rebuilt (T43).** The prompts a
+role executes — its `AGENTS.md` and its `skills/` — are laid out today by the
+role's own process, with the role's own uid: `materializeRoleHome` runs inside
+the container, and `prepareAgentHome` empties the folder first. That is why
+mounting them read-only makes the role fail to start, which is what VPS
+measured (EBUSY on the unlink; EACCES here on a locked folder). A process does
+not defend itself from itself.
+
+So the layout moves outside, to a uid that is not the role's, and the runtime
+takes the other half: with `JHT_API_HOME_PREPARED=1` it writes nothing in that
+home — no emptying, no marker, no skills copy, not even the identity it
+normally rewrites at the end — and instead checks that what is on disk is
+exactly what this role should read: the marker, the composed prompt, every
+skill as the rewrite leaves it, and no skill folder nobody loads. Anything
+else and the role does **not** start, naming the file: a run on a prompt
+nobody verified is what the mount exists to prevent, and quietly rebuilding
+would hand it straight back. `skills/` is compared as a TREE, not looked up by the names the runtime
+expects. The first version of this check was broken twice by SICUREZZA, and
+both holes had one shape — asking "is what I expect here?" instead of "is what
+is here what it should be?", which is an allowlist with gaps: a skill folder
+added as a SYMBOLIC LINK passed, because `isDirectory()` is false for a link
+and it was not even counted, and an extra file INSIDE an expected skill passed,
+because only `SKILL.md` was compared while those folders also ship scripts and
+translations. Now every node is read with `lstat` and compared both ways —
+name, KIND (a link is never a folder) and bytes — against the layout
+`materializeRoleHome` itself would have written, derived from the image rather
+than kept by hand.
+
+`tests/prepared-home.test.ts` holds it: prepared and accepted, a replaced
+prompt, a changed and a smuggled skill, an empty home, and the two SICUREZZA
+found — a linked folder, a link in place of a file the role reads, an extra
+file beside `SKILL.md`, and a shipped script changed.
+
+The switch is the executor's, set on the container it starts; a role cannot
+turn it on for its own process, and turning it on without the files being
+right buys nothing, because the run stops. The final word is not this suite:
+it is SICUREZZA's probe on the real box, where the uid and the mount are.
+
 **Seven roles have no shell here (T42).** `bash` reached every role because it
 is in the base toolkit, not because a prompt asked for it — and it is the
 widest tool there is: it touches every file the process's uid can, and no
