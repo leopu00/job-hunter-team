@@ -465,6 +465,18 @@ turn it on for its own process, and turning it on without the files being
 right buys nothing, because the run stops. The final word is not this suite:
 it is SICUREZZA's probe on the real box, where the uid and the mount are.
 
+**And this check is a second line, not the mount's replacement.** The system
+prompt carries the index of those paths and tells the model to read a
+`SKILL.md` before acting, so the model reads from disk AFTER the check has
+run: the window between verifying and using is as wide as the run. What it
+proves is that the home was right at startup, never that it still is. Saying
+otherwise is the argument by which the read-only mount gets dropped one day.
+That is also why the home's own top level is an exact set — marker, prompt,
+`skills/`, nothing else — and why a file with more than one name is refused:
+a hard link has the right bytes and the right kind, and whoever holds the
+other name rewrites the inode when the check is over (SICUREZZA, cases C, D
+and E).
+
 **Seven roles have no shell here (T42).** `bash` reached every role because it
 is in the base toolkit, not because a prompt asked for it — and it is the
 widest tool there is: it touches every file the process's uid can, and no

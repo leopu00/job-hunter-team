@@ -17,7 +17,7 @@
  * those.
  */
 
-import { cp, mkdir, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import { HarnessError } from "../core/errors.ts";
@@ -256,6 +256,26 @@ export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, sy
     fail(`${HOME_IDENTITY_FILE} is not the prompt this role composes (${[...(identity ?? "")].length} characters on disk, ${[...system].length} expected)`);
   }
 
+  // The home's own top level is an exact set too (SICUREZZA, cases C and D):
+  // a file or a folder the executor did not put there is text this role can be
+  // told to read — the check used to cover the marker, the prompt and
+  // `skills/`, and let everything beside them through.
+  const top = await readdir(homeDir, { withFileTypes: true }).catch(() => null);
+  if (top === null) return void fail("it is not a folder this runtime can read");
+  for (const entry of [...top].sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (!PREPARED_HOME_ENTRIES.has(entry.name)) {
+      fail(`it carries ${entry.isDirectory() ? "a folder" : entry.isSymbolicLink() ? "a symbolic link" : "a file"} that does not belong to a prepared home: ${entry.name}`);
+    }
+    const wantDir = entry.name === HOME_SKILLS_DIR;
+    if (entry.isSymbolicLink() || entry.isDirectory() !== wantDir) {
+      fail(`${entry.name} is not what a prepared home holds there (${wantDir ? "a folder" : "a file"} is expected)`);
+    }
+  }
+  for (const name of [".jht-api-agent", HOME_IDENTITY_FILE]) {
+    const stats = await lstat(join(homeDir, name)).catch(() => null);
+    if (stats !== null && stats.nlink > 1) fail(`${name} has ${stats.nlink} names: a second one outside this home can change it after this check`);
+  }
+
   // The skills folder is compared as a TREE, not looked up by the names we
   // expect. SICUREZZA broke the first version twice, and both holes had the
   // same shape: a check that asks "is what I expect here?" instead of "is what
@@ -280,6 +300,9 @@ export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, sy
     const want = wanted.get(path);
     if (want === undefined) fail(`${HOME_SKILLS_DIR}/ carries ${describe(node)} this role does not load: ${path}`);
     if (want!.kind !== node.kind) fail(`${HOME_SKILLS_DIR}/${path} is ${describe(node)} where this role's skill has ${describe(want!)}`);
+    if (node.kind === "file" && (node.links ?? 1) > 1) {
+      fail(`${HOME_SKILLS_DIR}/${path} has ${node.links} names: a second one outside this home can change it after this check`);
+    }
     if (node.kind === "file" && !node.bytes!.equals(want!.bytes!)) fail(`${HOME_SKILLS_DIR}/${path} is not what this role should read`);
     if (node.kind === "link" && node.target !== want!.target) fail(`${HOME_SKILLS_DIR}/${path} points somewhere else`);
   }
@@ -288,11 +311,16 @@ export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, sy
   }
 }
 
+/** Everything a home the executor prepared may hold, and nothing else. */
+const PREPARED_HOME_ENTRIES = new Set([".jht-api-agent", HOME_IDENTITY_FILE, HOME_SKILLS_DIR]);
+
 /** A node of a tree as it is on disk: what it IS, not what it resolves to. */
 interface TreeNode {
   kind: "file" | "dir" | "link" | "other";
   bytes?: Buffer;
   target?: string;
+  /** How many names this inode has. More than one, in a prepared home, is a second door. */
+  links?: number;
 }
 
 function describe(node: TreeNode): string {
@@ -317,7 +345,10 @@ async function snapshotTree(dir: string): Promise<Map<string, TreeNode> | null> 
         out.set(rel, { kind: "dir" });
         await walk(path, rel);
       } else if (entry.isFile()) {
-        out.set(rel, { kind: "file", bytes: await readFile(path) });
+        // `nlink` comes along: a hard link has the same bytes as the file it
+        // shadows and the same kind, and whoever holds the other name can
+        // change them after this check (SICUREZZA, case E).
+        out.set(rel, { kind: "file", bytes: await readFile(path), links: (await lstat(path)).nlink });
       } else {
         out.set(rel, { kind: "other" });
       }
