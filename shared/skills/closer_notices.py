@@ -399,15 +399,172 @@ def flush(notifier: Callable[..., Any] | None = None) -> dict[str, Any]:
     return {"status": "sent", "count": len(pending), "source_id": source_id}
 
 
+# ── the positions that WAIT: a state, not an event ──────────────────────────
+#
+# Why this exists beside `flush()` (MASTER, 24/09). On the operator's box 16 of
+# 21 authorised positions have been sitting in a `blocked_human` checkpoint for
+# twenty-six days — the sites' own doing: an ATS nobody supports, an anti-bot
+# wall, a captcha, an ambiguous form. The gate holds them, correctly, and the
+# person was told once, the evening they stopped: `notices.json` says
+# `pending 0, sent 27`. Nothing was lost and nothing is broken — and nobody has
+# asked her for the hand those sixteen are waiting for since.
+#
+# An EVENT is told once; a STATE can be told for as long as it lasts. So the
+# source here is not the stops as they happen, it is the queue's `held` list —
+# what is true NOW. And the executor is not the CLOSER: it does not exist when
+# the queue is closed (C-27), which is exactly when the list is longest. It is
+# whoever runs anyway and reads the gate.
+#
+# The message must not become daily noise, so it goes out only when the LIST
+# CHANGES: the fingerprint is the SET of held positions and their reasons, never
+# the days — those move every night, and a notice that repeats every night is
+# one nobody reads. And it says how long, because "four for twenty-six days"
+# moves a person and `ats_unsupported` does not.
+
+WAITING_SOURCE_ACTION = "closer_waiting"
+
+def _parse_utc(value: str) -> datetime | None:
+    """A timestamp of the database as the instant it is: UTC, never local.
+
+    The column holds `YYYY-MM-DD HH:MM:SS` written by SQLite's
+    `CURRENT_TIMESTAMP`, which is UTC. Read as local time it would be hours off,
+    and on the wrong side of a day boundary that is a whole day of waiting
+    gained or lost in the sentence the person reads.
+    """
+    text_value = (value or "").strip()
+    if not text_value:
+        return None
+    normalised = text_value.replace("T", " ")
+    for shape in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(normalised[: len(shape) + 2].strip(), shape).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _days_waiting(authorised_at: str, now: datetime | None = None) -> int | None:
+    """Whole days since the person authorised it; None when there is no date."""
+    at = _parse_utc(authorised_at)
+    if at is None:
+        return None
+    return max(0, ((now or _now()) - at).days)
+
+
+def waiting_entries(queue: Mapping[str, Any], now: datetime | None = None) -> list[dict[str, Any]]:
+    """The queue's held positions, each with how long it has been waiting.
+
+    Oldest first: the sentence the person reads starts with what has waited
+    longest, which is the one she is most likely to have forgotten.
+    """
+    entries: list[dict[str, Any]] = []
+    for item in queue.get("held") or []:
+        try:
+            pid = int(item["position_id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        facts = _position(pid)
+        entries.append({
+            "position_id": pid,
+            "reason": str(item.get("reason") or ""),
+            "days": _days_waiting(facts.get("apply_requested_at", ""), now),
+            "label": _position_label(pid, facts),
+        })
+    return sorted(entries, key=lambda e: (-(e["days"] if e["days"] is not None else -1), e["position_id"]))
+
+
+def _ages(entries: list[Mapping[str, Any]]) -> str:
+    """`4 for 26 days, 7 for 19 days`: the counts by age, oldest first."""
+    counted: dict[int, int] = {}
+    for entry in entries:
+        days = entry.get("days")
+        if days is None:
+            continue
+        counted[int(days)] = counted.get(int(days), 0) + 1
+    return ", ".join(text("closer.waiting.age", count=n, days=days) for days, n in sorted(counted.items(), reverse=True))
+
+
+def waiting_message(entries: list[Mapping[str, Any]]) -> str:
+    lines = [text("closer.waiting.header", count=len(entries), ages=_ages(entries))]
+    for entry in entries[:MAX_LINES]:
+        lines.append(text(
+            "closer.waiting.line",
+            position=entry.get("label", ""),
+            days=entry.get("days") if entry.get("days") is not None else "",
+            action=reason_action(str(entry.get("reason") or "")),
+        ))
+    if len(entries) > MAX_LINES:
+        lines.append(text("closer.waiting.more", count=len(entries) - MAX_LINES))
+    lines.append("")
+    lines.append(text("closer.waiting.footer"))
+    return "\n".join(lines)
+
+
+def waiting_fingerprint(entries: list[Mapping[str, Any]]) -> str:
+    """The SET being waited on: positions and reasons, never the days."""
+    keys = sorted(f"{int(e['position_id'])}:{e.get('reason') or ''}" for e in entries)
+    return hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()[:24]
+
+
+def waiting(
+    notifier: Callable[..., Any] | None = None,
+    queue: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """One message for the positions that wait, and only when the list changed.
+
+    Returns `{status, count}`: `sent`, `unchanged` (the same set was already
+    told), `empty` (nothing is held), `unavailable` (the gate could not be
+    read — never an empty list invented in its place) or `failed`.
+    """
+    if queue is None:
+        try:
+            if str(Path(__file__).resolve().parent) not in sys.path:
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import apply_gate  # noqa: PLC0415
+
+            queue = apply_gate.application_queue()
+        except Exception as exc:
+            # The gate is the only source: no queue, no list. Saying "nothing is
+            # waiting" because the read failed would be the worst of the two.
+            return {"status": "unavailable", "count": 0, "error": type(exc).__name__}
+    entries = waiting_entries(queue, now)
+    if not entries:
+        return {"status": "empty", "count": 0}
+    fingerprint = waiting_fingerprint(entries)
+    path = _state_path()
+    state = _read_state(path)
+    known = state.get("waiting") if isinstance(state.get("waiting"), Mapping) else {}
+    if known.get("fingerprint") == fingerprint:
+        return {"status": "unchanged", "count": len(entries), "fingerprint": fingerprint}
+    source_id = "closer-waiting:" + fingerprint
+    payload = {"position_ids": [int(e["position_id"]) for e in entries]}
+    try:
+        (notifier or _default_notifier)(message=waiting_message(entries), source_id=source_id, payload=payload)
+    except Exception as exc:
+        # Not recorded: the same list is told again next time, which is what a
+        # person waiting twenty-six days needs more than a tidy state file.
+        return {"status": "failed", "count": len(entries), "error": type(exc).__name__}
+    state = _read_state(path)
+    state["waiting"] = {"fingerprint": fingerprint, "at": _now().isoformat().replace("+00:00", "Z"), "count": len(entries)}
+    _write_state(path, state)
+    return {"status": "sent", "count": len(entries), "fingerprint": fingerprint}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="CLOSER notices: send the round's summary")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("flush", help="send the pending site stops as one message")
     sub.add_parser("pending", help="print the pending stops as JSON")
+    sub.add_parser("waiting", help="tell the user about the positions that wait, if the list changed")
     args = parser.parse_args(argv)
     if args.command == "pending":
         print(json.dumps(_read_state(_state_path())["pending"], ensure_ascii=False))
         return 0
+    if args.command == "waiting":
+        answer = waiting()
+        print(json.dumps(answer, sort_keys=True))
+        return 0 if answer["status"] in {"sent", "unchanged", "empty"} else 1
     result = flush()
     print(json.dumps(result, sort_keys=True))
     return 0 if result["status"] in {"sent", "empty"} else 1

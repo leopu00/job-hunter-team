@@ -718,7 +718,10 @@ const PYTHON_NO_TOOL: Record<string, string> = {
   "linkedin_check.py":
     "drives a browser against LinkedIn; there is none here, and the verification it does cannot happen. Measure what this box carries with the `tool_health` tool instead.",
   "closer_notices.py":
-    "collects the round's stops into ONE message to the person: here that message is the `notify_user` tool, one for the whole round, never one per position.",
+    "collects the round's stops into ONE message to the person: here that message is the `notify_user` tool, one for the whole round, never one per position. " +
+    "Its `waiting` half is the CAPITANO's (24/09): the authorised positions the gate is HOLDING, and how long each has waited. Build it from " +
+    "`apply_gate queue --json` — the `held` list, which is the state now — and send ONE `notify_user`, only when that list has changed since the last time. " +
+    "Never one message per position, and never a fresh one just because a day passed.",
 };
 
 /**
