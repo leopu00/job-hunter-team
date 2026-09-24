@@ -120,6 +120,22 @@ reads:
    `write_file` and `edit_file`. It renders from a copy of `agents/` alone, the
    image's layout, so a path into the checkout's `shared/` cannot pass.
 
+8. **The CAPITANO is told which models exist HERE** (B-05, 24/09). Its team
+   table gives each role a model — Sonnet for seven of them, Opus for three,
+   Codex for the Dottore — and the table is *true*: those are the CLIs the
+   product's tmux sessions run on. It is not true of this harness, and a model
+   follows its prompt over a tool's description: the CAPITANO asked for
+   `sonnet` in **every** one of five live rounds and the launcher refused it
+   every time (VPS's count off `launcher.log`, 23-24/09), which is two or three
+   paid rounds per delegation. The prompt is **not** edited — the TUI needs it
+   as it is — so the difference goes where every other one goes, the parity
+   notes the role reads each round: the table is named for what it is, and the
+   launcher's allowed models are listed beside it. The list comes from
+   `Launcher.limits()`, the same source as `spawn_agent`'s own description
+   (`allowedModelsLine`): one renderer, because two lists that contradict each
+   other is the defect being fixed. Without a hub there is no launcher, no
+   spawn and no note — an unread limit is never a guessed one.
+
 ### How it was checked (2026-09-19)
 
 On the reference TUI box, read only: the `scout-1` folder of a running team
@@ -222,6 +238,9 @@ every statement is a constant with bound parameters.
 | `team_directives.py active/list/show` | `team_directives` {args} | same lines (C-06), from `team_directives` in `jobs.db`. `add`, `edit`, `archive` are the person's: refused |
 | `bridge_mailbox.py drain/peek/status/reset` | `bridge_mailbox` {args} | the SENTINELLA's safety net under a lost delivery (T37): the pacing bridge appends every verdict whether or not a pane received it, and the reader advances a byte cursor. Same lines, same exit code and **the same cursor left behind** — compared as sequences (drain, drain again, status), because the cursor is state and one call on its own would prove less. The script's own edge cases are the cases: a cursor past the end of the file rereads from zero, a cursor that is not a number is a zero, and a line that is not JSON is skipped by the reader while `status` still counts it |
 | `burn_intent.py status [--json]` | `burn_intent` {args} | whether the person has suspended the daily ceiling (S-10), the read the SENTINELLA must do in the turn where it would send a daily brake. Same JSON key for key — the int/float of `hours` included, which `json.load` keeps apart and `JSON.parse` does not — the same banner line, and the same fail-closed: missing, unreadable, malformed, or without an expiry all answer `active: false`, so a failed read is never a licence to speed up. **Narrower on purpose:** `grant`, `revoke` and `sweep` are refused. They are the person's, through `jht burn on\|off`, and in the TUI only the prompt stopped a role from granting itself a derogation to the ceiling it enforces |
+| `doctor_analytics.py <SESSION> <since>` | `doctor_analytics` {args} | the DOTTORE's retrospective, its measurable half (T41): the same `PRODUCTION` map and the same prefix match on the `*_by` columns, compared against the script row for row where the box has python3. **Different sources, on purpose**, because the script's are a tmux session, a message log and a throttle log: the session's age, the communications, the throttles and `last_captain_msg` come back `null` with a note each — never `0`, which would read as measured — and in their place the window carries `runs`, off the spend ledger (how many runs, their tokens, their dollars, how each ended). `--db`, `--messages`, `--throttle` and `--session-created` are refused: the database is the runtime's and there is no session to date. **One difference is a defect of the script, fixed here and held by a test**: it interpolates the ISO window straight into the SQL, and the skill computes it with `isoformat()`, so `2026-09-23T06:00:00Z` compared as text against a column full of `2026-09-23 08:00:00` puts every row before the window — the script's count is **always zero**. The window is converted to the column's own shape first |
+| the growing journal (`/jht_home/logs/doctor-retrospective.jsonl`) | `doctor_journal` {agent, since, notes?} | the same file, one dense line per window, under `$JHT_HOME/logs/`. The entry's **numbers are measured by the tool**, not taken from the call: the model's words ride in `notes`, beside them and never instead of them, with `source` and `unmeasured` on the line so a reader can tell one from the other. **The refusal is the point**: a window with no artifact and no run is refused and nothing is written — not an entry with zeros. In the TUI the synthesis came from an interview, and an interview always answers something; a model asked to summarise silence writes a plausible paragraph, and the next Doctor reads this file as fact. An empty window goes to the CAPITANO as a sentence |
+| the `cv-disk-audit` skill (`find /jht_user/cv` + `db_query cv-pdf-paths` + `comm`) | `cv_disk_audit` {} | the reconciliation of bug #26, in one deterministic read ("niente LLM", as the skill has it): orphans (a PDF no row points at) and ghosts (a row pointing at a PDF that is not there), the mismatch appended to `logs/cv-disk-audit.jsonl` and nothing appended when disk and database agree. The script half it names never existed — `db_query.py cv-pdf-paths` is marked "da implementare" in the skill — so there is nothing to compare it to; the CV folders are the CLOSER's own (`<userDir>/cv` and the hub's), never the JHT home. **It deletes nothing and relinks nothing**: a row whose path lies outside the folders it can read is not called a ghost, and what to do with a mismatch stays the CAPITANO's |
 
 `tests/skills-parity.test.ts` and `tests/db-*.test.ts` run each script and
 its tool on the same input and compare what they print and what they leave
@@ -278,6 +297,36 @@ tmux and the throttle engine do for a TUI agent:
    `system`. (The TUI has no verified sender: this is a difference on purpose.)
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
+
+**The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
+rehearsals of the whole team on `ashley` ended on the account's rate limit and
+not on money (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`): in the
+last one **13 of 59 requests came back 429**, five agents of six died, the
+CAPITANO among them, and the team stopped after 56 seconds having spent less
+than a third of its cap. The AI SDK's own retrying is off (`maxRetries: 0`) and
+the runtime does it, only on a 429:
+
+- **four attempts**, with waits of ≈2.5 s, 5 s, 10 s, spread by jitter so the
+  roles refused together do not come back together. The base is 2.5 s because
+  the refused calls came back from upstream in **635-1685 ms** and every wait
+  jitter can produce must clear the slowest refusal — a 2 s base can wait
+  1540 ms, which lands inside the window that was already refusing;
+- **`retry-after` obeyed** when the provider sends one, capped at 30 s per wait
+  (`retry-after: 600` is not obeyed to the letter) and 45 s of waiting per call;
+- **no wait crosses the call's own budget**, which the loop sets to the lesser
+  of the step timeout and what the run has left on the wall clock. A role asleep
+  is a role alive, and the launcher's piggy bank holds its booking meanwhile: a
+  run near its ceiling refuses instead of sleeping past it;
+- **the refusal says whose limit it was.** `provider_rate_limited`, a code of
+  its own, with a sentence naming the upstream account's rate limit, the
+  attempts, the waiting, and that a refused call bills nothing — so the money is
+  untouched. The ledger's note carries that code too. Reading an upstream 429 as
+  one of our own limits has already cost two diagnoses;
+- **the waiting is not work.** `GenerateResult.backoff` carries the attempts and
+  the milliseconds waited; the round's `durationMs` has them subtracted, the
+  audit trail records `backoffMs` beside the duration, and `npm run monitor`
+  shows a `429` column. A round whose duration swallowed a six-second wait reads
+  as a slow model, and a slow model is looked for in the wrong place.
 
 From the command line (`JHT_API_APP_ROOT` defaults to this checkout, `/app`
 in the container; `JHT_HOME` to `~/.jht`, read for the locale;
@@ -616,6 +665,81 @@ is host-side, and it is worth naming rather than quietly leaving out:
   equivalent and is not ported;
 - **`spawn-doctor.sh`** creates a session and launches a REPL: the hub's
   spawn, not a role's shell.
+
+**The DOTTORE is an archivist here, and half of it is gone (T41).** Of all the
+roles this is the one where porting for fidelity would have been the mistake:
+its trade is tmux. It dissolves a line stuck in a composer, reads a pane's age,
+interviews a session and kills+recreates it so a bloated context window starts
+clean. The harness has no panes and no sessions, and **every run begins with a
+clean context** — so the disease is absent, not the cure. What is ported is the
+record: `doctor_analytics`, `doctor_journal`, `cv_disk_audit` (the rows above)
+and the board its retrospective is written against (`db_query dashboard`,
+`stats`, `recent-activity`, and nothing else: it writes nowhere in the
+database, `role-policy.ts`).
+
+**It does not get the right to stop or restart a role** (MASTER, 23/09). That
+is the most dangerous permission the team has, and the reason it exists in the
+TUI — a context that bloats, an Enter that hangs — does not exist here. If a
+stuck run ever shows up it is added then, from the hub, with the rule the team
+already has for `freeze_team`: the role asks, the launcher decides.
+
+**It writes only to the CAPITANO** (SICUREZZA P2, MASTER 23/09). In the TUI it
+writes to every session and has to: it interviews each one before recreating it
+and kicks it off again afterwards. Here it interviews nobody, so the set of
+peers it used to need does not exist — and a role that may still write to every
+peer is one more channel into every model, held open for a use that is gone.
+`PEER_POLICY` names it beside the SENTINELLA and the MENTOR, and the refusal
+tells it to go through the CAPITANO, who decides.
+
+What is gone, and why, so nobody ports it back:
+
+- **the UNBLOCK phase** (`agent_unblock.py`, the role's own first step). Its
+  four shapes of block are all pane-shaped: text pending in a coordinator's
+  composer, an agent's envelope typed but never submitted, a retry-loop at a
+  mute peer, everyone idle at an empty prompt. A message here is a file the
+  peer drains at its next turn, so there is no Enter to force and no composer
+  to type into; `relay` — deliver without touching the pane — is what
+  `send_message` already is. D-04 (never send, never delete the text the
+  person typed) has nothing to act on, and stays as a rule in the prompt;
+- **the session refresh itself**: age, context occupancy, the 12h TTL and its
+  stagger, capture-pane, the `[RETRO]` interview, the PARKED check and
+  `kill + start-agent.sh <role> <SAME-N> + [RESUME]`. A run's own occupancy is
+  the runtime's (`usage.ts`), and the retrospective's source here is the trail
+  a run leaves, not the story an agent tells about itself;
+- **`liveness-check`** — a tmux session outliving its CLI, with
+  `jht-tmux-send` returning `exit 0` into a bare bash. That zombie cannot
+  exist here; what a coordinator needs of it, the state and spend of the
+  agents it started, is `list_agents`, and it is the CAPITANO's;
+- **`daily-restart-wave`**, the pre-emptive mass restart for context
+  freshness: there is no drift to pre-empt in a context that is new every run;
+- **`stepcap-watchdog.py --health` and `proc-kill.py`** (step 0 of the round):
+  a run that reaches its ceiling here **ends and says so**, and nothing waits
+  alive for a keystroke, so there is nobody to resume and no process of the
+  team to kill;
+- **`cache-prune`** and **`py-tools-audit`**: the first reclaims the `uv`
+  wheel cache and Codex's telemetry SQLite, artefacts of the TUI container
+  (there is no Codex here), and the second uninstalls what agents installed
+  with `uv pip install --user` — in this harness a role installs nothing
+  (`jht-install` is already refused, the image carries its dependencies).
+  Disk hygiene is the host's, not an LLM's;
+- **the working-hours gate**, `doctor_schedule.py` and the one-shot lifecycle
+  (spawn at `+30min`/`mid`, STANDBY without self-destruct): the window is the
+  launcher's or the three declared variables, as it is for the SENTINELLA's
+  tick, and when a run happens is decided by whoever starts it;
+- **the strict exceptions** (output in the last 60s, a Codex window
+  transition, a non-agent session): heuristics on a pane. The sane equivalent
+  is a launcher rule — a spawn is not touched mid-round — and it is not this
+  role's to hold.
+
+Each of these is refused with its reason where a prompt names it, never with
+`command not found`: `python3 …/agent_unblock.py` answers that there are no
+panes and that stopping a role is the hub's, which is a sentence a model can
+act on. On the mock the round is `DOTTORE_MOCK_SCRIPT`
+(`tests/parity-dottore-run.test.ts`): it walks into its two absent steps, is
+told why, records the one window that has work in it, is **refused the empty
+one**, tells the CAPITANO that the window is empty — that is the finding — and
+ends by reconciling the CVs. The journal comes out of that run with exactly
+one line.
 
 **The review loop runs in one process (T33).** In the TUI the Writer spawns a
 fresh `CRITICO-S<N>` session per round through the launcher, sends it the PDF

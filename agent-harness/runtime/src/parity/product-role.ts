@@ -15,7 +15,8 @@ import { join } from "node:path";
 
 import { agentInstanceId, sameAgent } from "../core/agent-id.ts";
 import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } from "../hub/client.ts";
-import { createSpawnTools } from "../hub/spawn-tools.ts";
+import { allowedModelsLine, createSpawnTools, type SpawnLimits } from "../hub/spawn-tools.ts";
+import { HUB_PATHS } from "../hub/protocol.ts";
 import { roleOf } from "../db/role-policy.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
@@ -70,6 +71,11 @@ export interface ProductRoleOptions {
   jhtHome: string;
   /** The person's profile folder (`JHT_API_PROFILE_DIR`); `<jhtHome>/profile` when the runtime has none. */
   profileDir?: string | undefined;
+  /**
+   * The team's spend ledger (`JHT_API_LEDGER`), when this run has one: the
+   * DOTTORE counts a window's runs off it (T41). A mock run has none.
+   */
+  ledger?: string | undefined;
   env?: Record<string, string | undefined>;
   /**
    * The team's jobs.db, opened by the runtime. The Python skills that read or
@@ -140,10 +146,34 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   // one folder for both; here the team writes beside the history and never into it.
   // T42: a role with no shell is told so, in the notes it reads every round.
   const shell = hasShell(options.agent);
+  // B-05: the CAPITANO asks for a model its own prompt names, and the launcher
+  // refuses it every round. The team table of `capitano.md` gives each role a
+  // model — Sonnet for seven of them — and that table is TRUE: it describes the
+  // product's tmux team, where those are the CLIs the roles run on. It is simply
+  // not true here, and the model follows the prompt over a tool's description,
+  // which is why five live rounds died on `sonnet` (VPS's count, 23-24/09).
+  //
+  // The prompt is not touched: the TUI needs it as it is. The difference goes
+  // where every other difference of this harness goes — the parity notes the
+  // role reads each round — and it is read from the launcher's own limits, the
+  // same source as the tool's description (MASTER's condition: one source, or
+  // the two contradict each other again one layer up).
+  const spawnLimits =
+    options.hub && roleOf(options.agent) === "capitano"
+      ? await options.hub.post<SpawnLimits>(HUB_PATHS.spawnLimits, {}).catch(() => undefined)
+      : undefined;
+  const models = allowedModelsLine(spawnLimits);
+  const modelNote = models
+    ? `\n\nThe team table in your instructions gives each role a model (Sonnet, Opus, Codex). That table is the ` +
+      `product's tmux team, and it is true of it: those are the CLIs those sessions run on. It is not true here. ` +
+      `In this harness the launcher allows exactly these models: ${models}. A \`spawn_agent\` call naming any other ` +
+      `is refused before anything starts, whatever the table says — the tool's description carries the same list, ` +
+      `and both read the launcher's own configuration.`
+    : "";
   const notes = options.userHistoryDir
     ? `${PARITY_NOTES}\nWhat the team makes goes in ${userDir} (\`cv/\` is the Scrittore's, \`critiche/\` the Critico's).\nThe person's own CVs and letters are in ${options.userHistoryDir}: read them, never write there.`
     : PARITY_NOTES;
-  const roleNotes = shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`;
+  const roleNotes = `${shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`}${modelNote}`;
   const systemPrompt = composeSystemPrompt(prompt, roleNotes, options.homeDir);
   // T43: with a home the executor prepared (and mounted read-only), the runtime
   // checks it instead of rebuilding it — rebuilding is exactly what makes the
@@ -177,10 +207,17 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     // T30: `render_pdf` reads the markdown a role wrote here and writes the PDF beside it.
     userDir,
     workdir: options.homeDir,
+    // T41: the ledger the DOTTORE's analytics reads. Absent on a mock run.
+    ...(options.ledger ? { ledger: options.ledger } : {}),
   };
   const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
-  if (hub && roleOf(options.agent) === "capitano") skills.push(...createSpawnTools(hub));
+  // The launcher's limits are read once, at boot, and named in the tool's description: the
+  // allowlist and the cap window were costing two or three refused rounds per delegation
+  // (VPS, five live rounds). A hub that cannot answer leaves the description saying so —
+  // an unread limit is never a guessed one.
+  // The limits were read above, for the note: the tool and the note say the same thing.
+  if (hub && roleOf(options.agent) === "capitano") skills.push(...createSpawnTools(hub, spawnLimits));
 
   /**
    * The role's tools, `blind` when the reader of them must not see the

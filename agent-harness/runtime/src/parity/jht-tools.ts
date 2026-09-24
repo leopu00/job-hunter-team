@@ -519,6 +519,8 @@ export const PYTHON_SKILLS: Record<string, string> = {
   "tool_health.py": "tool_health",
   // T39, the CLOSER's queue read and the answers it works out (the sending subcommands are refused inside).
   "apply_gate.py": "apply_gate",
+  // T41, the DOTTORE's analytics: the same window, measured from what this runtime has.
+  "doctor_analytics.py": "doctor_analytics",
   "application_answers.py": "application_answers",
 };
 
@@ -606,7 +608,10 @@ export function rewriteThrottleCommands(text: string): string {
 
 /** `python3 [flags] [path/]<script>.py` at a command position; the script's file name is captured. */
 const PYTHON_AT = new RegExp(
-  String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?python3?(?:\.\d+)?\s+(?:-\S+\s+)*(?:\S*/)?([A-Za-z0-9_]+\.py)(?=\s|$|[;&|)])`,
+  // A hyphen belongs in the name: `stepcap-watchdog.py` and `proc-kill.py` are the
+  // launcher's own, and a name this pattern misses gets the generic refusal instead of
+  // the reason (T41).
+  String.raw`(?:^|[;&|(\n]|\$\()\s*(?:\S*/)?python3?(?:\.\d+)?\s+(?:-\S+\s+)*(?:\S*/)?([A-Za-z0-9_-]+\.py)(?=\s|$|[;&|)])`,
   "g",
 );
 
@@ -660,6 +665,23 @@ const PYTHON_NO_TOOL: Record<string, string> = {
   "ats_account.py":
     "creates a candidate account on an employer's portal and stores its password on the host. No browser and no credential store here.",
   "verification_code.py": "reads the person's IMAP inbox for a one-time code: there is no mailbox here.",
+  // T41, the DOTTORE: the scripts of the trade that does not exist here. Each says what
+  // is missing, because this is the role whose defect would be doing the work anyway —
+  // and because a model that reads "command not found" tries the next path.
+  "agent_unblock.py":
+    "scans tmux panes for the four shapes of block and clears them: a line stuck in a composer, an Enter never submitted, " +
+    "an agent retrying at a mute peer, everyone idle at an empty prompt. None of them exists here — a message is a file the peer " +
+    "drains at its next turn, and there is no composer to type into. If a run of another role looks stuck, say so to the CAPITANO: " +
+    "starting and stopping roles is the hub's, and not yours.",
+  "doctor_schedule.py":
+    "computes the slots of your round for the watchdog that spawns you in tmux. Here a run is scheduled by whoever starts it, " +
+    "and you are already running: do the round you were asked for.",
+  "stepcap-watchdog.py":
+    "watches for sessions parked on the step cap, alive and waiting for a keystroke. A run that reaches its ceiling here ends and " +
+    "says so — nothing waits for an input, so there is nothing to resume.",
+  "proc-kill.py":
+    "kills a process of the container so pid1 respawns it. An API role has no processes of the team to reach, and stopping or " +
+    "restarting a role is the hub's with an identity of its own — the DOTTORE does not have it (MASTER, 23/09).",
   // T41, the MANTENITORE: the one role whose object of work is the box. Almost
   // none of its sweep exists here, and a refusal that only said "no" would leave
   // the role hunting for another way in — so each one names where that power went.

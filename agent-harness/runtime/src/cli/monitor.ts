@@ -11,17 +11,25 @@
  *   npm run monitor -- <run>        replay one run (id, id prefix or path), then follow it if live
  *   npm run monitor -- --last       replay the most recent run
  *   npm run monitor -- --verbose    full prompt, arguments, outputs and process samples
+ *   npm run monitor -- --dashboard  the whole team on one screen, redrawn every second
+ *                                   (--window=<min> only runs of the last minutes; --once one frame;
+ *                                   --no-bell no bell on a new result; --page=agents|results|money|start
+ *                                   the page to open on; ←/→ or 1 2 3 4 move between them, q quits)
  *
- * Read-only: it opens trace files and nothing else.
+ * Read-only: it opens trace files and nothing else — but for the dashboard's
+ * START page, the one place that asks the hub to start the team, on the
+ * conditions `start-page.ts` sets out.
  */
 
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import type { TraceLine } from "../core/trace.ts";
 import { resolveUserPath } from "../tools/paths.ts";
+import { PAGES, runDashboard } from "./dashboard.ts";
 import { c, countNames, dur, int, TraceView, usd, width } from "./render.ts";
+import { Tail } from "./tail.ts";
 
 const POLL_MS = 250;
 const SCAN_MS = 1_000;
@@ -89,7 +97,12 @@ function list(): void {
     console.log(`\n  No runs yet in ${logsDir}\n`);
     return;
   }
-  const head = ["agent", "run", "status", "started", "time", "rounds", "tools", "search", "tok in", "tok out", "$ total", "model"];
+  // `429` is the time this run spent waiting for the upstream account's rate
+  // limit to clear — reported apart from `time`, which is work. Reading one as
+  // the other has already sent the team looking for a slow model twice
+  // (MASTER, 23/09), and with five or six agents at once this is the wall the
+  // rehearsals of 23/09 kept hitting, not the budget.
+  const head = ["agent", "run", "status", "started", "time", "429", "rounds", "tools", "search", "tok in", "tok out", "$ total", "model"];
   const rows = files.map((file) => {
     const records = readRecords(file);
     const started = records.find((r) => r.type === "run_started");
@@ -102,6 +115,7 @@ function list(): void {
     const cost = rounds.reduce((a, r) => a + (r.type === "round_finished" ? r.costUsd : 0), 0);
     // T19: the searches the provider ran, as each web_search call recorded them.
     const searches = records.reduce((a, r) => a + (r.type === "tool_finished" && typeof r.details?.webSearches === "number" ? r.details.webSearches : 0), 0);
+    const waited = rounds.reduce((a, r) => a + (r.type === "round_finished" ? (r.backoff?.waitedMs ?? 0) : 0), 0);
     const status = statusOf(records);
     return [
       basename(dirname(file)),
@@ -109,6 +123,7 @@ function list(): void {
       STATUS_PAINT[status](status),
       first ? new Date(first.ts).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "medium" }) : "",
       first && last ? dur(Date.parse(last.ts) - Date.parse(first.ts)) : "",
+      waited ? c.dim(dur(waited)) : c.dim("–"),
       int(rounds.length),
       tools.length ? `${tools.length} ${c.dim(`(${countNames(tools)})`)}` : c.dim("–"),
       searches ? int(searches) : c.dim("–"),
@@ -120,46 +135,13 @@ function list(): void {
   });
   const all = [head, ...rows];
   const w = head.map((_, i) => Math.max(...all.map((r) => width(r[i] ?? ""))));
-  const right = new Set([4, 5, 7, 8, 9, 10]);
+  const right = new Set([4, 5, 6, 8, 9, 10, 11]);
   const row = (r: string[]) => `  ${r.map((s, i) => (right.has(i) ? " ".repeat(w[i]! - width(s)) + s : s + " ".repeat(w[i]! - width(s)))).join("  ")}`;
   console.log();
   console.log(row(head.map((h) => c.bold(h))));
   console.log(c.dim(`  ${w.map((n) => "─".repeat(n)).join("  ")}`));
   for (const r of rows) console.log(row(r));
   console.log(`\n  ${c.dim(`${files.length} runs · ${logsDir}`)}\n`);
-}
-
-/** Reads what has been appended to a file since the last call, line by line. */
-class Tail {
-  readonly file: string;
-  #offset = 0;
-  #partial = "";
-  constructor(file: string) {
-    this.file = file;
-  }
-
-  read(): Record_[] {
-    const size = statSync(this.file).size;
-    if (size <= this.#offset) return [];
-    const fd = openSync(this.file, "r");
-    try {
-      const buffer = Buffer.alloc(size - this.#offset);
-      readSync(fd, buffer, 0, buffer.length, this.#offset);
-      this.#offset = size;
-      const text = this.#partial + buffer.toString("utf8");
-      const lines = text.split("\n");
-      this.#partial = lines.pop() ?? "";
-      return lines.filter(Boolean).flatMap((line) => {
-        try {
-          return [JSON.parse(line) as Record_];
-        } catch {
-          return [];
-        }
-      });
-    } finally {
-      closeSync(fd);
-    }
-  }
 }
 
 const TAG_COLORS = [c.cyan, c.magenta, c.yellow, c.blue, c.green];
@@ -237,7 +219,18 @@ function findRun(query: string): string | undefined {
 
 const positional = args.filter((a) => !a.startsWith("--"));
 
-if (args.includes("--list")) {
+if (args.includes("--dashboard")) {
+  const window = Number(args.find((a) => a.startsWith("--window="))?.slice("--window=".length));
+  const page = PAGES.find((p) => args.includes(`--page=${p}`));
+  runDashboard({
+    logsDir,
+    traceFiles,
+    ...(Number.isFinite(window) && window > 0 ? { windowMin: window } : {}),
+    ...(page ? { page } : {}),
+    once: args.includes("--once"),
+    bell: !args.includes("--no-bell"),
+  });
+} else if (args.includes("--list")) {
   list();
 } else if (args.includes("--last") || positional.length > 0) {
   const file = args.includes("--last") ? traceFiles().sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs).at(-1) : findRun(positional[0] ?? "");

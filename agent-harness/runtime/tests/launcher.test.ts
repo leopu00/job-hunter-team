@@ -407,6 +407,139 @@ describe("through the hub", () => {
     }
   });
 
+  /**
+   * T27-c: the rule travels with the tool, so the first attempt is inside it.
+   *
+   * The count VPS took off `launcher.log` over five live rounds (23-24/09): 5
+   * rounds lost because the CAPITANO asked for `sonnet` — every round, then
+   * learning inside the one negotiation and starting over in the next — 4 to a
+   * cap outside its window, 2 to instances or spawns. Nine of the eleven were
+   * requests paid for to be told a rule. In the fifth round, with a 0.12 USD
+   * cap, it never reached a delegation at all: it ran out first.
+   *
+   * The refusals were not the problem and are untouched. What is new is that the
+   * allowed models and the cap window are in the tool's description, read from
+   * `Launcher.limits()` — the same fields `#start` refuses on.
+   *
+   * The test builds its request from NOTHING BUT the description's own words:
+   * it parses the model and the cap window out of the sentence the model reads,
+   * and that request goes through at the first attempt, with no `refused` line
+   * in the log. One round per delegation instead of three.
+   */
+  it("names the launcher's limits in the tool, and a request built from them alone is accepted first time", async () => {
+    const server = createHub({
+      tokens: new Map([[CAPITANO, "capitano-1"]]),
+      dbPath: join(root, "hub", "jobs.db"),
+      channelsDir: join(root, "hub", "channels"),
+      stateDir: join(root, "hub", "state"),
+      appRoot: REPO_ROOT,
+      launcher: launcher(),
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const hub = new HubClient({ url, token: CAPITANO });
+      const captain = await prepareProductRole({
+        appRoot: REPO_ROOT,
+        apiHome: join(root, "api"),
+        jhtHome: join(root, "jht"),
+        env: {},
+        role: "capitano",
+        agent: "capitano-1",
+        homeDir: join(root, "api", "agents", "c"),
+        hub,
+      });
+      const spawn = captain.tools([]).find((t) => t.spec.name === "spawn_agent")!;
+      const said = spawn.spec.description;
+
+      // The values are the config's, and the roles come with their window and their instances.
+      expect(said).toContain("Models allowed: gpt-5.6-luna, gpt-5-mini");
+      expect(said).toContain("scout cap_usd in (0, 0.4], up to 2 at once");
+      expect(said).toContain("analista cap_usd in (0, 0.4], up to 1 at once");
+      expect(said).toContain("At most 3 children running at once, 6 spawns in the session");
+      expect(said).toContain("task of at most 2000 characters");
+      // SICUREZZA: the fixed limits are named as FIXED, and what is not fixed is named too.
+      // A description that promised "nothing is wasted" would spend the round it set out to
+      // save the first time the session's money ran short — the likeliest refusal of all.
+      expect(said).toContain("The session's MONEY is not fixed");
+      expect(said).toContain("`list_agents`");
+      expect(said).toContain("left_usd");
+      expect(said).toContain("failed too often");
+      expect(said).toContain("operator's STOP");
+      // And no figure for the money: it moves, and a frozen number would be the lie.
+      expect(said).not.toMatch(/left_usd is [0-9]/);
+      expect(said).not.toContain("nothing is wasted");
+
+      /**
+       * B-05: the same list in the PROMPT, because the model follows the prompt.
+       * `capitano.md` gives each role a model — Sonnet for seven of them — and
+       * that table is true of the product's tmux team and not of here, which is
+       * why five live rounds died on `sonnet`. The prompt is not touched; the
+       * difference goes in the parity notes it reads every round, from the same
+       * source as the description above.
+       */
+      expect(captain.systemPrompt).toContain("the launcher allows exactly these models: gpt-5.6-luna, gpt-5-mini");
+      expect(captain.systemPrompt).toContain("That table is the product's tmux team");
+      // The prompt's own table is still there, unedited: the note explains it, it does not hide it.
+      expect(captain.systemPrompt).toMatch(/\| Sonnet \|/);
+      // `sonnet` is what it asked for in every live round, and it is not in the sentence.
+      expect(said).not.toContain("sonnet");
+
+      // Now the delegation, built ONLY from what the description says.
+      const model = /Models allowed: ([^,(]+)/.exec(said)![1]!.trim();
+      const window = /scorer cap_usd in \(0, ([0-9.]+)\]/.exec(said);
+      expect(window, "the role the CAPITANO wants must be named with its window").not.toBeNull();
+      const request = { role: "scorer", cap_usd: Number(window![1]), model, task: "Score the queue." };
+      const answer = await spawn.execute(request, { account: undefined as never, remainingMs: () => 60_000 });
+      expect(answer).toMatchObject({ ok: true, content: expect.stringContaining('"agent": "scorer-1"') });
+
+      // The measurement: one round for this delegation, and the launcher refused nothing.
+      const log = readFileSync(join(root, "state", "launcher.log"), "utf8").trim().split("\n").map((line) => JSON.parse(line) as { event: string });
+      expect(log.map((e) => e.event)).toEqual(["spawned"]);
+      expect(log.filter((e) => e.event === "refused")).toEqual([]);
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+  });
+
+  /** One source, or the description drifts from the check: the config decides both. */
+  it("follows the config it is judged by, and says so is unread when the hub cannot answer", async () => {
+    const server = createHub({
+      tokens: new Map([[CAPITANO, "capitano-1"]]),
+      dbPath: join(root, "hub", "jobs.db"),
+      channelsDir: join(root, "hub", "channels"),
+      stateDir: join(root, "hub", "state2"),
+      appRoot: REPO_ROOT,
+      launcher: launcher({ models: ["gpt-5.6-terra"], roles: { scorer: { capUsd: 0.12, instances: 2 } }, maxActive: 1 }),
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const common = { appRoot: REPO_ROOT, apiHome: join(root, "api"), jhtHome: join(root, "jht"), env: {}, role: "capitano", agent: "capitano-1" };
+    try {
+      const withHub = await prepareProductRole({ ...common, homeDir: join(root, "api", "agents", "e"), hub: new HubClient({ url, token: CAPITANO }) });
+      const said = withHub.tools([]).find((t) => t.spec.name === "spawn_agent")!.spec.description;
+      expect(said).toContain("Models allowed: gpt-5.6-terra");
+      expect(said).toContain("scorer cap_usd in (0, 0.12], up to 2 at once");
+      expect(said).not.toContain("gpt-5.6-luna");
+      expect(said).toContain("At most 1 children running at once");
+      // B-05, one source: the note follows the same config as the description.
+      expect(withHub.systemPrompt).toContain("the launcher allows exactly these models: gpt-5.6-terra");
+      expect(withHub.systemPrompt).not.toContain("allows exactly these models: gpt-5.6-luna");
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+
+    // A hub that cannot be reached: the tool is still there, and it says the limits
+    // were not read instead of naming values nobody checked.
+    const deaf = await prepareProductRole({ ...common, homeDir: join(root, "api", "agents", "f"), hub: new HubClient({ url: "http://127.0.0.1:1", token: CAPITANO }) });
+    const blind = deaf.tools([]).find((t) => t.spec.name === "spawn_agent")!.spec.description;
+    expect(blind).toContain("could not be read just now");
+    expect(blind).toContain("read the refusal");
+    expect(blind).not.toMatch(/cap_usd in \(0,/);
+    // And no model is named in the prompt either: an unread limit is never a guessed one.
+    expect(deaf.systemPrompt).not.toContain("the launcher allows exactly these models");
+  });
+
   it("takes spawns from the CAPITANO's token only, and the CAPITANO's runtime has the tools", async () => {
     const server = createHub({
       tokens: new Map([

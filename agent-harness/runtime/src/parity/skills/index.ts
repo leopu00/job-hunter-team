@@ -20,6 +20,7 @@ import { createFeedbackQueryTool } from "./feedback-query.ts";
 import { createCaptainTools } from "./captain.ts";
 import { createMaintainerTools } from "./maintainer.ts";
 import { createDeadlineExtractTool } from "./deadline-extract.ts";
+import { createDoctorTools } from "./doctor.ts";
 import { createEnrichmentPolicyTool } from "./enrichment-policy.ts";
 import { createLogoFetchTool } from "./logo-fetch.ts";
 import { createRecheckLivenessTool } from "./recheck-liveness.ts";
@@ -70,6 +71,13 @@ export interface SkillToolsOptions {
   cvDirs?: readonly string[] | undefined;
   /** Where a relative path a tool is given resolves: the role's home. */
   workdir?: string | undefined;
+  /**
+   * The team's spend ledger (`JHT_API_LEDGER`), when the run has one: the
+   * DOTTORE's analytics counts the runs of a window off it. A mock run has no
+   * ledger, and then the analytics has nothing to count — which is the answer,
+   * not a failure (T41).
+   */
+  ledger?: string | undefined;
   /** Test seam for the network tools: a scripted resolver and transport. */
   client?: SafeHttpsClient;
 }
@@ -193,6 +201,25 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
     const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile"), cvRoots, cvLayout: createCvLayoutHold() };
     if (listed.has("apply-authorization") || scripts.has("apply_gate")) tools.push(createApplyGateTool(closer));
     if (listed.has("apply-flow")) tools.push(createApplicationAnswersTool(closer));
+  }
+  // T41, the DOTTORE: what is left of it here (the MASTER's four rows, 23/09). The
+  // retrospective's numbers and its journal come with `session-refresh`, which is the
+  // skill that ran the analytics; the CV reconciliation with its own skill. The other
+  // seven skills of this role are gone by construction, each declared in docs/parity.md:
+  // there are no panes to unblock, no session to age and no context that bloats.
+  if (db && (listed.has("session-refresh") || listed.has("cv-disk-audit"))) {
+    const jhtHome = options.jhtHome ?? join(options.stateDir ?? ".", "jht");
+    const doctor = createDoctorTools({
+      db: db.open,
+      agent: options.agent,
+      jhtHome,
+      ...(options.ledger ? { ledger: options.ledger } : {}),
+      // The same CV folders the CLOSER's gate measures: the deliverables' `cv/` and the
+      // hub's own. Never the JHT home, which holds the person's credentials (T39-3).
+      cvRoots: [...(options.userDir ? [join(options.userDir, "cv")] : []), ...(options.cvDirs ?? [])],
+    });
+    const want = (name: string) => (name === "cv_disk_audit" ? listed.has("cv-disk-audit") : listed.has("session-refresh"));
+    tools.push(...doctor.filter((t) => want(t.spec.name)));
   }
   if ((listed.has("logo-extraction") || scripts.has("enrichment_policy")) && policy) tools.push(createEnrichmentPolicyTool(policy));
   // T38: the ASSISTENTE writes the person's profile, and its rule A-02 says

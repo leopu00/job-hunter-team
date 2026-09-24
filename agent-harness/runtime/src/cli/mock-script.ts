@@ -750,6 +750,92 @@ export function assistenteMockScript(profileDir: string, historyDir?: string): S
   ];
 }
 
+/**
+ * T41: the DOTTORE's round, which here is an archivist's round.
+ *
+ * Its trade in the TUI is tmux — dissolve a stuck Enter, read a pane's age,
+ * interview a session and recreate it — and this rehearsal opens by running
+ * into exactly that: the step-cap watchdog and the unblock scan, refused with
+ * the reason, because there are no panes, no parked sessions and no context
+ * that bloats. What is left is the record: the numbers of a window, the
+ * journal, and the CV reconciliation.
+ *
+ * The turn that matters is the seventh. The window of one agent has something
+ * in it and the journal takes the entry; the window of another has **nothing**
+ * — no artifact, no run — and the journal REFUSES it. That is the whole reason
+ * the tool measures for itself: an interview always answers something, so a
+ * model asked to summarise an empty window writes a plausible paragraph, and
+ * the next Doctor reads the journal as fact. Here it cannot: an empty window
+ * goes to the CAPITANO as a sentence, never into the record as a synthesis.
+ */
+export const DOTTORE_MOCK_SCRIPT: ScriptedTurn[] = [
+  { text: "Reading my instructions.", toolCalls: [{ name: "read_file", args: { path: "AGENTS.md", limit: 20 } }] },
+  {
+    // Step 0 of the round: the watchdog that resumes whoever is parked on the step cap.
+    text: "First the watchdog freshness check, as my round starts.",
+    toolCalls: [{ name: "bash", args: { command: "python3 /app/.launcher/stepcap-watchdog.py --health" } }],
+  },
+  {
+    // Step 0bis: the UNBLOCK phase, the thing this role puts before everything else.
+    text: "Nothing is parked here. The unblock phase, then.",
+    toolCalls: [{ name: "bash", args: { command: "python3 /app/shared/skills/agent_unblock.py scan" } }],
+  },
+  {
+    text: "No panes to unblock either. So: the record. The board first.",
+    toolCalls: [{ name: "db_query", args: { args: ["dashboard"] } }],
+  },
+  {
+    text: "What the Scout did in this window.",
+    toolCalls: [{ name: "doctor_analytics", args: { args: ["scout-1", "2026-01-01T00:00:00Z"] } }],
+  },
+  {
+    text: "Measured, so it can be written down.",
+    toolCalls: [
+      {
+        name: "doctor_journal",
+        args: {
+          agent: "scout-1",
+          since: "2026-01-01T00:00:00Z",
+          notes: "Found positions in this window; no run recorded in the ledger, which on a mock run is expected and not a stall.",
+        },
+      },
+    ],
+  },
+  {
+    text: "And the Scorer's window.",
+    toolCalls: [{ name: "doctor_analytics", args: { args: ["scorer-1", "2026-01-01T00:00:00Z"] } }],
+  },
+  {
+    // The turn the whole tool exists for: nothing measured, so nothing written.
+    text: "Nothing in it. I will try to write the entry anyway, which is what a round under time pressure does.",
+    toolCalls: [
+      { name: "doctor_journal", args: { agent: "scorer-1", since: "2026-01-01T00:00:00Z", notes: "Quiet window: the Scorer was probably waiting for the queue." } },
+    ],
+  },
+  {
+    text: "Refused, and rightly: I have nothing measured to write. That empty window is itself the finding, and it goes to the CAPITANO.",
+    toolCalls: [
+      {
+        name: "send_message",
+        args: {
+          to: "capitano",
+          text: "[@dottore -> @capitano] [REPORT] scorer-1: window empty — no score in the database and no run in the ledger. Nothing written to the journal; the window is the finding.",
+        },
+      },
+    ],
+  },
+  { text: "End of round: the CVs on disk against the rows.", toolCalls: [{ name: "cv_disk_audit", args: {} }] },
+  {
+    toolCalls: [
+      {
+        name: "send_message",
+        args: { to: "capitano", text: "[@dottore -> @capitano] [REPORT] CV audit mismatch — see logs/cv-disk-audit.jsonl: a PDF on disk no application points at. I relink nothing, you decide." },
+      },
+    ],
+  },
+  { text: "Mock run complete: one window recorded, one empty window reported and not invented, the CVs reconciled." },
+];
+
 export function productRoleMockScript(role: string, userDir = ".", profileDir = ".", historyDir?: string): ScriptedTurn[] {
   if (role === "assistente") return assistenteMockScript(profileDir, historyDir);
   if (role === "scorer") return SCORER_MOCK_SCRIPT;
@@ -759,6 +845,7 @@ export function productRoleMockScript(role: string, userDir = ".", profileDir = 
   if (role === "critico") return criticoMockScript(userDir, profileDir);
   if (role === "sentinella") return SENTINELLA_MOCK_SCRIPT;
   if (role === "closer") return CLOSER_MOCK_SCRIPT;
+  if (role === "dottore") return DOTTORE_MOCK_SCRIPT;
   if (role === "mentor") return mentorMockScript(profileDir);
   if (role === "mantenitore") return MANTENITORE_MOCK_SCRIPT;
   return PRODUCT_ROLE_MOCK_SCRIPT;

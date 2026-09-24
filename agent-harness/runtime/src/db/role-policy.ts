@@ -238,6 +238,18 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       purpose: "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06).",
     },
   },
+  // T41, dottore.md: the archivist. In the TUI it lists `db-query` to "recover task
+  // context before respawning a crashed agent" — and there are no respawns here, because
+  // there are no sessions to crash: the MASTER's decision of 23/09 leaves this role
+  // without the right to stop or restart anyone. What is left of that skill is the
+  // overview a retrospective is written against, and only that. It writes nothing
+  // anywhere in the database: a role whose whole output is a record of what the others
+  // did must not be able to change what they did.
+  dottore: {
+    query: ["dashboard", "stats", "recent-activity"],
+    insert: [],
+    update: [],
+  },
   // T38, assistente.md: the one role that talks to the person. It reads the
   // database to answer them ("how many positions are ready?") and writes
   // NOTHING there — its own line says so: "The Assistente never writes to the
