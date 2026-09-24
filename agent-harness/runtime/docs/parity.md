@@ -443,9 +443,22 @@ exactly what this role should read: the marker, the composed prompt, every
 skill as the rewrite leaves it, and no skill folder nobody loads. Anything
 else and the role does **not** start, naming the file: a run on a prompt
 nobody verified is what the mount exists to prevent, and quietly rebuilding
-would hand it straight back. `tests/prepared-home.test.ts` holds all four —
-prepared and accepted, a replaced prompt, a changed and a smuggled skill, an
-empty home.
+would hand it straight back. `skills/` is compared as a TREE, not looked up by the names the runtime
+expects. The first version of this check was broken twice by SICUREZZA, and
+both holes had one shape — asking "is what I expect here?" instead of "is what
+is here what it should be?", which is an allowlist with gaps: a skill folder
+added as a SYMBOLIC LINK passed, because `isDirectory()` is false for a link
+and it was not even counted, and an extra file INSIDE an expected skill passed,
+because only `SKILL.md` was compared while those folders also ship scripts and
+translations. Now every node is read with `lstat` and compared both ways —
+name, KIND (a link is never a folder) and bytes — against the layout
+`materializeRoleHome` itself would have written, derived from the image rather
+than kept by hand.
+
+`tests/prepared-home.test.ts` holds it: prepared and accepted, a replaced
+prompt, a changed and a smuggled skill, an empty home, and the two SICUREZZA
+found — a linked folder, a link in place of a file the role reads, an extra
+file beside `SKILL.md`, and a shipped script changed.
 
 The switch is the executor's, set on the container it starts; a role cannot
 turn it on for its own process, and turning it on without the files being
