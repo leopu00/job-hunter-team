@@ -56,7 +56,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(20,24,20,.6); }
 .status-pill i, .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 11px rgba(187,242,70,.65); }
 .topbar__actions { display: flex; align-items: center; gap: 10px; }
-.live-screen-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: rgba(20,24,20,.6); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: border-color .18s ease; }
+.live-screen-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: rgba(20,24,20,.6); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: border-color .18s ease; text-decoration: none; }
 .live-screen-button:hover { border-color: var(--accent-dark); }
 .live-screen-button i { width: 6px; height: 6px; border-radius: 50%; background: #ff4d4d; }
 
@@ -282,3 +282,4 @@ h1 em { color: var(--accent); font-style: normal; font-weight: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.login-setup-link { position: fixed; top: 26px; right: clamp(28px, 5vw, 76px); z-index: 2; }
