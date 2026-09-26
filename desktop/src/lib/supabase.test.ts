@@ -42,6 +42,7 @@ function deps(client: SupabaseClient, invoke: LoginDeps["invoke"]): LoginDeps {
 
 function backend(login: () => Promise<unknown>) {
   return vi.fn(async (command: string) => {
+    if (command === "auth_store_prepare") return undefined;
     if (command === "auth_callback_url") return CALLBACK;
     if (command === "auth_google_login") return login();
     throw new Error(`unexpected command ${command}`);
@@ -128,6 +129,19 @@ describe("signInWithGoogle", () => {
     expect(client.auth.signInWithOAuth).not.toHaveBeenCalled();
   });
 
+  it("stops before the browser when the keychain refuses the session key", async () => {
+    const client = fakeClient();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === "auth_store_prepare") throw { code: "keychain_unavailable" };
+      return CALLBACK;
+    }) as unknown as LoginDeps["invoke"];
+    await expect(signInWithGoogle({}, deps(client, invoke))).rejects.toMatchObject({
+      code: "keychain-failed",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(client.auth.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
   it("reports a failed exchange", async () => {
     const client = fakeClient({
       exchangeCodeForSession: vi.fn().mockResolvedValue({
@@ -174,6 +188,7 @@ describe("the real supabase-js client against the backend's rules", () => {
       configured: true,
       desktop: true,
       invoke: (async (command: string, args?: Record<string, unknown>) => {
+        if (command === "auth_store_prepare") return undefined;
         if (command === "auth_callback_url") return CALLBACK;
         authorizeUrl = String(args?.authorizeUrl);
         return "0b8f1c2e-1234-4d5e-9abc-def012345678";

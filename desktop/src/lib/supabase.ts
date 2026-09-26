@@ -109,6 +109,7 @@ export type LoginErrorCode =
   | "port-busy"
   | "browser-failed"
   | "browser-not-found"
+  | "keychain-failed"
   | "denied"
   | "timed-out"
   | "cancelled"
@@ -130,6 +131,7 @@ const BACKEND_ERRORS: Record<string, LoginErrorCode> = {
   port_busy: "port-busy",
   browser_failed: "browser-failed",
   browser_not_found: "browser-not-found",
+  keychain_unavailable: "keychain-failed",
   denied: "denied",
   timed_out: "timed-out",
   cancelled: "cancelled",
@@ -183,6 +185,13 @@ export async function signInWithGoogle(
 ): Promise<void> {
   if (!deps.configured) throw new LoginError("not-configured");
   if (!deps.desktop) throw new LoginError("not-desktop");
+  // La chiave della sessione prima del browser: se il portachiavi la nega lo
+  // si dice subito, invece di aprire Google e fallire allo scambio del codice.
+  try {
+    await deps.invoke("auth_store_prepare");
+  } catch (backendError) {
+    throw toLoginError(backendError);
+  }
   const redirectTo = await deps.invoke<string>("auth_callback_url");
   const { data, error } = await deps.client.auth.signInWithOAuth({
     provider: "google",

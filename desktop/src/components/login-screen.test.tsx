@@ -107,6 +107,15 @@ describe("LoginScreen", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("says the keychain refused, in words the user can act on", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockRejectedValue(new LoginError("keychain-failed"));
+    render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
+    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Consenti sempre");
+    expect(signIn).toHaveBeenCalledTimes(1);
+  });
+
   it("disables the button when the build has no Supabase project", () => {
     render(<LoginScreen configured={false} loadBrowsers={noBrowsers} />);
     expect(screen.getByRole("button", { name: /Accedi con Google/ })).toBeDisabled();
