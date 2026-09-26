@@ -108,6 +108,7 @@ export type LoginErrorCode =
   | "not-desktop"
   | "port-busy"
   | "browser-failed"
+  | "browser-not-found"
   | "denied"
   | "timed-out"
   | "cancelled"
@@ -128,6 +129,7 @@ export class LoginError extends Error {
 const BACKEND_ERRORS: Record<string, LoginErrorCode> = {
   port_busy: "port-busy",
   browser_failed: "browser-failed",
+  browser_not_found: "browser-not-found",
   denied: "denied",
   timed_out: "timed-out",
   cancelled: "cancelled",
@@ -158,13 +160,27 @@ const defaultDeps = (): LoginDeps => ({
   invoke,
 });
 
+export interface SignInOptions {
+  /**
+   * Dove aprire la pagina di Google: `default` (il browser predefinito),
+   * `manual` (nessuno: l'utente copia il link) o l'`id` di un browser di
+   * `listBrowsers()`. Senza, il predefinito.
+   */
+  browser?: string;
+  /** Riceve il link di autorizzazione appena c'è, per «Copia link». */
+  onAuthorizeUrl?: (url: string) => void;
+}
+
 /**
  * Login Google, flusso PKCE: supabase-js prepara l'URL e salva il code
- * verifier, il backend apre il browser di sistema e aspetta il ritorno su
+ * verifier, il backend lo apre nel browser scelto e aspetta il ritorno su
  * loopback, il codice si scambia qui per la sessione. A sessione salvata,
  * `useSession` cambia da solo.
  */
-export async function signInWithGoogle(deps: LoginDeps = defaultDeps()): Promise<void> {
+export async function signInWithGoogle(
+  options: SignInOptions = {},
+  deps: LoginDeps = defaultDeps(),
+): Promise<void> {
   if (!deps.configured) throw new LoginError("not-configured");
   if (!deps.desktop) throw new LoginError("not-desktop");
   const redirectTo = await deps.invoke<string>("auth_callback_url");
@@ -177,9 +193,13 @@ export async function signInWithGoogle(deps: LoginDeps = defaultDeps()): Promise
     },
   });
   if (error || !data?.url) throw new LoginError("unknown", error?.message ?? null);
+  options.onAuthorizeUrl?.(data.url);
   let code: string;
   try {
-    code = await deps.invoke<string>("auth_google_login", { authorizeUrl: data.url });
+    code = await deps.invoke<string>("auth_google_login", {
+      authorizeUrl: data.url,
+      browser: options.browser ?? "default",
+    });
   } catch (backendError) {
     throw toLoginError(backendError);
   }

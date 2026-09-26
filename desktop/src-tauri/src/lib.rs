@@ -1,5 +1,6 @@
 mod auth_login;
 mod auth_store;
+mod browsers;
 mod live_screen;
 mod podman;
 mod team;
@@ -17,6 +18,7 @@ pub fn run() {
             auth_store::auth_store_get,
             auth_store::auth_store_remove,
             auth_store::auth_store_set,
+            browsers::auth_browsers,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             podman::check_podman,

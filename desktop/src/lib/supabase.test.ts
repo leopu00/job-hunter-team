@@ -72,7 +72,8 @@ describe("signInWithGoogle", () => {
   it("asks for the URL without redirecting, lets the backend wait, then exchanges the code", async () => {
     const client = fakeClient();
     const invoke = backend(async () => "code-123");
-    await signInWithGoogle(deps(client, invoke));
+    const onAuthorizeUrl = vi.fn();
+    await signInWithGoogle({ browser: "chrome-canary", onAuthorizeUrl }, deps(client, invoke));
 
     expect(client.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: "google",
@@ -82,15 +83,24 @@ describe("signInWithGoogle", () => {
         queryParams: { prompt: "select_account" },
       },
     });
+    expect(onAuthorizeUrl).toHaveBeenCalledWith(`${PROJECT}/auth/v1/authorize?provider=google`);
     expect(invoke).toHaveBeenCalledWith("auth_google_login", {
       authorizeUrl: `${PROJECT}/auth/v1/authorize?provider=google`,
+      browser: "chrome-canary",
     });
     expect(client.auth.exchangeCodeForSession).toHaveBeenCalledWith("code-123");
+  });
+
+  it("opens the default browser when no choice is given", async () => {
+    const invoke = backend(async () => "code");
+    await signInWithGoogle({}, deps(fakeClient(), invoke));
+    expect(invoke).toHaveBeenCalledWith("auth_google_login", expect.objectContaining({ browser: "default" }));
   });
 
   it("maps the backend refusals to login errors", async () => {
     const cases: Array<[unknown, string, string | null]> = [
       [{ code: "port_busy", detail: null }, "port-busy", null],
+      [{ code: "browser_not_found" }, "browser-not-found", null],
       [{ code: "denied", detail: "User denied" }, "denied", "User denied"],
       [{ code: "timed_out" }, "timed-out", null],
       [{ code: "cancelled" }, "cancelled", null],
@@ -99,7 +109,7 @@ describe("signInWithGoogle", () => {
     ];
     for (const [rejection, code, detail] of cases) {
       const client = fakeClient();
-      const attempt = signInWithGoogle(deps(client, backend(() => Promise.reject(rejection))));
+      const attempt = signInWithGoogle({}, deps(client, backend(() => Promise.reject(rejection))));
       await expect(attempt).rejects.toMatchObject({ code, detail });
       expect(client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
     }
@@ -109,9 +119,9 @@ describe("signInWithGoogle", () => {
     const client = fakeClient();
     const invoke = backend(async () => "code");
     await expect(
-      signInWithGoogle({ ...deps(client, invoke), configured: false }),
+      signInWithGoogle({}, { ...deps(client, invoke), configured: false }),
     ).rejects.toMatchObject({ code: "not-configured" });
-    await expect(signInWithGoogle({ ...deps(client, invoke), desktop: false })).rejects.toMatchObject(
+    await expect(signInWithGoogle({}, { ...deps(client, invoke), desktop: false })).rejects.toMatchObject(
       { code: "not-desktop" },
     );
     expect(invoke).not.toHaveBeenCalled();
@@ -125,7 +135,7 @@ describe("signInWithGoogle", () => {
         error: { message: "invalid flow state" },
       }),
     });
-    const attempt = signInWithGoogle(deps(client, backend(async () => "code")));
+    const attempt = signInWithGoogle({}, deps(client, backend(async () => "code")));
     await expect(attempt).rejects.toBeInstanceOf(LoginError);
     await expect(attempt).rejects.toMatchObject({ code: "exchange-failed" });
   });
@@ -159,7 +169,7 @@ describe("the real supabase-js client against the backend's rules", () => {
     );
 
     let authorizeUrl = "";
-    await signInWithGoogle({
+    await signInWithGoogle({}, {
       client,
       configured: true,
       desktop: true,
