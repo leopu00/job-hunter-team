@@ -259,3 +259,13 @@ describe("CLOSER live screen", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("dashboard link", () => {
+  it("leads from every setup screen back to the dashboard page", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
+    await user.click(screen.getByRole("button", { name: /inizia la configurazione/i }));
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
+  });
+});

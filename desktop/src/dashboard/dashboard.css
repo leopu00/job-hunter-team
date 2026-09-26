@@ -1,0 +1,13 @@
+/* The dashboard page wears the web's stylesheet as it is: same tokens, same
+   Tailwind build, same base. It lives on its own page (dashboard.html), so
+   the web's global rules never reach the setup screens of index.html. */
+@import "@fontsource/jetbrains-mono/300.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource/jetbrains-mono/700.css";
+@import "../../../web/app/globals.css";
+
+/* Tailwind scans desktop/ on its own; the reused components live in web/. */
+@source "../../../web/app/components";
+@source "../../../web/app/(protected)/_components/DashboardSkeleton.tsx";

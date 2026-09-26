@@ -45,6 +45,18 @@ function LiveScreenButton() {
   );
 }
 
+/**
+ * Back to the dashboard, the page the main window opens on. These setup
+ * screens stay here, one click away from it.
+ */
+function DashboardLink() {
+  return (
+    <a className="live-screen-button" href="dashboard.html">
+      Dashboard
+    </a>
+  );
+}
+
 function ArrowIcon() {
   return <span aria-hidden="true">→</span>;
 }
@@ -55,6 +67,7 @@ function WelcomePage({ onStart }: { onStart: () => void }) {
       <header className="topbar">
         <BrandMark />
         <div className="topbar__actions">
+          <DashboardLink />
           <LiveScreenButton />
           <span className="status-pill">
             <i /> Anteprima locale
@@ -280,6 +293,7 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
         <header className="topbar">
           <BrandMark />
           <div className="topbar__actions">
+            <DashboardLink />
             <LiveScreenButton />
             <span className="status-pill">
               <i /> Team in esecuzione
@@ -303,6 +317,7 @@ function SetupPage({ onBack, onStarted }: SetupPageProps) {
       <header className="topbar">
         <BrandMark />
         <div className="topbar__actions">
+          <DashboardLink />
           <LiveScreenButton />
           <span className="step-label">Setup iniziale · 02 / 02</span>
         </div>
@@ -429,6 +444,7 @@ function TeamPage({
       <header className="topbar">
         <BrandMark />
         <div className="topbar__actions">
+          <DashboardLink />
           <LiveScreenButton />
           <span className="status-pill">
             <i /> Team operativo
