@@ -24,8 +24,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost ws://127.0.0.1:* https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev",
-      "devCsp": "default-src 'self' http://127.0.0.1:1420; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' http://127.0.0.1:1420; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:* https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev"
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; font-src 'self' data: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost ws://127.0.0.1:* https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
+      "devCsp": "default-src 'self' http://127.0.0.1:1420; img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; font-src 'self' data: http://127.0.0.1:1420 https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' http://127.0.0.1:1420; worker-src 'self' http://127.0.0.1:1420 blob:; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:* https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com"
     }
   },
   "bundle": {

@@ -1,13 +1,42 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { searchForWorkspaceRoot } from "vite";
+import { searchForWorkspaceRoot, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
+/**
+ * MapLibre 6 ships its worker as a separate module and the web pins its URL
+ * to a same-origin copy, /maplibre/maplibre-gl-worker.mjs (web/lib/
+ * maplibre-worker.ts; the web copies it into public/ on postinstall). The
+ * desktop serves the installed files at that path in dev and emits them
+ * into the build: always the installed version, nothing committed to drift.
+ * The worker imports the shared module next to it, so both go. A missing
+ * file fails the build instead of shipping a map without tiles.
+ */
+function maplibreWorker(): Plugin {
+  const files = ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"];
+  const read = (file: string) => readFileSync(fromHere(`./node_modules/maplibre-gl/dist/${file}`));
+  return {
+    name: "jht-maplibre-worker",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const file = files.find((f) => req.url?.split("?")[0] === `/maplibre/${f}`);
+        if (!file) return next();
+        res.setHeader("Content-Type", "text/javascript");
+        res.end(read(file));
+      });
+    },
+    generateBundle() {
+      for (const file of files) this.emitFile({ type: "asset", fileName: `maplibre/${file}`, source: read(file) });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), maplibreWorker()],
   // The dashboard renders the web's own components (web/app/components) so
   // the two look the same. `@/` is the web's alias; `@/lib/queries` is the
   // one web module that needs Next, and the components only take types from
