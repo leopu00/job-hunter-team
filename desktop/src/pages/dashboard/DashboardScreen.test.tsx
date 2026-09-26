@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { NAVIGATE_EVENT } from "../web-shims/next-link";
+import { describe, expect, it } from "vitest";
+import { currentLocation, navigate } from "../../shell/router";
 import DashboardScreen from "./DashboardScreen";
 import { fixtureData } from "./dashboard-fixture";
 
@@ -21,16 +21,14 @@ describe("DashboardScreen", () => {
     expect(screen.queryByText("Candidature inviate")).not.toBeInTheDocument();
   });
 
-  it("keeps a click on a position inside the app", () => {
-    const onNavigate = vi.fn();
-    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+  it("opens a position through the shell's router", () => {
+    navigate("/dashboard", { replace: true });
     render(<DashboardScreen data={fixtureData()} locale="it" />);
     const link = screen.getAllByRole("link", { name: /Ruolo sintetico 11/ })[0];
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    expect(link).toHaveAttribute("href", "#/positions/pos-11");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
     fireEvent(link, click);
     expect(click.defaultPrevented).toBe(true);
-    expect(onNavigate).toHaveBeenCalledTimes(1);
-    expect((onNavigate.mock.calls[0][0] as CustomEvent).detail).toEqual({ href: "/positions/pos-11" });
-    window.removeEventListener(NAVIGATE_EVENT, onNavigate);
+    expect(currentLocation().path).toBe("/positions/pos-11");
   });
 });

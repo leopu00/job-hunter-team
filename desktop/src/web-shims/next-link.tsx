@@ -1,35 +1,42 @@
 import type { AnchorHTMLAttributes, MouseEvent, Ref } from "react";
+import { isAppHref, navigate } from "../shell/router";
 
 /**
- * Stand-in for `next/link` in the desktop build. The dashboard reuses the web
- * components as they are, and RecentPositionsTable links to `/positions` and
- * `/positions/<id>`: pages the desktop does not have yet. A real navigation
- * would leave the app, so the click is kept inside and announced as a
- * `jht:navigate` event, for the screen that will handle those routes.
+ * Stand-in for `next/link` in the desktop build, so the web components run
+ * unchanged. A web path (`/positions/42`) goes through the shell's router; any
+ * other href (https://…, mailto:) behaves as a plain link. Modified clicks
+ * (cmd/ctrl/shift, middle button) are left alone.
  */
-export const NAVIGATE_EVENT = "jht:navigate";
-
-type Props = AnchorHTMLAttributes<HTMLAnchorElement> & {
-  href: string;
+type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+  href: string | { pathname?: string; query?: Record<string, string> };
   ref?: Ref<HTMLAnchorElement>;
-  prefetch?: boolean;
+  prefetch?: boolean | null;
   replace?: boolean;
   scroll?: boolean;
 };
 
+function toHref(href: Props["href"]): string {
+  if (typeof href === "string") return href;
+  const query = href.query ? "?" + new URLSearchParams(href.query).toString() : "";
+  return (href.pathname ?? "") + query;
+}
+
 export default function Link({
-  href,
+  href: rawHref,
   onClick,
   prefetch: _prefetch,
-  replace: _replace,
+  replace = false,
   scroll: _scroll,
   ...rest
 }: Props) {
+  const href = toHref(rawHref);
+  const inApp = isAppHref(href);
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || !inApp) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { href } }));
+    navigate(href, { replace });
   };
-  return <a href={href} onClick={handleClick} {...rest} />;
+  return <a href={inApp ? "#" + href : href} onClick={handleClick} {...rest} />;
 }
