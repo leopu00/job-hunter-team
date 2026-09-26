@@ -149,6 +149,62 @@ jobs:
         working-directory: desktop
         run: npm test
 
+  # Il crate Tauri del desktop ha rami per sistema (#[cfg(target_os = ...)]:
+  # browser installati, portachiavi, lancio dei processi). Da un solo sistema
+  # gli altri rami non si compilano nemmeno: qui ognuno gira sul suo. Un job a
+  # se' e non una matrice su `desktop`: la suite vitest non cambia col sistema.
+  desktop-rust:
+    name: desktop — Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
+    if: github.event_name != 'schedule'
+    strategy:
+      # Tre verdetti separati: un rosso su Windows non deve cancellare Linux
+      # e macOS a meta'.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Le librerie di sistema che Tauri 2 linka su Linux (WebKitGTK 4.1 e
+      # compagnia); macOS e Windows usano la webview del sistema.
+      - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      # Rust stable e' gia' sui runner: niente action di terzi per installarlo.
+      - name: Show Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: desktop-cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-cargo-${{ runner.os }}-
+
+      # --locked: un Cargo.lock non allineato a Cargo.toml e' un rosso, non
+      # un lock riscritto in silenzio sul runner.
+      - name: Check desktop crate
+        working-directory: desktop/src-tauri
+        run: cargo check --locked --all-targets
+
+      - name: Test desktop crate
+        working-directory: desktop/src-tauri
+        run: cargo test --locked
+
   # A migration is an immutable release identity, not merely a SQL file that
   # parses today.  This gate compares the exact base tree with HEAD and every
   # freshly fetched remote branch by version/path/Git blob, then applies only
