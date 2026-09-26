@@ -6,11 +6,15 @@ import { currentLocation, navigate, refresh, useLocation } from "../shell/router
  * read and move the shell's router. router.refresh() asks the current page
  * to read its data again (see useRefresh in shell/router).
  */
+/** The option Next's router.push/replace take: `scroll: false` keeps the scroll position. */
+type NavigateOptions = { scroll?: boolean };
+
 export function useRouter() {
   return useMemo(
     () => ({
-      push: (href: string) => navigate(href),
-      replace: (href: string) => navigate(href, { replace: true }),
+      push: (href: string, options?: NavigateOptions) => navigate(href, { scroll: options?.scroll }),
+      replace: (href: string, options?: NavigateOptions) =>
+        navigate(href, { replace: true, scroll: options?.scroll }),
       back: () => window.history.back(),
       forward: () => window.history.forward(),
       refresh,

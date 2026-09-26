@@ -79,24 +79,32 @@ export default defineConfig(({ mode }) => ({
   // the local SQLite workspace, the filesystem, the demo cookie) get
   // stand-ins in src/web-shims/server: every query takes the web's cloud
   // branch with the user's own session, and `@/lib/queries` is the web's real
-  // one. next/link, next/navigation, next/dynamic, next/image and
-  // next/headers get stand-ins (src/web-shims) wired to the shell's router
+  // one. next/link, next/navigation, next/dynamic, next/image,
+  // next/headers and next/server get stand-ins (src/web-shims) wired to the shell's router
   // and document.cookie. Keep the same map in tsconfig.json "paths".
   resolve: {
     alias: [
       { find: /^@\/lib\/supabase\/server$/, replacement: fromHere("./src/web-shims/server/supabase-server.ts") },
       { find: /^@\/lib\/supabase\/client$/, replacement: fromHere("./src/web-shims/server/supabase-client.ts") },
+      { find: /^@\/lib\/supabase\/admin$/, replacement: fromHere("./src/web-shims/server/supabase-admin.ts") },
       { find: /^@\/lib\/auth$/, replacement: fromHere("./src/web-shims/server/auth.ts") },
       { find: /^@\/lib\/workspace$/, replacement: fromHere("./src/web-shims/server/workspace.ts") },
       { find: /^@\/lib\/local-queries$/, replacement: fromHere("./src/web-shims/server/local-queries.ts") },
       { find: /^@\/lib\/demo\/mode$/, replacement: fromHere("./src/web-shims/server/demo-mode.ts") },
       { find: /^@\/lib\/server-locale$/, replacement: fromHere("./src/web-shims/server/server-locale.ts") },
       { find: /^@\/lib\/position-document-file\.server$/, replacement: fromHere("./src/web-shims/server/position-document-file.ts") },
+      { find: /^@\/lib\/deploy-mode$/, replacement: fromHere("./src/web-shims/server/deploy-mode.ts") },
+      { find: /^@\/lib\/local-token$/, replacement: fromHere("./src/web-shims/server/local-token.ts") },
+      { find: /^@\/lib\/jht-paths$/, replacement: fromHere("./src/web-shims/server/jht-paths.ts") },
+      { find: /^@\/lib\/user-document-upload\.server$/, replacement: fromHere("./src/web-shims/server/user-document-upload.ts") },
+      { find: /^@\/lib\/positions\/local-first-write$/, replacement: fromHere("./src/web-shims/server/local-first-write.ts") },
+      { find: /^better-sqlite3$/, replacement: fromHere("./src/web-shims/server/better-sqlite3.ts") },
       { find: /^next\/link$/, replacement: fromHere("./src/web-shims/next-link.tsx") },
       { find: /^next\/navigation$/, replacement: fromHere("./src/web-shims/next-navigation.ts") },
       { find: /^next\/dynamic$/, replacement: fromHere("./src/web-shims/next-dynamic.tsx") },
       { find: /^next\/image$/, replacement: fromHere("./src/web-shims/next-image.tsx") },
       { find: /^next\/headers$/, replacement: fromHere("./src/web-shims/next-headers.ts") },
+      { find: /^next\/server$/, replacement: fromHere("./src/web-shims/next-server.ts") },
       { find: /^@\//, replacement: fromHere("../web/") },
     ],
     // A web/node_modules (present wherever the web is installed) must not

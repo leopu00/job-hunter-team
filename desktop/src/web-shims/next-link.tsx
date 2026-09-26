@@ -26,7 +26,7 @@ export default function Link({
   onClick,
   prefetch: _prefetch,
   replace = false,
-  scroll: _scroll,
+  scroll = true,
   ...rest
 }: Props) {
   const href = toHref(rawHref);
@@ -36,7 +36,7 @@ export default function Link({
     if (event.defaultPrevented || !inApp) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    navigate(href, { replace });
+    navigate(href, { replace, scroll });
   };
   return <a href={inApp ? "#" + href : href} onClick={handleClick} {...rest} />;
 }

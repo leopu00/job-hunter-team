@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRefresh } from "./router";
 
 /**
@@ -7,23 +7,30 @@ import { useRefresh } from "./router";
  * shows what it returns. Its server-only imports resolve to the desktop
  * stand-ins (web-shims/server), so its queries run with the user's session.
  * The page runs again when something asks for fresh data (Aggiorna,
- * router.refresh()); until the first result, `fallback`.
+ * router.refresh()), and when `runKey` changes (a page whose query string
+ * holds its filters): the screen stays up until the new result replaces it,
+ * as a Next soft navigation does, so the client components keep their state.
+ * Until the first result, `fallback`.
  */
 type Props = {
   render: () => Promise<ReactNode> | ReactNode;
   fallback?: ReactNode;
   failure?: ReactNode;
+  runKey?: string;
 };
 
 type State = { state: "loading" } | { state: "ready"; node: ReactNode } | { state: "failed" };
 
-export default function ServerPage({ render, fallback = null, failure }: Props) {
+export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
   const [result, setResult] = useState<State>({ state: "loading" });
+  // The latest closure: a run started by runKey or refresh reads the props of now.
+  const latest = useRef(render);
+  latest.current = render;
 
   const run = useCallback(() => {
     let live = true;
     Promise.resolve()
-      .then(render)
+      .then(() => latest.current())
       .then((node) => live && setResult({ state: "ready", node }))
       .catch((error: unknown) => {
         console.error("[desktop] server page failed:", error);
@@ -33,12 +40,12 @@ export default function ServerPage({ render, fallback = null, failure }: Props) 
     return () => {
       live = false;
     };
-    // `render` is a fresh closure every render: the page runs once per mount
-    // and on refresh, not on every re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `render` is a fresh closure every render: the page runs once per mount,
+    // on refresh and on a new runKey, not on every re-render.
   }, []);
 
-  useEffect(run, [run]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(run, [run, runKey]);
   useRefresh(run);
 
   if (result.state === "ready") return <>{result.node}</>;

@@ -31,6 +31,23 @@ describe("ServerPage", () => {
     spy.mockRestore();
   });
 
+  it("runs the page again on a new runKey, with the new props, keeping the screen meanwhile", async () => {
+    let resolveSecond!: (node: React.ReactNode) => void;
+    const page = vi.fn((q: string) =>
+      q === "a" ? Promise.resolve(<p>page a</p>) : new Promise<React.ReactNode>((r) => (resolveSecond = r)),
+    );
+    const { rerender } = render(<ServerPage runKey="a" render={() => page("a")} fallback={<p>loading</p>} />);
+    expect(await screen.findByText("page a")).toBeInTheDocument();
+    rerender(<ServerPage runKey="b" render={() => page("b")} fallback={<p>loading</p>} />);
+    await act(async () => undefined);
+    // While the new result is on its way, the old screen stays (no fallback).
+    expect(screen.getByText("page a")).toBeInTheDocument();
+    expect(screen.queryByText("loading")).not.toBeInTheDocument();
+    await act(async () => resolveSecond(<p>page b</p>));
+    expect(screen.getByText("page b")).toBeInTheDocument();
+    expect(page.mock.calls.map((c) => c[0])).toEqual(["a", "b"]);
+  });
+
   it("says so when the page cannot be read at all", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     render(<ServerPage render={() => Promise.reject(new Error("offline"))} />);
