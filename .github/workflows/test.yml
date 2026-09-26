@@ -115,6 +115,40 @@ jobs:
         working-directory: tests/js
         run: npm test
 
+  # Il pannello di controllo desktop (Tauri + React): la sua suite vitest e
+  # il typecheck non giravano in nessun job. Pacchetto a se' con il suo lock;
+  # i moduli puri di web/lib che importa (tipi, regole) non hanno dipendenze,
+  # quindi web/ non si installa.
+  desktop:
+    name: desktop — types, vitest
+    runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Typecheck desktop
+        working-directory: desktop
+        run: npx tsc --noEmit
+
+      - name: Run desktop tests
+        working-directory: desktop
+        run: npm test
+
   # A migration is an immutable release identity, not merely a SQL file that
   # parses today.  This gate compares the exact base tree with HEAD and every
   # freshly fetched remote branch by version/path/Git blob, then applies only

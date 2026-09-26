@@ -46,6 +46,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "test.yml": {
         "api-worker": READ_CONTENTS,
         "vitest": READ_CONTENTS,
+        "desktop": READ_CONTENTS,
         "migration-gate": READ_CONTENTS,
         "pytest": READ_CONTENTS,
         "e2e": READ_CONTENTS,
