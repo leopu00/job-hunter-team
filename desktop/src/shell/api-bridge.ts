@@ -53,3 +53,47 @@ export function installApiBridge(answer: ApiFetch, target: typeof globalThis = g
     target.fetch = realFetch;
   };
 }
+
+/**
+ * A web route module (web/app/api/.../route.ts): its exports are handlers
+ * named after HTTP methods, called as Next calls them, `(request, { params })`.
+ */
+export type WebRouteModule = Record<string, unknown>;
+
+type WebHandler = (request: Request, context: { params: Promise<Record<string, string>> }) => Promise<Response> | Response;
+
+function matchPattern(pattern: string, path: string): Record<string, string> | null {
+  const a = pattern.split("/").filter(Boolean);
+  const b = path.split("/").filter(Boolean);
+  if (a.length !== b.length) return null;
+  const params: Record<string, string> = {};
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].startsWith("[") && a[i].endsWith("]")) params[a[i].slice(1, -1)] = decodeURIComponent(b[i]);
+    else if (a[i] !== b[i]) return null;
+  }
+  return params;
+}
+
+/**
+ * Runs web route handlers as they are, for an explicit list of routes whose
+ * work is a Supabase read or write with the user's session (their
+ * server-only imports resolve to the desktop stand-ins). Patterns use the
+ * web's folder syntax: "/api/pending-messages/[id]/ack". A listed route
+ * without a handler for the method answers 405, as Next does.
+ */
+export function webRoutes(routes: Record<string, WebRouteModule>, next: ApiFetch): ApiFetch {
+  return async (input, init) => {
+    const path = apiPath(input);
+    if (path) {
+      for (const [pattern, mod] of Object.entries(routes)) {
+        const params = matchPattern(pattern, path);
+        if (!params) continue;
+        const request = new Request(input instanceof Request ? input : new URL(String(input), window.location.href), init);
+        const handler = mod[request.method.toUpperCase()];
+        if (typeof handler !== "function") return json({ error: "method_not_allowed" }, 405);
+        return (handler as WebHandler)(request, { params: Promise.resolve(params) });
+      }
+    }
+    return next(input, init);
+  };
+}

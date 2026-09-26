@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { installApiBridge, notInDesktop, shellApi, type ApiFetch } from "./api-bridge";
+import { installApiBridge, notInDesktop, shellApi, webRoutes, type ApiFetch } from "./api-bridge";
 
 function fakeGlobal() {
   const real = vi.fn(async () => new Response("real"));
@@ -36,6 +36,23 @@ describe("shellApi", () => {
     const other = await api("/api/positions/7/cv", { method: "POST" });
     expect(other.status).toBe(404);
     expect(await other.json()).toEqual({ error: "not_in_desktop", path: "/api/positions/7/cv" });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("webRoutes", () => {
+  it("calls the web handler for the method, with the path params as Next passes them", async () => {
+    const POST = vi.fn(async (request: Request, { params }: { params: Promise<Record<string, string>> }) =>
+      Response.json({ id: (await params).id, body: await request.json() }),
+    );
+    const next = vi.fn(notInDesktop);
+    const api = webRoutes({ "/api/pending-messages/[id]/ack": { POST } }, next);
+
+    const res = await api("/api/pending-messages/abc/ack", { method: "POST", body: JSON.stringify({ a: 1 }) });
+    expect(await res.json()).toEqual({ id: "abc", body: { a: 1 } });
+
+    expect((await api("/api/pending-messages/abc/ack")).status).toBe(405);
+    expect((await api("/api/pending-messages/abc/other", { method: "POST" })).status).toBe(404);
     expect(next).toHaveBeenCalledTimes(1);
   });
 });
