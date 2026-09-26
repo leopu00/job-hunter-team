@@ -50,7 +50,10 @@ in the app. `src/lib/supabase.ts` exports the signed-in client (`supabase`),
   webview's localStorage: they are encrypted (ChaCha20-Poly1305) in the app's
   local data dir, with the 32-byte key in the OS keychain (macOS Keychain,
   Windows Credential Manager, Linux kernel keyring). A file that no longer
-  decrypts counts as signed out.
+  decrypts counts as signed out. The key is read from the keychain at most once per
+  process and kept in memory: on macOS every keychain read of an unsigned or
+  rebuilt app can raise a password prompt. A refusal is not asked again until
+  the user clicks "Accedi con Google" once more.
 - **Sign-out** revokes this app's session only (`scope: "local"`): the web and
   other devices stay signed in.
 - The CSP allows `https://*.supabase.co` and `wss://*.supabase.co`; a project

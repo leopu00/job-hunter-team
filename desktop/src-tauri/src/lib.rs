@@ -11,11 +11,13 @@ use team::TeamRuntimeState;
 pub fn run() {
     tauri::Builder::default()
         .manage(TeamRuntimeState::default())
+        .manage(auth_store::system_key_cache())
         .invoke_handler(tauri::generate_handler![
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
             auth_store::auth_store_get,
+            auth_store::auth_store_prepare,
             auth_store::auth_store_remove,
             auth_store::auth_store_set,
             browsers::auth_browsers,

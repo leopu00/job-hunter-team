@@ -23,6 +23,7 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::{Mutex, MutexGuard},
 };
 use tauri::Manager;
 use zeroize::Zeroizing;
@@ -34,6 +35,7 @@ const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
 const MAX_NAME_LEN: usize = 128;
 const MAX_VALUE_BYTES: usize = 64 * 1024;
+const KEYCHAIN_UNAVAILABLE: &str = "keychain_unavailable";
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,45 +47,207 @@ fn failure(code: &'static str) -> AuthStoreError {
     AuthStoreError { code }
 }
 
+/// La chiave del portachiavi di questo processo (stato gestito da Tauri).
+pub(crate) type SystemKeyCache = KeyCache<SystemKeychain>;
+
+pub(crate) fn system_key_cache() -> SystemKeyCache {
+    KeyCache::new(SystemKeychain)
+}
+
 #[tauri::command]
 pub(crate) fn auth_store_get(
     app: tauri::AppHandle,
+    keys: tauri::State<'_, SystemKeyCache>,
     name: String,
 ) -> Result<Option<String>, AuthStoreError> {
-    validate_name(&name)?;
-    let dir = store_dir(&app)?;
-    let path = entry_path(&dir, &name);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let Some(key) = keyring_key(false)? else {
-        // Il file c'è ma la chiave no: illeggibile per sempre.
-        let _ = fs::remove_file(&path);
-        return Ok(None);
-    };
-    read_entry(&path, &name, &key)
+    get_value(&store_dir(&app)?, &keys, &name)
 }
 
 #[tauri::command]
 pub(crate) fn auth_store_set(
     app: tauri::AppHandle,
+    keys: tauri::State<'_, SystemKeyCache>,
     name: String,
     value: String,
 ) -> Result<(), AuthStoreError> {
-    validate_name(&name)?;
-    if value.len() > MAX_VALUE_BYTES {
-        return Err(failure("value_too_large"));
-    }
-    let dir = store_dir(&app)?;
-    let key = keyring_key(true)?.ok_or_else(|| failure("keyring_failed"))?;
-    write_entry(&dir, &name, &value, &key)
+    set_value(&store_dir(&app)?, &keys, &name, &value)
 }
 
 #[tauri::command]
 pub(crate) fn auth_store_remove(app: tauri::AppHandle, name: String) -> Result<(), AuthStoreError> {
     validate_name(&name)?;
-    let dir = store_dir(&app)?;
-    remove_entry(&dir, &name)
+    remove_entry(&store_dir(&app)?, &name)
+}
+
+/// Prima di aprire il browser: la chiave c'è (o si crea) e il portachiavi la
+/// dà. È il solo punto che riprova dopo un rifiuto, perché lo chiede l'utente
+/// con un clic su «Accedi»: una domanda per clic, mai un giro da solo.
+#[tauri::command]
+pub(crate) fn auth_store_prepare(
+    keys: tauri::State<'_, SystemKeyCache>,
+) -> Result<(), AuthStoreError> {
+    keys.prepare()
+}
+
+fn get_value<S: KeySource>(
+    dir: &Path,
+    keys: &KeyCache<S>,
+    name: &str,
+) -> Result<Option<String>, AuthStoreError> {
+    validate_name(name)?;
+    let path = entry_path(dir, name);
+    if fs::symlink_metadata(&path).is_err() {
+        return Ok(None);
+    }
+    let Some(key) = keys.existing()? else {
+        // Il file c'è ma la chiave no: illeggibile per sempre.
+        let _ = fs::remove_file(&path);
+        return Ok(None);
+    };
+    read_entry(&path, name, &key)
+}
+
+fn set_value<S: KeySource>(
+    dir: &Path,
+    keys: &KeyCache<S>,
+    name: &str,
+    value: &str,
+) -> Result<(), AuthStoreError> {
+    validate_name(name)?;
+    if value.len() > MAX_VALUE_BYTES {
+        return Err(failure("value_too_large"));
+    }
+    let key = keys.existing_or_new()?;
+    write_entry(dir, name, value, &key)
+}
+
+/// Dove sta la chiave: il portachiavi del sistema, o un finto nei test.
+pub(crate) trait KeySource: Send + Sync + 'static {
+    /// `Ok(None)` se la voce non c'è.
+    fn read(&self) -> Result<Option<Zeroizing<Vec<u8>>>, ()>;
+    fn write(&self, key: &[u8]) -> Result<(), ()>;
+}
+
+pub(crate) struct SystemKeychain;
+
+impl SystemKeychain {
+    fn entry() -> Result<keyring::Entry, ()> {
+        keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|_| ())
+    }
+}
+
+impl KeySource for SystemKeychain {
+    fn read(&self) -> Result<Option<Zeroizing<Vec<u8>>>, ()> {
+        match Self::entry()?.get_secret() {
+            Ok(secret) => Ok(Some(Zeroizing::new(secret))),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err(()),
+        }
+    }
+
+    fn write(&self, key: &[u8]) -> Result<(), ()> {
+        Self::entry()?.set_secret(key).map_err(|_| ())
+    }
+}
+
+enum KeyState {
+    /// Il portachiavi non è ancora stato interrogato.
+    Unknown,
+    /// Interrogato: la voce non c'è (o ha una forma sbagliata e va rifatta).
+    Missing,
+    Loaded(Zeroizing<[u8; KEY_LEN]>),
+    /// Rifiuto o errore: niente altre domande finché l'utente non riprova.
+    Failed,
+}
+
+/// La chiave, letta dal portachiavi AL PIÙ UNA VOLTA per processo.
+///
+/// Su macOS ogni lettura di un'app non firmata, o ricompilata, può aprire la
+/// finestra «vuole usare le informazioni riservate nel Portachiavi», e
+/// supabase-js legge e scrive lo storage decine di volte (sessione, code
+/// verifier, refresh): chiedere la chiave a ogni accesso era un popup a ogni
+/// accesso. Il lucchetto copre anche la lettura: due chiamate insieme fanno
+/// una domanda sola.
+pub(crate) struct KeyCache<S: KeySource> {
+    source: S,
+    state: Mutex<KeyState>,
+}
+
+impl<S: KeySource> KeyCache<S> {
+    pub(crate) fn new(source: S) -> Self {
+        Self {
+            source,
+            state: Mutex::new(KeyState::Unknown),
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, KeyState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn load(&self, state: &mut KeyState) {
+        if !matches!(state, KeyState::Unknown) {
+            return;
+        }
+        *state = match self.source.read() {
+            Ok(Some(secret)) if secret.len() == KEY_LEN => {
+                let mut key = Zeroizing::new([0u8; KEY_LEN]);
+                key.copy_from_slice(&secret);
+                KeyState::Loaded(key)
+            }
+            Ok(_) => KeyState::Missing,
+            Err(()) => KeyState::Failed,
+        };
+    }
+
+    /// Per leggere: `None` se il portachiavi non ha la chiave.
+    fn existing(&self) -> Result<Option<Zeroizing<[u8; KEY_LEN]>>, AuthStoreError> {
+        let mut state = self.lock();
+        self.load(&mut state);
+        match &*state {
+            KeyState::Loaded(key) => Ok(Some(key.clone())),
+            KeyState::Missing => Ok(None),
+            KeyState::Unknown | KeyState::Failed => Err(failure(KEYCHAIN_UNAVAILABLE)),
+        }
+    }
+
+    /// Per scrivere: se manca la crea, una volta.
+    fn existing_or_new(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, AuthStoreError> {
+        let mut state = self.lock();
+        self.load(&mut state);
+        self.create_if_missing(&mut state)
+    }
+
+    fn prepare(&self) -> Result<(), AuthStoreError> {
+        let mut state = self.lock();
+        if matches!(*state, KeyState::Failed) {
+            *state = KeyState::Unknown;
+        }
+        self.load(&mut state);
+        self.create_if_missing(&mut state).map(|_| ())
+    }
+
+    fn create_if_missing(
+        &self,
+        state: &mut KeyState,
+    ) -> Result<Zeroizing<[u8; KEY_LEN]>, AuthStoreError> {
+        match state {
+            KeyState::Loaded(key) => return Ok(key.clone()),
+            KeyState::Unknown | KeyState::Failed => return Err(failure(KEYCHAIN_UNAVAILABLE)),
+            KeyState::Missing => {}
+        }
+        let generated = ChaCha20Poly1305::generate_key(&mut OsRng);
+        let mut key = Zeroizing::new([0u8; KEY_LEN]);
+        key.copy_from_slice(generated.as_slice());
+        if self.source.write(key.as_slice()).is_err() {
+            *state = KeyState::Failed;
+            return Err(failure(KEYCHAIN_UNAVAILABLE));
+        }
+        *state = KeyState::Loaded(key.clone());
+        Ok(key)
+    }
 }
 
 fn validate_name(name: &str) -> Result<(), AuthStoreError> {
@@ -109,36 +273,6 @@ fn store_dir(app: &tauri::AppHandle) -> Result<PathBuf, AuthStoreError> {
 
 fn entry_path(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!("{name}.bin"))
-}
-
-/// Chiave dal portachiavi del sistema; con `create` la genera se manca.
-fn keyring_key(create: bool) -> Result<Option<Zeroizing<[u8; KEY_LEN]>>, AuthStoreError> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        .map_err(|_| failure("keyring_failed"))?;
-    match entry.get_secret() {
-        Ok(secret) => {
-            let secret = Zeroizing::new(secret);
-            if secret.len() == KEY_LEN {
-                let mut key = Zeroizing::new([0u8; KEY_LEN]);
-                key.copy_from_slice(&secret);
-                return Ok(Some(key));
-            }
-            // Voce di forma sbagliata: la si rimpiazza, i file vecchi decadono.
-            if !create {
-                return Ok(None);
-            }
-        }
-        Err(keyring::Error::NoEntry) if !create => return Ok(None),
-        Err(keyring::Error::NoEntry) => {}
-        Err(_) => return Err(failure("keyring_failed")),
-    }
-    let generated = ChaCha20Poly1305::generate_key(&mut OsRng);
-    let mut key = Zeroizing::new([0u8; KEY_LEN]);
-    key.copy_from_slice(generated.as_slice());
-    entry
-        .set_secret(key.as_slice())
-        .map_err(|_| failure("keyring_failed"))?;
-    Ok(Some(key))
 }
 
 fn cipher(key: &[u8; KEY_LEN]) -> ChaCha20Poly1305 {
@@ -268,12 +402,164 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{entry_path, read_entry, remove_entry, validate_name, write_entry, KEY_LEN};
+    use super::{
+        entry_path, get_value, read_entry, remove_entry, set_value, validate_name, write_entry,
+        KeyCache, KeySource, KEY_LEN,
+    };
     use std::{
         fs,
         path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
+        thread,
         time::{SystemTime, UNIX_EPOCH},
     };
+    use zeroize::Zeroizing;
+
+    /// Un portachiavi finto che conta le domande: ognuna, su macOS, può
+    /// essere un popup.
+    #[derive(Default)]
+    struct CountingKeychain {
+        stored: Mutex<Option<Vec<u8>>>,
+        deny: AtomicBool,
+        reads: AtomicUsize,
+        writes: AtomicUsize,
+    }
+
+    impl CountingKeychain {
+        fn with_key(key: [u8; KEY_LEN]) -> Self {
+            Self {
+                stored: Mutex::new(Some(key.to_vec())),
+                ..Self::default()
+            }
+        }
+        fn denying() -> Self {
+            let keychain = Self::default();
+            keychain.deny.store(true, Ordering::SeqCst);
+            keychain
+        }
+        fn asked(&self) -> (usize, usize) {
+            (
+                self.reads.load(Ordering::SeqCst),
+                self.writes.load(Ordering::SeqCst),
+            )
+        }
+    }
+
+    impl KeySource for Arc<CountingKeychain> {
+        fn read(&self) -> Result<Option<Zeroizing<Vec<u8>>>, ()> {
+            self.reads.fetch_add(1, Ordering::SeqCst);
+            if self.deny.load(Ordering::SeqCst) {
+                return Err(());
+            }
+            Ok(self.stored.lock().unwrap().clone().map(Zeroizing::new))
+        }
+        fn write(&self, key: &[u8]) -> Result<(), ()> {
+            self.writes.fetch_add(1, Ordering::SeqCst);
+            if self.deny.load(Ordering::SeqCst) {
+                return Err(());
+            }
+            *self.stored.lock().unwrap() = Some(key.to_vec());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn many_gets_and_sets_ask_the_keychain_once() {
+        let dir = scratch_dir("once");
+        let keychain = Arc::new(CountingKeychain::with_key([3u8; KEY_LEN]));
+        let keys = KeyCache::new(keychain.clone());
+        for round in 0..25 {
+            set_value(&dir, &keys, NAME, &format!("session-{round}")).unwrap();
+            set_value(&dir, &keys, "sb-abc-auth-token-code-verifier", "verifier").unwrap();
+            assert_eq!(
+                get_value(&dir, &keys, NAME).unwrap().as_deref(),
+                Some(format!("session-{round}").as_str())
+            );
+            keys.prepare().unwrap();
+        }
+        assert_eq!(keychain.asked(), (1, 0));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_missing_key_is_created_once_and_then_only_used() {
+        let dir = scratch_dir("create");
+        let keychain = Arc::new(CountingKeychain::default());
+        let keys = KeyCache::new(keychain.clone());
+        // Niente file: il portachiavi non si disturba neanche.
+        assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
+        assert_eq!(keychain.asked(), (0, 0));
+        for _ in 0..10 {
+            set_value(&dir, &keys, NAME, "session").unwrap();
+            assert_eq!(
+                get_value(&dir, &keys, NAME).unwrap().as_deref(),
+                Some("session")
+            );
+        }
+        assert_eq!(keychain.asked(), (1, 1));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn concurrent_first_accesses_ask_once() {
+        let dir = Arc::new(scratch_dir("concurrent"));
+        let keychain = Arc::new(CountingKeychain::with_key([4u8; KEY_LEN]));
+        let keys = Arc::new(KeyCache::new(keychain.clone()));
+        let workers: Vec<_> = (0..8)
+            .map(|index| {
+                let (dir, keys) = (dir.clone(), keys.clone());
+                thread::spawn(move || {
+                    let name = format!("sb-abc-entry-{index}");
+                    set_value(&dir, &keys, &name, "value").unwrap();
+                })
+            })
+            .collect();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(keychain.asked(), (1, 0));
+        fs::remove_dir_all(&*dir).unwrap();
+    }
+
+    #[test]
+    fn a_refusal_is_not_asked_again_until_the_user_retries() {
+        let dir = scratch_dir("denied");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(entry_path(&dir, NAME), [0u8; 40]).unwrap();
+        let keychain = Arc::new(CountingKeychain::denying());
+        let keys = KeyCache::new(keychain.clone());
+        for _ in 0..10 {
+            assert_eq!(
+                get_value(&dir, &keys, NAME).unwrap_err().code,
+                "keychain_unavailable"
+            );
+            assert_eq!(
+                set_value(&dir, &keys, NAME, "session").unwrap_err().code,
+                "keychain_unavailable"
+            );
+        }
+        assert_eq!(keychain.asked(), (1, 0));
+        // Il file non si butta per un rifiuto: con la chiave tornerebbe leggibile.
+        assert!(entry_path(&dir, NAME).exists());
+
+        // «Accedi» di nuovo: una domanda in più, una sola.
+        assert!(keys.prepare().is_err());
+        assert_eq!(keychain.asked(), (2, 0));
+
+        keychain.deny.store(false, Ordering::SeqCst);
+        *keychain.stored.lock().unwrap() = Some([5u8; KEY_LEN].to_vec());
+        keys.prepare().unwrap();
+        set_value(&dir, &keys, NAME, "session").unwrap();
+        assert_eq!(
+            get_value(&dir, &keys, NAME).unwrap().as_deref(),
+            Some("session")
+        );
+        assert_eq!(keychain.asked(), (3, 0));
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     fn scratch_dir(name: &str) -> PathBuf {
         let nanos = SystemTime::now()

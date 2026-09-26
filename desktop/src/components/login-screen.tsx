@@ -24,6 +24,8 @@ const MESSAGES: Record<LoginErrorCode, string> = {
     "Un altro programma occupa la porta del ritorno dal browser. Chiudi l'altro accesso in corso e riprova.",
   "browser-failed": "Non riesco ad aprire il browser scelto. Scegline un altro o copia il link.",
   "browser-not-found": "Il browser scelto non c'è più. Scegline un altro.",
+  "keychain-failed":
+    "Il Portachiavi non ha dato la chiave della sessione. Riprova e, se macOS lo chiede, scegli «Consenti sempre».",
   denied: "Accesso non concesso.",
   "timed-out": "Il browser non ha risposto entro cinque minuti. Riprova.",
   cancelled: "Accesso annullato.",
