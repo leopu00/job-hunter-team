@@ -7,7 +7,9 @@ import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, navigate } from "./router";
 import Shell from "./Shell";
 
-vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, signOut: vi.fn() }));
+vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
+// The real map needs WebGL, which jsdom has not: the shell only has to route to it.
+vi.mock("../pages/map", () => ({ default: () => <h1>Mappa</h1> }));
 vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),

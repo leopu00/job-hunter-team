@@ -8,6 +8,30 @@ import { defineConfig } from "vitest/config";
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /**
+ * The web's files live in ../web, which has no node_modules of its own here
+ * (nor in CI, which installs desktop/ only). A package they import
+ * (maplibre-gl, react, @supabase/supabase-js...) is resolved as if a desktop
+ * file had imported it: one copy of each, the desktop's. The aliases above
+ * run before this, so `@/` and the next/* stand-ins never reach it.
+ * tsconfig.json maps the same packages for tsc in "paths" (react,
+ * maplibre-gl, geojson, @supabase/supabase-js): add one there when a web
+ * file brings a new package in.
+ */
+function webDepsFromDesktop(): Plugin {
+  const webDir = fromHere("../web/");
+  const desktopImporter = fromHere("./src/main.tsx");
+  return {
+    name: "jht-web-deps-from-desktop",
+    enforce: "pre",
+    resolveId(source, importer, options) {
+      if (!importer?.startsWith(webDir)) return null;
+      if (/^[./\0]/.test(source) || source.startsWith(fromHere("./"))) return null;
+      return this.resolve(source, desktopImporter, { ...options, skipSelf: true });
+    },
+  };
+}
+
+/**
  * MapLibre 6 ships its worker as a separate module and the web pins its URL
  * to a same-origin copy, /maplibre/maplibre-gl-worker.mjs (web/lib/
  * maplibre-worker.ts; the web copies it into public/ on postinstall). The
@@ -35,8 +59,20 @@ function maplibreWorker(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), maplibreWorker()],
+/**
+ * The web's code reads process.env, which Next replaces at build time and a
+ * browser does not have (ReferenceError). The desktop replaces it with the
+ * environment of a web page on the cloud deploy: web/lib/deploy-mode says
+ * "cloud", like the stand-ins in src/web-shims/server, which take the cloud
+ * branch (the user's session, RLS; no local workspace, no team commands).
+ * Every other variable is undefined: no secret can reach the bundle.
+ * Not under vitest, which runs on Node and has its own process.env.
+ */
+const webEnv = (mode: string) => ({ NEXT_PUBLIC_JHT_DEPLOY: "cloud", NODE_ENV: mode === "production" ? "production" : "development" });
+
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), webDepsFromDesktop(), maplibreWorker()],
+  define: process.env.VITEST ? {} : { "process.env": JSON.stringify(webEnv(mode)) },
   // The pages render the web's own components and server pages
   // (web/app) so the two look and behave the same. `@/` is the web's alias.
   // The web modules that only make sense on a server (Supabase from cookies,
@@ -99,4 +135,4 @@ export default defineConfig({
     minify: process.env.TAURI_ENV_DEBUG ? false : "oxc",
     sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
   },
-});
+}));
