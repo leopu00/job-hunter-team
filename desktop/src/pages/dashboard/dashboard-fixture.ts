@@ -1,6 +1,6 @@
 // Synthetic dashboard data for tests: invented titles and companies, no real
 // positions or profiles (public repo).
-import type { DashboardPosition, DashboardStats } from "../lib/dashboard-data";
+import type { DashboardPosition, DashboardStats } from "../../lib/dashboard-data";
 import type { DashboardData } from "./load-dashboard";
 
 export function fixturePosition(i: number, over: Partial<DashboardPosition> = {}): DashboardPosition {

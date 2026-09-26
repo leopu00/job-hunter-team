@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DashboardClient } from "../lib/dashboard-data";
+import type { DashboardClient } from "../../lib/dashboard-data";
 import { fixturePosition, fixtureStats } from "./dashboard-fixture";
 import { loadDashboard, newestScored, type DashboardSources } from "./load-dashboard";
 

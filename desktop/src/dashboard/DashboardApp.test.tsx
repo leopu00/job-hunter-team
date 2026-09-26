@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { goTo, LOGIN_PAGE, SETUP_PAGE } from "../lib/pages";
 import DashboardApp from "./DashboardApp";
-import { fixtureData } from "./dashboard-fixture";
-import { loadDashboard } from "./load-dashboard";
+import { fixtureData } from "../pages/dashboard/dashboard-fixture";
+import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { useSession } from "../lib/supabase";
 
 vi.mock("../lib/supabase", () => ({
@@ -16,8 +16,8 @@ vi.mock("../lib/pages", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/pages")>()),
   goTo: vi.fn(),
 }));
-vi.mock("./load-dashboard", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./load-dashboard")>()),
+vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),
 }));
 

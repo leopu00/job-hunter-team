@@ -27,3 +27,7 @@ if (dom) {
     }
   }
 }
+
+// jsdom implements window.scrollTo as a "not implemented" console error; the
+// shell's router scrolls to the top on every navigation.
+window.scrollTo = () => undefined;

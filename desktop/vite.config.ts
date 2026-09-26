@@ -12,11 +12,16 @@ export default defineConfig({
   // the two look the same. `@/` is the web's alias; `@/lib/queries` is the
   // one web module that needs Next, and the components only take types from
   // it, so it points at the desktop data layer that re-declares them.
-  // `next/link` gets a stand-in. Keep the same map in tsconfig.json "paths".
+  // next/link, next/navigation, next/dynamic and next/image get stand-ins
+  // (src/web-shims) wired to the shell's router. Keep the same map in
+  // tsconfig.json "paths".
   resolve: {
     alias: [
       { find: /^@\/lib\/queries$/, replacement: fromHere("./src/lib/dashboard-data.ts") },
       { find: /^next\/link$/, replacement: fromHere("./src/web-shims/next-link.tsx") },
+      { find: /^next\/navigation$/, replacement: fromHere("./src/web-shims/next-navigation.ts") },
+      { find: /^next\/dynamic$/, replacement: fromHere("./src/web-shims/next-dynamic.tsx") },
+      { find: /^next\/image$/, replacement: fromHere("./src/web-shims/next-image.tsx") },
       { find: /^@\//, replacement: fromHere("../web/") },
     ],
     // A web/node_modules (present wherever the web is installed) must not

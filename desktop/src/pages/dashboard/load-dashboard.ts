@@ -8,7 +8,7 @@ import {
   type DashboardClient,
   type DashboardPosition,
   type DashboardStats,
-} from "../lib/dashboard-data";
+} from "../../lib/dashboard-data";
 
 /** What the dashboard screen draws: the same inputs web/app/(protected)/dashboard/page.tsx gathers. */
 export type DashboardData = {
