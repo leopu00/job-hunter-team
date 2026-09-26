@@ -1,10 +1,18 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  listBrowsers,
+  readBrowserChoice,
+  saveBrowserChoice,
+  type BrowserChoice,
+  type InstalledBrowser,
+} from "../lib/browsers";
 import {
   cancelGoogleSignIn,
   LoginError,
   signInWithGoogle,
   supabaseConfigured,
   type LoginErrorCode,
+  type SignInOptions,
 } from "../lib/supabase";
 import "./login-screen.css";
 
@@ -14,7 +22,8 @@ const MESSAGES: Record<LoginErrorCode, string> = {
   "not-desktop": "L'accesso funziona solo dentro l'app desktop.",
   "port-busy":
     "Un altro programma occupa la porta del ritorno dal browser. Chiudi l'altro accesso in corso e riprova.",
-  "browser-failed": "Non riesco ad aprire il browser di sistema.",
+  "browser-failed": "Non riesco ad aprire il browser scelto. Scegline un altro o copia il link.",
+  "browser-not-found": "Il browser scelto non c'è più. Scegline un altro.",
   denied: "Accesso non concesso.",
   "timed-out": "Il browser non ha risposto entro cinque minuti. Riprova.",
   cancelled: "Accesso annullato.",
@@ -24,43 +33,89 @@ const MESSAGES: Record<LoginErrorCode, string> = {
 };
 
 export interface LoginScreenProps {
-  /** Sostituibile nei test; di norma il login vero. */
-  signIn?: () => Promise<void>;
+  /** Sostituibili nei test; di norma il login vero. */
+  signIn?: (options: SignInOptions) => Promise<void>;
   cancel?: () => Promise<void>;
+  loadBrowsers?: () => Promise<InstalledBrowser[]>;
   configured?: boolean;
 }
+
+type CopyState = "idle" | "copied" | "failed";
 
 /**
  * La schermata «Accedi con Google». Non decide cosa viene dopo: a login
  * riuscito cambia la sessione, e chi usa `useSession` passa alla dashboard.
+ *
+ * Si sceglie il browser in cui aprire Google (l'ultima scelta resta), oppure
+ * nessuno: il link si copia e si incolla dove si vuole. Il ritorno arriva
+ * all'app in ogni caso, dal listener su loopback.
  */
 export function LoginScreen({
   signIn = signInWithGoogle,
   cancel = cancelGoogleSignIn,
+  loadBrowsers = listBrowsers,
   configured = supabaseConfigured,
 }: LoginScreenProps) {
+  const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
+  const [choice, setChoice] = useState<BrowserChoice>("default");
   const [waiting, setWaiting] = useState(false);
+  const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
+  const [copy, setCopy] = useState<CopyState>("idle");
+  const linkField = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<LoginError | null>(
     configured ? null : new LoginError("not-configured"),
   );
 
+  useEffect(() => {
+    let active = true;
+    loadBrowsers()
+      .catch(() => [] as InstalledBrowser[])
+      .then((found) => {
+        if (!active) return;
+        setBrowsers(found);
+        setChoice(readBrowserChoice(found));
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadBrowsers]);
+
   const start = useCallback(async () => {
     setError(null);
+    setAuthorizeUrl(null);
+    setCopy("idle");
     setWaiting(true);
+    saveBrowserChoice(choice);
     try {
-      await signIn();
+      await signIn({ browser: choice, onAuthorizeUrl: setAuthorizeUrl });
     } catch (failure) {
       setError(failure instanceof LoginError ? failure : new LoginError("unknown"));
     } finally {
       setWaiting(false);
+      setAuthorizeUrl(null);
     }
-  }, [signIn]);
+  }, [signIn, choice]);
 
   const stop = useCallback(() => {
     cancel().catch(() => undefined);
   }, [cancel]);
 
+  const copyLink = useCallback(async () => {
+    if (!authorizeUrl) return;
+    try {
+      await navigator.clipboard.writeText(authorizeUrl);
+      setCopy("copied");
+      return;
+    } catch {
+      // WebView senza Clipboard API: si ripiega sulla selezione del campo.
+    }
+    const field = linkField.current;
+    field?.select();
+    setCopy(field && document.execCommand?.("copy") ? "copied" : "failed");
+  }, [authorizeUrl]);
+
   const showCancelled = error?.code === "cancelled";
+  const manual = choice === "manual";
 
   return (
     <main className="page login-screen">
@@ -74,20 +129,59 @@ export function LoginScreen({
 
         {waiting ? (
           <div className="login-card__waiting" role="status">
-            <p>Completa l'accesso nel browser che si è aperto.</p>
-            <button className="login-card__cancel" type="button" onClick={stop}>
+            <p>
+              {manual
+                ? "Copia il link e aprilo nel browser in cui vuoi accedere."
+                : "Completa l'accesso nel browser che si è aperto."}
+            </p>
+            {authorizeUrl && (
+              <div className="login-card__link">
+                <input
+                  ref={linkField}
+                  readOnly
+                  value={authorizeUrl}
+                  aria-label="Link di accesso"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <button className="login-card__secondary" type="button" onClick={copyLink}>
+                  {copy === "copied" ? "Link copiato" : "Copia link"}
+                </button>
+              </div>
+            )}
+            {copy === "failed" && (
+              <p className="login-card__note">Non riesco a copiarlo: selezionalo e copialo a mano.</p>
+            )}
+            <button className="login-card__secondary" type="button" onClick={stop}>
               Annulla
             </button>
           </div>
         ) : (
-          <button
-            className="primary-button login-card__google"
-            type="button"
-            onClick={start}
-            disabled={!configured}
-          >
-            <GoogleIcon /> Accedi con Google
-          </button>
+          <>
+            <label className="login-card__browser">
+              <span>Apri con</span>
+              <select
+                value={choice}
+                onChange={(event) => setChoice(event.target.value)}
+                disabled={!configured}
+              >
+                <option value="default">Browser predefinito</option>
+                {browsers.map((browser) => (
+                  <option key={browser.id} value={browser.id}>
+                    {browser.name}
+                  </option>
+                ))}
+                <option value="manual">Nessuno: copio il link</option>
+              </select>
+            </label>
+            <button
+              className="primary-button login-card__google"
+              type="button"
+              onClick={start}
+              disabled={!configured}
+            >
+              <GoogleIcon /> Accedi con Google
+            </button>
+          </>
         )}
 
         {error && !showCancelled && (

@@ -12,6 +12,7 @@
 //! solo insieme al code verifier, che non esce mai dall'app. Un altro processo
 //! che bussa alla porta con un codice suo fa fallire lo scambio, non entra.
 
+use crate::browsers::{self, Browser};
 use serde::Serialize;
 use std::{
     io::{ErrorKind, Read, Write},
@@ -63,11 +64,39 @@ pub(crate) fn auth_callback_url() -> String {
     callback_url()
 }
 
-/// Apre `authorize_url` nel browser e aspetta il ritorno. Restituisce il
-/// codice da scambiare con `exchangeCodeForSession`.
+/// Dove si apre la pagina di autorizzazione.
+#[derive(Debug, PartialEq, Eq)]
+enum Opener {
+    /// Il browser predefinito del sistema.
+    Default,
+    /// Nessuno: l'utente copia il link e lo incolla nel browser che vuole.
+    Manual,
+    /// Uno dei browser rilevati da `browsers::installed`.
+    Installed(Browser),
+}
+
+fn resolve_opener(choice: Option<&str>, installed: Vec<Browser>) -> Result<Opener, AuthLoginError> {
+    match choice {
+        None | Some("default") => Ok(Opener::Default),
+        Some("manual") => Ok(Opener::Manual),
+        Some(id) => installed
+            .into_iter()
+            .find(|browser| browser.id == id)
+            .map(Opener::Installed)
+            .ok_or_else(|| failure("browser_not_found")),
+    }
+}
+
+/// Apre `authorize_url` nel browser scelto (`browser`: `default`, `manual` o
+/// l'`id` di un browser rilevato) e aspetta il ritorno. Restituisce il codice
+/// da scambiare con `exchangeCodeForSession`.
 #[tauri::command]
-pub(crate) async fn auth_google_login(authorize_url: String) -> Result<String, AuthLoginError> {
+pub(crate) async fn auth_google_login(
+    authorize_url: String,
+    browser: Option<String>,
+) -> Result<String, AuthLoginError> {
     validate_authorize_url(&authorize_url)?;
+    let opener = resolve_opener(browser.as_deref(), browsers::installed())?;
     if LOGIN_IN_PROGRESS.swap(true, Ordering::SeqCst) {
         return Err(failure("login_in_progress"));
     }
@@ -78,7 +107,12 @@ pub(crate) async fn auth_google_login(authorize_url: String) -> Result<String, A
         listener
             .set_nonblocking(true)
             .map_err(|_| failure("listener_failed"))?;
-        open::that_detached(&authorize_url).map_err(|_| failure("browser_failed"))?;
+        match &opener {
+            Opener::Default => open::that_detached(&authorize_url),
+            Opener::Manual => Ok(()),
+            Opener::Installed(browser) => browsers::open_in(browser, &authorize_url),
+        }
+        .map_err(|_| failure("browser_failed"))?;
         wait_for_callback(&listener, Instant::now() + LOGIN_TIMEOUT, &LOGIN_CANCELLED)
     })
     .await
@@ -243,8 +277,10 @@ main{{text-align:center}}h1{{font-size:1.4rem}}</style></head>\
 #[cfg(test)]
 mod tests {
     use super::{
-        callback_url, parse_callback, serve, validate_authorize_url, wait_for_callback, Callback,
+        callback_url, parse_callback, resolve_opener, serve, validate_authorize_url,
+        wait_for_callback, Callback, Opener,
     };
+    use crate::browsers::Browser;
     use std::{
         io::{Read, Write},
         net::{TcpListener, TcpStream},
@@ -280,6 +316,33 @@ mod tests {
         )
         .is_err());
         assert!(validate_authorize_url("file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn the_browser_is_the_default_none_or_one_that_was_detected() {
+        let canary = Browser {
+            id: "chrome-canary",
+            name: "Google Chrome Canary",
+            path: "/Applications/Google Chrome Canary.app".into(),
+        };
+        assert_eq!(resolve_opener(None, vec![]), Ok(Opener::Default));
+        assert_eq!(resolve_opener(Some("default"), vec![]), Ok(Opener::Default));
+        assert_eq!(resolve_opener(Some("manual"), vec![]), Ok(Opener::Manual));
+        assert_eq!(
+            resolve_opener(Some("chrome-canary"), vec![canary.clone()]),
+            Ok(Opener::Installed(canary))
+        );
+        assert_eq!(
+            resolve_opener(Some("chrome-canary"), vec![])
+                .unwrap_err()
+                .code,
+            "browser_not_found"
+        );
+        // Un percorso al posto dell'id non diventa un eseguibile da lanciare.
+        assert_eq!(
+            resolve_opener(Some("/bin/sh"), vec![]).unwrap_err().code,
+            "browser_not_found"
+        );
     }
 
     #[test]

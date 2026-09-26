@@ -5,10 +5,15 @@
 .login-card__lede { margin: 18px 0 30px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .login-card__google { width: 100%; gap: 12px; }
 .login-card__google svg { flex: none; padding: 3px; border-radius: 4px; background: #fff; width: 24px; height: 24px; }
-.login-card__waiting { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 13px; }
+.login-card__browser { width: 100%; margin-bottom: 14px; display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.login-card__browser select { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--panel-soft); font: inherit; font-size: 14px; letter-spacing: normal; text-transform: none; }
+.login-card__browser select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.login-card__waiting { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 13px; }
 .login-card__waiting p { margin: 0; }
-.login-card__cancel { flex: none; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: transparent; cursor: pointer; }
-.login-card__cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.login-card__link { width: 100%; display: flex; gap: 8px; }
+.login-card__link input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--panel-soft); font-size: 12px; }
+.login-card__secondary { flex: none; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: transparent; cursor: pointer; }
+.login-card__secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .login-card__error, .login-card__note { margin: 18px 0 0; font-size: 13px; line-height: 1.5; }
 .login-card__error { color: #ff9b8a; }
 .login-card__note { color: var(--muted); }

@@ -39,6 +39,13 @@ in the app. `src/lib/supabase.ts` exports the signed-in client (`supabase`),
   allowed redirect URLs. Loopback rather than a deep link because a custom
   scheme only exists for the installed app on macOS, and sign-in has to work
   from `tauri dev` too.
+- **Browser choice.** The login screen lists the browsers found installed
+  (macOS: the `.app` bundles in `/Applications` and `~/Applications`;
+  Windows: the usual install folders; Linux: `PATH`), plus the system default
+  and "copy the link" for any other browser. The last choice is remembered in
+  localStorage (a preference, not a secret). The frontend sends only the id:
+  the backend resolves it again and launches the browser with separate
+  arguments, never through a shell.
 - **Storage.** The session and the PKCE verifier are not kept in the
   webview's localStorage: they are encrypted (ChaCha20-Poly1305) in the app's
   local data dir, with the 32-byte key in the OS keychain (macOS Keychain,
