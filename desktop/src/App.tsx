@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ResultExplorer, TeamLiveDashboard } from "./components/team-dashboard";
+import { LoginScreen } from "./components/login-screen";
 import { openLiveScreen } from "./lib/live-screen";
+import { DASHBOARD_PAGE, goTo, isLoginRequest, SETUP_PAGE } from "./lib/pages";
 import { checkPodman, type PodmanStatus } from "./lib/podman";
 import {
   isTeamAgentActivity,
@@ -9,8 +11,9 @@ import {
   type TeamProgress,
   type TeamStartResult,
 } from "./lib/team";
+import { useSession } from "./lib/supabase";
 
-type Screen = "welcome" | "setup" | "team";
+type Screen = "login" | "welcome" | "setup" | "team";
 
 function BrandMark() {
   return (
@@ -51,7 +54,7 @@ function LiveScreenButton() {
  */
 function DashboardLink() {
   return (
-    <a className="live-screen-button" href="dashboard.html">
+    <a className="live-screen-button" href={DASHBOARD_PAGE}>
       Dashboard
     </a>
   );
@@ -498,10 +501,31 @@ function TeamPage({
   );
 }
 
+/**
+ * The Google sign-in, where the dashboard sends whoever has no session. Once
+ * the session is there, back to the dashboard. The local team setup does not
+ * need an account and stays one click away.
+ */
+function LoginPage() {
+  const { session } = useSession();
+  useEffect(() => {
+    if (session) goTo(DASHBOARD_PAGE);
+  }, [session]);
+  return (
+    <>
+      <a className="live-screen-button login-setup-link" href={SETUP_PAGE}>
+        Team locale
+      </a>
+      <LoginScreen />
+    </>
+  );
+}
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("welcome");
+  const [screen, setScreen] = useState<Screen>(() => (isLoginRequest() ? "login" : "welcome"));
   const [teamResult, setTeamResult] = useState<TeamStartResult | null>(null);
 
+  if (screen === "login") return <LoginPage />;
   if (screen === "welcome")
     return <WelcomePage onStart={() => setScreen("setup")} />;
   if (screen === "team" && teamResult) {

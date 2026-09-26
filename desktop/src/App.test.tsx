@@ -1,13 +1,26 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import App from "./App";
 import { openLiveScreen } from "./lib/live-screen";
+import { goTo } from "./lib/pages";
+import { useSession } from "./lib/supabase";
 import { checkPodman } from "./lib/podman";
 import { startApiTeam } from "./lib/team";
 
 vi.mock("./lib/live-screen", () => ({
   openLiveScreen: vi.fn(),
+}));
+
+vi.mock("./lib/supabase", () => ({ useSession: vi.fn() }));
+
+vi.mock("./components/login-screen", () => ({
+  LoginScreen: () => <p>login-screen</p>,
+}));
+
+vi.mock("./lib/pages", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/pages")>()),
+  goTo: vi.fn(),
 }));
 
 vi.mock("./lib/podman", () => ({
@@ -267,5 +280,32 @@ describe("dashboard link", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
     await user.click(screen.getByRole("button", { name: /inizia la configurazione/i }));
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
+  });
+});
+
+describe("Google sign-in page", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/index.html?login");
+    vi.mocked(goTo).mockReset();
+  });
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("shows the sign-in, with the local setup one click away", () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    render(<App />);
+    expect(screen.getByText("login-screen")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Team locale" })).toHaveAttribute("href", "index.html");
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the dashboard once the session is there", () => {
+    vi.mocked(useSession).mockReturnValue({
+      session: { user: { id: "user-1" } },
+      loading: false,
+    } as unknown as ReturnType<typeof useSession>);
+    render(<App />);
+    expect(goTo).toHaveBeenCalledWith("dashboard.html");
   });
 });

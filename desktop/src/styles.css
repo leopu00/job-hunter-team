@@ -282,3 +282,4 @@ h1 em { color: var(--accent); font-style: normal; font-weight: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.login-setup-link { position: fixed; top: 26px; right: clamp(28px, 5vw, 76px); z-index: 2; }

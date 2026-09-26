@@ -2,13 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
-import { LoginScreen } from "../components/login-screen";
+import { goTo, LOGIN_PAGE, SETUP_PAGE } from "../lib/pages";
 import { signOut, supabase, useSession } from "../lib/supabase";
 import DashboardScreen from "./DashboardScreen";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
-
-/** The local team setup (welcome → Podman → team) lives on index.html. */
-export const SETUP_PAGE = "index.html";
 
 type Load =
   | { state: "loading" }
@@ -82,15 +79,19 @@ function SignedInDashboard({ locale }: { locale: Locale }) {
 }
 
 /**
- * The main window's first page: the Google sign-in until there is a session,
- * then the user's dashboard.
+ * The main window's first page: the user's dashboard. Without a session (never
+ * signed in, or just signed out) it hands over to the Google sign-in.
  */
 export default function DashboardApp() {
   const { session, loading } = useSession();
   const [locale] = useState<Locale>(readLocaleCookie);
+  const signedOut = !loading && !session;
 
-  if (loading) return <DashboardSkeleton label="Caricamento dashboard" />;
-  if (!session) return <LoginScreen />;
+  useEffect(() => {
+    if (signedOut) goTo(LOGIN_PAGE);
+  }, [signedOut]);
+
+  if (!session) return <DashboardSkeleton label="Caricamento dashboard" />;
   // Keyed by user: signing in as someone else starts from an empty screen.
   return <SignedInDashboard key={session.user.id} locale={locale} />;
 }
