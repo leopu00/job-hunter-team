@@ -79,7 +79,7 @@ describe("Shell", () => {
       expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
-    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget"]);
+    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget", "Ufficio"]);
   });
 
   it.each(["/team", "/team/log", "/team/scout", "/team/analista", "/team/scorer", "/team/scrittore", "/team/critico"])(
