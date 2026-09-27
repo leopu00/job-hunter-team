@@ -241,9 +241,7 @@ export class AiSdkProvider implements ProviderPort {
       return {
         text: result.text,
         sources,
-        // A failed search is not billed, but we cannot tell which failed: count
-        // every search call, which errs towards overstating spend.
-        searches: result.content.filter((part) => part.type === "tool-call" && part.providerExecuted).length,
+        searches: billedSearches(this.profile.providerId, result.content),
         usage: {
           inputTokens: result.usage.inputTokens ?? 0,
           outputTokens: result.usage.outputTokens ?? 0,
@@ -363,6 +361,37 @@ function toToolSet(specs: ToolSpec[]): ToolSet {
       tool({ description: spec.description, inputSchema: spec.schema }),
     ]),
   ) as ToolSet;
+}
+
+/**
+ * The searches one search call will be billed for, read from the items the
+ * provider really returned (never from what was booked before the call).
+ *
+ * OpenAI returns a `web_search_call` item per action, and an action is
+ * `search`, `open_page` or `find_in_page`: «Search actions incur a tool call
+ * cost» (developers.openai.com/api/docs/guides/tools-web-search). Under
+ * `max_tool_calls: 1` it often returns TWO search items for one request, and
+ * bills one: the searches OpenAI billed on a day of the JHT-API-TEST A2 week
+ * were the responses that searched, not their items (the key proxy's log
+ * against the usage console). So: the search items, at most
+ * MAX_SEARCHES_PER_CALL per call. Counting every item had billed the runs for
+ * about twice the searches OpenAI charged.
+ *
+ * Anthropic returns one server tool call per search it ran.
+ */
+export function billedSearches(
+  providerId: ModelProfile["providerId"],
+  content: ReadonlyArray<{ type: string; providerExecuted?: boolean; result?: unknown }>,
+): number {
+  if (providerId === "openai") {
+    const searches = content.filter(
+      (part) =>
+        part.type === "tool-result" &&
+        (part.result as { action?: { type?: unknown } } | undefined)?.action?.type === "search",
+    ).length;
+    return Math.min(searches, MAX_SEARCHES_PER_CALL);
+  }
+  return content.filter((part) => part.type === "tool-call" && part.providerExecuted).length;
 }
 
 /**

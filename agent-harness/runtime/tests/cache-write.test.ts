@@ -1,8 +1,9 @@
 /**
- * Cache writes (T1c): OpenAI reports `input_tokens_details.cache_write_tokens`,
- * and the runtime charges them as the key proxy does — on top of the input
- * price, at the cache-write rate — so a run's cap, trace and ledger never
- * show less than the proxy settles.
+ * Cache writes (T1c): OpenAI reports `input_tokens_details.cache_write_tokens`
+ * inside `input_tokens`, and bills them «at 1.25x the uncached input token
+ * rate» IN PLACE of it (each gpt-5.6 model's page, read 2026-09-27). Until
+ * then the runtime charged them on top of a full input price, as the key
+ * proxy did: the two agreed and both overstated the bill.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -34,21 +35,23 @@ afterEach(async () => {
 });
 
 describe("cache-write pricing", () => {
-  it("prices the calibration request with long-context rates and cache writes on top", () => {
-    // 8,712 × 0.40 + 4,400 × 0.50 + 194 × 1.80, per million.
-    expect(costUsd(CALIBRATION, LUNA)).toBeCloseTo(0.0034848 + 0.0022 + 0.0003492, 10);
-    // Never below what the proxy settled for the same tokens (0.0119752 with the search fee).
-    expect(costUsd(CALIBRATION, LUNA) + LUNA.webSearchPerCallUsd!).toBeGreaterThan(0.0119752);
+  it("prices the calibration request at luna's short rates, cache writes in place of input", () => {
+    // 4,312 fresh × 0.20 + 4,400 written × 0.25 + 194 out × 1.20, per million.
+    expect(costUsd(CALIBRATION, LUNA)).toBeCloseTo(0.0008624 + 0.0011 + 0.0002328, 12);
+    // With its one search: the true cost the calibration foresaw for writes billed at 1.25x.
+    expect(costUsd(CALIBRATION, LUNA) + LUNA.webSearchPerCallUsd!).toBeCloseTo(0.0121952, 12);
   });
 
-  it("charges mini's cache writes at twice its input price", () => {
-    expect(costUsd({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 1_000_000 }, MINI)).toBeCloseTo(0.25 + 0.5, 10);
+  it("prices mini's cache writes as input: its page has no cache-write price", () => {
+    expect(costUsd({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 1_000_000 }, MINI)).toBeCloseTo(0.25, 12);
   });
 
-  it("counts cache writes against the budget", () => {
-    const g = new Guardrails({ limits: { ...DEFAULT_LIMITS, budgetUsd: 0.0006 }, pricing: MINI });
-    // 0.00025 of input alone fits; the 0.0005 of cache writes on top does not.
-    expect(() => g.recordUsage({ inputTokens: 1_000, outputTokens: 0, cacheWriteTokens: 1_000 })).toThrowError(
+  it("counts the cache-write rate against the budget", () => {
+    // 2,000 fresh tokens of luna: 0.0004. The same 2,000 written to the cache: 0.0005.
+    const fresh = new Guardrails({ limits: { ...DEFAULT_LIMITS, budgetUsd: 0.00045 }, pricing: LUNA });
+    expect(() => fresh.recordUsage({ inputTokens: 2_000, outputTokens: 0 })).not.toThrow();
+    const written = new Guardrails({ limits: { ...DEFAULT_LIMITS, budgetUsd: 0.00045 }, pricing: LUNA });
+    expect(() => written.recordUsage({ inputTokens: 2_000, outputTokens: 0, cacheWriteTokens: 2_000 })).toThrowError(
       expect.objectContaining({ code: "budget_exhausted" }),
     );
   });
@@ -67,7 +70,7 @@ describe("cache writes in the round, the trace and the monitor", () => {
     const round = events.find((e) => e.type === "round_finished");
     expect(round?.type === "round_finished" && round.usage.cacheWriteTokens).toBe(4_400);
     if (round?.type !== "round_finished") throw new Error("no round");
-    expect(round.costInUsd).toBeCloseTo(0.0034848 + 0.0022, 10);
+    expect(round.costInUsd).toBeCloseTo(0.0008624 + 0.0011, 12);
     expect(round.costInUsd + round.costOutUsd).toBeCloseTo(round.costUsd, 12);
     expect(guardrails.state.costUsd).toBeCloseTo(round.costUsd, 12);
 

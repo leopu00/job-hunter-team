@@ -100,11 +100,11 @@ describe("the search cap", () => {
   });
 
   it("refuses a search whose worst case no longer fits the budget, without calling the provider", async () => {
-    // 1 USD per million tokens: a call is booked for four searches, as the key proxy books it
-    // (T19-a): ~100,000 input tokens written to the cache (0.20), 4,096 output (0.004) and four
-    // fees (0.04), 0.244. Booked for one search it would be 0.064, for two 0.124: 0.2 of budget
-    // would have let either run.
-    const pricing: Pricing = { inputPerMTokUsd: 1, outputPerMTokUsd: 1, webSearchPerCallUsd: 0.01, cacheWritePerMTokUsd: 1 };
+    // 1 USD per million tokens, 2 for a cache write (in place of input): a call is booked for four
+    // searches, as the key proxy books it (T19-a): ~100,000 input tokens written to the cache
+    // (0.20), 4,096 output (0.004) and four fees (0.04), 0.244. Booked for one search it would be
+    // 0.064, for two 0.124: 0.2 of budget would have let either run.
+    const pricing: Pricing = { inputPerMTokUsd: 1, outputPerMTokUsd: 1, webSearchPerCallUsd: 0.01, cacheWritePerMTokUsd: 2 };
     const { provider, guardrails, session, results } = searchingSession({ calls: 1, results: [found(1)], limits: { budgetUsd: 0.2 }, pricing });
     await session.send("Go.");
     expect(provider.searches).toEqual([]);

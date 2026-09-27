@@ -48,7 +48,7 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_LIVE=1` | required for anything but the mock |
 | `JHT_API_MODEL` | required live; priced from the catalogue or `JHT_API_PRICE_*_PER_MTOK` |
 | `JHT_API_BUDGET_USD` | required live, > 0: the hard cap for the run; a model call or a search whose worst case does not fit in what is left does not start |
-| `JHT_API_MAX_WEB_SEARCHES` | searches per run, as the provider ran them (default 8, `0` = none); past it `web_search` answers without calling the provider. The count is in the monitor and in the ledger's note (`web_searches=N`) |
+| `JHT_API_MAX_WEB_SEARCHES` | searches per run, as the provider bills them (default 8, `0` = none); past it `web_search` answers without calling the provider. The count is in the monitor and in the ledger's note (`web_searches=N`) |
 | `JHT_API_LEDGER` | required live: the team's spend TSV (`agents-hq/ledger/openai-spesa.tsv`) |
 | `JHT_API_OPENAI_BASE_URL` / `OPENAI_BASE_URL` | OpenAI through a key proxy, e.g. `http://127.0.0.1:8787/v1` |
 | `JHT_API_HOME` | state root (default `~/.jht-api`) |
@@ -129,24 +129,32 @@ says why and starts nothing.
 
 ## What the live runs cost (T5, 2026-09-19)
 
-SCOUT, one turn per run, on `gpt-5.6-luna` through the key proxy. The figures
-come from the spend ledger; the proxy's count matched the runtime's to the
-cent in every run.
+SCOUT, one turn per run, on `gpt-5.6-luna` through the key proxy. Tokens from
+the spend ledger, searches from the proxy's log, priced as OpenAI bills them
+(the catalog of 2026-09-27). The ledger itself holds the older count, which
+put cached input at full price, luna at its long-context rates and every
+`web_search_call` item as a billed search: the proxy counted the same way, so
+the two matched to the cent and were both about five times too high.
 
 | Run | USD | New positions | USD / position | Rounds | Ended |
 | --- | ---: | ---: | ---: | ---: | --- |
-| T5 | 0.17 | 0 | — | 19 | completed, but blocked: no Python for the skills (the native db tools came from this) |
-| T5-bis | 0.23 | 1 | 0.23 | 16 | stopped at the token cap, which then counted cached input |
-| T5-ter | 0.36 | 2 | 0.18 | 21 | completed; the profile was not read (fixed in T10b) |
-| T5-quater | 0.43 | 2 | 0.22 | 26 | completed; profile read first |
+| T5 | 0.03 | 0 | — | 19 | completed, but blocked: no Python for the skills (the native db tools came from this) |
+| T5-bis | 0.04 | 1 | 0.04 | 16 | stopped at the token cap, which then counted cached input |
+| T5-ter | 0.10 | 2 | 0.05 | 21 | completed; the profile was not read (fixed in T10b) |
+| T5-quater | 0.09 | 2 | 0.04 | 26 | completed; profile read first |
 
 The baseline for the same role on a TUI subscription is 2.26 USD a session and
 0.53 USD a position. The last two runs, the first comparable ones, came to
-0.18 and 0.22 USD a position: 59–66 % less. That is 4 positions over 2
-sessions, too small a sample to settle it. A runtime session is also shorter
-than a TUI one (21–26 rounds, against a median of 74 calls), so the per-session
-figures do not compare like for like.
-Web search is 30–47 % of the spend of those runs.
+0.04 and 0.05 USD a position. That is 4 positions over 2 sessions, too small
+a sample to settle it. A runtime session is also shorter than a TUI one
+(21–26 rounds, against a median of 74 calls), so the per-session figures do
+not compare like for like. Web search is more than half of the spend of those
+runs: most of the input is served from the cache, at a tenth of its price.
+
+`npm run spend -- reprice <file>` prices a proxy log or a ledger this way, day
+by day; `npm run spend -- reconcile <file>` checks the days against OpenAI's
+Costs API (it needs an admin key in `OPENAI_ADMIN_KEY`) and exits 1 on a gap
+over 10 %.
 
 ## Boundaries
 

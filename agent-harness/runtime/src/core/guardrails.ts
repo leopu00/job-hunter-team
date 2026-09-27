@@ -23,9 +23,9 @@ export interface Limits {
   /** Maximum spend in one run, in USD. */
   budgetUsd: number;
   /**
-   * Maximum web searches in one run, counted as the provider ran them (one
-   * `web_search` call can run more than one). T13: a SCOUT spent 82 % of its
-   * budget on 34 searches and saved nothing.
+   * Maximum web searches in one run, counted as the provider bills them
+   * (`billedSearches` in ai-sdk.ts). T13: a SCOUT spent 82 % of its budget on
+   * 34 searches and saved nothing.
    */
   maxWebSearches: number;
   /** Wall-clock deadline for the whole run, in milliseconds. */
@@ -67,6 +67,12 @@ export class Guardrails {
   #steps = 0;
   #toolCalls = 0;
   #usage: Usage = ZERO_USAGE;
+  /**
+   * What the tokens cost, request by request. Not the cost of `#usage`: a
+   * request is priced on its own input (long-context rates start above a
+   * per-request threshold), so summed usage cannot be priced after the fact.
+   */
+  #tokensUsd = 0;
   /** Spend that is not tokens: web searches, billed per call. */
   #chargesUsd = 0;
   #webSearches = 0;
@@ -89,7 +95,7 @@ export class Guardrails {
     };
   }
 
-  /** What `usage` costs at this run's prices. */
+  /** What one request of `usage` costs at this run's prices. */
   costOf(usage: Usage): number {
     return costUsd(usage, this.#pricing);
   }
@@ -130,9 +136,10 @@ export class Guardrails {
     this.#steps += 1;
   }
 
-  /** Records the usage of the step that just finished, then re-checks limits. */
+  /** Records the usage of ONE request that just finished, then re-checks limits. */
   recordUsage(usage: Usage): void {
     this.#usage = addUsage(this.#usage, usage);
+    this.#tokensUsd += costUsd(usage, this.#pricing);
 
     // Cached input is not counted here (see `countedTokens`); the budget below prices it.
     const counted = countedTokens(this.#usage);
@@ -150,7 +157,7 @@ export class Guardrails {
     return Math.max(0, this.limits.maxWebSearches - this.#webSearches);
   }
 
-  /** Counts the searches the provider ran, all of them, even past the cap. */
+  /** Counts the searches the provider billed, all of them, even past the cap. */
   recordSearches(count: number): void {
     this.#webSearches += count;
   }
@@ -195,7 +202,7 @@ export class Guardrails {
   }
 
   #spent(): number {
-    return costUsd(this.#usage, this.#pricing) + this.#chargesUsd;
+    return this.#tokensUsd + this.#chargesUsd;
   }
 
   #checkBudget(): void {

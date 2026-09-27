@@ -7,8 +7,10 @@
  * cannot be computed cannot be capped, and an uncappable live run is refused.
  *
  * Prices are USD per million tokens at standard (non-batch) rates, first-party
- * API. Sources and dates are per block below. They go stale: the catalog exists
- * to cap a local run, not to be an invoice.
+ * API. Sources and dates are per block below. They go stale, and the cap is
+ * only as right as they are: a run stopped at a fifth of its budget is as
+ * wrong as one let past it (JHT-API-TEST A2, A5). `npm run spend -- reconcile`
+ * checks them against what OpenAI billed.
  */
 
 import type { ModelCapabilities, ModelProfile, ProviderId } from "./port.ts";
@@ -41,40 +43,67 @@ interface CatalogEntry {
  */
 const WEB_SEARCH_PER_CALL_USD = 0.01;
 
-function usd(
-  inputPerMTokUsd: number,
-  outputPerMTokUsd: number,
-  webSearchPerCallUsd = WEB_SEARCH_PER_CALL_USD,
-  cacheWritePerMTokUsd?: number,
-): Pricing {
+/**
+ * Long-context rates of the gpt-5.6 models (luna, terra, sol): «Prompts with
+ * >272K input tokens are priced at 2x input and 1.5x output for the full
+ * request», on each model's page (developers.openai.com/api/docs/models/
+ * <model>, read 2026-09-27). Per request: a run's rounds stay far below it,
+ * so short rates are what they pay. gpt-5 and gpt-5-mini have no
+ * long-context price.
+ */
+const GPT_5_6_LONG_CONTEXT = { aboveInputTokens: 272_000, inputMultiplier: 2, outputMultiplier: 1.5 } as const;
+
+/** Cache writes on the gpt-5.6 models: «billed at 1.25x the uncached input token rate», in place of it. */
+const CACHE_WRITE_MULTIPLIER = 1.25;
+
+function usd(prices: {
+  input: number;
+  cachedInput: number;
+  output: number;
+  cacheWrites?: boolean;
+  longContext?: Pricing["longContext"];
+}): Pricing {
   return {
-    inputPerMTokUsd,
-    outputPerMTokUsd,
-    webSearchPerCallUsd,
-    ...(cacheWritePerMTokUsd === undefined ? {} : { cacheWritePerMTokUsd }),
+    inputPerMTokUsd: prices.input,
+    cachedInputPerMTokUsd: prices.cachedInput,
+    outputPerMTokUsd: prices.output,
+    webSearchPerCallUsd: WEB_SEARCH_PER_CALL_USD,
+    ...(prices.cacheWrites ? { cacheWritePerMTokUsd: prices.input * CACHE_WRITE_MULTIPLIER } : {}),
+    ...(prices.longContext ? { longContext: prices.longContext } : {}),
   };
 }
 
 const CATALOG: Record<string, CatalogEntry> = {
-  // OpenAI — the models and prices of the harness plan (PIANO-HARNESS-API,
-  // 2026-09-19), which match developers.openai.com/api/docs/pricing as checked
-  // 2026-09-12. The API budget is OpenAI's, so only OpenAI is catalogued: any
-  // other model runs live only with an explicit JHT_API_PRICE_* override.
-  // Cheapest first; pick the cheapest one that holds the role.
-  // luna and mini: developers.openai.com/api/docs/pricing, standard tier, reread
-  // from the VPS and here on 2026-09-19 (agents-hq/piani/web-search-prezzi-vps-res.txt).
-  // The page gives no threshold between short and long context, so luna is
-  // priced at its long-context rates, the higher ones: input 0.40 (short 0.20),
-  // output 1.80 (short 1.20), cache writes 0.50 (short 0.25), on top of input,
-  // as the key proxy charges them. gpt-5-mini has no long-context or
-  // cache-write price on the page (dashes): its short rates stand, and a cache
-  // write is charged at twice its input price, 0.50, as the proxy does.
-  // Search fee: see WEB_SEARCH_PER_CALL_USD, stated rather than defaulted.
-  "gpt-5.6-luna": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.4, 1.8, 0.01, 0.5) },
-  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(0.25, 2, 0.01, 0.5) },
-  "gpt-5": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(1.25, 10) },
-  "gpt-5.6-terra": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(2, 12) },
-  "gpt-5.6-sol": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd(4, 20) },
+  // OpenAI, standard tier, first-party API: each model's own page
+  // (developers.openai.com/api/docs/models/<model>), read 2026-09-27, and
+  // /api/docs/pricing for the columns. The API budget is OpenAI's, so only
+  // OpenAI is catalogued: any other model runs live only with an explicit
+  // JHT_API_PRICE_* override. Cheapest first; pick the cheapest one that
+  // holds the role.
+  //
+  // Until 2026-09-27 luna was priced at its long-context rates on every
+  // request, cached input at the full input price and cache writes on top of
+  // it: several times what OpenAI billed for the same runs. The key proxy
+  // made the same count, so the two agreed to the cent and were wrong
+  // together; only the invoice could tell.
+  "gpt-5.6-luna": {
+    providerId: "openai",
+    capabilities: SEARCH_MODEL,
+    pricing: usd({ input: 0.2, cachedInput: 0.02, output: 1.2, cacheWrites: true, longContext: GPT_5_6_LONG_CONTEXT }),
+  },
+  // No cache-write or long-context price on mini's or gpt-5's page.
+  "gpt-5-mini": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd({ input: 0.25, cachedInput: 0.025, output: 2 }) },
+  "gpt-5": { providerId: "openai", capabilities: SEARCH_MODEL, pricing: usd({ input: 1.25, cachedInput: 0.125, output: 10 }) },
+  "gpt-5.6-terra": {
+    providerId: "openai",
+    capabilities: SEARCH_MODEL,
+    pricing: usd({ input: 2, cachedInput: 0.2, output: 12, cacheWrites: true, longContext: GPT_5_6_LONG_CONTEXT }),
+  },
+  "gpt-5.6-sol": {
+    providerId: "openai",
+    capabilities: SEARCH_MODEL,
+    pricing: usd({ input: 4, cachedInput: 0.4, output: 20, cacheWrites: true, longContext: GPT_5_6_LONG_CONTEXT }),
+  },
 };
 
 /**
