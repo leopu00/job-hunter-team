@@ -89,11 +89,29 @@ export default function Shell() {
   }, [match]);
 
   const Page = match?.route.page;
+  const page = Page && <Page key={path} params={match.params} search={params} />;
+  // A full-bleed page (the office) is a column as tall as the window: the
+  // navbar, then the page in all the rest, with no margins and no page
+  // scroll. Every other page keeps the web's MainChrome.
+  if (match?.route.fullBleed) {
+    return (
+      <DashboardI18nProvider>
+        <div
+          style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "calc(100svh / var(--zoom, 1))", overflow: "hidden" }}
+        >
+          <Navbar />
+          <main className="relative min-h-0 flex-1" data-testid="full-bleed">
+            {page}
+          </main>
+        </div>
+      </DashboardI18nProvider>
+    );
+  }
   return (
     <DashboardI18nProvider>
       <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar />
-        <MainChrome>{Page && <Page key={path} params={match.params} search={params} />}</MainChrome>
+        <MainChrome>{page}</MainChrome>
       </div>
     </DashboardI18nProvider>
   );

@@ -25,7 +25,12 @@ import type { PageProps } from "../pages/types";
  * (web/app/(protected)/<name>), so the web components' links land here
  * unchanged. A page is the default export of desktop/src/pages/<name>/index.tsx.
  */
-export type Route = { path: string; page: ComponentType<PageProps> };
+export type Route = {
+  path: string;
+  page: ComponentType<PageProps>;
+  /** the page fills the window under the navbar, edge to edge, without the web's MainChrome (the office's scene) */
+  fullBleed?: boolean;
+};
 
 export const HOME = "/dashboard";
 
@@ -47,5 +52,5 @@ export const ROUTES: Route[] = [
   // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in Shell.tsx).
   { path: "/agents", page: AgentsPage },
   { path: "/budget", page: BudgetPage },
-  { path: "/office", page: OfficePage },
+  { path: "/office", page: OfficePage, fullBleed: true },
 ];
