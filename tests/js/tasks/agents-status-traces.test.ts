@@ -4,10 +4,12 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JsonlTrace } from "../../../agent-harness/runtime/src/core/trace.ts";
 import {
+  apiTeamRunning,
   createApiAgentsStatusReader,
   parseTraceLines,
   statusFromTrace,
   IDLE_HORIZON_MS,
+  TEAM_RECENT_MS,
   TRACE_LIVE_MS,
 } from "../../../cli/src/lib/agents-status-traces.js";
 
@@ -133,6 +135,57 @@ describe("the reader, on traces the harness writes", () => {
 
   it("logs that cannot be read publish nothing", async () => {
     expect(await createApiAgentsStatusReader({ logsDir: "/nowhere/at/all" }).read()).toBeNull();
+  });
+});
+
+describe("is the API team running (apiTeamRunning, team_state.is_running of the test box)", () => {
+  let dir = "";
+  afterEach(() => dir && rmSync(dir, { recursive: true, force: true }));
+
+  /** One run of `role`, its file dated at its last event as the harness leaves it. */
+  function run(role: string, clock: number[], events: object[]) {
+    let i = 0;
+    const runId = `2026-09-27T21-00-00-000Z-${role}`;
+    const trace = new JsonlTrace({ dir, role, runId, now: () => new Date(T0 + clock[i++]! * 1000) });
+    for (const e of events) trace.write(e as never);
+    const last = new Date(T0 + clock[clock.length - 1]! * 1000);
+    utimesSync(join(dir, role, `${runId}.jsonl`), last, last);
+  }
+  const fresh = () => (dir = mkdtempSync(join(tmpdir(), "jht-api-team-")));
+
+  it("an open run that is still written: running", async () => {
+    fresh();
+    run("scout-1", [0, 50], [{ type: "run_started" }, { type: "process_sample" }]);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 60_000 })).toBe(true);
+  });
+
+  it("an open run gone silent is a process that died: not running", async () => {
+    fresh();
+    run("scout-1", [0, 5], [{ type: "run_started" }, { type: "process_sample" }]);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 5_000 + TRACE_LIVE_MS + 1_000 })).toBe(false);
+  });
+
+  it("a run completed a few minutes ago is an agent waiting: running; long ago, not", async () => {
+    fresh();
+    run("capitano-1", [0, 10], [{ type: "run_started" }, { type: "run_finished", reason: "completed" }]);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 10_000 + TEAM_RECENT_MS - 1_000 })).toBe(true);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 10_000 + TEAM_RECENT_MS + 1_000 })).toBe(false);
+  });
+
+  it("a stopped or failed run is a team switched off, even a moment ago", async () => {
+    fresh();
+    run("scout-1", [0, 10], [{ type: "run_started" }, { type: "run_finished", reason: "stopped" }]);
+    run("critico-1", [0, 10], [{ type: "run_started" }, { type: "run_failed", code: "x", message: "y" }]);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 12_000 })).toBe(false);
+  });
+
+  it("one agent at work is enough; no agents is false; logs that cannot be read say nothing", async () => {
+    fresh();
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 })).toBe(false);
+    run("scout-1", [0, 10], [{ type: "run_started" }, { type: "run_finished", reason: "stopped" }]);
+    run("analista-1", [0, 55], [{ type: "run_started" }, { type: "turn_started", turn: 1 }]);
+    expect(await apiTeamRunning({ logsDir: dir, now: T0 + 60_000 })).toBe(true);
+    expect(await apiTeamRunning({ logsDir: "/nowhere/at/all" })).toBeNull();
   });
 });
 

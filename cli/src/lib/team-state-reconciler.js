@@ -31,7 +31,7 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
-import { observeTeamRunning } from './team-observed.js';
+import { observeTeam as observeBoxTeam } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, startAgentsStatusPublisher } from './agents-status.js';
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
@@ -203,11 +203,11 @@ export const HEARTBEAT_TIMEOUT_MS = 30_000;
  *
  * @param {object} [options]
  * @param {AbortSignal} [options.signal] default: HEARTBEAT_TIMEOUT_MS
- * @param {() => boolean | null} [options.observeTeam]
+ * @param {() => boolean | null | Promise<boolean | null>} [options.observeTeam]
  */
 export async function reconcileOnce({
   signal = AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS),
-  observeTeam = observeTeamRunning,
+  observeTeam = observeBoxTeam,
 } = {}) {
   const config = await loadCloudConfig();
   if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
@@ -218,7 +218,7 @@ export async function reconcileOnce({
 
   // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
   const fields = { last_heartbeat_at: new Date().toISOString() };
-  const running = observeTeam();
+  const running = await observeTeam();
   if (running !== null) fields.is_running = running;
   const reader = getDirectReader(config);
   let beat = false;

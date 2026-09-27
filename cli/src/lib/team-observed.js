@@ -18,6 +18,7 @@
 
 import { AGENTS, isAgentSession } from '../commands/team/agents.js';
 import { readTmuxSessions } from './api/tmux-read.js';
+import { apiTeamRunning } from './agents-status-traces.js';
 
 /**
  * @param {object} [options]
@@ -34,4 +35,19 @@ export function observeTeamRunning({ read = readTmuxSessions } = {}) {
   if (result?.tmux === 'no-server') return false;
   if (result?.tmux !== 'ok' || !Array.isArray(result.sessions)) return null;
   return result.sessions.some((name) => AGENTS.some((agent) => isAgentSession(name, agent)));
+}
+
+/**
+ * The team this box runs: the JHT API executor's when JHT_API_TRACES_DIR
+ * names its logs (the test box, where there is no tmux and the TUI rule
+ * would never say), read from its traces (agents-status-traces.js,
+ * apiTeamRunning); otherwise the TUI team in tmux. The same switch as the
+ * agents-status publisher's source.
+ *
+ * @returns {Promise<boolean | null>}
+ */
+export async function observeTeam({ env = process.env, read } = {}) {
+  const tracesDir = env.JHT_API_TRACES_DIR;
+  if (tracesDir) return apiTeamRunning({ logsDir: tracesDir });
+  return observeTeamRunning(read ? { read } : {});
 }
