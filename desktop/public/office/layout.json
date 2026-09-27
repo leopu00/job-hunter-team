@@ -15,6 +15,31 @@
  "floorImage": {
   "src": "/office/floor/floor_main.jpg"
  },
+ "backdrop": [
+  {
+   "image": {
+    "src": "/office/floor/glass_box.png"
+   },
+   "draw": {
+    "x": 240.0,
+    "y": -52.0,
+    "w": 2920.0,
+    "h": 72.0
+   }
+  },
+  {
+   "image": {
+    "src": "/office/floor/wall_main.png"
+   },
+   "draw": {
+    "x": 240.0,
+    "y": 20.0,
+    "w": 2920.0,
+    "h": 120.0
+   },
+   "repeatX": true
+  }
+ ],
  "furniture": [
   {
    "id": "rug_scout",
@@ -119,6 +144,27 @@
     "y": 1525.0,
     "w": 940.0,
     "h": 430.0
+   }
+  },
+  {
+   "id": "rug_lounge",
+   "kind": "rug",
+   "rect": {
+    "x": 2429.6,
+    "y": 1081.2,
+    "w": 380.8,
+    "h": 217.60000000000002
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/rug.png"
+   },
+   "draw": {
+    "x": 2429.6,
+    "y": 1081.2,
+    "w": 380.8,
+    "h": 217.60000000000002
    }
   },
   {

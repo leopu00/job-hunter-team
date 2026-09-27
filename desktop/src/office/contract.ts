@@ -170,7 +170,11 @@ export type FurnitureItem = {
   seatOf?: AgentRole;
 };
 
-/** A desk of a department (DepartmentDefs.DEPARTMENTS[*].desks). */
+/**
+ * A desk of a department (DepartmentDefs.DEPARTMENTS[*].desks). Its
+ * furniture need not be repeated in OfficeLayout.furniture: the scene draws
+ * both lists, once per id.
+ */
 export type Desk = {
   /** 0..5, the order of DepartmentDefs (so `scout-5` gets desk 4, as in Godot) */
   index: number;
@@ -212,6 +216,13 @@ export type OfficeLayout = {
   floor: Rect;
   /** the painted floor (floor_main), drawn over `floor` */
   floorImage: ImageRef;
+  /**
+   * What stands behind the floor, drawn before it: the north wall and the
+   * glass band above it (game/scripts/office/office_floor.gd, wall_main
+   * tiled horizontally). `repeatX`: the image is tiled across `draw` at the
+   * scale that makes it `draw.h` tall, instead of stretched.
+   */
+  backdrop?: Array<{ image: ImageRef; draw: Rect; repeatX?: boolean }>;
   furniture: FurnitureItem[];
   departments: Department[];
   coreSeats: CoreSeat[];
