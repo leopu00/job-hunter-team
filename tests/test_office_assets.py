@@ -105,3 +105,16 @@ def test_gdscript_literals_are_read_and_expressions_are_skipped(tmp_path: Path):
     assert values["ITEMS"] == [{"id": "a#1", "at": {"x": 5.0, "y": 6.0}, "c": "#00e87a", "on": True, "path": "res://x/y.png"}]
     assert values["TYPED"] == 32.0
     assert "NODE" not in values
+
+
+def test_every_sheet_a_role_wears_is_in_the_manifest_at_half_size(committed):
+    manifest = json.loads((OFFICE / "manifest.json").read_text(encoding="utf-8"))
+    by_id = {c["id"]: c for c in manifest["characters"]}
+    worn = {sheet for sheets in committed["sheets"].values() for sheet in sheets}
+    assert worn <= set(by_id), worn - set(by_id)
+    main = by_id["scout_a"]["main"]
+    # Half the Godot sheet: a cell and the feet in the shipped pixels, and a scale
+    # that still draws a cell at 256 * 0.425 world pixels.
+    assert (main["cols"], main["rows"], main["cell"], main["feet"]) == (6, 12, {"w": 128, "h": 192}, {"x": 64.0, "y": 180.0})
+    assert main["cell"]["w"] * main["scale"] == pytest.approx(256 * 0.425)
+    assert by_id["scout_a"]["sit"]["cols"] == 4 and by_id["scout_a"]["sit"]["rows"] == 3

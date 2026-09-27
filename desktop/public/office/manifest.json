@@ -1,6 +1,1022 @@
 {
  "version": 1,
  "layout": "/office/layout.json",
- "characters": [],
+ "characters": [
+  {
+   "id": "analista_a",
+   "sit": {
+    "src": "/office/characters/analista_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "analista_b",
+   "sit": {
+    "src": "/office/characters/analista_b_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_b.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "analista_c",
+   "sit": {
+    "src": "/office/characters/analista_c_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_c.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "analista_d",
+   "sit": {
+    "src": "/office/characters/analista_d_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_d.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "analista_e",
+   "sit": {
+    "src": "/office/characters/analista_e_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_e.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "analista_f",
+   "sit": {
+    "src": "/office/characters/analista_f_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/analista_f.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "assistente_a",
+   "sit": null,
+   "main": {
+    "src": "/office/characters/assistente_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "coordinatore_a",
+   "sit": {
+    "src": "/office/characters/coordinatore_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/coordinatore_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_a",
+   "sit": {
+    "src": "/office/characters/critico_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_b",
+   "sit": {
+    "src": "/office/characters/critico_b_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_b.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_c",
+   "sit": {
+    "src": "/office/characters/critico_c_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_c.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_d",
+   "sit": {
+    "src": "/office/characters/critico_d_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_d.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_e",
+   "sit": {
+    "src": "/office/characters/critico_e_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_e.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "critico_f",
+   "sit": {
+    "src": "/office/characters/critico_f_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/critico_f.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "mentor_a",
+   "sit": null,
+   "main": {
+    "src": "/office/characters/mentor_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_a",
+   "sit": {
+    "src": "/office/characters/scorer_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_b",
+   "sit": {
+    "src": "/office/characters/scorer_b_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_b.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_c",
+   "sit": {
+    "src": "/office/characters/scorer_c_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_c.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_d",
+   "sit": {
+    "src": "/office/characters/scorer_d_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_d.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_e",
+   "sit": {
+    "src": "/office/characters/scorer_e_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_e.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scorer_f",
+   "sit": {
+    "src": "/office/characters/scorer_f_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scorer_f.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_a",
+   "sit": {
+    "src": "/office/characters/scout_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_b",
+   "sit": {
+    "src": "/office/characters/scout_b_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_b.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_c",
+   "sit": {
+    "src": "/office/characters/scout_c_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_c.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_d",
+   "sit": {
+    "src": "/office/characters/scout_d_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_d.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_e",
+   "sit": {
+    "src": "/office/characters/scout_e_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_e.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scout_f",
+   "sit": {
+    "src": "/office/characters/scout_f_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scout_f.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_a",
+   "sit": {
+    "src": "/office/characters/scrittore_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_b",
+   "sit": {
+    "src": "/office/characters/scrittore_b_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_b.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_c",
+   "sit": {
+    "src": "/office/characters/scrittore_c_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_c.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_d",
+   "sit": {
+    "src": "/office/characters/scrittore_d_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_d.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_e",
+   "sit": {
+    "src": "/office/characters/scrittore_e_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_e.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "scrittore_f",
+   "sit": {
+    "src": "/office/characters/scrittore_f_sit.png",
+    "cols": 4,
+    "rows": 3,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   },
+   "main": {
+    "src": "/office/characters/scrittore_f.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "sentinella_a",
+   "sit": null,
+   "main": {
+    "src": "/office/characters/sentinella_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  }
+ ],
  "atlases": []
 }
