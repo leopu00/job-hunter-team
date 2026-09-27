@@ -205,6 +205,47 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo test --locked
 
+  # Il motore della JHT API (agent-harness/runtime): typecheck e suite vitest
+  # non giravano in nessun job fino al 27/09, 1213 test mai eseguiti in CI.
+  # I test di parita' confrontano gli strumenti portati con le skill Python al
+  # commit da cui e' stato preso src/db/schema.sql (`-- source: ...`), estratte
+  # con `git archive`: senza quel commit nel checkout SALTANO in silenzio
+  # (tests/helpers/python-skills.ts). Per questo la storia intera, e non il
+  # solo commit di testa che actions/checkout scarica di default.
+  # I pytest di scripts/parity (tests/test_jobsdb_parity.py) stanno gia' in
+  # tests/ e girano nel job `pytest`.
+  agent-harness:
+    name: agent-harness — types, vitest
+    runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
+    # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
+    timeout-minutes: 40
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: agent-harness/runtime/package-lock.json
+
+      - name: Install agent runtime dependencies
+        working-directory: agent-harness/runtime
+        run: npm ci
+
+      - name: Typecheck agent runtime
+        working-directory: agent-harness/runtime
+        run: npx tsc --noEmit
+
+      - name: Run agent runtime tests
+        working-directory: agent-harness/runtime
+        run: npm test
+
   # A migration is an immutable release identity, not merely a SQL file that
   # parses today.  This gate compares the exact base tree with HEAD and every
   # freshly fetched remote branch by version/path/Git blob, then applies only
