@@ -19,6 +19,8 @@ import { salaryPreference } from "../../../web/lib/salary-source";
 const ROOT = resolve(__dirname, "../../..");
 const CLOUD = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
 const LOCAL = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
+// Il ramo cloud dello swipe vive in un file suo, condiviso con la desktop.
+const SWIPE = readFileSync(resolve(ROOT, "web/lib/swipe-decks.ts"), "utf-8");
 const DETAIL = readFileSync(
   resolve(ROOT, "web/app/(protected)/positions/[id]/page.tsx"),
   "utf-8",
@@ -98,12 +100,17 @@ describe("la regola è applicata dappertutto", () => {
   });
 
   it("lista, dashboard e swipe la prendono dalla stessa funzione", () => {
-    // Tre punti sul cloud (getPositions, swipe, dashboard), due in locale
-    // (lista, dashboard): la dashboard e lo swipe leggono lo stesso
-    // salary_min, quindi il difetto era su tre schermate, non su una.
+    // Tre punti sul cloud (getPositions e dashboard in queries.ts, swipe in
+    // swipe-decks.ts), due in locale (lista, dashboard): la dashboard e lo
+    // swipe leggono lo stesso salary_min, quindi il difetto era su tre
+    // schermate, non su una.
     expect(CLOUD.match(/salaryPreference\(/g)?.length).toBeGreaterThanOrEqual(
-      3,
+      2,
     );
+    expect(SWIPE.match(/salaryPreference\(/g)?.length).toBeGreaterThanOrEqual(
+      1,
+    );
+    expect(SWIPE).toContain('from "@/lib/salary-source"');
     expect(LOCAL.match(/salaryPreference\(/g)?.length).toBeGreaterThanOrEqual(
       2,
     );

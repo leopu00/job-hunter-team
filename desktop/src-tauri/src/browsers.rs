@@ -247,7 +247,10 @@ fn launch_command(executable: &Path, url: &str) -> Command {
 
 #[cfg(test)]
 mod tests {
-    use super::{detect, launch_command};
+    // `detect` ha test solo su macOS e Linux: su Windows l'import resterebbe inutilizzato.
+    #[cfg(not(target_os = "windows"))]
+    use super::detect;
+    use super::launch_command;
     use std::{
         fs,
         path::{Path, PathBuf},

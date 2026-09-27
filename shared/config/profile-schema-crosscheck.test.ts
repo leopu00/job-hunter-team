@@ -15,7 +15,10 @@ import { BLOCK_KINDS, TARGET_ROLE_CATEGORY_IDS } from "./profile-schema.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PY = join(here, "../skills/validate_profile.py");
-const PROFILE_PAGE = join(here, "../../web/app/(protected)/profile/page.tsx");
+const PROFILE_PAGE = join(
+  here,
+  "../../web/app/(protected)/profile/ProfileView.tsx",
+);
 
 describe("cross-check zod ↔ python", () => {
   it("i BLOCK_KINDS coincidono tra profile-schema.ts e validate_profile.py", () => {
@@ -51,7 +54,7 @@ describe("cross-check schema ↔ dashboard reader", () => {
   // rilevava → profilo valido ma card vuote in dashboard. Questa guardia lega
   // il reader allo schema. (`projects[].description` è di proposito, non è
   // nello schema: qui controlliamo solo i map `e.` di esperienza/formazione.)
-  it("profile/page.tsx legge i campi canonici summary/degree, non description/title", () => {
+  it("profile/ProfileView.tsx legge i campi canonici summary/degree, non description/title", () => {
     const src = readFileSync(PROFILE_PAGE, "utf8");
     expect(
       /\be\.summary\b/.test(src),

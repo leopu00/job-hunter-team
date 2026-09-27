@@ -177,11 +177,13 @@ mod tests {
             password_path(&home),
             Path::new("/Users/synthetic/.jht/live-screen/viewer-password")
         );
+        // Un assoluto su ogni sistema: "/srv/jht" su Windows non lo è.
+        let absolute = std::env::temp_dir().join("jht");
         let custom = jht_home_dir(
-            Some(PathBuf::from("/srv/jht")),
+            Some(absolute.clone()),
             Some(PathBuf::from("/Users/synthetic")),
         );
-        assert_eq!(custom.unwrap(), Path::new("/srv/jht"));
+        assert_eq!(custom.unwrap(), absolute);
         // Un JHT_HOME relativo dipenderebbe dalla cartella da cui parte l'app.
         let relative = jht_home_dir(
             Some(PathBuf::from("jht")),
