@@ -88,6 +88,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -248,6 +249,51 @@ def effective_seconds(agent: str, requested=None) -> int:
     except Exception as exc:  # noqa: BLE001
         _log("could not resolve duration for %s: %s" % (agent, exc))
         return 300
+
+
+# ── Pausa breve quando c'è lavoro chiesto dall'utente (27/09) ────────────
+# La pausa del config è il freno del Capitano contro i giri A VUOTO: un worker
+# che si sveglia, trova la coda vuota e rispende budget per scoprirlo. Su una
+# VPS l'ANALISTA-1 era a 780 s anche con 120 geocoding chiesti dall'utente in
+# coda: 41 s di lavoro e 13 minuti di pausa per ogni coordinata, il 95 % del
+# tempo fermo davanti a lavoro già chiesto. Con richieste dell'utente in attesa
+# (le code di db_query.USER_REQUEST_QUEUES: stessa condizione, stesso conto) la
+# pausa dell'Analista scende a USER_WORK_PAUSE_SEC; a coda vuota torna quella del
+# Capitano, che resta il freno per i giri a vuoto. 60 s è il gradino più basso
+# della ladder: la pausa resta un checkpoint fra un'unità e l'altra, come vuole
+# il worker floor, solo più corto. Le richieste dell'utente le serve l'Analista
+# (RULE-14): gli altri ruoli non cambiano.
+USER_WORK_PAUSE_SEC = 60
+_USER_REQUEST_ROLES = frozenset({"analista"})
+
+
+def waiting_user_requests(agent: str) -> list:
+    """[(coda, quante)] delle richieste dell'utente in attesa per `agent`.
+
+    Vuota per i ruoli che non le servono, e per qualunque errore: senza una
+    risposta certa si tiene la pausa del Capitano (la direzione sicura è il
+    freno, come in `effective_seconds`).
+    """
+    if re.sub(r"-\d+$", "", str(agent or "").strip().lower()) not in _USER_REQUEST_ROLES:
+        return []
+    try:
+        # db_query importa i suoi vicini (`from _db import …`) per nome.
+        for cand in (Path("/app/shared/skills"), Path(__file__).resolve().parent):
+            if (cand / "db_query.py").exists():
+                if str(cand) not in sys.path:
+                    sys.path.insert(0, str(cand))
+                break
+        mod = _load_shared("db_query", "db_query.py")
+        if mod is None:
+            return []
+        conn = mod.get_db()
+        try:
+            return [(q, int(n)) for q, n in mod.waiting_user_requests(conn)]
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001 — la skill gira in loop dagli agenti
+        _log("could not count user requests for %s: %s" % (agent, exc))
+        return []
 
 
 def _within_working_hours(now: float) -> bool:
@@ -414,6 +460,10 @@ def register(agent: str, seconds=None, reason=None, session=None,
         raise ValueError("agent is required")
     now = time.time() if now is None else float(now)
     applied = effective_seconds(agent, seconds)
+    waiting = waiting_user_requests(agent) if applied > USER_WORK_PAUSE_SEC else []
+    shortened_from = None
+    if waiting:
+        shortened_from, applied = applied, USER_WORK_PAUSE_SEC
 
     state = read_flags()
     if applied <= 0:
@@ -447,14 +497,20 @@ def register(agent: str, seconds=None, reason=None, session=None,
         "pause_id": pause_id,
     }
     write_flags(state)
+    # Una pausa accorciata lo dice, con il valore che il Capitano aveva messo
+    # e le richieste che l'hanno accorciata: chi legge il log del pacing deve
+    # poter distinguere «il Capitano ha abbassato il freno» da «c'era lavoro».
+    shortened = ({"shortened_from": shortened_from,
+                  "user_requests_waiting": dict(waiting)} if waiting else {})
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
-         reason=reason)
+         reason=reason, **shortened)
     emit_pause("start", agent, now, id=pause_id,
                requested_sec=seconds if seconds is not None else applied,
                applied_sec=applied, reason=reason,
-               source="explicit" if seconds is not None else "config")
+               source="explicit" if seconds is not None else "config",
+               **shortened)
     return {"agent": agent, "armed": True, "applied_sec": applied,
-            "until": until}
+            "until": until, **shortened}
 
 
 # ── Ack (lo fa l'AGENTE: è ciò che rende NOTIFIED una prova) ──────────────
@@ -886,8 +942,12 @@ def _print_register(res: dict, fmt: str) -> None:
         print(res["until"] if res.get("until") else "")
     else:
         if res.get("armed"):
-            print("THROTTLE_ARMED agent=%s applied_sec=%d until=%d"
-                  % (res["agent"], res["applied_sec"], res["until"]))
+            line = ("THROTTLE_ARMED agent=%s applied_sec=%d until=%d"
+                    % (res["agent"], res["applied_sec"], res["until"]))
+            if res.get("shortened_from"):
+                line += (" shortened_from=%d (user requests waiting)"
+                         % res["shortened_from"])
+            print(line)
         else:
             print("THROTTLE_NONE agent=%s applied_sec=0" % res["agent"])
 
