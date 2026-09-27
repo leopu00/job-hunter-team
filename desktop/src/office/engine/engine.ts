@@ -20,15 +20,16 @@ import {
   type Department,
   type DeptId,
   type Facing,
+  type FurnitureItem,
   type OfficeAgent,
   type OfficeEngine,
   type OfficeEvent,
   type OfficeLayout,
   type Piles,
-  type Rect,
   type SheetFacing,
   type Vec,
 } from "../contract";
+import { allFurniture } from "../layout-items";
 import { NavGrid, distance } from "./nav-grid";
 import { effectiveMode, frameAt, startsGait, trackFor, walkFpsForSpeed } from "./rig";
 
@@ -39,7 +40,10 @@ export const PIPELINE_SPEED = 185;
 /** How many pipeline events an agent keeps while busy (AgentNPC._pending_pipeline). */
 export const PENDING_MAX = 8;
 
-/** agent_npc.gd _seat_offset: where the body sits relative to desk_spot, by the desk's facing. */
+/**
+ * agent_npc.gd _seat_offset's table by facing: where the body sits relative
+ * to desk_spot. The layout's Desk/CoreSeat.seatOffset wins when present.
+ */
 export function seatOffset(facing: Facing): Vec {
   switch (facing) {
     case "up":
@@ -77,10 +81,16 @@ type Leg = {
   exit?: boolean;
 };
 
-type Home = { spot: Vec; facing: Facing; dept: Department | null };
+/**
+ * Where an agent works. `furniture`: the desk or core seat it sits at, null
+ * when it has no workstation of its own (an instance beyond the chairs)
+ * and works standing, as Godot's overflow copies do.
+ */
+type Home = { spot: Vec; facing: Facing; dept: Department | null; offset: Vec; furniture: FurnitureItem | null };
 
 type Agent = {
   info: OfficeAgent;
+  /** agent_npc.gd _seated(): a seated sheet, or a workstation with seated art */
   hasSit: boolean;
   home: Home;
   pos: Vec;
@@ -104,18 +114,6 @@ type Agent = {
 };
 
 const EMPTY_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
-
-/**
- * The A*'s obstacles: the blocking furniture and the departments' desks,
- * which the layout keeps in departments[].desks only (nav_grid.gd adds them
- * from the desk nodes); an id listed in both counts once.
- */
-function obstaclesOf(layout: OfficeLayout): Rect[] {
-  const byId = new Map<string, Rect>();
-  for (const f of layout.furniture) if (f.blocking) byId.set(f.id, f.rect);
-  for (const d of layout.departments) for (const k of d.desks) if (k.furniture.blocking) byId.set(k.furniture.id, k.furniture.rect);
-  return [...byId.values()];
-}
 
 export const createOfficeEngine: CreateOfficeEngine = (layout, options = {}) =>
   new Engine(layout, options.random ?? Math.random, options.characters);
@@ -144,7 +142,10 @@ class Engine implements OfficeEngine {
   ) {
     this.nav = new NavGrid({
       floor: layout.floor,
-      obstacles: obstaclesOf(layout),
+      // allFurniture: the departments' desks too, which the layout may keep only in their Desk
+      obstacles: allFurniture(layout)
+        .filter((f) => f.blocking)
+        .map((f) => f.rect),
       walls: layout.nav.walls,
       cell: layout.nav.cell,
       margin: layout.nav.margin,
@@ -205,6 +206,7 @@ class Engine implements OfficeEngine {
         flipped: a.facing === "side" && a.flipped,
         frame: frameAt(track, a.t, fps ?? track.fps),
         carrying: a.mode === "carry",
+        ...(a.mode === "sit" && a.home.furniture ? { seatedAt: a.home.furniture.id } : {}),
       };
     });
   }
@@ -229,10 +231,12 @@ class Engine implements OfficeEngine {
     const { n } = parseUid(info.uid);
     const variants = this.layout.sheets[info.role] ?? [];
     const sheet = info.sheet || variants[(Math.max(1, n) - 1) % Math.max(1, variants.length)] || "";
+    const sheetSit = this.sitBySheet ? this.sitBySheet.get(sheet) === true : true;
+    const home = this.homeOf(info.role, n);
     const agent: Agent = {
       info: { ...info, sheet },
-      hasSit: this.sitBySheet ? this.sitBySheet.get(sheet) === true : true,
-      home: this.homeOf(info.role, n),
+      hasSit: home.furniture !== null && (sheetSit || home.furniture.occupiedImage !== undefined),
+      home,
       pos: { ...this.layout.door },
       state: "work",
       legs: [],
@@ -275,18 +279,40 @@ class Engine implements OfficeEngine {
     this.startNextLeg(a);
   }
 
-  /** Where an agent works: its department's desk n-1 (scout-5 → desk 4), or its core seat. */
+  /**
+   * Where an agent works (office.gd _take_desk_for, _spawn_backend_agent):
+   * its department's desk n-1 (scout-5 → desk 4), else the first free one;
+   * its core seat. With no free chair it works standing next to its
+   * department's inbox, or next to the core seat, shifted per copy so two
+   * bodies never share a spot.
+   */
   private homeOf(role: AgentRole, n: number): Home {
     const deptId = DEPT_OF_ROLE[role];
     const dept = deptId ? this.deptById.get(deptId) ?? null : null;
-    if (dept && dept.desks.length > 0) {
-      const desks = [...dept.desks].sort((x, y) => x.index - y.index);
-      const desk = desks.find((d) => d.index === n - 1) ?? desks[(Math.max(1, n) - 1) % desks.length]!;
-      return { spot: desk.seat, facing: desk.seatFacing, dept };
+    const taken = new Set([...this.agents.values()].flatMap((a) => (a.home.furniture ? [a.home.furniture.id] : [])));
+    const copies = [...this.agents.values()].filter((a) => a.info.role === role && a.home.furniture === null).length;
+    if (dept) {
+      const desks = [...dept.desks].sort((x, y) => x.index - y.index).filter((d) => !taken.has(d.furniture.id));
+      const desk = desks.find((d) => d.index === n - 1) ?? desks[0];
+      if (desk) {
+        const offset = desk.seatOffset ?? seatOffset(desk.seatFacing);
+        return { spot: desk.seat, facing: desk.seatFacing, dept, offset, furniture: desk.furniture };
+      }
+      const serial = copies + 1;
+      const spot = { x: dept.inbox.x + 58 * serial, y: dept.inbox.y + 46 * (serial % 2) };
+      return { spot: this.nav.clampToWalkable(spot), facing: "down", dept, offset: { x: 0, y: 0 }, furniture: null };
     }
     const core = this.layout.coreSeats.find((s) => s.role === role);
-    if (core) return { spot: core.seat, facing: core.seatFacing, dept };
-    return { spot: { ...this.layout.door }, facing: "down", dept };
+    if (core) {
+      const furniture = allFurniture(this.layout).find((f) => f.id === core.furnitureId) ?? null;
+      if (furniture && !taken.has(furniture.id)) {
+        return { spot: core.seat, facing: core.seatFacing, dept, offset: core.seatOffset ?? seatOffset(core.seatFacing), furniture };
+      }
+      const serial = copies + 1;
+      const spot = { x: core.seat.x + 84 * serial, y: core.seat.y + 52 * (serial % 2) };
+      return { spot: this.nav.clampToWalkable(spot), facing: core.seatFacing, dept, offset: { x: 0, y: 0 }, furniture: null };
+    }
+    return { spot: { ...this.layout.door }, facing: "down", dept, offset: { x: 0, y: 0 }, furniture: null };
   }
 
   /** At the desk (agent_npc.gd _work_pose): seated with the seat offset, or working standing. */
@@ -297,7 +323,7 @@ class Engine implements OfficeEngine {
     a.path = [];
     a.pipeline = false;
     const sits = a.hasSit;
-    const off = sits ? seatOffset(a.home.facing) : { x: 0, y: 0 };
+    const off = sits ? a.home.offset : { x: 0, y: 0 };
     a.pos = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
     this.setMotion(a, rigFacing(a.home.facing), sits ? "sit" : "work");
     const next = a.pending.shift();
@@ -450,7 +476,7 @@ class Engine implements OfficeEngine {
       a.state = "pause";
       a.pause = leg.pause;
       if (leg.deskWork && a.hasSit) {
-        const off = seatOffset(a.home.facing);
+        const off = a.home.offset;
         a.pos = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
         this.setMotion(a, rigFacing(a.home.facing), "sit");
       } else if (leg.deskWork) {
