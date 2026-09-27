@@ -73,6 +73,12 @@ def test_a_desks_seat_is_the_standing_point_of_desk_spot(committed):
     assert scout[2]["seat"] == {"x": 775.0, "y": 448.0}
     # Rect2(690, 689, 170, 78) facing down: (centre.x, y - 14).
     assert scout[3]["seat"] == {"x": 775.0, "y": 675.0}
+    # agent_npc.gd _seat_offset: the desk's own, else by facing.
+    assert scout[5]["seatOffset"] == {"x": 41.0, "y": -71.0}  # "right" drawn down_right: its own offset
+    assert scout[3]["seatOffset"] == {"x": 0.0, "y": 95.0}  # "down", from the table
+    core = {c["role"]: c for c in committed["coreSeats"]}
+    assert core["mentor"]["seatOffset"] == {"x": 0.0, "y": -24.0}
+    assert core["capitano"]["seatOffset"] == {"x": 0.0, "y": 95.0}
 
 
 def test_art_is_placed_by_godots_rule_and_mirrored_where_godot_mirrors_it(committed):
