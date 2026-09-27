@@ -103,6 +103,7 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/user-document-upload\.server$/, replacement: fromHere("./src/web-shims/server/user-document-upload.ts") },
       { find: /^@\/lib\/positions\/local-first-write$/, replacement: fromHere("./src/web-shims/server/local-first-write.ts") },
       { find: /^@\/lib\/cloud-sync\/auth$/, replacement: fromHere("./src/web-shims/server/cloud-sync-auth.ts") },
+      { find: /^@\/lib\/cloud-sync\/tokens$/, replacement: fromHere("./src/web-shims/server/cloud-sync-tokens.ts") },
       { find: /^@\/lib\/pending-message-reply-local$/, replacement: fromHere("./src/web-shims/server/pending-message-reply-local.ts") },
       { find: /^better-sqlite3$/, replacement: fromHere("./src/web-shims/server/better-sqlite3.ts") },
       { find: /^next\/link$/, replacement: fromHere("./src/web-shims/next-link.tsx") },
