@@ -125,6 +125,8 @@ describe("npm run role -- --role assistente (T38)", () => {
     // A-02 names the validator, and it is a tool here, not a script.
     expect(prompt).toMatch(/validate_profile\b/);
     expect(prompt).not.toMatch(/validate_profile\.py/);
+    // Its flags are a tool here: the sandboxed shell cannot write the profile.
+    expect(prompt).toContain("are the `profile_flag` tool here");
   }, CLI_RUN_TIMEOUT_MS);
 
   it("writes in the profile folder only what it fills in, not what lives there beside it", async () => {
