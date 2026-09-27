@@ -18,11 +18,11 @@
 #   1. registra la pausa nel motore (che applica floor + ladder + deroga);
 #   2. blocca in chunk da 15s finché la scadenza non passa — così la semantica
 #      che i prompt attuali si aspettano («jht-throttle ti ferma») non cambia;
-#   3. all'uscita fa l'ack, che chiude il flag e disarma la sveglia.
+#   3. all'uscita NON firma: la sveglia la manda il motore alla scadenza, anche
+#      se questo processo è sopravvissuto al turno che l'ha lanciato (27/09).
 #
-# Il punto è il passo 3 mancato: se il parent viene killato a metà, l'ack non
-# arriva, il timer resta armato SUL DISCO DEL MOTORE e la sveglia arriva
-# comunque. Il blocco qui è diventato una comodità, non il meccanismo.
+# Se il parent viene killato a metà, il timer resta armato SUL DISCO DEL MOTORE
+# e la sveglia arriva comunque. Il blocco qui è una comodità, non il meccanismo.
 #
 # ## Uso (invariato)
 #
@@ -102,7 +102,8 @@ while :; do
   sleep "$CHUNK"
 done
 
-# Abbiamo atteso per intero: firmiamo noi il risveglio, così il motore non manda
-# una sveglia a un agente che è già ripartito.
-python3 "$ENGINE" ack "$AGENT" >/dev/null 2>&1 || true
+# Nessun ack qui, come in `jht-throttle-wait`: la sveglia è del motore e la
+# firma è dell'agente (`throttle-ack`). Uno shim che firma da solo, sopravvissuto
+# al turno che l'ha lanciato, porta l'agente ad ACTIVE senza che nessuno lo
+# svegli (27/09). Un [RIPRENDI] in più costa poco, una sveglia persa ferma una coda.
 exit 0
