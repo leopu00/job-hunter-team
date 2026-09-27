@@ -43,3 +43,16 @@ def test_docker_does_not_publish_hq_integration_images():
 def test_docker_pull_requests_build_every_image_input_path():
     workflow = _workflow("docker.yml")["on"]
     assert set(workflow["pull_request"]["paths"]) == set(workflow["push"]["paths"])
+
+
+def test_production_smoke_is_not_part_of_a_branch_gate():
+    # A workflow_dispatch of test.yml is the gate of a branch before its merge.
+    # The smoke asks the live site, not the branch: run on every dispatch it
+    # put four ERROR 22P02 in the production Postgres log per run (27/09).
+    workflow = _workflow("test.yml")
+    smoke_input = workflow["on"]["workflow_dispatch"]["inputs"]["smoke"]
+    assert smoke_input["default"] == "false"
+    condition = " ".join(workflow["jobs"]["smoke"]["if"].split())
+    assert "github.event_name == 'schedule'" in condition
+    assert "(github.event_name == 'workflow_dispatch' && inputs.smoke)" in condition
+    assert "github.event_name == 'workflow_dispatch')" not in condition
