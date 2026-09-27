@@ -65,6 +65,10 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // pushato. Al tick successivo selezioniamo solo righe con updated_at >
 // cursor. Crollo bandwidth ~95% (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
 const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
+// The sentinel bridge's samples of the TUI team's usage window, and the
+// cursor of the lane that sends them (usage-samples-push.js).
+const SENTINEL_DATA_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
+const USAGE_PUSH_STATE_FILE = join(JHT_HOME, '.cloud-usage-cursor.json');
 // Cursor pull desired-state: ultimo updated_at letto da Supabase per
 // recuperare flag user-driven (write_requested) scritti via web mentre
 // il container era offline. Separato dal push cursor: due direzioni di
@@ -3888,6 +3892,24 @@ async function maybeBootstrapPush(options = {}) {
  * quando trova modifiche entra nello STESSO `handlePush` di bootstrap e
  * "Sync now", già serializzato da `createExclusiveRunner`.
  */
+/**
+ * The TUI team's usage samples to the cloud (sentinel_ticks), at most once a
+ * quarter hour and only the new ones: usage-samples-push.js. Best effort, on
+ * its own: whatever happens here, the data push keeps its own outcome.
+ */
+async function maybePushUsageSamples(config) {
+  const { pushUsageSamples } = await import('../lib/usage-samples-push.js');
+  const result = await pushUsageSamples({
+    config,
+    samplesPath: SENTINEL_DATA_PATH,
+    statePath: USAGE_PUSH_STATE_FILE,
+    headers: cloudSyncHeaders(config?.token, { 'Content-Type': 'application/json' }),
+    signal: AbortSignal.timeout(30_000),
+    log: (_level, msg, meta) => console.error(pc.yellow(`  ${msg} ${JSON.stringify(meta)}`)),
+  });
+  if (result.advanced) console.log(pc.dim(`  usage samples: ${result.sent} sent`));
+}
+
 export async function maybePeriodicPush(options = {}) {
   const silent = options.silent === true;
   const now = options.now ?? Date.now();
@@ -4246,6 +4268,12 @@ async function handleDaemon(options) {
         } catch (err) {
           console.error(pc.yellow(`  daemon periodic-push error: ${err.message}`));
         }
+
+        try {
+          await maybePushUsageSamples(config);
+        } catch (err) {
+          console.error(pc.yellow(`  daemon usage-samples error: ${err.message}`));
+        }
       }
     }
     fastTick += 1;
@@ -4505,6 +4533,8 @@ async function runRealtimeLoop({ config, isRunning }) {
     catch (e) { console.error(pc.yellow(`  bootstrap-push error: ${e.message}`)); }
     try { await maybePeriodicPush({ silent: false, config }); }
     catch (e) { console.error(pc.yellow(`  periodic-push error: ${e.message}`)); }
+    try { await maybePushUsageSamples(config); }
+    catch (e) { console.error(pc.yellow(`  usage-samples error: ${e.message}`)); }
 
     tick += 1;
     await sleepTick();
