@@ -379,6 +379,27 @@ describe("db_query against db_query.py", () => {
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
   });
 
+  it.skipIf(skills === null)("an empty next-for-analista names the user's requests still waiting, with their counts", async () => {
+    const { pyDb, ourDb, call, py } = twins("analista-1");
+    const empty = (db: Database) => db.prepare("UPDATE positions SET status = 'checked' WHERE status = 'new'").run();
+    const queues = [["next-for-analista"], ["next-for-analista", "--json"], ["next-for-geocoding"], ["next-for-recheck"], ["next-for-salary-precise"]];
+    for (const db of [pyDb, ourDb]) empty(db);
+    for (const args of queues) expectSame(await call("db_query", args), py("db_query.py", args));
+    // The seed asks a geocoding (#3), a recheck and a precise salary (#1): one of each waits.
+    expect((await call("db_query", ["next-for-analista"])).content).toBe(
+      "\nNew positions ready for analysis: none.\n" +
+        "User requests waiting — serve them before pausing, one position per turn: next-for-geocoding (1), next-for-recheck (1), next-for-salary-precise (1).",
+    );
+    // Served ones leave the reminder as they leave their queue; with none left, no reminder.
+    for (const db of [pyDb, ourDb]) {
+      db.prepare("UPDATE positions SET last_open_check = '2026-09-10 11:00:00', salary_precise = 'NET 40k' WHERE id = 1").run();
+    }
+    for (const args of queues) expectSame(await call("db_query", args), py("db_query.py", args));
+    for (const db of [pyDb, ourDb]) db.prepare("UPDATE positions SET geocode_requested = 0").run();
+    for (const args of queues) expectSame(await call("db_query", args), py("db_query.py", args));
+    expect((await call("db_query", ["next-for-analista"])).content).toBe("\nNew positions ready for analysis: none.");
+  });
+
   it.skipIf(skills === null)("next-for-scorer, as the SCORER runs it (T15)", async () => {
     const { call, py } = twins("scorer-1");
     for (const args of [["next-for-scorer"], ["next-for-scorer", "--json"]]) {
