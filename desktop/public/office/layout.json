@@ -1523,7 +1523,8 @@
       },
       "occupiedImage": {
        "src": "/office/furniture/occupied/scout_d_down_seated_v3.png"
-      }
+      },
+      "frontOcclusion": 0.72
      },
      "seat": {
       "x": 775.0,
@@ -1783,7 +1784,8 @@
       },
       "occupiedImage": {
        "src": "/office/furniture/occupied/analisti_d_down_seated_v3.png"
-      }
+      },
+      "frontOcclusion": 0.72
      },
      "seat": {
       "x": 2655.0,
@@ -2044,7 +2046,8 @@
       },
       "occupiedImage": {
        "src": "/office/furniture/occupied/scorer_d_down_seated_v3.png"
-      }
+      },
+      "frontOcclusion": 0.78
      },
      "seat": {
       "x": 1700.0,
@@ -2303,7 +2306,8 @@
       },
       "occupiedImage": {
        "src": "/office/furniture/occupied/scrittori_d_down_seated_v3.png"
-      }
+      },
+      "frontOcclusion": 0.62
      },
      "seat": {
       "x": 690.0,
@@ -2563,7 +2567,8 @@
       },
       "occupiedImage": {
        "src": "/office/furniture/occupied/critici_d_down_seated_v3.png"
-      }
+      },
+      "frontOcclusion": 0.8
      },
      "seat": {
       "x": 2625.0,
