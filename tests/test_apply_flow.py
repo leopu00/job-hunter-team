@@ -1312,6 +1312,37 @@ def test_a_failed_screenshot_never_breaks_the_stop(page, tmp_path: Path, cv_path
     assert [p.name for p in tmp_path.iterdir() if ".stop-" in p.name] == []
 
 
+def test_a_page_that_cannot_hide_its_passwords_is_not_photographed(page, tmp_path: Path, cv_path: Path, monkeypatch):
+    """The stop is saved without its picture: never a password in clear to go faster."""
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    shots: list[dict] = []
+
+    class Unhideable:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def wait_for_function(self, script, **kwargs):
+            if "__jhtHiddenSecrets" in script:
+                raise TimeoutError("synthetic: no document to hide the fields in")
+            return self._inner.wait_for_function(script, **kwargs)
+
+        def screenshot(self, **kwargs):
+            shots.append(kwargs)
+            return self._inner.screenshot(**kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    page.set_content(ashby_form(captcha=True))
+
+    result = build_flow(tmp_path, cv_path).run(page=Unhideable(page), navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "captcha")
+    assert shots == []
+    assert _read_checkpoint(tmp_path)["stop_screenshot"] == ""
+    assert [p.name for p in tmp_path.iterdir() if ".stop-" in p.name] == []
+
+
 def test_a_denial_before_any_page_opens_has_no_screenshot(tmp_path: Path, cv_path: Path):
     flow = build_flow(tmp_path, cv_path, verdicts=[GateVerdict(False, "apply_not_requested")])
 

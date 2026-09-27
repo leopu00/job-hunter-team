@@ -3197,16 +3197,26 @@ def _fill_secret(control: Any, value: str) -> None:
 
 
 @contextlib.contextmanager
-def _secrets_hidden(page: Any):
+def _secrets_hidden(page: Any, *, required: bool = False):
     """No screenshot ever shows a portal password (ats_account's rule).
 
     Without the module, or on a page that cannot hide them, the screenshot is
     still taken: these pages have no password field, and a stop without its
     picture is worse.  A recipe that types a password checks the hiding itself.
+
+    `required`: the stop screenshot. There the hiding comes first — a page
+    that cannot hide its fields is a page that is not photographed (the stop
+    is saved without its picture), never a password in clear to go faster.
     """
     module = _optional_module("ats_account")
     if module is None:
+        if required:
+            raise RuntimeError("secrets_unhideable")
         yield
+        return
+    if required:
+        with module.secrets_hidden(page):
+            yield
         return
     try:
         with module.secrets_hidden(page):
@@ -3885,7 +3895,7 @@ class ApplicationFlow:
             slug = re.sub(r"[^a-z0-9_]+", "_", str(reason).casefold()).strip("_")[:60] or "stop"
             target = directory / f"{self._stop_screenshot_prefix()}{stamp}-{slug}.png"
             temporary = directory / f".{target.name}.partial.png"
-            with _secrets_hidden(page):
+            with _secrets_hidden(page, required=True):
                 page.screenshot(path=str(temporary), full_page=True, timeout=10_000)
             os.chmod(temporary, 0o600)
             os.replace(temporary, target)
