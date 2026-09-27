@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { OfficeEngine, OfficeScene, OfficeSnapshot } from "../../office/contract";
+import type { AgentStatuses, OfficeEngine, OfficeScene, OfficeSnapshot } from "../../office/contract";
 import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts } from "../../office/parts";
 import { routeForClick } from "../../office/scene/click";
+import { loadAgentStatuses } from "../../office/status";
 import { supabase } from "../../lib/supabase";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -48,6 +49,13 @@ export default function OfficePage(_props: PageProps) {
 function Office({ ready }: { ready: Ready }) {
   const host = useRef<HTMLDivElement>(null);
   const engineRef = useRef<OfficeEngine | null>(null);
+  const sceneRef = useRef<OfficeScene | null>(null);
+  // The last statuses read: a scene that mounts after the first read gets them at once.
+  const statusesRef = useRef<AgentStatuses | null>(null);
+  const showStatuses = (next: AgentStatuses | null) => {
+    statusesRef.current = next;
+    sceneRef.current?.setAgentStatuses?.(next);
+  };
   const [status, setStatus] = useState<string | null>(null);
   const { assets, parts } = ready;
 
@@ -72,6 +80,8 @@ function Office({ ready }: { ready: Ready }) {
       .then((s) => {
         if (gone) return s.destroy();
         scene = s;
+        sceneRef.current = s;
+        s.setAgentStatuses?.(statusesRef.current);
         observer.observe(el);
       })
       .catch((error: unknown) => {
@@ -82,6 +92,7 @@ function Office({ ready }: { ready: Ready }) {
       gone = true;
       observer.disconnect();
       scene?.destroy();
+      sceneRef.current = null;
       engineRef.current = null;
     };
   }, [assets, parts]);
@@ -92,16 +103,23 @@ function Office({ ready }: { ready: Ready }) {
   read.current = () => {
     if (!parts.data) return;
     const data = parts.data;
+    // The tags' statuses in a query of their own: its failure costs the tags, not the office.
+    const statuses = loadAgentStatuses(supabase);
     data
       .load(supabase)
-      .then((next) => {
+      .then(async (next) => {
         const engine = engineRef.current;
         if (!engine) return;
         for (const event of data.diff(prev.current, next)) engine.apply(event);
         prev.current = next;
         setStatus(next.teamOnline === false ? "Il team è spento: l'ufficio è vuoto." : null);
+        // a team that is not online has no present status to show
+        showStatuses(next.teamOnline ? await statuses : null);
       })
-      .catch(() => setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era."));
+      .catch(() => {
+        showStatuses(null);
+        setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era.");
+      });
   };
   useEffect(() => {
     if (!parts.data) {

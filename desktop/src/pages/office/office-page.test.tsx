@@ -5,14 +5,16 @@ import { emptyEngine, loadAssets } from "../../office/parts";
 import { currentLocation, navigate } from "../../shell/router";
 
 // jsdom has no WebGL: the scene is replaced, and the test sees what the page gives it.
-const scene = { options: null as OfficeSceneOptions | null, resize: vi.fn(), destroy: vi.fn() };
+const scene = { options: null as OfficeSceneOptions | null, resize: vi.fn(), destroy: vi.fn(), setAgentStatuses: vi.fn() };
 vi.mock("../../office/scene/pixi-scene", () => ({
   createOfficeScene: vi.fn(async (_host: HTMLElement, options: OfficeSceneOptions) => {
     scene.options = options;
-    return { resize: scene.resize, destroy: scene.destroy };
+    return { resize: scene.resize, destroy: scene.destroy, setAgentStatuses: scene.setAgentStatuses };
   }),
 }));
 vi.mock("../../lib/supabase", () => ({ supabase: { from: vi.fn() } }));
+const statuses = vi.hoisted(() => ({ value: null as unknown }));
+vi.mock("../../office/status", () => ({ loadAgentStatuses: vi.fn(async () => statuses.value) }));
 
 const parts = vi.hoisted(() => ({ value: { createEngine: null as unknown, data: null as unknown } }));
 vi.mock("../../office/parts", async (importOriginal) => ({
@@ -76,6 +78,22 @@ describe("the office page", () => {
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(diff).toHaveBeenCalledWith(null, snapshot);
+  });
+
+  it("hands the scene the published statuses only while the team is online", async () => {
+    statuses.value = { at: Date.now(), agents: { capitano: { status: "working" } } };
+    const online = { teamOnline: true } as OfficeSnapshot;
+    parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => online), diff: vi.fn(() => []) } };
+    const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalledWith(statuses.value));
+    unmount();
+
+    scene.setAgentStatuses.mockClear();
+    const offline = { teamOnline: false } as OfficeSnapshot;
+    parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => offline), diff: vi.fn(() => []) } };
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalled());
+    expect(scene.setAgentStatuses).toHaveBeenLastCalledWith(null);
   });
 
   it("a click in the scene opens the page it points to", async () => {

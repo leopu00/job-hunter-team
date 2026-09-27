@@ -346,6 +346,19 @@ export type AgentPose = {
   seatedAt?: string;
 };
 
+/**
+ * An agent's status as the box publishes it (team_state.agents_status,
+ * migration 089), with the Godot game's rule; "idle" is the game's WAITING.
+ */
+export type AgentStatus = {
+  status: "working" | "idle" | "paused" | "throttled";
+  /** throttled only: when the pause ends, on this computer's clock */
+  throttleUntil?: number;
+};
+
+/** The statuses to tag, by uid (capitano, scout-1…); `at` is when the box observed them. */
+export type AgentStatuses = { at: number; agents: Record<string, AgentStatus> };
+
 /** A speech bubble over an agent. */
 export type Bubble = { uid: string; text: string; until: number };
 
@@ -460,5 +473,7 @@ export type OfficeSceneOptions = {
 
 export interface OfficeScene {
   resize(width: number, height: number): void;
+  /** the tags over the agents; null = no tags (no status, or an old one) */
+  setAgentStatuses?(statuses: AgentStatuses | null): void;
   destroy(): void;
 }
