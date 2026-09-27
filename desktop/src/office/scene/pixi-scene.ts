@@ -15,7 +15,7 @@ import type {
 } from "../contract";
 import { clamp, fit, pan, zoomAt, type Camera } from "./camera";
 import { feetAnchor, pickCell } from "./frames";
-import { allFurniture } from "../layout-items";
+import { allFurniture, sceneBounds } from "../layout-items";
 
 /**
  * The office drawn with PixiJS in the webview: the floor, the furniture and
@@ -116,7 +116,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   // Camera, pan and zoom.
   let view = { w: app.screen.width, h: app.screen.height };
-  let camera: Camera = fit(view, layout.floor);
+  const bounds = sceneBounds(layout);
+  let camera: Camera = fit(view, bounds);
   const applyCamera = () => {
     world.scale.set(camera.scale);
     world.position.set(camera.x, camera.y);
@@ -134,7 +135,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     const now = { x: e.global.x, y: e.global.y };
     if (Math.hypot(now.x - drag.start.x, now.y - drag.start.y) > CLICK_SLOP) drag.moved = true;
     if (drag.moved) {
-      camera = pan(camera, { x: now.x - drag.last.x, y: now.y - drag.last.y }, view, layout.floor);
+      camera = pan(camera, { x: now.x - drag.last.x, y: now.y - drag.last.y }, view, bounds);
       applyCamera();
     }
     drag.last = now;
@@ -148,7 +149,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const wheel = (e: WheelEvent) => {
     e.preventDefault();
     const box = app.canvas.getBoundingClientRect();
-    camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), { x: e.clientX - box.left, y: e.clientY - box.top }, view, layout.floor);
+    camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), { x: e.clientX - box.left, y: e.clientY - box.top }, view, bounds);
     applyCamera();
   };
   app.canvas.addEventListener("wheel", wheel, { passive: false });
@@ -249,7 +250,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       if (width <= 0 || height <= 0) return;
       app.renderer.resize(width, height);
       view = { w: width, h: height };
-      camera = clamp(camera, view, layout.floor);
+      camera = clamp(camera, view, bounds);
       applyCamera();
     },
     destroy() {
