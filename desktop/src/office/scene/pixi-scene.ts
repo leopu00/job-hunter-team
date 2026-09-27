@@ -4,6 +4,7 @@ import "pixi.js/unsafe-eval";
 import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, TilingSprite } from "pixi.js";
 import type {
   AgentPose,
+  AgentStatuses,
   Department,
   Vec,
   CharacterSheet,
@@ -29,6 +30,7 @@ import {
 } from "./effects";
 import { feetAnchor, pickCell } from "./frames";
 import { allFurniture, cameraBounds } from "../layout-items";
+import { tagOf } from "../status";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
 import { RIG_SCALE } from "../contract";
 
@@ -237,6 +239,36 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const agents = new Map<string, Sprite>();
   const shadows = new Map<string, Graphics>();
   const bubbles = new Map<string, { node: Container; text: string }>();
+  // The status tags (AgentStateTag): what the box published, never guessed.
+  let statuses: AgentStatuses | null = null;
+  const tags = new Map<string, { node: Container; key: string }>();
+  const drawTags = (poses: AgentPose[]) => {
+    const live = new Set<string>();
+    const now = Date.now();
+    for (const pose of poses) {
+      const status = statuses?.agents[pose.uid.toLowerCase()];
+      const sprite = agents.get(pose.uid);
+      if (!status || !sprite) continue;
+      live.add(pose.uid);
+      const { label, color } = tagOf(status, now);
+      const key = `${label}|${color}`;
+      let entry = tags.get(pose.uid);
+      if (!entry || entry.key !== key) {
+        entry?.node.destroy({ children: true });
+        entry = { node: stateTag(label, color), key };
+        tags.set(pose.uid, entry);
+        overlay.addChild(entry.node);
+      }
+      // over the head: the cell's top above the feet, plus half the tag and 6 px (STATE_TAG_HEAD_CLEARANCE)
+      const top = sprite.getLocalBounds().y * Math.abs(sprite.scale.y);
+      entry.node.position.set(pose.pos.x, pose.pos.y + top - 18);
+    }
+    for (const [uid, entry] of tags) {
+      if (live.has(uid)) continue;
+      entry.node.destroy({ children: true });
+      tags.delete(uid);
+    }
+  };
 
   const drawAgents = (poses: AgentPose[]) => {
     const seen = new Set<string>();
@@ -345,10 +377,14 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     door.step(someoneNear(poses, layout.door, 120), dt);
     drawAgents(poses);
     drawBubbles(poses);
+    drawTags(poses);
     drawPiles();
   });
 
   return {
+    setAgentStatuses(next: AgentStatuses | null) {
+      statuses = next;
+    },
     resize(width: number, height: number) {
       if (width <= 0 || height <= 0) return;
       app.renderer.resize(width, height);
@@ -820,4 +856,24 @@ function frontOccluder(where: Rect, tex: Texture, cut: number, flip: boolean): S
   s.visible = false;
   s.eventMode = "none";
   return s;
+}
+
+/** AgentStateTag._draw: a dark plate with the status colour's border, the (unlit) LED and the label. */
+function stateTag(label: string, color: number): Container {
+  const c = new Container();
+  c.eventMode = "none";
+  const text = new Text({ text: label, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: 0xf0f0fa } });
+  const w = text.width + 24;
+  const h = 24;
+  const g = new Graphics()
+    .rect(-w / 2, -h / 2, w, h)
+    .fill({ color: 0x16161d, alpha: 0.96 })
+    .rect(-w / 2, -h / 2, w, h)
+    .stroke({ color, alpha: 0.85, width: 1.4 });
+  // the game lights this LED from the CPU sampler, which the cloud does not have: always unlit
+  g.circle(-w / 2 + 9, 0, 3).fill(0x252530);
+  g.circle(-w / 2 + 9, 0, 2.7).stroke({ color: 0x4a4a5e, alpha: 0.8, width: 0.8 });
+  text.position.set(-w / 2 + 16, -text.height / 2);
+  c.addChild(g, text);
+  return c;
 }
