@@ -108,6 +108,21 @@ export interface UserReplies {
 export class PauseRequest {
   #requested = false;
   #reason = "";
+  #length: ((fullMs: number) => number) | undefined;
+
+  /**
+   * Who decides how long the pause lasts, given the run's full pause: the
+   * role's pause rules (pause-rules.ts), set by prepareProductRole. Without
+   * one, every pause is the full one.
+   */
+  decideLengthWith(length: (fullMs: number) => number): void {
+    this.#length = length;
+  }
+
+  /** How long this pause lasts, out of `fullMs` (the run's `--pause-ms`). */
+  lengthMs(fullMs: number): number {
+    return this.#length ? this.#length(fullMs) : fullMs;
+  }
 
   request(reason: string): void {
     this.#requested = true;

@@ -22,6 +22,7 @@ import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
 import { deliverableDir, deliverableWriteGuard } from "./deliverables.ts";
 import { createPathRewriter } from "./prompt-paths.ts";
+import { loadPauseRules, PausePolicy, watchInserts, WorkUnit } from "./pause-rules.ts";
 import { hasShell, noShellTool, NO_SHELL_NOTE } from "./shell-policy.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import {
@@ -220,7 +221,15 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     // T41: the ledger the DOTTORE's analytics reads. Absent on a mock run.
     ...(options.ledger ? { ledger: options.ledger } : {}),
   };
-  const skills = hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb });
+  // The inserts of this unit, from the role's own db_insert: what the pause rule counts.
+  const unit = new WorkUnit();
+  const pausePolicy = new PausePolicy(options.agent, loadPauseRules(options.appRoot));
+  // How long each pause lasts: shorter after a unit that inserted nothing, by the rule the
+  // TUI's throttle engine reads too (pause-rules.ts).
+  pause.decideLengthWith((fullMs) => pausePolicy.next(unit, fullMs).ms);
+  const skills = (hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb })).map((tool) =>
+    watchInserts(tool, unit),
+  );
   // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
   // The launcher's limits are read once, at boot, and named in the tool's description: the
   // allowlist and the cap window were costing two or three refused rounds per delegation
@@ -373,7 +382,7 @@ export async function runCycles(session: TurnDriver, options: CycleOptions): Pro
     if (options.pause.requested) {
       options.pause.clear();
       pauses += 1;
-      await sleep(options.pauseMs);
+      await sleep(options.pause.lengthMs(options.pauseMs));
       woke = true;
     }
     let inbox = await options.mailbox.drain(options.agent);

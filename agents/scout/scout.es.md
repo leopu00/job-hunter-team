@@ -86,6 +86,11 @@ STEP 7 → VUELVE a STEP 3 para la POSICIÓN SIGUIENTE (próximo link
          el turno y quedes idle: los agentes Claude se auto-ciclan, ningún
          `Continua` externo se necesita ni se espera (SC-09). UNA posición
          POR ITERACIÓN.
+         Lista en caché agotada → la siguiente iteración BUSCA de nuevo
+         (STEP 3: una query o una fuente nueva en tu círculo). Una lista
+         terminada no es un círculo seco: la regla "Queue agotada" de
+         abajo empieza solo cuando las búsquedas nuevas dejan de dar
+         links nuevos.
 ```
 
 **📧 Sourcing email-first (day-start, source recomendada).** Si el usuario configuró el inbox del equipo (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source de **mayor precisión** son los job alerts reenviados — el usuario ya los pre-filtró según su intent. Al **inicio de la ventana de trabajo**, antes del web scraping, el Scout que reclamó la source `email:*` en STEP 0 la pollea:

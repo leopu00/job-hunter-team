@@ -987,6 +987,109 @@ def test_a_shorter_captains_pause_is_not_lengthened(home, monkeypatch):
     assert eng.register("analista-1", now=T0)["applied_sec"] == 30
 
 
+# ── Lo SCOUT che non ha inserito niente (27/09) ──────────────────────────
+# Su una VPS lo SCOUT smaltiva una lista di annunci già visti: 16-36 s per un
+# duplicato, poi 660 s di pausa. La regola è in pause-rules.json, la stessa che
+# legge l'harness API (agent-harness/runtime/tests/pause-rules.test.ts).
+def _utc(ts: float) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(ts))
+
+
+def _inserted(db: Path, agent: str, at: float):
+    """La transizione None → 'new' che db_insert.py scrive per un INSERT."""
+    import sqlite3
+    conn = sqlite3.connect(db)
+    conn.execute("INSERT INTO position_state_transitions "
+                 "(position_id, from_state, to_state, by_agent, notes, ts) "
+                 "VALUES (1, NULL, 'new', ?, 'initial INSERT', ?)",
+                 (agent, _utc(at)))
+    conn.commit()
+    conn.close()
+
+
+def _unit(agent: str, start: float, reason: str) -> dict:
+    """Una pausa del Capitano, il risveglio, poi la pausa dopo l'unità."""
+    eng.tick(now=start)
+    eng.ack(agent, now=start + 1)
+    return eng.register(agent, reason=reason, now=start + 30)
+
+
+def test_a_scout_unit_that_inserted_nothing_pauses_short(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch)
+    rules = json.loads((REPO_ROOT / "agents" / "_skills" / "throttle"
+                        / "pause-rules.json").read_text(encoding="utf-8"))
+    # the first pause after the boot: nothing to count from, the brake
+    assert eng.register("scout-2", now=T0)["applied_sec"] == 660
+    res = _unit("scout-2", T0 + 660, "post-dedup-skip")
+    assert res["applied_sec"] == rules["short_pause_sec"] == 60
+    assert res["shortened_from"] == 660 and res["empty_unit"] == 1
+    armed = events("armed")[-1]
+    assert armed["applied_sec"] == 60 and armed["empty_unit"] == 1
+
+
+def test_a_scout_unit_that_inserted_keeps_the_captains_pause(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    db = _jobs_db(home, monkeypatch)
+    eng.register("scout-2", now=T0)
+    _unit("scout-2", T0 + 660, "post-dedup-skip")
+    # the next unit inserts: a real unit of work, the Capitano's pause
+    eng.tick(now=T0 + 720)
+    eng.ack("scout-2", now=T0 + 721)
+    _inserted(db, "scout-2", T0 + 740)
+    res = eng.register("scout-2", reason="post-insert", now=T0 + 750)
+    assert res["applied_sec"] == 660 and "shortened_from" not in res
+    assert flag("scout-2")["empty_streak"] == 0
+
+
+def test_another_scouts_insert_does_not_count(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    db = _jobs_db(home, monkeypatch)
+    eng.register("scout-2", now=T0)
+    eng.tick(now=T0 + 660)
+    eng.ack("scout-2", now=T0 + 661)
+    _inserted(db, "scout-1", T0 + 670)
+    assert eng.register("scout-2", now=T0 + 690)["applied_sec"] == 60
+
+
+def test_after_max_streak_short_pauses_the_brake_comes_back(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch)
+    rules = json.loads((REPO_ROOT / "agents" / "_skills" / "throttle"
+                        / "pause-rules.json").read_text(encoding="utf-8"))
+    cap = rules["empty_unit"]["max_streak"]
+    assert cap == eng.EMPTY_UNIT_MAX_STREAK == 10
+    eng.register("scout-2", now=T0)
+    start = T0 + 660
+    applied = []
+    for _ in range(cap + 1):
+        res = _unit("scout-2", start, "post-dedup-skip")
+        applied.append(res["applied_sec"])
+        start += 30 + res["applied_sec"]
+    assert applied == [60] * cap + [660]
+    # and the count starts again after the Capitano's pause
+    assert _unit("scout-2", start, "post-dedup-skip")["applied_sec"] == 60
+
+
+def test_an_empty_unit_is_a_scout_rule_only(home, monkeypatch):
+    # L'ANALISTA che non inserisce posizioni è la norma, non un'unità vuota.
+    set_config(home, **{"analista-1": 780})
+    _jobs_db(home, monkeypatch)
+    eng.register("analista-1", now=T0)
+    assert _unit("analista-1", T0 + 780, "post-check")["applied_sec"] == 780
+
+
+def test_an_unreadable_db_keeps_the_scouts_brake(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    bad = home / "jobs.db"
+    bad.write_text("not a database", encoding="utf-8")
+    monkeypatch.setenv("JHT_DB", str(bad))
+    import sys
+    monkeypatch.delitem(sys.modules, "_db", raising=False)
+    eng.register("scout-2", now=T0)
+    assert _unit("scout-2", T0 + 660, "post-dedup-skip")["applied_sec"] == 660
+
+
 # ── Un wait orfano non si prende la sveglia (27/09) ──────────────────────
 # Su una VPS l'ANALISTA-1 ha armato 300 s, ha ricevuto un ordine a metà pausa
 # e, nel turno che ne è seguito, ha lanciato `jht-throttle-check ||

@@ -86,6 +86,10 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
          checkpointod. NE zárd le a turnust és ne menj idle-be: a Claude
          agentek önmagukat ciklázzák, semmilyen külső `Continua` nem kell
          és nem várható (SC-09). EGY pozíció ITERÁCIÓNKÉNT.
+         Elfogyott a cache-elt lista → a következő iteráció ÚJRA KERES
+         (STEP 3: új query vagy új forrás a körödben). Egy elfogyott lista
+         nem kiszáradt kör: a lenti „Kimerült queue" szabály csak akkor indul,
+         amikor az új keresések már nem adnak új linkeket.
 ```
 
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:

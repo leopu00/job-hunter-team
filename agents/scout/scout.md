@@ -84,6 +84,10 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
          throttle in STEP 5 — that IS your pace + checkpoint. Do NOT close
          the turn and idle: Claude agents self-loop, no external `Continua`
          is needed or expected (SC-09). One position PER ITERATION.
+         Cached list used up → the next iteration SEARCHES again (STEP 3:
+         a new query or source in your circle). A finished list is not a
+         dry circle: the "Queue exhausted" ladder below starts only when
+         fresh searches stop yielding new links.
 ```
 
 **📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:

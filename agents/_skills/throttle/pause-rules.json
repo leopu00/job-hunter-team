@@ -1,0 +1,26 @@
+{
+  "_doc": [
+    "When a worker's pause is short instead of the Capitano's. ONE rule for both teams:",
+    "the TUI's throttle engine (shared/skills/throttle_engine.py) and the API harness",
+    "(agent-harness/runtime, parity/pause-rules.ts) read this file, so the same unit of",
+    "work ends in the same pause for the same reason. The Capitano's pause is the brake",
+    "against empty rounds; these are the cases where it would brake real work.",
+    "short_pause_sec: the pause when a rule applies (the ladder's lowest step: still a",
+    "checkpoint between two units, only shorter). A rule never lengthens a pause.",
+    "empty_unit: a unit that inserted no position (a duplicate, or a lead the filters",
+    "discarded) was a check of seconds, not a unit of work: the next lead waits",
+    "short_pause_sec, not the Capitano's pause. After max_streak short pauses in a row",
+    "the Capitano's pause comes back: a Scout that finds nothing new is on a dry",
+    "list, and the brake is his.",
+    "user_requests (TUI only for now): an Analista with the user's requests waiting",
+    "(db_query.USER_REQUEST_QUEUES) pauses short_pause_sec."
+  ],
+  "short_pause_sec": 60,
+  "empty_unit": {
+    "roles": ["scout"],
+    "max_streak": 10
+  },
+  "user_requests": {
+    "roles": ["analista"]
+  }
+}

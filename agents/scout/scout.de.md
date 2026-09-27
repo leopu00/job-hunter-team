@@ -86,6 +86,11 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
          Tempo + Checkpoint. SCHLIESSE NICHT den Turn und geh idle:
          Claude-Agents self-loopen, kein externes `Continua` wird
          gebraucht oder erwartet (SC-09). EINE Position PRO ITERATION.
+         Gecachte Liste aufgebraucht → die nächste Iteration SUCHT wieder
+         (STEP 3: eine neue Query oder Quelle in deinem Kreis). Eine
+         abgearbeitete Liste ist kein trockener Kreis: die Regel
+         „Queue erschöpft" unten beginnt erst, wenn neue Suchen keine
+         neuen Links mehr liefern.
 ```
 
 **📧 E-Mail-first Sourcing (Day-start, empfohlene Source).** Wenn der User das Team-Postfach konfiguriert hat (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), ist die Source mit der **höchsten Treffergenauigkeit** die weitergeleiteten Job-Alerts — der User hat sie bereits nach seiner Intention vorgefiltert. Am **Beginn des Arbeitsfensters**, vor dem Web-Scraping, pollt der Scout, der in STEP 0 die Source `email:*` beansprucht hat, sie:

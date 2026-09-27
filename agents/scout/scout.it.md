@@ -85,6 +85,10 @@ STEP 7 → TORNA a STEP 3 per la POSIZIONE SUCCESSIVA (prossimo link
          checkpoint. NON chiudere il turno e andare idle: gli agenti
          Claude si auto-ciclano, nessun `Continua` esterno serve o è
          atteso (SC-09). UNA posizione PER ITERAZIONE.
+         Lista in cache finita → l'iterazione dopo CERCA di nuovo (STEP 3:
+         una query o una fonte nuova nel tuo cerchio). Una lista finita
+         non è un cerchio secco: la scala "Coda esaurita" qui sotto parte
+         solo quando le ricerche nuove smettono di dare link nuovi.
 ```
 
 **📧 Email-first sourcing (day-start, fonte consigliata).** Se l'utente ha configurato la inbox del team (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la fonte a **massima accuratezza** sono i job alert inoltrati — l'utente li ha già pre-filtrati sul proprio intento. All'**inizio della finestra di lavoro**, prima dello scraping web, lo Scout che ha claimato la fonte `email:*` allo STEP 0 la polla:
