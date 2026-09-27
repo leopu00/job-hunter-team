@@ -263,8 +263,40 @@ def effective_seconds(agent: str, requested=None) -> int:
 # della ladder: la pausa resta un checkpoint fra un'unità e l'altra, come vuole
 # il worker floor, solo più corto. Le richieste dell'utente le serve l'Analista
 # (RULE-14): gli altri ruoli non cambiano.
-USER_WORK_PAUSE_SEC = 60
-_USER_REQUEST_ROLES = frozenset({"analista"})
+#
+# La regola è scritta UNA volta, in agents/_skills/throttle/pause-rules.json,
+# e la legge anche l'harness del team API (agent-harness/runtime, parity/
+# pause-rules.ts): stessa unità di lavoro, stessa pausa, stesso motivo. Un file
+# che manca o non si legge spegne le regole: resta la pausa del Capitano.
+def _pause_rules() -> dict:
+    for cand in (Path("/app/agents/_skills/throttle/pause-rules.json"),
+                 Path(__file__).resolve().parents[2] / "agents" / "_skills"
+                 / "throttle" / "pause-rules.json"):
+        try:
+            if cand.exists():
+                return json.loads(cand.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            _log("could not read %s: %s" % (cand, exc))
+    return {}
+
+
+_RULES = _pause_rules()
+USER_WORK_PAUSE_SEC = int(_RULES.get("short_pause_sec") or 0)
+_USER_REQUEST_ROLES = frozenset((_RULES.get("user_requests") or {}).get("roles") or ())
+# ── Lo SCOUT che non ha inserito niente (27/09) ──────────────────────────
+# Su una VPS lo SCOUT smaltiva una lista in cache piena di annunci già visti:
+# 16-36 s per riconoscere un duplicato, poi 660 s di pausa, un annuncio ogni
+# 11 minuti. Un'unità che non ha inserito nessuna posizione (duplicato, o un
+# annuncio scartato dai filtri) è un controllo, non un lavoro: la pausa dopo
+# è quella breve. Dopo `max_streak` pause brevi di fila torna quella del
+# Capitano: uno Scout che non trova niente di nuovo è su una lista secca.
+_EMPTY_UNIT = _RULES.get("empty_unit") or {}
+_EMPTY_UNIT_ROLES = frozenset(_EMPTY_UNIT.get("roles") or ())
+EMPTY_UNIT_MAX_STREAK = int(_EMPTY_UNIT.get("max_streak") or 0)
+
+
+def _role_of(agent: str) -> str:
+    return re.sub(r"-\d+$", "", str(agent or "").strip().lower())
 
 
 def waiting_user_requests(agent: str) -> list:
@@ -274,7 +306,7 @@ def waiting_user_requests(agent: str) -> list:
     risposta certa si tiene la pausa del Capitano (la direzione sicura è il
     freno, come in `effective_seconds`).
     """
-    if re.sub(r"-\d+$", "", str(agent or "").strip().lower()) not in _USER_REQUEST_ROLES:
+    if _role_of(agent) not in _USER_REQUEST_ROLES:
         return []
     try:
         # db_query importa i suoi vicini (`from _db import …`) per nome.
@@ -294,6 +326,40 @@ def waiting_user_requests(agent: str) -> list:
     except Exception as exc:  # noqa: BLE001 — la skill gira in loop dagli agenti
         _log("could not count user requests for %s: %s" % (agent, exc))
         return []
+
+
+def inserted_since(agent: str, since: float):
+    """Quante posizioni ha inserito `agent` da `since` (epoch), o None.
+
+    Le conta dall'event-log: ogni INSERT di db_insert.py (e dell'harness API)
+    scrive la transizione None → 'new' con `by_agent` = l'agente. `ts` è
+    CURRENT_TIMESTAMP di SQLite, «YYYY-MM-DD HH:MM:SS» in UTC: il confine si
+    scrive nello stesso formato, altrimenti il confronto fra stringhe mente.
+    None per qualunque errore: senza una risposta certa non si accorcia.
+    """
+    try:
+        for cand in (Path("/app/shared/skills"), Path(__file__).resolve().parent):
+            if (cand / "db_query.py").exists():
+                if str(cand) not in sys.path:
+                    sys.path.insert(0, str(cand))
+                break
+        mod = _load_shared("db_query", "db_query.py")
+        if mod is None:
+            return None
+        conn = mod.get_db()
+        try:
+            row = conn.execute(
+                "SELECT count(*) FROM position_state_transitions "
+                "WHERE by_agent = ? AND from_state IS NULL AND to_state = 'new' "
+                "AND ts >= ?",
+                (agent, time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(since))),
+            ).fetchone()
+            return int(row[0])
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        _log("could not count the positions of %s: %s" % (agent, exc))
+        return None
 
 
 def _within_working_hours(now: float) -> bool:
@@ -466,6 +532,20 @@ def register(agent: str, seconds=None, reason=None, session=None,
         shortened_from, applied = applied, USER_WORK_PAUSE_SEC
 
     state = read_flags()
+    # Lo SCOUT dopo un'unità vuota: si conta da quando l'unità è cominciata,
+    # cioè dal risveglio (`since` dopo l'ack) o, se l'ack non c'è stato,
+    # dall'inizio della pausa prima. Senza una pausa prima (il primo giro dopo
+    # il boot) non si sa da quando contare, e si tiene quella del Capitano.
+    previous = state["agents"].get(agent) or {}
+    started = previous.get("timer_armed_at") or previous.get("since")
+    empty_streak = 0
+    if (not waiting and applied > USER_WORK_PAUSE_SEC
+            and _role_of(agent) in _EMPTY_UNIT_ROLES
+            and isinstance(started, (int, float))):
+        streak = int(previous.get("empty_streak") or 0)
+        if streak < EMPTY_UNIT_MAX_STREAK and inserted_since(agent, started) == 0:
+            shortened_from, applied = applied, USER_WORK_PAUSE_SEC
+            empty_streak = streak + 1
     if applied <= 0:
         # Throttle 0 = nessuna pausa (il core interattivo ci sta per scelta:
         # deve restare reattivo per la chat dell'utente). L'agente resta ACTIVE
@@ -495,13 +575,16 @@ def register(agent: str, seconds=None, reason=None, session=None,
         "reason": reason,
         "notify_attempts": 0,
         "pause_id": pause_id,
+        "empty_streak": empty_streak,
     }
     write_flags(state)
     # Una pausa accorciata lo dice, con il valore che il Capitano aveva messo
     # e le richieste che l'hanno accorciata: chi legge il log del pacing deve
     # poter distinguere «il Capitano ha abbassato il freno» da «c'era lavoro».
     shortened = ({"shortened_from": shortened_from,
-                  "user_requests_waiting": dict(waiting)} if waiting else {})
+                  "user_requests_waiting": dict(waiting)} if waiting else
+                 {"shortened_from": shortened_from, "empty_unit": empty_streak}
+                 if shortened_from is not None else {})
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
          reason=reason, **shortened)
     emit_pause("start", agent, now, id=pause_id,
@@ -944,9 +1027,13 @@ def _print_register(res: dict, fmt: str) -> None:
         if res.get("armed"):
             line = ("THROTTLE_ARMED agent=%s applied_sec=%d until=%d"
                     % (res["agent"], res["applied_sec"], res["until"]))
-            if res.get("shortened_from"):
+            if res.get("shortened_from") and res.get("user_requests_waiting"):
                 line += (" shortened_from=%d (user requests waiting)"
                          % res["shortened_from"])
+            elif res.get("shortened_from"):
+                line += (" shortened_from=%d (nothing inserted since the last"
+                         " pause, %d in a row)"
+                         % (res["shortened_from"], res.get("empty_unit") or 0))
             print(line)
         else:
             print("THROTTLE_NONE agent=%s applied_sec=0" % res["agent"])

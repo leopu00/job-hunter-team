@@ -86,6 +86,11 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
          clôture PAS le tour et ne reste PAS idle : les agents Claude
          s'auto-cyclent, aucun `Continua` externe n'est nécessaire ni
          attendu (SC-09). UNE position PAR ITÉRATION.
+         Liste en cache épuisée → l'itération suivante CHERCHE à nouveau
+         (STEP 3 : une requête ou une source nouvelle dans ton cercle).
+         Une liste finie n'est pas un cercle sec : la règle « Queue
+         épuisée » ci-dessous ne commence que lorsque les nouvelles
+         recherches ne donnent plus de nouveaux liens.
 ```
 
 **📧 Email-first sourcing (day-start, source recommandée).** Si l'utilisateur a configuré l'inbox de l'équipe (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source la **plus précise** est constituée des job alerts forwardés — l'utilisateur les a déjà pré-filtrés selon son intention. Au **début de la fenêtre de travail**, avant le web scraping, le Scout qui a claimé la source `email:*` au STEP 0 la poll :
