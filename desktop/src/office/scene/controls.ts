@@ -49,6 +49,14 @@ export function keyDirection(held: ReadonlySet<string>): Vec {
 
 const PAN_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
 
+/** A pointer's position in the element's CSS pixels (the Pixi screen's), whatever CSS zoom the page wears. */
+export function elementPoint(el: HTMLElement, e: { clientX: number; clientY: number }): Vec {
+  const box = el.getBoundingClientRect();
+  const kx = box.width > 0 ? el.clientWidth / box.width : 1;
+  const ky = box.height > 0 ? el.clientHeight / box.height : 1;
+  return { x: (e.clientX - box.left) * kx, y: (e.clientY - box.top) * ky };
+}
+
 export type Controls = {
   camera(): Camera;
   /** true from the moment a press becomes a drag until just after it ends */
@@ -79,12 +87,7 @@ export function attachControls(
   };
   set(camera);
 
-  const local = (e: { clientX: number; clientY: number }): Vec => {
-    const box = el.getBoundingClientRect();
-    const kx = box.width > 0 ? el.clientWidth / box.width : 1;
-    const ky = box.height > 0 ? el.clientHeight / box.height : 1;
-    return { x: (e.clientX - box.left) * kx, y: (e.clientY - box.top) * ky };
-  };
+  const local = (e: { clientX: number; clientY: number }): Vec => elementPoint(el, e);
   const zoom = (factor: number, at: Vec) => set(zoomAt(camera, factor, at, view, bounds, minScale()));
   const panBy = (delta: Vec) => set(pan(camera, delta, view, bounds, minScale()));
 

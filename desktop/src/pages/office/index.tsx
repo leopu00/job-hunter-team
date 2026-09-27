@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { AgentStatuses, OfficeEngine, OfficeScene, OfficeSnapshot } from "../../office/contract";
+import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeScene, OfficeSnapshot, Vec } from "../../office/contract";
+import OfficePanel from "../../office/panel/OfficePanel";
+import OfficeTooltip from "../../office/panel/OfficeTooltip";
 import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts } from "../../office/parts";
-import { routeForClick } from "../../office/scene/click";
 import { loadAgentStatuses } from "../../office/status";
 import { supabase } from "../../lib/supabase";
 import { navigate, useRefresh } from "../../shell/router";
@@ -17,8 +18,10 @@ type Load = { state: "loading" } | { state: "ready"; ready: Ready } | { state: "
 /**
  * /office: the team's office, as in the Godot game (D05). The page loads the
  * assets and the engine, mounts the PixiJS scene, and every SNAPSHOT_EVERY_MS
- * reads the cloud and hands the engine what changed. A click on an agent
- * opens its page, a click on a pile the positions.
+ * reads the cloud and hands the engine what changed. A click opens a panel
+ * INSIDE the office (D07: agents, piles, departments, the CV shelf and the
+ * printer, the corkboard, the hologram), the pointer shows a tag; only the
+ * panel's secondary links change page.
  */
 export default function OfficePage(_props: PageProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -52,10 +55,15 @@ function Office({ ready }: { ready: Ready }) {
   const sceneRef = useRef<OfficeScene | null>(null);
   // The last statuses read: a scene that mounts after the first read gets them at once.
   const statusesRef = useRef<AgentStatuses | null>(null);
+  const [statuses, setStatuses] = useState<AgentStatuses | null>(null);
   const showStatuses = (next: AgentStatuses | null) => {
     statusesRef.current = next;
     sceneRef.current?.setAgentStatuses?.(next);
+    setStatuses(next);
   };
+  const [snapshot, setSnapshot] = useState<OfficeSnapshot | null>(null);
+  const [panel, setPanel] = useState<OfficeClick | null>(null);
+  const [hover, setHover] = useState<{ target: OfficeClick; at: Vec } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const { assets, parts } = ready;
 
@@ -74,7 +82,9 @@ function Office({ ready }: { ready: Ready }) {
           manifest: assets.manifest,
           layout: assets.layout,
           engine,
-          onClick: (click) => navigate(routeForClick(click)),
+          // a click on nothing closes the panel
+          onClick: (click) => setPanel(click),
+          onHover: (target, at) => setHover(target ? { target, at } : null),
         }),
       )
       .then((s) => {
@@ -112,6 +122,7 @@ function Office({ ready }: { ready: Ready }) {
         if (!engine) return;
         for (const event of data.diff(prev.current, next)) engine.apply(event);
         prev.current = next;
+        setSnapshot(next);
         setStatus(next.teamOnline === false ? "Il team è spento: l'ufficio è vuoto." : null);
         // a team that is not online has no present status to show
         showStatuses(next.teamOnline ? await statuses : null);
@@ -132,6 +143,14 @@ function Office({ ready }: { ready: Ready }) {
   }, [parts.data]);
   useRefresh(() => read.current());
 
+  // Esc closes the panel, as the Godot office's overlays.
+  useEffect(() => {
+    if (!panel) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPanel(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel]);
+
   return (
     // the shell gives the office the whole window under the navbar (Route.fullBleed)
     <div className="relative h-full" data-testid="office-page">
@@ -143,6 +162,21 @@ function Office({ ready }: { ready: Ready }) {
         >
           {status}
         </p>
+      )}
+      {hover && !panel && (
+        <OfficeTooltip target={hover.target} at={hover.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />
+      )}
+      {panel && (
+        <OfficePanel
+          target={panel}
+          layout={assets.layout}
+          snapshot={snapshot}
+          statuses={statuses}
+          client={supabase}
+          onClose={() => setPanel(null)}
+          onOpen={setPanel}
+          onNavigate={navigate}
+        />
       )}
     </div>
   );

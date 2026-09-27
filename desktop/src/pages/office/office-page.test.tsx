@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeClick, OfficeEvent, OfficeLayout, OfficeManifest, OfficeSceneOptions, OfficeSnapshot } from "../../office/contract";
 import { emptyEngine, loadAssets } from "../../office/parts";
@@ -96,13 +96,36 @@ describe("the office page", () => {
     expect(scene.setAgentStatuses).toHaveBeenLastCalledWith(null);
   });
 
-  it("a click in the scene opens the page it points to", async () => {
+  it("a click opens a panel INSIDE the office, never another page; a click on nothing or Esc closes it", async () => {
     navigate("/office", { replace: true });
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.options).not.toBeNull());
     const click: OfficeClick = { kind: "agent", uid: "scout-1", role: "scout" };
     act(() => scene.options!.onClick(click));
-    expect(currentLocation()).toEqual({ path: "/agents", search: "?agent=scout" });
+    const panel = await screen.findByRole("complementary", { name: "Dettagli dell'ufficio" });
+    expect(within(panel).getByRole("heading", { name: "SCOUT-1" })).toBeInTheDocument();
+    expect(currentLocation()).toEqual({ path: "/office", search: "" });
+    // the scene stays mounted under the panel
+    expect(screen.getByTestId("office-canvas")).toBeInTheDocument();
+
+    act(() => scene.options!.onClick(null));
+    expect(screen.queryByRole("complementary")).toBeNull();
+
+    act(() => scene.options!.onClick({ kind: "board" }));
+    expect(await screen.findByRole("heading", { name: "Bacheca" })).toBeInTheDocument();
+    act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("the pointer over a target shows its tag, and nothing when it leaves", async () => {
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(scene.options).not.toBeNull());
+    act(() => scene.options!.onHover!({ kind: "hologram" }, { x: 100, y: 80 }));
+    const tag = screen.getByRole("tooltip");
+    expect(tag).toHaveTextContent("Mappa");
+    expect(tag.style.left).toBe("114px");
+    act(() => scene.options!.onHover!(null, { x: 0, y: 0 }));
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("the scene is destroyed when the page goes", async () => {
