@@ -8,7 +8,7 @@
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,14 +72,23 @@ describe("seatbeltProfile", () => {
   });
 });
 
+/** A fake filesystem for `lookup`: folders, other files, and links resolved to where they point. */
+function fakeFs(dirs: string[], files: string[], links: Record<string, string> = {}) {
+  return (path: string) => {
+    const real = Object.entries(links).reduce((p, [from, to]) => (p === from || p.startsWith(`${from}/`) ? to + p.slice(from.length) : p), path);
+    if (dirs.includes(real)) return { real, dir: true };
+    if (files.includes(real)) return { real, dir: false };
+    return undefined;
+  };
+}
+
 describe("bubblewrapArgs", () => {
-  const present = new Set(["/home/me/.ssh", "/home/me/.config/gh", "/home/me/.netrc", "/work/.env", "/etc/jht/mcp.json"]);
   const args = bubblewrapArgs({
     writableRoots: ["/work", "/tmp/jht-api-sandbox-x"],
     home: "/home/me",
     protectedPaths: ["/etc/jht/mcp.json"],
     workdir: "/work",
-    exists: (path) => present.has(path),
+    lookup: fakeFs(["/home/me/.ssh", "/home/me/.config/gh"], ["/home/me/.netrc", "/work/.env", "/etc/jht/mcp.json"]),
     listDir: () => [".env", ".env.example", "notes.md"],
   });
   const joined = args.join(" ");
@@ -107,27 +116,66 @@ describe("bubblewrapArgs", () => {
   });
 
   it("hides the socket folders and the Docker socket, and binds a writable root under /tmp back on top", () => {
-    const sockets = new Set(["/tmp", "/run/user/1000", "/var/run/docker.sock"]);
     const withSockets = bubblewrapArgs({
       writableRoots: ["/tmp/jht-api-sandbox-x"],
       home: "/home/me",
       protectedPaths: [],
       workdir: "/work",
       uid: 1000,
-      exists: (path) => sockets.has(path),
+      lookup: fakeFs(["/tmp", "/run/user/1000"], ["/run/docker.sock"]),
       listDir: () => [],
     });
     const line = withSockets.join(" ");
     expect(line).toContain("--tmpfs /tmp");
     expect(line).toContain("--tmpfs /run/user/1000");
-    expect(line).toContain("--ro-bind /dev/null /var/run/docker.sock");
+    expect(line).toContain("--ro-bind /dev/null /run/docker.sock");
     expect(withSockets.indexOf("--tmpfs")).toBeLessThan(withSockets.indexOf("--bind"));
+  });
+
+  // CI, 27/09, the first real bubblewrap: /var/run is a link to /run, bwrap does not
+  // follow a link in a destination, tries to create the file on the read-only root,
+  // and every command died: "Can't create file at /var/run/docker.sock".
+  it("masks each path where it really is, once — never through a link, never where it is not", () => {
+    const line = bubblewrapArgs({
+      writableRoots: ["/work"],
+      home: "/home/me",
+      protectedPaths: ["/etc/jht/absent.json"],
+      workdir: "/work",
+      lookup: fakeFs(["/tmp"], ["/run/docker.sock"], { "/var/run": "/run" }),
+      listDir: () => [],
+    }).join(" ");
+    expect(line).not.toContain("/var/run");
+    expect(line.match(/--ro-bind \/dev\/null \/run\/docker\.sock/g)).toHaveLength(1);
+    expect(line).not.toContain("absent.json");
+    expect(line).not.toContain("/run/user");
+  });
+
+  it("does the same on the real disk: a secret behind a linked folder, a missing one, a folder given as a file", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-bwargs-")));
+    try {
+      await mkdir(join(root, "real"));
+      await writeFile(join(root, "real", "secret.json"), "{}");
+      await mkdir(join(root, "real", "keys"));
+      await symlink(join(root, "real"), join(root, "linked"));
+      const line = bubblewrapArgs({
+        writableRoots: [],
+        home: join(root, "home"),
+        protectedPaths: [join(root, "linked", "secret.json"), join(root, "linked", "gone.json"), join(root, "linked", "keys")],
+        workdir: join(root, "work"),
+      }).join(" ");
+      expect(line).toContain(`--ro-bind /dev/null ${join(root, "real", "secret.json")}`);
+      expect(line).toContain(`--tmpfs ${join(root, "real", "keys")}`);
+      expect(line).not.toContain(join(root, "linked"));
+      expect(line).not.toContain("gone.json");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
 describe("createSandbox — gaps", () => {
   it("declares what bubblewrap cannot shut: loopback above all", () => {
-    const sandbox = createSandbox({ workdir: tmpdir(), platform: "linux", available: () => true });
+    const sandbox = createSandbox({ workdir: tmpdir(), platform: "linux", available: () => true, start: () => undefined });
     try {
       expect(sandbox.kind).toBe("bubblewrap");
       expect(sandbox.gaps.join("\n")).toMatch(/loopback .* stays reachable/);
@@ -156,6 +204,21 @@ describe("createSandbox — fallback", () => {
     expect(sandbox.wrap(["/bin/bash", "-c", "true"])).toEqual(["/bin/bash", "-c", "true"]);
   });
 
+  it("runs without a sandbox, and says bwrap's own words, when bwrap refuses the one it was given", () => {
+    const tried: string[][] = [];
+    const sandbox = createSandbox({
+      workdir: tmpdir(),
+      platform: "linux",
+      available: () => true,
+      start: (argv) => (tried.push(argv), "bwrap: Can't create file at /var/run/docker.sock: No such file or directory"),
+    });
+    // The probe runs the sandbox as built, masks and all, not an empty one.
+    expect(tried[0]![0]).toBe("bwrap");
+    expect(tried[0]!.slice(-2)).toEqual(["--", "/bin/true"]);
+    expect(tried[0]).toContain("--bind");
+    expect(sandbox).toMatchObject({ kind: "none", missing: expect.stringContaining("Can't create file at /var/run/docker.sock") });
+  });
+
   it("says why when the sandbox program cannot start", () => {
     const sandbox = createSandbox({ workdir: "/w", platform: "linux", available: () => false });
     expect(sandbox).toMatchObject({ kind: "none", missing: expect.stringContaining("bwrap") });
@@ -178,6 +241,8 @@ describe("the toolkit", () => {
   it("gives bash the sandbox, reports it, and removes its temporary folder on close", async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-kit-")));
     try {
+      // As in run.ts: the role's home is prepared before its toolkit, and bubblewrap binds it.
+      await mkdir(join(root, "agents", "scrittore-1"), { recursive: true });
       const toolkit = await buildToolkit(
         {
           role: "scrittore-1",
@@ -192,7 +257,6 @@ describe("the toolkit", () => {
       const kind = createProbe().kind;
       expect(toolkit.sandbox.kind).toBe(kind);
       const bash = toolkit.tools.find((tool) => tool.spec.name === "bash")!;
-      await mkdir(join(root, "agents", "scrittore-1"), { recursive: true });
       const result = await bash.execute({ command: 'echo "$TMPDIR"' }, CONTEXT);
       expect(result.details).toMatchObject({ sandbox: kind });
       if (kind !== "none") {

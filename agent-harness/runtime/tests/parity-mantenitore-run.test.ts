@@ -143,10 +143,12 @@ describe("npm run role -- --role mantenitore (T41)", () => {
     if (sandbox === "none") {
       expect(existsSync(join(logs, "vitals.jsonl")), "no sandbox: the shell deleted it").toBe(false);
       expect(String(finished.at(-1)?.["result"])).toContain("rc=0");
-    } else {
-      expect(String(finished.at(-1)?.["result"])).toMatch(/Operation not permitted|Read-only file system/);
+    } else if (sandbox === "seatbelt") {
+      expect(String(finished.at(-1)?.["result"])).toContain("Operation not permitted");
       expect(String(finished.at(-1)?.["result"])).toContain("rc=1");
     }
+    // bubblewrap hides /tmp, where this run lives, under an empty tmpfs: `rm -f`
+    // finds nothing and says rc=0. The file on disk is what the check above read.
 
     // One line for the next round, in the team's folder — the only thing it wrote.
     const entries = (await readFile(join(logs, "mantenitore-logbook.jsonl"), "utf8")).trim().split("\n");

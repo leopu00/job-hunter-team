@@ -45,7 +45,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, platform as osPlatform, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -77,6 +77,8 @@ export interface SandboxOptions {
   platform?: NodeJS.Platform;
   uid?: number;
   available?: (kind: "seatbelt" | "bubblewrap") => boolean;
+  /** Runs `true` in the sandbox as built; the error, or undefined when it started. */
+  start?: (argv: string[]) => string | undefined;
 }
 
 /** Credential folders under the home, as `SECRET_DIRS` in `paths.ts`. */
@@ -168,7 +170,15 @@ export function createSandbox(options: SandboxOptions): Sandbox {
   }
   const uid = options.uid ?? process.getuid?.();
   const args = bubblewrapArgs({ writableRoots, home, protectedPaths, workdir: options.workdir, ...(uid === undefined ? {} : { uid }) });
-  return { kind, gaps: BUBBLEWRAP_GAPS, writableRoots, env, dispose, wrap: (argv) => ["bwrap", ...args, "--", ...argv] };
+  const wrap = (argv: string[]) => ["bwrap", ...args, "--", ...argv];
+  // The probe above starts an empty sandbox; this one starts the real one. A mount
+  // bubblewrap refuses would fail every command: declared as no sandbox instead.
+  const refused = (options.start ?? startsTrue)(wrap(["/bin/true"]));
+  if (refused !== undefined) {
+    dispose();
+    return unsandboxed(`bwrap refused this sandbox: ${refused}`);
+  }
+  return { kind, gaps: BUBBLEWRAP_GAPS, writableRoots, env, dispose, wrap };
 }
 
 /**
@@ -217,7 +227,13 @@ export function seatbeltProfile(options: { writableRoots: string[]; home: string
  * bubblewrap arguments: the root read-only, the folders where local servers
  * keep their sockets hidden under an empty tmpfs, the writable roots bound
  * read-write on top, the network shared, and every credential path that
- * exists masked — an empty tmpfs over a folder, `/dev/null` over a file.
+ * exists masked — an empty tmpfs over a folder, `/dev/null` over anything else.
+ *
+ * Every mask goes on the path as resolved, once, and only when it is there.
+ * bubblewrap does not follow a symlink in a destination: it tries to create
+ * the file instead, and on a root bound read-only that kills the command. On
+ * most Linux systems `/var/run` is a link to `/run`, so `/var/run/docker.sock`
+ * was such a destination, and every bash command died on it.
  */
 export function bubblewrapArgs(options: {
   writableRoots: string[];
@@ -225,33 +241,62 @@ export function bubblewrapArgs(options: {
   protectedPaths: string[];
   workdir: string;
   uid?: number;
-  exists?: (path: string) => boolean;
+  /** Test seam: where a path really is, and whether it is a folder. Undefined when it is not there. */
+  lookup?: (path: string) => Found | undefined;
   listDir?: (dir: string) => string[];
 }): string[] {
-  const exists = options.exists ?? existsSync;
+  const lookup = options.lookup ?? find;
   const listDir = options.listDir ?? safeList;
-  const dirs = SECRET_HOME_DIRS.map((dir) => join(options.home, dir)).filter(exists);
   const dotEnvs = listDir(options.workdir)
     .filter((name) => /^\.env(\..+)?$/.test(name) && name !== ".env.example")
     .map((name) => join(options.workdir, name));
-  const files = [...SECRET_HOME_FILES.map((file) => join(options.home, file)), ...options.protectedPaths, ...dotEnvs].filter(exists);
+  const secrets = [
+    ...SECRET_HOME_DIRS.map((dir) => join(options.home, dir)),
+    ...SECRET_HOME_FILES.map((file) => join(options.home, file)),
+    ...options.protectedPaths,
+    ...dotEnvs,
+  ];
   // tmux keeps its socket in /tmp, session services theirs in /run/user/<uid>.
-  const socketDirs = ["/tmp", ...(options.uid === undefined ? [] : [`/run/user/${options.uid}`])].filter(exists);
-  const sockets = ["/run/docker.sock", "/var/run/docker.sock"].filter(exists);
+  const socketDirs = ["/tmp", ...(options.uid === undefined ? [] : [`/run/user/${options.uid}`])];
+  const sockets = ["/run/docker.sock", "/var/run/docker.sock"];
   return [
     "--ro-bind", "/", "/",
     "--dev", "/dev",
     "--proc", "/proc",
-    ...socketDirs.flatMap((dir) => ["--tmpfs", dir]),
-    ...sockets.flatMap((socket) => ["--ro-bind", "/dev/null", socket]),
+    ...masks([...socketDirs, ...sockets], lookup),
     // After the tmpfs: a writable root under /tmp is bound back on top of it.
     ...options.writableRoots.flatMap((root) => ["--bind", root, root]),
-    ...dirs.flatMap((dir) => ["--tmpfs", dir]),
-    ...files.flatMap((file) => ["--ro-bind", "/dev/null", file]),
+    ...masks(secrets, lookup),
     // Killing bwrap's process group, as a timeout does, ends everything inside.
     "--unshare-pid",
     "--die-with-parent",
   ];
+}
+
+interface Found {
+  /** The path with every symlink resolved. */
+  real: string;
+  dir: boolean;
+}
+
+/** The bubblewrap arguments that hide `paths`: the ones that exist, resolved, each once, by kind. */
+function masks(paths: string[], lookup: (path: string) => Found | undefined): string[] {
+  const seen = new Set<string>();
+  return paths.flatMap((path) => {
+    const found = lookup(path);
+    if (!found || seen.has(found.real)) return [];
+    seen.add(found.real);
+    return found.dir ? ["--tmpfs", found.real] : ["--ro-bind", "/dev/null", found.real];
+  });
+}
+
+function find(path: string): Found | undefined {
+  try {
+    const real = realpathSync(path);
+    return { real, dir: statSync(real).isDirectory() };
+  } catch {
+    return undefined;
+  }
 }
 
 function unsandboxed(missing: string): Sandbox {
@@ -271,6 +316,13 @@ function isAvailable(kind: "seatbelt" | "bubblewrap"): boolean {
     probes.set(kind, ok);
   }
   return ok;
+}
+
+function startsTrue(argv: string[]): string | undefined {
+  const [bin, ...args] = argv;
+  const run = spawnSync(bin!, args, { encoding: "utf8", timeout: 5_000 });
+  if (run.status === 0) return undefined;
+  return run.error?.message ?? (run.stderr.trim() || `exit ${run.status ?? run.signal}`);
 }
 
 /** Seatbelt matches the resolved path: `/var` is `/private/var` on macOS. */
