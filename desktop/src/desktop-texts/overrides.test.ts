@@ -24,6 +24,13 @@ describe("desktop-only texts", () => {
     expect(applyTextOverrides(id, readFileSync(id, "utf-8"))).not.toMatch(/SQLite/);
   });
 
+  it("the team's status card no longer calls the desktop a read-only mobile view", () => {
+    const id = `${repo}web/app/(protected)/team/MobileTeamStatus.tsx`;
+    const desktop = applyTextOverrides(id, readFileSync(id, "utf-8"));
+    expect(desktop).not.toMatch(/mobile view|vista mobile|vista móvil|vue mobile|mobile Ansicht|mobilnézet|vista móvel/i);
+    expect(desktop).toContain("Qui vedi lo stato del team e puoi fermarlo. Per avviarlo usa «Team locale», in alto.");
+  });
+
   it("fails loudly when the web rewords a text instead of shipping the old one", () => {
     const override = { file: "web/x.tsx", from: "old words", to: "new words" };
     expect(() => applyTextOverrides("/repo/web/x.tsx", "reworded", [override])).toThrow(/found 0/);

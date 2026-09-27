@@ -10,6 +10,7 @@
 export type TextOverride = { file: string; from: string; to: string };
 
 const ACTIVITY_CHARTS = "web/app/(protected)/team/ActivityCharts.tsx";
+const MOBILE_TEAM_STATUS = "web/app/(protected)/team/MobileTeamStatus.tsx";
 
 // /team with no activity: the web says the data comes from a local SQLite,
 // which the desktop never reads. It arrives when the team syncs.
@@ -48,6 +49,43 @@ export const TEXT_OVERRIDES: TextOverride[] = [
     file: ACTIVITY_CHARTS,
     from: "Tente alargar o intervalo, ou inicie a equipa para preencher os gráficos — os dados vêm do SQLite local (ou do Supabase quando sincronizado).",
     to: "Ainda não há dados da equipa: chegam quando a sua equipa sincronizar com a nuvem.",
+  },
+  // /team's status card: the web's mobile view can only stop the team, the
+  // desktop also starts it, from «Team locale» in its navbar.
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "Mobile view is read-only, except for emergency stop.",
+    to: "Here you see the team's status and can stop it. To start it, use «Team locale» at the top.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "La vista mobile è sola lettura, tranne lo stop d'emergenza.",
+    to: "Qui vedi lo stato del team e puoi fermarlo. Per avviarlo usa «Team locale», in alto.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "La vista móvil es de solo lectura, salvo la parada de emergencia.",
+    to: "Aquí ves el estado del equipo y puedes detenerlo. Para iniciarlo, usa «Team locale», arriba.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "La vue mobile est en lecture seule, sauf pour l'arrêt d'urgence.",
+    to: "Ici, vous voyez l'état de l'équipe et pouvez l'arrêter. Pour la démarrer, utilisez « Team locale », en haut.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "Die mobile Ansicht ist schreibgeschützt – außer für den Not-Aus.",
+    to: "Hier sehen Sie den Status des Teams und können es stoppen. Zum Starten nutzen Sie oben „Team locale“.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "A mobilnézet csak olvasható, a vészleállítás kivételével.",
+    to: "Itt látod a csapat állapotát, és leállíthatod. Az indításhoz használd a fenti „Team locale” gombot.",
+  },
+  {
+    file: MOBILE_TEAM_STATUS,
+    from: "A vista móvel é só de leitura, exceto a paragem de emergência.",
+    to: "Aqui vês o estado da equipa e podes pará-la. Para a iniciar, usa «Team locale», em cima.",
   },
 ];
 
