@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   agentsStatusWriter,
+  createHeartbeatCarrier,
   buildAgentsStatus,
   canonicalAgentId,
   createAgentsStatusReader,
@@ -190,15 +191,31 @@ describe("the reader and the publisher", () => {
     }
   });
 
-  it("writes direct with a session, through the web route without one, only its own source", async () => {
+  it("writes direct with a session, hands the map to the heartbeat without one, only its own source", async () => {
     const map = { "scout-1": { status: "working", since: "x" } };
     const direct = { patchTeamState: vi.fn(async () => {}) };
-    const route = vi.fn(async () => {});
-    await agentsStatusWriter({ source: "tui", direct, route })(map);
+    const carrier = createHeartbeatCarrier({ source: "api" });
+    const hold = vi.spyOn(carrier, "hold");
+    await agentsStatusWriter({ source: "tui", direct, carrier })(map);
     expect(direct.patchTeamState).toHaveBeenCalledWith({ agents_status: { tui: { agents: map } } });
-    expect(route).not.toHaveBeenCalled();
-    await agentsStatusWriter({ source: "api", direct: null, route })(map);
-    expect(route).toHaveBeenCalledWith({ agents_status: { api: { agents: map } } });
+    expect(hold).not.toHaveBeenCalled();
+    expect(carrier.fields()).toEqual({});
+    await agentsStatusWriter({ source: "api", direct: null, carrier })(map);
+    expect(carrier.fields()).toEqual({ agents_status: { api: { agents: map } } });
+  });
+
+  it("the heartbeat carrier gives the last map, and nothing for a while after a refusal", async () => {
+    let now = 1_000;
+    const carrier = createHeartbeatCarrier({ source: "tui", refusedRetry: 30_000, now: () => now });
+    expect(carrier.fields()).toEqual({});
+    await carrier.hold({ a: { status: "idle", since: "1" } });
+    await carrier.hold({ a: { status: "working", since: "2" } });
+    expect(carrier.fields()).toEqual({ agents_status: { tui: { agents: { a: { status: "working", since: "2" } } } } });
+    carrier.refused();
+    now += 29_999;
+    expect(carrier.fields()).toEqual({});
+    now += 1;
+    expect(carrier.fields()).toHaveProperty("agents_status");
   });
 
   it("the change key ignores `since`", () => {
