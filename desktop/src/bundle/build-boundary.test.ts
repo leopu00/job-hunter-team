@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
 // Web modules that must never reach the webview: service_role, sync tokens,
-// the local SQLite workspace, the home directory.
+// the local SQLite workspace, the home directory, the host's shell.
 const SERVER_ONLY = [
   "web/lib/cloud-sync/tokens.ts",
   "web/lib/cloud-sync/auth.ts",
@@ -24,6 +24,7 @@ const SERVER_ONLY = [
   "web/lib/local-queries.ts",
   "web/lib/jht-paths.ts",
   "web/lib/pending-message-reply-local.ts",
+  "web/lib/shell.ts",
 ];
 
 let moduleIds: string[] = [];
@@ -46,13 +47,14 @@ describe("the desktop bundle", () => {
     // Guards the test itself: an empty or wrong build would pass the checks below.
     expect(moduleIds.some((id) => id.includes("/web/lib/queries.ts"))).toBe(true);
     expect(moduleIds.some((id) => id.includes("/web/app/components/MapCharts.tsx"))).toBe(true);
+    expect(moduleIds.some((id) => id.includes("/web/app/api/team/send/route.ts"))).toBe(true);
   });
 
   it.each(SERVER_ONLY)("never contains %s", (file) => {
     expect(moduleIds.filter((id) => id.replace(/\\/g, "/").endsWith(`/${file}`))).toEqual([]);
   });
 
-  it("never pulls node:crypto in", () => {
-    expect(moduleIds.filter((id) => /(^|[:/])(node:)?crypto$/.test(id))).toEqual([]);
+  it("never pulls node:crypto or child_process in", () => {
+    expect(moduleIds.filter((id) => /(^|[:/])(node:)?(crypto|child_process)$/.test(id))).toEqual([]);
   });
 });

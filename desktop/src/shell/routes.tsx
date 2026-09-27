@@ -7,6 +7,14 @@ import PositionsPage from "../pages/positions";
 import ProfilePage from "../pages/profile";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
+import {
+  TeamAnalistaPage,
+  TeamCriticoPage,
+  TeamLogPage,
+  TeamScorerPage,
+  TeamScoutPage,
+  TeamScrittorePage,
+} from "../pages/team/agents";
 import type { PageProps } from "../pages/types";
 
 /**
@@ -25,6 +33,12 @@ export const ROUTES: Route[] = [
   { path: "/positions/:id", page: PositionPage },
   { path: "/swipe", page: SwipePage },
   { path: "/team", page: TeamPage },
+  { path: "/team/log", page: TeamLogPage },
+  { path: "/team/scout", page: TeamScoutPage },
+  { path: "/team/analista", page: TeamAnalistaPage },
+  { path: "/team/scorer", page: TeamScorerPage },
+  { path: "/team/scrittore", page: TeamScrittorePage },
+  { path: "/team/critico", page: TeamCriticoPage },
   { path: "/messages", page: MessagesPage },
   { path: "/profile", page: ProfilePage },
 ];

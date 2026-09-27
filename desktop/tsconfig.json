@@ -32,6 +32,7 @@
       "@/lib/positions/local-first-write": ["./src/web-shims/server/local-first-write.ts"],
       "@/lib/cloud-sync/auth": ["./src/web-shims/server/cloud-sync-auth.ts"],
       "@/lib/cloud-sync/tokens": ["./src/web-shims/server/cloud-sync-tokens.ts"],
+      "@/lib/shell": ["./src/web-shims/server/shell.ts"],
       "@/lib/pending-message-reply-local": ["./src/web-shims/server/pending-message-reply-local.ts"],
       "better-sqlite3": ["./src/web-shims/server/better-sqlite3.ts"],
       "@/*": ["../web/*"],

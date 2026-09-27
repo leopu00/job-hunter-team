@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
 import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
-import { currentLocation, navigate } from "./router";
+import { currentLocation, matchRoute, navigate } from "./router";
+import { ROUTES } from "./routes";
 import Shell from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
@@ -69,4 +70,11 @@ describe("Shell", () => {
     act(() => screen.getByRole("button", { name: "Aggiorna" }).click());
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
   });
+
+  it.each(["/team", "/team/log", "/team/scout", "/team/analista", "/team/scorer", "/team/scrittore", "/team/critico"])(
+    "has a page for the web's %s",
+    (path) => {
+      expect(matchRoute(ROUTES, path)?.route.path).toBe(path);
+    },
+  );
 });
