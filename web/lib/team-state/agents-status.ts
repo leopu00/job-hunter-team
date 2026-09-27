@@ -9,7 +9,8 @@
  *
  * The vocabulary stays loose on purpose (a word the desktop does not know is
  * dropped by the desktop, cli/src/lib/agents-status.js is the producer);
- * what is checked is the shape and the sizes.
+ * what is checked is the shape and the sizes. An agent whose name is not
+ * [a-z0-9-] is left out, the rest of the map is kept.
  */
 
 /** The sources a paired box may write: the TUI team, the JHT API executor (its own account). */
@@ -68,11 +69,9 @@ export function sanitizeAgentsStatus(
       return { ok: false, error: `agents_status.${source}: troppi agenti` };
     const clean: Record<string, AgentStatusEntry> = {};
     for (const [uid, raw] of agents) {
-      if (!UID.test(uid))
-        return {
-          ok: false,
-          error: `agents_status.${source}: nome agente non valido`,
-        };
+      // a name outside the format is one entry left out, never the whole
+      // team's tags: a tmux session opened by hand is not an agent
+      if (!UID.test(uid)) continue;
       if (!isObject(raw) || Object.keys(raw).some((k) => !ENTRY_KEYS.has(k)))
         return {
           ok: false,

@@ -36,7 +36,7 @@
 
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { canonicalAgentId } from './agents-status.js';
+import { canonicalAgentId, createDroppedNameLog, UID_FORMAT } from './agents-status.js';
 
 /** A live run writes a process_sample every 5 s: silent this long, it is not live. */
 export const TRACE_LIVE_MS = 30_000;
@@ -110,9 +110,11 @@ async function readTail(path, bytes = TRACE_TAIL_BYTES) {
 /**
  * Reads <logsDir>/<agent>/<newest run>.jsonl for every agent and answers the
  * map to publish under "api": { uid: { status, since } }, or null when the
- * logs cannot be read at all (then nothing is published).
+ * logs cannot be read at all (then nothing is published). A folder whose
+ * name is outside UID_FORMAT is left out, told once.
  */
-export function createApiAgentsStatusReader({ logsDir, tail = readTail } = {}) {
+export function createApiAgentsStatusReader({ logsDir, tail = readTail, log } = {}) {
+  const dropped = createDroppedNameLog(log);
   return {
     async read(now = new Date()) {
       let agents;
@@ -124,6 +126,10 @@ export function createApiAgentsStatusReader({ logsDir, tail = readTail } = {}) {
       const map = {};
       for (const dir of agents) {
         if (!dir.isDirectory()) continue;
+        if (!UID_FORMAT.test(canonicalAgentId(dir.name))) {
+          dropped(dir.name);
+          continue;
+        }
         try {
           const runs = (await readdir(join(logsDir, dir.name))).filter((f) => f.endsWith('.jsonl')).sort();
           if (runs.length === 0) continue;

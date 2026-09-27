@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { JsonlTrace } from "../../../agent-harness/runtime/src/core/trace.ts";
 import {
   createApiAgentsStatusReader,
@@ -102,6 +102,18 @@ describe("the reader, on traces the harness writes", () => {
     run("critico-1", "2026-09-27T21-00-00-000Z-dddddddd", [0, 1], [{ type: "run_started" }, { type: "run_failed", code: "x", message: "y" }]);
     const map = await createApiAgentsStatusReader({ logsDir: dir }).read(new Date(T0 + 10_000));
     expect(map).toEqual({ capitano: { status: "working", since: at(0) }, "scout-2": { status: "idle", since: at(5) } });
+  });
+
+  it("a folder whose name is not an agent's is left out, told once", async () => {
+    dir = mkdtempSync(join(tmpdir(), "jht-api-logs-"));
+    run("scout-1", "2026-09-27T21-00-00-000Z-aaaaaaaa", [0, 5], [{ type: "turn_started", turn: 1 }, { type: "turn_finished", turn: 1 }]);
+    run("prova_manuale", "2026-09-27T21-00-00-000Z-bbbbbbbb", [0], [{ type: "turn_started", turn: 1 }]);
+    const log = vi.fn();
+    const reader = createApiAgentsStatusReader({ logsDir: dir, log });
+    expect(Object.keys((await reader.read(new Date(T0 + 10_000)))!)).toEqual(["scout-1"]);
+    await reader.read(new Date(T0 + 10_000));
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith("warn", "agents-status.name-dropped", { name: "prova_manuale" });
   });
 
   it("logs that cannot be read publish nothing", async () => {
