@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { searchForWorkspaceRoot, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { applyTextOverrides } from "./src/desktop-texts/overrides";
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -31,6 +32,22 @@ function webDepsFromDesktop(): Plugin {
       // pulled one in (instead of the desktop importer used below).
       if (source.startsWith("node:") || builtinModules.includes(source)) return null;
       return this.resolve(source, desktopImporter, { ...options, skipSelf: true });
+    },
+  };
+}
+
+/**
+ * Web texts that are false inside the desktop get a desktop-only wording when
+ * Vite loads the web file (src/desktop-texts/overrides.ts); the web stays
+ * unchanged. Runs before the React transform, on the source.
+ */
+function desktopTexts(): Plugin {
+  return {
+    name: "jht-desktop-texts",
+    enforce: "pre",
+    transform(code, id) {
+      const out = applyTextOverrides(id, code);
+      return out === code ? null : { code: out, map: null };
     },
   };
 }
@@ -75,7 +92,7 @@ function maplibreWorker(): Plugin {
 const webEnv = (mode: string) => ({ NEXT_PUBLIC_JHT_DEPLOY: "cloud", NODE_ENV: mode === "production" ? "production" : "development" });
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), webDepsFromDesktop(), maplibreWorker()],
+  plugins: [desktopTexts(), react(), tailwindcss(), webDepsFromDesktop(), maplibreWorker()],
   define: process.env.VITEST ? {} : { "process.env": JSON.stringify(webEnv(mode)) },
   // The pages render the web's own components and server pages
   // (web/app) so the two look and behave the same. `@/` is the web's alias.
