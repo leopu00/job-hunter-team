@@ -7,7 +7,7 @@ export type FakeQuery = {
   op(name: string): unknown[] | undefined;
 };
 
-export type FakeResult = { data: unknown; error: { message: string } | null };
+export type FakeResult = { data: unknown; error: { message: string } | null; count?: number | null };
 
 /**
  * A Supabase client that records every query chain and answers it with
@@ -36,6 +36,7 @@ export function fakeSupabase(
       "neq",
       "in",
       "is",
+      "ilike",
       "not",
       "or",
       "gte",

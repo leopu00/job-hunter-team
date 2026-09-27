@@ -55,6 +55,51 @@ describe("the office engine: agents at their desks", () => {
   });
 });
 
+describe("the office engine: where each one sits", () => {
+  it("uses the layout's seat offset of the desk and says which furniture it sits at", () => {
+    const layout = smallOffice();
+    const desk = layout.departments[0]!.desks[1]!;
+    desk.seatOffset = { x: 41, y: -71 }; // department_defs.gd's diagonal desk
+    const engine = createOfficeEngine(layout, { random: seeded() });
+    engine.apply({ type: "enter", agent: { uid: "scout-2", role: "scout", sheet: "" }, atOnce: true });
+    engine.apply({ type: "enter", agent: { uid: "capitano", role: "capitano", sheet: "" }, atOnce: true });
+    expect(pose(engine, "scout-2")).toMatchObject({ pos: { x: desk.seat.x + 41, y: 272 - 71 }, seatedAt: "scout_desk_1" });
+    expect(pose(engine, "capitano").seatedAt).toBe("cap_desk");
+  });
+
+  it("is seated only at its desk: walking it has no seatedAt", () => {
+    const engine = createOfficeEngine(smallOffice(), { random: seeded() });
+    engine.apply({ type: "enter", agent: { uid: "scout-1", role: "scout", sheet: "" }, atOnce: false });
+    expect(pose(engine, "scout-1").mode).toBe("walk");
+    expect(pose(engine, "scout-1").seatedAt).toBeUndefined();
+  });
+
+  it("sits without a seated sheet when its desk has the seated art, as agent_npc.gd _seated()", () => {
+    const layout = smallOffice();
+    layout.departments[0]!.desks[0]!.furniture.occupiedImage = { src: "/office/desk_seated.webp" };
+    const characters: CharacterSheet[] = [
+      { id: "scout_a", main: { src: "", cols: 6, rows: 12, cell: { w: 256, h: 384 }, feet: { x: 128, y: 360 }, scale: 0.425 }, sit: null },
+    ];
+    const engine = createOfficeEngine(layout, { random: seeded(), characters });
+    engine.apply({ type: "enter", agent: { uid: "scout-1", role: "scout", sheet: "" }, atOnce: true });
+    expect(pose(engine, "scout-1")).toMatchObject({ mode: "sit", seatedAt: "scout_desk_0" });
+  });
+
+  it("gives a taken desk to nobody else: a copy beyond the chairs works standing by the inbox", () => {
+    const layout = smallOffice();
+    const engine = createOfficeEngine(layout, { random: seeded() });
+    for (const uid of ["analista-1", "analista-2", "analista-3"]) engine.apply({ type: "enter", agent: { uid, role: "analista", sheet: "" }, atOnce: true });
+    engine.apply({ type: "enter", agent: { uid: "scout-5", role: "scout", sheet: "" }, atOnce: true });
+    const third = pose(engine, "analista-3");
+    expect(third.mode).toBe("work");
+    expect(third.seatedAt).toBeUndefined();
+    // office.gd: the department's inbox + (58, 46) for the first copy
+    expect(third.pos).toEqual({ x: 900 + 58, y: 520 + 46 });
+    // scout-5 wants desk 4, which does not exist: the first free one
+    expect(pose(engine, "scout-5").seatedAt).toBe("scout_desk_0");
+  });
+});
+
 describe("the office engine: a pipeline transition becomes a trip", () => {
   it("an Analista fetches from the Scout pile, works seated, drops on its own pile and sits back", () => {
     const layout = smallOffice();

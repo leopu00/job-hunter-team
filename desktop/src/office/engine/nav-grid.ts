@@ -41,6 +41,8 @@ export class NavGrid {
   private readonly origin: Vec;
   private readonly floor: Rect;
   private readonly grown: Rect[];
+  /** the obstacles and walls as drawn, not grown */
+  private readonly solid: Rect[];
   private readonly walkable: Uint8Array;
   /** walkable cell ids, ascending: the candidates of closestPoint */
   private readonly walkableIds: number[];
@@ -55,6 +57,7 @@ export class NavGrid {
       ...input.obstacles.map((r) => grow(r, input.margin)),
       ...input.walls.map((r) => grow(r, input.wallMargin)),
     ];
+    this.solid = [...input.obstacles, ...input.walls];
     this.walkable = new Uint8Array(this.cols * this.rows);
     this.walkableIds = [];
     for (let y = 0; y < this.rows; y++) {
@@ -78,10 +81,16 @@ export class NavGrid {
    * The path from `from` to `to`: the cell centres from the one closest to
    * `from` to the one closest to `to`, the last replaced by `to` itself when
    * `to` is walkable (else by its closest cell). Empty when there is no way.
+   *
+   * From a point off the grid (a seat inside an obstacle's margin, or inside
+   * a piece of furniture: the layout puts scout desk 2's spot inside the
+   * hologram) the first cell is the closest one reachable in a straight line
+   * without crossing furniture, so the agent steps out instead of cutting
+   * through a desk. Godot's physics does the same with collisions.
    */
   path(from: Vec, to: Vec): Vec[] {
     if (this.walkableIds.length === 0) return [];
-    const a = this.closestId(from);
+    const a = this.isPointWalkable(from) ? this.closestId(from) : this.exitId(from);
     const b = this.closestId(to);
     const ids = this.astar(a, b);
     if (ids.length === 0) return [];
@@ -137,6 +146,23 @@ export class NavGrid {
       }
     }
     return best;
+  }
+
+  /** The closest walkable cell whose straight segment from `p` crosses no furniture but what `p` stands in. */
+  private exitId(p: Vec): number {
+    const around = this.solid.filter((r) => hasPoint(r, p));
+    const others = this.solid.filter((r) => !around.includes(r));
+    const byDistance = this.walkableIds
+      .map((id) => {
+        const q = this.pointOf(id);
+        return { id, d: (q.x - p.x) ** 2 + (q.y - p.y) ** 2 };
+      })
+      .sort((x, y) => x.d - y.d || x.id - y.id);
+    for (const { id } of byDistance) {
+      const q = this.pointOf(id);
+      if (!others.some((r) => segmentHits(r, p, q))) return id;
+    }
+    return this.closestId(p);
   }
 
   private neighbours(id: number): number[] {
@@ -201,6 +227,16 @@ export class NavGrid {
     }
     return [];
   }
+}
+
+/** Whether the segment a→b passes through the rect: sampled every 4 px, enough for furniture. */
+function segmentHits(r: Rect, a: Vec, b: Vec): boolean {
+  const steps = Math.max(1, Math.ceil(distance(a, b) / 4));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    if (hasPoint(r, { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })) return true;
+  }
+  return false;
 }
 
 /** A binary min-heap of (id, priority); ties go to the lower id, so paths are deterministic. */

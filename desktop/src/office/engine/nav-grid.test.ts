@@ -57,6 +57,18 @@ describe("NavGrid (nav_grid.gd)", () => {
     expect(open.isPointWalkable(end)).toBe(true);
   });
 
+  it("steps out of a seat inside the margins towards a cell it reaches without crossing the desk", () => {
+    // A desk above the seat and a table below it: the closest cell is above, through the desk.
+    const desk = { x: 100, y: 100, w: 120, h: 40 };
+    const table = { x: 90, y: 150, w: 140, h: 100 };
+    const g = grid([desk, table]);
+    const seat = { x: 160, y: 158 };
+    const first = g.path(seat, { x: 16, y: 300 })[0]!;
+    const crosses = [0, 0.25, 0.5, 0.75, 1].some((t) => hasPoint(desk, { x: seat.x + (first.x - seat.x) * t, y: seat.y + (first.y - seat.y) * t }));
+    expect(crosses).toBe(false);
+    expect(first.y).toBeGreaterThan(140);
+  });
+
   it("is deterministic: the same inputs give the same route", () => {
     const g = grid([{ x: 100, y: 60, w: 40, h: 200 }]);
     expect(g.path({ x: 16, y: 16 }, { x: 300, y: 300 })).toEqual(g.path({ x: 16, y: 16 }, { x: 300, y: 300 }));

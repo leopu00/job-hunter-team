@@ -181,7 +181,7 @@ async function readMoves(client: Client): Promise<Record<AgentRole, AgentMove[]>
 type PositionMeta = { id: string; title: string | null; company: string | null };
 
 /** legacy_id → the position's uuid and title, as web/lib/queries.ts enrichRecent resolves them. */
-async function readPositions(client: Client, legacyIds: number[]): Promise<Map<number, PositionMeta>> {
+export async function readPositions(client: Client, legacyIds: number[]): Promise<Map<number, PositionMeta>> {
   const out = new Map<number, PositionMeta>();
   for (let i = 0; i < legacyIds.length; i += 150) {
     const chunk = legacyIds.slice(i, i + 150);
