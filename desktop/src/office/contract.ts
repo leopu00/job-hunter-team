@@ -170,7 +170,11 @@ export type FurnitureItem = {
   seatOf?: AgentRole;
 };
 
-/** A desk of a department (DepartmentDefs.DEPARTMENTS[*].desks). */
+/**
+ * A desk of a department (DepartmentDefs.DEPARTMENTS[*].desks). Its
+ * furniture need not be repeated in OfficeLayout.furniture: the scene draws
+ * both lists, once per id.
+ */
 export type Desk = {
   /** 0..5, the order of DepartmentDefs (so `scout-5` gets desk 4, as in Godot) */
   index: number;
@@ -182,6 +186,12 @@ export type Desk = {
   seat: Vec;
   /** the way the seated agent looks */
   seatFacing: Facing;
+  /**
+   * agent_npc.gd _seat_offset() resolved for this desk: the desk's own
+   * seat_offset (department_defs.gd; the diagonals differ from their facing)
+   * or the table by facing. Missing = the engine uses the table by facing.
+   */
+  seatOffset?: Vec;
 };
 
 export type Department = {
@@ -203,7 +213,14 @@ export type Department = {
 
 /** A core role's fixed place (capitano, sentinella, mentor, assistente…). */
 /** `seat` is the standing point, as for a Desk. */
-export type CoreSeat = { role: AgentRole; seat: Vec; seatFacing: Facing; furnitureId: string };
+export type CoreSeat = {
+  role: AgentRole;
+  seat: Vec;
+  seatFacing: Facing;
+  furnitureId: string;
+  /** as Desk.seatOffset: the role def's seat_offset (the mentor's (0, -24)) or the table by facing */
+  seatOffset?: Vec;
+};
 
 /** Everything static about the office: /office/layout.json. */
 export type OfficeLayout = {
@@ -212,6 +229,13 @@ export type OfficeLayout = {
   floor: Rect;
   /** the painted floor (floor_main), drawn over `floor` */
   floorImage: ImageRef;
+  /**
+   * What stands behind the floor, drawn before it: the north wall and the
+   * glass band above it (game/scripts/office/office_floor.gd, wall_main
+   * tiled horizontally). `repeatX`: the image is tiled across `draw` at the
+   * scale that makes it `draw.h` tall, instead of stretched.
+   */
+  backdrop?: Array<{ image: ImageRef; draw: Rect; repeatX?: boolean }>;
   furniture: FurnitureItem[];
   departments: Department[];
   coreSeats: CoreSeat[];
@@ -223,7 +247,11 @@ export type OfficeLayout = {
    * Critici put a PASS (OutputShelf.RECT centre + (0, 46)).
    */
   pois: { printer: Vec; outputShelf: Vec };
-  /** NavGrid inputs (nav_grid.gd): the engine builds the grid from these */
+  /**
+   * NavGrid inputs (nav_grid.gd): the engine builds the grid from these.
+   * The obstacles are every blocking piece of allFurniture(layout)
+   * (layout-items.ts), the departments' desks included, grown by `margin`.
+   */
   nav: {
     cell: number; // 32
     margin: number; // 28, around blocking furniture
@@ -274,6 +302,13 @@ export type AgentPose = {
   frame: number;
   /** carrying a sheet of paper (draws the carry track, or a sheet in hand) */
   carrying: boolean;
+  /**
+   * The furniture id the agent is seated at, working at its own desk or
+   * core seat; absent when standing or walking. Where that furniture has
+   * an occupiedImage, the scene draws it (desk and agent in one picture,
+   * as Godot's seated_art) and hides the agent's own sprite.
+   */
+  seatedAt?: string;
 };
 
 /** A speech bubble over an agent. */
@@ -333,7 +368,11 @@ export type OfficeEvent =
    * Scout instead goes to the printer first.
    */
   | { type: "pipeline"; uid: string; toState: string; position: PositionTag; ts: string }
-  /** the piles' counts */
+  /**
+   * the piles' TRUE counts on the cloud, already including the pipeline
+   * events that arrived with them: the engine's piles() reaches them sheet
+   * by sheet as the trips drop and pick up, never counting twice
+   */
   | { type: "piles"; piles: Piles }
   /** a line over an agent's head */
   | { type: "say"; uid: string; text: string; seconds: number };
@@ -347,6 +386,7 @@ export interface OfficeEngine {
   step(dt: number): void;
   poses(): AgentPose[];
   bubbles(): Bubble[];
+  /** the counts as drawn now: moving towards the last "piles" event with the trips */
   piles(): Piles;
 }
 
