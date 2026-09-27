@@ -247,7 +247,11 @@ export type OfficeLayout = {
    * Critici put a PASS (OutputShelf.RECT centre + (0, 46)).
    */
   pois: { printer: Vec; outputShelf: Vec };
-  /** NavGrid inputs (nav_grid.gd): the engine builds the grid from these */
+  /**
+   * NavGrid inputs (nav_grid.gd): the engine builds the grid from these.
+   * The obstacles are every blocking piece of allFurniture(layout)
+   * (layout-items.ts), the departments' desks included, grown by `margin`.
+   */
   nav: {
     cell: number; // 32
     margin: number; // 28, around blocking furniture
@@ -364,7 +368,11 @@ export type OfficeEvent =
    * Scout instead goes to the printer first.
    */
   | { type: "pipeline"; uid: string; toState: string; position: PositionTag; ts: string }
-  /** the piles' counts */
+  /**
+   * the piles' TRUE counts on the cloud, already including the pipeline
+   * events that arrived with them: the engine's piles() reaches them sheet
+   * by sheet as the trips drop and pick up, never counting twice
+   */
   | { type: "piles"; piles: Piles }
   /** a line over an agent's head */
   | { type: "say"; uid: string; text: string; seconds: number };
@@ -378,6 +386,7 @@ export interface OfficeEngine {
   step(dt: number): void;
   poses(): AgentPose[];
   bubbles(): Bubble[];
+  /** the counts as drawn now: moving towards the last "piles" event with the trips */
   piles(): Piles;
 }
 
