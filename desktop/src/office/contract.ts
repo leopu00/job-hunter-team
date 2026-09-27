@@ -186,6 +186,12 @@ export type Desk = {
   seat: Vec;
   /** the way the seated agent looks */
   seatFacing: Facing;
+  /**
+   * agent_npc.gd _seat_offset() resolved for this desk: the desk's own
+   * seat_offset (department_defs.gd; the diagonals differ from their facing)
+   * or the table by facing. Missing = the engine uses the table by facing.
+   */
+  seatOffset?: Vec;
 };
 
 export type Department = {
@@ -207,7 +213,14 @@ export type Department = {
 
 /** A core role's fixed place (capitano, sentinella, mentor, assistente…). */
 /** `seat` is the standing point, as for a Desk. */
-export type CoreSeat = { role: AgentRole; seat: Vec; seatFacing: Facing; furnitureId: string };
+export type CoreSeat = {
+  role: AgentRole;
+  seat: Vec;
+  seatFacing: Facing;
+  furnitureId: string;
+  /** as Desk.seatOffset: the role def's seat_offset (the mentor's (0, -24)) or the table by facing */
+  seatOffset?: Vec;
+};
 
 /** Everything static about the office: /office/layout.json. */
 export type OfficeLayout = {
@@ -289,6 +302,13 @@ export type AgentPose = {
   frame: number;
   /** carrying a sheet of paper (draws the carry track, or a sheet in hand) */
   carrying: boolean;
+  /**
+   * The furniture id the agent is seated at, working at its own desk or
+   * core seat; absent when standing or walking. Where that furniture has
+   * an occupiedImage, the scene draws it (desk and agent in one picture,
+   * as Godot's seated_art) and hides the agent's own sprite.
+   */
+  seatedAt?: string;
 };
 
 /** A speech bubble over an agent. */

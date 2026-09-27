@@ -81,8 +81,20 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   glass.fill({ color: 0x9fd4ff, alpha: 0.35 });
   floorLayer.addChild(glass);
 
+  // Furniture with a seated picture: swapped in while someone sits there.
+  type Occupiable = { sprite: Sprite; free: Texture; taken: Texture; occupant: { uid: string; role: AgentPose["role"] } | null };
+  const occupiable = new Map<string, Occupiable>();
   for (const item of furniture) {
     const node = furnitureNode(item, textures);
+    const free = textureFor(textures, item.image);
+    const taken = textureFor(textures, item.occupiedImage);
+    if (node instanceof Sprite && free && taken) {
+      const entry: Occupiable = { sprite: node, free, taken, occupant: null };
+      occupiable.set(item.id, entry);
+      // While taken, the picture is the agent: a click on it is a click on the agent.
+      clickable(node, () => entry.occupant && onClick({ kind: "agent", ...entry.occupant }));
+      node.eventMode = "none";
+    }
     if (item.layer === "floor") floorLayer.addChild(node);
     else sortedLayer.addChild(node);
   }
@@ -156,6 +168,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   const drawAgents = (poses: AgentPose[]) => {
     const seen = new Set<string>();
+    const seated = new Map<string, AgentPose>();
     for (const pose of poses) {
       const character = characters.get(pose.sheet);
       if (!character) continue;
@@ -170,6 +183,17 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
         sortedLayer.addChild(sprite);
       }
       drawPose(sprite, pose, character, textures);
+      // Seated where the furniture has the seated picture: the picture is the agent.
+      if (pose.seatedAt && occupiable.has(pose.seatedAt)) {
+        seated.set(pose.seatedAt, pose);
+        sprite.visible = false;
+      }
+    }
+    for (const [id, o] of occupiable) {
+      const who = seated.get(id);
+      o.sprite.texture = who ? o.taken : o.free;
+      o.occupant = who ? { uid: who.uid, role: who.role } : null;
+      o.sprite.eventMode = who ? "static" : "none";
     }
     for (const [uid, sprite] of agents) {
       if (seen.has(uid)) continue;
