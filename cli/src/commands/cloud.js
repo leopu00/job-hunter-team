@@ -4016,6 +4016,22 @@ async function writePendingUserMessage({ agent, body, kind = 'alert', dbPath = J
  * Se cloud sync non e' abilitato, esce con errore: il chiamante (pid1
  * dispatcher) si occupa di degradare gracefully a dashboard.
  */
+/** The dashboard's threshold for an offline box (web/app/api/team-state/claim/route.ts HEARTBEAT_STALE_MS). */
+const HEARTBEAT_STALE_MS = 5 * 60_000;
+/** A heartbeat older than this is late: said in the log before the dashboard notices. */
+export const HEARTBEAT_LATE_MS = 4 * 60_000;
+
+/**
+ * «Daemon stopped.» was the last line of a process that stayed alive: on
+ * leone (27/09) SIGTERM ended the loop, and 20 s later the process was still
+ * there and needed a SIGKILL — a handle some module left open kept the event
+ * loop busy. The loop is over, so the process goes: a timer that does not
+ * itself keep it alive (`unref`) ends it if nothing else did.
+ */
+function exitAfterStop(graceMs = 2_000) {
+  setTimeout(() => process.exit(process.exitCode ?? 0), graceMs).unref();
+}
+
 async function handleDaemon(options) {
   // Default 60s: ogni push genera ~10 query Postgres (auth chain + RLS + UPDATE
   // cloud_sync_tokens). A 30s saturavamo il Disk IO Budget Supabase con un
@@ -4063,6 +4079,14 @@ async function handleDaemon(options) {
   const syncCheckSec = Math.max(1, parseInt(process.env.JHT_SYNC_CHECK_SEC || '5', 10) || 5);
   const heavyEvery = Math.max(1, Math.round(intervalSec / syncCheckSec));
   let fastTick = 0;
+  // The heavy round (and in it the heartbeat) goes by the CLOCK, every
+  // intervalSec since the last one, not every heavyEvery fast rounds: the fast
+  // rounds back off to 60 s when the cloud says the team is stopped, and a
+  // count of 12 of them was one heartbeat every ~12 minutes (leone, 27/09),
+  // past the 5 minutes after which the dashboard shows the box offline.
+  const intervalMs = intervalSec * 1000;
+  let lastHeavyAt = null;
+  let lastBeatAt = null;
 
   // [JHT-REALTIME-SYNC] Ramo event-driven (flag JHT_REALTIME_SYNC=1, default OFF):
   // il daemon si iscrive a Supabase Realtime e reagisce agli eventi invece di pollare
@@ -4070,6 +4094,7 @@ async function handleDaemon(options) {
   if (realtimeSyncEnabled(config)) {
     await runRealtimeLoop({ config, isRunning: () => running });
     console.log(pc.dim('Daemon stopped (event-driven).'));
+    exitAfterStop();
     return;
   }
 
@@ -4083,6 +4108,8 @@ async function handleDaemon(options) {
     // null: nessuna osservazione di team fermo, quindi cadenza syncCheckSec e
     // backoff azzerato, come per una lettura fallita.
     let rendezvousState = null;
+    // Halted, no heavy round is due: the sleep keeps its own length.
+    let heavyDue = false;
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
         console.log(pc.dim(`  HALT-WEEKLY active (${WEEKLY_HALT_FLAG}) Sync suspended.`));
@@ -4093,7 +4120,10 @@ async function handleDaemon(options) {
         console.log(pc.green(`  HALT-WEEKLY removed, resume.`));
         haltSkipCount = 0;
       }
-      const doHeavy = fastTick % heavyEvery === 0;
+      const heavyAt = Date.now();
+      const doHeavy = lastHeavyAt === null || heavyAt - lastHeavyAt >= intervalMs;
+      if (doHeavy) lastHeavyAt = heavyAt;
+      heavyDue = true;
 
       // ── Letture pesanti (richieste utente→team): ogni intervalSec (~60s) ──
       if (doHeavy) {
@@ -4168,11 +4198,20 @@ async function handleDaemon(options) {
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
       // start/restart restano desktop; lo stop cloud è la lane stretta sopra).
       if (doHeavy) {
+        // A late heartbeat says so: the silence of a daemon that does not
+        // beat read, twice in one evening, as a daemon that hung.
+        if (lastBeatAt !== null && heavyAt - lastBeatAt > HEARTBEAT_LATE_MS) {
+          console.error(pc.yellow(
+            `  heartbeat late: the last one reached the cloud ${Math.round((heavyAt - lastBeatAt) / 1000)}s ago ` +
+            `(the dashboard shows the box offline after ${Math.round(HEARTBEAT_STALE_MS / 1000)}s)`
+          ));
+        }
         try {
           const prevRc = process.exitCode;
           process.exitCode = 0;
           const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
-          await reconcileOnce();
+          const beat = await reconcileOnce();
+          if (beat?.beat) lastBeatAt = Date.now();
           process.exitCode = prevRc;
         } catch (err) {
           console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
@@ -4212,8 +4251,10 @@ async function handleDaemon(options) {
         })
       : syncCheckSec * 1000;
     if (rendezvousState?.is_running !== false) stoppedPollAttempt = 0;
+    // Never past the next heavy round: the backoff slows the fast rounds, not the heartbeat.
+    const untilHeavy = heavyDue ? Math.max(0, lastHeavyAt + intervalMs - Date.now()) : sleepMs;
     // Sleep interrompibile: chunk <=1s così SIGTERM ferma entro 1s.
-    let remaining = sleepMs;
+    let remaining = Math.min(sleepMs, untilHeavy);
     while (remaining > 0 && running) {
       const chunk = Math.min(1000, remaining);
       await new Promise((r) => setTimeout(r, chunk));
@@ -4221,6 +4262,7 @@ async function handleDaemon(options) {
     }
   }
   console.log(pc.dim('Daemon stopped.'));
+  exitAfterStop();
 }
 
 /**
