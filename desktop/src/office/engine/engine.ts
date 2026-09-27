@@ -25,6 +25,7 @@ import {
   type OfficeEvent,
   type OfficeLayout,
   type Piles,
+  type Rect,
   type SheetFacing,
   type Vec,
 } from "../contract";
@@ -104,6 +105,18 @@ type Agent = {
 
 const EMPTY_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
 
+/**
+ * The A*'s obstacles: the blocking furniture and the departments' desks,
+ * which the layout keeps in departments[].desks only (nav_grid.gd adds them
+ * from the desk nodes); an id listed in both counts once.
+ */
+function obstaclesOf(layout: OfficeLayout): Rect[] {
+  const byId = new Map<string, Rect>();
+  for (const f of layout.furniture) if (f.blocking) byId.set(f.id, f.rect);
+  for (const d of layout.departments) for (const k of d.desks) if (k.furniture.blocking) byId.set(k.furniture.id, k.furniture.rect);
+  return [...byId.values()];
+}
+
 export const createOfficeEngine: CreateOfficeEngine = (layout, options = {}) =>
   new Engine(layout, options.random ?? Math.random, options.characters);
 
@@ -112,7 +125,15 @@ class Engine implements OfficeEngine {
   private readonly agents = new Map<string, Agent>();
   private readonly deptById = new Map<DeptId, Department>();
   private readonly sitBySheet: Map<string, boolean> | null;
-  private currentPiles: Piles = { ...EMPTY_PILES };
+  /** the true counts of the last "piles" event */
+  private truePiles: Piles = { ...EMPTY_PILES };
+  /**
+   * What the trips still owe to the piles: +1 on a pile a trip has not taken
+   * its sheet from yet, -1 on a pile it has not dropped on yet. The true
+   * counts already hold the move; the drawn pile reaches them sheet by
+   * sheet, as Godot's PaperPile.set_target waits for the physical trip.
+   */
+  private owed: Record<DeptId, number> = { scout: 0, analisti: 0, scorer: 0, scrittori: 0, critici: 0 };
   private said: Bubble[] = [];
   private clock = 0;
 
@@ -123,7 +144,7 @@ class Engine implements OfficeEngine {
   ) {
     this.nav = new NavGrid({
       floor: layout.floor,
-      obstacles: layout.furniture.filter((f) => f.blocking).map((f) => f.rect),
+      obstacles: obstaclesOf(layout),
       walls: layout.nav.walls,
       cell: layout.nav.cell,
       margin: layout.nav.margin,
@@ -145,7 +166,7 @@ class Engine implements OfficeEngine {
         this.pipeline(event.uid, event.toState);
         return;
       case "piles":
-        this.currentPiles = { ...event.piles };
+        this.truePiles = { ...event.piles };
         return;
       case "say":
         this.said = this.said.filter((b) => b.uid !== event.uid);
@@ -193,7 +214,12 @@ class Engine implements OfficeEngine {
   }
 
   piles(): Piles {
-    return { ...this.currentPiles };
+    const out = { ...this.truePiles };
+    for (const d of Object.keys(out) as DeptId[]) {
+      const c = out[d];
+      if (c !== null) out[d] = Math.max(0, c + this.owed[d]);
+    }
+    return out;
   }
 
   // ─── Agents ────────────────────────────────────────────────────────────
@@ -236,6 +262,13 @@ class Engine implements OfficeEngine {
   private leave(uid: string): void {
     const a = this.agents.get(uid);
     if (!a) return;
+    // The trips it will not walk owe nothing any more.
+    for (const toState of a.pending) this.owe(a, toState, -1);
+    const unwalked = [...(a.state === "trip" && a.leg ? [a.leg] : []), ...a.legs];
+    for (const leg of unwalked) {
+      if (leg.pileTake) this.owed[leg.pileTake] -= 1;
+      if (leg.pileDrop) this.owed[leg.pileDrop] += 1;
+    }
     a.pending = [];
     a.pipeline = false;
     a.legs = [{ target: this.layout.door, mode: "walk", pause: 0, pauseMode: "idle", exit: true }];
@@ -268,7 +301,7 @@ class Engine implements OfficeEngine {
     a.pos = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
     this.setMotion(a, rigFacing(a.home.facing), sits ? "sit" : "work");
     const next = a.pending.shift();
-    if (next !== undefined) this.pipeline(a.info.uid, next);
+    if (next !== undefined) this.startTrip(a, next);
   }
 
   // ─── Pipeline trips ────────────────────────────────────────────────────
@@ -276,11 +309,16 @@ class Engine implements OfficeEngine {
   private pipeline(uid: string, toState: string): void {
     const a = this.agents.get(uid);
     if (!a || a.gone || a.legs.some((l) => l.exit) || a.leg?.exit) return;
+    this.owe(a, toState, +1);
     if (a.state !== "work") {
       a.pending.push(toState);
-      if (a.pending.length > PENDING_MAX) a.pending.shift();
+      if (a.pending.length > PENDING_MAX) this.owe(a, a.pending.shift()!, -1);
       return;
     }
+    this.startTrip(a, toState);
+  }
+
+  private startTrip(a: Agent, toState: string): void {
     const legs = this.pipelineLegs(a, toState);
     if (legs.length === 0) return;
     a.legs = legs;
@@ -290,6 +328,20 @@ class Engine implements OfficeEngine {
 
   private between(lo: number, hi: number): number {
     return lo + (hi - lo) * this.random();
+  }
+
+  /** The piles a trip takes from and drops on (the pileTake/pileDrop of pipelineLegs), owed or forgiven. */
+  private owe(a: Agent, toState: string, sign: 1 | -1): void {
+    const dept = a.home.dept;
+    if (!dept) return;
+    const src = FETCH_FROM[dept.id];
+    const hasSrc = src !== undefined && this.deptById.has(src);
+    if (dept.id !== "scout" && !hasSrc) return;
+    const writerDrop = dept.id === "scrittori" && (toState === "review" || toState === "ready");
+    const take = dept.id === "scout" || writerDrop ? undefined : src;
+    const drop = dept.id === "scrittori" && toState === "writing" ? undefined : dept.id;
+    if (take) this.owed[take] += sign;
+    if (drop) this.owed[drop] -= sign;
   }
 
   /** agent_npc.gd _prepare_pipeline_trip, leg by leg. */
@@ -327,7 +379,7 @@ class Engine implements OfficeEngine {
     }
     // The Critici are the last department: the PASS goes to the output shelf.
     if (dept.id === "critici") {
-      return [pick, process, { target: this.layout.pois.outputShelf, mode: "carry", pause: this.between(0.8, 1.4), pauseMode: "idle" }, back];
+      return [pick, process, { target: this.layout.pois.outputShelf, mode: "carry", pause: this.between(0.8, 1.4), pauseMode: "idle", pileDrop: dept.id }, back];
     }
     return [pick, process, { target: homeOut, mode: "carry", pause: this.between(0.8, 1.4), pauseMode: "idle", pileDrop: dept.id }, back];
   }
@@ -392,8 +444,8 @@ class Engine implements OfficeEngine {
       a.gone = true;
       return;
     }
-    if (leg.pileTake) this.bump(leg.pileTake, -1);
-    if (leg.pileDrop) this.bump(leg.pileDrop, +1);
+    if (leg.pileTake) this.owed[leg.pileTake] -= 1;
+    if (leg.pileDrop) this.owed[leg.pileDrop] += 1;
     if (leg.pause > 0) {
       a.state = "pause";
       a.pause = leg.pause;
@@ -409,12 +461,6 @@ class Engine implements OfficeEngine {
       return;
     }
     this.startNextLeg(a);
-  }
-
-  /** The handoff piles move with the trips; the next "piles" event sets the true counts. */
-  private bump(dept: DeptId, by: number): void {
-    const c = this.currentPiles[dept];
-    if (c !== null) this.currentPiles[dept] = Math.max(0, c + by);
   }
 
   private setMotion(a: Agent, f: { facing: SheetFacing; flipped: boolean }, mode: AgentMode): void {

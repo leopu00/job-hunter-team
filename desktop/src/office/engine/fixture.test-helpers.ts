@@ -38,7 +38,8 @@ export function smallOffice(): OfficeLayout {
     world: { x: 0, y: 0, w: 1280, h: 800 },
     floor: { x: 0, y: 0, w: 1280, h: 800 },
     floorImage: { src: "/office/floor.webp" },
-    furniture: [...scout.desks.map((d) => d.furniture), ...analisti.desks.map((d) => d.furniture), capDesk],
+    // as in the real layout.json, the departments' desks are only in departments[].desks
+    furniture: [capDesk],
     departments: [scout, analisti],
     coreSeats: [{ role: "capitano", seat: { x: 608, y: 620 }, seatFacing: "down", furnitureId: "cap_desk" }],
     door: { x: 640, y: 780 },
