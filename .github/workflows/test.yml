@@ -251,6 +251,20 @@ jobs:
           sudo apt-get install -y --no-install-recommends pandoc wkhtmltopdf poppler-utils
           python3 --version
 
+      # La sandbox di bash (src/tools/sandbox.ts) su Linux e' bubblewrap: senza
+      # `bwrap` che parte, i test dal vivo di tests/sandbox.test.ts
+      # (describe.runIf(probe.kind !== "none")) saltano tutti, e il confine
+      # che il prodotto usa su Linux non verrebbe mai eseguito. Qui si
+      # installa bwrap e si permettono i namespace utente non privilegiati
+      # (Ubuntu li restringe con AppArmor); l'ultima riga prova ad avviarlo e
+      # ne stampa l'esito nel log.
+      - name: Install bubblewrap for the bash sandbox
+        run: |
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --version
+          bwrap --ro-bind / / --dev /dev --proc /proc true && echo "bwrap starts" || echo "bwrap does NOT start"
+
       - name: Install agent runtime dependencies
         working-directory: agent-harness/runtime
         run: npm ci
