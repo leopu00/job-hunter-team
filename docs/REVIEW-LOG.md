@@ -235,6 +235,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-08-14 | ✅ |
 | [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-08-14 | ✅ |
 | [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-08-12 | ✅ |
+| [docs/guides/DESKTOP.md](./guides/DESKTOP.md) | Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'. | — | — | ✅ |
 
 
 ## 🛰️ docs/internal
