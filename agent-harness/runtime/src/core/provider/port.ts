@@ -140,7 +140,7 @@ export interface WebSearchResult {
   /** The model's digest of what the search found, with the facts it relies on. */
   text: string;
   sources: Array<{ url: string; title?: string }>;
-  /** Searches the provider ran and will bill. */
+  /** Searches the provider will bill, read from what it returned (`billedSearches` in ai-sdk.ts). */
   searches: number;
   usage: Usage;
 }

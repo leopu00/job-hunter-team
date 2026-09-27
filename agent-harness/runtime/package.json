@@ -11,6 +11,7 @@
     "user": "node --experimental-strip-types --env-file-if-exists=.env src/cli/user.ts",
     "monitor": "node --experimental-strip-types --env-file-if-exists=.env src/cli/monitor.ts",
     "hub": "node --experimental-strip-types src/cli/hub.ts",
+    "spend": "node --experimental-strip-types --env-file-if-exists=.env src/cli/spend.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
