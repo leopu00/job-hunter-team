@@ -32,7 +32,7 @@ afterEach(() => {
 
 type Beat = { at: number; body: Record<string, unknown> };
 
-async function fakeCloud() {
+async function fakeCloud(isRunning = false) {
   const beats: Beat[] = [];
   const reads: number[] = [];
   const server = createServer((req, res) => {
@@ -42,7 +42,7 @@ async function fakeCloud() {
       res.setHeader("Content-Type", "application/json");
       if (req.url?.startsWith("/api/team-state") && req.method === "GET") {
         reads.push(Date.now());
-        res.end(JSON.stringify({ state: { is_running: false, should_run: true } }));
+        res.end(JSON.stringify({ state: { is_running: isRunning, should_run: true } }));
         return;
       }
       if (req.url?.startsWith("/api/team-state") && req.method === "PATCH") {
@@ -130,6 +130,25 @@ describe("cloud daemon — the heartbeat of the polling loop", () => {
       // The observed state the cloud had lost: agent sessions in tmux → running.
       for (const beat of cloud.beats) expect(beat.body.is_running).toBe(true);
       expect(run.exitedAfterTermMs).not.toBeNull();
+    },
+    40_000,
+  );
+
+  it(
+    "reads through Vercel at most once a minute even when the team runs",
+    async () => {
+      // No Supabase session: every read is a Vercel invocation. With
+      // is_running true (the heartbeat writes it now) the fast round went back
+      // to 5 s: ~17,000 invocations a day for one box. The defaults of a box:
+      // --interval 60, a 5 s fast round.
+      const cloud = await fakeCloud(true);
+      const { home, bin } = sandbox(cloud.baseUrl, 'printf "CAPITANO\\nSCOUT-1\\n"');
+      await runDaemon(home, bin, 16_000, { JHT_SYNC_CHECK_SEC: "5" }, "60");
+
+      expect(cloud.beats.length).toBe(1);
+      expect(cloud.beats[0]!.body.is_running).toBe(true);
+      // One round at start, the next one a minute later: at 5 s it was 4 by now.
+      expect(cloud.reads.length).toBe(1);
     },
     40_000,
   );
