@@ -4020,6 +4020,8 @@ async function writePendingUserMessage({ agent, body, kind = 'alert', dbPath = J
 const HEARTBEAT_STALE_MS = 5 * 60_000;
 /** A heartbeat older than this is late: said in the log before the dashboard notices. */
 export const HEARTBEAT_LATE_MS = 4 * 60_000;
+/** The fast round of a box that reads through Vercel (no Supabase session): once a minute. */
+export const VERCEL_POLL_MS = 60_000;
 
 /**
  * «Daemon stopped.» was the last line of a process that stayed alive: on
@@ -4087,6 +4089,13 @@ async function handleDaemon(options) {
   const intervalMs = intervalSec * 1000;
   let lastHeavyAt = null;
   let lastBeatAt = null;
+  // Without a Supabase session every read of this loop is a Vercel function
+  // invocation, and Vercel bills by the boxes that poll it, not by the tabs
+  // open on the site: at 5 s one box made ~17,000 of them a day for nothing,
+  // since the web cannot send the box a command. Through Vercel the fast round
+  // runs at most once a minute, whatever is_running says; the heartbeat keeps
+  // its own clock above. With a session the reads go to Supabase and keep 5 s.
+  const readsViaVercel = !getDirectReader(config);
 
   // [JHT-REALTIME-SYNC] Ramo event-driven (flag JHT_REALTIME_SYNC=1, default OFF):
   // il daemon si iscrive a Supabase Realtime e reagisce agli eventi invece di pollare
@@ -4244,12 +4253,14 @@ async function handleDaemon(options) {
     // Il fallback dei pairing senza Realtime non resta a 5s per sempre quando
     // il team e' fermo: sale fino a 60s con jitter. La prima osservazione dopo
     // uno start torna subito alla cadenza chat.
-    const sleepMs = rendezvousState?.is_running === false
-      ? boundedBackoffDelay(stoppedPollAttempt++, {
-          minMs: syncCheckSec * 1000,
-          maxMs: 60_000,
-        })
-      : syncCheckSec * 1000;
+    const sleepMs = readsViaVercel
+      ? VERCEL_POLL_MS
+      : rendezvousState?.is_running === false
+        ? boundedBackoffDelay(stoppedPollAttempt++, {
+            minMs: syncCheckSec * 1000,
+            maxMs: 60_000,
+          })
+        : syncCheckSec * 1000;
     if (rendezvousState?.is_running !== false) stoppedPollAttempt = 0;
     // Never past the next heavy round: the backoff slows the fast rounds, not the heartbeat.
     const untilHeavy = heavyDue ? Math.max(0, lastHeavyAt + intervalMs - Date.now()) : sleepMs;
