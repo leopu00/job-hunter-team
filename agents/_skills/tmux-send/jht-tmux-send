@@ -298,12 +298,19 @@ EOF
 # Legacy budget retained for callers/tests; busy no longer gates typing.
 busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 
-# Riga corrente del composer: l'ULTIMA che inizia col marker di input della TUI
-# ("❯" su Claude Code/Codex/Kimi, ">" su build piu' vecchie, "▌" sul cursore a
-# blocco). Deve essere l'ultima e non la prima: dopo un submit il messaggio
-# resta visibile NEL TRANSCRIPT sopra al composer, quindi cercare la signature
-# in tutto il pane direbbe "non submittato" anche quando il turno e' partito
-# regolarmente.
+# Il COMPOSER della TUI: dall'ULTIMA riga che inizia col marker di input
+# ("❯" su Claude Code/Kimi, "›" su OpenAI Codex, ">" su build piu' vecchie,
+# "▌" sul cursore a blocco) fino in fondo al pane. Deve essere l'ultima e non
+# la prima: dopo un submit il messaggio resta visibile NEL TRANSCRIPT sopra al
+# composer, quindi cercare la signature in tutto il pane direbbe "non
+# submittato" anche quando il turno e' partito regolarmente.
+#
+# Fino in fondo, non la sola riga del marker: Codex manda a capo il testo del
+# composer, e la coda del messaggio (la probe) sta sulle righe di
+# continuazione. Il marker "›" di Codex mancava: `_composer_line` tornava vuota
+# (o una riga del transcript), `_submitted` non vedeva la probe e rispondeva
+# "submittato" con il testo ancora nel composer — 27/09, un CAPITANO con
+# decine di messaggi incollati e mai inviati, ciascuno dichiarato consegnato.
 #
 # Il marker puo' essere preceduto dal BORDO del box che alcune TUI disegnano
 # ("│ > ..."): senza tollerarlo la riga non viene trovata, `_composer_line`
@@ -313,9 +320,12 @@ busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 # (Recuperato dalla versione dev7 di questa stessa verifica, che nasceva dallo
 # stesso guasto e copriva questi due casi in piu'.)
 _composer_line() {
-  printf '%s\n' "$1" \
-    | grep -E '^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*(❯|>|▌)' \
-    | tail -1 || true
+  local start
+  start=$(printf '%s\n' "$1" \
+    | grep -nE '^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*(❯|›|>|▌)' \
+    | tail -1 | cut -d: -f1 || true)
+  [ -n "$start" ] || return 0
+  printf '%s\n' "$1" | tail -n "+$start" || true
 }
 
 # Il submit e' avvenuto se il turno e' partito (pane occupato) OPPURE il testo
