@@ -1,7 +1,7 @@
 // Pixi 8 compiles its shaders' uniform uploads with `new Function`, which the
 // app's CSP (no 'unsafe-eval') refuses: this swaps in the eval-free versions.
 import "pixi.js/unsafe-eval";
-import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, type FederatedPointerEvent } from "pixi.js";
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from "pixi.js";
 import type {
   AgentPose,
   CharacterSheet,
@@ -15,6 +15,7 @@ import type {
 } from "../contract";
 import { clamp, fit, pan, zoomAt, type Camera } from "./camera";
 import { feetAnchor, pickCell } from "./frames";
+import { allFurniture } from "../layout-items";
 
 /**
  * The office drawn with PixiJS in the webview: the floor, the furniture and
@@ -44,7 +45,9 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   host.appendChild(app.canvas);
   app.canvas.style.display = "block";
 
-  const textures = await loadTextures(manifest, layout.floorImage, layout.furniture);
+  const furniture = allFurniture(layout);
+  const backdrop = layout.backdrop ?? [];
+  const textures = await loadTextures(manifest, [layout.floorImage, ...backdrop.map((b) => b.image)], furniture);
 
   const world = new Container();
   const floorLayer = new Container();
@@ -54,12 +57,31 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   world.addChild(floorLayer, sortedLayer, overlay);
   app.stage.addChild(world);
 
+  // Behind the floor: the wall and the glass band, tiled or stretched.
+  for (const item of backdrop) {
+    const tex = textureFor(textures, item.image);
+    if (!tex) continue;
+    if (item.repeatX) {
+      const tiles = new TilingSprite({ texture: tex, width: item.draw.w, height: item.draw.h });
+      const k = item.draw.h / tex.height;
+      tiles.tileScale.set(k, k);
+      tiles.position.set(item.draw.x, item.draw.y);
+      floorLayer.addChild(tiles);
+    } else floorLayer.addChild(placed(new Sprite(tex), item.draw, false));
+  }
+
   // Floor: the painted floor on its rect, or a plain one.
   const floorTex = textureFor(textures, layout.floorImage);
   if (floorTex) floorLayer.addChild(placed(new Sprite(floorTex), layout.floor, false));
   else floorLayer.addChild(new Graphics().rect(layout.floor.x, layout.floor.y, layout.floor.w, layout.floor.h).fill(0x1b2530));
 
-  for (const item of layout.furniture) {
+  // The glass walls between departments (the navigation's walls), as Godot's glass lines.
+  const glass = new Graphics();
+  for (const w of layout.nav.walls) glass.rect(w.x, w.y, w.w, w.h);
+  glass.fill({ color: 0x9fd4ff, alpha: 0.35 });
+  floorLayer.addChild(glass);
+
+  for (const item of furniture) {
     const node = furnitureNode(item, textures);
     if (item.layer === "floor") floorLayer.addChild(node);
     else sortedLayer.addChild(node);
@@ -220,10 +242,10 @@ type Textures = Map<string, Texture>;
 /** Loads every image the manifest and the layout name, once per file. */
 async function loadTextures(
   manifest: OfficeSceneOptions["manifest"],
-  floor: ImageRef,
+  images: ImageRef[],
   furniture: FurnitureItem[],
 ): Promise<Textures> {
-  const srcs = new Set<string>([floor.src]);
+  const srcs = new Set<string>(images.map((i) => i.src));
   for (const item of furniture) {
     if (item.image) srcs.add(item.image.src);
     if (item.occupiedImage) srcs.add(item.occupiedImage.src);

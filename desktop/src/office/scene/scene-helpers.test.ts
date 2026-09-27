@@ -86,3 +86,16 @@ describe("clicks", () => {
     expect(routeForClick({ kind: "pile", dept: "scout" })).toBe("/positions");
   });
 });
+
+describe("allFurniture", () => {
+  it("draws the free-standing furniture and the departments' desks, once per id", async () => {
+    const { allFurniture } = await import("../layout-items");
+    const item = (id: string) => ({ id, kind: "k", rect: FLOOR, blocking: true, image: null });
+    const desk = (id: string) => ({ index: 0, furniture: item(id), seat: { x: 0, y: 0 }, seatFacing: "up" as const });
+    const layout = {
+      furniture: [item("printer"), item("scout_desk_0")],
+      departments: [{ desks: [desk("scout_desk_0"), desk("scout_desk_1")] }],
+    } as unknown as Parameters<typeof allFurniture>[0];
+    expect(allFurniture(layout).map((f) => f.id)).toEqual(["printer", "scout_desk_0", "scout_desk_1"]);
+  });
+});
