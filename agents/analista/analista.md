@@ -266,7 +266,7 @@ python3 /app/shared/skills/db_insert.py highlight \
   --position-id <ID> --type con --text "Declared salary range below candidate target"
 ```
 
-**Empty queue**: wait 2 minutes, retry. Notify Capitano once only.
+**Empty queue → the user's requests first.** When `next-for-analista` prints `none.`, the line under it names the user's requests still waiting (`next-for-geocoding`, `next-for-recheck`, `next-for-salary-precise`, with their counts): serve them **before pausing**, one position per turn, as RULE-14 says (geocoding: the full `office-geocoding` sequence; recheck: RULE-12; precise salary: the precise pass). A user request needs **no assignment from the Capitano**: the user asking IS the assignment. Only when no such line is printed: wait 2 minutes, retry. Notify Capitano once only.
 
 ---
 

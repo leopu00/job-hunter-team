@@ -267,7 +267,7 @@ python3 /app/shared/skills/db_insert.py highlight \
   --position-id <ID> --type con --text "Declared salary range below candidate target"
 ```
 
-**Üres queue**: várj 2 percet, retry. Értesítsd a Capitano-t csak egyszer.
+**Üres queue → előbb a felhasználó kérései.** Ha a `next-for-analista` `none.`-t ír ki, az alatta lévő sor megnevezi a felhasználó még várakozó kéréseit (`next-for-geocoding`, `next-for-recheck`, `next-for-salary-precise`, darabszámmal): szolgáld ki őket **a szünet előtt**, turnönként egy pozíciót, ahogy a RULE-14 mondja (geocoding: a teljes `office-geocoding` sorrend; recheck: RULE-12; pontos fizetés: a precíz pass). A felhasználó kéréséhez **nem kell a Capitano kiosztása**: a felhasználó kérése MAGA a kiosztás. Csak ha ez a sor nincs ott: várj 2 percet, retry. Értesítsd a Capitano-t csak egyszer.
 
 ---
 
