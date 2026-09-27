@@ -308,22 +308,58 @@ export interface CycleOptions {
   /** How long a pause lasts. The TUI's throttle engine decides this; here the caller does. */
   pauseMs: number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * The agent's own children still queued or running (the CAPITANO's spawns).
+   * Absent, or an answer that cannot be had: none. See runCycles.
+   */
+  children?: () => Promise<number>;
+  /** How often an agent waiting for its children looks at its mailbox again. */
+  childPollMs?: number;
+  /** The longest an agent waits for its children without a message, in all. */
+  childWaitMs?: number;
+  now?: () => number;
 }
 
 export interface CycleResult {
   turns: number;
   pauses: number;
-  /** Why the run ended: the turn cap, or a turn that ended with nothing to wake it. */
-  ended: "max_turns" | "idle";
+  /**
+   * Why the run ended: the turn cap, a turn that ended with nothing to wake
+   * it, or children that stayed silent past the wait limit.
+   */
+  ended: "max_turns" | "idle" | "child_wait_limit";
 }
+
+/** A CAPITANO waiting for its children looks at its mailbox this often. */
+export const CHILD_POLL_MS = 15_000;
 
 /**
  * Runs turns until the cap, or until a turn ends with no pause and no
  * message waiting — a TUI agent in that state sits idle at its prompt, and
  * an idle API agent costs nothing only if the process ends.
+ *
+ * Except while its children work. The TUI CAPITANO delegates and ends its
+ * turn, and its session stays: the child's report wakes it. Here the turn
+ * that delegated used to end the run, the executor then stopped every child
+ * because its CAPITANO was gone (`capitano_finito`), and nothing delegated
+ * ever finished. So an empty mailbox with children still queued or running
+ * is a wait, not an end: no model call, the mailbox looked at again every
+ * `childPollMs`, the next turn when a message lands. The run ends idle once
+ * no child is left, or at `childWaitMs` of silence in all.
  */
 export async function runCycles(session: TurnDriver, options: CycleOptions): Promise<CycleResult> {
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const now = options.now ?? Date.now;
+  const children = async () => {
+    if (!options.children) return 0;
+    try {
+      return await options.children();
+    } catch {
+      return 0;
+    }
+  };
+  const pollMs = options.childPollMs ?? CHILD_POLL_MS;
+  let waitedMs = 0;
   let turns = 0;
   let pauses = 0;
   let next = options.task;
@@ -340,10 +376,30 @@ export async function runCycles(session: TurnDriver, options: CycleOptions): Pro
       await sleep(options.pauseMs);
       woke = true;
     }
-    const inbox = await options.mailbox.drain(options.agent);
+    let inbox = await options.mailbox.drain(options.agent);
+    while (!woke && inbox.length === 0 && (await children()) > 0) {
+      if (options.childWaitMs !== undefined && waitedMs >= options.childWaitMs) {
+        return { turns, pauses, ended: "child_wait_limit" };
+      }
+      const started = now();
+      await sleep(pollMs);
+      waitedMs += Math.max(now() - started, pollMs);
+      inbox = await options.mailbox.drain(options.agent);
+    }
     if (!woke && inbox.length === 0) return { turns, pauses, ended: "idle" };
     next = wakeMessage(options.agent, woke, inbox);
   }
+}
+
+/** Children of `by` still queued or running, from the launcher's `list_agents` answer. */
+export function activeChildren(answer: unknown): number {
+  if (!answer || typeof answer !== "object") return 0;
+  const spawns = (answer as { spawns?: unknown }).spawns;
+  if (!Array.isArray(spawns)) return 0;
+  return spawns.filter((s) => {
+    const state = (s as { state?: unknown } | null)?.state;
+    return state === "queued" || state === "running";
+  }).length;
 }
 
 /**

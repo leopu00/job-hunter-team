@@ -308,6 +308,15 @@ tmux and the throttle engine do for a TUI agent:
    `system`. (The TUI has no verified sender: this is a difference on purpose.)
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
+5. **Except while its children work** (B2, 27/09). The TUI CAPITANO delegates,
+   ends its turn, and its session stays: the child's report wakes it. Here the
+   turn that delegated ended the run, the executor stopped every child because
+   its CAPITANO was gone (`capitano_finito`), and nothing delegated finished.
+   A role with `list_agents` (the CAPITANO, with a hub) now waits instead: no
+   model call, its mailbox looked at again every 15 s, the next turn when a
+   report lands. It ends idle once none of its children is queued or running,
+   or after the run's wall-clock limit of silence (`child_wait_limit`). A
+   launcher that cannot answer counts as no children, as before.
 
 **The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
 rehearsals of the whole team on `ashley` ended on the account's rate limit and
