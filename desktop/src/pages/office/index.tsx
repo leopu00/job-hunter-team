@@ -133,7 +133,8 @@ function Office({ ready }: { ready: Ready }) {
   useRefresh(() => read.current());
 
   return (
-    <div className="relative" style={{ height: "calc(100svh / var(--zoom, 1) - 56px)" }}>
+    // the shell gives the office the whole window under the navbar (Route.fullBleed)
+    <div className="relative h-full" data-testid="office-page">
       <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
       {status && (
         <p
