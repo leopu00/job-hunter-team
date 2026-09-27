@@ -50,5 +50,11 @@ done
 
 # Attesa completata: firmiamo il risveglio, così il motore non manda una sveglia
 # a un agente già ripartito.
-python3 "$ENGINE" ack "$AGENT" >/dev/null 2>&1 || true
+# Nessun ack qui: la sveglia la manda il motore, e la firma l'agente con
+# `throttle-ack`. Fino al 27/09 questo shim firmava lui alla scadenza. Ma un
+# wait lanciato in un turno che poi si chiude resta vivo in background (Codex
+# non lo uccide), e la sua firma portava l'agente ad ACTIVE senza [RIPRENDI]:
+# su una VPS l'ANALISTA è rimasto al prompt ad aspettare una notifica che non
+# sarebbe arrivata. Un [RIPRENDI] in più a chi era già ripartito non costa
+# niente; una sveglia persa ferma una coda.
 exit 0

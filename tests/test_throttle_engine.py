@@ -985,3 +985,40 @@ def test_a_shorter_captains_pause_is_not_lengthened(home, monkeypatch):
              geocode_requested_at="2026-09-27 14:54:03")
     monkeypatch.setattr(eng, "effective_seconds", lambda agent, requested=None: 30)
     assert eng.register("analista-1", now=T0)["applied_sec"] == 30
+
+
+# ── Un wait orfano non si prende la sveglia (27/09) ──────────────────────
+# Su una VPS l'ANALISTA-1 ha armato 300 s, ha ricevuto un ordine a metà pausa
+# e, nel turno che ne è seguito, ha lanciato `jht-throttle-check ||
+# jht-throttle-wait` e ha chiuso il turno. Il wait è rimasto vivo in background
+# e alla scadenza ha firmato lui il risveglio (acked, self_resumed): stato
+# ACTIVE, nessun [RIPRENDI] al pane, e l'agente al prompt ad aspettare una
+# notifica che non sarebbe arrivata. Nessun agente in coda lo vedeva.
+@pytest.mark.skipif(os.name != "posix", reason="i tool sono script bash")
+@pytest.mark.parametrize("shim", ["jht-throttle-wait", "jht-throttle"])
+def test_an_orphan_wait_does_not_take_the_wake_up(home, shim):
+    tools = REPO_ROOT / "agents" / "_tools"
+    env = {**os.environ, "JHT_HOME": str(home)}
+    now = time.time()
+    if shim == "jht-throttle-wait":
+        eng.register("analista-1", seconds=300, reason="post-geocode", now=now)
+        # La pausa è quasi finita quando parte il wait (qui: fra un secondo).
+        state = eng.read_flags()
+        state["agents"]["analista-1"]["until"] = int(now) + 1
+        eng.write_flags(state)
+        cmd = [str(tools / shim), "analista-1"]
+    else:
+        # Un secondo, non 300: l'esenzione dal floor esiste per questo.
+        (home / "config").mkdir(parents=True, exist_ok=True)
+        (home / "config" / "throttle-floor-exempt.txt").write_text("analista-1\n", encoding="utf-8")
+        cmd = [str(tools / shim), "1", "--agent", "analista-1"]
+    done = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+
+    # Il turno dell'agente è già chiuso: chi lo sveglia è il motore, al giro dopo.
+    assert flag("analista-1")["state"] != eng.ACTIVE, \
+        "lo shim ha firmato la sveglia al posto dell'agente"
+    eng.tick(now=time.time() + 2)
+    woke = [s for s in SENT if s["agent"] == "analista-1"]
+    assert woke and woke[-1]["session"] == "ANALISTA-1", SENT
+    assert events("notified")[-1]["agent"] == "analista-1"
