@@ -43,6 +43,9 @@ OUT = ROOT / "desktop" / "public" / "office"
 
 JPEG_QUALITY = 82
 PALETTE = 256
+# Image pixels per world pixel for floor and furniture: 2, so the office stays
+# sharp zoomed in and on a retina screen. Never more than the source has.
+DENSITY = 2.0
 # The Godot rig draws a 256x384 cell at 0.425; half the sheet keeps ~1.2 image
 # pixels per world pixel for the characters, who are what the eye follows.
 SHEET_FACTOR = 0.5
@@ -120,7 +123,8 @@ def gd_constants(path: Path, known: dict | None = None) -> dict:
     Rect2 -> {x, y, w, h}, Vector2 -> {x, y}, Color -> "#rrggbb". A constant
     that is not a literal (a call, an expression over nodes) is skipped.
     """
-    text = _strip_comments(path.read_text(encoding="utf-8"))
+    # A line ending in a backslash goes on: `const X := \` then the value below.
+    text = re.sub(r"\\\n\s*", " ", _strip_comments(path.read_text(encoding="utf-8")))
     env = {"Rect2": rect, "Vector2": vec, "Color": color, "true": True, "false": False, "null": None, **(known or {})}
     values: dict = {}
     for match in re.finditer(r"^const\s+([A-Z_][A-Z0-9_]*)\s*(?::\s*[A-Za-z0-9_\[\]]+)?\s*:?=\s*", text, re.M):
@@ -150,16 +154,18 @@ class Art:
     width: float = 0.0
     # An exact size, for art that is stretched out of its aspect (the glass band).
     size: tuple[int, int] | None = None
+    # Godot's modulate, baked in: (r, g, b, a) multipliers.
+    tint: tuple[float, float, float, float] | None = None
 
 
 class ArtPlan:
     def __init__(self) -> None:
         self.items: dict[Path, Art] = {}
 
-    def use(self, source: Path, folder: str, width: float, ext: str = "png", size: tuple[int, int] | None = None) -> str:
+    def use(self, source: Path, folder: str, width: float, ext: str = "png", size: tuple[int, int] | None = None, tint=None) -> str:
         art = self.items.get(source)
         if art is None:
-            art = Art(source, f"/office/{folder}/{source.stem}.{ext}", size=size)
+            art = Art(source, f"/office/{folder}/{source.stem}.{ext}", size=size, tint=tint)
             self.items[source] = art
         art.width = max(art.width, width)
         return art.url
@@ -351,6 +357,21 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
                 table["image"] = {"src": plan.use(res(path), "furniture", w)}
             items.append(table)
 
+    # glass_partition.gd: every GLASS_WALL is a pane WALL_HEIGHT tall standing on
+    # the wall's centre line, the art stretched to the wall's width and tinted
+    # (modulate 0.94, 0.97, 1.0, 0.82). Not an obstacle here: nav.walls is.
+    glass = gd_constants(office / "glass_partition.gd")
+    pane_png = res(glass["HORIZONTAL_TEX"])
+    pane_h = glass["WALL_HEIGHT"]
+    widest = max(w["w"] for w in departments["GLASS_WALLS"])
+    for i, wall in enumerate(departments["GLASS_WALLS"]):
+        cx, cy = wall["x"] + wall["w"] / 2, wall["y"] + wall["h"] / 2
+        items.append({
+            "id": f"glass_{i}", "kind": "glass_partition", "rect": wall, "blocking": False,
+            "image": {"src": plan.use(pane_png, "furniture", widest, size=(round(widest), round(pane_h)), tint=(0.94, 0.97, 1.0, 0.82))},
+            "draw": rect(cx - wall["w"] / 2, cy - pane_h, wall["w"], pane_h),
+        })
+
     # The output shelf is drawn in code in Godot: a plain block here.
     items.append({"id": "output_shelf", "kind": "output_shelf", "rect": shelf["RECT"], "blocking": True, "image": None})
 
@@ -419,7 +440,7 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
 # ─── Images ─────────────────────────────────────────────────────────────
 
 
-def write_image(source: Path, target: Path, width: int | None = None, size: tuple[int, int] | None = None) -> int:
+def write_image(source: Path, target: Path, width: int | None = None, size: tuple[int, int] | None = None, tint=None) -> int:
     """Resized with Lanczos, then saved by the target's extension: .jpg opaque, .png as a palette with alpha."""
     from PIL import Image
 
@@ -430,6 +451,9 @@ def write_image(source: Path, target: Path, width: int | None = None, size: tupl
             size = (width, max(1, round(image.height * width / image.width)))
         if size is not None and size != image.size:
             image = image.resize(size, Image.LANCZOS)
+        if tint is not None:
+            bands = [band.point(lambda v, k=k: round(v * k)) for band, k in zip(image.split(), tint)]
+            image = Image.merge("RGBA", bands)
         if target.suffix == ".jpg":
             image.convert("RGB").save(target, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
         else:
@@ -482,7 +506,8 @@ def main(argv: list[str] | None = None) -> int:
     before = after = 0
     for art in plan.items.values():
         before += art.source.stat().st_size
-        after += write_image(art.source, url_path(art.url), width=max(1, round(art.width)), size=art.size)
+        size = None if art.size is None else (min(round(art.size[0] * DENSITY), _size(art.source)[0]), round(art.size[1] * DENSITY))
+        after += write_image(art.source, url_path(art.url), width=max(1, round(art.width * DENSITY)), size=size, tint=art.tint)
     print(f"floor and furniture: {len(plan.items)} images, {human(before)} -> {human(after)}")
 
     characters: list[dict] = []

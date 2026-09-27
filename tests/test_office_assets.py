@@ -65,6 +65,11 @@ def test_the_layout_has_the_offices_shape(committed):
     glass, wall = committed["backdrop"]
     assert wall["repeatX"] is True and wall["draw"] == {"x": 240.0, "y": 20.0, "w": 2920.0, "h": 120.0}
     assert glass["draw"]["y"] + glass["draw"]["h"] == wall["draw"]["y"]
+    # glass_partition.gd: one pane per GLASS_WALL, 172 tall, standing on the wall's centre line.
+    panes = [i for i in committed["furniture"] if i["kind"] == "glass_partition"]
+    assert len(panes) == len(committed["nav"]["walls"]) and not any(p["blocking"] for p in panes)
+    first, wall0 = panes[0], committed["nav"]["walls"][0]
+    assert first["draw"]["h"] == 172.0 and first["draw"]["y"] + 172.0 == wall0["y"] + wall0["h"] / 2
 
 
 def test_a_desks_seat_is_the_standing_point_of_desk_spot(committed):
@@ -107,6 +112,8 @@ def test_gdscript_literals_are_read_and_expressions_are_skipped(tmp_path: Path):
                 "]",
                 "const NODE := preload(\"res://n.gd\")",
                 "const TYPED: float = 32.0",
+                "const CONTINUED := \\",
+                '\t\t"res://on/the/next/line.png"',
             ]
         )
     )
@@ -114,6 +121,7 @@ def test_gdscript_literals_are_read_and_expressions_are_skipped(tmp_path: Path):
     assert values["R"] == {"x": 1.0, "y": 2.5, "w": 3.0, "h": 4.0}
     assert values["ITEMS"] == [{"id": "a#1", "at": {"x": 5.0, "y": 6.0}, "c": "#00e87a", "on": True, "path": "res://x/y.png"}]
     assert values["TYPED"] == 32.0
+    assert values["CONTINUED"] == "res://on/the/next/line.png"
     assert "NODE" not in values
 
 
