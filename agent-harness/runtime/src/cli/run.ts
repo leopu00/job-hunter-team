@@ -51,7 +51,7 @@ import { JsonlTrace, sampleProcess, traceThen, type TraceSink } from "../core/tr
 import { displayPath } from "../tools/paths.ts";
 import { buildToolkit } from "../tools/toolkit.ts";
 import { activeChildren, prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
-import { jobsDbPath, openJobsDb, type Database } from "../db/jobs-db.ts";
+import { jobsDbPath, openJobsDb, refuseMockRows, type Database } from "../db/jobs-db.ts";
 import { HubClient } from "../hub/client.ts";
 import { HUB_PATHS } from "../hub/protocol.ts";
 import { resolveUserPath } from "../tools/paths.ts";
@@ -189,6 +189,8 @@ async function main(): Promise<number> {
     // With a hub (T18) the database and the channels are its: nothing opens them here.
     hub = config.hub ? new HubClient(config.hub) : undefined;
     jobsDb = hub ? undefined : { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
+    // A live role works on the team's rows, never on a rehearsal's (jobs-db.ts refuseMockRows).
+    if (jobsDb && config.live) refuseMockRows(dbFile);
     role = await prepareProductRole({
       // The executor's switch, never the role's: it is set on the container.
       homePrepared,
