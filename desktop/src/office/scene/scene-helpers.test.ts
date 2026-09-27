@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPose, CharacterSheet, Rect } from "../contract";
 import { clamp, cover, fit, MAX_SCALE, pan, toWorld, zoomAt } from "./camera";
-import { routeForClick } from "./click";
 import { cellRect, feetAnchor, pickCell } from "./frames";
 
 // FurnitureDefs.FLOOR of the Godot office.
@@ -83,13 +82,6 @@ describe("frames", () => {
   it("a still track has one frame, and the feet are the anchor", () => {
     expect(cellRect(SHEET, { row: 0, frames: 1, fps: 0 }, 5).x).toBe(0);
     expect(feetAnchor(SHEET)).toEqual({ x: 0.5, y: 180 / 192 });
-  });
-});
-
-describe("clicks", () => {
-  it("an agent opens its page, a pile the positions", () => {
-    expect(routeForClick({ kind: "agent", uid: "scorer-2", role: "scorer" })).toBe("/agents?agent=scorer");
-    expect(routeForClick({ kind: "pile", dept: "scout" })).toBe("/positions");
   });
 });
 

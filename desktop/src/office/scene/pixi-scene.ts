@@ -11,11 +11,14 @@ import type {
   DeptId,
   FurnitureItem,
   ImageRef,
+  OfficeClick,
   OfficeScene,
   OfficeSceneOptions,
   Rect,
 } from "../contract";
-import { attachControls } from "./controls";
+import { attachControls, elementPoint } from "./controls";
+import { toWorld } from "./camera";
+import { hitTest, layoutHits, sameTarget, type Hit } from "./hit";
 import { sheetPlacements, towerHeight, type PaperRule } from "./paper";
 import {
   doorLeaves,
@@ -40,8 +43,9 @@ import { RIG_SCALE } from "../contract";
  * their counts, the bubbles, and a camera moved as in the Godot game
  * (controls.ts: drag, trackpad, pinch, wheel, keys). What moves is the
  * engine's business: every frame the scene advances it and draws its poses;
- * it invents nothing. A click on an agent or on a pile goes to `onClick`; a
- * drag is not a click.
+ * it invents nothing. What is under the pointer is found by scene/hit.ts
+ * (the Godot office's order): a click goes to `onClick`, the pointer's
+ * target to `onHover`; a drag is not a click.
  */
 
 const BACKGROUND = 0x0b0f14;
@@ -109,8 +113,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     if (node instanceof Sprite && free && taken) {
       const entry: Occupiable = { sprite: node, free, taken, occupant: null };
       occupiable.set(item.id, entry);
-      // While taken, the picture is the agent: a click on it is a click on the agent.
-      clickable(node, () => entry.occupant && onClick({ kind: "agent", ...entry.occupant }));
+      // While taken, the picture is the agent: hit.ts treats its box as the agent's.
       node.eventMode = "none";
     }
     if (item.layer === "floor") floorLayer.addChild(node);
@@ -160,13 +163,14 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const paper = layout.paperPile;
   const sheetTex = paper ? textureFor(textures, paper.image) : null;
   const piles = new Map<DeptId, (n: number | null) => void>();
+  const pileNodes = new Map<DeptId, { node: Container; spot: Vec }>();
   for (const dept of layout.departments) {
     if (dept.handoff) sortedLayer.addChild(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1));
     const spot = dept.handoff?.pileSpot ?? dept.inbox;
     const pile = new Container();
     pile.position.set(spot.x, spot.y);
     pile.zIndex = dept.inbox.y + 0.5;
-    clickable(pile, () => onClick({ kind: "pile", dept: dept.id }));
+    pileNodes.set(dept.id, { node: pile, spot });
     sortedLayer.addChild(pile);
     piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex) : counterBadge(pile, dept.color));
   }
@@ -226,13 +230,50 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     },
   });
 
-  function clickable(node: Container, action: () => void) {
-    node.eventMode = "static";
-    node.cursor = "pointer";
-    node.on("pointertap", () => {
-      if (!controls.dragging()) action();
-    });
-  }
+  // What is under the pointer (hit.ts): the agents' and the piles' boxes as
+  // they are drawn now, the layout's fixed targets, in world pixels.
+  const fixedHits = layoutHits(layout);
+  const roles = new Map<string, AgentPose["role"]>();
+  const worldBox = (b: { x: number; y: number; width: number; height: number }) => {
+    const c = controls.camera();
+    return { x: (b.x - c.x) / c.scale, y: (b.y - c.y) / c.scale, w: b.width / c.scale, h: b.height / c.scale };
+  };
+  const targetAt = (screen: Vec): OfficeClick | null => {
+    const agentHits: Hit[] = [];
+    for (const [uid, sprite] of agents) {
+      const role = roles.get(uid);
+      if (sprite.visible && role) agentHits.push({ rect: worldBox(sprite.getBounds()), target: { kind: "agent", uid, role } });
+    }
+    for (const o of occupiable.values()) {
+      if (o.occupant) agentHits.push({ rect: worldBox(o.sprite.getBounds()), target: { kind: "agent", ...o.occupant } });
+    }
+    const pileHits: Hit[] = [];
+    for (const [dept, { node, spot }] of pileNodes) {
+      const b = node.getBounds();
+      const rect = b.width > 0 ? worldBox(b) : { x: spot.x - 40, y: spot.y - 60, w: 80, h: 70 };
+      pileHits.push({ rect, target: { kind: "pile", dept } });
+    }
+    return hitTest(toWorld(controls.camera(), screen), { agents: agentHits, piles: pileHits, ...fixedHits });
+  };
+  let hovered: OfficeClick | null = null;
+  const hover = (target: OfficeClick | null, at: Vec) => {
+    app.canvas.style.cursor = target ? "pointer" : "";
+    // while on a target the position goes too, so a tag can follow the pointer
+    if (target || !sameTarget(target, hovered)) options.onHover?.(target, at);
+    hovered = target;
+  };
+  const onPointerMove = (e: PointerEvent) => {
+    const at = elementPoint(app.canvas, e);
+    hover(controls.dragging() ? null : targetAt(at), at);
+  };
+  const onPointerLeave = (e: PointerEvent) => hover(null, elementPoint(app.canvas, e));
+  const onCanvasClick = (e: MouseEvent) => {
+    if (controls.dragging()) return;
+    onClick(targetAt(elementPoint(app.canvas, e)));
+  };
+  app.canvas.addEventListener("pointermove", onPointerMove);
+  app.canvas.addEventListener("pointerleave", onPointerLeave);
+  app.canvas.addEventListener("click", onCanvasClick);
 
   // Agents, bubbles, pile counts: every frame from the engine.
   const characters = new Map(manifest.characters.map((c) => [c.id, c]));
@@ -280,12 +321,10 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       let sprite = agents.get(pose.uid);
       if (!sprite) {
         sprite = new Sprite();
-        const role = pose.role;
-        const uid = pose.uid;
-        clickable(sprite, () => onClick({ kind: "agent", uid, role }));
         agents.set(pose.uid, sprite);
         sortedLayer.addChild(sprite);
       }
+      roles.set(pose.uid, pose.role);
       drawPose(sprite, pose, character, textures);
       let shadow = shadows.get(pose.uid);
       if (!shadow) {
@@ -309,12 +348,12 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       const who = seated.get(id);
       o.sprite.texture = who ? o.taken : o.free;
       o.occupant = who ? { uid: who.uid, role: who.role } : null;
-      o.sprite.eventMode = who ? "static" : "none";
     }
     for (const [uid, sprite] of agents) {
       if (seen.has(uid)) continue;
       sprite.destroy();
       agents.delete(uid);
+      roles.delete(uid);
       shadows.get(uid)?.destroy();
       shadows.delete(uid);
     }
@@ -392,6 +431,9 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       sizeGrade(width, height);
     },
     destroy() {
+      app.canvas.removeEventListener("pointermove", onPointerMove);
+      app.canvas.removeEventListener("pointerleave", onPointerLeave);
+      app.canvas.removeEventListener("click", onCanvasClick);
       window.clearInterval(lightTimer);
       controls.destroy();
       app.destroy(true, { children: true });

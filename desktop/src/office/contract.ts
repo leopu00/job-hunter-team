@@ -461,15 +461,28 @@ export type DiffOfficeSnapshots = (prev: OfficeSnapshot | null, next: OfficeSnap
 // ─── The scene's API (sadie) ─────────────────────────────────────────────
 
 /** What a click in the office means; the page turns it into a route. */
+/**
+ * What a click or a hover in the office is on (scene/hit.ts, in the Godot
+ * office's order). The page opens a panel inside the office for it, never
+ * another page (D07).
+ */
 export type OfficeClick =
-  | { kind: "agent"; uid: string; role: AgentRole } // -> /agents?agent=<role>
-  | { kind: "pile"; dept: DeptId }; // -> /positions
+  | { kind: "agent"; uid: string; role: AgentRole }
+  | { kind: "pile"; dept: DeptId } // a pile or its handoff table: that phase's positions
+  | { kind: "department"; dept: DeptId } // its zone, its whiteboard
+  | { kind: "shelf" } // the output shelf: the CVs produced
+  | { kind: "printer" } // the printer: the CVs produced
+  | { kind: "board" } // the corkboard: ready, sent, answered
+  | { kind: "hologram" }; // the globe: positions by place
 
 export type OfficeSceneOptions = {
   manifest: OfficeManifest;
   layout: OfficeLayout;
   engine: OfficeEngine;
-  onClick: (click: OfficeClick) => void;
+  /** a click on a target, or null on nothing (the page closes its panel) */
+  onClick: (click: OfficeClick | null) => void;
+  /** what is under the pointer, or null; `at` in pixels of the office's element */
+  onHover?: (target: OfficeClick | null, at: Vec) => void;
 };
 
 export interface OfficeScene {
