@@ -147,10 +147,25 @@ export type FurnitureItem = {
   facing?: Facing;
   /** false for what hangs on a wall (corkboard): no obstacle on the floor */
   blocking: boolean;
-  /** null while the kind has no art: the scene draws a plain block */
+  /** null while the kind has no art: the scene draws a plain block on `rect` */
   image: ImageRef | null;
-  /** the "occupied" art (agent seated at it), when there is one */
+  /** the "occupied" art (agent seated at it), when there is one: same canvas, so same `draw` and `flip` */
   occupiedImage?: ImageRef;
+  /**
+   * Where the image is drawn, in world pixels. Godot places each kind of
+   * furniture with a rule of its own (furniture_node.gd: width rect.w*1.06
+   * with the base at rect.end.y+10, handoff tables 220 wide on the inbox,
+   * rugs stretched on their rect…): the asset script computes it, so the
+   * scene only draws. Missing = the image stretched on `rect`.
+   */
+  draw?: Rect;
+  /** drawn mirrored horizontally (left/down_left from the _side/_diag_down art, wb_scorer) */
+  flip?: boolean;
+  /**
+   * "floor": flat on the floor under everyone (rugs); "sorted" (default):
+   * y-sorted with the agents by the bottom of `draw` (or of `rect`).
+   */
+  layer?: "floor" | "sorted";
   /** the core role that sits here (registry_key "core:<role>"), if any */
   seatOf?: AgentRole;
 };
