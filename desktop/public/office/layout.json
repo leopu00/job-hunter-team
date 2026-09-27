@@ -1,0 +1,2355 @@
+{
+ "version": 1,
+ "world": {
+  "x": 0.0,
+  "y": -420.0,
+  "w": 3400.0,
+  "h": 2560.0
+ },
+ "floor": {
+  "x": 240.0,
+  "y": 140.0,
+  "w": 2920.0,
+  "h": 1860.0
+ },
+ "floorImage": {
+  "src": "/office/floor/floor_main.jpg"
+ },
+ "furniture": [
+  {
+   "id": "rug_scout",
+   "kind": "rug",
+   "rect": {
+    "x": 305.0,
+    "y": 355.0,
+    "w": 940.0,
+    "h": 410.0
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/persian_scout.png"
+   },
+   "draw": {
+    "x": 305.0,
+    "y": 355.0,
+    "w": 940.0,
+    "h": 410.0
+   }
+  },
+  {
+   "id": "rug_analisti",
+   "kind": "rug",
+   "rect": {
+    "x": 2215.0,
+    "y": 230.0,
+    "w": 880.0,
+    "h": 400.0
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/persian_analisti.png"
+   },
+   "draw": {
+    "x": 2215.0,
+    "y": 230.0,
+    "w": 880.0,
+    "h": 400.0
+   }
+  },
+  {
+   "id": "rug_scorer",
+   "kind": "rug",
+   "rect": {
+    "x": 1160.0,
+    "y": 870.0,
+    "w": 1080.0,
+    "h": 500.0
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/persian_scorer.png"
+   },
+   "draw": {
+    "x": 1160.0,
+    "y": 870.0,
+    "w": 1080.0,
+    "h": 500.0
+   }
+  },
+  {
+   "id": "rug_scrittori",
+   "kind": "rug",
+   "rect": {
+    "x": 200.0,
+    "y": 1506.0,
+    "w": 980.0,
+    "h": 440.0
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/persian_scrittori.png"
+   },
+   "draw": {
+    "x": 200.0,
+    "y": 1506.0,
+    "w": 980.0,
+    "h": 440.0
+   }
+  },
+  {
+   "id": "rug_critici",
+   "kind": "rug",
+   "rect": {
+    "x": 2155.0,
+    "y": 1525.0,
+    "w": 940.0,
+    "h": 430.0
+   },
+   "blocking": false,
+   "layer": "floor",
+   "image": {
+    "src": "/office/furniture/persian_critici.png"
+   },
+   "draw": {
+    "x": 2155.0,
+    "y": 1525.0,
+    "w": 940.0,
+    "h": 430.0
+   }
+  },
+  {
+   "id": "maintainer_workbench",
+   "kind": "mantenitore_workbench",
+   "rect": {
+    "x": 580.0,
+    "y": 900.0,
+    "w": 245.0,
+    "h": 106.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/mantenitore_workbench_down.png"
+   },
+   "draw": {
+    "x": 572.65,
+    "y": 842.8666666666667,
+    "w": 259.7,
+    "h": 173.13333333333333
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/mantenitore_workbench_down_seated_v2.png"
+   }
+  },
+  {
+   "id": "maintainer_parts",
+   "kind": "nc_boxes",
+   "rect": {
+    "x": 510.0,
+    "y": 930.0,
+    "w": 45.0,
+    "h": 38.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_boxes.png"
+   },
+   "draw": {
+    "x": 508.65,
+    "y": 910.3325581395349,
+    "w": 47.7,
+    "h": 67.66744186046512
+   }
+  },
+  {
+   "id": "maintainer_cabinet",
+   "kind": "nc_filing_cabinet",
+   "rect": {
+    "x": 980.0,
+    "y": 875.0,
+    "w": 58.0,
+    "h": 92.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_filing_cabinet.png"
+   },
+   "draw": {
+    "x": 978.26,
+    "y": 857.0586579378069,
+    "w": 61.480000000000004,
+    "h": 119.94134206219313
+   }
+  },
+  {
+   "id": "doctor_lab_desk",
+   "kind": "lab_bench",
+   "rect": {
+    "x": 490.0,
+    "y": 1160.0,
+    "w": 220.0,
+    "h": 90.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/lab_bench.png"
+   },
+   "draw": {
+    "x": 483.4,
+    "y": 1146.9333333333334,
+    "w": 233.20000000000002,
+    "h": 113.06666666666666
+   }
+  },
+  {
+   "id": "doctor_drawers",
+   "kind": "nc_drawer_unit",
+   "rect": {
+    "x": 720.0,
+    "y": 1182.0,
+    "w": 52.0,
+    "h": 68.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_drawer_unit.png"
+   },
+   "draw": {
+    "x": 718.44,
+    "y": 1176.6408300907913,
+    "w": 55.120000000000005,
+    "h": 83.35916990920883
+   }
+  },
+  {
+   "id": "doctor_armchair",
+   "kind": "dottore_armchair",
+   "rect": {
+    "x": 780.0,
+    "y": 1200.0,
+    "w": 140.0,
+    "h": 133.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/dottore_armchair.png"
+   },
+   "draw": {
+    "x": 775.8,
+    "y": 1194.6,
+    "w": 148.4,
+    "h": 148.4
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/dottore_armchair_seated_v2.png"
+   }
+  },
+  {
+   "id": "coffee_table",
+   "kind": "table_low",
+   "rect": {
+    "x": 2410.0,
+    "y": 1195.0,
+    "w": 90.0,
+    "h": 45.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/coffee_table.png"
+   },
+   "draw": {
+    "x": 2407.3,
+    "y": 1176.2782608695652,
+    "w": 95.4,
+    "h": 73.72173913043478
+   }
+  },
+  {
+   "id": "mentor_armchair",
+   "kind": "mentor_armchair",
+   "rect": {
+    "x": 2760.0,
+    "y": 1117.0,
+    "w": 140.0,
+    "h": 133.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/mentor_armchair.png"
+   },
+   "draw": {
+    "x": 2755.8,
+    "y": 1111.6,
+    "w": 148.4,
+    "h": 148.4
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/mentor_armchair_seated_v2.png"
+   },
+   "seatOf": "mentor"
+  },
+  {
+   "id": "lamp",
+   "kind": "lamp",
+   "rect": {
+    "x": 2700.0,
+    "y": 1090.0,
+    "w": 44.0,
+    "h": 44.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/floor_lamp.png"
+   },
+   "draw": {
+    "x": 2698.68,
+    "y": 1050.72,
+    "w": 46.64,
+    "h": 93.28
+   }
+  },
+  {
+   "id": "plant_a",
+   "kind": "plant",
+   "rect": {
+    "x": 2750.0,
+    "y": 1035.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant.png"
+   },
+   "draw": {
+    "x": 2748.32,
+    "y": 1038.616,
+    "w": 59.36,
+    "h": 62.38399999999999
+   }
+  },
+  {
+   "id": "corkboard",
+   "kind": "corkboard",
+   "rect": {
+    "x": 2990.0,
+    "y": 865.0,
+    "w": 150.0,
+    "h": 34.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/corkboard.png"
+   },
+   "draw": {
+    "x": 2985.5,
+    "y": 789.75,
+    "w": 159.0,
+    "h": 119.25
+   }
+  },
+  {
+   "id": "bookshelf",
+   "kind": "shelf_h",
+   "rect": {
+    "x": 2580.0,
+    "y": 950.0,
+    "w": 360.0,
+    "h": 90.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/bookshelf.png"
+   },
+   "draw": {
+    "x": 2569.2,
+    "y": 872.8285714285714,
+    "w": 381.6,
+    "h": 177.17142857142858
+   }
+  },
+  {
+   "id": "printer",
+   "kind": "printer",
+   "rect": {
+    "x": 1218.0,
+    "y": 185.0,
+    "w": 95.0,
+    "h": 70.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/printer.png"
+   },
+   "draw": {
+    "x": 1215.15,
+    "y": 138.47256478999105,
+    "w": 100.7,
+    "h": 126.52743521000895
+   }
+  },
+  {
+   "id": "plant_printer",
+   "kind": "plant_palm",
+   "rect": {
+    "x": 1330.0,
+    "y": 190.0,
+    "w": 110.0,
+    "h": 100.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_palm.png"
+   },
+   "draw": {
+    "x": 1326.7,
+    "y": 153.71568228105906,
+    "w": 116.60000000000001,
+    "h": 146.28431771894094
+   }
+  },
+  {
+   "id": "hologram",
+   "kind": "hologram",
+   "rect": {
+    "x": 675.0,
+    "y": 435.0,
+    "w": 200.0,
+    "h": 180.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/hologram.png"
+   },
+   "draw": {
+    "x": 669.0,
+    "y": 364.0769230769231,
+    "w": 212.0,
+    "h": 260.9230769230769
+   }
+  },
+  {
+   "id": "desk_coordinator",
+   "kind": "coordinatore_desk",
+   "rect": {
+    "x": 1365.0,
+    "y": 455.0,
+    "w": 260.0,
+    "h": 108.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/coordinatore_desk_down.png"
+   },
+   "draw": {
+    "x": 1357.2,
+    "y": 379.1957219251337,
+    "w": 275.6,
+    "h": 193.80427807486632
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/coordinatore_desk_down_seated_v2.png"
+   },
+   "seatOf": "capitano"
+  },
+  {
+   "id": "desk_sentinella",
+   "kind": "sentinella_desk",
+   "rect": {
+    "x": 1765.0,
+    "y": 513.0,
+    "w": 280.0,
+    "h": 95.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/sentinella_desk_down.png"
+   },
+   "draw": {
+    "x": 1756.6,
+    "y": 432.35964691046655,
+    "w": 296.8,
+    "h": 185.64035308953345
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/sentinella_desk_down_seated_v2.png"
+   },
+   "seatOf": "sentinella"
+  },
+  {
+   "id": "blackboard",
+   "kind": "blackboard",
+   "rect": {
+    "x": 2950.0,
+    "y": 1050.0,
+    "w": 56.0,
+    "h": 260.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/blackboard.png"
+   },
+   "draw": {
+    "x": 2948.32,
+    "y": 1127.08,
+    "w": 59.36,
+    "h": 192.92000000000002
+   }
+  },
+  {
+   "id": "plant_c",
+   "kind": "plant",
+   "rect": {
+    "x": 3030.0,
+    "y": 1340.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant.png"
+   },
+   "draw": {
+    "x": 3028.32,
+    "y": 1343.616,
+    "w": 59.36,
+    "h": 62.38399999999999
+   }
+  },
+  {
+   "id": "plant_palm_a",
+   "kind": "plant_palm",
+   "rect": {
+    "x": 760.0,
+    "y": 1370.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_palm.png"
+   },
+   "draw": {
+    "x": 758.32,
+    "y": 1361.527983706721,
+    "w": 59.36,
+    "h": 74.47201629327903
+   }
+  },
+  {
+   "id": "plant_monstera_a",
+   "kind": "plant_monstera",
+   "rect": {
+    "x": 2765.0,
+    "y": 235.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_monstera.png"
+   },
+   "draw": {
+    "x": 2763.32,
+    "y": 243.7085110876452,
+    "w": 59.36,
+    "h": 57.29148891235481
+   }
+  },
+  {
+   "id": "plant_shelf_a",
+   "kind": "plant_shelf",
+   "rect": {
+    "x": 2470.0,
+    "y": 960.0,
+    "w": 90.0,
+    "h": 50.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_shelf.png"
+   },
+   "draw": {
+    "x": 2467.3,
+    "y": 974.2462876254181,
+    "w": 95.4,
+    "h": 45.753712374581944
+   }
+  },
+  {
+   "id": "plant_monstera_b",
+   "kind": "plant_monstera",
+   "rect": {
+    "x": 2225.0,
+    "y": 250.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_monstera.png"
+   },
+   "draw": {
+    "x": 2223.32,
+    "y": 258.7085110876452,
+    "w": 59.36,
+    "h": 57.29148891235481
+   }
+  },
+  {
+   "id": "plant_palm_b",
+   "kind": "plant_palm",
+   "rect": {
+    "x": 1790.0,
+    "y": 1725.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_palm.png"
+   },
+   "draw": {
+    "x": 1788.32,
+    "y": 1716.527983706721,
+    "w": 59.36,
+    "h": 74.47201629327903
+   }
+  },
+  {
+   "id": "plant_monstera_c",
+   "kind": "plant_monstera",
+   "rect": {
+    "x": 3080.0,
+    "y": 1515.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_monstera.png"
+   },
+   "draw": {
+    "x": 3078.32,
+    "y": 1523.708511087645,
+    "w": 59.36,
+    "h": 57.29148891235481
+   }
+  },
+  {
+   "id": "plant_palm_c",
+   "kind": "plant_palm",
+   "rect": {
+    "x": 302.0,
+    "y": 1436.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant_palm.png"
+   },
+   "draw": {
+    "x": 300.32,
+    "y": 1427.527983706721,
+    "w": 59.36,
+    "h": 74.47201629327903
+   }
+  },
+  {
+   "id": "desk_assistant",
+   "kind": "assistente_desk",
+   "rect": {
+    "x": 1550.0,
+    "y": 1800.0,
+    "w": 230.0,
+    "h": 100.0
+   },
+   "blocking": true,
+   "facing": "down",
+   "image": {
+    "src": "/office/furniture/assistente_desk_down.png"
+   },
+   "draw": {
+    "x": 1543.1,
+    "y": 1747.4666666666667,
+    "w": 243.8,
+    "h": 162.53333333333333
+   },
+   "occupiedImage": {
+    "src": "/office/furniture/occupied/assistente_desk_down_seated_v2.png"
+   },
+   "seatOf": "assistente"
+  },
+  {
+   "id": "critici_center",
+   "kind": "critici_center",
+   "rect": {
+    "x": 2107.5,
+    "y": 1877.5,
+    "w": 75.0,
+    "h": 62.5
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/critici_center.png"
+   },
+   "draw": {
+    "x": 2105.25,
+    "y": 1869.061809045226,
+    "w": 79.5,
+    "h": 80.93819095477387
+   }
+  },
+  {
+   "id": "plant_b",
+   "kind": "plant",
+   "rect": {
+    "x": 1950.0,
+    "y": 860.0,
+    "w": 56.0,
+    "h": 56.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/plant.png"
+   },
+   "draw": {
+    "x": 1948.32,
+    "y": 863.616,
+    "w": 59.36,
+    "h": 62.38399999999999
+   }
+  },
+  {
+   "id": "wb_analisti",
+   "kind": "nc_whiteboard",
+   "rect": {
+    "x": 1255.0,
+    "y": 400.0,
+    "w": 150.0,
+    "h": 34.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_whiteboard.png"
+   },
+   "draw": {
+    "x": 1250.5,
+    "y": 255.20679611650485,
+    "w": 159.0,
+    "h": 188.79320388349515
+   }
+  },
+  {
+   "id": "wb_scorer",
+   "kind": "nc_whiteboard",
+   "rect": {
+    "x": 1585.0,
+    "y": 400.0,
+    "w": 150.0,
+    "h": 34.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_whiteboard.png"
+   },
+   "draw": {
+    "x": 1580.5,
+    "y": 255.20679611650485,
+    "w": 159.0,
+    "h": 188.79320388349515
+   },
+   "flip": true
+  },
+  {
+   "id": "wb_scrittori",
+   "kind": "nc_whiteboard",
+   "rect": {
+    "x": 290.0,
+    "y": 1160.0,
+    "w": 150.0,
+    "h": 34.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_whiteboard.png"
+   },
+   "draw": {
+    "x": 285.5,
+    "y": 1015.2067961165048,
+    "w": 159.0,
+    "h": 188.79320388349515
+   }
+  },
+  {
+   "id": "boxes_critici",
+   "kind": "nc_boxes",
+   "rect": {
+    "x": 3000.0,
+    "y": 1945.0,
+    "w": 50.0,
+    "h": 41.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_boxes.png"
+   },
+   "draw": {
+    "x": 2998.5,
+    "y": 1920.8139534883721,
+    "w": 53.0,
+    "h": 75.18604651162791
+   }
+  },
+  {
+   "id": "boxes_scrittori",
+   "kind": "nc_boxes",
+   "rect": {
+    "x": 1115.0,
+    "y": 1925.0,
+    "w": 50.0,
+    "h": 41.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_boxes.png"
+   },
+   "draw": {
+    "x": 1113.5,
+    "y": 1900.8139534883721,
+    "w": 53.0,
+    "h": 75.18604651162791
+   }
+  },
+  {
+   "id": "filing_coord",
+   "kind": "nc_filing_cabinet",
+   "rect": {
+    "x": 2445.0,
+    "y": 910.0,
+    "w": 70.0,
+    "h": 110.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_filing_cabinet.png"
+   },
+   "draw": {
+    "x": 2442.9,
+    "y": 885.2432078559738,
+    "w": 74.2,
+    "h": 144.7567921440262
+   }
+  },
+  {
+   "id": "coat_rack",
+   "kind": "nc_coat_rack",
+   "rect": {
+    "x": 1500.0,
+    "y": 1780.0,
+    "w": 50.0,
+    "h": 50.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_coat_rack.png"
+   },
+   "draw": {
+    "x": 1498.5,
+    "y": 1707.898924731183,
+    "w": 53.0,
+    "h": 132.1010752688172
+   }
+  },
+  {
+   "id": "bin_scout",
+   "kind": "nc_waste_bin",
+   "rect": {
+    "x": 1175.0,
+    "y": 215.0,
+    "w": 26.0,
+    "h": 26.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_waste_bin.png"
+   },
+   "draw": {
+    "x": 1174.22,
+    "y": 216.10688524590165,
+    "w": 27.560000000000002,
+    "h": 34.89311475409836
+   }
+  },
+  {
+   "id": "drawer_scout",
+   "kind": "nc_drawer_unit",
+   "rect": {
+    "x": 605.0,
+    "y": 640.0,
+    "w": 42.0,
+    "h": 50.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_drawer_unit.png"
+   },
+   "draw": {
+    "x": 603.74,
+    "y": 632.671439688716,
+    "w": 44.52,
+    "h": 67.32856031128405
+   }
+  },
+  {
+   "id": "drawer_scrittori",
+   "kind": "nc_drawer_unit",
+   "rect": {
+    "x": 380.0,
+    "y": 1425.0,
+    "w": 60.0,
+    "h": 72.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/nc_drawer_unit.png"
+   },
+   "draw": {
+    "x": 378.2,
+    "y": 1410.8163424124514,
+    "w": 63.6,
+    "h": 96.18365758754865
+   }
+  },
+  {
+   "id": "dartboard",
+   "kind": "nc_dartboard",
+   "rect": {
+    "x": 254.0,
+    "y": 1010.0,
+    "w": 36.0,
+    "h": 36.0
+   },
+   "blocking": true,
+   "image": null
+  },
+  {
+   "id": "wall_art",
+   "kind": "nc_wall_art",
+   "rect": {
+    "x": 2040.0,
+    "y": 150.0,
+    "w": 90.0,
+    "h": 60.0
+   },
+   "blocking": true,
+   "image": null
+  },
+  {
+   "id": "sideboard",
+   "kind": "nc_sideboard",
+   "rect": {
+    "x": 1830.0,
+    "y": 1815.0,
+    "w": 180.0,
+    "h": 70.0
+   },
+   "blocking": true,
+   "image": null
+  },
+  {
+   "id": "handoff_scout",
+   "kind": "handoff_table",
+   "rect": {
+    "x": 985.0,
+    "y": 740.0,
+    "w": 190.0,
+    "h": 60.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/handoff_table_scout.png"
+   },
+   "draw": {
+    "x": 970.0,
+    "y": 650.1724137931035,
+    "w": 220.0,
+    "h": 149.82758620689654
+   }
+  },
+  {
+   "id": "handoff_analisti",
+   "kind": "handoff_table",
+   "rect": {
+    "x": 2705.0,
+    "y": 790.0,
+    "w": 190.0,
+    "h": 60.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/handoff_table_analisti.png"
+   },
+   "draw": {
+    "x": 2690.0,
+    "y": 700.4302925989673,
+    "w": 220.0,
+    "h": 149.5697074010327
+   }
+  },
+  {
+   "id": "handoff_scorer",
+   "kind": "handoff_table",
+   "rect": {
+    "x": 1605.0,
+    "y": 1060.0,
+    "w": 190.0,
+    "h": 60.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/handoff_table_scorer.png"
+   },
+   "draw": {
+    "x": 1590.0,
+    "y": 970.1724137931035,
+    "w": 220.0,
+    "h": 149.82758620689654
+   }
+  },
+  {
+   "id": "handoff_scrittori",
+   "kind": "handoff_table",
+   "rect": {
+    "x": 985.0,
+    "y": 1500.0,
+    "w": 190.0,
+    "h": 60.0
+   },
+   "blocking": true,
+   "image": {
+    "src": "/office/furniture/handoff_table_scrittori.png"
+   },
+   "draw": {
+    "x": 970.0,
+    "y": 1410.4302925989673,
+    "w": 220.0,
+    "h": 149.5697074010327
+   }
+  },
+  {
+   "id": "output_shelf",
+   "kind": "output_shelf",
+   "rect": {
+    "x": 1395.0,
+    "y": 1908.0,
+    "w": 170.0,
+    "h": 64.0
+   },
+   "blocking": true,
+   "image": null
+  }
+ ],
+ "departments": [
+  {
+   "id": "scout",
+   "role": "scout",
+   "name": "Research",
+   "color": "#00e87a",
+   "zone": {
+    "x": 320.0,
+    "y": 348.0,
+    "w": 880.0,
+    "h": 520.0
+   },
+   "inbox": {
+    "x": 1080.0,
+    "y": 800.0
+   },
+   "inboxDropAccess": {
+    "x": 1240.0,
+    "y": 800.0
+   },
+   "inboxPickupAccess": {
+    "x": 1100.0,
+    "y": 920.0
+   },
+   "desks": [
+    {
+     "index": 0,
+     "furniture": {
+      "id": "desk_scout_0",
+      "kind": "scout_a",
+      "rect": {
+       "x": 384.0,
+       "y": 400.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scout_a_side.png"
+      },
+      "draw": {
+       "x": 378.9,
+       "y": 324.4571428571428,
+       "w": 180.20000000000002,
+       "h": 163.54285714285717
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_b_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 568.0,
+      "y": 484.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 1,
+     "furniture": {
+      "id": "desk_scout_1",
+      "kind": "scout_a",
+      "rect": {
+       "x": 426.0,
+       "y": 616.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scout_a_diag_down.png"
+      },
+      "draw": {
+       "x": 420.9,
+       "y": 524.3005555555555,
+       "w": 180.20000000000002,
+       "h": 179.69944444444445
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_a_diag_down_seated_v2.png"
+      }
+     },
+     "seat": {
+      "x": 610.0,
+      "y": 700.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 2,
+     "furniture": {
+      "id": "desk_scout_2",
+      "kind": "scout_a",
+      "rect": {
+       "x": 690.0,
+       "y": 346.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "up",
+      "image": {
+       "src": "/office/furniture/scout_a_up.png"
+      },
+      "draw": {
+       "x": 684.9,
+       "y": 291.7447986577181,
+       "w": 180.20000000000002,
+       "h": 142.25520134228188
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_c_up_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 775.0,
+      "y": 448.0
+     },
+     "seatFacing": "up"
+    },
+    {
+     "index": 3,
+     "furniture": {
+      "id": "desk_scout_3",
+      "kind": "scout_a",
+      "rect": {
+       "x": 690.0,
+       "y": 689.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "down",
+      "image": {
+       "src": "/office/furniture/scout_a_down.png"
+      },
+      "draw": {
+       "x": 684.9,
+       "y": 619.9940594059406,
+       "w": 180.20000000000002,
+       "h": 157.0059405940594
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_d_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 775.0,
+      "y": 675.0
+     },
+     "seatFacing": "down"
+    },
+    {
+     "index": 4,
+     "furniture": {
+      "id": "desk_scout_4",
+      "kind": "scout_a",
+      "rect": {
+       "x": 956.0,
+       "y": 400.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scout_a_side.png"
+      },
+      "draw": {
+       "x": 950.9,
+       "y": 324.4571428571428,
+       "w": 180.20000000000002,
+       "h": 163.54285714285717
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_e_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 942.0,
+      "y": 484.0
+     },
+     "seatFacing": "right"
+    },
+    {
+     "index": 5,
+     "furniture": {
+      "id": "desk_scout_5",
+      "kind": "scout_a",
+      "rect": {
+       "x": 914.0,
+       "y": 560.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scout_a_diag_down.png"
+      },
+      "draw": {
+       "x": 908.9,
+       "y": 468.30055555555555,
+       "w": 180.20000000000002,
+       "h": 179.69944444444445
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scout_f_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 900.0,
+      "y": 644.0
+     },
+     "seatFacing": "right"
+    }
+   ]
+  },
+  {
+   "id": "analisti",
+   "role": "analista",
+   "name": "Analysis",
+   "color": "#4d9fff",
+   "zone": {
+    "x": 2232.0,
+    "y": 150.0,
+    "w": 848.0,
+    "h": 580.0
+   },
+   "inbox": {
+    "x": 2800.0,
+    "y": 850.0
+   },
+   "inboxDropAccess": {
+    "x": 2640.0,
+    "y": 850.0
+   },
+   "inboxPickupAccess": {
+    "x": 2960.0,
+    "y": 850.0
+   },
+   "desks": [
+    {
+     "index": 0,
+     "furniture": {
+      "id": "desk_analisti_0",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2336.0,
+       "y": 278.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/analisti_a_side.png"
+      },
+      "draw": {
+       "x": 2330.9,
+       "y": 214.86451612903224,
+       "w": 180.20000000000002,
+       "h": 151.13548387096776
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_b_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2520.0,
+      "y": 362.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 1,
+     "furniture": {
+      "id": "desk_analisti_1",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2365.0,
+       "y": 480.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/analisti_a_diag_down.png"
+      },
+      "draw": {
+       "x": 2359.9,
+       "y": 363.82769230769225,
+       "w": 180.20000000000002,
+       "h": 204.17230769230773
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_a_diag_down_seated_v2.png"
+      }
+     },
+     "seat": {
+      "x": 2549.0,
+      "y": 564.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 2,
+     "furniture": {
+      "id": "desk_analisti_2",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2570.0,
+       "y": 227.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "up",
+      "image": {
+       "src": "/office/furniture/analisti_a_up.png"
+      },
+      "draw": {
+       "x": 2564.9,
+       "y": 162.90317052270777,
+       "w": 180.20000000000002,
+       "h": 152.09682947729223
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_c_up_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2655.0,
+      "y": 329.0
+     },
+     "seatFacing": "up"
+    },
+    {
+     "index": 3,
+     "furniture": {
+      "id": "desk_analisti_3",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2570.0,
+       "y": 548.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "down",
+      "image": {
+       "src": "/office/furniture/analisti_a_down.png"
+      },
+      "draw": {
+       "x": 2564.9,
+       "y": 510.27906976744185,
+       "w": 180.20000000000002,
+       "h": 125.72093023255816
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_d_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2655.0,
+      "y": 534.0
+     },
+     "seatFacing": "down"
+    },
+    {
+     "index": 4,
+     "furniture": {
+      "id": "desk_analisti_4",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2854.0,
+       "y": 278.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/analisti_a_side.png"
+      },
+      "draw": {
+       "x": 2848.9,
+       "y": 214.86451612903224,
+       "w": 180.20000000000002,
+       "h": 151.13548387096776
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_e_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2840.0,
+      "y": 362.0
+     },
+     "seatFacing": "right"
+    },
+    {
+     "index": 5,
+     "furniture": {
+      "id": "desk_analisti_5",
+      "kind": "analisti_a",
+      "rect": {
+       "x": 2825.0,
+       "y": 480.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/analisti_a_diag_down.png"
+      },
+      "draw": {
+       "x": 2819.9,
+       "y": 363.82769230769225,
+       "w": 180.20000000000002,
+       "h": 204.17230769230773
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/analisti_f_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2811.0,
+      "y": 564.0
+     },
+     "seatFacing": "right"
+    }
+   ]
+  },
+  {
+   "id": "scorer",
+   "role": "scorer",
+   "name": "Compatibility",
+   "color": "#f5c518",
+   "zone": {
+    "x": 1140.0,
+    "y": 840.0,
+    "w": 1120.0,
+    "h": 640.0
+   },
+   "inbox": {
+    "x": 1700.0,
+    "y": 1120.0
+   },
+   "inboxDropAccess": {
+    "x": 1550.0,
+    "y": 1120.0
+   },
+   "inboxPickupAccess": {
+    "x": 1850.0,
+    "y": 1120.0
+   },
+   "desks": [
+    {
+     "index": 0,
+     "furniture": {
+      "id": "desk_scorer_0",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1263.0,
+       "y": 942.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scorer_a_side.png"
+      },
+      "draw": {
+       "x": 1257.9,
+       "y": 904.4784711388455,
+       "w": 180.20000000000002,
+       "h": 125.52152886115445
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_b_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 1447.0,
+      "y": 1026.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 1,
+     "furniture": {
+      "id": "desk_scorer_1",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1312.0,
+       "y": 1190.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scorer_a_diag_down.png"
+      },
+      "draw": {
+       "x": 1306.9,
+       "y": 1112.434076433121,
+       "w": 180.20000000000002,
+       "h": 165.565923566879
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_a_diag_down_seated_v2.png"
+      }
+     },
+     "seat": {
+      "x": 1496.0,
+      "y": 1274.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 2,
+     "furniture": {
+      "id": "desk_scorer_2",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1615.0,
+       "y": 880.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "up",
+      "image": {
+       "src": "/office/furniture/scorer_a_up.png"
+      },
+      "draw": {
+       "x": 1609.9,
+       "y": 840.3583333333333,
+       "w": 180.20000000000002,
+       "h": 127.64166666666668
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_c_up_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 1700.0,
+      "y": 982.0
+     },
+     "seatFacing": "up"
+    },
+    {
+     "index": 3,
+     "furniture": {
+      "id": "desk_scorer_3",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1615.0,
+       "y": 1274.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "down",
+      "image": {
+       "src": "/office/furniture/scorer_a_down.png"
+      },
+      "draw": {
+       "x": 1609.9,
+       "y": 1236.7122972972973,
+       "w": 180.20000000000002,
+       "h": 125.28770270270272
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_d_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 1700.0,
+      "y": 1260.0
+     },
+     "seatFacing": "down"
+    },
+    {
+     "index": 4,
+     "furniture": {
+      "id": "desk_scorer_4",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1967.0,
+       "y": 942.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scorer_a_side.png"
+      },
+      "draw": {
+       "x": 1961.9,
+       "y": 904.4784711388455,
+       "w": 180.20000000000002,
+       "h": 125.52152886115445
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_e_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 1953.0,
+      "y": 1026.0
+     },
+     "seatFacing": "right"
+    },
+    {
+     "index": 5,
+     "furniture": {
+      "id": "desk_scorer_5",
+      "kind": "scorer_a",
+      "rect": {
+       "x": 1918.0,
+       "y": 1190.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scorer_a_diag_down.png"
+      },
+      "draw": {
+       "x": 1912.9,
+       "y": 1112.434076433121,
+       "w": 180.20000000000002,
+       "h": 165.565923566879
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scorer_f_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 1904.0,
+      "y": 1274.0
+     },
+     "seatFacing": "right"
+    }
+   ]
+  },
+  {
+   "id": "scrittori",
+   "role": "scrittore",
+   "name": "Applications",
+   "color": "#a855f7",
+   "zone": {
+    "x": 320.0,
+    "y": 1520.0,
+    "w": 860.0,
+    "h": 440.0
+   },
+   "inbox": {
+    "x": 1080.0,
+    "y": 1560.0
+   },
+   "inboxDropAccess": {
+    "x": 1100.0,
+    "y": 1625.0
+   },
+   "inboxPickupAccess": {
+    "x": 1250.0,
+    "y": 1560.0
+   },
+   "desks": [
+    {
+     "index": 0,
+     "furniture": {
+      "id": "desk_scrittori_0",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 345.0,
+       "y": 1584.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scrittori_a_side.png"
+      },
+      "draw": {
+       "x": 339.9,
+       "y": 1530.0150880134115,
+       "w": 180.20000000000002,
+       "h": 141.98491198658846
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_b_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 529.0,
+      "y": 1668.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 1,
+     "furniture": {
+      "id": "desk_scrittori_1",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 380.0,
+       "y": 1720.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/scrittori_a_diag_down.png"
+      },
+      "draw": {
+       "x": 374.9,
+       "y": 1649.834958739685,
+       "w": 180.20000000000002,
+       "h": 158.1650412603151
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_a_diag_down_seated_v2.png"
+      }
+     },
+     "seat": {
+      "x": 564.0,
+      "y": 1804.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 2,
+     "furniture": {
+      "id": "desk_scrittori_2",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 605.0,
+       "y": 1538.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "up",
+      "image": {
+       "src": "/office/furniture/scrittori_a_up.png"
+      },
+      "draw": {
+       "x": 599.9,
+       "y": 1473.53390625,
+       "w": 180.20000000000002,
+       "h": 152.46609375
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_c_up_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 690.0,
+      "y": 1640.0
+     },
+     "seatFacing": "up"
+    },
+    {
+     "index": 3,
+     "furniture": {
+      "id": "desk_scrittori_3",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 605.0,
+       "y": 1830.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "down",
+      "image": {
+       "src": "/office/furniture/scrittori_a_down.png"
+      },
+      "draw": {
+       "x": 599.9,
+       "y": 1788.9960618846694,
+       "w": 180.20000000000002,
+       "h": 129.00393811533053
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_d_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 690.0,
+      "y": 1816.0
+     },
+     "seatFacing": "down"
+    },
+    {
+     "index": 4,
+     "furniture": {
+      "id": "desk_scrittori_4",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 865.0,
+       "y": 1584.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scrittori_a_side.png"
+      },
+      "draw": {
+       "x": 859.9,
+       "y": 1530.0150880134115,
+       "w": 180.20000000000002,
+       "h": 141.98491198658846
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_e_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 851.0,
+      "y": 1668.0
+     },
+     "seatFacing": "right"
+    },
+    {
+     "index": 5,
+     "furniture": {
+      "id": "desk_scrittori_5",
+      "kind": "scrittori_a",
+      "rect": {
+       "x": 830.0,
+       "y": 1768.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/scrittori_a_diag_down.png"
+      },
+      "draw": {
+       "x": 824.9,
+       "y": 1697.834958739685,
+       "w": 180.20000000000002,
+       "h": 158.1650412603151
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/scrittori_f_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 816.0,
+      "y": 1852.0
+     },
+     "seatFacing": "right"
+    }
+   ]
+  },
+  {
+   "id": "critici",
+   "role": "critico",
+   "name": "Quality check",
+   "color": "#ff4560",
+   "zone": {
+    "x": 2075.0,
+    "y": 1520.0,
+    "w": 1010.0,
+    "h": 440.0
+   },
+   "inbox": {
+    "x": 3025.0,
+    "y": 1820.0
+   },
+   "inboxDropAccess": {
+    "x": 3055.0,
+    "y": 1755.0
+   },
+   "inboxPickupAccess": {
+    "x": 3055.0,
+    "y": 1755.0
+   },
+   "desks": [
+    {
+     "index": 0,
+     "furniture": {
+      "id": "desk_critici_0",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2234.0,
+       "y": 1580.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/critici_a_side.png"
+      },
+      "draw": {
+       "x": 2228.9,
+       "y": 1510.3046153846153,
+       "w": 180.20000000000002,
+       "h": 157.69538461538463
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_a_side_seated_v2.png"
+      }
+     },
+     "seat": {
+      "x": 2418.0,
+      "y": 1664.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 1,
+     "furniture": {
+      "id": "desk_critici_1",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2276.0,
+       "y": 1796.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "left",
+      "image": {
+       "src": "/office/furniture/critici_a_diag_down.png"
+      },
+      "draw": {
+       "x": 2270.9,
+       "y": 1704.414492753623,
+       "w": 180.20000000000002,
+       "h": 179.58550724637684
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_b_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2460.0,
+      "y": 1880.0
+     },
+     "seatFacing": "left"
+    },
+    {
+     "index": 2,
+     "furniture": {
+      "id": "desk_critici_2",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2540.0,
+       "y": 1526.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "up",
+      "image": {
+       "src": "/office/furniture/critici_a_up.png"
+      },
+      "draw": {
+       "x": 2534.9,
+       "y": 1469.9715328467153,
+       "w": 180.20000000000002,
+       "h": 144.02846715328468
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_c_up_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2625.0,
+      "y": 1628.0
+     },
+     "seatFacing": "up"
+    },
+    {
+     "index": 3,
+     "furniture": {
+      "id": "desk_critici_3",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2540.0,
+       "y": 1815.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "down",
+      "image": {
+       "src": "/office/furniture/critici_a_down.png"
+      },
+      "draw": {
+       "x": 2534.9,
+       "y": 1779.9277479892762,
+       "w": 180.20000000000002,
+       "h": 123.07225201072387
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_d_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2625.0,
+      "y": 1801.0
+     },
+     "seatFacing": "down"
+    },
+    {
+     "index": 4,
+     "furniture": {
+      "id": "desk_critici_4",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2846.0,
+       "y": 1580.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/critici_a_side.png"
+      },
+      "draw": {
+       "x": 2840.9,
+       "y": 1510.3046153846153,
+       "w": 180.20000000000002,
+       "h": 157.69538461538463
+      },
+      "flip": true,
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_e_side_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2832.0,
+      "y": 1664.0
+     },
+     "seatFacing": "right"
+    },
+    {
+     "index": 5,
+     "furniture": {
+      "id": "desk_critici_5",
+      "kind": "critici_a",
+      "rect": {
+       "x": 2804.0,
+       "y": 1796.0,
+       "w": 170.0,
+       "h": 78.0
+      },
+      "blocking": true,
+      "facing": "right",
+      "image": {
+       "src": "/office/furniture/critici_a_diag_down.png"
+      },
+      "draw": {
+       "x": 2798.9,
+       "y": 1704.414492753623,
+       "w": 180.20000000000002,
+       "h": 179.58550724637684
+      },
+      "occupiedImage": {
+       "src": "/office/furniture/occupied/critici_f_diag_down_seated_v3.png"
+      }
+     },
+     "seat": {
+      "x": 2790.0,
+      "y": 1880.0
+     },
+     "seatFacing": "right"
+    }
+   ]
+  }
+ ],
+ "coreSeats": [
+  {
+   "role": "capitano",
+   "seat": {
+    "x": 1495.0,
+    "y": 441.0
+   },
+   "seatFacing": "down",
+   "furnitureId": "desk_coordinator"
+  },
+  {
+   "role": "mentor",
+   "seat": {
+    "x": 2830.0,
+    "y": 1274.0
+   },
+   "seatFacing": "down",
+   "furnitureId": "mentor_armchair"
+  },
+  {
+   "role": "assistente",
+   "seat": {
+    "x": 1665.0,
+    "y": 1786.0
+   },
+   "seatFacing": "down",
+   "furnitureId": "desk_assistant"
+  },
+  {
+   "role": "sentinella",
+   "seat": {
+    "x": 1905.0,
+    "y": 499.0
+   },
+   "seatFacing": "down",
+   "furnitureId": "desk_sentinella"
+  }
+ ],
+ "door": {
+  "x": 1300.0,
+  "y": 2000.0
+ },
+ "pois": {
+  "printer": {
+   "x": 1265.0,
+   "y": 300.0
+  },
+  "outputShelf": {
+   "x": 1480.0,
+   "y": 1986.0
+  }
+ },
+ "nav": {
+  "cell": 32.0,
+  "margin": 28.0,
+  "wallMargin": 14.0,
+  "walls": [
+   {
+    "x": 242.0,
+    "y": 206.5,
+    "w": 984.0,
+    "h": 12.0
+   },
+   {
+    "x": 1406.5,
+    "y": 282.0,
+    "w": 613.5,
+    "h": 12.0
+   },
+   {
+    "x": 2236.5,
+    "y": 182.5,
+    "w": 925.5,
+    "h": 12.0
+   },
+   {
+    "x": 242.0,
+    "y": 861.5,
+    "w": 816.0,
+    "h": 12.0
+   },
+   {
+    "x": 1366.0,
+    "y": 826.5,
+    "w": 684.0,
+    "h": 12.0
+   },
+   {
+    "x": 2347.0,
+    "y": 893.5,
+    "w": 821.0,
+    "h": 12.0
+   },
+   {
+    "x": 241.0,
+    "y": 1142.5,
+    "w": 807.5,
+    "h": 12.0
+   },
+   {
+    "x": 1240.0,
+    "y": 1389.0,
+    "w": 343.0,
+    "h": 12.0
+   },
+   {
+    "x": 1809.5,
+    "y": 1389.0,
+    "w": 375.0,
+    "h": 12.0
+   },
+   {
+    "x": 240.0,
+    "y": 1462.5,
+    "w": 798.0,
+    "h": 12.0
+   },
+   {
+    "x": 2308.5,
+    "y": 1484.0,
+    "w": 856.0,
+    "h": 12.0
+   },
+   {
+    "x": 318.0,
+    "y": 1946.0,
+    "w": 857.5,
+    "h": 12.0
+   },
+   {
+    "x": 2074.5,
+    "y": 1951.0,
+    "w": 956.5,
+    "h": 12.0
+   }
+  ]
+ },
+ "sheets": {
+  "scout": [
+   "scout_b",
+   "scout_a",
+   "scout_c",
+   "scout_d",
+   "scout_e",
+   "scout_f"
+  ],
+  "analista": [
+   "analista_b",
+   "analista_a",
+   "analista_c",
+   "analista_d",
+   "analista_e",
+   "analista_f"
+  ],
+  "scorer": [
+   "scorer_b",
+   "scorer_a",
+   "scorer_c",
+   "scorer_d",
+   "scorer_e",
+   "scorer_f"
+  ],
+  "scrittore": [
+   "scrittore_b",
+   "scrittore_a",
+   "scrittore_c",
+   "scrittore_d",
+   "scrittore_e",
+   "scrittore_f"
+  ],
+  "critico": [
+   "critico_a",
+   "critico_b",
+   "critico_c",
+   "critico_d",
+   "critico_e",
+   "critico_f"
+  ],
+  "capitano": [
+   "coordinatore_a"
+  ],
+  "sentinella": [
+   "sentinella_a"
+  ],
+  "assistente": [
+   "assistente_a"
+  ],
+  "mentor": [
+   "mentor_a"
+  ]
+ }
+}
