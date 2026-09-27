@@ -148,16 +148,18 @@ class Art:
     source: Path
     url: str
     width: float = 0.0
+    # An exact size, for art that is stretched out of its aspect (the glass band).
+    size: tuple[int, int] | None = None
 
 
 class ArtPlan:
     def __init__(self) -> None:
         self.items: dict[Path, Art] = {}
 
-    def use(self, source: Path, folder: str, width: float, ext: str = "png") -> str:
+    def use(self, source: Path, folder: str, width: float, ext: str = "png", size: tuple[int, int] | None = None) -> str:
         art = self.items.get(source)
         if art is None:
-            art = Art(source, f"/office/{folder}/{source.stem}.{ext}")
+            art = Art(source, f"/office/{folder}/{source.stem}.{ext}", size=size)
             self.items[source] = art
         art.width = max(art.width, width)
         return art.url
@@ -289,6 +291,15 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
             "id": f"rug_{dept_id}", "kind": "rug", "rect": r, "blocking": False, "layer": "floor",
             "image": {"src": plan.use(res(path), "furniture", r["w"])}, "draw": r,
         })
+    # office_floor.gd: the common area's rug, centred on (2620, 1190) at 0.68.
+    lounge = GAME / "assets" / "gen-art" / "furniture" / "rug.png"
+    if lounge.exists():
+        lw, lh = (v * 0.68 for v in _size(lounge))
+        r = rect(2620 - lw / 2, 1190 - lh / 2, lw, lh)
+        items.append({
+            "id": "rug_lounge", "kind": "rug", "rect": r, "blocking": False, "layer": "floor",
+            "image": {"src": plan.use(lounge, "furniture", lw)}, "draw": r,
+        })
     for item in furniture["ITEMS"]:
         items.append(furniture_item(item, plan, gen_art, id=item["id"], seat_of=core_seat_of.get(item.get("registry_key"))))
 
@@ -351,11 +362,29 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
 
     floor_png = GAME / "assets" / "gen-art" / "floor" / "floor_main.png"
     floor = furniture["FLOOR"]
+    # office_floor.gd: the north wall, WALL_H tall and tiled along the floor's
+    # width, and above it the glass band, GLASS_H tall and stretched.
+    ground = gd_constants(office / "office_floor.gd")
+    wall_png, glass_png = res(ground["WALL_TEX"]), res(ground["GLASS_TEX"])
+    wall_h, glass_h = ground["WALL_H"], ground["GLASS_H"]
+    ww, wh = _size(wall_png)
+    backdrop = [
+        {
+            "image": {"src": plan.use(glass_png, "floor", floor["w"], size=(min(_size(glass_png)[0], round(floor["w"])), round(glass_h)))},
+            "draw": rect(floor["x"], floor["y"] - wall_h - glass_h, floor["w"], glass_h),
+        },
+        {
+            "image": {"src": plan.use(wall_png, "floor", ww * wall_h / wh)},
+            "draw": rect(floor["x"], floor["y"] - wall_h, floor["w"], wall_h),
+            "repeatX": True,
+        },
+    ]
     layout = {
         "version": 1,
         "world": furniture["WORLD"],
         "floor": floor,
         "floorImage": {"src": plan.use(floor_png, "floor", floor["w"], ext="jpg")},
+        "backdrop": backdrop,
         "furniture": items,
         "departments": depts,
         "coreSeats": core_seats,
@@ -439,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
     before = after = 0
     for art in plan.items.values():
         before += art.source.stat().st_size
-        after += write_image(art.source, url_path(art.url), width=max(1, round(art.width)))
+        after += write_image(art.source, url_path(art.url), width=max(1, round(art.width)), size=art.size)
     print(f"floor and furniture: {len(plan.items)} images, {human(before)} -> {human(after)}")
 
     characters: list[dict] = []

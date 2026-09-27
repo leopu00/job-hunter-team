@@ -33,7 +33,7 @@ def test_the_committed_layout_is_what_game_says_today(committed):
 
 def test_every_image_the_layout_and_the_manifest_name_is_shipped(committed):
     manifest = json.loads((OFFICE / "manifest.json").read_text(encoding="utf-8"))
-    refs = [committed["floorImage"]]
+    refs = [committed["floorImage"]] + [b["image"] for b in committed["backdrop"]]
     items = committed["furniture"] + [d["furniture"] for dept in committed["departments"] for d in dept["desks"]]
     for item in items:
         refs += [ref for ref in (item["image"], item.get("occupiedImage")) if ref]
@@ -60,7 +60,11 @@ def test_the_layout_has_the_offices_shape(committed):
     assert committed["pois"]["printer"] == {"x": 1265.0, "y": 300.0}
     # Rugs lie under everyone and block nobody.
     rugs = [i for i in committed["furniture"] if i["kind"] == "rug"]
-    assert len(rugs) == 5 and all(r["layer"] == "floor" and not r["blocking"] for r in rugs)
+    assert len(rugs) == 6 and all(r["layer"] == "floor" and not r["blocking"] for r in rugs)
+    # office_floor.gd: the glass band above the wall, the wall tiled on the floor's north edge.
+    glass, wall = committed["backdrop"]
+    assert wall["repeatX"] is True and wall["draw"] == {"x": 240.0, "y": 20.0, "w": 2920.0, "h": 120.0}
+    assert glass["draw"]["y"] + glass["draw"]["h"] == wall["draw"]["y"]
 
 
 def test_a_desks_seat_is_the_standing_point_of_desk_spot(committed):
