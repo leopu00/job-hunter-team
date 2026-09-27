@@ -32,7 +32,8 @@ import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
 import { cloudSyncHeaders } from './client-identity.js';
-import { agentsStatusPatch, createAgentsStatusReader, startAgentsStatusPublisher } from './agents-status.js';
+import { agentsStatusWriter, createAgentsStatusReader, startAgentsStatusPublisher } from './agents-status.js';
+import { createApiAgentsStatusReader } from './agents-status-traces.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -211,20 +212,29 @@ export async function reconcileOnce() {
       last_heartbeat_at: nowIso,
     }).catch(() => {});
   }
-  if (reader) ensureAgentsStatusPublisher(reader);
+  ensureAgentsStatusPublisher({ reader, baseUrl, token });
   return { ok: true, action: null };
 }
 
 // Each agent's status for the desktop office's tags (agents-status.js):
-// started once, at the first heartbeat of the daemon, on the direct
-// Supabase path only. Without it the cloud has no agent status and the
-// desktop draws no tag, which is the honest fallback.
+// started once, at the first heartbeat of the daemon. Written direct to
+// Supabase when this box has a session (JHT_SUPABASE_DIRECT), otherwise
+// through PATCH /api/team-state with the box's token, as the heartbeat.
+// The source is the TUI team's panes, or with JHT_API_TRACES_DIR the JHT API
+// executor's traces (agents-status-traces.js; the test box, own account).
+// JHT_AGENTS_STATUS=0 turns it off.
 let stopAgentsStatus = null;
-function ensureAgentsStatusPublisher(reader) {
+function ensureAgentsStatusPublisher({ reader, baseUrl, token }) {
   if (stopAgentsStatus || process.env.JHT_AGENTS_STATUS === '0') return;
+  const tracesDir = process.env.JHT_API_TRACES_DIR;
+  const source = tracesDir ? 'api' : 'tui';
   stopAgentsStatus = startAgentsStatusPublisher({
-    reader: createAgentsStatusReader({ jhtHome: JHT_HOME }),
-    write: (map) => reader.patchTeamState(agentsStatusPatch('tui', map)),
+    reader: tracesDir ? createApiAgentsStatusReader({ logsDir: tracesDir }) : createAgentsStatusReader({ jhtHome: JHT_HOME }),
+    write: agentsStatusWriter({
+      source,
+      direct: reader,
+      route: (body) => apiCall('PATCH', baseUrl, token, '/api/team-state', body),
+    }),
     log,
   });
 }
