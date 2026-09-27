@@ -49,13 +49,17 @@ export function isAppHref(href: string): boolean {
 }
 
 /** Goes to a web path (`/positions/42?tab=cv`) inside the app. */
-export function navigate(href: string, { replace = false }: { replace?: boolean } = {}): void {
+export function navigate(
+  href: string,
+  { replace = false, scroll = true }: { replace?: boolean; scroll?: boolean } = {},
+): void {
   const target = "#" + (href.startsWith("#") ? href.slice(1) : href);
   if (replace) window.history.replaceState(window.history.state, "", target);
   else window.history.pushState(window.history.state, "", target);
   // pushState/replaceState do not fire hashchange.
   sync();
-  window.scrollTo?.(0, 0);
+  // Next's `{ scroll: false }`: a filter change keeps the list where it was.
+  if (scroll) window.scrollTo?.(0, 0);
 }
 
 /**

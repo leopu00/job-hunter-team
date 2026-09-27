@@ -10,6 +10,11 @@ import Shell from "./Shell";
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
 // The real map needs WebGL, which jsdom has not: the shell only has to route to it.
 vi.mock("../pages/map", () => ({ default: () => <h1>Mappa</h1> }));
+// The real position page runs the web's page (pages/positions/positions.test.tsx):
+// here it only has to receive the route's id.
+vi.mock("../pages/position", () => ({
+  default: ({ params }: { params: Record<string, string> }) => <h1>Posizione {params.id}</h1>,
+}));
 vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),
@@ -53,7 +58,7 @@ describe("Shell", () => {
     const links = await screen.findAllByRole("link", { name: /Ruolo sintetico 11/ });
     await user.click(links[0]);
     expect(currentLocation().path).toBe("/positions/pos-11");
-    expect(await screen.findByRole("heading", { name: "Posizione" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Posizione pos-11" })).toBeInTheDocument();
   });
 
   it("asks the page for fresh data from the navbar", async () => {
