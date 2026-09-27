@@ -30,14 +30,13 @@ export function sceneBounds(layout: OfficeLayout): Rect {
 }
 
 /**
- * What the camera may show: the whole world (FurnitureDefs.WORLD, the box
- * with the dark band outside it), as Godot's FreeCamera limits, and the
- * backdrop if it ever reaches past it.
+ * What the camera may show: only what is drawn, the floor and the backdrop
+ * behind it (sceneBounds). Godot's FreeCamera limits are the whole world,
+ * with the dark band outside the floor; in the desktop that band read as
+ * margins at the sides (the operator, 27/09), so the camera covers the drawn
+ * office and never shows a void: the smallest zoom fills the view on both
+ * axes, what is past the edge is reached by panning.
  */
 export function cameraBounds(layout: OfficeLayout): Rect {
-  const a = layout.world;
-  const b = sceneBounds(layout);
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+  return sceneBounds(layout);
 }

@@ -16,6 +16,8 @@ vi.mock("../pages/map", () => ({ default: () => <h1>Mappa</h1> }));
 vi.mock("../pages/position", () => ({
   default: ({ params }: { params: Record<string, string> }) => <h1>Posizione {params.id}</h1>,
 }));
+// The real office needs WebGL too: here only where the shell puts it.
+vi.mock("../pages/office", () => ({ default: () => <h1>Ufficio</h1> }));
 vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),
@@ -80,6 +82,25 @@ describe("Shell", () => {
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
     expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget", "Ufficio"]);
+  });
+
+  it("gives the office the whole window under the navbar, and leaves every other page in the web's MainChrome", async () => {
+    navigate("/office", { replace: true });
+    const { unmount } = render(<Shell />);
+    const office = await screen.findByRole("heading", { name: "Ufficio" });
+    const bleed = office.closest("main")!;
+    expect(bleed).toHaveAttribute("data-testid", "full-bleed");
+    expect(bleed.className).not.toMatch(/max-w|px-|py-/);
+    const column = bleed.parentElement!;
+    expect(column.style.height).toBe("calc(100svh / var(--zoom, 1))");
+    expect(column.style.overflow).toBe("hidden");
+    unmount();
+
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+    const dashboard = await screen.findByRole("heading", { name: "Dashboard" });
+    expect(dashboard.closest("main")).not.toHaveAttribute("data-testid", "full-bleed");
+    expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path)).toEqual(["/office"]);
   });
 
   it.each(["/team", "/team/log", "/team/scout", "/team/analista", "/team/scorer", "/team/scrittore", "/team/critico"])(
