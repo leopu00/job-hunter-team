@@ -990,6 +990,31 @@ interface QueueGate {
 const LAST_VERIFIED_SQL = "MAX(COALESCE(p.last_checked, ''), COALESCE(p.last_open_check, ''))";
 
 /** `_emit_disabled_queue`: a queue the policy turned off is a state, not an empty queue. */
+/**
+ * The queues of the user's requests the Analista serves (RULE-14), each with
+ * its condition, shared by the queues themselves and by the reminder under an
+ * empty `next-for-analista` (db_query.py's USER_REQUEST_QUEUES): with one
+ * Analista and nothing new, no one served them.
+ */
+const GEOCODING_WHERE = "p.geocode_requested = 1";
+const RECHECK_WHERE = "p.recheck_requested = 1 AND (p.last_open_check IS NULL OR p.last_open_check < p.recheck_requested_at)";
+const SALARY_PRECISE_WHERE = "p.salary_precise_requested = 1 AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')";
+const USER_REQUEST_QUEUES: Array<[string, string]> = [
+  ["next-for-geocoding", GEOCODING_WHERE],
+  ["next-for-recheck", RECHECK_WHERE],
+  ["next-for-salary-precise", SALARY_PRECISE_WHERE],
+];
+
+/** The non-empty queues of the user's requests, with how many each holds. */
+function waitingUserRequests(db: Database): Array<[string, number]> {
+  const waiting: Array<[string, number]> = [];
+  for (const [queueName, where] of USER_REQUEST_QUEUES) {
+    const n = Number(select(db, `SELECT COUNT(*) AS n FROM positions p WHERE ${where}`, []).rows[0]!["n"]);
+    if (n) waiting.push([queueName, n]);
+  }
+  return waiting;
+}
+
 function disabledQueue(role: string, label: string, message: string, asJson: boolean, print: (line?: string) => void): void {
   if (asJson) {
     print(pyJson({ queue: role, label, enabled: false, total: 0, shown: 0, limit: null, rows: [] }, { ensureAscii: false }));
@@ -1167,7 +1192,7 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
             SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.geocode_requested = 1
+            WHERE ${GEOCODING_WHERE}
             ORDER BY p.geocode_requested_at ASC
             LIMIT ?
         `;
@@ -1177,9 +1202,7 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
             SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.recheck_requested = 1
-              AND (p.last_open_check IS NULL
-                   OR p.last_open_check < p.recheck_requested_at)
+            WHERE ${RECHECK_WHERE}
             ORDER BY p.recheck_requested_at ASC
             LIMIT ?
         `;
@@ -1205,8 +1228,7 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
             SELECT p.id, p.title, p.company, p.salary_precise_requested_at,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.salary_precise_requested = 1
-              AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')
+            WHERE ${SALARY_PRECISE_WHERE}
             ORDER BY p.salary_precise_requested_at ASC
             LIMIT ?
         `;
@@ -1229,6 +1251,10 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
   }
   if (!rows.length) {
     print(`\n${label}: none.`);
+    const waiting = role === "analista" ? waitingUserRequests(db) : [];
+    if (waiting.length) {
+      print(`User requests waiting — serve them before pausing, one position per turn: ${waiting.map(([q, n]) => `${q} (${n})`).join(", ")}.`);
+    }
     return;
   }
   const counted = shown === total ? String(total) : `showing ${shown} of ${total}`;

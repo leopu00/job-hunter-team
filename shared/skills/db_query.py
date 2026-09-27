@@ -1090,6 +1090,34 @@ def recheck_due_rows(conn, min_score=None, older_than_days=None, limit=None):
     return rows, min_score, older_than_days
 
 
+# Le code delle RICHIESTE DELL'UTENTE che l'Analista serve (RULE-14), con la
+# condizione di ciascuna: la usano le code stesse e il promemoria sotto
+# `next-for-analista` vuota, così il conto del promemoria è quello della coda.
+# Senza promemoria un team con un solo Analista non le serviva mai: la coda
+# nuova vuota voleva dire pausa, e le code on-demand le assegnava solo il
+# Capitano (2026-09-27: 123 geocoding richiesti, zero serviti).
+_GEOCODING_WHERE = "p.geocode_requested = 1"
+_RECHECK_WHERE = ("p.recheck_requested = 1 AND (p.last_open_check IS NULL "
+                  "OR p.last_open_check < p.recheck_requested_at)")
+_SALARY_PRECISE_WHERE = ("p.salary_precise_requested = 1 AND "
+                         "(p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')")
+USER_REQUEST_QUEUES = (
+    ('next-for-geocoding', _GEOCODING_WHERE),
+    ('next-for-recheck', _RECHECK_WHERE),
+    ('next-for-salary-precise', _SALARY_PRECISE_WHERE),
+)
+
+
+def waiting_user_requests(conn):
+    """[(coda, quante)] delle code di richieste dell'utente non vuote."""
+    waiting = []
+    for queue, where in USER_REQUEST_QUEUES:
+        n = conn.execute(f"SELECT COUNT(*) FROM positions p WHERE {where}").fetchone()[0]
+        if n:
+            waiting.append((queue, n))
+    return waiting
+
+
 def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                   as_json=False):
     conn = get_db()
@@ -1195,11 +1223,11 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # azzera atomicamente insieme al risultato terminale. Non filtrare su
         # office_geocoded: il bottone "Ricalcola" deve poter richiedere nuove
         # coordinate anche per una posizione già geocodificata.
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.geocode_requested = 1
+            WHERE {_GEOCODING_WHERE}
             ORDER BY p.geocode_requested_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
@@ -1213,13 +1241,11 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # burn) e NIENTE backfill automatico dello storico. "Servito" =
         # last_open_check aggiornato DOPO recheck_requested_at → esce dalla coda
         # senza azzerare il flag (una nuova richiesta sposta avanti il timestamp).
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.recheck_requested = 1
-              AND (p.last_open_check IS NULL
-                   OR p.last_open_check < p.recheck_requested_at)
+            WHERE {_RECHECK_WHERE}
             ORDER BY p.recheck_requested_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
@@ -1261,12 +1287,11 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         # dashboard/Telegram → salary_precise_requested = 1 (viaggia nel sync). L'analista
         # produce il breakdown preciso (azienda + media web + tasse + NETTO) in
         # salary_precise. Processa SOLO i flaggati non ancora prodotti.
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.salary_precise_requested_at,
                    COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.salary_precise_requested = 1
-              AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')
+            WHERE {_SALARY_PRECISE_WHERE}
             ORDER BY p.salary_precise_requested_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
@@ -1434,7 +1459,12 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
         conn.close()
         return
 
+    waiting = (waiting_user_requests(conn)
+               if role == 'analista' and not rows and not as_json else [])
     _emit_queue(conn, role, label, rows, lim, as_json)
+    if waiting:
+        print("User requests waiting — serve them before pausing, one position "
+              "per turn: " + ", ".join(f"{q} ({n})" for q, n in waiting) + ".")
 
 
 def query_application(position_id):

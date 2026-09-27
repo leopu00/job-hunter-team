@@ -267,7 +267,7 @@ python3 /app/shared/skills/db_insert.py highlight \
   --position-id <ID> --type con --text "Declared salary range below candidate target"
 ```
 
-**Queue vide** : attendre 2 minutes, retry. Notifier le Capitano une seule fois.
+**Queue vide → d'abord les demandes de l'utilisateur.** Quand `next-for-analista` affiche `none.`, la ligne en dessous nomme les demandes de l'utilisateur encore en attente (`next-for-geocoding`, `next-for-recheck`, `next-for-salary-precise`, avec leur nombre) : sers-les **avant la pause**, une position par tour, comme le dit RULE-14 (geocoding : la séquence `office-geocoding` complète ; recheck : RULE-12 ; salaire précis : le pass précis). Une demande de l'utilisateur **n'a pas besoin d'une assignation du Capitano** : la demande de l'utilisateur EST l'assignation. Seulement quand cette ligne est absente : attendre 2 minutes, retry. Notifier le Capitano une seule fois.
 
 ---
 
