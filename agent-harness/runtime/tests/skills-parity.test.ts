@@ -25,6 +25,7 @@ import { sanitizeFeedbackDisplay } from "../src/parity/skills/feedback-display.t
 import { createFeedbackQueryTool } from "../src/parity/skills/feedback-query.ts";
 import { createScoutCoordTool } from "../src/parity/skills/scout-coord.ts";
 import type { ToolHandler } from "../src/tools/registry.ts";
+import { crossSecondBoundary } from "./helpers/clock.ts";
 
 const SKILLS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "shared", "skills");
 const HAS_PYTHON = spawnSync("python3", ["--version"]).status === 0;
@@ -458,31 +459,40 @@ describe("scout_coord and the role's own name (T9)", () => {
 });
 
 describe.skipIf(!HAS_PYTHON)("feedback_query recent and themes ↔ feedback_query.py (T15)", () => {
-  /** "YYYY-MM-DD HH:MM:SS", `days` before now: what SQLite's CURRENT_TIMESTAMP writes. */
-  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().replace("T", " ").slice(0, 19);
+  /** "YYYY-MM-DD HH:MM:SS", `days` before `now`: what SQLite's CURRENT_TIMESTAMP writes. */
+  const ago = (now: number, days: number) => new Date(now - days * 86_400_000).toISOString().replace("T", " ").slice(0, 19);
 
-  function seed(path: string) {
+  /**
+   * Seeds one of the two twins the tests compare. The time is FIXED by the
+   * caller, once for both: a seed that read the clock itself gave the twins
+   * different `created_at` when the second ticked between them, and the JSON
+   * of the two sides differed on nothing the code did (tests/helpers/clock.ts).
+   */
+  function seed(path: string, now: number) {
     const db = openJobsDb(path);
     for (const id of [1, 2, 3, 4, 5, 6]) db.prepare("INSERT INTO positions (id, title, company) VALUES (?, ?, ?)").run(id, `P${id}`, "Acme");
     const add = db.prepare(
       "INSERT INTO position_feedback (position_id, action, reason, comment, score, direction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
-    add.run(1, "dislike", "troppo senior", "Richiesta troppo seniore — Lead role, see https://acme.example/x", 2, "less_like_this", ago(2));
-    add.run(2, "dislike", "Troppo Senior!", null, null, null, ago(3));
-    add.run(3, "hide", "too senior for me", "stipendio basso", null, null, ago(4));
-    add.run(3, "dislike", "stipendio troppo basso", null, 1, null, ago(1));
-    add.run(4, "like", "ottimo stack, remoto", "token=abc123 /home/me/notes.md", 5, "more_like_this", ago(5));
-    add.run(5, "dislike", "stipendio basso", null, null, null, ago(6));
-    add.run(5, "clear", null, null, null, null, ago(0.5)); // the vote on #5 was withdrawn
-    add.run(6, "dislike", "troppo senior", null, null, null, ago(45)); // outside a 30-day window
+    add.run(1, "dislike", "troppo senior", "Richiesta troppo seniore — Lead role, see https://acme.example/x", 2, "less_like_this", ago(now, 2));
+    add.run(2, "dislike", "Troppo Senior!", null, null, null, ago(now, 3));
+    add.run(3, "hide", "too senior for me", "stipendio basso", null, null, ago(now, 4));
+    add.run(3, "dislike", "stipendio troppo basso", null, 1, null, ago(now, 1));
+    add.run(4, "like", "ottimo stack, remoto", "token=abc123 /home/me/notes.md", 5, "more_like_this", ago(now, 5));
+    add.run(5, "dislike", "stipendio basso", null, null, null, ago(now, 6));
+    add.run(5, "clear", null, null, null, null, ago(now, 0.5)); // the vote on #5 was withdrawn
+    add.run(6, "dislike", "troppo senior", null, null, null, ago(now, 45)); // outside a 30-day window
     db.close();
   }
 
   it("prints the script's JSON for every flag the Scorer and the Mentor use", async () => {
     const pyDb = join(root, "py", "jobs.db");
     const tsDb = join(root, "ts", "jobs.db");
-    seed(pyDb);
-    seed(tsDb);
+    // One instant for both twins, and the second crossed between them on purpose.
+    const now = Date.now();
+    seed(pyDb, now);
+    crossSecondBoundary();
+    seed(tsDb, now);
     const db = openJobsDb(tsDb);
     const tool = createFeedbackQueryTool({ db: () => db, jhtHome });
     const ids = "1,2,3,4,5,6,99";
@@ -513,8 +523,11 @@ describe.skipIf(!HAS_PYTHON)("feedback_query recent and themes ↔ feedback_quer
   it("takes an id as the SCORER's prompt writes it: one value or a list, text or number (T22)", async () => {
     const pyDb = join(root, "py", "jobs.db");
     const tsDb = join(root, "ts", "jobs.db");
-    seed(pyDb);
-    seed(tsDb);
+    // One instant for both twins, and the second crossed between them on purpose.
+    const now = Date.now();
+    seed(pyDb, now);
+    crossSecondBoundary();
+    seed(tsDb, now);
     const db = openJobsDb(tsDb);
     const tool = createFeedbackQueryTool({ db: () => db, jhtHome });
     const base = { command: "themes", legacy_ids: "1,2,3,4,5,6,99", min_positions: 1, top: 10 };
