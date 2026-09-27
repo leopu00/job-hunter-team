@@ -154,7 +154,7 @@ describe("the loops that write both twins", () => {
       for (const match of source.matchAll(loop)) {
         checked++;
         let body = match[0];
-        if (match[2].trimEnd().endsWith("{")) {
+        if ((match[2] ?? "").trimEnd().endsWith("{")) {
           const rest = source.slice(match.index! + match[0].length);
           const end = new RegExp(String.raw`^${match[1]}\}`, "m").exec(rest);
           body += end === null ? rest : rest.slice(0, end.index);
