@@ -18,9 +18,15 @@
  * - **The exit code is part of the result.** Output alone does not say whether
  *   a command failed; many programs write to stderr when all is well.
  *
+ * And one boundary: the command runs inside the operating system's sandbox
+ * (`sandbox.ts`) — writes only in the working and temporary folders, no
+ * credential files, the internet but not this machine's local services —
+ * without asking anyone anything. Where there is no sandbox it runs without
+ * one, and says so in every result's details.
+ *
  * Beside the text, each run reports structured details for the trace: exit
- * code, signal, output sizes and — where `/usr/bin/time` is available — the
- * CPU time and peak memory the command used.
+ * code, signal, output sizes, the sandbox and what it leaves open, and — where
+ * `/usr/bin/time` is available — the CPU time and peak memory the command used.
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -31,9 +37,12 @@ import { z } from "zod";
 
 import type { CommandResources } from "../core/trace.ts";
 import type { ToolHandler, ToolExecution } from "./registry.ts";
+import type { Sandbox } from "./sandbox.ts";
 
 export interface BashToolOptions {
   workdir: string;
+  /** The boundary commands run in. Absent means none, and every result says so. */
+  sandbox?: Sandbox;
   defaultTimeoutMs?: number;
   maxTimeoutMs?: number;
 }
@@ -51,6 +60,14 @@ const SECRET_VALUE = /[a-z][a-z0-9+.-]*:\/\/[^\s/@:]*:[^\s/@]+@/i;
 export function createBashTool(options: BashToolOptions): ToolHandler {
   const defaultTimeout = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxTimeout = options.maxTimeoutMs ?? MAX_TIMEOUT_MS;
+  const sandbox = options.sandbox;
+  const boundary =
+    sandbox && sandbox.kind !== "none"
+      ? " Commands run in a sandbox: they can write only inside the working folder and $TMPDIR, " +
+        "can reach the internet over IPv4 but not services on this machine (localhost, local sockets such as tmux), " +
+        "and cannot read credential files (.env, SSH and cloud keys, logins). " +
+        "A write elsewhere fails with 'Operation not permitted'; keep your files in the working folder."
+      : "";
 
   return {
     spec: {
@@ -59,7 +76,8 @@ export function createBashTool(options: BashToolOptions): ToolHandler {
         "Run a shell command with bash and return its exit code, stdout and stderr. " +
         "The command starts in the working folder; use absolute paths or cd to go elsewhere. " +
         "It has no stdin and is killed after timeout_ms (default 120000). " +
-        "Prefer read_file, glob and grep for reading and searching files.",
+        "Prefer read_file, glob and grep for reading and searching files." +
+        boundary,
       schema: z
         .object({
           command: z.string().min(1).max(10_000),
@@ -75,22 +93,28 @@ export function createBashTool(options: BashToolOptions): ToolHandler {
 
     execute(args) {
       const { command, timeout_ms } = args as { command: string; timeout_ms?: number };
-      return run(command, options.workdir, timeout_ms ?? defaultTimeout);
+      return run(command, options.workdir, timeout_ms ?? defaultTimeout, sandbox);
     },
   };
 }
 
-function run(command: string, cwd: string, timeoutMs: number): Promise<ToolExecution> {
+function run(command: string, cwd: string, timeoutMs: number, sandbox: Sandbox | undefined): Promise<ToolExecution> {
   return new Promise((resolvePromise) => {
     const meter = TIME_FLAGS ? mkdtempSync(join(tmpdir(), "jht-api-time-")) : undefined;
     const meterFile = meter ? join(meter, "rusage") : undefined;
-    const [bin, argv] = meterFile && TIME_FLAGS
-      ? ["/usr/bin/time", [...TIME_FLAGS, "-o", meterFile, "/bin/bash", "-c", command]]
-      : ["/bin/bash", ["-c", command]];
+    const shell = ["/bin/bash", "-c", command];
+    const boxed = sandbox ? sandbox.wrap(shell) : shell;
+    // `time` stays outside the sandbox: its report is written outside the writable roots.
+    const [bin = "/bin/bash", ...argv] = meterFile && TIME_FLAGS ? ["/usr/bin/time", ...TIME_FLAGS, "-o", meterFile, ...boxed] : boxed;
+    const sandboxDetails = {
+      sandbox: sandbox?.kind ?? "none",
+      ...(sandbox?.kind === "none" || !sandbox ? { sandboxMissing: sandbox?.missing ?? "no sandbox was configured" } : {}),
+      ...(sandbox?.gaps.length ? { sandboxGaps: sandbox.gaps } : {}),
+    };
     const startedAt = Date.now();
     const child = spawn(bin, argv, {
       cwd,
-      env: scrubEnv(process.env),
+      env: { ...scrubEnv(process.env), ...sandbox?.env },
       stdio: ["ignore", "pipe", "pipe"],
       // Its own process group, so a timeout can kill everything it started.
       detached: true,
@@ -110,7 +134,7 @@ function run(command: string, cwd: string, timeoutMs: number): Promise<ToolExecu
     child.on("error", (error) => {
       clearTimeout(timer);
       if (meter) rmSync(meter, { recursive: true, force: true });
-      resolvePromise({ ok: false, content: `The command could not be started: ${error.message}` });
+      resolvePromise({ ok: false, content: `The command could not be started: ${error.message}`, details: sandboxDetails });
     });
 
     child.on("close", (code, signal) => {
@@ -138,6 +162,7 @@ function run(command: string, cwd: string, timeoutMs: number): Promise<ToolExecu
           stdoutBytes: stdout.bytes(),
           stderrBytes: stderr.bytes(),
           resources,
+          ...sandboxDetails,
         },
       });
     });

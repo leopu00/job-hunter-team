@@ -102,7 +102,7 @@ describe("npm run role -- --role mantenitore (T41)", () => {
       ["send_message", "failed"],
       ["send_message", "accepted"],
       ["maintainer_logbook", "accepted"],
-      // The shell, which no policy of this runtime stops (measured 23/09).
+      // The shell: the command runs, and the sandbox decides what it reaches.
       ["bash", "accepted"],
     ]);
     const results = finished.map((r) => String(r["result"]));
@@ -131,14 +131,22 @@ describe("npm run role -- --role mantenitore (T41)", () => {
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     // No tool archived, pruned or swept: the files a TUI sweep would have taken
-    // are untouched — except the one the SHELL removed in the last turn, which
-    // is the measurement, not the design (docs/parity.md).
+    // are untouched. The last turn reaches for the shell: in the sandbox the
+    // team's logs are not the role's folder and `rm` fails; where no sandbox
+    // starts (the trace says which), the shell deletes it, as measured on 23/09.
+    const sandbox = (records.find((r) => r.type === "run_started")?.["sandbox"] as { kind: string } | undefined)?.kind;
+    expect(sandbox).toBeDefined();
     for (const [name, body] of Object.entries(sweepable)) {
-      if (name === "vitals.jsonl") continue;
+      if (name === "vitals.jsonl" && sandbox === "none") continue;
       expect(await readFile(join(logs, name), "utf8"), name).toBe(body);
     }
-    expect(existsSync(join(logs, "vitals.jsonl")), "the shell deleted it: no mount and no allowlist stood in the way").toBe(false);
-    expect(String(finished.at(-1)?.["result"])).toContain("rc=0");
+    if (sandbox === "none") {
+      expect(existsSync(join(logs, "vitals.jsonl")), "no sandbox: the shell deleted it").toBe(false);
+      expect(String(finished.at(-1)?.["result"])).toContain("rc=0");
+    } else {
+      expect(String(finished.at(-1)?.["result"])).toMatch(/Operation not permitted|Read-only file system/);
+      expect(String(finished.at(-1)?.["result"])).toContain("rc=1");
+    }
 
     // One line for the next round, in the team's folder — the only thing it wrote.
     const entries = (await readFile(join(logs, "mantenitore-logbook.jsonl"), "utf8")).trim().split("\n");

@@ -1,0 +1,392 @@
+/**
+ * The kernel's sandbox around `bash` (src/tools/sandbox.ts), ported from Home
+ * Hunter Team. The profile and argument tests run everywhere; the escapes run
+ * against the sandbox this machine really has — Seatbelt on macOS, bubblewrap
+ * on Linux where it can start — and each one must fail.
+ */
+
+import { spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { createServer, type AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { TurnAccount } from "../src/core/agent-loop.ts";
+import { MockProvider } from "../src/core/provider/mock.ts";
+import { createBashTool } from "../src/tools/bash.ts";
+import { bubblewrapArgs, createSandbox, seatbeltProfile, type Sandbox } from "../src/tools/sandbox.ts";
+import { buildToolkit } from "../src/tools/toolkit.ts";
+
+const CONTEXT = { account: new TurnAccount(Date.now), remainingMs: () => 60_000 };
+
+describe("seatbeltProfile", () => {
+  const profile = seatbeltProfile({
+    writableRoots: ["/work", "/private/tmp/jht-api-sandbox-x"],
+    home: "/Users/me",
+    protectedPaths: ["/etc/jht/mcp.json"],
+  });
+
+  it("denies every write, then allows the writable roots and the devices", () => {
+    expect(profile).toMatch(/\(deny file-write\*\)\n\(allow file-write\*\n {2}\(subpath "\/work"\)\n {2}\(subpath "\/private\/tmp\/jht-api-sandbox-x"\)/);
+    expect(profile).toContain('(literal "/dev/null")');
+  });
+
+  it("shuts the credential folders, files and names of paths.ts, and the run's own secrets", () => {
+    expect(profile).toContain('(subpath "/Users/me/.ssh")');
+    expect(profile).toContain('(subpath "/Users/me/.config/gcloud")');
+    expect(profile).toContain('(subpath "/Users/me/.config/gh")');
+    expect(profile).toContain('(literal "/Users/me/.codex/auth.json")');
+    expect(profile).toContain('(literal "/etc/jht/mcp.json")');
+    expect(profile).toContain(String.raw`(regex #"/\.env(\.[^/]+)?$")`);
+    expect(profile).toContain(String.raw`(regex #"/credentials(\.json)?$")`);
+    expect(profile).toContain(String.raw`(regex #"-key\.txt$")`);
+  });
+
+  it("lets .env.example back in after the rule that shuts .env*, since later rules win", () => {
+    const allow = profile.indexOf(String.raw`(allow file-read* (regex #"/\.env\.example$"))`);
+    expect(allow).toBeGreaterThan(profile.indexOf("(deny file-read* file-write*"));
+  });
+
+  it("shuts key files under the home only, so the system's CA bundle stays readable", () => {
+    expect(profile).toContain(String.raw`(regex #"^/Users/me/.*\.(pem|key|p12|pfx|keychain-db)$")`);
+    expect(profile).not.toMatch(/regex #"\\\.\(pem/);
+  });
+
+  it("does not shut *token* names: Python's own token.py and tokenize.py would go with them", () => {
+    expect(profile).not.toMatch(/token/i);
+  });
+
+  it("shuts unix sockets but the DNS resolver's, IPv4 loopback and IPv6, as separate rules", () => {
+    const network = profile.split("\n").filter((line) => line.includes("network-outbound"));
+    expect(network).toEqual([
+      "(deny network-outbound (remote unix-socket))",
+      '(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))',
+      '(deny network-outbound (remote ip4 "localhost:*"))',
+      '(deny network-outbound (remote ip6 "*:*"))',
+    ]);
+    // `ip` next to `ip6` stops Seatbelt matching IPv4 loopback: never both.
+    expect(profile).not.toContain("(remote ip ");
+  });
+});
+
+describe("bubblewrapArgs", () => {
+  const present = new Set(["/home/me/.ssh", "/home/me/.config/gh", "/home/me/.netrc", "/work/.env", "/etc/jht/mcp.json"]);
+  const args = bubblewrapArgs({
+    writableRoots: ["/work", "/tmp/jht-api-sandbox-x"],
+    home: "/home/me",
+    protectedPaths: ["/etc/jht/mcp.json"],
+    workdir: "/work",
+    exists: (path) => present.has(path),
+    listDir: () => [".env", ".env.example", "notes.md"],
+  });
+  const joined = args.join(" ");
+
+  it("binds the root read-only and the writable roots read-write, network shared", () => {
+    expect(joined).toContain("--ro-bind / /");
+    expect(joined).toContain("--bind /work /work");
+    expect(joined).toContain("--bind /tmp/jht-api-sandbox-x /tmp/jht-api-sandbox-x");
+    expect(joined).not.toContain("--unshare-net");
+    expect(joined).not.toContain("--unshare-all");
+  });
+
+  it("masks the credential paths that exist, and only those", () => {
+    expect(joined).toContain("--tmpfs /home/me/.ssh");
+    expect(joined).toContain("--tmpfs /home/me/.config/gh");
+    expect(joined).toContain("--ro-bind /dev/null /home/me/.netrc");
+    expect(joined).toContain("--ro-bind /dev/null /work/.env");
+    expect(joined).toContain("--ro-bind /dev/null /etc/jht/mcp.json");
+    expect(joined).not.toContain(".aws");
+    expect(joined).not.toContain(".env.example");
+  });
+
+  it("masks after binding, so a mask inside a writable root still holds", () => {
+    expect(args.indexOf("/work")).toBeLessThan(args.lastIndexOf("/work/.env"));
+  });
+
+  it("hides the socket folders and the Docker socket, and binds a writable root under /tmp back on top", () => {
+    const sockets = new Set(["/tmp", "/run/user/1000", "/var/run/docker.sock"]);
+    const withSockets = bubblewrapArgs({
+      writableRoots: ["/tmp/jht-api-sandbox-x"],
+      home: "/home/me",
+      protectedPaths: [],
+      workdir: "/work",
+      uid: 1000,
+      exists: (path) => sockets.has(path),
+      listDir: () => [],
+    });
+    const line = withSockets.join(" ");
+    expect(line).toContain("--tmpfs /tmp");
+    expect(line).toContain("--tmpfs /run/user/1000");
+    expect(line).toContain("--ro-bind /dev/null /var/run/docker.sock");
+    expect(withSockets.indexOf("--tmpfs")).toBeLessThan(withSockets.indexOf("--bind"));
+  });
+});
+
+describe("createSandbox — gaps", () => {
+  it("declares what bubblewrap cannot shut: loopback above all", () => {
+    const sandbox = createSandbox({ workdir: tmpdir(), platform: "linux", available: () => true });
+    try {
+      expect(sandbox.kind).toBe("bubblewrap");
+      expect(sandbox.gaps.join("\n")).toMatch(/loopback .* stays reachable/);
+      expect(sandbox.gaps.join("\n")).toMatch(/local network/);
+    } finally {
+      sandbox.dispose();
+    }
+  });
+
+  it("declares the local network as Seatbelt's gap, and nothing it shuts", () => {
+    const sandbox = createSandbox({ workdir: tmpdir(), platform: "darwin", available: () => true });
+    try {
+      expect(sandbox.gaps).toHaveLength(1);
+      expect(sandbox.gaps[0]).toMatch(/local network/);
+    } finally {
+      sandbox.dispose();
+    }
+  });
+});
+
+describe("createSandbox — fallback", () => {
+  it("runs without a sandbox on an OS it has none for, and says why", () => {
+    const sandbox = createSandbox({ workdir: "/w", platform: "win32" });
+    expect(sandbox.kind).toBe("none");
+    expect(sandbox.missing).toContain("win32");
+    expect(sandbox.wrap(["/bin/bash", "-c", "true"])).toEqual(["/bin/bash", "-c", "true"]);
+  });
+
+  it("says why when the sandbox program cannot start", () => {
+    const sandbox = createSandbox({ workdir: "/w", platform: "linux", available: () => false });
+    expect(sandbox).toMatchObject({ kind: "none", missing: expect.stringContaining("bwrap") });
+  });
+
+  it("puts the fallback in every bash result's details", async () => {
+    const workdir = await realpath(await mkdtemp(join(tmpdir(), "jht-api-nobox-")));
+    try {
+      const bash = createBashTool({ workdir, sandbox: createSandbox({ workdir, platform: "win32" }) });
+      const result = await bash.execute({ command: "true" }, CONTEXT);
+      expect(result.details).toMatchObject({ sandbox: "none", sandboxMissing: expect.stringContaining("win32") });
+      expect(bash.spec.description).not.toContain("sandbox");
+    } finally {
+      await rm(workdir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the toolkit", () => {
+  it("gives bash the sandbox, reports it, and removes its temporary folder on close", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-kit-")));
+    try {
+      const toolkit = await buildToolkit(
+        {
+          role: "scrittore-1",
+          workdir: join(root, "agents", "scrittore-1"),
+          agentHome: join(root, "agents", "scrittore-1"),
+          apiHome: root,
+          permissionMode: "auto",
+          profile: { capabilities: { webSearch: false } },
+        } as Parameters<typeof buildToolkit>[0],
+        { provider: new MockProvider([]) },
+      );
+      const kind = createProbe().kind;
+      expect(toolkit.sandbox.kind).toBe(kind);
+      const bash = toolkit.tools.find((tool) => tool.spec.name === "bash")!;
+      await mkdir(join(root, "agents", "scrittore-1"), { recursive: true });
+      const result = await bash.execute({ command: 'echo "$TMPDIR"' }, CONTEXT);
+      expect(result.details).toMatchObject({ sandbox: kind });
+      if (kind !== "none") {
+        const tmp = /--- stdout ---\n(.+)/.exec(result.content)![1]!;
+        expect(existsSync(tmp)).toBe(true);
+        await toolkit.close();
+        expect(existsSync(tmp)).toBe(false);
+      } else {
+        expect(toolkit.sandbox.missing).toBeTruthy();
+        await toolkit.close();
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// The real boundary, on the machine that has one. Every escape below must fail;
+// what the work needs — DNS, HTTPS, python and node inside the folder — must not.
+const probe = createProbe();
+
+describe.runIf(probe.kind !== "none")(`bash in ${probe.kind}`, () => {
+  let workdir: string;
+  let outside: string;
+  let home: string;
+  let secret: string;
+  let sandbox: Sandbox;
+  const run = (command: string) => createBashTool({ workdir, sandbox }).execute({ command }, CONTEXT);
+  const has = (bin: string) => spawnSync("/bin/sh", ["-c", `command -v ${bin}`], { stdio: "ignore" }).status === 0;
+
+  beforeAll(async () => {
+    // The role's folder sits inside a parent it must not write to: `cd ..` has somewhere to go.
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "jht-api-parent-")));
+    workdir = join(parent, "agent");
+    await mkdir(workdir);
+    outside = await realpath(await mkdtemp(join(tmpdir(), "jht-api-outside-")));
+    home = await realpath(await mkdtemp(join(tmpdir(), "jht-api-home-")));
+    secret = join(outside, "mcp.json");
+    await mkdir(join(home, ".ssh"));
+    await writeFile(join(home, ".ssh", "id_ed25519"), "PRIVATE hunter2\n");
+    await writeFile(join(home, ".ssh", "config"), "Host hunter2\n");
+    await writeFile(join(workdir, ".env"), "API_KEY=hunter2\n");
+    await writeFile(join(workdir, ".env.example"), "API_KEY=\n");
+    await writeFile(join(outside, "notes.txt"), "original\n");
+    await writeFile(secret, '{"token":"hunter2"}');
+    sandbox = createSandbox({ workdir, protectedPaths: [secret], homeDir: home });
+  });
+
+  afterAll(async () => {
+    sandbox.dispose();
+    await rm(join(workdir, ".."), { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it("writes in the working folder and in $TMPDIR, and says it is sandboxed", async () => {
+    const result = await run('echo hi > note.txt && echo tmp > "$TMPDIR/scratch" && cat "$TMPDIR/scratch"');
+    expect(result).toMatchObject({ ok: true, details: { sandbox: probe.kind } });
+    expect(await readFile(join(workdir, "note.txt"), "utf8")).toBe("hi\n");
+  });
+
+  it("cannot write anywhere else: an absolute path, or cd ..", async () => {
+    for (const command of [`echo x > ${outside}/escaped.txt`, "cd .. && echo x > escaped.txt"]) {
+      const result = await run(command);
+      // bubblewrap puts an empty tmpfs over /tmp, where these folders are: a write
+      // there can land in it and vanish with the command. What counts is the disk.
+      if (probe.kind === "seatbelt") {
+        expect(result.ok, command).toBe(false);
+        expect(result.content, command).toContain("Operation not permitted");
+      }
+    }
+    expect(existsSync(join(outside, "escaped.txt"))).toBe(false);
+    expect(existsSync(join(workdir, "..", "escaped.txt"))).toBe(false);
+  });
+
+  it("cannot write through a symlink or a hard link to a file outside", async () => {
+    await run(`ln -s ${outside} out-link; echo pwned > out-link/notes.txt`);
+    await run(`ln ${outside}/notes.txt hard-notes.txt; echo pwned >> hard-notes.txt`);
+    expect(await readFile(join(outside, "notes.txt"), "utf8")).toBe("original\n");
+  });
+
+  it("cannot read a secret through a symlink or a hard link either", async () => {
+    const soft = await run(`ln -s ${secret} soft.json; cat soft.json`);
+    const hard = await run(`ln ${secret} hard.json; cat hard.json`);
+    expect(soft.content).not.toContain("hunter2");
+    expect(hard.content).not.toContain("hunter2");
+  });
+
+  it("python and node cannot write outside either", async () => {
+    const target = join(outside, "from-script.txt");
+    if (has("python3")) await run(`python3 -c 'open("${target}", "w").write("pwned")'`);
+    if (has("node")) await run(`node -e 'require("fs").writeFileSync("${target}", "pwned")'`);
+    expect(existsSync(target)).toBe(false);
+  });
+
+  it("python and node still run, and write in the working folder", async () => {
+    if (has("python3")) {
+      expect(await run(`python3 -c 'import tokenize, json; open("py.txt", "w").write("ok")' && cat py.txt`)).toMatchObject({ ok: true, content: expect.stringContaining("ok") });
+    }
+    if (has("node")) {
+      expect(await run(`node -e 'require("fs").writeFileSync("js.txt", "ok")' && cat js.txt`)).toMatchObject({ ok: true, content: expect.stringContaining("ok") });
+    }
+  });
+
+  it("cannot read ~/.ssh, the credential files, or the run's own secrets, but reads a template", async () => {
+    for (const command of ["cat ~/.ssh/id_ed25519", "cat ~/.ssh/config", "cat .env", `cat ${secret}`]) {
+      const result = await run(command.replace("~", home));
+      expect(result.ok, command).toBe(false);
+      expect(result.content, command).not.toContain("hunter2");
+    }
+    expect(await run("cat .env.example")).toMatchObject({ ok: true, content: expect.stringContaining("API_KEY=") });
+  });
+
+  it.runIf(probe.kind === "seatbelt")(
+    "cannot reach a server on this machine: unix socket, IPv4 loopback, ::1, ::ffff:127.0.0.1 or localhost",
+    async () => {
+      const socketPath = join(outside, "server.sock");
+      const hits: string[] = [];
+      const unixServer = createServer((c) => { hits.push("unix"); c.end("pwned"); }).listen(socketPath);
+      const tcp4 = createServer((c) => { hits.push("tcp4"); c.end("pwned"); });
+      const tcp6 = createServer((c) => { hits.push("tcp6"); c.end("pwned"); });
+      await Promise.all([
+        once(unixServer, "listening"),
+        new Promise<void>((resolve) => tcp4.listen(0, "127.0.0.1", resolve)),
+        new Promise<void>((resolve) => tcp6.listen(0, "::1", resolve)),
+      ]);
+      const port4 = (tcp4.address() as AddressInfo).port;
+      const port6 = (tcp6.address() as AddressInfo).port;
+      try {
+        const connect = (target: string) =>
+          `node -e 'const s=require("net").connect(${target});s.on("data",d=>{console.log("REACHED",String(d));process.exit(0)});s.on("error",e=>{console.log("refused",e.code);process.exit(1)})'`;
+        for (const target of [JSON.stringify(socketPath), `${port4},"127.0.0.1"`, `${port6},"::1"`, `${port4},"::ffff:127.0.0.1"`, `${port4},"localhost"`]) {
+          const result = await run(connect(target));
+          expect(result.content, target).not.toContain("REACHED");
+          expect(result.content, target).toContain("refused");
+        }
+        expect(hits).toEqual([]);
+      } finally {
+        unixServer.close();
+        tcp4.close();
+        tcp6.close();
+      }
+    },
+  );
+
+  it.runIf(has("tmux"))("cannot reach a tmux server: its sessions are other agents", async () => {
+    // A private server, not anyone's real one. On Linux the socket lives in /tmp, which bubblewrap hides.
+    const socket = probe.kind === "bubblewrap" ? join("/tmp", `jht-api-tmux-${process.pid}`) : join(outside, "tmux.sock");
+    expect(spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", "victim", "sleep 60"]).status).toBe(0);
+    try {
+      const result = await run(`tmux -S ${socket} ls; tmux -S ${socket} send-keys -t victim 'echo pwned' Enter`);
+      expect(result.ok).toBe(false);
+      expect(result.content).not.toContain("victim:");
+    } finally {
+      spawnSync("tmux", ["-S", socket, "kill-server"]);
+      await rm(socket, { force: true });
+    }
+  });
+
+  it("still resolves names and reads the system CA bundle, which HTTPS needs", async () => {
+    const dns = await run(`node -e 'require("dns").lookup("localhost",(e,a)=>{console.log(e?"dns-failed":"dns-ok");process.exit(e?1:0)})'`);
+    expect(dns).toMatchObject({ ok: true, content: expect.stringContaining("dns-ok") });
+    const bundle = ["/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt"].find(existsSync);
+    if (bundle) expect(await run(`head -c 1 ${bundle} >/dev/null && echo ca-ok`)).toMatchObject({ ok: true, content: expect.stringContaining("ca-ok") });
+  });
+
+  it("reaches a site over HTTPS, when this machine is online", async () => {
+    const curl = "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://example.com";
+    const online = spawnSync("/bin/sh", ["-c", curl], { encoding: "utf8" }).stdout.startsWith("2");
+    if (!online) return;
+    expect(await run(curl)).toMatchObject({ ok: true, content: expect.stringMatching(/\b2\d\d\b/) });
+    if (has("python3")) {
+      const py = await run(`python3 -c 'import urllib.request as u; print(u.urlopen("https://example.com", timeout=15).status)'`);
+      expect(py).toMatchObject({ ok: true, content: expect.stringContaining("200") });
+    }
+  });
+
+  it("reports the gaps it leaves in every result's details", async () => {
+    const gaps = (await run("true")).details?.["sandboxGaps"] as string[];
+    expect(gaps.join("\n")).toMatch(/local network/);
+    if (probe.kind === "bubblewrap") expect(gaps.join("\n")).toMatch(/loopback/);
+  });
+
+  it("removes its temporary folder when disposed", async () => {
+    const box = createSandbox({ workdir });
+    const tmp = box.env["TMPDIR"]!;
+    expect(existsSync(tmp)).toBe(true);
+    box.dispose();
+    expect(existsSync(tmp)).toBe(false);
+  });
+});
+
+function createProbe(): Sandbox {
+  const box = createSandbox({ workdir: tmpdir() });
+  box.dispose();
+  return box;
+}
