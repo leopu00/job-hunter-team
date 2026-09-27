@@ -1,7 +1,7 @@
 // Pixi 8 compiles its shaders' uniform uploads with `new Function`, which the
 // app's CSP (no 'unsafe-eval') refuses: this swaps in the eval-free versions.
 import "pixi.js/unsafe-eval";
-import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, TilingSprite, type FederatedPointerEvent } from "pixi.js";
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, TilingSprite } from "pixi.js";
 import type {
   AgentPose,
   CharacterSheet,
@@ -11,24 +11,22 @@ import type {
   OfficeScene,
   OfficeSceneOptions,
   Rect,
-  Vec,
 } from "../contract";
-import { clamp, fit, pan, zoomAt, type Camera } from "./camera";
+import { attachControls } from "./controls";
 import { feetAnchor, pickCell } from "./frames";
 import { allFurniture, sceneBounds } from "../layout-items";
 
 /**
  * The office drawn with PixiJS in the webview: the floor, the furniture and
  * the agents y-sorted together (as Godot's YSort), the handoff piles with
- * their counts, the bubbles, and a camera that pans (drag) and zooms (wheel)
- * around the pointer. What moves is the engine's business: every frame the
- * scene advances it and draws its poses; it invents nothing. A click on an
- * agent or on a pile goes to `onClick`; a drag is not a click.
+ * their counts, the bubbles, and a camera moved as in the Godot game
+ * (controls.ts: drag, trackpad, pinch, wheel, keys). What moves is the
+ * engine's business: every frame the scene advances it and draws its poses;
+ * it invents nothing. A click on an agent or on a pile goes to `onClick`; a
+ * drag is not a click.
  */
 
 const BACKGROUND = 0x0b0f14;
-/** a pointer that moved less than this between down and up clicked */
-const CLICK_SLOP = 5;
 
 export async function createOfficeScene(host: HTMLElement, options: OfficeSceneOptions): Promise<OfficeScene> {
   const { manifest, layout, engine, onClick } = options;
@@ -114,51 +112,26 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     piles.set(dept.id, label);
   }
 
-  // Camera, pan and zoom.
-  let view = { w: app.screen.width, h: app.screen.height };
+  // Camera: the controls (controls.ts) move it, the world follows.
   const bounds = sceneBounds(layout);
-  let camera: Camera = fit(view, bounds);
-  const applyCamera = () => {
-    world.scale.set(camera.scale);
-    world.position.set(camera.x, camera.y);
-  };
-  applyCamera();
-
-  let drag: { start: Vec; last: Vec; moved: boolean } | null = null;
-  app.stage.eventMode = "static";
-  app.stage.hitArea = app.screen;
-  app.stage.on("pointerdown", (e: FederatedPointerEvent) => {
-    drag = { start: { x: e.global.x, y: e.global.y }, last: { x: e.global.x, y: e.global.y }, moved: false };
+  const floorCentre = { x: layout.floor.x + layout.floor.w / 2, y: layout.floor.y + layout.floor.h / 2 };
+  // The canvas takes the pointer and the wheel, not the page around it.
+  app.canvas.style.touchAction = "none";
+  const controls = attachControls(app.canvas, {
+    view: { w: app.screen.width, h: app.screen.height },
+    bounds,
+    start: floorCentre,
+    onChange: (camera) => {
+      world.scale.set(camera.scale);
+      world.position.set(camera.x, camera.y);
+    },
   });
-  app.stage.on("globalpointermove", (e: FederatedPointerEvent) => {
-    if (!drag) return;
-    const now = { x: e.global.x, y: e.global.y };
-    if (Math.hypot(now.x - drag.start.x, now.y - drag.start.y) > CLICK_SLOP) drag.moved = true;
-    if (drag.moved) {
-      camera = pan(camera, { x: now.x - drag.last.x, y: now.y - drag.last.y }, view, bounds);
-      applyCamera();
-    }
-    drag.last = now;
-  });
-  const endDrag = () => {
-    // cleared after the tap handlers of this same pointerup have run
-    setTimeout(() => (drag = null), 0);
-  };
-  app.stage.on("pointerup", endDrag);
-  app.stage.on("pointerupoutside", endDrag);
-  const wheel = (e: WheelEvent) => {
-    e.preventDefault();
-    const box = app.canvas.getBoundingClientRect();
-    camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), { x: e.clientX - box.left, y: e.clientY - box.top }, view, bounds);
-    applyCamera();
-  };
-  app.canvas.addEventListener("wheel", wheel, { passive: false });
 
   function clickable(node: Container, action: () => void) {
     node.eventMode = "static";
     node.cursor = "pointer";
     node.on("pointertap", () => {
-      if (!drag?.moved) action();
+      if (!controls.dragging()) action();
     });
   }
 
@@ -238,7 +211,9 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   };
 
   app.ticker.add((ticker) => {
-    engine.step(Math.min(ticker.deltaMS / 1000, 0.1));
+    const dt = Math.min(ticker.deltaMS / 1000, 0.1);
+    controls.step(dt);
+    engine.step(dt);
     const poses = engine.poses();
     drawAgents(poses);
     drawBubbles(poses);
@@ -249,12 +224,10 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     resize(width: number, height: number) {
       if (width <= 0 || height <= 0) return;
       app.renderer.resize(width, height);
-      view = { w: width, h: height };
-      camera = clamp(camera, view, bounds);
-      applyCamera();
+      controls.resize({ w: width, h: height });
     },
     destroy() {
-      app.canvas.removeEventListener("wheel", wheel);
+      controls.destroy();
       app.destroy(true, { children: true });
     },
   };
