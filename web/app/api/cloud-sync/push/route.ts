@@ -688,6 +688,11 @@ export async function POST(req: NextRequest) {
   };
   const legacyToUuid = new Map<number, string>();
   const appliedPositionIds = new Set<number>();
+  // The positions that arrived as applied in the positions part of this
+  // request. The box sends one table per request, positions before
+  // applications (cli cloud.js performPush): their application is in a later
+  // request, or already on the cloud. See the confirmation below.
+  const appliedByPosition = new Set<number>();
   // companies.id locale (int) → companies.id cloud (UUID). Popolata
   // dall'upsert companies, consumata dal mapping positions.company_id.
   const companyLegacyToUuid = new Map<number, string>();
@@ -796,7 +801,7 @@ export async function POST(req: NextRequest) {
       .filter((p) => typeof p.id === "number" && p.title && p.company)
       .map((p) => {
         const status = normalizePositionStatus(p.status);
-        if (status === "applied") appliedPositionIds.add(p.id);
+        if (status === "applied") appliedByPosition.add(p.id);
         return {
           user_id: userId,
           legacy_id: p.id,
@@ -1206,6 +1211,54 @@ export async function POST(req: NextRequest) {
       }
       applicationReceiptIds = receivedReceiptIds as string[];
       applicationsUpserted = receipts.length;
+    }
+  }
+
+  // A position that came applied without its application in this request is
+  // published only if the cloud already holds that application complete (as
+  // the RPC below checks it). Otherwise it waits, unpublished (its status was
+  // deferred above), for the applications request, which confirms it. Asking
+  // the RPC for it here failed with incomplete_application whenever the
+  // application came in the next request, which is always, since the box
+  // sends positions first: every position the team marked applied, and the
+  // 47 of a first push, ended in quarantine for a state the next request
+  // made true.
+  const awaiting = [...appliedByPosition].filter(
+    (legacyId) => !appliedPositionIds.has(legacyId),
+  );
+  if (awaiting.length > 0) {
+    const uuids = awaiting
+      .map((legacyId) => legacyToUuid.get(legacyId))
+      .filter((uuid): uuid is string => typeof uuid === "string");
+    const { data: ready, error } = uuids.length
+      ? await admin
+          .from("applications")
+          .select("position_id, status, applied, applied_at, applied_via")
+          .eq("user_id", userId)
+          .in("position_id", uuids)
+      : { data: [], error: null };
+    if (error) {
+      return sanitizedError(error, {
+        status: 500,
+        scope: "cloud-sync/push",
+        publicMessage: "applied_positions_lookup_failed",
+      });
+    }
+    const complete = new Set(
+      (ready ?? [])
+        .filter(
+          (a: any) =>
+            a.status === "applied" &&
+            a.applied === true &&
+            a.applied_at != null &&
+            typeof a.applied_via === "string" &&
+            a.applied_via.trim() !== "",
+        )
+        .map((a: any) => a.position_id as string),
+    );
+    for (const legacyId of awaiting) {
+      const uuid = legacyToUuid.get(legacyId);
+      if (uuid && complete.has(uuid)) appliedPositionIds.add(legacyId);
     }
   }
 

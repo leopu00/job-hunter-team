@@ -9,6 +9,14 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      # A dispatch is how a branch gets its gates before a merge (the CI runs
+      # on master only): that run tests the branch, not the live site. The
+      # smoke asks for it, and only then.
+      smoke:
+        description: "Also run the production smoke against the live site"
+        type: boolean
+        default: false
   # Solo per il job `smoke` (vedi in fondo): i test che interrogano la
   # produzione non appartengono al gate della PR, ma la copertura non si
   # butta — si sposta dove ha senso, cioè dopo il deploy.
@@ -672,7 +680,11 @@ jobs:
   # sulla PR. Qui un rosso significa davvero che la produzione è rotta, e non
   # blocca nessuno che stia solo cercando di fare merge.
   #
-  # Cron + workflow_dispatch soltanto: sulle PR resta escluso.
+  # Cron, o workflow_dispatch con `smoke: true`: sulle PR resta escluso, e
+  # anche sui dispatch che fanno da gate a un ramo. Ogni dispatch lo lanciava:
+  # il 27/09 una quarantina, e ciascuno chiedeva /positions/not-a-real-uuid-0000
+  # al sito vivo, cioe' quattro ERROR 22P02 nel log di Postgres di produzione
+  # (~80 l'ora nelle ore di lavoro) per verificare il sito, non il ramo.
   smoke:
     name: smoke — produzione (post-deploy)
     runs-on: ubuntu-latest
@@ -682,7 +694,8 @@ jobs:
     timeout-minutes: 40
     if: >-
       github.repository == 'leopu00/job-hunter-team' &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.smoke))
 
     steps:
       - uses: actions/checkout@v7

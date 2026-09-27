@@ -29,6 +29,9 @@ let pendingRpcCountOverride: number | null = null;
 let pendingPersistedOverride: ((rows: any[]) => any[]) | null = null;
 // I `position_legacy_id` che il finto cloud NON restituisce dopo l'upsert.
 let transitionsMissing: number[] = [];
+// The applications the fake cloud already holds, as the route reads them back
+// for a position that came applied without its application.
+let cloudApplications: any[] | null = null;
 
 /** La resa di un `timestamptz` da parte di PostgREST: `2026-08-16T18:24:28+00:00`. */
 function postgrestInstant(value: string) {
@@ -147,7 +150,10 @@ function fakeAdmin() {
                                 )
                               : operation === "select" && table === "positions"
                                 ? selectedPositions
-                                : null;
+                                : operation === "select" &&
+                                    table === "applications"
+                                  ? cloudApplications
+                                  : null;
           return Promise.resolve({
             data: upsertError ? null : data,
             error: operation === "upsert" ? upsertError : null,
@@ -277,6 +283,7 @@ beforeEach(() => {
   pendingRpcCountOverride = null;
   pendingPersistedOverride = null;
   transitionsMissing = [];
+  cloudApplications = null;
   profileRpcData = { changed: true };
   admin = fakeAdmin();
 });
@@ -919,6 +926,74 @@ describe("push sync di una candidatura", () => {
       (call) => call.kind === "upsert" && call.table === "positions",
     );
     expect(position?.payload[0]).not.toHaveProperty("status");
+  });
+
+  describe("a position that comes applied without its application, as the box sends it", () => {
+    // The box sends one table per request, positions before applications
+    // (cli cloud.js performPush): the application is in the next request, or
+    // already on the cloud. The collaudo's first push quarantined 47 positions
+    // with application_state_invariant_failed for a state the next request
+    // made true.
+    const positionsOnly = () =>
+      pushBody({
+        positions: [
+          { id: 73, title: "Synthetic role", company: "Example", status: "applied" },
+        ],
+      });
+    const confirmCall = () =>
+      calls.find(
+        (call) =>
+          call.kind === "rpc" && call.name === "sync_confirm_positions_applied",
+      );
+    const complete = {
+      position_id: "position-uuid-73",
+      status: "applied",
+      applied: true,
+      applied_at: "2026-08-12T16:30:00+00:00",
+      applied_via: "telegram",
+    };
+
+    it("with no application on the cloud yet, it is written unpublished and acked, not refused", async () => {
+      // The RPC refuses what it cannot confirm, as the real one does.
+      rpcError = { code: "P0001", message: "incomplete_application" };
+      const response = await positionsOnly();
+      expect(response.status).toBe(200);
+      expect(confirmCall()).toBeUndefined();
+      const position = calls.find(
+        (call) => call.kind === "upsert" && call.table === "positions",
+      );
+      expect(position?.payload[0]).not.toHaveProperty("status");
+      await expect(response.json()).resolves.toMatchObject({
+        receipts: { positions: [receiptId("positions", 73)] },
+      });
+    });
+
+    it("with its application still ready on the cloud (the team just applied), it waits for the applications request", async () => {
+      rpcError = { code: "P0001", message: "incomplete_application" };
+      cloudApplications = [
+        { ...complete, status: "ready", applied: false, applied_at: null, applied_via: null },
+      ];
+      const response = await positionsOnly();
+      expect(response.status).toBe(200);
+      expect(confirmCall()).toBeUndefined();
+    });
+
+    it("with its application complete on the cloud, it is published now", async () => {
+      cloudApplications = [complete];
+      const response = await positionsOnly();
+      expect(response.status).toBe(200);
+      expect(confirmCall()?.args).toEqual({
+        p_user_id: "00000000-0000-0000-0000-000000000073",
+        p_position_legacy_ids: [73],
+      });
+    });
+
+    it("an application with a blank channel is not complete", async () => {
+      cloudApplications = [{ ...complete, applied_via: "  " }];
+      const response = await positionsOnly();
+      expect(response.status).toBe(200);
+      expect(confirmCall()).toBeUndefined();
+    });
   });
 
   it("non perde un'application delta quando la position non è nel batch", async () => {
