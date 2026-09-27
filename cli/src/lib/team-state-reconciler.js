@@ -31,6 +31,7 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
+import { observeTeamRunning } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import { agentsStatusWriter, createAgentsStatusReader, startAgentsStatusPublisher } from './agents-status.js';
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
@@ -72,10 +73,11 @@ function stripAnsi(s) {
   return (s || '').replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-async function apiCall(method, baseUrl, token, path, body) {
+async function apiCall(method, baseUrl, token, path, body, { signal } = {}) {
   const opts = {
     method,
     headers: cloudSyncHeaders(token, body ? { 'Content-Type': 'application/json' } : {}),
+    ...(signal ? { signal } : {}),
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${baseUrl}${path}`, opts);
@@ -191,7 +193,22 @@ async function reconcile(baseUrl, token, state) {
 // conserva ancora il vecchio reconcile completo per chi lo ri-abilita. M2
 // mantiene nel daemon default una sola eccezione: il rendezvous stop-only
 // autenticato, implementato da reconcileEmergencyStop qui sotto.
-export async function reconcileOnce() {
+/** How long one heartbeat may take, both ways included: past it the next round tries again. */
+export const HEARTBEAT_TIMEOUT_MS = 30_000;
+
+/**
+ * The heartbeat: `last_heartbeat_at`, and the observed `is_running` when the
+ * box can tell (team-observed.js). `beat` says whether it reached the cloud,
+ * so the daemon can say so when it does not.
+ *
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal] default: HEARTBEAT_TIMEOUT_MS
+ * @param {() => boolean | null} [options.observeTeam]
+ */
+export async function reconcileOnce({
+  signal = AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS),
+  observeTeam = observeTeamRunning,
+} = {}) {
   const config = await loadCloudConfig();
   if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
@@ -200,20 +217,21 @@ export async function reconcileOnce() {
   if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
 
   // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
-  const nowIso = new Date().toISOString();
+  const fields = { last_heartbeat_at: new Date().toISOString() };
+  const running = observeTeam();
+  if (running !== null) fields.is_running = running;
   const reader = getDirectReader(config);
   let beat = false;
   if (reader) {
-    try { await reader.patchTeamState({ last_heartbeat_at: nowIso }); beat = true; }
+    try { await reader.patchTeamState(fields, { signal }); beat = true; }
     catch (err) { log('warn', 'heartbeat.direct-failed', { err: err.message }); }
   }
   if (!beat) {
-    await apiCall('PATCH', baseUrl, token, '/api/team-state', {
-      last_heartbeat_at: nowIso,
-    }).catch(() => {});
+    beat = await apiCall('PATCH', baseUrl, token, '/api/team-state', fields, { signal })
+      .then(() => true, () => false);
   }
   ensureAgentsStatusPublisher({ reader, baseUrl, token });
-  return { ok: true, action: null };
+  return { ok: true, action: null, beat };
 }
 
 // Each agent's status for the desktop office's tags (agents-status.js):
