@@ -5,12 +5,16 @@
  * code, tested on the web): what these tests prove is that the desktop runs
  * that code on the user's client. Each call is recorded, filters included,
  * so a test can still check what was asked. Synthetic data only.
+ *
+ * Next to it, fake-supabase.ts answers each query through a callback: use
+ * that one when the test decides the answer per query, this one when a page
+ * or a route of the web fires many queries whose answers are just rows.
  */
-export type FakeCall = { table: string; ops: Array<{ name: string; args: unknown[] }> };
+export type PermissiveCall = { table: string; ops: Array<{ name: string; args: unknown[] }> };
 
-export type FakeSupabase = {
+export type PermissiveSupabase = {
   rows: Record<string, Record<string, unknown>[]>;
-  calls: FakeCall[];
+  calls: PermissiveCall[];
   user: { id: string; email?: string } | null;
   rpc: Array<{ name: string; args: unknown }>;
   /** What each RPC answers (default: no data, no error). */
@@ -18,8 +22,8 @@ export type FakeSupabase = {
   client: any;
 };
 
-export function createFakeSupabase(): FakeSupabase {
-  const fake: FakeSupabase = {
+export function createPermissiveSupabase(): PermissiveSupabase {
+  const fake: PermissiveSupabase = {
     rows: {},
     calls: [],
     user: { id: "user-1" },
@@ -30,7 +34,7 @@ export function createFakeSupabase(): FakeSupabase {
 
   fake.client = {
     from(table: string) {
-      const call: FakeCall = { table, ops: [] };
+      const call: PermissiveCall = { table, ops: [] };
       fake.calls.push(call);
       const all = () => fake.rows[table] ?? [];
       const builder: any = new Proxy(

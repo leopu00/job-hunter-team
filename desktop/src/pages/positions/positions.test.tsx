@@ -1,12 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navigate } from "../../shell/router";
-import { createFakeSupabase } from "../../test/fake-supabase";
+import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 
 // The web's /positions and /positions/[id] pages, run as they are on a fake
 // desktop client: the tests prove the desktop renders the web's own page
 // with the user's rows. Synthetic data only.
-const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeSupabase> | null }));
+const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
@@ -42,7 +42,7 @@ function position(extra: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  fake.current = createFakeSupabase();
+  fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   // The sidebar and the seen marker call the web's /api routes: here nothing
   // answers them, as when a route is not in the desktop.

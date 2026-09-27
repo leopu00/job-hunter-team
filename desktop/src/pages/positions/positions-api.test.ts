@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installApiBridge, notInDesktop } from "../../shell/api-bridge";
-import { createFakeSupabase } from "../../test/fake-supabase";
+import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { positionsApi } from "./positions-api";
 
 // The web's position routes, run as they are behind the shell's bridge, on a
 // fake desktop client: each test calls fetch("/api/...") the way the web
 // component does and checks what reached Supabase. Synthetic data only.
-const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeSupabase> | null }));
+const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
@@ -19,7 +19,7 @@ const POSITION_ID = "00000000-0000-4000-8000-000000000042";
 
 let restore: () => void;
 beforeEach(() => {
-  fake.current = createFakeSupabase();
+  fake.current = createPermissiveSupabase();
   restore = installApiBridge(positionsApi(notInDesktop));
 });
 afterEach(() => restore());
