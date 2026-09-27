@@ -18,7 +18,8 @@ import type {
 } from "../contract";
 import { attachControls, elementPoint } from "./controls";
 import { toWorld } from "./camera";
-import { hitTest, layoutHits, sameTarget, type Hit } from "./hit";
+import { hitTest, layoutHits, rectOf, sameTarget, type Hit } from "./hit";
+import { advanceEffects, START_EFFECTS, watchReducedMotion } from "./motion";
 import { sheetPlacements, towerHeight, type PaperRule } from "./paper";
 import {
   doorLeaves,
@@ -238,7 +239,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     const c = controls.camera();
     return { x: (b.x - c.x) / c.scale, y: (b.y - c.y) / c.scale, w: b.width / c.scale, h: b.height / c.scale };
   };
-  const targetAt = (screen: Vec): OfficeClick | null => {
+  const hitLayers = () => {
     const agentHits: Hit[] = [];
     for (const [uid, sprite] of agents) {
       const role = roles.get(uid);
@@ -253,7 +254,28 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       const rect = b.width > 0 ? worldBox(b) : { x: spot.x - 40, y: spot.y - 60, w: 80, h: 70 };
       pileHits.push({ rect, target: { kind: "pile", dept } });
     }
-    return hitTest(toWorld(controls.camera(), screen), { agents: agentHits, piles: pileHits, ...fixedHits });
+    return { agents: agentHits, piles: pileHits, ...fixedHits };
+  };
+  const targetAt = (screen: Vec): OfficeClick | null => hitTest(toWorld(controls.camera(), screen), hitLayers());
+
+  // The keyboard's focus (D08): a ring around the focused target, redrawn
+  // every frame (agents move), and the camera brought to it if it is out of
+  // sight. Drawn in the world, above everything.
+  const focusRing = new Graphics();
+  focusRing.eventMode = "none";
+  focusRing.zIndex = 1e9;
+  sortedLayer.addChild(focusRing);
+  let focused: OfficeClick | null = null;
+  const drawFocus = () => {
+    focusRing.clear();
+    if (!focused) return null;
+    const r = rectOf(focused, hitLayers());
+    if (!r) return null;
+    const pad = 6;
+    focusRing
+      .roundRect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad, 8)
+      .stroke({ width: 3 / Math.max(controls.camera().scale, 0.2), color: 0xf0f0fa, alpha: 0.95 });
+    return r;
   };
   let hovered: OfficeClick | null = null;
   const hover = (target: OfficeClick | null, at: Vec) => {
@@ -390,39 +412,52 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     for (const [dept, show] of piles) show(counts[dept]);
   };
 
-  let grainClock = 0;
-  let clock = 0;
-  let holoClock = 0;
+  // Lights and effects (motion.ts): still under prefers-reduced-motion.
+  let effects = START_EFFECTS;
+  const motion = watchReducedMotion(() => {
+    effects = START_EFFECTS;
+  });
   app.ticker.add((ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 0.1);
+    const frame = advanceEffects(effects, dt, motion.reduced());
+    effects = frame.next;
     // ScreenGrade's grain moves 9 times a second, like a dirty brush
-    grainClock += dt;
-    if (grainClock > 1 / 9) {
-      grainClock = 0;
-      grain.tilePosition.set(Math.random() * 256, Math.random() * 256);
-    }
+    if (frame.moveGrain) grain.tilePosition.set(Math.random() * 256, Math.random() * 256);
     controls.step(dt);
     engine.step(dt);
-    clock += dt;
-    edges.alpha = tesseractPulse(clock);
+    edges.alpha = tesseractPulse(frame.t);
     // the hologram redraws at 20 Hz, as in Godot
-    holoClock += dt;
-    if (holoItem && holoClock >= 0.05) {
-      holoClock = 0;
-      drawHologram(holo, holoItem.rect, clock);
-    }
+    if (holoItem && frame.redrawHologram) drawHologram(holo, holoItem.rect, frame.t);
     const poses = engine.poses();
-    if (printerItem) drawPrinter(printerFx, printerItem.rect.w / 150, layout.pois && someoneStandsAt(poses, layout.pois.printer, 70) ? clock : null);
+    const printing = layout.pois && someoneStandsAt(poses, layout.pois.printer, 70);
+    if (printerItem) drawPrinter(printerFx, printerItem.rect.w / 150, printing && frame.animatePrinter ? frame.t : null);
     door.step(someoneNear(poses, layout.door, 120), dt);
     drawAgents(poses);
     drawBubbles(poses);
     drawTags(poses);
     drawPiles();
+    drawFocus();
   });
 
   return {
     setAgentStatuses(next: AgentStatuses | null) {
       statuses = next;
+    },
+    focus(target: OfficeClick | null) {
+      focused = target;
+      const r = drawFocus();
+      if (!r) return null;
+      const c = controls.camera();
+      const view = { w: app.screen.width, h: app.screen.height };
+      const onScreen = (x: number, y: number) => ({ x: x * c.scale + c.x, y: y * c.scale + c.y });
+      const a = onScreen(r.x, r.y);
+      const b = onScreen(r.x + r.w, r.y + r.h);
+      if (a.x < 0 || a.y < 0 || b.x > view.w || b.y > view.h) {
+        controls.lookAt({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+        const c2 = controls.camera();
+        return { x: r.x * c2.scale + c2.x, y: r.y * c2.scale + c2.y, w: r.w * c2.scale, h: r.h * c2.scale };
+      }
+      return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
     },
     resize(width: number, height: number) {
       if (width <= 0 || height <= 0) return;
@@ -431,6 +466,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       sizeGrade(width, height);
     },
     destroy() {
+      motion.stop();
       app.canvas.removeEventListener("pointermove", onPointerMove);
       app.canvas.removeEventListener("pointerleave", onPointerLeave);
       app.canvas.removeEventListener("click", onCanvasClick);

@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeClick, OfficeEvent, OfficeLayout, OfficeManifest, OfficeSceneOptions, OfficeSnapshot } from "../../office/contract";
@@ -5,11 +6,17 @@ import { emptyEngine, loadAssets } from "../../office/parts";
 import { currentLocation, navigate } from "../../shell/router";
 
 // jsdom has no WebGL: the scene is replaced, and the test sees what the page gives it.
-const scene = { options: null as OfficeSceneOptions | null, resize: vi.fn(), destroy: vi.fn(), setAgentStatuses: vi.fn() };
+const scene = {
+  options: null as OfficeSceneOptions | null,
+  resize: vi.fn(),
+  destroy: vi.fn(),
+  setAgentStatuses: vi.fn(),
+  focus: vi.fn((t: unknown) => (t ? { x: 100, y: 50, w: 40, h: 60 } : null)),
+};
 vi.mock("../../office/scene/pixi-scene", () => ({
   createOfficeScene: vi.fn(async (_host: HTMLElement, options: OfficeSceneOptions) => {
     scene.options = options;
-    return { resize: scene.resize, destroy: scene.destroy, setAgentStatuses: scene.setAgentStatuses };
+    return { resize: scene.resize, destroy: scene.destroy, setAgentStatuses: scene.setAgentStatuses, focus: scene.focus };
   }),
 }));
 vi.mock("../../lib/supabase", () => ({ supabase: { from: vi.fn() } }));
@@ -115,6 +122,43 @@ describe("the office page", () => {
     expect(await screen.findByRole("heading", { name: "Bacheca" })).toBeInTheDocument();
     act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("without a mouse: Tab reaches every object with its tag's words, Enter opens, Esc closes and gives the focus back", async () => {
+    const user = userEvent.setup();
+    const withObjects = {
+      ...LAYOUT,
+      furniture: [
+        { id: "corkboard", kind: "corkboard", rect: { x: 0, y: 0, w: 10, h: 10 }, blocking: true, image: null },
+        { id: "hologram", kind: "hologram", rect: { x: 20, y: 0, w: 10, h: 10 }, blocking: true, image: null },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => (url === "/office/manifest.json" ? json(MANIFEST) : url === "/office/layout.json" ? json(withObjects) : json({}, 404))),
+    );
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(scene.options).not.toBeNull());
+    const list = screen.getByRole("list", { name: "Agenti e oggetti dell'ufficio" });
+    const board = within(list).getByRole("button", { name: /^Bacheca/ });
+    expect(within(list).getByRole("button", { name: /^Mappa/ })).toBeInTheDocument();
+
+    act(() => board.focus());
+    // the scene rings it, and its tag appears beside it
+    expect(scene.focus).toHaveBeenLastCalledWith({ kind: "board" });
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Bacheca");
+    expect(screen.getByRole("tooltip").style.left).toBe("154px");
+
+    await user.keyboard("{Enter}");
+    const panel = await screen.findByRole("complementary", { name: "Dettagli dell'ufficio" });
+    expect(panel).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(board).toHaveFocus();
+
+    act(() => board.blur());
+    expect(scene.focus).toHaveBeenLastCalledWith(null);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("the pointer over a target shows its tag, and nothing when it leaves", async () => {

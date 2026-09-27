@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeScene, OfficeSnapshot, Vec } from "../../office/contract";
 import OfficePanel from "../../office/panel/OfficePanel";
-import OfficeTooltip from "../../office/panel/OfficeTooltip";
+import OfficeKeyboard from "../../office/panel/OfficeKeyboard";
+import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
+import { keyboardTargets } from "../../office/scene/hit";
+import { useLocale } from "@/lib/use-locale";
 import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts } from "../../office/parts";
 import { loadAgentStatuses } from "../../office/status";
 import { supabase } from "../../lib/supabase";
@@ -64,6 +67,10 @@ function Office({ ready }: { ready: Ready }) {
   const [snapshot, setSnapshot] = useState<OfficeSnapshot | null>(null);
   const [panel, setPanel] = useState<OfficeClick | null>(null);
   const [hover, setHover] = useState<{ target: OfficeClick; at: Vec } | null>(null);
+  // the keyboard's focus (D08): the target focused and where its tag goes
+  const [keyFocus, setKeyFocus] = useState<{ target: OfficeClick; at: Vec } | null>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const locale = useLocale();
   const [status, setStatus] = useState<string | null>(null);
   const { assets, parts } = ready;
 
@@ -150,6 +157,23 @@ function Office({ ready }: { ready: Ready }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [panel]);
+  // A panel opened from the keyboard gives the focus back to its button when it closes.
+  useEffect(() => {
+    if (panel || !opener.current) return;
+    opener.current.focus();
+    opener.current = null;
+  }, [panel]);
+
+  const targets = useMemo(() => keyboardTargets(snapshot?.roster ?? [], assets.layout), [snapshot?.roster, assets.layout]);
+  const label = (t: OfficeClick) => {
+    const { title, lines } = tooltipFor(t, { layout: assets.layout, snapshot, statuses, locale });
+    return [title, ...lines].join(", ");
+  };
+  const focusTarget = (t: OfficeClick | null) => {
+    const box = sceneRef.current?.focus?.(t) ?? null;
+    setKeyFocus(t && box ? { target: t, at: { x: box.x + box.w, y: box.y + box.h } } : null);
+  };
+  const tag = hover ?? keyFocus;
 
   return (
     // the shell gives the office the whole window under the navbar (Route.fullBleed)
@@ -163,9 +187,16 @@ function Office({ ready }: { ready: Ready }) {
           {status}
         </p>
       )}
-      {hover && !panel && (
-        <OfficeTooltip target={hover.target} at={hover.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />
-      )}
+      <OfficeKeyboard
+        targets={targets}
+        label={label}
+        onFocusTarget={focusTarget}
+        onOpen={(t, button) => {
+          opener.current = button;
+          setPanel(t);
+        }}
+      />
+      {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
       {panel && (
         <OfficePanel
           target={panel}

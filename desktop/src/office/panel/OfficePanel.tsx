@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatRelative } from "@/lib/message-display";
 import { PUBLIC_STATE_COLORS, publicPositionState, publicPositionStateLabel } from "@/lib/position-state";
 import { useLocale } from "@/lib/use-locale";
@@ -52,17 +52,23 @@ export function deptName(layout: OfficeLayout, dept: DeptId): string {
 
 export default function OfficePanel(props: OfficePanelProps) {
   const { target, onClose } = props;
+  // the panel takes the focus when it opens (D08): the keyboard and a screen reader land in it
+  const self = useRef<HTMLElement>(null);
+  const key = JSON.stringify(target);
+  useEffect(() => self.current?.focus(), [key]);
   return (
     <aside
+      ref={self}
+      tabIndex={-1}
       aria-label="Dettagli dell'ufficio"
-      className="absolute right-3 top-3 bottom-3 z-20 flex w-[380px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl"
+      className="absolute right-3 top-3 bottom-3 z-20 flex w-[380px] focus:outline-none max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
         aria-label="Chiudi"
         onClick={onClose}
-        className="absolute right-2 top-2 z-10 rounded px-2 py-0.5 text-[13px] text-[var(--color-muted)] hover:text-[var(--color-bright)]"
+        className="absolute right-2 top-2 z-10 rounded px-2 py-0.5 text-[13px] text-[var(--color-muted)] hover:text-[var(--color-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]"
       >
         ✕
       </button>
@@ -137,7 +143,7 @@ function StateChip({ status }: { status: string | null }) {
 
 function SecondaryLink({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="text-[11px] text-[var(--color-muted)] underline hover:text-[var(--color-bright)]">
+    <button type="button" onClick={onClick} className="rounded text-[11px] text-[var(--color-muted)] underline hover:text-[var(--color-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]">
       {label}
     </button>
   );
@@ -387,7 +393,7 @@ function PositionList({ positions, onNavigate }: { positions: PanelPosition[]; o
             type="button"
             aria-expanded={open === p.id}
             onClick={() => setOpen(open === p.id ? null : p.id)}
-            className="flex w-full items-baseline gap-2 py-1.5 text-left hover:bg-[var(--color-card)]"
+            className="flex w-full items-baseline gap-2 rounded py-1.5 text-left hover:bg-[var(--color-card)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]"
           >
             <span className="w-7 flex-shrink-0 text-right text-[11px] font-bold text-[var(--color-bright)]">{p.score ?? "—"}</span>
             <span className="min-w-0 flex-1 truncate">{positionLine(p)}</span>

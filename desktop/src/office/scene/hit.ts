@@ -76,3 +76,41 @@ export function hitTest(p: Vec, layers: { agents: Hit[]; piles: Hit[]; tables: H
 export function sameTarget(a: OfficeClick | null, b: OfficeClick | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
+
+/**
+ * Where a target is, for the keyboard's focus ring (D08): its box in world
+ * pixels, or null when it is not in the office now (an agent that left). A
+ * department is its zone, not its whiteboard; a pile is its sheets, or its
+ * handoff table when the pile is empty.
+ */
+export function rectOf(target: OfficeClick, layers: { agents: Hit[]; piles: Hit[]; tables: Hit[]; objects: Hit[]; zones: Hit[] }): Rect | null {
+  const order =
+    target.kind === "department"
+      ? [layers.zones, layers.objects]
+      : target.kind === "pile"
+        ? [layers.piles, layers.tables]
+        : target.kind === "agent"
+          ? [layers.agents]
+          : [layers.objects];
+  for (const list of order) {
+    const hit = list.find((h) => sameTarget(h.target, target));
+    if (hit) return hit.rect;
+  }
+  return null;
+}
+
+/**
+ * Every target the keyboard can reach, in reading order: the agents of the
+ * roster, then each phase's pile, each department, the CV shelf, the
+ * printer, the corkboard, the hologram (only those the layout has).
+ */
+export function keyboardTargets(roster: Array<{ uid: string; role: string }>, layout: OfficeLayout): OfficeClick[] {
+  const { objects, zones } = layoutHits(layout);
+  const out: OfficeClick[] = roster.map((a) => ({ kind: "agent", uid: a.uid, role: a.role }) as OfficeClick);
+  for (const z of zones) out.push({ kind: "pile", dept: (z.target as { dept: DeptId }).dept });
+  for (const z of zones) out.push(z.target);
+  for (const kind of ["shelf", "printer", "board", "hologram"] as const) {
+    if (objects.some((o) => o.target.kind === kind)) out.push({ kind });
+  }
+  return out;
+}

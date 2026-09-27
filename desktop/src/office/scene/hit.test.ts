@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { OfficeClick, OfficeLayout, Rect } from "../contract";
-import { hitTest, layoutHits, sameTarget, type Hit } from "./hit";
+import { hitTest, keyboardTargets, layoutHits, rectOf, sameTarget, type Hit } from "./hit";
 
 const r = (x: number, y: number, w = 100, h = 100): Rect => ({ x, y, w, h });
 const item = (id: string, kind: string, rect: Rect) => ({ id, kind, rect, blocking: true, image: null });
@@ -73,5 +73,38 @@ describe("hitTest (the Godot office's order)", () => {
     const a: OfficeClick = { kind: "pile", dept: "scout" };
     expect(sameTarget(a, { kind: "pile", dept: "scout" })).toBe(true);
     expect(sameTarget(a, null)).toBe(false);
+  });
+});
+
+describe("the keyboard's targets (D08)", () => {
+  const fixed = layoutHits(LAYOUT);
+  it("a department is its zone, a pile its sheets or else its table, an agent that left is nowhere", () => {
+    const layers = { agents: [agent("scout-1", r(1, 2, 3, 4))], piles: [], ...fixed };
+    expect(rectOf({ kind: "department", dept: "scout" }, layers)).toEqual(r(320, 348, 880, 520));
+    expect(rectOf({ kind: "pile", dept: "scout" }, layers)).toEqual(r(1000, 700, 190, 60));
+    expect(rectOf({ kind: "pile", dept: "scout" }, { ...layers, piles: [{ rect: r(9, 9, 9, 9), target: { kind: "pile", dept: "scout" } }] })).toEqual(r(9, 9, 9, 9));
+    expect(rectOf({ kind: "agent", uid: "scout-1", role: "scout" }, layers)).toEqual(r(1, 2, 3, 4));
+    expect(rectOf({ kind: "agent", uid: "scout-9", role: "scout" }, layers)).toBeNull();
+    expect(rectOf({ kind: "board" }, layers)).toEqual(r(2990, 865, 150, 34));
+  });
+
+  it("a department with a zone and a whiteboard is rung around its zone", () => {
+    const dept = { kind: "department", dept: "scrittori" } as const;
+    const zone = r(320, 1520, 860, 440);
+    const board = r(290, 1160, 150, 34);
+    expect(rectOf(dept, { agents: [], piles: [], tables: [], objects: [{ rect: board, target: dept }], zones: [{ rect: zone, target: dept }] })).toEqual(zone);
+  });
+
+  it("reading order: agents, piles, departments, then the objects the layout has", () => {
+    expect(keyboardTargets([{ uid: "capitano", role: "capitano" }, { uid: "scout-1", role: "scout" }], LAYOUT)).toEqual([
+      { kind: "agent", uid: "capitano", role: "capitano" },
+      { kind: "agent", uid: "scout-1", role: "scout" },
+      { kind: "pile", dept: "scout" },
+      { kind: "department", dept: "scout" },
+      { kind: "shelf" },
+      { kind: "printer" },
+      { kind: "board" },
+      { kind: "hologram" },
+    ]);
   });
 });
