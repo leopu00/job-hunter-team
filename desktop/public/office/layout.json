@@ -1608,7 +1608,23 @@
       "y": -71.0
      }
     }
-   ]
+   ],
+   "tagline": "Finds relevant opportunities for you.",
+   "labelPos": {
+    "x": 338.0,
+    "y": 834.0
+   },
+   "handoff": {
+    "label": "RESEARCH  →  ANALYSIS",
+    "labelPos": {
+     "x": 1080.0,
+     "y": 816.0
+    },
+    "pileSpot": {
+     "x": 1080.0,
+     "y": 692.0
+    }
+   }
   },
   {
    "id": "analisti",
@@ -1852,7 +1868,23 @@
       "y": -71.0
      }
     }
-   ]
+   ],
+   "tagline": "Turns listings into clear decisions.",
+   "labelPos": {
+    "x": 2250.0,
+    "y": 696.0
+   },
+   "handoff": {
+    "label": "ANALYSIS  →  COMPATIBILITY",
+    "labelPos": {
+     "x": 2800.0,
+     "y": 866.0
+    },
+    "pileSpot": {
+     "x": 2800.0,
+     "y": 742.0
+    }
+   }
   },
   {
    "id": "scorer",
@@ -2096,7 +2128,23 @@
       "y": -71.0
      }
     }
-   ]
+   ],
+   "tagline": "Gauges how well each role fits you.",
+   "labelPos": {
+    "x": 1158.0,
+    "y": 1446.0
+   },
+   "handoff": {
+    "label": "COMPATIBILITY  →  APPLICATIONS",
+    "labelPos": {
+     "x": 1700.0,
+     "y": 1136.0
+    },
+    "pileSpot": {
+     "x": 1700.0,
+     "y": 1012.0
+    }
+   }
   },
   {
    "id": "scrittori",
@@ -2340,7 +2388,23 @@
       "y": -71.0
      }
     }
-   ]
+   ],
+   "tagline": "Tailors each application to you and the role.",
+   "labelPos": {
+    "x": 338.0,
+    "y": 1926.0
+   },
+   "handoff": {
+    "label": "APPLICATIONS  →  QUALITY CHECK",
+    "labelPos": {
+     "x": 1080.0,
+     "y": 1576.0
+    },
+    "pileSpot": {
+     "x": 1080.0,
+     "y": 1452.0
+    }
+   }
   },
   {
    "id": "critici",
@@ -2584,7 +2648,12 @@
       "y": -71.0
      }
     }
-   ]
+   ],
+   "tagline": "Reviews every detail before you decide.",
+   "labelPos": {
+    "x": 2093.0,
+    "y": 1926.0
+   }
   }
  ],
  "coreSeats": [
@@ -2793,5 +2862,23 @@
   "mentor": [
    "mentor_a"
   ]
+ },
+ "paperPile": {
+  "image": {
+   "src": "/office/furniture/paper_pile_1.png"
+  },
+  "width": 38.0,
+  "rise": 1.05,
+  "perStack": 40,
+  "maxStacks": 12,
+  "columns": 6,
+  "basisX": {
+   "x": 32.0,
+   "y": 8.5
+  },
+  "basisY": {
+   "x": -36.0,
+   "y": 30.0
+  }
  }
 }

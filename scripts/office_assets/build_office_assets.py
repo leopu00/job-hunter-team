@@ -331,7 +331,8 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
                 "seatOffset": seat_offset(desk, desk.get("facing", "down")),
             })
         inbox = d["inbox"]
-        depts.append({
+        zone = d["zone"]
+        dept: dict = {
             "id": dept_id,
             "role": ROLE_OF_SLUG[dept_roles[dept_id]["slug"]],
             "name": d["name"],
@@ -341,10 +342,24 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
             "inboxDropAccess": d.get("inbox_drop_access", d.get("inbox_access", inbox)),
             "inboxPickupAccess": d.get("inbox_pickup_access", d.get("inbox_access", inbox)),
             "desks": desks,
-        })
+            # department_dressing.gd: the name bottom-left of the zone, the tagline 24 px below.
+            "tagline": d.get("tagline", ""),
+            "labelPos": vec(zone["x"] + 18, zone["y"] + zone["h"] - 34),
+        }
+        depts.append(dept)
         # The handoff table: its A* footprint (DepartmentDefs.obstacles) is the
         # rect; the art is TABLE_WIDTH wide with its bottom on the inbox.
         if dept_id in departments["HANDOFF_DEPTS"]:
+            # handoff_station.gd: "SOURCE  →  DESTINATION" on a tag centred 16 px below
+            # the inbox, and the pile on the table at PILE_OFFSET. The destination is
+            # the department that fetches from this one (office.gd).
+            fetcher = next(k for k, v in departments["FETCH_FROM"].items() if v == dept_id)
+            offset = handoff["PILE_OFFSET"]
+            dept["handoff"] = {
+                "label": f"{d['name'].upper()}  →  {departments['DEPARTMENTS'][fetcher]['name'].upper()}",
+                "labelPos": vec(inbox["x"], inbox["y"] + 16),
+                "pileSpot": vec(inbox["x"] + offset["x"], inbox["y"] + offset["y"]),
+            }
             size = departments["HANDOFF_SIZE"]
             footprint = rect(inbox["x"] - size["x"] / 2, inbox["y"] - size["y"], size["x"], size["y"])
             table: dict = {"id": f"handoff_{dept_id}", "kind": "handoff_table", "rect": footprint, "blocking": True, "image": None}
@@ -431,6 +446,14 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
         },
         "nav": {"cell": 32, "margin": 28, "wallMargin": 14, "walls": departments["GLASS_WALLS"]},
         "sheets": sheets,
+    }
+    # paper_pile.gd: the sheet art and the geometry of the stacks on a table.
+    pile = gd_constants(office / "paper_pile.gd")
+    layout["paperPile"] = {
+        "image": {"src": plan.use(res(pile["SHEET_TEX"]), "furniture", pile["WIDTH"])},
+        "width": pile["WIDTH"], "rise": pile["SHEET_RISE"], "perStack": pile["SHEETS_PER_STACK"],
+        "maxStacks": pile["MAX_STACKS"], "columns": pile["STACK_COLUMNS"],
+        "basisX": pile["STACK_BASIS_X"], "basisY": pile["STACK_BASIS_Y"],
     }
     nav = gd_constants(office / "nav_grid.gd")
     layout["nav"]["cell"], layout["nav"]["margin"], layout["nav"]["wallMargin"] = nav["CELL"], nav["MARGIN"], nav["WALL_MARGIN"]
