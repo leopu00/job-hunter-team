@@ -56,6 +56,7 @@ const CONFIG: LauncherConfig = {
   models: ["gpt-5.6-luna"],
   taskChars: 2_000,
   spawnReserveUsd: 0,
+  staggerS: 0,
 };
 
 let root: string;

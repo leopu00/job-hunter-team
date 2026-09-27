@@ -56,6 +56,7 @@ The team starts once per session: while a member is up, another
   "models": ["gpt-5.6-luna", "gpt-5-mini"],
   "taskChars": 2000,
   "spawnReserveUsd": 0.4,
+  "staggerS": 30,
   "team": [
     { "role": "scout", "instances": 2 },
     { "role": "analista", "instances": 1 },
@@ -69,6 +70,12 @@ The team starts once per session: while a member is up, another
 - The piggy bank: `captainUsd` + the caps of the children running + what the
   ended ones spent, as the executor measured it, must stay within
   `sessionUsd`. A child that ended with no measured spend stays at its cap.
+- Of that, **spent** is what the ended runs cost on the key proxy's log, the
+  same money the key proxy counts; **booked** is money held and not spent (the
+  caps of the runs going on, a cap nobody measured, the part of the
+  CAPITANO's reserve it has not used). A refusal and `list_agents` say both:
+  on 27/09 the launcher's «0.52 left» and the key proxy's «0.65» were the same
+  spend, and the difference was the CAPITANO's unspent reserve.
 - A new `session` starts the counts and the piggy bank over: the launcher
   ignores a state file left by another session, whatever shape an older
   version wrote it in. Changing `session` is how the operator starts a run
