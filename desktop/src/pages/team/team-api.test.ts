@@ -60,7 +60,10 @@ describe("the /team routes in the desktop", () => {
   it("POST /api/team/send stays refused, as on the cloud: nothing reaches an agent's terminal", async () => {
     const res = await post("/api/team/send", { session: "SCOUT-1", message: "vai" });
     expect(res.status).toBe(403);
-    expect(await res.json()).toMatchObject({ error: "read_only" });
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body).toEqual({ error: "read_only", message: "I comandi al team dalla desktop sono in arrivo." });
+    // The web's wording is false inside the desktop.
+    expect(body.message).not.toMatch(/si fa dall'app desktop/);
   });
 
   it("GET /api/team/status infers each agent from the team's command history, as on the cloud", async () => {

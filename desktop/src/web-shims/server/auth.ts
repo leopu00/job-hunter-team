@@ -29,16 +29,15 @@ export async function requireAuth(): Promise<NextResponse | null> {
 
 /**
  * web/lib/auth.ts requireLocalWrite on the cloud deploy: control, config and
- * data writes that belong to the user's own machine are refused, with the
- * web's same 403 body. The desktop keeps the cloud behaviour for them
- * (sending keys to an agent's tmux, for one); nothing reaches a shell.
+ * data writes that belong to the user's own machine are refused with 403
+ * read_only, and nothing reaches a shell. The web's message ("si fa dall'app
+ * desktop") is false here: in the desktop these commands are coming. The
+ * only desktop route that reaches this today is /api/team/send
+ * (require-local-write.test.ts fails if another starts to), hence a team
+ * wording (operator's decision, 27/09).
  */
+export const DESKTOP_READ_ONLY_MESSAGE = "I comandi al team dalla desktop sono in arrivo.";
+
 export async function requireLocalWrite(): Promise<NextResponse | null> {
-  return NextResponse.json(
-    {
-      error: "read_only",
-      message: "Questa azione si fa dall'app desktop. Dal browser è sola visualizzazione.",
-    },
-    { status: 403 },
-  );
+  return NextResponse.json({ error: "read_only", message: DESKTOP_READ_ONLY_MESSAGE }, { status: 403 });
 }
