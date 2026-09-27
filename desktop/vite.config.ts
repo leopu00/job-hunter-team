@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { searchForWorkspaceRoot, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { webPublicAssets } from "./src/bundle/web-public-assets";
 import { applyTextOverrides } from "./src/desktop-texts/overrides";
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -92,7 +93,7 @@ function maplibreWorker(): Plugin {
 const webEnv = (mode: string) => ({ NEXT_PUBLIC_JHT_DEPLOY: "cloud", NODE_ENV: mode === "production" ? "production" : "development" });
 
 export default defineConfig(({ mode }) => ({
-  plugins: [desktopTexts(), react(), tailwindcss(), webDepsFromDesktop(), maplibreWorker()],
+  plugins: [desktopTexts(), react(), tailwindcss(), webDepsFromDesktop(), maplibreWorker(), webPublicAssets()],
   define: process.env.VITEST ? {} : { "process.env": JSON.stringify(webEnv(mode)) },
   // The pages render the web's own components and server pages
   // (web/app) so the two look and behave the same. `@/` is the web's alias.

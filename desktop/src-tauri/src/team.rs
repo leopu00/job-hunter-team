@@ -15,6 +15,9 @@ const BUILD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MACHINE_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 const TEAM_TIMEOUT: Duration = Duration::from_secs(35 * 60);
 const TEAM_PROGRESS_PREFIX: &str = "JHT_TEAM_PROGRESS:";
+/// The provider-cost caps the app gives every run: the whole team, and each agent.
+pub(crate) const TEAM_MAX_COST_USD: &str = "0.10";
+pub(crate) const AGENT_MAX_COST_USD: &str = "0.02";
 
 #[derive(Default)]
 pub(crate) struct TeamRuntimeState {
@@ -156,11 +159,7 @@ pub(crate) async fn start_api_team(
         .resolve("runtime/api-worker/Dockerfile", BaseDirectory::Resource)
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf));
-    let workspace_dir = app
-        .path()
-        .app_local_data_dir()
-        .ok()
-        .map(|path| path.join("api-team"));
+    let workspace_dir = workspace_dir(&app);
 
     let result = match (runtime_dir, workspace_dir) {
         (Some(runtime_dir), Some(workspace_dir)) => {
@@ -175,6 +174,14 @@ pub(crate) async fn start_api_team(
 
     state.running.store(false, Ordering::Release);
     result
+}
+
+/// Where the API team's runs live: the database (data/team.db) and the artifacts.
+pub(crate) fn workspace_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_local_data_dir()
+        .ok()
+        .map(|path| path.join("api-team"))
 }
 
 fn run_team(
@@ -341,9 +348,9 @@ fn run_container(
         "--workspace",
         "/workspace",
         "--max-cost-usd",
-        "0.10",
+        TEAM_MAX_COST_USD,
         "--max-agent-cost-usd",
-        "0.02",
+        AGENT_MAX_COST_USD,
     ]);
 
     let progress_channel = progress.clone();
