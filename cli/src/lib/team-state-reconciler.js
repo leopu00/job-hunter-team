@@ -229,7 +229,9 @@ function ensureAgentsStatusPublisher({ reader, baseUrl, token }) {
   const tracesDir = process.env.JHT_API_TRACES_DIR;
   const source = tracesDir ? 'api' : 'tui';
   stopAgentsStatus = startAgentsStatusPublisher({
-    reader: tracesDir ? createApiAgentsStatusReader({ logsDir: tracesDir }) : createAgentsStatusReader({ jhtHome: JHT_HOME }),
+    reader: tracesDir
+      ? createApiAgentsStatusReader({ logsDir: tracesDir, log })
+      : createAgentsStatusReader({ jhtHome: JHT_HOME, log }),
     write: agentsStatusWriter({
       source,
       direct: reader,

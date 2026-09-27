@@ -71,6 +71,20 @@ describe("the published map", () => {
     expect(buildAgentsStatus({ "SCOUT-2": "weird" }, {}, new Map())["scout-2"].status).toBe("idle");
   });
 
+  it("a session whose name is not an agent's is left out, told once, and the others are published", async () => {
+    const dropped = vi.fn();
+    const map = buildAgentsStatus({ "SCOUT-1": "working", my_shell: "idle", "sess 2": "idle" }, {}, new Map(), new Date(), dropped);
+    expect(Object.keys(map)).toEqual(["scout-1"]);
+    expect(dropped.mock.calls.map((c) => c[0])).toEqual(["my_shell", "sess 2"]);
+
+    const log = vi.fn();
+    const reader = createAgentsStatusReader({ jhtHome: "/nowhere", run: async () => ({ "SCOUT-1": { status: "working" }, my_shell: { status: "idle" } }), readThrottles: async () => "", log });
+    expect(Object.keys((await reader.read())!)).toEqual(["scout-1"]);
+    await reader.read();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith("warn", "agents-status.name-dropped", { name: "my_shell" });
+  });
+
   it("a session that is gone leaves the map", () => {
     const changedAt = new Map();
     buildAgentsStatus({ "SCOUT-1": "working", "SCOUT-2": "idle" }, {}, changedAt);

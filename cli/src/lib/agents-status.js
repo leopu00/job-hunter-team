@@ -121,16 +121,40 @@ export function createSmoother() {
 }
 
 /**
+ * The names the web route and the desktop accept for an agent
+ * (web/lib/team-state/agents-status.ts): lower case, digits, hyphens. A tmux
+ * session opened by hand with another name is not an agent of the team.
+ */
+export const UID_FORMAT = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/**
+ * Tells once per name that a name is left out of the map: the others are
+ * published, and the log does not repeat the same line every 20 s.
+ */
+export function createDroppedNameLog(log = () => {}) {
+  const told = new Set();
+  return (name) => {
+    if (told.has(name)) return;
+    told.add(name);
+    log('warn', 'agents-status.name-dropped', { name: String(name).slice(0, 60) });
+  };
+}
+
+/**
  * The published map from one reading: pane statuses (after the smoother),
  * the active throttles, and when each status last changed (`changedAt`,
- * kept by the caller between readings).
+ * kept by the caller between readings). A name outside UID_FORMAT is left
+ * out and handed to `dropped`.
  */
-export function buildAgentsStatus(statuses, throttles, changedAt, now = new Date()) {
+export function buildAgentsStatus(statuses, throttles, changedAt, now = new Date(), dropped = () => {}) {
   const map = {};
   const nowIso = now.toISOString();
   for (const [session, paneStatus] of Object.entries(statuses)) {
-    if (!uidOf(session) || uidOf(session).includes(' ')) continue;
     const uid = canonicalAgentId(session);
+    if (!UID_FORMAT.test(uid)) {
+      dropped(session);
+      continue;
+    }
     // vps_backend.gd _parse_roster: anything but working/idle/paused is idle; a throttle wins
     let status = ['working', 'idle', 'paused'].includes(paneStatus) ? paneStatus : 'idle';
     const t = throttles[uid];
@@ -173,16 +197,17 @@ async function readThrottleTail(jhtHome) {
  * of the daemon. `read()` answers the map to publish, or null when the rule
  * could not run (then nothing is published, and the desktop shows no tag).
  */
-export function createAgentsStatusReader({ jhtHome, run = runRule, readThrottles = readThrottleTail } = {}) {
+export function createAgentsStatusReader({ jhtHome, run = runRule, readThrottles = readThrottleTail, log } = {}) {
   const smooth = createSmoother();
   const changedAt = new Map();
+  const dropped = createDroppedNameLog(log);
   return {
     async read(now = new Date()) {
       const activity = await run();
       if (!activity || typeof activity !== 'object') return null;
       const statuses = smooth(activity);
       const throttles = parseThrottles(await readThrottles(jhtHome), now.getTime() / 1000);
-      return buildAgentsStatus(statuses, throttles, changedAt, now);
+      return buildAgentsStatus(statuses, throttles, changedAt, now, dropped);
     },
   };
 }

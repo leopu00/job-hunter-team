@@ -27,6 +27,14 @@ describe("sanitizeAgentsStatus", () => {
     });
   });
 
+  it("an agent with a name outside [a-z0-9-] is left out, the others are kept", () => {
+    const agent = { status: "idle", since: SINCE };
+    expect(sanitizeAgentsStatus({ tui: { agents: { "Scout 1": agent, test_session: agent, "scout-3": agent } } })).toEqual({
+      ok: true,
+      value: { tui: { agents: { "scout-3": agent } } },
+    });
+  });
+
   it("refuses what is not that shape", () => {
     const agent = { status: "idle", since: SINCE };
     const bad: unknown[] = [
@@ -36,7 +44,6 @@ describe("sanitizeAgentsStatus", () => {
       { other: { agents: {} } },
       { tui: { agents: {}, at: SINCE } },
       { tui: { agents: [] } },
-      { tui: { agents: { "Scout 1": agent } } },
       { tui: { agents: { "scout-1": { ...agent, extra: 1 } } } },
       { tui: { agents: { "scout-1": { ...agent, status: "WORKING!" } } } },
       { tui: { agents: { "scout-1": { ...agent, since: "yesterday" } } } },
@@ -76,6 +83,15 @@ describe("PATCH /api/team-state — agents_status from the box", () => {
     const response = await PATCH(request(body));
     expect(response.status).toBe(200);
     expect(upsert).toHaveBeenCalledWith({ user_id: "user-test", ...body }, { onConflict: "user_id" });
+  });
+
+  it("a session opened by hand does not take the team's tags with it", async () => {
+    asDevice("device-test");
+    const { PATCH } = await import("@/app/api/team-state/route");
+    const agent = { status: "working", since: SINCE };
+    const response = await PATCH(request({ agents_status: { tui: { agents: { capitano: agent, my_shell: agent } } } }));
+    expect(response.status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith({ user_id: "user-test", agents_status: { tui: { agents: { capitano: agent } } } }, { onConflict: "user_id" });
   });
 
   it("a malformed map is refused before any write", async () => {
