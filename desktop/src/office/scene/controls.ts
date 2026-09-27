@@ -65,6 +65,8 @@ export type Controls = {
   step(dt: number): void;
   resize(view: { w: number; h: number }): void;
   reset(): void;
+  /** centres the view on a world point at the current zoom, within the edges (the keyboard's focus) */
+  lookAt(world: Vec): void;
   destroy(): void;
 };
 
@@ -186,6 +188,8 @@ export function attachControls(
       set(clamp(camera, view, bounds, minScale()));
     },
     reset: () => set(home()),
+    lookAt: (p: Vec) =>
+      set(clamp({ scale: camera.scale, x: view.w / 2 - p.x * camera.scale, y: view.h / 2 - p.y * camera.scale }, view, bounds, minScale())),
     destroy() {
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);

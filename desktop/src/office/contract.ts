@@ -489,5 +489,11 @@ export interface OfficeScene {
   resize(width: number, height: number): void;
   /** the tags over the agents; null = no tags (no status, or an old one) */
   setAgentStatuses?(statuses: AgentStatuses | null): void;
+  /**
+   * the keyboard's focus (D08): a ring around the target, the camera brought
+   * to it when out of sight; its box on screen (element pixels), or null
+   * when it is not in the office now
+   */
+  focus?(target: OfficeClick | null): Rect | null;
   destroy(): void;
 }

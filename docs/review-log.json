@@ -1769,6 +1769,11 @@
       "path": "docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md",
       "description": "Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log.",
       "last_review": null
+    },
+    {
+      "path": "docs/guides/DESKTOP.md",
+      "description": "Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'.",
+      "last_review": null
     }
   ]
 }
