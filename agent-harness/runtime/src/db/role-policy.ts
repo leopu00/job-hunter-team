@@ -103,6 +103,8 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       "active-categories", "other-pile", "category-sizes",
       // Care mode, assigned by the Capitano (RULE-14), gated by the enrichment policy.
       "next-for-recheck-due", "next-for-recheck-weekly", "next-for-geocode-missing", "next-for-logo-missing",
+      // MAIN LOOP step 6: whether the office of the new position is to be geocoded now.
+      "geocode-check",
     ],
     // RULE-08: the company registry and the position's highlights are the ANALISTA's to fill.
     insert: ["company", "highlight"],

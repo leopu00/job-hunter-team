@@ -9,7 +9,7 @@ import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
 import { createDbTools } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
 import { crossSecondBoundary } from "./helpers/clock.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
 const context = {} as ToolContext;
@@ -226,6 +226,68 @@ const CARE: Array<[string, Record<string, unknown> | null, Record<string, unknow
   ["unreadable mode", null, "{not json", ["next-for-recheck-due", "--json"]],
   ["broken policy", "{not json" as unknown as Record<string, unknown>, null, ["next-for-geocode-missing"]],
 ];
+
+/**
+ * geocode-check (the ANALISTA's MAIN LOOP step 6): whether the office of ONE
+ * position is to be geocoded now, under the same policy and mode files as the
+ * care queues. The command is new in this commit, so the Python it is judged
+ * against is this tree's (pythonSkillsOfThisTree), not the pinned one.
+ */
+const GEOCODE_CHECK: Array<[string, Record<string, unknown> | null, Record<string, unknown> | string | null, string[]]> = [
+  ["no files", null, null, ["geocode-check", "1"]],
+  ["no files", null, null, ["geocode-check", "2", "--json"]],
+  ["no files", null, null, ["geocode-check", "3"]],
+  ["no files", null, null, ["geocode-check", "5"]],
+  ["no files", null, null, ["geocode-check", "99"]],
+  ["no files", null, null, ["geocode-check", "x"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["geocode-check", "6"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["geocode-check", "4", "--json"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["geocode-check", "1"]],
+  ["thresholds", { logo: { min_score: 80 }, geocode_missing: { min_score: 75, non_remote_only: false }, recheck_weekly: { min_score: 80, older_than_days: 3 } }, null, ["geocode-check", "2"]],
+  ["float and bool thresholds", { logo: { min_score: 70.0 }, geocode_missing: { min_score: true }, recheck_weekly: { min_score: 99.5, older_than_days: false } }, null, ["geocode-check", "6"]],
+  ["float and bool thresholds", { logo: { min_score: 70.0 }, geocode_missing: { min_score: true }, recheck_weekly: { min_score: 99.5, older_than_days: false } }, null, ["geocode-check", "1"]],
+  ["economy", { economy: true }, null, ["geocode-check", "1"]],
+  ["geocoding off", { geocode_missing: { enabled: false } }, null, ["geocode-check", "1", "--json"]],
+  ["saving", null, { mode: "saving" }, ["geocode-check", "1"]],
+  ["unreadable mode", null, "{not json", ["geocode-check", "1", "--json"]],
+];
+
+describe("geocode-check against this tree's db_query.py, under the enrichment policy", () => {
+  const here = pythonSkillsOfThisTree();
+  it.skipIf(here === null).each(GEOCODE_CHECK.map(([label, policy, mode, args]) => [`${label}: ${args.join(" ")}`, policy, mode, args]))(
+    "%s",
+    async (_label, policy, mode, args) => {
+      const { call, ourDb, pyDb } = twins("analista-1");
+      mkdirSync(join(root, "profile"), { recursive: true });
+      const write = (file: string, value: unknown) =>
+        writeFileSync(join(root, "profile", file), typeof value === "string" ? value : JSON.stringify(value));
+      if (policy !== null) write("enrichment-policy.json", policy);
+      if (mode !== null) write("capitano-maintenance.json", mode);
+      for (const db of [ourDb, pyDb]) {
+        // One remote, one already geocoded, one excluded, one scored above and one below 75.
+        db.prepare("UPDATE positions SET work_mode = 'remote' WHERE id = 2").run();
+        db.prepare("UPDATE positions SET office_lat = 45.46, office_lon = 9.19, office_geocoded = 1 WHERE id = 3").run();
+        db.prepare("UPDATE positions SET status = 'excluded' WHERE id = 5").run();
+        db.prepare("INSERT INTO scores (position_id, total_score) VALUES (6, 76)").run();
+        db.prepare("INSERT INTO scores (position_id, total_score) VALUES (4, 60)").run();
+      }
+      const py = runPython(here!, ["db_query.py", ...(args as string[])], {
+        JHT_DB: join(root, "py.db"),
+        JHT_HOME: join(root, "py-home"),
+        JHT_AGENT_NAME: "analista-1",
+        JHT_EXTERNAL_CONTENT_NONCE: NONCE,
+        COLUMNS: "80",
+      });
+      const ours = await call("db_query", args as string[]);
+      expectSame(ours, py);
+    },
+  );
+
+  it.skipIf(here === null)("says why for every position, and refuses nothing it should allow (the reasons, read)", async () => {
+    const { call } = twins("analista-1");
+    expect((await call("db_query", ["geocode-check", "1"])).content).toBe("GEOCODE #1: YES — live, not geocoded yet, geocoding policy on");
+  });
+});
 
 describe("the care-mode queues against db_query.py, under the enrichment policy", () => {
   it.skipIf(skills === null).each(CARE.map(([label, policy, mode, args]) => [`${label}: ${args.join(" ")}`, policy, mode, args]))(
