@@ -1,17 +1,23 @@
-import { SETUP_PAGE } from "../../lib/pages";
-import ComingSoon from "../coming-soon";
+import TeamLoading from "@/app/(protected)/team/loading";
+import WebTeamPage from "@/app/(protected)/team/page";
+import ServerPage from "../../shell/server-page";
 import type { PageProps } from "../types";
 
-/** The web's /team (live agents) is not ported yet; the local team setup is. */
-export default function TeamPage(_props: PageProps) {
+/**
+ * The web's /team (web/app/(protected)/team/page.tsx), run as it is: the
+ * team's status, the activity charts over the chosen range, the board of
+ * standing orders. As on the web cloud deploy, the only command it can give
+ * the team is the protected emergency stop; its routes are answered by
+ * pages/team/team-api.ts. The range lives in the query string, so the page
+ * reads again when it changes, keeping the screen meanwhile.
+ */
+export default function TeamPage({ search }: PageProps) {
+  const searchParams = Object.fromEntries(search);
   return (
-    <>
-      <ComingSoon title="Team" note="Il monitor del team arriva nella desktop. Il team locale si configura da qui:" />
-      <div className="max-w-6xl mx-auto px-5">
-        <a href={SETUP_PAGE} className="text-[11px] font-semibold tracking-widest uppercase no-underline" style={{ color: "var(--color-green)" }}>
-          Team locale →
-        </a>
-      </div>
-    </>
+    <ServerPage
+      runKey={search.toString()}
+      render={() => WebTeamPage({ searchParams: Promise.resolve(searchParams) })}
+      fallback={<TeamLoading />}
+    />
   );
 }

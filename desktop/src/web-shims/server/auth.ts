@@ -26,3 +26,19 @@ export async function requireAuth(): Promise<NextResponse | null> {
   }
   return null;
 }
+
+/**
+ * web/lib/auth.ts requireLocalWrite on the cloud deploy: control, config and
+ * data writes that belong to the user's own machine are refused, with the
+ * web's same 403 body. The desktop keeps the cloud behaviour for them
+ * (sending keys to an agent's tmux, for one); nothing reaches a shell.
+ */
+export async function requireLocalWrite(): Promise<NextResponse | null> {
+  return NextResponse.json(
+    {
+      error: "read_only",
+      message: "Questa azione si fa dall'app desktop. Dal browser è sola visualizzazione.",
+    },
+    { status: 403 },
+  );
+}
