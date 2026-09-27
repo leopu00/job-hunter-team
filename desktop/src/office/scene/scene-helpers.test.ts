@@ -99,3 +99,15 @@ describe("allFurniture", () => {
     expect(allFurniture(layout).map((f) => f.id)).toEqual(["printer", "scout_desk_0", "scout_desk_1"]);
   });
 });
+
+describe("sceneBounds", () => {
+  it("frames the floor and the wall behind it", async () => {
+    const { sceneBounds } = await import("../layout-items");
+    const layout = {
+      floor: FLOOR,
+      backdrop: [{ image: { src: "/office/wall.png" }, draw: { x: 240, y: 20, w: 2920, h: 120 }, repeatX: true }],
+    } as unknown as Parameters<typeof sceneBounds>[0];
+    expect(sceneBounds(layout)).toEqual({ x: 240, y: 20, w: 2920, h: 1980 });
+    expect(sceneBounds({ ...layout, backdrop: undefined })).toEqual(FLOOR);
+  });
+});

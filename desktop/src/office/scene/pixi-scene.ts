@@ -15,7 +15,7 @@ import type {
 } from "../contract";
 import { clamp, fit, pan, zoomAt, type Camera } from "./camera";
 import { feetAnchor, pickCell } from "./frames";
-import { allFurniture } from "../layout-items";
+import { allFurniture, sceneBounds } from "../layout-items";
 
 /**
  * The office drawn with PixiJS in the webview: the floor, the furniture and
@@ -81,8 +81,20 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   glass.fill({ color: 0x9fd4ff, alpha: 0.35 });
   floorLayer.addChild(glass);
 
+  // Furniture with a seated picture: swapped in while someone sits there.
+  type Occupiable = { sprite: Sprite; free: Texture; taken: Texture; occupant: { uid: string; role: AgentPose["role"] } | null };
+  const occupiable = new Map<string, Occupiable>();
   for (const item of furniture) {
     const node = furnitureNode(item, textures);
+    const free = textureFor(textures, item.image);
+    const taken = textureFor(textures, item.occupiedImage);
+    if (node instanceof Sprite && free && taken) {
+      const entry: Occupiable = { sprite: node, free, taken, occupant: null };
+      occupiable.set(item.id, entry);
+      // While taken, the picture is the agent: a click on it is a click on the agent.
+      clickable(node, () => entry.occupant && onClick({ kind: "agent", ...entry.occupant }));
+      node.eventMode = "none";
+    }
     if (item.layer === "floor") floorLayer.addChild(node);
     else sortedLayer.addChild(node);
   }
@@ -104,7 +116,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   // Camera, pan and zoom.
   let view = { w: app.screen.width, h: app.screen.height };
-  let camera: Camera = fit(view, layout.floor);
+  const bounds = sceneBounds(layout);
+  let camera: Camera = fit(view, bounds);
   const applyCamera = () => {
     world.scale.set(camera.scale);
     world.position.set(camera.x, camera.y);
@@ -122,7 +135,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     const now = { x: e.global.x, y: e.global.y };
     if (Math.hypot(now.x - drag.start.x, now.y - drag.start.y) > CLICK_SLOP) drag.moved = true;
     if (drag.moved) {
-      camera = pan(camera, { x: now.x - drag.last.x, y: now.y - drag.last.y }, view, layout.floor);
+      camera = pan(camera, { x: now.x - drag.last.x, y: now.y - drag.last.y }, view, bounds);
       applyCamera();
     }
     drag.last = now;
@@ -136,7 +149,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const wheel = (e: WheelEvent) => {
     e.preventDefault();
     const box = app.canvas.getBoundingClientRect();
-    camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), { x: e.clientX - box.left, y: e.clientY - box.top }, view, layout.floor);
+    camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), { x: e.clientX - box.left, y: e.clientY - box.top }, view, bounds);
     applyCamera();
   };
   app.canvas.addEventListener("wheel", wheel, { passive: false });
@@ -156,6 +169,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   const drawAgents = (poses: AgentPose[]) => {
     const seen = new Set<string>();
+    const seated = new Map<string, AgentPose>();
     for (const pose of poses) {
       const character = characters.get(pose.sheet);
       if (!character) continue;
@@ -170,6 +184,17 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
         sortedLayer.addChild(sprite);
       }
       drawPose(sprite, pose, character, textures);
+      // Seated where the furniture has the seated picture: the picture is the agent.
+      if (pose.seatedAt && occupiable.has(pose.seatedAt)) {
+        seated.set(pose.seatedAt, pose);
+        sprite.visible = false;
+      }
+    }
+    for (const [id, o] of occupiable) {
+      const who = seated.get(id);
+      o.sprite.texture = who ? o.taken : o.free;
+      o.occupant = who ? { uid: who.uid, role: who.role } : null;
+      o.sprite.eventMode = who ? "static" : "none";
     }
     for (const [uid, sprite] of agents) {
       if (seen.has(uid)) continue;
@@ -225,7 +250,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       if (width <= 0 || height <= 0) return;
       app.renderer.resize(width, height);
       view = { w: width, h: height };
-      camera = clamp(camera, view, layout.floor);
+      camera = clamp(camera, view, bounds);
       applyCamera();
     },
     destroy() {
