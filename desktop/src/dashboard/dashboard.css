@@ -17,3 +17,19 @@
 @source "../../../web/app";
 @source "../../../web/lib";
 @source "../../../web/i18n";
+
+/* «Quando, chi e cosa» on the team page (web/app/(protected)/team/
+   ActivityCharts.tsx): at 1x the plane draws its chart as wide as its
+   clientWidth, which rounds a fractional width UP (982.28 → 983) under the
+   body's zoom. The overflow of less than a pixel shows the web's always-on
+   WebKit scrollbars, the width drops by 6 px, the chart shrinks, the bars go
+   away and it starts again: the desktop settled on a stray bar about one load
+   in two. Without its scrollbar the plane keeps one width; zoomed in (2x…) it
+   still scrolls with the trackpad or Shift + wheel. The only plane of its kind:
+   team-timeline-scrollbar.test.ts fails if the web changes it. */
+.flex-1.overflow-x-auto:has(> div > svg) {
+  scrollbar-width: none;
+}
+.flex-1.overflow-x-auto:has(> div > svg)::-webkit-scrollbar {
+  display: none;
+}
