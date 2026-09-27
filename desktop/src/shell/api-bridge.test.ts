@@ -48,8 +48,10 @@ describe("webRoutes", () => {
     const next = vi.fn(notInDesktop);
     const api = webRoutes({ "/api/pending-messages/[id]/ack": { POST } }, next);
 
-    const res = await api("/api/pending-messages/abc/ack", { method: "POST", body: JSON.stringify({ a: 1 }) });
+    const res = await api("/api/pending-messages/abc/ack?x=1", { method: "POST", body: JSON.stringify({ a: 1 }) });
     expect(await res.json()).toEqual({ id: "abc", body: { a: 1 } });
+    // Next hands route handlers a NextRequest: nextUrl is there.
+    expect((POST.mock.calls[0][0] as unknown as { nextUrl: URL }).nextUrl.searchParams.get("x")).toBe("1");
 
     expect((await api("/api/pending-messages/abc/ack")).status).toBe(405);
     expect((await api("/api/pending-messages/abc/other", { method: "POST" })).status).toBe(404);

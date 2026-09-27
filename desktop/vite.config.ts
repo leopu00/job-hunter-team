@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -26,6 +27,9 @@ function webDepsFromDesktop(): Plugin {
     resolveId(source, importer, options) {
       if (!importer?.startsWith(webDir)) return null;
       if (/^[./\0]/.test(source) || source.startsWith(fromHere("./"))) return null;
+      // Node built-ins stay with Vite, which then names the web file that
+      // pulled one in (instead of the desktop importer used below).
+      if (source.startsWith("node:") || builtinModules.includes(source)) return null;
       return this.resolve(source, desktopImporter, { ...options, skipSelf: true });
     },
   };
@@ -98,6 +102,8 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/jht-paths$/, replacement: fromHere("./src/web-shims/server/jht-paths.ts") },
       { find: /^@\/lib\/user-document-upload\.server$/, replacement: fromHere("./src/web-shims/server/user-document-upload.ts") },
       { find: /^@\/lib\/positions\/local-first-write$/, replacement: fromHere("./src/web-shims/server/local-first-write.ts") },
+      { find: /^@\/lib\/cloud-sync\/auth$/, replacement: fromHere("./src/web-shims/server/cloud-sync-auth.ts") },
+      { find: /^@\/lib\/pending-message-reply-local$/, replacement: fromHere("./src/web-shims/server/pending-message-reply-local.ts") },
       { find: /^better-sqlite3$/, replacement: fromHere("./src/web-shims/server/better-sqlite3.ts") },
       { find: /^next\/link$/, replacement: fromHere("./src/web-shims/next-link.tsx") },
       { find: /^next\/navigation$/, replacement: fromHere("./src/web-shims/next-navigation.ts") },

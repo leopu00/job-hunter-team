@@ -5,7 +5,8 @@ import type { PageProps } from "../types";
 
 /**
  * web/app/(protected)/messages, run as it is: the chat with the team (history,
- * replies, new turns, Realtime).
+ * replies, new turns, Realtime). Its routes are answered by
+ * pages/messages/messages-api.ts.
  */
 export default function MessagesPage(_props: PageProps) {
   return <ServerPage render={() => WebMessagesPage()} fallback={<DashboardSkeleton label="Caricamento messaggi" />} />;

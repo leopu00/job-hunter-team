@@ -10,6 +10,6 @@ export async function getWorkspacePath(): Promise<string | null> {
   return null;
 }
 
-export function workspaceHasDb(_path: string): boolean {
+export function workspaceHasDb(_path?: string): boolean {
   return false;
 }
