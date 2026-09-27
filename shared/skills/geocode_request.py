@@ -58,14 +58,17 @@ def request_geocode(position_id: int, mode: str) -> dict:
 
     flag = 1 if mode == "on" else 0
     conn.execute(
-        # `CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END` mantiene
-        # `geocode_requested_at` allineato al flag (NULL su toggle-off → la
-        # query `next-for-geocoding` ordina FIFO solo sulle richieste vive).
+        # Anche l'annullamento ha il suo istante: il pull desired-state fa
+        # vincere il cloud solo con un istante piu' recente (resolveRequest in
+        # cli/src/commands/cloud.js), e un annullamento senza istante
+        # perderebbe contro la richiesta vecchia ancora sul cloud.
+        # `next-for-geocoding` filtra sul flag, quindi la FIFO resta sulle
+        # sole richieste vive.
         "UPDATE positions "
         "   SET geocode_requested = ?, "
-        "       geocode_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END "
+        "       geocode_requested_at = CURRENT_TIMESTAMP "
         " WHERE id = ?",
-        (flag, flag, position_id),
+        (flag, position_id),
     )
     conn.commit()
 

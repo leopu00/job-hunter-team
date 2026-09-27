@@ -108,10 +108,10 @@ function toggleViaLocal(
       `
       UPDATE positions
          SET geocode_requested = ?,
-             geocode_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END
+             geocode_requested_at = CURRENT_TIMESTAMP
        WHERE id = ?
     `,
-    ).run(requested ? 1 : 0, requested ? 1 : 0, legacyId);
+    ).run(requested ? 1 : 0, legacyId);
 
     const updated = db
       .prepare<[number], PositionRow>(
@@ -194,7 +194,9 @@ async function toggleViaCloud(
   };
   const r = row as unknown as R;
 
-  const geocodeRequestedAt = requested ? new Date().toISOString() : null;
+  // Anche l'annullamento ha il suo istante: il box prende dal cloud solo una
+  // richiesta piu' recente della sua (resolveRequest, cli/src/commands/cloud.js).
+  const geocodeRequestedAt = new Date().toISOString();
   const { error: upErr } = await supabase
     .from("positions")
     .update({
@@ -294,7 +296,7 @@ async function handleToggle(
         .from("positions")
         .update({
           geocode_requested: requested,
-          geocode_requested_at: requested ? new Date().toISOString() : null,
+          geocode_requested_at: new Date().toISOString(),
         })
         .eq("user_id", userId)
         .eq("legacy_id", legacyId);

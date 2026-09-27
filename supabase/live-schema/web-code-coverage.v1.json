@@ -1483,9 +1483,6 @@
       "sha256:215979ce8aee149e559b065ca80e091b5e47bfcebc5b1ea0cdfe06013c4a8dea": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:26fbde8657a8967a1cc39ebecbd9cd1e8cfa348ebb560b9c7ac63bc826e73b97": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:2c3d9384c3dd7e797147cd7cdc1dacaf03977aae4e80a1efadf3cd67671e90a8": {
         "exception": "reviewed_dynamic_schema_use"
       },

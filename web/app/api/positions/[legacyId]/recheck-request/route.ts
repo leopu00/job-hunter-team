@@ -71,9 +71,9 @@ async function handleToggle(
       db.prepare(
         `UPDATE positions
             SET recheck_requested = ?,
-                recheck_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE recheck_requested_at END
+                recheck_requested_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
-      ).run(requested ? 1 : 0, requested ? 1 : 0, legacyId);
+      ).run(requested ? 1 : 0, legacyId);
     } finally {
       db.close();
     }
@@ -111,9 +111,9 @@ async function handleToggle(
       db.prepare(
         `UPDATE positions
             SET recheck_requested = ?,
-                recheck_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE recheck_requested_at END
+                recheck_requested_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
-      ).run(requested ? 1 : 0, requested ? 1 : 0, legacyId);
+      ).run(requested ? 1 : 0, legacyId);
     } finally {
       db.close();
     }
@@ -124,9 +124,7 @@ async function handleToggle(
         .from("positions")
         .update({
           recheck_requested: requested,
-          ...(requested
-            ? { recheck_requested_at: new Date().toISOString() }
-            : {}),
+          recheck_requested_at: new Date().toISOString(),
         })
         .eq("user_id", userId)
         .eq("legacy_id", legacyId);
@@ -166,7 +164,9 @@ async function handleToggle(
     .from("positions")
     .update({
       recheck_requested: requested,
-      recheck_requested_at: requested ? new Date().toISOString() : null,
+      // Anche l'annullamento ha il suo istante: il box prende dal cloud solo
+      // una richiesta piu' recente della sua (resolveRequest, cli cloud.js).
+      recheck_requested_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
     .eq("legacy_id", legacyId);
