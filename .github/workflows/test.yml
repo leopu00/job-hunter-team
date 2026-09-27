@@ -371,16 +371,19 @@ jobs:
       # copertura non è sparita: gira nel job `smoke`, sul cron.
       #
       # `--timeout=300 --timeout-method=thread`: un test appeso ferma la run
-      # con il suo nome e lo stack di ogni thread, invece di consumare il tetto
-      # del job. Dal 20/09 al 27/09 un solo test fermo (una page.evaluate senza
-      # timeout su una pagina che non risponde) ha dato «cancelled» a ogni push
-      # su master: quaranta minuti e nessun nome. Il metodo `thread` chiude il
+      # dopo cinque minuti, invece di consumare il tetto del job. `-v` e non
+      # `-q`: il metodo thread stampa solo gli stack, e quello del thread
+      # principale sta nel loop di Playwright; con `-v` pytest scrive il nome
+      # di ogni test prima di eseguirlo, quindi il test appeso e' quello sulla
+      # riga del «Timeout». Dal 20/09 al 27/09 un solo test fermo (una
+      # page.evaluate senza timeout su una pagina che non risponde) ha dato
+      # «cancelled» a ogni push su master: quaranta minuti e nessun nome. Il metodo `thread` chiude il
       # processo; `signal` interrompe il test ma lascia Playwright in uno stato
       # che blocca il test successivo. Nelle run del 26/09 il blocco di 72 test
       # più lento ha impiegato 3 minuti e 13 secondi: nessun test sano arriva
       # a cinque.
       - name: Run pytest
-        run: python -m pytest tests/ -q -m "not production" --timeout=300 --timeout-method=thread
+        run: python -m pytest tests/ -v -m "not production" --timeout=300 --timeout-method=thread
 
   # Spec end-to-end. Gira TUTTO ciò che non è in quarantena: le 75 spec
   # storiche testavano un sito che non esiste più (pagine rimosse, plane locale
