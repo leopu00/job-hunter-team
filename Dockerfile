@@ -306,6 +306,12 @@ RUN useradd --create-home --shell /bin/bash jht \
 	       ln -sf "$f" "/usr/local/bin/$name"; \
 	     fi; \
        done \
+    # La CLI stessa, per gli agenti: le skill chiamano `jht cloud quarantine`,
+    # `jht cloud status`, `jht team start <ruolo>`. L'immagine non l'ha mai
+    # esposta (l'entrypoint la lancia per percorso): su una VPS c'era solo
+    # perché aggiunta a mano nel container, e col container ricreato il
+    # 27/09 è sparita, e con lei quei comandi.
+    && ln -sf /app/cli/bin/jht.js /usr/local/bin/jht \
     # Skill discovery: per-agente, popolato dal launcher.
     # `agents/_skills/` è la library (single source of truth). Il manifest
     # `agents/<role>/skills.list` dichiara quali skill l'agente consuma;
