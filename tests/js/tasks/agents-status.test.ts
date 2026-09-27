@@ -4,6 +4,9 @@ import { join, resolve } from "node:path";
 import {
   agentsStatusWriter,
   createHeartbeatCarrier,
+  CARRY_FRESH_MS,
+  KEEPALIVE_MS,
+  READ_EVERY_MS,
   buildAgentsStatus,
   canonicalAgentId,
   createAgentsStatusReader,
@@ -144,6 +147,33 @@ describe("the reader and the publisher", () => {
       expect(write).toHaveBeenCalledTimes(2);
       await vi.advanceTimersByTimeAsync(10_000);
       expect(write).toHaveBeenCalledTimes(3);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the heartbeat stops carrying the map two minutes after the rule stops answering", async () => {
+    vi.useFakeTimers();
+    try {
+      // The pane script fails: the reader says null from now on. The last map
+      // must not ride every heartbeat as if it were live.
+      let answers = true;
+      const reader = { read: async () => (answers ? { a: { status: "working", since: "x" } } : null) };
+      const carrier = createHeartbeatCarrier({ source: "tui" });
+      const stop = startAgentsStatusPublisher({ reader, write: carrier.hold, every: READ_EVERY_MS, keepalive: KEEPALIVE_MS });
+      // While the rule answers, the keepalive keeps the map fresh however long.
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(carrier.fields()).toHaveProperty("agents_status");
+      answers = false;
+      await vi.advanceTimersByTimeAsync(CARRY_FRESH_MS - KEEPALIVE_MS);
+      expect(carrier.fields()).toHaveProperty("agents_status");
+      await vi.advanceTimersByTimeAsync(KEEPALIVE_MS + READ_EVERY_MS);
+      expect(carrier.fields()).toEqual({});
+      // The rule answers again: the tags come back at the next reading.
+      answers = true;
+      await vi.advanceTimersByTimeAsync(READ_EVERY_MS);
+      expect(carrier.fields()).toHaveProperty("agents_status");
       stop();
     } finally {
       vi.useRealTimers();
