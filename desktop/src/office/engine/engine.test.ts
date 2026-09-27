@@ -64,21 +64,33 @@ describe("the office engine: a pipeline transition becomes a trip", () => {
     const seated = pose(engine, "analista-1").pos;
     expect(pose(engine, "analista-1").mode).toBe("sit");
     engine.apply({ type: "pipeline", uid: "analista-1", toState: "checked", position: TAG, ts: "2026-09-27T17:00:00Z" });
+    // the cloud's counts already hold the move; the drawn piles wait for the trip
+    engine.apply({ type: "piles", piles: { scout: 4, analisti: 3, scorer: null, scrittori: null, critici: null } });
+    expect(engine.piles()).toMatchObject({ scout: 5, analisti: 2 });
 
     const modes: string[] = [];
     let reachedPickup = false;
     let crossedWall = false;
+    let crossedDesk = false;
     const pickup = layout.departments[0]!.inboxPickupAccess;
+    const desks = layout.departments.flatMap((d) => d.desks.map((k) => k.furniture.rect));
     run(engine, 60, () => {
       const p = pose(engine, "analista-1");
       if (modes.at(-1) !== p.mode) modes.push(p.mode);
-      if (Math.hypot(p.pos.x - pickup.x, p.pos.y - pickup.y) < 1) reachedPickup = true;
+      if (Math.hypot(p.pos.x - pickup.x, p.pos.y - pickup.y) < 1) {
+        reachedPickup = true;
+        // taken from the Scout pile, not dropped yet
+        expect(engine.piles()).toMatchObject({ scout: 4, analisti: 2 });
+      }
       // the glass wall at x 600..608 is open only below y 600
       if (p.pos.x > 590 && p.pos.x < 618 && p.pos.y < 600) crossedWall = true;
+      if ((p.mode === "walk" || p.mode === "carry") && desks.some((r) => p.pos.x > r.x && p.pos.x < r.x + r.w && p.pos.y > r.y && p.pos.y < r.y + r.h)) crossedDesk = true;
     });
 
     expect(reachedPickup).toBe(true);
     expect(crossedWall).toBe(false);
+    // the departments' desks are obstacles though they are not in layout.furniture
+    expect(crossedDesk).toBe(false);
     // (seated before the event) walk to the pile, pause, carry to the desk, work seated,
     // carry to the own pile, pause, walk back, sit
     expect(modes).toEqual(["walk", "idle", "carry", "sit", "carry", "idle", "walk", "sit"]);
@@ -115,6 +127,8 @@ describe("the office engine: a pipeline transition becomes a trip", () => {
     engine.apply({ type: "enter", agent: { uid: "analista-1", role: "analista", sheet: "" }, atOnce: true });
     engine.apply({ type: "piles", piles: { scout: 5, analisti: 0, scorer: null, scrittori: null, critici: null } });
     for (let i = 0; i < 3; i++) engine.apply({ type: "pipeline", uid: "analista-1", toState: "checked", position: TAG, ts: `t${i}` });
+    engine.apply({ type: "piles", piles: { scout: 2, analisti: 3, scorer: null, scrittori: null, critici: null } });
+    expect(engine.piles()).toMatchObject({ scout: 5, analisti: 0 });
     run(engine, 200);
     expect(engine.piles()).toMatchObject({ scout: 2, analisti: 3 });
     expect(pose(engine, "analista-1").mode).toBe("sit");
@@ -176,6 +190,23 @@ describe("the office engine: bubbles and piles", () => {
 
   it("keeps an unknown pile unknown when a trip passes by it", () => {
     const engine = createOfficeEngine(smallOffice(), { random: seeded() });
+    engine.apply({ type: "enter", agent: { uid: "analista-1", role: "analista", sheet: "" }, atOnce: true });
+    engine.apply({ type: "pipeline", uid: "analista-1", toState: "checked", position: TAG, ts: "t" });
+    run(engine, 60);
     expect(engine.piles()).toEqual({ scout: null, analisti: null, scorer: null, scrittori: null, critici: null });
+  });
+
+  it("shows the true counts once an agent leaves in the middle of its trips", () => {
+    const engine = createOfficeEngine(smallOffice(), { random: seeded(4) });
+    engine.apply({ type: "enter", agent: { uid: "analista-1", role: "analista", sheet: "" }, atOnce: true });
+    engine.apply({ type: "piles", piles: { scout: 5, analisti: 0, scorer: null, scrittori: null, critici: null } });
+    for (let i = 0; i < 2; i++) engine.apply({ type: "pipeline", uid: "analista-1", toState: "checked", position: TAG, ts: `t${i}` });
+    engine.apply({ type: "piles", piles: { scout: 3, analisti: 2, scorer: null, scrittori: null, critici: null } });
+    // walking to the Scout pile, one more trip queued
+    run(engine, 0.5);
+    engine.apply({ type: "leave", uid: "analista-1" });
+    expect(engine.piles()).toMatchObject({ scout: 3, analisti: 2 });
+    run(engine, 30);
+    expect(engine.piles()).toMatchObject({ scout: 3, analisti: 2 });
   });
 });
