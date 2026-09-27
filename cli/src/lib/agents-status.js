@@ -195,6 +195,15 @@ export function agentsStatusPatch(source, agents) {
   return { agents_status: { [source]: { agents } } };
 }
 
+/**
+ * How a box writes its source: direct to Supabase when it has a session
+ * (`direct`, supabase-direct's patchTeamState), otherwise `route`, the
+ * PATCH /api/team-state it already uses for the heartbeat (token jht_sync).
+ */
+export function agentsStatusWriter({ source, direct, route }) {
+  return (map) => (direct ? direct.patchTeamState(agentsStatusPatch(source, map)) : route(agentsStatusPatch(source, map)));
+}
+
 /** How often the rule is read, and the longest silence between two writes. */
 export const READ_EVERY_MS = 20_000;
 export const KEEPALIVE_MS = 60_000;
@@ -209,18 +218,37 @@ export function statusKey(map) {
 }
 
 /**
+ * After the server said no (an HTTP status: a web route older than this
+ * field answers 403, a cloud without migration 089 refuses the column), the
+ * next write waits this long. Nothing changes by asking every 20 s.
+ */
+export const REFUSED_RETRY_MS = 30 * 60_000;
+
+/**
  * Reads every READ_EVERY_MS and writes team_state.agents_status when the
  * statuses changed, or at least every KEEPALIVE_MS so the desktop can tell a
- * live map from an old one. Its own UPDATE, never with the heartbeat: a
+ * live map from an old one. Its own write, never with the heartbeat: a
  * refused write must not take the heartbeat with it (see migration 089).
- * `write` failing only skips a round. Returns a stop function.
+ * A failed write logs once, then stays quiet until one succeeds again; a
+ * refusal (the error carries an HTTP `status`) also waits REFUSED_RETRY_MS
+ * before the next try, a network error only the next round. Returns a stop
+ * function.
  */
-export function startAgentsStatusPublisher({ reader, write, every = READ_EVERY_MS, keepalive = KEEPALIVE_MS, log = () => {} }) {
+export function startAgentsStatusPublisher({
+  reader,
+  write,
+  every = READ_EVERY_MS,
+  keepalive = KEEPALIVE_MS,
+  refusedRetry = REFUSED_RETRY_MS,
+  log = () => {},
+}) {
   let lastKey = null;
   let lastWrite = 0;
   let busy = false;
+  let failing = false;
+  let retryAt = 0;
   const tick = async () => {
-    if (busy) return;
+    if (busy || Date.now() < retryAt) return;
     busy = true;
     try {
       const map = await reader.read();
@@ -230,8 +258,18 @@ export function startAgentsStatusPublisher({ reader, write, every = READ_EVERY_M
       await write(map);
       lastKey = key;
       lastWrite = Date.now();
+      if (failing) log('info', 'agents-status.write-resumed', {});
+      failing = false;
     } catch (err) {
-      log('warn', 'agents-status.write-failed', { err: err?.message });
+      const refused = typeof err?.status === 'number';
+      if (!failing) {
+        log('warn', 'agents-status.write-failed', {
+          err: err?.message,
+          ...(refused ? { status: err.status, retry_in_s: Math.round(refusedRetry / 1000) } : {}),
+        });
+      }
+      failing = true;
+      if (refused) retryAt = Date.now() + refusedRetry;
     } finally {
       busy = false;
     }

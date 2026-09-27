@@ -3,6 +3,7 @@ import { resolveUser } from "@/lib/team-state/auth";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import { sanitizeAgentsStatus } from "@/lib/team-state/agents-status";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,11 @@ const OBSERVED_FIELDS = [
   // locale; il browser riceve soltanto current/errore + timestamp.
   "cloud_push_status",
   "cloud_push_checked_at",
+  // Lo stato di ogni agente per le targhette dell'ufficio desktop (089): il
+  // box manda solo la sua chiave ({ tui: { agents } }), il db la unisce alle
+  // altre sorgenti e la timbra. Ricostruito da sanitizeAgentsStatus, mai
+  // passato così com'è.
+  "agents_status",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];
@@ -162,6 +168,14 @@ export async function PATCH(req: NextRequest) {
         { status: 400 },
       );
     }
+  }
+
+  if ("agents_status" in update) {
+    const agentsStatus = sanitizeAgentsStatus(update.agents_status);
+    if (!agentsStatus.ok) {
+      return NextResponse.json({ error: agentsStatus.error }, { status: 400 });
+    }
+    update.agents_status = agentsStatus.value;
   }
 
   // Single-team enforcement: solo il device active può scrivere observed.
