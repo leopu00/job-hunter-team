@@ -68,6 +68,30 @@ describe("the desktop bundle", () => {
     expect(Buffer.from(source!)).toEqual(readFileSync(new URL(`../../../web/public/${file}`, import.meta.url)));
   });
 
+  // Tailwind in the desktop generates only the classes it finds in the
+  // folders dashboard.css names with @source (plus desktop/ itself). A web
+  // file in the bundle outside them renders with its layout classes
+  // missing: the position page did (lg:grid-cols-3, md:items-center…).
+  it("every web file in the bundle is scanned by Tailwind", () => {
+    const css = readFileSync(new URL("../dashboard/dashboard.css", import.meta.url), "utf8");
+    const sources = [...css.matchAll(/@source\s+"([^"]+)"/g)].map((m) =>
+      fileURLToPath(new URL(m[1], new URL("../dashboard/", import.meta.url))).replace(/\\/g, "/"),
+    );
+    const webFiles = moduleIds
+      .map((id) => id.replace(/\\/g, "/").split("?")[0])
+      .filter((id) => id.includes("/web/") && !id.includes("/node_modules/") && /\.(tsx?|jsx?)$/.test(id));
+    expect(webFiles.length).toBeGreaterThan(0);
+    const unscanned = [...new Set(webFiles.filter((f) => !sources.some((s) => f === s || f.startsWith(s.replace(/\/?$/, "/")))))];
+    expect(unscanned).toEqual([]);
+  });
+
+  it("the dashboard stylesheet has the layout classes only the ported pages use", () => {
+    const css = [...assets].find(([name]) => /^assets\/dashboard-.*\.css$/.test(name))?.[1];
+    expect(css).toBeDefined();
+    // used only in web/app/(protected)/positions/[id]/page.tsx
+    for (const cls of ["lg\\:grid-cols-3", "lg\\:col-span-2", "md\\:items-center"]) expect(String(css)).toContain(cls);
+  });
+
   it("never pulls node:crypto or child_process in", () => {
     expect(moduleIds.filter((id) => /(^|[:/])(node:)?(crypto|child_process)$/.test(id))).toEqual([]);
   });

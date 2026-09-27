@@ -8,6 +8,12 @@
 @import "@fontsource/jetbrains-mono/700.css";
 @import "../../../web/app/globals.css";
 
-/* Tailwind scans desktop/ on its own; the reused components live in web/. */
-@source "../../../web/app/components";
-@source "../../../web/app/(protected)/_components/DashboardSkeleton.tsx";
+/* Tailwind scans desktop/ on its own; the reused web code lives in web/app
+   (components, the protected pages, their routes), web/lib and web/i18n. Whole folders,
+   not one per page: a page ported later must not lose its classes (the
+   position page did), and a glob with "(protected)" in it is read as a group,
+   not as the folder's name. src/bundle/build-boundary.test.ts fails when a
+   web file in the bundle is outside these. */
+@source "../../../web/app";
+@source "../../../web/lib";
+@source "../../../web/i18n";
