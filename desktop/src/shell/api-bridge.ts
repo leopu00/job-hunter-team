@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { locales } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 
@@ -75,7 +76,8 @@ function matchPattern(pattern: string, path: string): Record<string, string> | n
 }
 
 /**
- * Runs web route handlers as they are, for an explicit list of routes whose
+ * Runs web route handlers as they are, with a NextRequest (next/server
+ * stand-in), for an explicit list of routes whose
  * work is a Supabase read or write with the user's session (their
  * server-only imports resolve to the desktop stand-ins). Patterns use the
  * web's folder syntax: "/api/pending-messages/[id]/ack". A listed route
@@ -88,7 +90,8 @@ export function webRoutes(routes: Record<string, WebRouteModule>, next: ApiFetch
       for (const [pattern, mod] of Object.entries(routes)) {
         const params = matchPattern(pattern, path);
         if (!params) continue;
-        const request = new Request(input instanceof Request ? input : new URL(String(input), window.location.href), init);
+        // A NextRequest, as Next hands the handler (some read req.nextUrl).
+        const request = new NextRequest(input instanceof Request ? input : new URL(String(input), window.location.href), init);
         const handler = mod[request.method.toUpperCase()];
         if (typeof handler !== "function") return json({ error: "method_not_allowed" }, 405);
         return (handler as WebHandler)(request, { params: Promise.resolve(params) });

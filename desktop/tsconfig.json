@@ -30,6 +30,8 @@
       "@/lib/jht-paths": ["./src/web-shims/server/jht-paths.ts"],
       "@/lib/user-document-upload.server": ["./src/web-shims/server/user-document-upload.ts"],
       "@/lib/positions/local-first-write": ["./src/web-shims/server/local-first-write.ts"],
+      "@/lib/cloud-sync/auth": ["./src/web-shims/server/cloud-sync-auth.ts"],
+      "@/lib/pending-message-reply-local": ["./src/web-shims/server/pending-message-reply-local.ts"],
       "better-sqlite3": ["./src/web-shims/server/better-sqlite3.ts"],
       "@/*": ["../web/*"],
       "next/link": ["./src/web-shims/next-link.tsx"],
