@@ -219,12 +219,20 @@ _HIDE_JS = """(attr) => {
     el.style.visibility = 'hidden';
   });
   window.__jhtHiddenSecrets = hidden;
-  return hidden.length;
+  return true;
 }"""
 _SHOW_JS = """() => {
   (window.__jhtHiddenSecrets || []).forEach(([el, value]) => { el.style.visibility = value; });
   window.__jhtHiddenSecrets = [];
+  return true;
 }"""
+# Both scripts run through wait_for_function, not evaluate: evaluate has no
+# timeout, and on a page whose navigation never committed there is no
+# document to run in, so it waits forever (the CLOSER stuck on a hung
+# portal, and pytest without a verdict from 20/09). wait_for_function gives
+# up after this long; the scripts return true, so a live page answers at
+# the first poll.
+_SECRET_SCRIPT_TIMEOUT_MS = 5_000
 
 
 def fill_secret(control: Any, password: str) -> None:
@@ -237,11 +245,11 @@ def fill_secret(control: Any, password: str) -> None:
 def secrets_hidden(page: Any) -> Iterator[None]:
     """Hide every password field (and every field marked by fill_secret) for the duration of a screenshot."""
     try:
-        page.evaluate(_HIDE_JS, SECRET_ATTR)
+        page.wait_for_function(_HIDE_JS, arg=SECRET_ATTR, timeout=_SECRET_SCRIPT_TIMEOUT_MS)
     except Exception as exc:
         raise AccountStop("account_secret_unhidden", "password fields could not be hidden before a screenshot") from exc
     try:
         yield
     finally:
         with contextlib.suppress(Exception):
-            page.evaluate(_SHOW_JS)
+            page.wait_for_function(_SHOW_JS, timeout=_SECRET_SCRIPT_TIMEOUT_MS)

@@ -152,9 +152,27 @@ def test_password_fields_are_hidden_during_a_screenshot_and_shown_after(page):
     assert shown == ["visible", "visible", "visible"]
 
 
+def test_a_page_that_never_committed_stops_instead_of_waiting_forever(page):
+    """page.evaluate has no timeout: on a navigation that never committed it
+    waits for a document that never comes (the CLOSER stuck on a hung portal,
+    pytest without a verdict from 20/09). The hiding gives up and stops."""
+    import time
+
+    page.route("https://portal.example.test/**", lambda route: None)  # never answers
+    with pytest.raises(Exception):
+        page.goto("https://portal.example.test/apply", timeout=1_000)
+
+    started = time.monotonic()
+    with pytest.raises(acct.AccountStop) as stop:
+        with acct.secrets_hidden(page):
+            pytest.fail("a page whose fields could not be hidden must not reach the screenshot")
+    assert stop.value.reason == "account_secret_unhidden"
+    assert time.monotonic() - started < acct._SECRET_SCRIPT_TIMEOUT_MS / 1000 + 5
+
+
 def test_a_page_that_cannot_hide_its_secrets_stops():
     class Broken:
-        def evaluate(self, *_args):
+        def wait_for_function(self, *_args, **_kwargs):
             raise RuntimeError("target closed")
 
     with pytest.raises(acct.AccountStop) as stop:
