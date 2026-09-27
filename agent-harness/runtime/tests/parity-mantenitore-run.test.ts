@@ -30,7 +30,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -45,7 +45,10 @@ const run = promisify(execFile);
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "jht-mantenitore-run-"));
+  // Resolved: on macOS the temp folder is behind the /var -> /private/var link, and a
+  // path that reaches the permission policy unresolved hid, on the Mac only, that the
+  // logbook was refused as another role's state (it was on Linux, where the team runs).
+  root = await realpath(await mkdtemp(join(tmpdir(), "jht-mantenitore-run-")));
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });

@@ -100,8 +100,13 @@ export class PermissionPolicy {
     this.#ask = options.ask;
   }
 
-  async decide(toolName: string, access: ToolAccess): Promise<PermissionDecision> {
-    if (access.risk === "none") return { allowed: true, asked: false };
+  async decide(toolName: string, requested: ToolAccess): Promise<PermissionDecision> {
+    if (requested.risk === "none") return { allowed: true, asked: false };
+    // The roots are resolved (constructor); the paths a tool declares are resolved
+    // here too, or the two sides do not compare: on macOS /var is /private/var, and
+    // an unresolved path fell outside every root — a refusal on Linux, where the
+    // team runs, that the Mac never showed (T41, the MANTENITORE's logbook).
+    const access: ToolAccess = { ...requested, paths: requested.paths.map(realPath) };
     if (access.risk === "write") {
       // T38: a read-only root may hold a few files this role does write — the
       // ASSISTENTE's profile inside the person's folder. The exception is a

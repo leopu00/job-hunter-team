@@ -159,6 +159,49 @@ describe("PermissionPolicy — runtime state", () => {
   });
 });
 
+describe("PermissionPolicy — paths compared resolved on both sides (T41)", () => {
+  it("refuses another role's state reached through a link, as it refuses it by its real path", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "jht-perm-link-")));
+    try {
+      const state = join(root, "api");
+      await mkdir(join(state, "agents", "scout"), { recursive: true });
+      await mkdir(join(state, "agents", "analista"), { recursive: true });
+      await writeFile(join(state, "agents", "analista", "notes.md"), "x");
+      const alias = join(root, "alias");
+      await symlink(state, alias);
+      const policy = new PermissionPolicy({
+        mode: "auto",
+        freeReadRoots: [join(state, "agents", "scout")],
+        ownRoots: [join(state, "agents", "scout")],
+        stateRoots: [state],
+      });
+      for (const path of [join(state, "agents", "analista", "notes.md"), join(alias, "agents", "analista", "notes.md")]) {
+        expect((await policy.decide("read_file", read(path))).allowed, path).toBe(false);
+        expect((await policy.decide("write_file", write(path))).allowed, path).toBe(false);
+      }
+      // Its own home, by the link too, stays its own.
+      expect((await policy.decide("write_file", write(join(alias, "agents", "scout", "n.md")))).allowed).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("makes one file of the team's logs the MANTENITORE's, and nothing beside it", async () => {
+    const logbook = "/srv/state/team/logs/mantenitore-logbook.jsonl";
+    const policy = new PermissionPolicy({
+      mode: "auto",
+      freeReadRoots: ["/srv/state/agents/mantenitore-1"],
+      ownRoots: ["/srv/state/agents/mantenitore-1", logbook],
+      stateRoots: ["/srv/state"],
+    });
+    expect((await policy.decide("maintainer_logbook", write(logbook))).allowed).toBe(true);
+    expect((await policy.decide("maintainer_logbook", read(logbook))).allowed).toBe(true);
+    for (const path of ["/srv/state/team/logs/captain-diary.jsonl", "/srv/state/team/logs", "/srv/state/team/logs/mantenitore-logbook.jsonl.bak"]) {
+      expect((await policy.decide("write_file", write(path))).allowed, path).toBe(false);
+    }
+  });
+});
+
 describe("workspace walks — runtime state", () => {
   it("glob and grep from a parent folder skip other roles' state, not the role's own", async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "jht-api-walk-")));
