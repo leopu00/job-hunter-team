@@ -16,6 +16,7 @@ import { HOME, ROUTES } from "./routes";
 export const DESKTOP_LINKS = [
   { href: "/agents", label: "Agenti" },
   { href: "/budget", label: "Budget" },
+  { href: "/office", label: "Ufficio" },
 ];
 
 function DesktopLinks() {
