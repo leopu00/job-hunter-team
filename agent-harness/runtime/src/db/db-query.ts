@@ -36,7 +36,7 @@ export const DB_QUERY_SUBCOMMANDS = [
   "next-for-categorize", "next-for-salary-precise", "next-for-recheck-due", "next-for-recheck-weekly",
   "next-for-geocode-missing", "next-for-logo-missing", "next-for-harvest", "next-for-calibration",
   "calibration-consume", "active-categories", "other-pile", "category-sizes", "application", "applications",
-  "check-url", "cv-pdf-paths", "maintenance-report", "check-history",
+  "check-url", "cv-pdf-paths", "maintenance-report", "geocode-check", "check-history",
 ] as const;
 
 /** The queues `next_for_role` answers with one SELECT each, and what each is called. */
@@ -59,7 +59,7 @@ const QUEUES = {
 type QueueCommand = keyof typeof QUEUES;
 
 export const DB_QUERY_PORTED = [
-  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "dashboard", "application",
+  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "geocode-check", "dashboard", "application",
   "applications", "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
 ] as const;
 type Ported = (typeof DB_QUERY_PORTED)[number];
@@ -120,6 +120,7 @@ const SPECS: Record<Ported, CommandSpec> = {
     ],
   },
   "check-history": { prog: "db_query.py check-history", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
+  "geocode-check": { prog: "db_query.py geocode-check", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
   "active-categories": {
     prog: "db_query.py active-categories",
     positionals: [{ name: "user_id", optional: true, default: null }],
@@ -686,6 +687,47 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     print(
       `\npositions: ${counts.positions} | companies: ${counts.companies} | scores: ${counts.scores} | applications: ${counts.applications} | schema: V${version}`,
     );
+    return done();
+  }
+
+  if (name === "geocode-check") {
+    // `geocode_check`: whether the office of THIS position is to be geocoded
+    // now (the ANALISTA's pipeline step 6), and why. The same gates as the
+    // care queue next-for-geocode-missing; no policy to read is no permission.
+    const id = a["id"] as number;
+    const pos = select(db(), "SELECT status, work_mode, office_lat, office_geocoded FROM positions WHERE id = ?", [id]);
+    const p = pos.rows[0];
+    if (!p) {
+      print(`Position ${id} not found.`);
+      return done(1);
+    }
+    const scored = select(db(), "SELECT MAX(total_score) AS best FROM scores WHERE position_id = ?", [id]);
+    const best = scored.rows[0]?.["best"] ?? null;
+    const policy = options.policy;
+    const opts = policy?.geocodeOptions() ?? { min_score: null, non_remote_only: true };
+    const minScore = typeof opts.min_score === "boolean" ? (opts.min_score ? "True" : "False") : String(opts.min_score);
+    let verdict: boolean;
+    let reason: string;
+    if (p["office_lat"] !== null && pyTruthy(p["office_geocoded"])) {
+      [verdict, reason] = [false, "already geocoded (office_geocoded=1)"];
+    } else if (p["status"] === "excluded") {
+      [verdict, reason] = [false, "excluded position"];
+    } else if (!policy || !policy.isEnabled("geocode_missing")) {
+      [verdict, reason] = [false, `geocoding OFF — ${policy ? policy.disabledReason("geocode_missing") : "the enrichment policy cannot be read here"}`];
+    } else if (opts.non_remote_only && String(p["work_mode"] ?? "").toLowerCase() === "remote") {
+      [verdict, reason] = [false, "remote position (work_mode=remote): no office to geocode"];
+    } else if (opts.min_score !== null && best === null) {
+      [verdict, reason] = [false, `score gate ${minScore}: not scored yet — next-for-geocode-missing takes it after scoring`];
+    } else if (opts.min_score !== null && Number(best) < Number(opts.min_score)) {
+      [verdict, reason] = [false, `score gate ${minScore}: best score ${scored.s(scored.rows[0]!, "best")}`];
+    } else {
+      [verdict, reason] = [true, "live, not geocoded yet, geocoding policy on"];
+    }
+    if (a["json"]) {
+      print(pyJson({ position_id: id, geocode: verdict, reason }, { ensureAscii: false }));
+      return done();
+    }
+    print(`GEOCODE #${id}: ${verdict ? "YES" : "NO"} — ${reason}`);
     return done();
   }
 

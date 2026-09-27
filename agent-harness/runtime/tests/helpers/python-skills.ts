@@ -42,6 +42,16 @@ export function pythonSkills(): string | null {
   return extracted;
 }
 
+/**
+ * `shared/skills` of THIS tree, for a command the port and the Python gain in
+ * the same commit: the pinned commit cannot have it, and the Python it is
+ * judged against is the one next to it. Run with PYTHONDONTWRITEBYTECODE, so
+ * the tree gets no __pycache__. Null without python3.
+ */
+export function pythonSkillsOfThisTree(): string | null {
+  return works("python3", ["--version"]) ? join(REPO, "shared", "skills") : null;
+}
+
 export interface PyRun {
   stdout: string;
   stderr: string;
@@ -67,6 +77,7 @@ export function runPython(skills: string, args: string[], env: Record<string, st
     env: {
       PATH: process.env["PATH"] ?? "",
       PYTHONIOENCODING: "utf-8",
+      PYTHONDONTWRITEBYTECODE: "1",
       ...(process.env["TZ"] === undefined ? {} : { TZ: process.env["TZ"] }),
       ...env,
     },
