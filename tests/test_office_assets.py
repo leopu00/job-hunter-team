@@ -33,7 +33,7 @@ def test_the_committed_layout_is_what_game_says_today(committed):
 
 def test_every_image_the_layout_and_the_manifest_name_is_shipped(committed):
     manifest = json.loads((OFFICE / "manifest.json").read_text(encoding="utf-8"))
-    refs = [committed["floorImage"]] + [b["image"] for b in committed["backdrop"]]
+    refs = [committed["floorImage"], committed["paperPile"]["image"]] + [b["image"] for b in committed["backdrop"]]
     items = committed["furniture"] + [d["furniture"] for dept in committed["departments"] for d in dept["desks"]]
     for item in items:
         refs += [ref for ref in (item["image"], item.get("occupiedImage")) if ref]
@@ -136,3 +136,20 @@ def test_every_sheet_a_role_wears_is_in_the_manifest_at_half_size(committed):
     assert (main["cols"], main["rows"], main["cell"], main["feet"]) == (6, 12, {"w": 128, "h": 192}, {"x": 64.0, "y": 180.0})
     assert main["cell"]["w"] * main["scale"] == pytest.approx(256 * 0.425)
     assert by_id["scout_a"]["sit"]["cols"] == 4 and by_id["scout_a"]["sit"]["rows"] == 3
+
+
+def test_the_departments_carry_their_labels_and_the_handoff_tags(committed):
+    scout, *_, critici = committed["departments"]
+    # department_dressing.gd: bottom-left of the zone Rect2(320, 348, 880, 520).
+    assert scout["tagline"] == "Finds relevant opportunities for you."
+    assert scout["labelPos"] == {"x": 338.0, "y": 834.0}
+    # handoff_station.gd: the tag names the department that fetches from this one.
+    assert scout["handoff"] == {
+        "label": "RESEARCH  →  ANALYSIS",
+        "labelPos": {"x": 1080.0, "y": 816.0},
+        "pileSpot": {"x": 1080.0, "y": 692.0},
+    }
+    assert "handoff" not in critici  # the last of the chain hands to the output shelf
+    pile = committed["paperPile"]
+    assert (pile["width"], pile["perStack"], pile["maxStacks"], pile["columns"]) == (38.0, 40, 12, 6)
+    assert pile["image"]["src"].endswith("paper_pile_1.png")

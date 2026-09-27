@@ -202,6 +202,19 @@ export type Department = {
   /** "#rrggbb" */
   color: string;
   zone: Rect;
+  /** DepartmentDefs "tagline", in English as the game falls back to */
+  tagline?: string;
+  /**
+   * Where the name is written (department_dressing.gd: zone.x + 18,
+   * zone.end.y - 34): the name at 26 px, the tagline 24 px below at 15 px.
+   * The zone's tint and L brackets the scene draws from `zone` and `color`.
+   */
+  labelPos?: Vec;
+  /**
+   * The handoff table's tag (handoff_station.gd), "RESEARCH  →  ANALYSIS",
+   * centred on labelPos at 10 px; pileSpot is where the paper pile stands.
+   */
+  handoff?: { label: string; labelPos: Vec; pileSpot: Vec };
   /** the handoff table where the department's output piles up */
   inbox: Vec;
   /** where the department's own agents stand to drop on it */
@@ -257,6 +270,21 @@ export type OfficeLayout = {
     margin: number; // 28, around blocking furniture
     wallMargin: number; // 14
     walls: Rect[];
+  };
+  /**
+   * The paper on the handoff tables (paper_pile.gd): stacks of `perStack`
+   * sheets, each stack `rise` px higher per sheet, at most `maxStacks` in
+   * `columns` columns laid along basisX/basisY, drawn `width` px wide.
+   */
+  paperPile?: {
+    image: ImageRef;
+    width: number;
+    rise: number;
+    perStack: number;
+    maxStacks: number;
+    columns: number;
+    basisX: Vec;
+    basisY: Vec;
   };
   /** which sheet each role wears, and the variants for its instances */
   sheets: Record<AgentRole, string[]>;
