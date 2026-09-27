@@ -222,11 +222,34 @@ export function agentsStatusPatch(source, agents) {
 
 /**
  * How a box writes its source: direct to Supabase when it has a session
- * (`direct`, supabase-direct's patchTeamState), otherwise `route`, the
- * PATCH /api/team-state it already uses for the heartbeat (token jht_sync).
+ * (`direct`, supabase-direct's patchTeamState), otherwise handed to the
+ * `carrier` (createHeartbeatCarrier), which the heartbeat takes along.
  */
-export function agentsStatusWriter({ source, direct, route }) {
-  return (map) => (direct ? direct.patchTeamState(agentsStatusPatch(source, map)) : route(agentsStatusPatch(source, map)));
+export function agentsStatusWriter({ source, direct, carrier }) {
+  return (map) => (direct ? direct.patchTeamState(agentsStatusPatch(source, map)) : carrier.hold(map));
+}
+
+/**
+ * A box without a Supabase session writes through PATCH /api/team-state, and
+ * every request there is a Vercel invocation, billed by the boxes that make
+ * them: its own write every 20-60 s cost one box 1,440-4,320 a day for the
+ * tags alone. So the statuses ride the heartbeat's PATCH, once a minute, and
+ * a change waits for the next beat.
+ *
+ * `fields()` is what the heartbeat adds to its body: the last map, or
+ * nothing. A refusal of that body (a web route older than the field answers
+ * 403, a shape the route or the database refuses 400) must not take the
+ * heartbeat with it: the heartbeat tells the carrier `refused()`, sends
+ * itself alone, and for `refusedRetry` the carrier adds nothing.
+ */
+export function createHeartbeatCarrier({ source, refusedRetry = REFUSED_RETRY_MS, now = Date.now }) {
+  let held = null;
+  let refusedUntil = 0;
+  return {
+    hold: async (map) => { held = map; },
+    fields: () => (held && now() >= refusedUntil ? agentsStatusPatch(source, held) : {}),
+    refused: () => { refusedUntil = now() + refusedRetry; },
+  };
 }
 
 /** How often the rule is read, and the longest silence between two writes. */
@@ -252,8 +275,10 @@ export const REFUSED_RETRY_MS = 30 * 60_000;
 /**
  * Reads every READ_EVERY_MS and writes team_state.agents_status when the
  * statuses changed, or at least every KEEPALIVE_MS so the desktop can tell a
- * live map from an old one. Its own write, never with the heartbeat: a
- * refused write must not take the heartbeat with it (see migration 089).
+ * live map from an old one. With a session it is its own write, never with
+ * the heartbeat: a refused write must not take the heartbeat with it (see
+ * migration 089). Without one the write only hands the map to the heartbeat
+ * (createHeartbeatCarrier), which keeps that promise itself.
  * A failed write logs once, then stays quiet until one succeeds again; a
  * refusal (the error carries an HTTP `status`) also waits REFUSED_RETRY_MS
  * before the next try, a network error only the next round. Returns a stop

@@ -32,9 +32,11 @@ afterEach(() => {
 
 type Beat = { at: number; body: Record<string, unknown> };
 
-async function fakeCloud(isRunning = false) {
+async function fakeCloud(isRunning = false, refuse: (body: Record<string, unknown>) => number | null = () => null) {
   const beats: Beat[] = [];
   const reads: number[] = [];
+  // Every PATCH the route received, accepted or not: a Vercel invocation each.
+  const patches: Beat[] = [];
   const server = createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
@@ -47,6 +49,13 @@ async function fakeCloud(isRunning = false) {
       }
       if (req.url?.startsWith("/api/team-state") && req.method === "PATCH") {
         const body = JSON.parse(raw || "{}") as Record<string, unknown>;
+        patches.push({ at: Date.now(), body });
+        const refused = refuse(body);
+        if (refused) {
+          res.statusCode = refused;
+          res.end(JSON.stringify({ error: "refused" }));
+          return;
+        }
         if (body.last_heartbeat_at) beats.push({ at: Date.now(), body });
         res.end(JSON.stringify({ state: {} }));
         return;
@@ -57,7 +66,7 @@ async function fakeCloud(isRunning = false) {
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return { beats, reads, baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}` };
+  return { beats, reads, patches, baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}` };
 }
 
 /** A JHT_HOME with cloud.json (no Realtime credentials: the polling loop) and a fake tmux. */
@@ -73,6 +82,23 @@ function sandbox(baseUrl: string, tmuxScript: string) {
   writeFileSync(path.join(bin, "tmux"), `#!/bin/sh\n${tmuxScript}\n`);
   chmodSync(path.join(bin, "tmux"), 0o755);
   return { home, bin };
+}
+
+/** The PATCHes but the periodic push's outcome (cloud_push_status). */
+function ownPatches(cloud: { patches: Beat[] }) {
+  return cloud.patches.filter((p) => !("cloud_push_status" in p.body));
+}
+
+/** A JHT API executor's logs with one agent whose run completed just now: idle. */
+function apiTraces(home: string) {
+  const dir = path.join(home, "api-logs", "scout-1");
+  mkdirSync(dir, { recursive: true });
+  const ts = new Date().toISOString();
+  writeFileSync(
+    path.join(dir, `${ts.replace(/[:.]/g, "-")}.jsonl`),
+    `${JSON.stringify({ type: "run_started", ts })}\n${JSON.stringify({ type: "run_finished", reason: "completed", ts })}\n`,
+  );
+  return path.dirname(dir);
 }
 
 function runDaemon(home: string, bin: string, forMs: number, extraEnv: Record<string, string> = {}, interval = "5") {
@@ -149,6 +175,49 @@ describe("cloud daemon — the heartbeat of the polling loop", () => {
       expect(cloud.beats[0]!.body.is_running).toBe(true);
       // One round at start, the next one a minute later: at 5 s it was 4 by now.
       expect(cloud.reads.length).toBe(1);
+    },
+    40_000,
+  );
+
+  it(
+    "carries the agents' statuses in the heartbeat's PATCH, with no PATCH of their own",
+    async () => {
+      // No Supabase session: the statuses went through the web route on
+      // their own, every 20-60 s, 1,440-4,320 Vercel invocations a day for
+      // one box. Now one PATCH a minute carries both.
+      const cloud = await fakeCloud(true);
+      const { home, bin } = sandbox(cloud.baseUrl, 'printf "CAPITANO\\n"');
+      const traces = apiTraces(home);
+      await runDaemon(home, bin, 23_000, { JHT_API_TRACES_DIR: traces }, "10");
+
+      expect(cloud.beats.length).toBeGreaterThanOrEqual(3);
+      // Every request is a heartbeat: the statuses never travel alone. (The
+      // periodic push reports its outcome in a PATCH of its own, every 15
+      // minutes: not counted here.)
+      expect(ownPatches(cloud).length).toBe(cloud.beats.length);
+      const carried = cloud.beats.filter((b) => b.body.agents_status);
+      expect(carried.length).toBeGreaterThanOrEqual(1);
+      expect(carried[0]!.body.agents_status).toEqual({
+        api: { agents: { "scout-1": { status: "idle", since: expect.any(String) } } },
+      });
+    },
+    40_000,
+  );
+
+  it(
+    "a refusal of the statuses does not take the heartbeat with it",
+    async () => {
+      // A web route older than the field answers 403 to the whole body.
+      const cloud = await fakeCloud(true, (body) => (body.agents_status ? 403 : null));
+      const { home, bin } = sandbox(cloud.baseUrl, 'printf "CAPITANO\\n"');
+      await runDaemon(home, bin, 23_000, { JHT_API_TRACES_DIR: apiTraces(home) }, "10");
+
+      expect(cloud.beats.length).toBeGreaterThanOrEqual(3);
+      for (const beat of cloud.beats) expect(beat.body).not.toHaveProperty("agents_status");
+      // One refused body, the same heartbeat again alone, then the statuses
+      // wait: no second refusal a minute later.
+      expect(cloud.patches.filter((p) => p.body.agents_status).length).toBe(1);
+      expect(ownPatches(cloud).length).toBe(cloud.beats.length + 1);
     },
     40_000,
   );
