@@ -234,17 +234,20 @@ jobs:
           cache: "npm"
           cache-dependency-path: agent-harness/runtime/package-lock.json
 
-      # Le skill Python del CLOSER importano PyYAML; senza, i due blocchi di
-      # parita' di tests/parity-closer-tools.test.ts (apply_gate e
-      # application_answers, 21 test) saltano come senza python3: il 27/09 in
-      # CI erano 22 saltati contro 1 in locale. Il python del runner non ha
-      # PyYAML: si installa, alla versione di requirements.txt.
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install PyYAML for the Python skills
-        run: python -m pip install pyyaml==6.0.3
+      # I test di parita' confrontano il port con le skill Python eseguite dal
+      # python3 del runner, e ne confrontano anche i messaggi di argparse, che
+      # cambiano fra versioni minori: il 27/09 il python3 di sistema scriveva
+      # «(choose from 'new', 'excluded')» come il port, il 3.12 recente di
+      # setup-python «(choose from new, excluded)»: 18 rossi che
+      # misuravano l'interprete e non il port. Quindi il python3 di sistema,
+      # con PyYAML dal pacchetto della distribuzione: le skill del CLOSER lo
+      # importano, e senza i loro blocchi di parita' saltano.
+      - name: Install PyYAML for the system python3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-yaml
+          python3 --version
+          python3 -c "import yaml; print('yaml', yaml.__version__)"
 
       - name: Install agent runtime dependencies
         working-directory: agent-harness/runtime
@@ -254,9 +257,12 @@ jobs:
         working-directory: agent-harness/runtime
         run: npx tsc --noEmit
 
+      # --reporter=verbose: ogni test col suo esito, i saltati compresi. Il
+      # conto dei saltati si confronta col locale (1): un salto in piu' e' un
+      # test che qui non prova niente, e senza nomi non si sa quale.
       - name: Run agent runtime tests
         working-directory: agent-harness/runtime
-        run: npm test
+        run: npx vitest run --reporter=verbose
 
   # A migration is an immutable release identity, not merely a SQL file that
   # parses today.  This gate compares the exact base tree with HEAD and every
