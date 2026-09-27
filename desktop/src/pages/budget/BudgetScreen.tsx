@@ -5,34 +5,41 @@ import {
   agentsOfRun,
   budgetShare,
   formatCount,
+  formatMinutes,
   formatPercent,
+  formatUsagePercent,
   formatUsd,
   formatWhen,
   roleLabel,
   runStatusLabel,
   spendByRole,
   totals,
+  usageWindow,
 } from "./budget-model";
+import type { UsageRead } from "./load-usage";
 
 /**
  * The budget page. Two sources, told apart on screen:
  *  - the API team of this computer: its runs' database, read only through
  *    the api_team_spend command (runs, spend against budget, per role and
  *    per agent, the caps the app gives every run);
- *  - the tmux team's usage window (5 hours, week, reset): those numbers stay
- *    in the team's container and do not reach the cloud, so they are «—».
+ *  - the tmux team's usage window (5 hours, week, reset, projection): the
+ *    sentinel bridge's samples on the cloud (sentinel_ticks), read with the
+ *    user's session. That team runs on a subscription, so what it consumes is
+ *    a share of the provider's windows, not dollars.
  */
-export default function BudgetScreen({ spend }: { spend: SpendRead }) {
+export default function BudgetScreen({ spend, usage, now = Date.now() }: { spend: SpendRead; usage: UsageRead | null; now?: number }) {
   return (
     <div className="max-w-6xl mx-auto px-5 pt-8 pb-10" style={{ animation: "fade-in 0.35s ease both" }}>
       <h1 className="text-xl font-bold uppercase tracking-[0.18em] leading-none mb-2" style={{ color: "var(--color-white)" }}>
         Budget
       </h1>
       <p className="text-[11px] text-[var(--color-muted)] mb-6 m-0">
-        Quanto spende il team API di questo computer, dal database dei suoi run (sola lettura).
+        Quanto spende il team API di questo computer, dal database dei suoi run, e quanto consuma il team tmux, dal cloud
+        (sola lettura).
       </p>
       <ApiTeamSpend spend={spend} />
-      <TmuxTeamUsage />
+      <TmuxTeamUsage usage={usage} now={now} />
     </div>
   );
 }
@@ -201,20 +208,106 @@ function Runs({ spend }: { spend: Extract<SpendRead, { state: "ready" }> }) {
   );
 }
 
-/** The tmux team's usage window: known in its container, never on the cloud. */
-function TmuxTeamUsage() {
+/** The tmux team's usage window, from the bridge's samples on the cloud. */
+function TmuxTeamUsage({ usage, now }: { usage: UsageRead | null; now: number }) {
+  const title = "Consumo del team tmux";
+  if (usage == null)
+    return (
+      <Section title={title}>
+        <p className="m-0 text-[11px] text-[var(--color-muted)]">Caricamento del consumo dal cloud…</p>
+      </Section>
+    );
+  if (usage.state === "failed")
+    return (
+      <Section title={title}>
+        <p role="alert" className="m-0 text-[11px]" style={{ color: "var(--color-red)" }}>
+          Non riesco a leggere il consumo del team tmux dal cloud. Riprova con «Aggiorna».
+        </p>
+      </Section>
+    );
+  const w = usageWindow(usage.samples, now);
+  if (!w)
+    return (
+      <Section title={title}>
+        <UsageTiles />
+        <p className="m-0 text-[11px] text-[var(--color-muted)]">
+          Nessun campione sul cloud: il team tmux non ha ancora mandato il suo consumo. Lo manda il daemon cloud del
+          computer del team, al massimo ogni quarto d'ora.
+        </p>
+      </Section>
+    );
+  const { latest } = w;
+  const resetAt = latest.resetAtUnix != null ? new Date(latest.resetAtUnix * 1000).toISOString() : null;
+  const velocity = latest.velocity != null ? `${latest.velocity.toFixed(1).replace(".", ",")}% l'ora` : undefined;
   return (
-    <Section title="Consumo del team tmux">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-        <Tile label="Finestra 5 ore" value="—" />
-        <Tile label="Settimana" value="—" />
-        <Tile label="Prossimo reset" value="—" />
-        <Tile label="Proiezione" value="—" />
-      </div>
-      <p className="m-0 text-[11px] text-[var(--color-muted)]">
-        Non arriva al cloud: questi numeri restano nel container del team.
-      </p>
-    </Section>
+    <>
+      <Section title={title}>
+        <UsageTiles
+          window={{ value: formatUsagePercent(latest.usage), hint: `${latest.provider} · ${latest.status}` }}
+          week={{
+            value: formatUsagePercent(latest.weeklyUsage),
+            hint: w.weeklyResetInMinutes != null ? `reset tra ${formatMinutes(w.weeklyResetInMinutes)}` : undefined,
+          }}
+          reset={{ value: formatMinutes(w.resetInMinutes), hint: resetAt ? formatWhen(resetAt) : undefined }}
+          projection={{
+            value: formatUsagePercent(latest.projection),
+            hint: [velocity, latest.throttle ? `throttle ${latest.throttle}` : undefined].filter(Boolean).join(" · ") || undefined,
+          }}
+        />
+        <p
+          role={w.stale ? "status" : undefined}
+          className="m-0 text-[11px]"
+          style={{ color: w.stale ? "var(--color-yellow)" : "var(--color-muted)" }}
+        >
+          {w.stale
+            ? `Ultimo campione del ${formatWhen(latest.ts)}: da allora non ne sono arrivati, il team potrebbe essere fermo.`
+            : `Ultimo campione del ${formatWhen(latest.ts)}, dal cloud.`}
+        </p>
+      </Section>
+
+      <Section title="Campioni del team tmux">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="text-left text-[var(--color-dim)]">
+              <Th>Ora</Th>
+              <Th>Provider</Th>
+              <Th right>5 ore</Th>
+              <Th right>Settimana</Th>
+              <Th right>Proiezione</Th>
+              <Th>Stato</Th>
+              <Th right>Throttle</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {usage.samples.map((s) => (
+              <tr key={`${s.ts}:${s.provider}`} className="border-t border-[var(--color-border)]">
+                <Td>{formatWhen(s.ts)}</Td>
+                <Td>{s.provider}</Td>
+                <Td right>{formatUsagePercent(s.usage)}</Td>
+                <Td right>{formatUsagePercent(s.weeklyUsage)}</Td>
+                <Td right>{formatUsagePercent(s.projection)}</Td>
+                <Td>{s.status}</Td>
+                <Td right>{s.throttle ?? "—"}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Section>
+    </>
+  );
+}
+
+type TileText = { value: string; hint?: string | undefined };
+
+function UsageTiles({ window, week, reset, projection }: { window?: TileText; week?: TileText; reset?: TileText; projection?: TileText }) {
+  const none: TileText = { value: "—" };
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      <Tile label="Finestra 5 ore" {...(window ?? none)} />
+      <Tile label="Settimana" {...(week ?? none)} />
+      <Tile label="Prossimo reset" {...(reset ?? none)} />
+      <Tile label="Proiezione" {...(projection ?? none)} />
+    </div>
   );
 }
 
@@ -227,7 +320,7 @@ function Caps({ team, agent }: { team: number; agent: number }) {
   );
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Tile({ label, value, hint }: { label: string; value: string; hint?: string | undefined }) {
   return (
     <div className="rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
       <div className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-1">{label}</div>
