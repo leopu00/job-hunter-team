@@ -157,3 +157,51 @@ export function createApiAgentsStatusReader({ logsDir, tail = readTail, log } = 
     },
   };
 }
+
+/**
+ * How recently an agent's run must have completed for the JHT API team to
+ * still count as running: a completed run is an agent waiting for mail, as
+ * the TUI agent at its prompt, not a team switched off.
+ */
+export const TEAM_RECENT_MS = 10 * 60_000;
+
+/**
+ * Whether the JHT API team runs, for team_state.is_running on a box that has
+ * no tmux (the test box: the office showed «team off» while the API team
+ * worked). The rule is the one above, on each agent's newest run:
+ *   - a run still open and written within TRACE_LIVE_MS: running;
+ *   - a run that ended "completed" within TEAM_RECENT_MS: running;
+ *   - "stopped", run_failed, an open run gone silent, anything older: not.
+ * true when one agent says running, false when the logs are readable and
+ * none does, null when the logs cannot be read (then nothing is written).
+ */
+export async function apiTeamRunning({ logsDir, now = Date.now(), tail = readTail }) {
+  let agents;
+  try {
+    agents = await readdir(logsDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const dir of agents) {
+    if (!dir.isDirectory() || !UID_FORMAT.test(canonicalAgentId(dir.name))) continue;
+    try {
+      const runs = (await readdir(join(logsDir, dir.name))).filter((f) => f.endsWith('.jsonl')).sort();
+      if (runs.length === 0) continue;
+      const newest = join(logsDir, dir.name, runs.at(-1));
+      if (now - (await stat(newest)).mtimeMs > TEAM_RECENT_MS) continue;
+      const own = parseTraceLines(await tail(newest)).filter(
+        (ev) => (ev.agent === undefined || SUBAGENT.has(ev.type)) && Number.isFinite(Date.parse(ev.ts)),
+      );
+      if (own.length === 0) continue;
+      const end = own.findLast((ev) => ev.type === 'run_finished' || ev.type === 'run_failed');
+      if (end) {
+        if (end.type === 'run_finished' && end.reason === 'completed' && now - Date.parse(end.ts) <= TEAM_RECENT_MS) return true;
+      } else if (now - Date.parse(own.at(-1).ts) <= TRACE_LIVE_MS) {
+        return true;
+      }
+    } catch {
+      /* an agent whose trace cannot be read says nothing */
+    }
+  }
+  return false;
+}

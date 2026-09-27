@@ -223,6 +223,28 @@ describe("cloud daemon — the heartbeat of the polling loop", () => {
   );
 
   it(
+    "on a box with no tmux, reads is_running from the JHT API team's traces",
+    async () => {
+      // The test box: a cloud-only daemon, the API team at work, no tmux.
+      // The TUI rule cannot tell there, is_running stayed false, and the
+      // office said «team off».
+      const cloud = await fakeCloud();
+      const { home, bin } = sandbox(cloud.baseUrl, "exit 127");
+      const dir = path.join(home, "api-logs", "scout-1");
+      mkdirSync(dir, { recursive: true });
+      const ts = new Date().toISOString();
+      writeFileSync(
+        path.join(dir, `${ts.replace(/[:.]/g, "-")}.jsonl`),
+        `${JSON.stringify({ type: "run_started", ts })}\n${JSON.stringify({ type: "turn_started", turn: 1, ts })}\n`,
+      );
+      await runDaemon(home, bin, 3_000, { JHT_API_TRACES_DIR: path.dirname(dir) });
+      expect(cloud.beats.length).toBeGreaterThanOrEqual(1);
+      expect(cloud.beats[0]!.body.is_running).toBe(true);
+    },
+    40_000,
+  );
+
+  it(
     "writes no is_running when tmux cannot be read, and false when no tmux server runs",
     async () => {
       const unknown = await fakeCloud();
