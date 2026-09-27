@@ -68,9 +68,9 @@ export function parseProxyLog(text: string): SpendRow[] {
     const calls = typeof r["web_search_calls"] === "number" ? r["web_search_calls"] : null;
     const searches =
       actions !== null
-        ? billedSearches("openai", actions.map((type) => ({ type: "tool-result", result: { action: { type } } })))
+        ? billedSearches("openai", actions.map((type) => ({ type: "tool-result", output: { action: { type } } })))
         : calls !== null
-          ? billedSearches("openai", Array.from({ length: calls }, () => ({ type: "tool-result", result: { action: { type: "search" } } })))
+          ? billedSearches("openai", Array.from({ length: calls }, () => ({ type: "tool-result", output: { action: { type: "search" } } })))
           : 0;
     rows.push({
       day: r["ts"].slice(0, 10),
