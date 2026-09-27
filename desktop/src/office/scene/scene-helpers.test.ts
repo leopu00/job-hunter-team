@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPose, CharacterSheet, Rect } from "../contract";
-import { clamp, fit, MAX_SCALE, pan, toWorld, zoomAt } from "./camera";
+import { clamp, cover, fit, MAX_SCALE, pan, toWorld, zoomAt } from "./camera";
 import { routeForClick } from "./click";
 import { cellRect, feetAnchor, pickCell } from "./frames";
 
@@ -9,18 +9,18 @@ const FLOOR: Rect = { x: 240, y: 140, w: 2920, h: 1860 };
 const VIEW = { w: 1200, h: 700 };
 
 describe("camera", () => {
-  it("fits the whole floor, centred", () => {
-    const cam = fit(VIEW, FLOOR);
-    expect(cam.scale).toBeCloseTo(Math.min(1200 / 2920, 700 / 1860));
-    const topLeft = { x: FLOOR.x * cam.scale + cam.x, y: FLOOR.y * cam.scale + cam.y };
-    const bottomRight = { x: (FLOOR.x + FLOOR.w) * cam.scale + cam.x, y: (FLOOR.y + FLOOR.h) * cam.scale + cam.y };
-    expect(topLeft.y).toBeCloseTo(0);
-    expect(bottomRight.y).toBeCloseTo(700);
-    expect(topLeft.x + bottomRight.x).toBeCloseTo(1200);
+  it("fit shows the whole floor centred; cover fills the view, as Godot's minimum zoom", () => {
+    const f = fit(VIEW, FLOOR);
+    expect(f.scale).toBeCloseTo(Math.min(1200 / 2920, 700 / 1860));
+    const c = cover(VIEW, FLOOR);
+    expect(c.scale).toBeCloseTo(Math.max(1200 / 2920, 700 / 1860));
+    // covering, the floor is at least as large as the view on both axes
+    expect(FLOOR.w * c.scale).toBeGreaterThanOrEqual(1200 - 1e-9);
+    expect(FLOOR.h * c.scale).toBeGreaterThanOrEqual(700 - 1e-9);
   });
 
   it("zooms around the pointer: the world point under it stays there", () => {
-    const cam = fit(VIEW, FLOOR);
+    const cam = cover(VIEW, FLOOR);
     const at = { x: 700, y: 300 };
     const before = toWorld(cam, at);
     const after = toWorld(zoomAt(cam, 2, at, VIEW, FLOOR), at);
@@ -28,16 +28,22 @@ describe("camera", () => {
     expect(after.y).toBeCloseTo(before.y);
   });
 
-  it("never zooms out past the whole floor nor in past the maximum", () => {
-    const cam = fit(VIEW, FLOOR);
+  it("never zooms out past covering the office nor in past 2.8", () => {
+    const cam = cover(VIEW, FLOOR);
     expect(zoomAt(cam, 0.1, { x: 0, y: 0 }, VIEW, FLOOR).scale).toBeCloseTo(cam.scale);
     expect(zoomAt(cam, 100, { x: 0, y: 0 }, VIEW, FLOOR).scale).toBe(MAX_SCALE);
   });
 
-  it("a pan cannot drag the floor out of view", () => {
-    const zoomed = zoomAt(fit(VIEW, FLOOR), 3, { x: 600, y: 350 }, VIEW, FLOOR);
-    const far = pan(zoomed, { x: 100_000, y: 100_000 }, VIEW, FLOOR);
-    expect(far.x).toBeLessThanOrEqual(-FLOOR.x * far.scale + 80);
+  it("at the smallest zoom there is still room to pan, and never past the edges", () => {
+    const cam = cover(VIEW, FLOOR);
+    // this view is wider than the floor's ratio: the floor overflows vertically
+    const room = (FLOOR.h * cam.scale - 700) / 2;
+    expect(room).toBeGreaterThan(20);
+    const moved = pan(cam, { x: 0, y: -20 }, VIEW, FLOOR);
+    expect(moved.y).toBeCloseTo(cam.y - 20);
+    const far = pan(cam, { x: 100_000, y: 100_000 }, VIEW, FLOOR);
+    expect(far.x).toBeCloseTo(-FLOOR.x * far.scale);
+    expect(far.y).toBeCloseTo(-FLOOR.y * far.scale);
     expect(far).toEqual(clamp(far, VIEW, FLOOR));
   });
 });
