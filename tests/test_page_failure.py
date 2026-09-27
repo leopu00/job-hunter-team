@@ -309,7 +309,9 @@ class ScriptedPage:
     """A page whose every look is scripted: no browser, no real waiting.
 
     Each entry is (status, html) for one observe(); status "raise" makes the
-    status read fail, as an evaluate does while the page is reloading.
+    status read fail, as an evaluate does while the page is reloading, and
+    html NAVIGATING makes the content read fail as Playwright's does between
+    two documents.
     """
 
     def __init__(self, looks):
@@ -330,7 +332,14 @@ class ScriptedPage:
         return status
 
     def content(self):
+        if self.current[1] is NAVIGATING:
+            raise RuntimeError(
+                "Page.content: Unable to retrieve content because the page is navigating and changing the content."
+            )
         return self.current[1]
+
+
+NAVIGATING = object()
 
 
 def test_settle_waits_for_a_proof_of_work_check_to_clear_by_itself():
@@ -376,3 +385,28 @@ def test_settle_does_not_wait_on_a_bare_403():
     page = Page()
     assert pf.settle(page, bare, wait_ms=5_000, poll_ms=100) is bare
     assert page.waits == 0
+
+
+def test_settle_never_stops_on_a_reload_it_cannot_read_yet():
+    # CI run 36339861943: blocked_human after 1.4 s. Mid-reload the old
+    # document's 403 is still readable, the content is not ("page is
+    # navigating"): no challenge in an empty page made it a bare 403.
+    page = ScriptedPage([(403, SELF_CLEARING), (403, NAVIGATING), (200, VACANCY)])
+    first = pf.observe(page)
+
+    settled = pf.settle(page, first, wait_ms=5_000, poll_ms=250)
+
+    assert (settled.kind, settled.status) == (pf.OK, 200)
+
+
+def test_a_page_that_cannot_be_read_yet_is_never_a_verdict_to_go_on_with():
+    # Read outside settle (right after a goto), a page between two documents
+    # is temporary, not ok: the flow never proceeds with a page it could not read.
+    page = ScriptedPage([(200, NAVIGATING), (200, VACANCY)])
+    first = pf.observe(page)
+    assert (first.kind, first.navigating) == (pf.TEMPORARY, True)
+    # settle() looks again until the page reads.
+    assert pf.settle(page, first, wait_ms=5_000, poll_ms=250).kind == pf.OK
+    # And a page still navigating when the time is up stays temporary: tried again later.
+    stuck = ScriptedPage([(403, NAVIGATING)] * 10)
+    assert pf.settle(stuck, pf.observe(stuck), wait_ms=1_000, poll_ms=250).kind == pf.TEMPORARY
