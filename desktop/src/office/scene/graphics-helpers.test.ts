@@ -83,9 +83,28 @@ describe("paper piles (paper_pile.gd)", () => {
 });
 
 describe("cameraBounds", () => {
-  it("is the whole world, as Godot's camera limits", () => {
-    const layout = { world: WORLD, floor: FLOOR } as unknown as OfficeLayout;
-    expect(cameraBounds(layout)).toEqual(WORLD);
+  it("is only what is drawn: the floor and the backdrop behind it, never the dark band of the world", () => {
+    const backdrop = [{ draw: { x: 240, y: -52, w: 2920, h: 72 } }, { draw: { x: 240, y: 20, w: 2920, h: 120 } }];
+    const layout = { world: WORLD, floor: FLOOR, backdrop } as unknown as OfficeLayout;
+    expect(cameraBounds(layout)).toEqual({ x: 240, y: -52, w: 2920, h: 2052 });
+  });
+
+  it("at the smallest zoom the drawn office fills the whole view, however wide or tall", async () => {
+    const { clamp, cover, pan } = await import("./camera");
+    // no backdrop here: what is drawn is the floor alone
+    const drawn = FLOOR;
+    const bounds = cameraBounds({ world: WORLD, floor: FLOOR } as unknown as OfficeLayout);
+    for (const view of [{ w: 1600, h: 835 }, { w: 1512, h: 917 }, { w: 2560, h: 600 }, { w: 700, h: 1300 }]) {
+      // the first framing, and the framing pushed as far as panning goes in each direction
+      const start = clamp(cover(view, bounds), view, bounds);
+      for (const c of [start, pan(start, { x: 1e5, y: 1e5 }, view, bounds), pan(start, { x: -1e5, y: -1e5 }, view, bounds)]) {
+        // the drawn floor's edges are at or past the view's edges on every side: no void band
+        expect(drawn.x * c.scale + c.x).toBeLessThanOrEqual(0.001);
+        expect(drawn.y * c.scale + c.y).toBeLessThanOrEqual(0.001);
+        expect((drawn.x + drawn.w) * c.scale + c.x).toBeGreaterThanOrEqual(view.w - 0.001);
+        expect((drawn.y + drawn.h) * c.scale + c.y).toBeGreaterThanOrEqual(view.h - 0.001);
+      }
+    }
   });
 });
 
