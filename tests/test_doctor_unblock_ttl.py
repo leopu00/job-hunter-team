@@ -111,6 +111,16 @@ def render(sess):
     if sess.get("busy"):
         return "Working… (esc to interrupt)\n" + "\n".join(sess.get("transcript", []))
     lines = list(sess.get("transcript", []))
+    if sess.get("style") == "codex":
+        # OpenAI Codex: composer aperto da "›"; oltre `width` colonne il testo
+        # va a capo su una riga di continuazione rientrata, cosi' la coda del
+        # messaggio (la probe del mittente) sta lontana dal marker qualunque
+        # sia la lunghezza. Riga del modello in fondo al pane.
+        draft = sess.get("draft", "")
+        width = sess.get("width", 200)
+        lines += ["› " + draft[:width]] + (["  " + draft[width:]] if len(draft) > width else [])
+        lines += ["", "  gpt-5.6-sol high · ~/agents/capitano"]
+        return "\n".join(lines)
     lines += ["╭" + "─" * 40 + "╮", "│ > " + sess.get("draft", ""), "╰" + "─" * 40 + "╯"]
     return "\n".join(lines)
 
@@ -177,7 +187,8 @@ if cmd == "send-keys":
             mode = sess.get("submit", "ok")
             ok = mode == "ok" or (mode == "needs_space" and sess.get("last_key") == "Space")
             if ok and sess.get("draft"):
-                sess.setdefault("transcript", []).append("> " + sess["draft"])
+                prefix = "› " if sess.get("style") == "codex" else "> "
+                sess.setdefault("transcript", []).append(prefix + sess["draft"])
                 sess["draft"] = ""
             sess["last_key"] = "Enter"
         elif key == "C-u":
@@ -964,6 +975,41 @@ def test_sender_retries_are_bounded_on_a_frozen_tui(tmux_factory, home):
     keys = [c[-1] for c in tmux.calls("send-keys", session="SCOUT-1") if "-l" not in c]
     assert keys.count("Enter") == 3, keys
     assert keys.count("Space") == 2, keys
+
+
+def test_sender_does_not_claim_success_on_a_codex_composer(tmux_factory, home):
+    """Codex apre il composer con "›", non con "❯"/">": 27/09.
+
+    Il marker mancava, la riga del composer non veniva trovata e il mittente
+    dichiarava "submit 1" con il testo ancora nel composer: il CAPITANO di una
+    VPS ha accumulato decine di messaggi incollati e mai inviati.
+    """
+    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "frozen", "style": "codex"}})
+    r = _send(tmux, home, "CAPITANO", "[@utente -> @capitano] [CHAT] assegna la coda")
+    assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
+    assert "assegna la coda" in tmux.draft("CAPITANO")
+
+
+def test_sender_reads_the_whole_codex_composer_not_its_first_line(tmux_factory, home):
+    """Codex va a capo: la coda del messaggio sta sulle righe di continuazione.
+
+    Cercare la probe nella sola riga del marker direbbe "submittato" anche con
+    il testo ancora nel composer.
+    """
+    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "frozen", "style": "codex", "width": 60}})
+    msg = "[@utente -> @capitano] [CHAT] " + ("riepilogo lungo " * 12) + "CODA-UNIVOCA"
+    r = _send(tmux, home, "CAPITANO", msg)
+    assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
+
+
+def test_sender_still_delivers_to_a_healthy_codex_pane(tmux_factory, home):
+    """Nessuna regressione su Codex sano: il messaggio parte e resta solo nel transcript."""
+    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "ok", "style": "codex", "width": 30}})
+    msg = "[@utente -> @capitano] [CHAT] " + ("riepilogo lungo " * 12) + "CODA-UNIVOCA"
+    r = _send(tmux, home, "CAPITANO", msg)
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+    assert "submit 1" in r.stdout, r.stdout
+    assert tmux.draft("CAPITANO") == ""
 
 
 def test_sender_still_reports_a_dead_pane_as_three(tmux_factory, home):
