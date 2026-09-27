@@ -231,9 +231,14 @@ _SHOW_JS = """() => {
 # timeout, and on a page whose navigation never committed there is no
 # document to run in, so it waits forever (the CLOSER stuck on a hung
 # portal, and pytest without a verdict from 20/09). wait_for_function gives
-# up after this long; the scripts return true, so a live page answers at
-# the first poll.
+# up at the deadline; the scripts return true, so a live frame answers at
+# the first poll. They run in EVERY frame the page has (a login or a code
+# box often lives in an iframe), all within this one deadline.
 _SECRET_SCRIPT_TIMEOUT_MS = 5_000
+
+
+def _remaining_ms(deadline: float) -> int:
+    return int((deadline - time.monotonic()) * 1000)
 
 
 def fill_secret(control: Any, password: str) -> None:
@@ -264,7 +269,7 @@ def no_secret_fields(page: Any, timeout_ms: int = _SECRET_PROBE_TIMEOUT_MS) -> b
     if not frames:
         return False
     for frame in frames:
-        remaining = int((deadline - time.monotonic()) * 1000)
+        remaining = _remaining_ms(deadline)
         if remaining <= 0:
             return False
         try:
@@ -277,15 +282,43 @@ def no_secret_fields(page: Any, timeout_ms: int = _SECRET_PROBE_TIMEOUT_MS) -> b
     return True
 
 
+def _show_again(frames: list[Any]) -> None:
+    """Give the hidden fields their visibility back, best effort, within one deadline."""
+    deadline = time.monotonic() + _SECRET_SCRIPT_TIMEOUT_MS / 1000
+    for frame in frames:
+        remaining = _remaining_ms(deadline)
+        if remaining <= 0:
+            return
+        with contextlib.suppress(Exception):
+            frame.wait_for_function(_SHOW_JS, timeout=remaining)
+
+
 @contextlib.contextmanager
 def secrets_hidden(page: Any) -> Iterator[None]:
-    """Hide every password field (and every field marked by fill_secret) for the duration of a screenshot."""
+    """Hide every password field (and every field marked by fill_secret) for the duration of a screenshot.
+
+    In every frame of the page — the main one and each iframe Playwright
+    reaches, the same frames no_secret_fields asks — all within one deadline.
+    A frame that cannot be handled in time is a page that cannot be hidden:
+    what was already hidden is shown again and the screenshot does not happen
+    (account_secret_unhidden; the callers decide what that means).
+    """
+    hidden: list[Any] = []
+    deadline = time.monotonic() + _SECRET_SCRIPT_TIMEOUT_MS / 1000
     try:
-        page.wait_for_function(_HIDE_JS, arg=SECRET_ATTR, timeout=_SECRET_SCRIPT_TIMEOUT_MS)
+        frames = list(page.frames)
+        if not frames:
+            raise RuntimeError("a page without frames")
+        for frame in frames:
+            remaining = _remaining_ms(deadline)
+            if remaining <= 0:
+                raise TimeoutError("the frames could not all be handled in time")
+            frame.wait_for_function(_HIDE_JS, arg=SECRET_ATTR, timeout=remaining)
+            hidden.append(frame)
     except Exception as exc:
+        _show_again(hidden)
         raise AccountStop("account_secret_unhidden", "password fields could not be hidden before a screenshot") from exc
     try:
         yield
     finally:
-        with contextlib.suppress(Exception):
-            page.wait_for_function(_SHOW_JS, timeout=_SECRET_SCRIPT_TIMEOUT_MS)
+        _show_again(hidden)

@@ -261,8 +261,23 @@ def test_authorised_ashby_submission_requires_receipt_before_applied(
 # ── The receipt when the password fields cannot be hidden ───────────────────
 
 
+class _FrameThatCannotHide:
+    """A live frame in which hiding (and showing) the password fields fails; everything else answers."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def wait_for_function(self, script, **kwargs):
+        if "__jhtHiddenSecrets" in script:
+            raise TimeoutError("synthetic: the fields could not be hidden")
+        return self._inner.wait_for_function(script, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 class _HidingFails:
-    """A live page on which hiding the password fields fails (hide and show).
+    """A live page on which hiding the password fields fails, in every frame.
 
     `frames_answer=False`: the check that the page has no password field
     cannot get an answer from its frames either (a hung page).
@@ -272,15 +287,10 @@ class _HidingFails:
         self._inner = inner
         self._frames_answer = frames_answer
 
-    def wait_for_function(self, script, **kwargs):
-        if "__jhtHiddenSecrets" in script:
-            raise TimeoutError("synthetic: the fields could not be hidden")
-        return self._inner.wait_for_function(script, **kwargs)
-
     @property
     def frames(self):
         if self._frames_answer:
-            return self._inner.frames
+            return [_FrameThatCannotHide(frame) for frame in self._inner.frames]
 
         class Silent:
             def wait_for_function(self, *_args, **_kwargs):
@@ -1409,10 +1419,9 @@ def test_a_page_that_cannot_hide_its_passwords_is_not_photographed(page, tmp_pat
         def __init__(self, inner):
             self._inner = inner
 
-        def wait_for_function(self, script, **kwargs):
-            if "__jhtHiddenSecrets" in script:
-                raise TimeoutError("synthetic: no document to hide the fields in")
-            return self._inner.wait_for_function(script, **kwargs)
+        @property
+        def frames(self):
+            return [_FrameThatCannotHide(frame) for frame in self._inner.frames]
 
         def screenshot(self, **kwargs):
             shots.append(kwargs)
