@@ -3,6 +3,7 @@ mod auth_store;
 mod browsers;
 mod live_screen;
 mod podman;
+mod spend;
 mod team;
 
 use team::TeamRuntimeState;
@@ -24,6 +25,7 @@ pub fn run() {
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             podman::check_podman,
+            spend::api_team_spend,
             team::start_api_team
         ])
         .run(tauri::generate_context!())

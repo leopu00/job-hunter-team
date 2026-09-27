@@ -1,4 +1,6 @@
 import type { ComponentType } from "react";
+import AgentsPage from "../pages/agents";
+import BudgetPage from "../pages/budget";
 import DashboardPage from "../pages/dashboard";
 import MapPage from "../pages/map";
 import MessagesPage from "../pages/messages";
@@ -41,4 +43,7 @@ export const ROUTES: Route[] = [
   { path: "/team/critico", page: TeamCriticoPage },
   { path: "/messages", page: MessagesPage },
   { path: "/profile", page: ProfilePage },
+  // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in Shell.tsx).
+  { path: "/agents", page: AgentsPage },
+  { path: "/budget", page: BudgetPage },
 ];

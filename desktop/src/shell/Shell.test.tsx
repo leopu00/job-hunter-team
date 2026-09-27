@@ -6,7 +6,7 @@ import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
-import Shell from "./Shell";
+import Shell, { DESKTOP_LINKS } from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
 // The real map needs WebGL, which jsdom has not: the shell only has to route to it.
@@ -69,6 +69,17 @@ describe("Shell", () => {
     const before = vi.mocked(loadDashboard).mock.calls.length;
     act(() => screen.getByRole("button", { name: "Aggiorna" }).click());
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
+  });
+
+  it("adds the desktop's own pages after the web's links, and routes to them", async () => {
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+    const nav = screen.getByRole("navigation", { name: "Navigazione app" });
+    for (const { href, label } of DESKTOP_LINKS) {
+      expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
+      expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
+    }
+    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget"]);
   });
 
   it.each(["/team", "/team/log", "/team/scout", "/team/analista", "/team/scorer", "/team/scrittore", "/team/critico"])(

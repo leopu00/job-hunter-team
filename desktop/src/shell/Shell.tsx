@@ -9,10 +9,42 @@ import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, ROUTES } from "./routes";
 
 /**
+ * The desktop's own pages, after the web's links: they have no web
+ * counterpart, so NavLinks (a web file) does not list them. Same look as its
+ * NavLink, active on the path.
+ */
+export const DESKTOP_LINKS = [
+  { href: "/agents", label: "Agenti" },
+  { href: "/budget", label: "Budget" },
+];
+
+function DesktopLinks() {
+  const { path } = useLocation();
+  return (
+    <div className="flex items-center gap-1">
+      {DESKTOP_LINKS.map(({ href, label }) => {
+        const active = path === href || path.startsWith(href + "/");
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
+            style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * The signed-in app: the web's protected layout (navbar on top, MainChrome
  * around the page) with a client router in place of Next's. The navbar links
- * are the web's NavLinks; on the right, what the desktop adds: refresh the
- * page's data, the local team setup, sign out.
+ * are the web's NavLinks, then the desktop's own pages; on the right, what
+ * the desktop adds: refresh the page's data, the local team setup, sign out.
  */
 function Navbar() {
   const button =
@@ -25,8 +57,9 @@ function Navbar() {
             JHT
           </span>
         </Link>
-        <div className="flex items-center mx-auto">
+        <div className="flex items-center gap-1 mx-auto">
           <NavLinks />
+          <DesktopLinks />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button type="button" className={button} onClick={refresh}>
