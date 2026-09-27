@@ -265,6 +265,15 @@ def desk_spot(desk: dict) -> dict:
     return vec(r["x"] + r["w"] / 2, r["y"] - 14)
 
 
+# agent_npc.gd _seat_offset(): the seated rig's offset from the standing seat, by the desk's facing.
+SEAT_OFFSET_BY_FACING = {"up": vec(0, -24), "left": vec(-26, -2), "right": vec(26, -2), "down": vec(0, 95)}
+
+
+def seat_offset(defn: dict, facing: str) -> dict:
+    """The desk's (or the role's) own seat_offset, else the one for its facing."""
+    return defn.get("seat_offset") or SEAT_OFFSET_BY_FACING.get(facing, vec(0, 0))
+
+
 def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
     office = GAME / "scripts" / "office"
     furniture = gd_constants(office / "furniture_defs.gd")
@@ -313,6 +322,7 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
                 "furniture": furniture_item(desk, plan, gen_art, id=f"desk_{dept_id}_{index}"),
                 "seat": desk_spot(desk),
                 "seatFacing": desk.get("facing", "down"),
+                "seatOffset": seat_offset(desk, desk.get("facing", "down")),
             })
         inbox = d["inbox"]
         depts.append({
@@ -351,7 +361,11 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
             continue
         key = agent.get("workstation_key")
         furniture_id = next((i["id"] for i in furniture["ITEMS"] if i.get("registry_key") == key), "")
-        core_seats.append({"role": role, "seat": agent["spot"], "seatFacing": agent.get("facing", "down"), "furnitureId": furniture_id})
+        facing = agent.get("facing", "down")
+        core_seats.append({
+            "role": role, "seat": agent["spot"], "seatFacing": facing,
+            "seatOffset": seat_offset(agent, facing), "furnitureId": furniture_id,
+        })
 
     sheets: dict[str, list[str]] = {}
     for dept_id, variants in characters["VARIANT_BY_DESK"].items():

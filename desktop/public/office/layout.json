@@ -1160,7 +1160,11 @@
       "x": 568.0,
       "y": 484.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 1,
@@ -1193,7 +1197,11 @@
       "x": 610.0,
       "y": 700.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -41.0,
+      "y": -71.0
+     }
     },
     {
      "index": 2,
@@ -1225,7 +1233,11 @@
       "x": 775.0,
       "y": 448.0
      },
-     "seatFacing": "up"
+     "seatFacing": "up",
+     "seatOffset": {
+      "x": 0.0,
+      "y": -24.0
+     }
     },
     {
      "index": 3,
@@ -1257,7 +1269,11 @@
       "x": 775.0,
       "y": 675.0
      },
-     "seatFacing": "down"
+     "seatFacing": "down",
+     "seatOffset": {
+      "x": 0.0,
+      "y": 95.0
+     }
     },
     {
      "index": 4,
@@ -1290,7 +1306,11 @@
       "x": 942.0,
       "y": 484.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 5,
@@ -1322,7 +1342,11 @@
       "x": 900.0,
       "y": 644.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 41.0,
+      "y": -71.0
+     }
     }
    ]
   },
@@ -1380,7 +1404,11 @@
       "x": 2520.0,
       "y": 362.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 1,
@@ -1413,7 +1441,11 @@
       "x": 2549.0,
       "y": 564.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -41.0,
+      "y": -71.0
+     }
     },
     {
      "index": 2,
@@ -1445,7 +1477,11 @@
       "x": 2655.0,
       "y": 329.0
      },
-     "seatFacing": "up"
+     "seatFacing": "up",
+     "seatOffset": {
+      "x": 0.0,
+      "y": -24.0
+     }
     },
     {
      "index": 3,
@@ -1477,7 +1513,11 @@
       "x": 2655.0,
       "y": 534.0
      },
-     "seatFacing": "down"
+     "seatFacing": "down",
+     "seatOffset": {
+      "x": 0.0,
+      "y": 95.0
+     }
     },
     {
      "index": 4,
@@ -1510,7 +1550,11 @@
       "x": 2840.0,
       "y": 362.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 5,
@@ -1542,7 +1586,11 @@
       "x": 2811.0,
       "y": 564.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 41.0,
+      "y": -71.0
+     }
     }
    ]
   },
@@ -1601,7 +1649,11 @@
       "x": 1447.0,
       "y": 1026.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 1,
@@ -1634,7 +1686,11 @@
       "x": 1496.0,
       "y": 1274.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -41.0,
+      "y": -71.0
+     }
     },
     {
      "index": 2,
@@ -1666,7 +1722,11 @@
       "x": 1700.0,
       "y": 982.0
      },
-     "seatFacing": "up"
+     "seatFacing": "up",
+     "seatOffset": {
+      "x": 0.0,
+      "y": -24.0
+     }
     },
     {
      "index": 3,
@@ -1698,7 +1758,11 @@
       "x": 1700.0,
       "y": 1260.0
      },
-     "seatFacing": "down"
+     "seatFacing": "down",
+     "seatOffset": {
+      "x": 0.0,
+      "y": 95.0
+     }
     },
     {
      "index": 4,
@@ -1730,7 +1794,11 @@
       "x": 1953.0,
       "y": 1026.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 5,
@@ -1762,7 +1830,11 @@
       "x": 1904.0,
       "y": 1274.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 41.0,
+      "y": -71.0
+     }
     }
    ]
   },
@@ -1820,7 +1892,11 @@
       "x": 529.0,
       "y": 1668.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 1,
@@ -1853,7 +1929,11 @@
       "x": 564.0,
       "y": 1804.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -41.0,
+      "y": -71.0
+     }
     },
     {
      "index": 2,
@@ -1885,7 +1965,11 @@
       "x": 690.0,
       "y": 1640.0
      },
-     "seatFacing": "up"
+     "seatFacing": "up",
+     "seatOffset": {
+      "x": 0.0,
+      "y": -24.0
+     }
     },
     {
      "index": 3,
@@ -1917,7 +2001,11 @@
       "x": 690.0,
       "y": 1816.0
      },
-     "seatFacing": "down"
+     "seatFacing": "down",
+     "seatOffset": {
+      "x": 0.0,
+      "y": 95.0
+     }
     },
     {
      "index": 4,
@@ -1950,7 +2038,11 @@
       "x": 851.0,
       "y": 1668.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 5,
@@ -1982,7 +2074,11 @@
       "x": 816.0,
       "y": 1852.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 41.0,
+      "y": -71.0
+     }
     }
    ]
   },
@@ -2040,7 +2136,11 @@
       "x": 2418.0,
       "y": 1664.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 1,
@@ -2073,7 +2173,11 @@
       "x": 2460.0,
       "y": 1880.0
      },
-     "seatFacing": "left"
+     "seatFacing": "left",
+     "seatOffset": {
+      "x": -41.0,
+      "y": -71.0
+     }
     },
     {
      "index": 2,
@@ -2105,7 +2209,11 @@
       "x": 2625.0,
       "y": 1628.0
      },
-     "seatFacing": "up"
+     "seatFacing": "up",
+     "seatOffset": {
+      "x": 0.0,
+      "y": -24.0
+     }
     },
     {
      "index": 3,
@@ -2137,7 +2245,11 @@
       "x": 2625.0,
       "y": 1801.0
      },
-     "seatFacing": "down"
+     "seatFacing": "down",
+     "seatOffset": {
+      "x": 0.0,
+      "y": 95.0
+     }
     },
     {
      "index": 4,
@@ -2170,7 +2282,11 @@
       "x": 2832.0,
       "y": 1664.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 26.0,
+      "y": -2.0
+     }
     },
     {
      "index": 5,
@@ -2202,7 +2318,11 @@
       "x": 2790.0,
       "y": 1880.0
      },
-     "seatFacing": "right"
+     "seatFacing": "right",
+     "seatOffset": {
+      "x": 41.0,
+      "y": -71.0
+     }
     }
    ]
   }
@@ -2215,6 +2335,10 @@
     "y": 441.0
    },
    "seatFacing": "down",
+   "seatOffset": {
+    "x": 0.0,
+    "y": 95.0
+   },
    "furnitureId": "desk_coordinator"
   },
   {
@@ -2224,6 +2348,10 @@
     "y": 1274.0
    },
    "seatFacing": "down",
+   "seatOffset": {
+    "x": 0.0,
+    "y": -24.0
+   },
    "furnitureId": "mentor_armchair"
   },
   {
@@ -2233,6 +2361,10 @@
     "y": 1786.0
    },
    "seatFacing": "down",
+   "seatOffset": {
+    "x": 0.0,
+    "y": 95.0
+   },
    "furnitureId": "desk_assistant"
   },
   {
@@ -2242,6 +2374,10 @@
     "y": 499.0
    },
    "seatFacing": "down",
+   "seatOffset": {
+    "x": 0.0,
+    "y": 95.0
+   },
    "furnitureId": "desk_sentinella"
   }
  ],
