@@ -324,10 +324,11 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
         changed.push(`${k}=${str(k)}`);
       }
     }
-    // The geocoding request and its result land in one transaction.
+    // The geocoding request and its result land in one transaction. The
+    // request's instant stays: the desired-state pull lets the cloud win only
+    // with a newer one, so a cleared instant lost to the cloud's old request.
     if (action === "geocode" && a["office_geocoded"] !== null) {
       set("geocode_requested = 0");
-      set("geocode_requested_at = NULL");
       changed.push("geocode_requested=acknowledged");
     }
     if (a["expires_at"] !== null) {

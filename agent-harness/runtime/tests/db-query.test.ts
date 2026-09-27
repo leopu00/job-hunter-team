@@ -626,6 +626,26 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
   });
 
+  it.skipIf(skills === null)("closes a geocoding request keeping its instant, like db_update.py", async () => {
+    // The desired-state pull lets the cloud win only with a NEWER instant: an
+    // ACK that cleared it lost to the cloud's old request, and the ANALISTA
+    // geocoded the same position again (27/09). The snapshots leave `_at` out,
+    // so the instant is read here.
+    const { call, py, pyDb, ourDb } = twins("analista-1");
+    const requested = "2026-09-27 14:54:03";
+    for (const db of [pyDb, ourDb]) {
+      db.prepare("UPDATE positions SET geocode_requested = 1, geocode_requested_at = ? WHERE id = 1").run(requested);
+    }
+    const args = [
+      "position", "1", "--office-lat", "52.39", "--office-lon", "4.84", "--office-address", "Radarweg 29, Amsterdam",
+      "--office-geocoded", "true", "--office-verified", "true", "--action", "geocode", "--outcome", "updated",
+    ];
+    expectSame(await call("db_update", args), py("db_update.py", args));
+    const read = (db: Database) => db.prepare("SELECT geocode_requested, geocode_requested_at FROM positions WHERE id = 1").get();
+    expect(read(ourDb)).toEqual({ geocode_requested: 0, geocode_requested_at: requested });
+    expect(read(ourDb)).toEqual(read(pyDb));
+  });
+
   it("takes --work-mode full_remote, the prompt's word, as the column's remote (T21)", async () => {
     const { call, ourDb } = twins("analista-1");
     const r = await call("db_update", ["position", "2", "--work-mode", "full_remote", "--loc-country", "Italy"]);
