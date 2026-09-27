@@ -423,9 +423,15 @@ def update_position(args):
     # dichiara che il tentativo è terminato (anche dopo ricerca esaustiva
     # fallita). La lane care-mode non accende il flag, quindi l'UPDATE a 0 è
     # un no-op semantico e NON trasforma il geocoding in lavoro automatico.
+    #
+    # La chiusura CONSERVA `geocode_requested_at`: il pull desired-state fa
+    # vincere il cloud solo con un istante piu' recente (resolveRequest in
+    # cli/src/commands/cloud.js). Azzerato, il valore vecchio del cloud
+    # vinceva al tick dopo e riaccendeva la richiesta prima che il push
+    # portasse su la chiusura: l'ANALISTA rifaceva la stessa posizione in
+    # tondo (27/09).
     if m_action == 'geocode' and args.office_geocoded is not None:
         updates.append("geocode_requested = 0")
-        updates.append("geocode_requested_at = NULL")
         changed.append("geocode_requested=acknowledged")
 
     # Expiry tracking (espansione Analista — RULE-12 richeck giornaliero).

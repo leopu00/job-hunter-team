@@ -83,6 +83,8 @@ def test_request_persists_coordinates_and_is_acknowledged(fresh_db):
     queued = run(db, DB_QUERY, "next-for-geocoding", "--json")
     assert queued.returncode == 0, queued.stderr
     assert [item["id"] for item in json.loads(queued.stdout)["rows"]] == [position_id]
+    requested_at = row(db, position_id)["geocode_requested_at"]
+    assert requested_at
 
     completed = run(
         db,
@@ -106,10 +108,13 @@ def test_request_persists_coordinates_and_is_acknowledged(fresh_db):
     )
     assert completed.returncode == 0, completed.stderr
 
+    # The ACK keeps the request's instant: the desired-state pull lets the
+    # cloud win only with a NEWER one (cli cloud.js resolveRequest). Cleared,
+    # the cloud's old request won the next tick and reopened it (27/09).
     saved = dict(row(db, position_id))
     assert saved == {
         "geocode_requested": 0,
-        "geocode_requested_at": None,
+        "geocode_requested_at": requested_at,
         "office_lat": 41.9028,
         "office_lon": 12.4964,
         "office_address": "Rome, Italy",
@@ -130,6 +135,20 @@ def test_request_persists_coordinates_and_is_acknowledged(fresh_db):
     }
     conn.close()
     assert {"office_lat", "office_lon", "office_address", "office_geocoded"} <= fields
+
+
+def test_cancel_has_its_own_instant(fresh_db):
+    # A cancel without an instant lost to the cloud's older request: the pull
+    # only takes the cloud's value when its instant is newer than the box's.
+    db, position_id = fresh_db
+    assert run(db, GEOCODE_REQUEST, str(position_id), "--mode", "on").returncode == 0
+    requested_at = row(db, position_id)["geocode_requested_at"]
+    cancelled = run(db, GEOCODE_REQUEST, str(position_id), "--mode", "off")
+    assert cancelled.returncode == 0, cancelled.stderr
+    saved = row(db, position_id)
+    assert saved["geocode_requested"] == 0
+    assert saved["geocode_requested_at"] is not None
+    assert saved["geocode_requested_at"] >= requested_at
 
 
 def test_recompute_request_is_visible_even_when_already_geocoded(fresh_db):

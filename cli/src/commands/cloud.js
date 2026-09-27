@@ -2269,33 +2269,60 @@ function laterInstant(a, b) {
 }
 
 /**
- * [JHT-CLOSER] Quale autorizzazione vale fra quella del box e quella del cloud.
+ * L'istante di una richiesta, in millisecondi. SQLite scrive `CURRENT_TIMESTAMP`
+ * senza fuso ('2026-09-27 14:54:03', UTC) e il cloud rende lo stesso istante
+ * come '2026-09-27T14:54:03+00:00': `Date.parse` legge il primo come ora LOCALE
+ * del processo, quindi i due valori della stessa richiesta non si
+ * riconoscerebbero come uguali. Senza fuso = UTC, come lo salva Postgres.
+ */
+export function requestInstantMs(value) {
+  if (value == null || value === '') return NaN;
+  const text = String(value).trim();
+  const zoned = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(text);
+  return Date.parse(zoned ? text : `${text.replace(' ', 'T')}Z`);
+}
+
+/**
+ * Quale richiesta dell'utente vale fra quella del box e quella del cloud, per
+ * un flag desired-state (`<flag>`, `<flag>_at` e le colonne che viaggiano con
+ * loro).
  *
  * Dal cloud si prende l'AZIONE dell'utente, non lo stato della riga (#186): una
  * posizione rientra nel pull anche per altri motivi (un'esclusione, un altro
- * flag), e la sua riga cloud puo' non conoscere un flag acceso sul box che il
- * push non ha ancora portato su. Il 13/09 una riga trascinata da
- * un'esclusione ha spento cosi' due autorizzazioni date con `jht apply request`.
+ * flag, o solo il push precedente, che ne sposta `updated_at`), e la sua riga
+ * cloud puo' non conoscere un cambio fatto sul box che il push non ha ancora
+ * portato su. Il 13/09 una riga trascinata da un'esclusione ha spento cosi' due
+ * autorizzazioni date con `jht apply request`; il 27/09 lo stesso giro (pull
+ * PRIMA del push, a ogni tick) riaccendeva ogni geocoding appena chiuso
+ * dall'ANALISTA, che rifaceva la stessa posizione in tondo.
  *
- * Vince il cloud solo con un `apply_requested_at` strettamente piu' recente di
- * quello locale: e' un click (o un ritiro, che ha il suo istante) successivo.
- * Altrimenti la terna locale resta intera, istante e autore compresi.
+ * Vince il cloud solo con un istante strettamente piu' recente di quello
+ * locale: e' un click (o un ritiro, che ha il suo istante) successivo. Per
+ * questo chi accende, spegne o chiude una richiesta ne data l'istante (la
+ * chiusura conserva quello della richiesta). Altrimenti vale la riga locale,
+ * istante e colonne compagne comprese.
  */
+export function resolveRequest(local, cloud, flagCol, atCol, extraCols = []) {
+  const pick = (row, fromCloud) => {
+    const out = {
+      flag: row?.[flagCol] === true || row?.[flagCol] === 1 ? 1 : 0,
+      at: row?.[atCol] ?? null,
+    };
+    // Dal cloud una stringa vuota vale assenza, come faceva il pull di apply.
+    for (const col of extraCols) out[col] = (fromCloud ? row?.[col] || null : row?.[col] ?? null);
+    return out;
+  };
+  const cloudMs = requestInstantMs(cloud?.[atCol]);
+  if (Number.isNaN(cloudMs)) return pick(local, false);
+  const localMs = requestInstantMs(local?.[atCol]);
+  if (!Number.isNaN(localMs) && cloudMs <= localMs) return pick(local, false);
+  return pick(cloud, true);
+}
+
+/** [JHT-CLOSER] L'autorizzazione alla candidatura: `resolveRequest` con l'autore. */
 export function resolveApplyRequest(local, cloud) {
-  const localValue = {
-    flag: (local?.apply_requested ?? 0) === 1 ? 1 : 0,
-    at: local?.apply_requested_at ?? null,
-    by: local?.apply_requested_by ?? null,
-  };
-  const cloudMs = Date.parse(cloud?.apply_requested_at ?? '');
-  if (Number.isNaN(cloudMs)) return localValue;
-  const localMs = Date.parse(localValue.at ?? '');
-  if (!Number.isNaN(localMs) && cloudMs <= localMs) return localValue;
-  return {
-    flag: cloud.apply_requested === true || cloud.apply_requested === 1 ? 1 : 0,
-    at: cloud.apply_requested_at,
-    by: cloud.apply_requested_by || null,
-  };
+  const r = resolveRequest(local, cloud, 'apply_requested', 'apply_requested_at', ['apply_requested_by']);
+  return { flag: r.flag, at: r.at, by: r.apply_requested_by };
 }
 
 async function handlePullDesiredState(options = {}) {
@@ -2658,15 +2685,15 @@ async function handlePullDesiredState(options = {}) {
       if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
       const local = checkStmt.get(legacyId);
       if (!local) { missing++; continue; }
-      const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
-      const writeAt = p.write_requested_at || null;
-      const writeKind = p.write_request_kind || null;
-      const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
-      const geoAt = p.geocode_requested_at || null;
-      const rcFlag = p.recheck_requested === true || p.recheck_requested === 1 ? 1 : 0;
-      const rcAt = p.recheck_requested_at || null;
-      const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
-      const spAt = p.salary_precise_requested_at || null;
+      // Ogni richiesta dell'utente con la stessa regola (resolveRequest): una
+      // richiesta chiusa sul box resta chiusa finche' dal cloud non ne arriva
+      // una piu' recente.
+      const write = resolveRequest(local, p, 'write_requested', 'write_requested_at', ['write_request_kind']);
+      const { flag: writeFlag, at: writeAt, write_request_kind: writeKind } = write;
+      const { flag: geoFlag, at: geoAt } = resolveRequest(local, p, 'geocode_requested', 'geocode_requested_at');
+      const { flag: rcFlag, at: rcAt } = resolveRequest(local, p, 'recheck_requested', 'recheck_requested_at');
+      const { flag: spFlag, at: spAt } =
+        resolveRequest(local, p, 'salary_precise_requested', 'salary_precise_requested_at');
       // [JHT-CLOSER] L'autorizzazione alla candidatura. Viaggia con gli altri
       // flag perche' e' un desired-state come loro, ma l'AUTORE non e' un
       // ornamento: il gate (`shared/skills/apply_gate.py`) rifiuta un flag il
