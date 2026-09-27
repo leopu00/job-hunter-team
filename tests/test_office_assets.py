@@ -96,6 +96,10 @@ def test_art_is_placed_by_godots_rule_and_mirrored_where_godot_mirrors_it(commit
     desks = {d["furniture"]["id"]: d["furniture"] for dept in committed["departments"] for d in dept["desks"]}
     assert desks["desk_scout_1"]["flip"] is True  # down_left: the _diag_down art mirrored
     assert desks["desk_scout_1"]["image"]["src"].endswith("scout_a_diag_down.png")
+    # front_occlusion: only the five "down" desks at six o'clock carry it, with their own fraction.
+    occluded = {k: v["frontOcclusion"] for k, v in desks.items() if "frontOcclusion" in v}
+    assert sorted(occluded.values()) == [0.62, 0.72, 0.72, 0.78, 0.8]
+    assert all(k.endswith("_3") for k in occluded)
 
 
 def test_gdscript_literals_are_read_and_expressions_are_skipped(tmp_path: Path):

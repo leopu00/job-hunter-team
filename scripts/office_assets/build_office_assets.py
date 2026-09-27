@@ -238,6 +238,10 @@ def furniture_item(item: dict, plan: ArtPlan, gen_art: dict, *, id: str, seat_of
         seated = seated_texture(item, source)
         if seated is not None:
             out["occupiedImage"] = {"src": plan.use(seated, "furniture/occupied", draw["w"])}
+    if "front_occlusion" in item:
+        # furniture_node.gd _add_front_occluder: from this fraction of the art's
+        # height down, the desk's front is drawn again over an agent seated there.
+        out["frontOcclusion"] = item["front_occlusion"]
     if seat_of:
         out["seatOf"] = seat_of
     return out
