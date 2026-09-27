@@ -502,7 +502,12 @@ is in the base toolkit, not because a prompt asked for it — and it is the
 widest tool there is: it touches every file the process's uid can, and no
 policy of this runtime stands in between (measured 23/09: 84 deletions
 attempted, 84 done, the person's profile and the team's database included,
-while `write_file` on that same profile was denied).
+while `write_file` on that same profile was denied). Since then the shell runs
+inside the kernel's sandbox (`src/tools/sandbox.ts`, Seatbelt on macOS,
+bubblewrap on Linux): writes only in the role's working folder and a temporary
+one, credential files unreadable, the internet but not local sockets or
+loopback. Where no sandbox starts it runs without one, and the trace says so
+(`run_started.sandbox`, and `sandbox` in every `bash` result).
 
 So the question was put to the prompts. For each role: its own text plus the
 SKILL.md files its `skills.list` really loads, only the blocks declared as

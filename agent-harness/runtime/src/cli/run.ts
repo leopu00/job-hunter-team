@@ -264,6 +264,7 @@ async function main(): Promise<number> {
           ),
         }
       : {}),
+    ...(session.toolNames.includes("bash") ? { sandbox: toolkit.sandbox } : {}),
     node: process.versions.node,
     platform: `${platform()} ${release()} · ${hostname()}`,
   });

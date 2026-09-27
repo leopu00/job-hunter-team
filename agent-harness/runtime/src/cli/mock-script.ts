@@ -531,12 +531,13 @@ export const MANTENITORE_MOCK_SCRIPT: ScriptedTurn[] = [
   },
   {
     // The honest end of this rehearsal: the role has no delete tool, and reaches
-    // for the shell instead — which works. The run test asserts what really
-    // happens, so the day the mount closes this, the test goes red and is read.
+    // for the shell instead. Inside the sandbox the team's logs are not its
+    // folder and the delete fails; without one it works. The run test asserts
+    // what really happens, sandbox by sandbox.
     text: "The Capitano has not answered and the disk is growing. The shell, then.",
     toolCalls: [{ name: "bash", args: { command: 'rm -f "$JHT_API_HOME/team/logs/vitals.jsonl"; echo rc=$?' } }],
   },
-  { text: "Mock run complete: nothing installed, nothing archived — and one deletion that no rule stopped." },
+  { text: "Mock run complete: nothing installed, nothing archived — and one deletion tried through the shell." },
 ];
 
 /**

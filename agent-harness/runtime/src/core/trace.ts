@@ -58,6 +58,8 @@ export type TraceEvent =
       tools: string[];
       /** Connected MCP servers, as "name (n tools)" or "name (failed: why)". */
       mcp?: string[];
+      /** The sandbox `bash` runs in: `none` and why when there is none, and what it leaves open. */
+      sandbox?: { kind: string; missing?: string; gaps: string[] };
       node: string;
       platform: string;
     }

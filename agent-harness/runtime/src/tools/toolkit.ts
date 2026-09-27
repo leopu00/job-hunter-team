@@ -18,6 +18,7 @@ import type { ProviderPort } from "../core/provider/port.ts";
 import { createBashTool } from "./bash.ts";
 import { connectMcpFromFile, type McpServerStatus } from "./mcp.ts";
 import type { ToolHandler } from "./registry.ts";
+import { createSandbox, type SandboxKind } from "./sandbox.ts";
 import { createWebFetchTool, type WebFetchOptions } from "./web-fetch.ts";
 import { createWebSearchTool } from "./web-search.ts";
 import { createWorkspaceTools } from "./workspace.ts";
@@ -29,7 +30,9 @@ export interface Toolkit {
   platform: string;
   /** Connected MCP servers and what each offered. Empty without a config. */
   mcpServers: McpServerStatus[];
-  /** Stops MCP servers. Call when the session ends. */
+  /** The boundary `bash` runs in, what it leaves open, and why there is none when there is none. */
+  sandbox: { kind: SandboxKind; missing?: string; gaps: string[] };
+  /** Stops MCP servers and removes the sandbox's temporary folder. Call when the session ends. */
   close(): Promise<void>;
 }
 
@@ -84,10 +87,13 @@ export async function buildToolkit(
   const ownState = roleOf(config.role) === "mantenitore" ? [maintainerLogbookPath(join(config.apiHome, "team"))] : [];
 
   const mcp = config.mcpConfig ? await connectMcpFromFile(config.mcpConfig) : undefined;
+  // The shell's boundary: writes in the role's working folder and a temporary one
+  // only, the MCP config (its servers' Bearer headers) unreadable like a .env.
+  const sandbox = createSandbox({ workdir, protectedPaths: config.mcpConfig ? [config.mcpConfig] : [] });
 
   return {
     platform: PLATFORM_NAMES[platform()] ?? platform(),
-    tools: [...createWorkspaceTools({ workdir, ownRoots, stateRoots }), createBashTool({ workdir }), ...web, ...(mcp?.tools ?? [])],
+    tools: [...createWorkspaceTools({ workdir, ownRoots, stateRoots }), createBashTool({ workdir, sandbox }), ...web, ...(mcp?.tools ?? [])],
     permissions: new PermissionPolicy({
       mode: config.permissionMode,
       // The person's own folders are read freely and written by nobody: the profile
@@ -100,7 +106,9 @@ export async function buildToolkit(
       ask: options.ask,
     }),
     mcpServers: mcp?.servers ?? [],
+    sandbox: { kind: sandbox.kind, ...(sandbox.missing ? { missing: sandbox.missing } : {}), gaps: sandbox.gaps },
     close: async () => {
+      sandbox.dispose();
       await mcp?.close();
     },
   };
