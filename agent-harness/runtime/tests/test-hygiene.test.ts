@@ -32,6 +32,14 @@
  * passes or fails with the LOAD lies in the direction that costs most, a red
  * nobody believes. So every test in a file that starts the CLI carries
  * `CLI_RUN_TIMEOUT_MS` (helpers/cli.ts), and this refuses one that does not.
+ *
+ * ## A loop that writes the twins must not read the clock.
+ *
+ * `for (const db of [pyDb, ourDb]) { … datetime('now', …) … }` reads the
+ * machine's second once per twin: when it ticks between the two, every time
+ * the loop wrote is one second apart and the comparison of the two outputs
+ * fails on nothing (T40 in db-query.test.ts, CI 27/09, 1 red in 1299). The
+ * instant is read once, outside the loop, and passed in (helpers/clock.ts).
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -129,5 +137,32 @@ describe("the tests that start the runtime as a process", () => {
     }
     expect(checked, "no test starts the CLI: the scan is broken, not clean").toBeGreaterThanOrEqual(8);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("the loops that write both twins", () => {
+  it("never read the clock inside, every one of them", async () => {
+    // A loop over two databases, or the `...dbs` of a helper that seeds them
+    // all; its body is the line itself or the block it opens, up to the brace
+    // that closes it at the same indentation.
+    const loop = /^([ \t]*)for \(const \w+ of (?:\[\w+, \w+\]|dbs)\)(.*)$/gm;
+    const clock = /datetime\('now'|CURRENT_TIMESTAMP|Date\.now\(\)|new Date\(\)/;
+    const reading: string[] = [];
+    let checked = 0;
+    for (const file of await testFiles()) {
+      const source = await readFile(join(HERE, file), "utf8");
+      for (const match of source.matchAll(loop)) {
+        checked++;
+        let body = match[0];
+        if (match[2].trimEnd().endsWith("{")) {
+          const rest = source.slice(match.index! + match[0].length);
+          const end = new RegExp(String.raw`^${match[1]}\}`, "m").exec(rest);
+          body += end === null ? rest : rest.slice(0, end.index);
+        }
+        if (clock.test(body)) reading.push(`${file}: ${match[0].trim().slice(0, 90)}`);
+      }
+    }
+    expect(checked, "no loop over the twins found: the scan is broken, not clean").toBeGreaterThanOrEqual(8);
+    expect(reading).toEqual([]);
   });
 });
