@@ -154,19 +154,77 @@ class TestUnstuckApply:
         assert statuses['Stuck Checked'] == 'checked'
         assert statuses['Stuck Writing'] == 'scored'
 
-    def test_checked_reset_with_include_checked(self, tmp_db_path):
+    def test_include_checked_never_sends_an_analysed_position_back_to_new(self, tmp_db_path):
+        """27/09: al boot `--include-checked` rimandava a `new` ogni `checked`
+        ferma da 2 ore, e l'Analista la rianalizzava da capo. Una `checked`
+        senza punteggio è la coda dello Scorer: resta lì. Una con punteggio è
+        già valutata (#60, punteggio di luglio, rimandata all'Analista cinque
+        volte): va a `scored`. Nessuna torna mai a `new`."""
         _seed_positions(tmp_db_path, [
-            ('Stuck Checked', 'Acme', 'checked', 4),
+            ('Waiting For Scorer', 'Acme', 'checked', 4),
+            ('Already Scored', 'Gamma', 'checked', 4),
             ('Stuck Writing', 'Beta', 'writing', 4),
         ])
+        conn = sqlite3.connect(tmp_db_path)
+        scored_id = conn.execute(
+            "SELECT id FROM positions WHERE title = 'Already Scored'").fetchone()[0]
+        conn.execute("INSERT INTO scores (position_id, total_score) VALUES (?, 82)", (scored_id,))
+        conn.commit()
+        conn.close()
 
         import unstuck_positions
         unstuck_positions.main(['--apply', '--include-checked'])
 
-        rows = _read_statuses(tmp_db_path)
-        statuses = {r[1]: r[2] for r in rows}
-        assert statuses['Stuck Checked'] == 'new'  # checked → new
+        statuses = {r[1]: r[2] for r in _read_statuses(tmp_db_path)}
+        assert statuses['Waiting For Scorer'] == 'checked'
+        assert statuses['Already Scored'] == 'scored'
         assert statuses['Stuck Writing'] == 'scored'
+        assert 'new' not in statuses.values()
+
+    def test_every_reset_writes_its_transition(self, tmp_db_path):
+        """Un cambio di stato senza transizione non si vede nello storico della
+        posizione: prima il reset stava solo nelle note e nel log di pid1."""
+        _seed_positions(tmp_db_path, [
+            ('Already Scored', 'Gamma', 'checked', 4),
+            ('Stuck Writing', 'Beta', 'writing', 4),
+        ])
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute("INSERT INTO scores (position_id, total_score) VALUES (1, 82)")
+        conn.commit()
+        conn.close()
+
+        import unstuck_positions
+        unstuck_positions.main(['--apply', '--include-checked'])
+
+        conn = sqlite3.connect(tmp_db_path)
+        rows = conn.execute(
+            "SELECT position_id, from_state, to_state, by_agent "
+            "FROM position_state_transitions ORDER BY position_id").fetchall()
+        conn.close()
+        assert rows == [(1, 'checked', 'scored', 'unstuck'),
+                        (2, 'writing', 'scored', 'unstuck')]
+
+    def test_a_second_boot_changes_nothing(self, tmp_db_path):
+        """Il giro che si ripeteva a ogni avvio: al secondo boot niente da fare."""
+        _seed_positions(tmp_db_path, [('Already Scored', 'Gamma', 'checked', 4)])
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute("INSERT INTO scores (position_id, total_score) VALUES (1, 82)")
+        conn.execute("UPDATE positions SET updated_at = '2026-01-01 00:00:00'")
+        conn.commit()
+        conn.close()
+
+        import unstuck_positions
+        unstuck_positions.main(['--apply', '--include-checked'])
+        conn = sqlite3.connect(tmp_db_path)
+        conn.execute("UPDATE positions SET updated_at = '2026-01-01 00:00:00'")
+        conn.commit()
+        conn.close()
+        unstuck_positions.main(['--apply', '--include-checked'])
+
+        conn = sqlite3.connect(tmp_db_path)
+        n = conn.execute("SELECT count(*) FROM position_state_transitions").fetchone()[0]
+        conn.close()
+        assert n == 1
 
     def test_custom_stale_hours(self, tmp_db_path):
         _seed_positions(tmp_db_path, [

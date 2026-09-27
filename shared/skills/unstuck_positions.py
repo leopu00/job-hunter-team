@@ -18,8 +18,21 @@ Questo skill:
 2. Le resetta a `status='scored'` con nota in `notes` per audit trail.
 3. Idempotente: se non c'e' nessuna stuck, exit code 0 senza modifiche.
 
-Stesso pattern per `status='checked'` (Scorer killato mid-score → posizione
-non passa mai a `writing`).
+`status='checked'` NON è un lavoro lasciato a metà: è la coda dello Scorer
+(`next-for-scorer` = checked senza punteggio), e una posizione ci aspetta
+finché lo Scorer non la prende, anche per ore se è in pausa. Fino al
+2026-09-27 `--include-checked` la rimandava a `new`, cioè all'Analista, che la
+rianalizzava da capo: a ogni avvio del container. Peggio con una posizione
+`checked` che un punteggio lo ha già (#60 su una VPS, punteggio di luglio):
+lo Scorer non la prende mai, e il reset la rimandava all'Analista cinque volte
+dal 18/08. Ora `--include-checked`:
+- lascia dove sta la `checked` SENZA punteggio: è in coda allo Scorer;
+- porta a `scored` la `checked` CON punteggio: è già valutata, niente da rifare.
+Nessuna posizione torna mai a `new`: una posizione analizzata non si rianalizza.
+
+Ogni cambio di stato scrive la sua riga in `position_state_transitions`
+(by_agent='unstuck'), come ogni altro cambio di stato del team: prima il
+reset si vedeva solo nelle note e nel log di pid1.
 
 Uso:
     python3 unstuck_positions.py             # dry-run default 2h
@@ -43,7 +56,10 @@ from _db import get_db, ensure_schema
 
 
 def find_stuck(conn, status, stale_hours):
-    """Ritorna lista di (id, title, company, updated_at) stuck in `status`."""
+    """Ritorna lista di (id, title, company, updated_at) stuck in `status`.
+
+    Per `checked` solo quelle che un punteggio lo hanno già: le altre sono la
+    coda dello Scorer, non righe bloccate."""
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=stale_hours)).isoformat()
     # datetime() normalizza i due formati che convivono in updated_at:
     # ISO con 'T' (INSERT espliciti) e 'YYYY-MM-DD HH:MM:SS' col trigger
@@ -56,18 +72,21 @@ def find_stuck(conn, status, stale_hours):
         FROM positions
         WHERE status = ?
           AND datetime(updated_at) < datetime(?)
+          AND (? <> 'checked'
+               OR EXISTS (SELECT 1 FROM scores s WHERE s.position_id = positions.id))
         ORDER BY updated_at ASC
         """,
-        (status, cutoff)
+        (status, cutoff, status)
     )
     return cursor.fetchall()
 
 
 def reset_position(conn, row_id, current_status, audit_note):
-    """Reset una position a status precedente con audit in notes."""
-    # writing → scored (lo Scorer ha gia' fatto il suo lavoro)
-    # checked → new (Analista lo ha gia' analizzato ma Scorer e' fallito)
-    new_status = 'scored' if current_status == 'writing' else 'new'
+    """Riporta una position allo stato giusto, con transizione e audit in notes."""
+    # writing → scored: lo Scrittore è morto a metà, lo Scorer aveva già fatto
+    #   il suo lavoro; la posizione torna nella coda degli Scrittori.
+    # checked (con punteggio) → scored: già valutata, il punteggio c'è.
+    new_status = 'scored'
 
     # Concatena la audit note alle notes esistenti senza distruggere
     # contenuto precedente. Format: "<existing>\n[unstuck YYYY-MM-DD]: <note>"
@@ -89,6 +108,12 @@ def reset_position(conn, row_id, current_status, audit_note):
         """,
         (new_status, new_notes, row_id)
     )
+    conn.execute(
+        "INSERT INTO position_state_transitions "
+        "(position_id, from_state, to_state, by_agent, notes) "
+        "VALUES (?, ?, ?, 'unstuck', ?)",
+        (row_id, current_status, new_status, audit_note)
+    )
     return new_status
 
 
@@ -104,7 +129,8 @@ def main(argv=None):
     )
     parser.add_argument(
         '--include-checked', action='store_true',
-        help='Also include positions with status=checked (Scorer terminated mid-run).'
+        help='Also move status=checked positions that already have a score to scored '
+             '(checked without a score is the Scorer queue and is left alone).'
     )
     parser.add_argument(
         '--audit-note',

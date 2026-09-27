@@ -537,9 +537,12 @@ async function runMigrate() {
 }
 
 async function runUnstuckPositions() {
-  // Reset positions stuck in 'writing'/'checked' da HALT/kill mid-run del
-  // boot precedente. Idempotente: zero stuck = no-op. Skip se jobs.db
-  // ancora non esiste (nessun team mai avviato, niente da pulire).
+  // Riporta a 'scored' le posizioni lasciate in 'writing' da un HALT/kill
+  // mid-run del boot precedente, e le 'checked' che hanno già un punteggio.
+  // Una 'checked' senza punteggio è la coda dello Scorer e resta dov'è: nessuna
+  // posizione torna a 'new' (fino al 27/09 l'Analista le rianalizzava a ogni
+  // avvio). Idempotente: zero stuck = no-op. Skip se jobs.db ancora non esiste
+  // (nessun team mai avviato, niente da pulire).
   // Origin: docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md anomalia #4.
   const JOBS_DB_PATH = `${JHT_HOME}/jobs.db`;
   try {
@@ -547,7 +550,7 @@ async function runUnstuckPositions() {
   } catch {
     return;
   }
-  pid1Log('running unstuck_positions (reset stuck writing > 2h)');
+  pid1Log('running unstuck_positions (stuck writing and scored checked > 2h → scored)');
   await new Promise((resolve) => {
     const child = spawnLabeled('unstuck', '/usr/bin/env', [
       'python3',
