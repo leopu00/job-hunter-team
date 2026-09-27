@@ -13,7 +13,8 @@
  * agent's, naming the subagent):
  *   - run_finished "completed": idle. A turn that ends with no pause and no
  *     mail ends the process; the TUI agent would wait at its prompt
- *     (docs/parity.md, runCycles 4);
+ *     (docs/parity.md, runCycles 4). Only within IDLE_HORIZON_MS: a run
+ *     that ended a day ago is an old test's agent, not one of today's team;
  *   - run_finished "stopped", run_failed: no status, the agent is gone;
  *   - a run still open but silent for TRACE_LIVE_MS: no status. A live
  *     process writes a process_sample every 5 s, so silence is a process
@@ -34,12 +35,19 @@
  * event names red (tests/js/tasks/agents-status-traces.test.ts).
  */
 
-import { open, readdir } from 'node:fs/promises';
+import { open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { canonicalAgentId, createDroppedNameLog, UID_FORMAT } from './agents-status.js';
 
 /** A live run writes a process_sample every 5 s: silent this long, it is not live. */
 export const TRACE_LIVE_MS = 30_000;
+
+/**
+ * How long an agent whose run completed still counts as waiting: the
+ * desktop's roster window (an agent with no transition in 24 h is not drawn).
+ * The logs keep the folders of past test rounds; those are no status.
+ */
+export const IDLE_HORIZON_MS = 24 * 60 * 60 * 1000;
 
 /** How much of the end of a trace is read: ~10,000 process samples, hours of a pause. */
 export const TRACE_TAIL_BYTES = 2 * 1024 * 1024;
@@ -75,7 +83,10 @@ export function statusFromTrace(events, now = Date.now()) {
   const last = own[own.length - 1];
 
   const end = own.findLast((ev) => ev.type === 'run_finished' || ev.type === 'run_failed');
-  if (end) return end.type === 'run_finished' && end.reason === 'completed' ? { status: 'idle', since: end.ts } : null;
+  if (end) {
+    const recent = now - Date.parse(end.ts) <= IDLE_HORIZON_MS;
+    return end.type === 'run_finished' && end.reason === 'completed' && recent ? { status: 'idle', since: end.ts } : null;
+  }
   if (now - Date.parse(last.ts) > TRACE_LIVE_MS) return null;
 
   const turnEnd = own.findLastIndex((ev) => ev.type === 'turn_finished');
@@ -133,7 +144,10 @@ export function createApiAgentsStatusReader({ logsDir, tail = readTail, log } = 
         try {
           const runs = (await readdir(join(logsDir, dir.name))).filter((f) => f.endsWith('.jsonl')).sort();
           if (runs.length === 0) continue;
-          const status = statusFromTrace(parseTraceLines(await tail(join(logsDir, dir.name, runs.at(-1)))), now.getTime());
+          // a trace untouched for longer than the horizon says nothing about today: not even read
+          const newest = join(logsDir, dir.name, runs.at(-1));
+          if (now.getTime() - (await stat(newest)).mtimeMs > IDLE_HORIZON_MS) continue;
+          const status = statusFromTrace(parseTraceLines(await tail(newest)), now.getTime());
           if (status) map[canonicalAgentId(dir.name)] = status;
         } catch {
           /* an agent whose trace cannot be read has no status */
