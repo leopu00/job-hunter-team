@@ -8,9 +8,11 @@
  */
 
 import { platform } from "node:os";
+import { join } from "node:path";
 
 import type { Config } from "../config.ts";
-import { profileWritables } from "../db/role-policy.ts";
+import { profileWritables, roleOf } from "../db/role-policy.ts";
+import { maintainerLogbookPath } from "../parity/skills/maintainer.ts";
 import { PermissionPolicy, type PermissionAsker } from "../core/permissions.ts";
 import type { ProviderPort } from "../core/provider/port.ts";
 import { createBashTool } from "./bash.ts";
@@ -75,6 +77,11 @@ export async function buildToolkit(
   // listed one by one, not its folder, which can be a JHT home the profile
   // lives in too.
   const stateRoots = [config.apiHome, ...(options.jobsDbFile ? jobsDbFiles(options.jobsDbFile) : [])];
+  // T41: the MANTENITORE's logbook is its own state, though it sits in the team's
+  // logs/ beside the other roles' (`<apiHome>/team`, the teamDir its tool gets).
+  // One file, for the policy only: `maintainer_logbook` reaches it, the file tools
+  // still do not, and nothing else in logs/ becomes the role's.
+  const ownState = roleOf(config.role) === "mantenitore" ? [maintainerLogbookPath(join(config.apiHome, "team"))] : [];
 
   const mcp = config.mcpConfig ? await connectMcpFromFile(config.mcpConfig) : undefined;
 
@@ -88,7 +95,7 @@ export async function buildToolkit(
       freeReadRoots: [workdir, ...personal(config)],
       readOnlyRoots: personal(config),
       writable,
-      ownRoots,
+      ownRoots: [...ownRoots, ...ownState],
       stateRoots,
       ask: options.ask,
     }),

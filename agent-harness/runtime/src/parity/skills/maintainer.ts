@@ -35,7 +35,7 @@
  */
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 import { pathOf } from "../jht-tools.ts";
 import type { ScriptResult } from "../../db/tools.ts";
@@ -174,9 +174,18 @@ function quotedEntries(text: string): string {
   return [...(left > 0 ? [`(${left} older rounds not shown)`] : []), ...kept].join("\n");
 }
 
+/**
+ * The logbook's file. It is the MANTENITORE's own state: the toolkit lists
+ * this one file among that role's own roots, and the tool declares this file
+ * — not the team's `logs/` folder, which holds the other roles' state.
+ */
+export function maintainerLogbookPath(teamDir: string): string {
+  return join(teamDir, "logs", "mantenitore-logbook.jsonl");
+}
+
 function logbook(argv: string[], options: MaintainerOptions): ScriptResult {
-  const dir = join(options.teamDir, "logs");
-  const file = join(dir, "mantenitore-logbook.jsonl");
+  const file = maintainerLogbookPath(options.teamDir);
+  const dir = dirname(file);
   const cmd = (argv[0] ?? "tail").toLowerCase();
   if (cmd === "append") {
     const entry = argv.slice(1).join(" ").replaceAll(/\s+/gu, " ").trim();
@@ -231,7 +240,7 @@ export function createMaintainerTools(options: MaintainerOptions): ToolHandler[]
         `Your logbook, one line per round: \`append <entry>\` (at most ${ENTRY_MAX} characters) and \`tail\` for the ` +
         "previous rounds. It is the only thing you write, and it lives in the team's folder.",
       run: (args) => logbook(args, options),
-      classify: (args) => ({ risk: args[0] === "append" ? "write" : "read", paths: [join(options.teamDir, "logs")], summary: args[0] ?? "tail" }),
+      classify: (args) => ({ risk: args[0] === "append" ? "write" : "read", paths: [maintainerLogbookPath(options.teamDir)], summary: args[0] ?? "tail" }),
     }),
   ];
 }
