@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { fileURLToPath } from "node:url";
 import { build, type Rollup } from "vite";
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
+import { WEB_PUBLIC_FILES } from "./web-public-assets";
 
 /**
  * The desktop bundles web code, and the web mixes browser code with server
@@ -28,6 +30,7 @@ const SERVER_ONLY = [
 ];
 
 let moduleIds: string[] = [];
+let assets = new Map<string, Uint8Array | string>();
 
 beforeAll(async () => {
   const out = await build({
@@ -39,6 +42,9 @@ beforeAll(async () => {
   const outputs = (Array.isArray(out) ? out : [out]) as Rollup.RollupOutput[];
   moduleIds = outputs.flatMap((o) =>
     o.output.flatMap((item) => (item.type === "chunk" ? item.moduleIds : [])),
+  );
+  assets = new Map(
+    outputs.flatMap((o) => o.output.flatMap((item) => (item.type === "asset" ? [[item.fileName, item.source] as const] : []))),
   );
 }, 180_000);
 
@@ -52,6 +58,14 @@ describe("the desktop bundle", () => {
 
   it.each(SERVER_ONLY)("never contains %s", (file) => {
     expect(moduleIds.filter((id) => id.replace(/\\/g, "/").endsWith(`/${file}`))).toEqual([]);
+  });
+
+  // The web asks for them by absolute path (/agents/capitano.png): without
+  // them in the build the chat showed broken images (web-public-assets.ts).
+  it.each(WEB_PUBLIC_FILES)("ships the web's public file %s, byte for byte", (file) => {
+    const source = assets.get(file);
+    expect(source).toBeDefined();
+    expect(Buffer.from(source!)).toEqual(readFileSync(new URL(`../../../web/public/${file}`, import.meta.url)));
   });
 
   it("never pulls node:crypto or child_process in", () => {
