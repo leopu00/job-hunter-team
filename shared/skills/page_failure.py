@@ -195,6 +195,10 @@ class Access:
     final_url: str
     # The challenge fingerprint in the page, "" when none (a bare 403).
     challenge: str = ""
+    # The page could not be read because it was between two documents (a
+    # reload in flight): what was seen is the old document's status with no
+    # content, not a verdict on the page.
+    navigating: bool = False
 
     @property
     def kind(self) -> str:
@@ -214,6 +218,11 @@ def _document_status(page: Any) -> int | None:
     except Exception:
         return None
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def _is_navigating(error: BaseException) -> bool:
+    """Playwright's answer to page.content() while a new document replaces the old one."""
+    return "page is navigating" in str(error)
 
 
 def _is_timeout(error: BaseException) -> bool:
@@ -244,7 +253,11 @@ def observe(page: Any, *, response: Any = None, error: BaseException | None = No
         status = _document_status(page)
     try:
         html = page.content()
-    except Exception:
+    except Exception as exc:
+        if _is_navigating(exc):
+            # Not a verdict on the page: temporary, so whoever reads it without
+            # settle() waits and tries again, and never goes on with a page it could not read.
+            return Access(Verdict(TEMPORARY, "navigating"), status, final_url, navigating=True)
         html = ""
     if status is None:
         # No response and no error: content set in place, about:blank, an old
@@ -282,9 +295,12 @@ def settle(
     answered at once.  A cleared check reloads the page: caught in the middle
     of that reload, the new document can show its content before its status
     (flaky CI run 34881349729: ok with no status).  So after a challenge a page
-    is settled only with a status, or when the time is up.
+    is settled only with a status, or when the time is up.  Caught a moment
+    earlier, the page cannot be read at all ("page is navigating") while the
+    old document's 403 is still there: that is a reload in flight, not a
+    bare 403 (flaky CI run 36339861943, blocked_human after 1.4 s).
     """
-    if not (access.kind == BOT_PROTECTION and access.challenge):
+    if not access.navigating and not (access.kind == BOT_PROTECTION and access.challenge):
         return access
     waited = 0
     while waited < wait_ms:
@@ -294,6 +310,8 @@ def settle(
             return access
         waited += poll_ms
         access = observe(page)
+        if access.navigating:
+            continue  # between two documents: the next look reads the new one
         if access.kind == BOT_PROTECTION and access.challenge:
             continue
         if access.status is None and access.kind == OK:
