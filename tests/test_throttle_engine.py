@@ -900,3 +900,81 @@ def test_jht_throttle_non_forka_piu_un_figlio_detached():
     assert "< /dev/null &" not in src
     assert "rm -f \"$STATE_FILE\"" not in src, \
         "cancellare il flag all'uscita è ciò che faceva perdere i throttle"
+
+
+# ── Pausa breve con lavoro chiesto dall'utente (27/09) ────────────────────
+# Su una VPS l'ANALISTA-1 era a 780 s anche con 120 geocoding chiesti in coda:
+# 41 s di lavoro e 13 minuti di pausa per ogni coordinata. Con richieste
+# dell'utente in attesa la pausa scende a 60 s; a coda vuota resta il freno
+# del Capitano, che serve per i giri a vuoto.
+def _jobs_db(home_dir: Path, monkeypatch, **flags):
+    """Un jobs.db vero con UNA posizione e i flag di richiesta dati."""
+    db = home_dir / "jobs.db"
+    monkeypatch.setenv("JHT_DB", str(db))
+    seed = subprocess.run(
+        ["python3", "-c",
+         "import sys; sys.path.insert(0, %r); "
+         "from _db import get_db, ensure_schema; c = get_db(); ensure_schema(c); "
+         "c.execute(\"INSERT INTO positions (title, company, status) VALUES ('Engineer', 'Acme', 'scored')\"); "
+         "c.commit()" % str(SKILLS_DIR)],
+        env={**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home_dir)},
+        capture_output=True, text=True, timeout=60)
+    assert seed.returncode == 0, seed.stderr
+    if flags:
+        import sqlite3
+        conn = sqlite3.connect(db)
+        conn.execute("UPDATE positions SET %s WHERE id = 1"
+                     % ", ".join("%s = %r" % kv for kv in flags.items()))
+        conn.commit()
+        conn.close()
+    return db
+
+
+def test_user_requests_waiting_shorten_the_analyst_pause(home, monkeypatch):
+    set_config(home, **{"analista-1": 780})
+    _jobs_db(home, monkeypatch, geocode_requested=1,
+             geocode_requested_at="2026-09-27 14:54:03")
+    res = eng.register("analista-1", reason="post-geocode", now=T0)
+    assert res["applied_sec"] == eng.USER_WORK_PAUSE_SEC == 60
+    assert res["until"] == int(T0) + 60
+    assert res["shortened_from"] == 780
+    assert res["user_requests_waiting"] == {"next-for-geocoding": 1}
+    armed = events("armed")[-1]
+    assert armed["applied_sec"] == 60 and armed["shortened_from"] == 780
+
+
+def test_an_empty_user_queue_keeps_the_captains_pause(home, monkeypatch):
+    # Il freno per i giri a vuoto non si tocca: niente richieste, 780 s.
+    set_config(home, **{"analista-1": 780})
+    _jobs_db(home, monkeypatch, geocode_requested=0,
+             geocode_requested_at="2026-09-27 14:54:03", office_geocoded=1)
+    res = eng.register("analista-1", reason="queue-empty", now=T0)
+    assert res["applied_sec"] == 780
+    assert "shortened_from" not in res
+    assert "shortened_from" not in events("armed")[-1]
+
+
+def test_only_the_analyst_serves_user_requests(home, monkeypatch):
+    # Una richiesta dell'utente non è lavoro dello Scout: la sua pausa resta.
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch, geocode_requested=1,
+             geocode_requested_at="2026-09-27 14:54:03")
+    assert eng.register("scout-2", now=T0)["applied_sec"] == 660
+
+
+def test_an_unreadable_db_keeps_the_brake(home, monkeypatch):
+    # Senza una risposta certa sulla coda si tiene la pausa del Capitano.
+    set_config(home, **{"analista-1": 780})
+    bad = home / "jobs.db"
+    bad.write_text("not a database", encoding="utf-8")
+    monkeypatch.setenv("JHT_DB", str(bad))
+    assert eng.register("analista-1", now=T0)["applied_sec"] == 780
+
+
+def test_a_shorter_captains_pause_is_not_lengthened(home, monkeypatch):
+    # Il minimo fra i due: 60 s è un tetto, non un valore imposto.
+    set_config(home, **{"analista-1": 0})
+    _jobs_db(home, monkeypatch, geocode_requested=1,
+             geocode_requested_at="2026-09-27 14:54:03")
+    monkeypatch.setattr(eng, "effective_seconds", lambda agent, requested=None: 30)
+    assert eng.register("analista-1", now=T0)["applied_sec"] == 30
