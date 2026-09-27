@@ -5,9 +5,11 @@ The metre is not "the role runs" but "it does the same things as its TUI
 twin", and it is read in the database, not in the logs. Both sides start from
 the same seed, so what each one did afterwards can be compared row by row:
 
-  seed     --from <tui jobs.db> --out <seed.db>
+  seed     --from <tui jobs.db> --out <seed.db> [--force | --into]
            A consistent copy of the TUI database at one instant, read only
            (the source is opened with mode=ro and copied with SQLite's backup).
+           --into copies into an existing database that someone may have open
+           (a daemon, in WAL): through SQLite, never by replacing the file.
   prepare  --seed <seed.db> --out <api jobs.db> [--force]
            The API side's database, always a fresh copy of the seed: never a
            database with a history nobody remembers, never rows deleted by
@@ -424,6 +426,32 @@ def render_json(reports: list[TableReport], checks: dict[str, Any]) -> str:
 # ── seed and prepare (B0) ─────────────────────────────────────────────────
 
 
+def seed_into(source: Path, out: Path) -> int:
+    """Copy `source` into the existing database `out`, while others may have it open.
+
+    Replacing the file under an open connection leaves the old file's -wal and
+    -shm beside the new one, and SQLite may replay that WAL into it: a copy
+    that is corrupt, or holds old rows. SQLite's backup into a connection on
+    `out` takes its locks, goes through its WAL and leaves one consistent
+    database, which is then checked.
+    """
+    if not out.exists():
+        raise SystemExit(f"jobsdb_parity: {out} does not exist (the first copy is a plain seed)")
+    src = connect_ro(source)
+    try:
+        dst = sqlite3.connect(out, timeout=30)
+        try:
+            src.backup(dst)
+            check = dst.execute("PRAGMA integrity_check").fetchone()[0]
+            if check != "ok":
+                raise SystemExit(f"jobsdb_parity: {out} failed its integrity check after the copy: {check}")
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    return 0
+
+
 def seed(source: Path, out: Path, force: bool = False) -> int:
     if out.exists() and not force:
         raise SystemExit(f"jobsdb_parity: {out} exists (use --force to replace it)")
@@ -470,7 +498,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("seed", help="copy a jobs.db at one instant, read only")
     p.add_argument("--from", dest="source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--force", action="store_true")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--force", action="store_true", help="replace --out (nobody may have it open)")
+    mode.add_argument("--into", action="store_true", help="copy into the existing --out, safe while it is open")
     p = sub.add_parser("prepare", help="the API side's jobs.db, fresh from the seed")
     p.add_argument("--seed", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -484,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "seed":
-            return seed(args.source, args.out, args.force)
+            return seed_into(args.source, args.out) if args.into else seed(args.source, args.out, args.force)
         if args.command == "prepare":
             return prepare(args.seed, args.out, args.force)
         tui = load(args.tui, "tui")

@@ -1,12 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { JsonlTrace } from "../../../agent-harness/runtime/src/core/trace.ts";
 import {
   createApiAgentsStatusReader,
   parseTraceLines,
   statusFromTrace,
+  IDLE_HORIZON_MS,
   TRACE_LIVE_MS,
 } from "../../../cli/src/lib/agents-status-traces.js";
 
@@ -61,8 +62,10 @@ describe("the rule (statusFromTrace)", () => {
     expect(statusFromTrace(sub, NOW)?.status).toBe("idle");
   });
 
-  it("a closed run: completed is waiting, stopped or failed is no status", () => {
-    expect(statusFromTrace([ev(0, "run_started"), ev(9, "run_finished", { reason: "completed" })], NOW + 3_600_000)).toEqual({ status: "idle", since: at(9) });
+  it("a closed run: completed is waiting (within the horizon), stopped or failed is no status", () => {
+    const done = [ev(0, "run_started"), ev(9, "run_finished", { reason: "completed" })];
+    expect(statusFromTrace(done, NOW + 3_600_000)).toEqual({ status: "idle", since: at(9) });
+    expect(statusFromTrace(done, T0 + 9_000 + IDLE_HORIZON_MS + 1)).toBeNull();
     expect(statusFromTrace([ev(0, "run_started"), ev(9, "run_finished", { reason: "stopped" })], NOW)).toBeNull();
     expect(statusFromTrace([ev(0, "run_started"), ev(9, "run_failed", { code: "x" })], NOW)).toBeNull();
   });
@@ -102,6 +105,30 @@ describe("the reader, on traces the harness writes", () => {
     run("critico-1", "2026-09-27T21-00-00-000Z-dddddddd", [0, 1], [{ type: "run_started" }, { type: "run_failed", code: "x", message: "y" }]);
     const map = await createApiAgentsStatusReader({ logsDir: dir }).read(new Date(T0 + 10_000));
     expect(map).toEqual({ capitano: { status: "working", since: at(0) }, "scout-2": { status: "idle", since: at(5) } });
+  });
+
+  it("a folder whose name is not an agent's is left out, told once", async () => {
+    dir = mkdtempSync(join(tmpdir(), "jht-api-logs-"));
+    run("scout-1", "2026-09-27T21-00-00-000Z-aaaaaaaa", [0, 5], [{ type: "turn_started", turn: 1 }, { type: "turn_finished", turn: 1 }]);
+    run("prova_manuale", "2026-09-27T21-00-00-000Z-bbbbbbbb", [0], [{ type: "turn_started", turn: 1 }]);
+    const log = vi.fn();
+    const reader = createApiAgentsStatusReader({ logsDir: dir, log });
+    expect(Object.keys((await reader.read(new Date(T0 + 10_000)))!)).toEqual(["scout-1"]);
+    await reader.read(new Date(T0 + 10_000));
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith("warn", "agents-status.name-dropped", { name: "prova_manuale" });
+  });
+
+  it("an old test round's folder is not today's team, and is not even read", async () => {
+    dir = mkdtempSync(join(tmpdir(), "jht-api-logs-"));
+    run("closer-1", "2026-09-20T21-00-00-000Z-aaaaaaaa", [0, 1], [{ type: "run_started" }, { type: "run_finished", reason: "completed" }]);
+    const old = new Date(T0 - IDLE_HORIZON_MS - 60_000);
+    utimesSync(join(dir, "closer-1", "2026-09-20T21-00-00-000Z-aaaaaaaa.jsonl"), old, old);
+    run("scout-1", "2026-09-27T21-00-00-000Z-bbbbbbbb", [0, 5], [{ type: "turn_started", turn: 1 }, { type: "turn_finished", turn: 1 }]);
+    const tail = vi.fn(async (p: string) => readFileSync(p, "utf8"));
+    const map = await createApiAgentsStatusReader({ logsDir: dir, tail }).read(new Date(T0 + 10_000));
+    expect(Object.keys(map!)).toEqual(["scout-1"]);
+    expect(tail).toHaveBeenCalledTimes(1);
   });
 
   it("logs that cannot be read publish nothing", async () => {

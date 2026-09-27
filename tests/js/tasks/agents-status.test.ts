@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  agentsStatusWriter,
   buildAgentsStatus,
   canonicalAgentId,
   createAgentsStatusReader,
@@ -70,6 +71,20 @@ describe("the published map", () => {
     expect(buildAgentsStatus({ "SCOUT-2": "weird" }, {}, new Map())["scout-2"].status).toBe("idle");
   });
 
+  it("a session whose name is not an agent's is left out, told once, and the others are published", async () => {
+    const dropped = vi.fn();
+    const map = buildAgentsStatus({ "SCOUT-1": "working", my_shell: "idle", "sess 2": "idle" }, {}, new Map(), new Date(), dropped);
+    expect(Object.keys(map)).toEqual(["scout-1"]);
+    expect(dropped.mock.calls.map((c) => c[0])).toEqual(["my_shell", "sess 2"]);
+
+    const log = vi.fn();
+    const reader = createAgentsStatusReader({ jhtHome: "/nowhere", run: async () => ({ "SCOUT-1": { status: "working" }, my_shell: { status: "idle" } }), readThrottles: async () => "", log });
+    expect(Object.keys((await reader.read())!)).toEqual(["scout-1"]);
+    await reader.read();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith("warn", "agents-status.name-dropped", { name: "my_shell" });
+  });
+
   it("a session that is gone leaves the map", () => {
     const changedAt = new Map();
     buildAgentsStatus({ "SCOUT-1": "working", "SCOUT-2": "idle" }, {}, changedAt);
@@ -134,18 +149,56 @@ describe("the reader and the publisher", () => {
     }
   });
 
-  it("a failed write only skips a round", async () => {
-    const reader = { read: async () => ({ a: { status: "idle", since: "x", source: "tui" } }) };
-    const write = vi.fn().mockRejectedValueOnce(new Error("refused")).mockResolvedValue(undefined);
+  it("a route that refuses the field: one warning, then quiet, and a retry only after the long wait", async () => {
     vi.useFakeTimers();
     try {
-      const stop = startAgentsStatusPublisher({ reader, write, every: 1000, keepalive: 60_000 });
-      await vi.advanceTimersByTimeAsync(1000);
+      const reader = { read: async () => ({ a: { status: "idle", since: "x" } }) };
+      const refused = Object.assign(new Error("PATCH /api/team-state → HTTP 403"), { status: 403 });
+      const write = vi.fn().mockRejectedValue(refused);
+      const log = vi.fn();
+      const stop = startAgentsStatusPublisher({ reader, write, every: 1000, keepalive: 60_000, refusedRetry: 30_000, log });
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log.mock.calls[0]![2]).toMatchObject({ status: 403, retry_in_s: 30 });
+      await vi.advanceTimersByTimeAsync(2000);
       expect(write).toHaveBeenCalledTimes(2);
+      expect(log).toHaveBeenCalledTimes(1);
+      write.mockResolvedValue(undefined);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(write).toHaveBeenCalledTimes(3);
+      expect(log).toHaveBeenLastCalledWith("info", "agents-status.write-resumed", {});
       stop();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("a network failure tries again the next round, still with one warning", async () => {
+    vi.useFakeTimers();
+    try {
+      const reader = { read: async () => ({ a: { status: "idle", since: "x" } }) };
+      const write = vi.fn().mockRejectedValue(new Error("fetch failed"));
+      const log = vi.fn();
+      const stop = startAgentsStatusPublisher({ reader, write, every: 1000, keepalive: 60_000, log });
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(write).toHaveBeenCalledTimes(4);
+      expect(log).toHaveBeenCalledTimes(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes direct with a session, through the web route without one, only its own source", async () => {
+    const map = { "scout-1": { status: "working", since: "x" } };
+    const direct = { patchTeamState: vi.fn(async () => {}) };
+    const route = vi.fn(async () => {});
+    await agentsStatusWriter({ source: "tui", direct, route })(map);
+    expect(direct.patchTeamState).toHaveBeenCalledWith({ agents_status: { tui: { agents: map } } });
+    expect(route).not.toHaveBeenCalled();
+    await agentsStatusWriter({ source: "api", direct: null, route })(map);
+    expect(route).toHaveBeenCalledWith({ agents_status: { api: { agents: map } } });
   });
 
   it("the change key ignores `since`", () => {
