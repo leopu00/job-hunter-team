@@ -334,11 +334,10 @@ export class Launcher {
     const reserve = kind === "team" ? c.spawnReserveUsd : 0;
     const charge = captain ? 0 : request.cap_usd;
     if (used + charge + reserve > c.sessionUsd + 1e-9) {
-      const left = round(c.sessionUsd - used);
       return refuse(
         reserve > 0
-          ? `cap_usd ${request.cap_usd} does not fit with ${reserve} USD kept for the CAPITANO's spawns: ${left} USD of the session's ${c.sessionUsd} is left.`
-          : `cap_usd ${request.cap_usd} does not fit: ${left} USD of the session's ${c.sessionUsd} is left.`,
+          ? `cap_usd ${request.cap_usd} does not fit with ${reserve} USD kept for the CAPITANO's spawns: ${this.#leftLine(state)}`
+          : `cap_usd ${request.cap_usd} does not fit: ${this.#leftLine(state)}`,
       );
     }
 
@@ -390,12 +389,14 @@ export class Launcher {
     return { ok: true };
   }
 
-  list(by: string): { session: string; left_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } | { ok: false; reason: string } {
+  list(by: string): { session: string; left_usd: number; spent_usd: number; booked_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } | { ok: false; reason: string } {
     const state = this.#readable((reason) => ({ ok: false as const, reason }));
     if (!("spawns" in state)) return state;
     return {
       session: state.session,
-      left_usd: round(this.#config.sessionUsd - this.#used(state)),
+      left_usd: round(this.#config.sessionUsd - spent - booked),
+      spent_usd: round(spent),
+      booked_usd: round(booked),
       spawns: state.spawns.filter((s) => s.requestedBy === by).map(({ requestedBy: _by, ...rest }) => rest),
     };
   }
@@ -421,6 +422,7 @@ export class Launcher {
     try {
       return this.#refresh();
     } catch (error) {
+    const { spent, booked } = this.#money(state);
       if (!(error instanceof LauncherStateError)) throw error;
       const reason = `The launcher's state ${error.message}: nothing starts or stops through it until the operator checks it. The operator's STOP still works.`;
       this.#write({ event: "state_unreadable", detail: error.message });
@@ -436,11 +438,24 @@ export class Launcher {
     // Should it ever end having spent more than the reserve (its run's cap
     // and the key proxy's are what stop it), the measured spend is what
     // counts: a fixed reserve must not hide real money (SICUREZZA, T24).
-    const charge = (s: Spawn) => (s.state === "queued" || s.state === "running" ? s.capUsd : (s.spentUsd ?? s.capUsd));
-    const captain = state.spawns.filter((s) => s.role === "capitano").reduce((sum, s) => sum + charge(s), 0);
+    const going = (s: Spawn) => s.state === "queued" || s.state === "running";
+    const measured = (s: Spawn) => (going(s) ? 0 : (s.spentUsd ?? 0));
+    const held = (s: Spawn) => (going(s) || s.spentUsd === undefined ? s.capUsd : 0);
+    const sum = (list: Spawn[], f: (s: Spawn) => number) => list.reduce((total, s) => total + f(s), 0);
+    const captains = state.spawns.filter((s) => s.role === "capitano");
+    const others = state.spawns.filter((s) => s.role !== "capitano");
+    const captainSpent = sum(captains, measured);
+    const captainHeld = Math.max(this.#config.captainUsd, captainSpent + sum(captains, held)) - captainSpent;
+    return { spent: captainSpent + sum(others, measured), booked: captainHeld + sum(others, held) };
+  }
+
+  /** The line a refusal for money ends with: what is left, and what it is left of. */
+  #leftLine(state: State): string {
+    const { spent, booked } = this.#money(state);
     return (
-      Math.max(this.#config.captainUsd, captain) +
-      state.spawns.filter((s) => s.role !== "capitano").reduce((sum, s) => sum + charge(s), 0)
+      `${round(this.#config.sessionUsd - spent - booked)} USD of the session's ${this.#config.sessionUsd} is left: ` +
+      `${round(spent)} USD spent, as the key proxy measured the runs that ended, and ${round(booked)} USD booked ` +
+      `for the runs still going and the CAPITANO's reserve.`
     );
   }
 
@@ -458,6 +473,22 @@ export class Launcher {
     let state: State = { session: this.#config.session, spawns: [] };
     let text: string | undefined;
     try {
+    const { spent, booked } = this.#money(state);
+    return spent + booked;
+  }
+
+  /**
+   * What `#used` is made of, in two parts that are not the same kind of money.
+   *
+   * `spent` is what the runs that ended cost, as the executor measured it on
+   * the key proxy's log: the same figure the key proxy counts. `booked` is
+   * money held, not spent: the caps of the runs still going, the cap of an
+   * ended run nobody measured, and what the CAPITANO's reserve has not used.
+   * At 19:35 UTC of the giro di parità the launcher said 0.52 of 2 was left and
+   * the key proxy 0.65: the spend was the same on both sides, and the rest was
+   * the CAPITANO's unspent reserve, which the answer did not name.
+   */
+  #money(state: State): { spent: number; booked: number } {
       text = readFileSync(this.#stateFile, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new LauncherStateError(`cannot be read (${(error as NodeJS.ErrnoException).code ?? "error"})`);

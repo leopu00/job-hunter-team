@@ -344,6 +344,29 @@ describe("the base set (T24 run-team)", () => {
     expect(ended(0.5, "over")).toBeCloseTo(10 - 1.6 - 0.5, 6);
   });
 
+  it("tells the money spent apart from the money booked, so its figure squares with the key proxy's", () => {
+    // Giro di parità, 27/09, 19:35 UTC: the launcher said 0.52 of 2 was left, the key
+    // proxy 0.65. Same spend on both sides; the launcher's figure also held the
+    // CAPITANO's reserve it had not spent, and its answer did not say so.
+    const l = withTeam({ sessionUsd: 2, session: "giro" });
+    const spent: Record<string, number> = { "scout-1": 0.469, "scout-2": 0.2, "analista-1": 0.318, "scorer-1": 0.04, "capitano-1": 0.097 };
+    for (const a of l.startTeam("host").started) if (a.ok) report(a.spawn_id, "done", { exit_code: 0, spent_usd: spent[a.agent] });
+
+    // 1.124 spent as measured; 0.203 of the CAPITANO's 0.3 reserve still booked.
+    const money = listed(l, "host");
+    expect(money.spent_usd).toBeCloseTo(1.124, 6);
+    expect(money.booked_usd).toBeCloseTo(0.203, 6);
+    expect(money.left_usd).toBeCloseTo(2 - 1.124 - 0.203, 6);
+
+    // The team again: scout-1 books its 0.4, and scout-2 no longer fits.
+    const again = l.startTeam("host").started;
+    expect(again[0]).toMatchObject({ ok: true, agent: "scout-1" });
+    const reason = again[1] && !again[1].ok ? again[1].reason : "";
+    expect(reason).toContain("0.273 USD of the session's 2 is left");
+    expect(reason).toContain("1.124 USD spent, as the key proxy measured the runs that ended");
+    expect(reason).toContain("0.603 USD booked");
+  });
+
   it("starts the team once per session, and again only when it is down", () => {
     const l = withTeam();
     const first = l.startTeam("host");

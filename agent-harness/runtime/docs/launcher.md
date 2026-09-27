@@ -78,7 +78,14 @@ The team starts once per session: while a member is up, another
 - `team` is the base set and its start order; each entry takes `instances`,
   and optionally `cap_usd` (default: the role's cap; the CAPITANO's is
   `captainUsd`), `model` (default: the first allowed), `task` (default
-  `Start your cycle.`) and `delay_s`, the stagger the executor waits.
+  `Start your cycle.`) and `delay_s`, added to the member's place in the stagger.
+- `staggerS` (default 30) spaces the base set: the member in place *n* (from 0,
+  in the configured order, instances counted one by one) waits *n* × `staggerS`
+  plus its own `delay_s`. On 27/09, 21:09 UTC, five members started within two
+  seconds: that minute the key proxy passed 942,751 tokens, twelve requests came
+  back 429 and the CAPITANO died of it. `0` starts them together. The executor
+  refuses an order that waits more than 300 s, so a configuration whose set
+  would ask for one is refused when it is read.
 - `spawnReserveUsd` is money `run-team` may not take: the set is refused down
   to it, so the CAPITANO can still spawn an extra. The answer says plainly
   when no room is left for one, by money or by instances.
