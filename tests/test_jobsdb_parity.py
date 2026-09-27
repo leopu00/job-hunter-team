@@ -249,3 +249,45 @@ def test_a_missing_database_is_a_failed_command(tmp_path: Path):
 )
 def test_agents_are_compared_by_role(agent, role):
     assert parity.role_of(agent) == role
+
+
+def test_seed_into_refreshes_a_copy_that_a_reader_keeps_open_in_wal(tmp_path: Path):
+    # D06: the cloud daemon keeps its copy of jobs.db open, and _db.py puts it
+    # in WAL. Every refresh must land in that same database, whole and
+    # consistent, with the daemon's connection still open.
+    source = tmp_path / "live.db"
+    conn = new_db(source)
+    add_position(conn, "https://jobs.example/first")
+    conn.close()
+    copy = tmp_path / "copy" / "jobs.db"
+    assert parity.main(["seed", "--from", str(source), "--out", str(copy)]) == 0
+
+    daemon = sqlite3.connect(copy)
+    daemon.execute("PRAGMA journal_mode=WAL")
+    daemon.execute("INSERT INTO positions (title, company, url, status) VALUES ('pulled', 'x', 'https://jobs.example/pulled', 'new')")
+    daemon.commit()
+    assert Path(f"{copy}-wal").exists()
+
+    conn = sqlite3.connect(source)
+    add_position(conn, "https://jobs.example/second")
+    conn.close()
+    assert parity.main(["seed", "--into", "--from", str(source), "--out", str(copy)]) == 0
+
+    # The open connection sees the source as it is now, nothing else: the row
+    # it wrote itself is gone, and the database checks out.
+    urls = [row[0] for row in daemon.execute("SELECT url FROM positions ORDER BY url")]
+    assert urls == ["https://jobs.example/first", "https://jobs.example/second"]
+    daemon.close()
+    fresh = sqlite3.connect(copy)
+    assert fresh.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert [r[0] for r in fresh.execute("SELECT url FROM positions ORDER BY url")] == urls
+
+
+def test_seed_into_needs_the_copy_to_exist_and_is_not_force(tmp_path: Path):
+    source = tmp_path / "live.db"
+    new_db(source).close()
+    missing = tmp_path / "none.db"
+    assert parity.main(["seed", "--into", "--from", str(source), "--out", str(missing)]) == 2
+    assert not missing.exists()
+    with pytest.raises(SystemExit):
+        parity.main(["seed", "--into", "--force", "--from", str(source), "--out", str(missing)])
