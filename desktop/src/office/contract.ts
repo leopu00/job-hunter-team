@@ -175,7 +175,10 @@ export type Desk = {
   /** 0..5, the order of DepartmentDefs (so `scout-5` gets desk 4, as in Godot) */
   index: number;
   furniture: FurnitureItem;
-  /** where the agent's feet are when seated (DepartmentDefs.desk_spot) */
+  /**
+   * DepartmentDefs.desk_spot: the point STANDING in front of the chair, where
+   * the path ends. Seated, the engine adds agent_npc.gd's seat offset.
+   */
   seat: Vec;
   /** the way the seated agent looks */
   seatFacing: Facing;
@@ -199,6 +202,7 @@ export type Department = {
 };
 
 /** A core role's fixed place (capitano, sentinella, mentor, assistente…). */
+/** `seat` is the standing point, as for a Desk. */
 export type CoreSeat = { role: AgentRole; seat: Vec; seatFacing: Facing; furnitureId: string };
 
 /** Everything static about the office: /office/layout.json. */
@@ -213,6 +217,12 @@ export type OfficeLayout = {
   coreSeats: CoreSeat[];
   /** where agents enter and leave */
   door: Vec;
+  /**
+   * Shared points of the work flows: the printer the Scout goes to first
+   * (DepartmentDefs.POIS.printer.spot) and the output shelf where the
+   * Critici put a PASS (OutputShelf.RECT centre + (0, 46)).
+   */
+  pois: { printer: Vec; outputShelf: Vec };
   /** NavGrid inputs (nav_grid.gd): the engine builds the grid from these */
   nav: {
     cell: number; // 32
@@ -241,7 +251,11 @@ export type AgentMode = "idle" | "still" | "walk" | "work" | "carry" | "sit";
 export type OfficeAgent = {
   uid: string;
   role: AgentRole;
-  /** the CharacterSheet id it wears */
+  /**
+   * The CharacterSheet id it wears. The data layer has no layout and leaves
+   * it "": the engine picks layout.sheets[role][(n - 1) % length] from the
+   * instance number (scout-2 -> the second variant). Always set in poses().
+   */
   sheet: string;
 };
 
@@ -337,7 +351,15 @@ export interface OfficeEngine {
 }
 
 /** Builds an engine over a layout. `random` is injectable so tests are deterministic. */
-export type CreateOfficeEngine = (layout: OfficeLayout, options?: { random?: () => number }) => OfficeEngine;
+/**
+ * `characters`: the manifest's sheets, so the engine knows who has a seated
+ * sheet (without one, "sit" becomes "work" standing on the spot, as in
+ * Godot). Missing = every character is assumed to have one.
+ */
+export type CreateOfficeEngine = (
+  layout: OfficeLayout,
+  options?: { random?: () => number; characters?: CharacterSheet[] },
+) => OfficeEngine;
 
 /**
  * The data layer: reads a snapshot with the user's Supabase client, and turns
