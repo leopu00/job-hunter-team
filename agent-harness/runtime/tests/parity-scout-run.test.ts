@@ -11,7 +11,7 @@ import { NullAuditLog } from "../src/core/audit.ts";
 import { Guardrails } from "../src/core/guardrails.ts";
 import { MockProvider, type ScriptedTurn } from "../src/core/provider/mock.ts";
 import { RoleSession, type SessionEvent } from "../src/core/role-session.ts";
-import { prepareProductRole, runCycles, wakeMessage } from "../src/parity/product-role.ts";
+import { activeChildren, prepareProductRole, runCycles, wakeMessage } from "../src/parity/product-role.ts";
 import { JHT_TOOL_NAMES, rewritePythonSkills, rewriteThrottleCommands } from "../src/parity/jht-tools.ts";
 import { buildToolkit } from "../src/tools/toolkit.ts";
 
@@ -128,6 +128,123 @@ describe("a mock SCOUT run", () => {
 
 describe("runCycles", () => {
   const quiet = { send: async () => {}, drain: async () => [] };
+
+  describe("a CAPITANO whose children are still working", () => {
+    /** A mailbox that hands out `later` on the n-th drain after the first turn. */
+    function mailboxAt(drainNumber: number, text: string) {
+      let drains = 0;
+      return {
+        send: async () => {},
+        drain: async () => {
+          drains += 1;
+          return drains === drainNumber ? [{ from: "scout-1", to: "capitano", text, ts: 0 }] : [];
+        },
+      };
+    }
+
+    it("waits for the child's report instead of ending the run that delegated", async () => {
+      const { PauseRequest } = await import("../src/parity/jht-tools.ts");
+      const sent: string[] = [];
+      const running = [1, 1, 0];
+      const slept: number[] = [];
+      const result = await runCycles(
+        { send: async (text) => void sent.push(text) },
+        {
+          agent: "capitano",
+          task: "delegate",
+          maxTurns: 5,
+          mailbox: mailboxAt(3, "[@scout-1 -> @capitano] [RES] 4 new"),
+          pause: new PauseRequest(),
+          pauseMs: 1,
+          children: async () => running.shift() ?? 0,
+          childPollMs: 15_000,
+          sleep: async (ms) => void slept.push(ms),
+        },
+      );
+      expect(result).toEqual({ turns: 2, pauses: 0, ended: "idle" });
+      expect(slept).toEqual([15_000, 15_000]);
+      expect(sent[1]).toContain("[from scout-1]");
+      expect(sent[1]).toContain("4 new");
+    });
+
+    it("ends idle once no child is left, without a turn nobody asked for", async () => {
+      const { PauseRequest } = await import("../src/parity/jht-tools.ts");
+      const running = [1, 0];
+      let turns = 0;
+      const result = await runCycles(
+        { send: async () => void (turns += 1) },
+        {
+          agent: "capitano",
+          task: "delegate",
+          maxTurns: 5,
+          mailbox: quiet,
+          pause: new PauseRequest(),
+          pauseMs: 1,
+          children: async () => running.shift() ?? 0,
+          sleep: async () => {},
+        },
+      );
+      expect(result).toEqual({ turns: 1, pauses: 0, ended: "idle" });
+      expect(turns).toBe(1);
+    });
+
+    it("stops waiting at the limit when the children stay silent", async () => {
+      const { PauseRequest } = await import("../src/parity/jht-tools.ts");
+      let clock = 0;
+      const result = await runCycles(
+        { send: async () => {} },
+        {
+          agent: "capitano",
+          task: "delegate",
+          maxTurns: 5,
+          mailbox: quiet,
+          pause: new PauseRequest(),
+          pauseMs: 1,
+          children: async () => 1,
+          childPollMs: 10_000,
+          childWaitMs: 30_000,
+          now: () => clock,
+          sleep: async (ms) => void (clock += ms),
+        },
+      );
+      expect(result).toEqual({ turns: 1, pauses: 0, ended: "child_wait_limit" });
+      expect(clock).toBe(30_000);
+    });
+
+    it("treats a launcher that cannot answer as no children", async () => {
+      const { PauseRequest } = await import("../src/parity/jht-tools.ts");
+      const result = await runCycles(
+        { send: async () => {} },
+        {
+          agent: "capitano",
+          task: "delegate",
+          maxTurns: 5,
+          mailbox: quiet,
+          pause: new PauseRequest(),
+          pauseMs: 1,
+          children: async () => {
+            throw new Error("hub down");
+          },
+          sleep: async () => {
+            throw new Error("must not wait");
+          },
+        },
+      );
+      expect(result).toEqual({ turns: 1, pauses: 0, ended: "idle" });
+    });
+
+    it("counts only the children queued or running", () => {
+      expect(
+        activeChildren({
+          session: "s",
+          left_usd: 1,
+          spawns: [{ state: "queued" }, { state: "running" }, { state: "done" }, { state: "stopped" }, { state: "failed" }],
+        }),
+      ).toBe(2);
+      expect(activeChildren({ ok: false, reason: "no launcher" })).toBe(0);
+      expect(activeChildren(null)).toBe(0);
+    });
+  });
 
   it("stops at the turn cap even while the agent keeps pausing", async () => {
     const { PauseRequest } = await import("../src/parity/jht-tools.ts");

@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { refuseMockRows } from "../db/jobs-db.ts";
 import { Launcher, LauncherConfigSchema } from "../hub/launcher.ts";
 import { TOKEN } from "../hub/protocol.ts";
 import { createHub, loadTokens } from "../hub/server.ts";
@@ -60,6 +61,15 @@ const teamToken = process.env["JHT_HUB_TEAM_TOKEN"]?.trim();
 if (teamToken !== undefined && !TOKEN.test(teamToken)) {
   console.error("jht-hub: JHT_HUB_TEAM_TOKEN must be 32 to 256 characters of [A-Za-z0-9_-].");
   process.exit(2);
+}
+// A hub for rehearsals says so (JHT_HUB_MOCK=1); any other refuses a database a mock run wrote into.
+if (process.env["JHT_HUB_MOCK"]?.trim() !== "1") {
+  try {
+    refuseMockRows(required("JHT_HUB_DB"));
+  } catch (error) {
+    console.error(`jht-hub: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(2);
+  }
 }
 const server = createHub({
   tokens,

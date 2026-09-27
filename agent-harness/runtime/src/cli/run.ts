@@ -50,9 +50,10 @@ import { RoleSession } from "../core/role-session.ts";
 import { JsonlTrace, sampleProcess, traceThen, type TraceSink } from "../core/trace.ts";
 import { displayPath } from "../tools/paths.ts";
 import { buildToolkit } from "../tools/toolkit.ts";
-import { prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
-import { jobsDbPath, openJobsDb, type Database } from "../db/jobs-db.ts";
+import { activeChildren, prepareProductRole, runCycles, type ProductRole } from "../parity/product-role.ts";
+import { jobsDbPath, openJobsDb, refuseMockRows, type Database } from "../db/jobs-db.ts";
 import { HubClient } from "../hub/client.ts";
+import { HUB_PATHS } from "../hub/protocol.ts";
 import { resolveUserPath } from "../tools/paths.ts";
 import { DEFAULT_MOCK_SCRIPT, productRoleMockScript, readMockScript } from "./mock-script.ts";
 import { c, TraceView } from "./render.ts";
@@ -181,12 +182,15 @@ async function main(): Promise<number> {
   const dbFile = jobsDbPath(process.env, config.apiHome);
 
   let role: ProductRole | undefined;
+  let hub: HubClient | undefined;
   let systemPrompt: string;
   if (values.prompt === undefined) {
     const env = process.env;
     // With a hub (T18) the database and the channels are its: nothing opens them here.
-    const hub = config.hub ? new HubClient(config.hub) : undefined;
+    hub = config.hub ? new HubClient(config.hub) : undefined;
     jobsDb = hub ? undefined : { path: dbFile, open: () => (openedDb ??= openJobsDb(dbFile)) };
+    // A live role works on the team's rows, never on a rehearsal's (jobs-db.ts refuseMockRows).
+    if (jobsDb && config.live) refuseMockRows(dbFile);
     role = await prepareProductRole({
       // The executor's switch, never the role's: it is set on the container.
       homePrepared,
@@ -273,7 +277,22 @@ async function main(): Promise<number> {
 
   try {
     if (role) {
-      await runCycles(session, { agent: config.role, task, maxTurns: turns, mailbox: role.mailbox, pause: role.pause, pauseMs });
+      // A role that can start children waits for them (runCycles): the CAPITANO.
+      const launcherHub = session.toolNames.includes("list_agents") ? hub : undefined;
+      await runCycles(session, {
+        agent: config.role,
+        task,
+        maxTurns: turns,
+        mailbox: role.mailbox,
+        pause: role.pause,
+        pauseMs,
+        ...(launcherHub
+          ? {
+              children: async () => activeChildren(await launcherHub.post(HUB_PATHS.spawnList, {})),
+              childWaitMs: config.limits.wallClockMs,
+            }
+          : {}),
+      });
     } else {
       await session.send(task);
     }

@@ -15,10 +15,15 @@
  * `Launcher.limits()`, the same fields the launcher refuses on.
  *
  * So this test does not hand the run any value of its own: the mock script's
- * delegation is built from the launcher's config object, the one the hub will
- * judge it by. One `spawn_agent` call, accepted, and a log with a `spawned` line
- * and no `refused` one — one round per delegation, where the live rounds spent
- * three.
+ * delegations are built from the launcher's config object, the one the hub will
+ * judge them by. Three `spawn_agent` calls, three `spawned` lines and no
+ * `refused` one — one round per delegation, where the live rounds spent three.
+ *
+ * The two Scouts are the second half (B-06): neither call names an `instance`,
+ * because the launcher assigns it. Eight of the fourteen live refusals were an
+ * index the CAPITANO had chosen itself — once the FOURTH analista with none
+ * running and two allowed — since it read "up to 2 at once" as the next number
+ * to ask for. The count of refusals by index, here, is zero.
  */
 
 import { execFile } from "node:child_process";
@@ -44,7 +49,7 @@ const CONFIG: LauncherConfig = {
   sessionUsd: 1.5,
   captainUsd: 0.3,
   roles: { scorer: { capUsd: 0.2, instances: 1 }, scout: { capUsd: 0.2, instances: 2 } },
-  maxActive: 2,
+  maxActive: 3,
   maxSpawns: 4,
   maxFailures: 2,
   maxMinutes: 30,
@@ -62,7 +67,7 @@ afterEach(async () => {
 });
 
 describe("the CAPITANO's first delegation (T27-c)", () => {
-  it("goes through at the first call, with no refusal in the launcher's log", async () => {
+  it("delegates three times at the first call each, naming no index, with no refusal in the log", async () => {
     const server = createHub({
       tokens: new Map([[CAPITANO_TOKEN, "capitano-1"]]),
       dbPath: join(root, "hub", "jobs.db"),
@@ -85,7 +90,17 @@ describe("the CAPITANO's first delegation (T27-c)", () => {
       // launcher will check — never a second list of numbers.
       const script = [
         { text: "The queue needs a Scorer. The tool says which model and which window.", toolCalls: [{ name: "spawn_agent", args: { role: "scorer", cap_usd: CONFIG.roles["scorer"]!.capUsd, model: CONFIG.models[0], task: "Score the checked positions." } }] },
-        { text: "Started at the first attempt." },
+        {
+          // B-06: two Scouts, and no `instance` in either call — the launcher assigns the
+          // index. Eight of fourteen live refusals were an index the CAPITANO chose itself,
+          // once the fourth analista with none running and two allowed.
+          text: "Two Scouts on the circles. The index is the launcher's, so I do not name one.",
+          toolCalls: [
+            { name: "spawn_agent", args: { role: "scout", cap_usd: CONFIG.roles["scout"]!.capUsd, model: CONFIG.models[0], task: "Search the first circle." } },
+            { name: "spawn_agent", args: { role: "scout", cap_usd: CONFIG.roles["scout"]!.capUsd, model: CONFIG.models[0], task: "Search the second circle." } },
+          ],
+        },
+        { text: "Three started, no refusal." },
       ];
       await mkdir(join(root, "api"), { recursive: true });
       const scriptPath = join(root, "api", "capitano-delegates.json");
@@ -113,15 +128,19 @@ describe("the CAPITANO's first delegation (T27-c)", () => {
         .split("\n")
         .map((l) => JSON.parse(l) as { type: string; [k: string]: unknown });
       const spawns = records.filter((r) => r.type === "tool_finished" && r["name"] === "spawn_agent");
-      // One attempt, and it was accepted: this is the measurement.
-      expect(spawns).toHaveLength(1);
-      expect(spawns[0]).toMatchObject({ outcome: "accepted" });
+      // Three delegations, three attempts, all accepted: this is the measurement.
+      expect(spawns).toHaveLength(3);
+      expect(spawns.map((s) => s["outcome"])).toEqual(["accepted", "accepted", "accepted"]);
       expect(String(spawns[0]!["result"])).toContain('"agent": "scorer-1"');
+      // The launcher assigned the indices, in order, without being asked for either.
+      expect(String(spawns[1]!["result"])).toContain('"agent": "scout-1"');
+      expect(String(spawns[2]!["result"])).toContain('"agent": "scout-2"');
       expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
-      // And the launcher's own log, where VPS did the counting: one line, `spawned`.
-      const log = (await readFile(join(root, "launcher", "launcher.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line) as { event: string; model?: string; cap_usd?: number });
-      expect(log.map((e) => e.event)).toEqual(["spawned"]);
+      // And the launcher's own log, where VPS did the counting: three `spawned`, nothing refused.
+      const log = (await readFile(join(root, "launcher", "launcher.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line) as { event: string; model?: string; cap_usd?: number; instance?: number });
+      expect(log.map((e) => e.event)).toEqual(["spawned", "spawned", "spawned"]);
+      expect(log.filter((e) => e.event === "refused")).toEqual([]);
       expect(log[0]).toMatchObject({ model: "gpt-5.6-luna", cap_usd: 0.2 });
     } finally {
       await new Promise<void>((done) => server.close(() => done()));

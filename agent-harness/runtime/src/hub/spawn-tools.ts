@@ -47,6 +47,23 @@ export function allowedModelsLine(limits: SpawnLimits | undefined): string {
   return limits ? `${limits.models.join(", ")}` : "";
 }
 
+/**
+ * The indices each role really has, for the same two readers (B-06).
+ *
+ * `up to 2 at once` is a COUNT, and the CAPITANO read it as the next number to
+ * ask for: in eight of the fourteen refusals of the live rounds it asked for
+ * instance 3 or 4, and in the last one the FOURTH analista with none running and
+ * two allowed (VPS, 24/09). Its own prompt is where that comes from — it says to
+ * roll a die for the number and pass it — so the rule has to reach it in the
+ * shape it would use: which indices exist, and that the launcher picks.
+ */
+export function allowedIndicesLine(limits: SpawnLimits | undefined): string {
+  if (!limits) return "";
+  return Object.entries(limits.roles)
+    .map(([role, r]) => `${role} ${r.instances === 1 ? "has one instance, index 1" : `has indices 1-${r.instances}`}`)
+    .join("; ");
+}
+
 function limitsSentence(limits: SpawnLimits | undefined): string {
   if (!limits) {
     // Never invented: an unread limit is said to be unread.
@@ -56,13 +73,17 @@ function limitsSentence(limits: SpawnLimits | undefined): string {
     );
   }
   const roles = Object.entries(limits.roles)
-    .map(([role, r]) => `${role} cap_usd in (0, ${r.cap_usd}], up to ${r.instances} at once`)
+    .map(([role, r]) => `${role} cap_usd in (0, ${r.cap_usd}], ${r.instances} running at once at most`)
     .join("; ");
   return (
     `The launcher's FIXED limits, as it will check them — a first attempt inside these is not turned down for any of them. ` +
     `Models allowed: ${allowedModelsLine(limits)} (any other is refused). Roles: ${roles || "none configured"}. ` +
     `At most ${limits.max_active} children running at once, ${limits.max_spawns} spawns in the session, ` +
     `and a task of at most ${limits.task_chars} characters. A cap above its window is refused, not lowered for you. ` +
+    // B-06: the count was read as the next index to ask for. Say what the indices are,
+    // and who picks them, at the point where the call is written.
+    `How many may run together is not which index to ask for: the launcher assigns the index, so LEAVE \`instance\` OUT ` +
+    `unless one must be reused — ${allowedIndicesLine(limits)}. ` +
     // SICUREZZA, before the merge (24/09): the sentence above must not promise more than the
     // launcher keeps. Inside every fixed limit it still refuses for the session's MONEY
     // (`used + charge + reserve > sessionUsd`), for a role that failed too often, and for the
@@ -80,7 +101,16 @@ function limitsSentence(limits: SpawnLimits | undefined): string {
 const spawnSchema = z
   .object({
     role: z.string().max(32).describe("the role to start: scout, analista, scorer"),
-    instance: z.number().int().min(1).max(9).optional().describe("which instance, e.g. 2 for scout-2; default: the first free one"),
+    instance: z
+      .number()
+      .int()
+      .min(1)
+      .max(9)
+      .optional()
+      .describe(
+        "leave it out: the launcher assigns the index, taking the first free one. It is not a counter to increase — " +
+          "pass it only to name an instance that must be reused, and only within the indices that role has.",
+      ),
     cap_usd: z.number().positive().describe("the most this child may spend, in USD"),
     model: z.string().max(64).describe("the model it runs on"),
     task: z.string().min(1).describe("its first order, as you would send it"),
