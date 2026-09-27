@@ -1,0 +1,57 @@
+{
+  "_comment": "Copy OUTSIDE git (e.g. ~/.config/jht-parity/round.json) and fill the <...>. No host names or addresses in the repository.",
+  "out_dir": "~/<private dir for parity data, 0700>",
+  "ssh_config": "~/<ssh config that knows both aliases>",
+  "snapshot_every_min": 60,
+  "tick_s": 60,
+  "relaunch_min_s": 600,
+
+  "tui": {
+    "transport": "ssh",
+    "host": "<ssh alias of the TUI box>",
+    "exec_prefix": "docker exec -i jht",
+    "db": "/jht_home/jobs.db",
+    "profile": "/jht_home/profile/candidate_profile.yml",
+    "revision_cmd": "docker image inspect $(docker inspect -f '{{.Image}}' jht) --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}'",
+    "identity_cmd": "docker inspect -f '{{.State.StartedAt}} {{.Image}}' jht"
+  },
+
+  "api": {
+    "transport": "ssh",
+    "host": "<ssh alias of the API box>",
+    "root": "/srv/jht-api",
+    "db": "/srv/jht-api/db/jobs.db",
+    "db_dir": "db",
+    "owner": "1090:1090",
+    "profile": "/srv/jht-api/profile/candidate_profile.yml",
+    "revision_cmd": "podman image inspect jht-api:latest --format '{{.RepoTags}}'",
+    "proxy_state": "{root}/keyproxy-logs/state.json",
+    "running_roles_cmd": "podman ps -q --filter label=jht.role | wc -l",
+    "known_state_globs": [
+      "home/channels/mailbox/*.jsonl",
+      "home/channels/notify.jsonl",
+      "home/channels/replies/*",
+      "roles/*/base/team/logs/captain-diary-*.md"
+    ],
+    "launcher_config": "launcher/control/config.json",
+    "stop_file": "launcher/control/STOP",
+    "start_cmds": ["systemctl start jht-launcher-executor", "{root}/run.sh team"],
+    "relaunch_cmds": ["{root}/run.sh team"],
+    "stop_cmds": ["touch {root}/launcher/control/STOP"]
+  },
+
+  "launcher_config": {
+    "captainUsd": 0.3,
+    "spawnReserveUsd": 0.3,
+    "roles": {"scout": {"capUsd": 0.3, "instances": 2}, "analista": {"capUsd": 0.3, "instances": 2}, "scorer": {"capUsd": 0.2, "instances": 2}, "scrittore": {"capUsd": 0.4, "instances": 1}},
+    "team": [
+      {"role": "scout", "instances": 1, "cap_usd": 0.25},
+      {"role": "analista", "instances": 1, "cap_usd": 0.2},
+      {"role": "scorer", "instances": 1, "cap_usd": 0.15},
+      {"role": "scrittore", "instances": 1, "cap_usd": 0.3},
+      {"role": "capitano", "instances": 1, "cap_usd": 0.3, "delay_s": 20}
+    ],
+    "maxActive": 6, "maxSpawns": 30, "maxFailures": 4, "maxMinutes": 120,
+    "models": ["gpt-5.6-luna"], "taskChars": 2000
+  }
+}
