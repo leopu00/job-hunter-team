@@ -16,12 +16,13 @@
  *     (vps_backend.gd _smooth_activity).
  * Here it is only run and published, not reinterpreted.
  *
- * Shape, the same for every producer (the JHT API executor may write its
- * own agents later with source "api"):
- *   { "<uid>": { status, since, source: "tui", throttle_left_s? } }
- * `uid` is the tmux session in lower case (capitano, scout-1), as the
- * cloud's by_agent. `since` is when the status last changed, on this box's
- * clock; how old the whole map is, the database stamps (agents_status_at).
+ * Shape, one key per source (migration 089): this producer writes
+ *   { tui: { agents: { "<uid>": { status, since, throttle_left_s? } } } }
+ * and the database merges it next to the other sources (the JHT API
+ * executor's, agents-status-traces.js, under "api") and stamps its "at".
+ * `uid` is canonicalAgentId's: the TUI session in lower case (capitano,
+ * scout-1, critico-s2), as the cloud's by_agent. `since` is when the status
+ * last changed, on this box's clock.
  */
 
 import { execFile } from 'node:child_process';
@@ -41,6 +42,29 @@ export function uidOf(session) {
 }
 
 /**
+ * The roles the TUI starts without an instance number (.launcher/spawn-lib.sh
+ * jht_spawn_session_name: CAPITANO, not CAPITANO-1). A test keeps the list
+ * equal to the launcher's.
+ */
+export const SINGLE_ROLES = ['capitano', 'critico', 'sentinella', 'assistente', 'mentor'];
+
+/**
+ * The one name an agent goes by in agents_status, whoever publishes it: the
+ * TUI session in lower case. The JHT API executor numbers every agent
+ * (agent-harness agentInstanceId: capitano -> capitano-1, scout -> scout-1),
+ * the TUI numbers all but SINGLE_ROLES; both land on capitano, scout-1.
+ * critico-s2 (a writer's own critic) and other hyphenated names stay as
+ * they are.
+ */
+export function canonicalAgentId(name) {
+  const id = uidOf(name);
+  const m = /^(.+)-(\d+)$/.exec(id);
+  if (m) return m[2] === '1' && SINGLE_ROLES.includes(m[1]) ? m[1] : id;
+  // a bare role word is instance 1 (start-agent.sh scout starts SCOUT-1); anything else stays
+  return /^[a-z]+$/.test(id) && !SINGLE_ROLES.includes(id) ? `${id}-1` : id;
+}
+
+/**
  * vps_backend.gd _parse_throttles: the LAST event of each agent counts; a
  * "start" whose window (ts_unix + applied_sec) covers now is a throttle in
  * progress. Returns { uid: { left, total } } in seconds.
@@ -51,7 +75,7 @@ export function parseThrottles(raw, nowS = Date.now() / 1000) {
     if (!line.startsWith('{')) continue;
     let ev;
     try { ev = JSON.parse(line); } catch { continue; }
-    if (ev && typeof ev === 'object' && String(ev.agent ?? '') !== '') last[uidOf(ev.agent)] = ev;
+    if (ev && typeof ev === 'object' && String(ev.agent ?? '') !== '') last[canonicalAgentId(ev.agent)] = ev;
   }
   const active = {};
   for (const [uid, ev] of Object.entries(last)) {
@@ -105,15 +129,15 @@ export function buildAgentsStatus(statuses, throttles, changedAt, now = new Date
   const map = {};
   const nowIso = now.toISOString();
   for (const [session, paneStatus] of Object.entries(statuses)) {
-    const uid = uidOf(session);
-    if (!uid || uid.includes(' ')) continue;
+    if (!uidOf(session) || uidOf(session).includes(' ')) continue;
+    const uid = canonicalAgentId(session);
     // vps_backend.gd _parse_roster: anything but working/idle/paused is idle; a throttle wins
     let status = ['working', 'idle', 'paused'].includes(paneStatus) ? paneStatus : 'idle';
     const t = throttles[uid];
     if (t) status = 'throttled';
     const prev = changedAt.get(uid);
     if (!prev || prev.status !== status) changedAt.set(uid, { status, since: nowIso });
-    const entry = { status, since: changedAt.get(uid).since, source: 'tui' };
+    const entry = { status, since: changedAt.get(uid).since };
     if (t) entry.throttle_left_s = Math.round(t.left);
     map[uid] = entry;
   }
@@ -161,6 +185,14 @@ export function createAgentsStatusReader({ jhtHome, run = runRule, readThrottles
       return buildAgentsStatus(statuses, throttles, changedAt, now);
     },
   };
+}
+
+/**
+ * The PATCH a producer sends: only its own source's key. The database merges
+ * it next to the other sources and stamps its "at" (migration 089).
+ */
+export function agentsStatusPatch(source, agents) {
+  return { agents_status: { [source]: { agents } } };
 }
 
 /** How often the rule is read, and the longest silence between two writes. */

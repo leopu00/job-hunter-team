@@ -347,16 +347,17 @@ export type AgentPose = {
 };
 
 /**
- * An agent's status as the box publishes it (team_state.agents_status,
- * migration 089), with the Godot game's rule; "idle" is the game's WAITING.
+ * An agent's status as the team publishes it (team_state.agents_status,
+ * migration 089): the TUI with the Godot game's rule, the JHT API from its
+ * traces; "idle" is the game's WAITING.
  */
 export type AgentStatus = {
   status: "working" | "idle" | "paused" | "throttled";
-  /** throttled only: when the pause ends, on this computer's clock */
+  /** throttled only: when the pause ends, on this computer's clock; absent when its length is not known */
   throttleUntil?: number;
 };
 
-/** The statuses to tag, by uid (capitano, scout-1…); `at` is when the box observed them. */
+/** The statuses to tag, by uid (capitano, scout-1…); `at` is when the newest source was observed. */
 export type AgentStatuses = { at: number; agents: Record<string, AgentStatus> };
 
 /** A speech bubble over an agent. */

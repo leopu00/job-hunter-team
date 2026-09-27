@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import {
   buildAgentsStatus,
+  canonicalAgentId,
   createAgentsStatusReader,
   createSmoother,
   parseThrottles,
+  SINGLE_ROLES,
   startAgentsStatusPublisher,
   statusKey,
 } from "../../../cli/src/lib/agents-status.js";
@@ -54,24 +58,51 @@ describe("the published map", () => {
     const t1 = new Date("2026-09-27T20:00:20Z");
     const first = buildAgentsStatus({ CAPITANO: "working", "SCOUT-1": "idle" }, {}, changedAt, t0);
     expect(first).toEqual({
-      capitano: { status: "working", since: t0.toISOString(), source: "tui" },
-      "scout-1": { status: "idle", since: t0.toISOString(), source: "tui" },
+      capitano: { status: "working", since: t0.toISOString() },
+      "scout-1": { status: "idle", since: t0.toISOString() },
     });
     const second = buildAgentsStatus({ CAPITANO: "working", "SCOUT-1": "idle" }, { "scout-1": { left: 89.6, total: 120 } }, changedAt, t1);
     expect(second.capitano.since).toBe(t0.toISOString());
-    expect(second["scout-1"]).toEqual({ status: "throttled", since: t1.toISOString(), source: "tui", throttle_left_s: 90 });
+    expect(second["scout-1"]).toEqual({ status: "throttled", since: t1.toISOString(), throttle_left_s: 90 });
   });
 
   it("an unknown pane status is idle, as the game's roster reads it", () => {
-    expect(buildAgentsStatus({ X: "weird" }, {}, new Map())["x"].status).toBe("idle");
+    expect(buildAgentsStatus({ "SCOUT-2": "weird" }, {}, new Map())["scout-2"].status).toBe("idle");
   });
 
   it("a session that is gone leaves the map", () => {
     const changedAt = new Map();
-    buildAgentsStatus({ A: "working", B: "idle" }, {}, changedAt);
-    const next = buildAgentsStatus({ A: "working" }, {}, changedAt);
-    expect(Object.keys(next)).toEqual(["a"]);
-    expect([...changedAt.keys()]).toEqual(["a"]);
+    buildAgentsStatus({ "SCOUT-1": "working", "SCOUT-2": "idle" }, {}, changedAt);
+    const next = buildAgentsStatus({ "SCOUT-1": "working" }, {}, changedAt);
+    expect(Object.keys(next)).toEqual(["scout-1"]);
+    expect([...changedAt.keys()]).toEqual(["scout-1"]);
+  });
+});
+
+describe("one name per agent, whoever publishes it (canonicalAgentId)", () => {
+  it("the TUI's sessions and the JHT API's numbered ids land on the same key", () => {
+    expect(canonicalAgentId("CAPITANO")).toBe("capitano");
+    expect(canonicalAgentId("capitano-1")).toBe("capitano");
+    expect(canonicalAgentId("SCOUT-1")).toBe("scout-1");
+    expect(canonicalAgentId("scout")).toBe("scout-1");
+    expect(canonicalAgentId("scout-3")).toBe("scout-3");
+    expect(canonicalAgentId("CRITICO-S2")).toBe("critico-s2");
+    expect(canonicalAgentId("critico-1")).toBe("critico");
+    expect(canonicalAgentId("capitano-2")).toBe("capitano-2");
+  });
+
+  it("the roles without a number are the launcher's (spawn-lib.sh)", () => {
+    const lib = readFileSync(join(resolve(__dirname, "../../.."), ".launcher/spawn-lib.sh"), "utf8");
+    const body = lib.slice(lib.indexOf("jht_spawn_session_name()"));
+    const singles = /\n\s+([a-z|]+)\)\n\s+printf '%s' "\$prefix"/.exec(body);
+    expect(singles, "jht_spawn_session_name no longer names its single roles the same way").not.toBeNull();
+    expect(singles![1].split("|").sort()).toEqual([...SINGLE_ROLES].sort());
+  });
+
+  it("the pacing log's names are the same keys", () => {
+    const now = 1_790_000_000;
+    const raw = JSON.stringify({ event: "start", agent: "CAPITANO", ts_unix: now - 10, applied_sec: 60 });
+    expect(Object.keys(parseThrottles(raw, now))).toEqual(["capitano"]);
   });
 });
 
