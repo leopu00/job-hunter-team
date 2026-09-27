@@ -238,16 +238,18 @@ jobs:
       # python3 del runner, e ne confrontano anche i messaggi di argparse, che
       # cambiano fra versioni minori: il 27/09 il python3 di sistema scriveva
       # «(choose from 'new', 'excluded')» come il port, il 3.12 recente di
-      # setup-python «(choose from new, excluded)»: 18 rossi che
-      # misuravano l'interprete e non il port. Quindi il python3 di sistema,
-      # con PyYAML dal pacchetto della distribuzione: le skill del CLOSER lo
-      # importano, e senza i loro blocchi di parita' saltano.
-      - name: Install PyYAML for the system python3
+      # setup-python «(choose from new, excluded)»: 18 rossi che misuravano
+      # l'interprete e non il port. Quindi il python3 di sistema, niente
+      # setup-python.
+      #
+      # La toolchain PDF del job `pytest`: parity-pdf-layout (poppler) e
+      # render-pdf (pandoc, wkhtmltopdf) saltano senza. Il 27/09 erano 21 dei
+      # 22 saltati in CI, contro 1 in locale.
+      - name: Install CV PDF toolchain (parity with pdf_layout_check.py)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-yaml
+          sudo apt-get install -y --no-install-recommends pandoc wkhtmltopdf poppler-utils
           python3 --version
-          python3 -c "import yaml; print('yaml', yaml.__version__)"
 
       - name: Install agent runtime dependencies
         working-directory: agent-harness/runtime
