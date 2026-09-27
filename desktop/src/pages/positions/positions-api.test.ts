@@ -15,14 +15,36 @@ vi.mock("../../lib/supabase", () => ({
   supabaseConfigured: true,
 }));
 
+// In the webview `fs` is a stub that throws on first use. Five of these
+// routes import it at the top for their local-SQLite branch: here it throws
+// the same way, so a route that touched it on the desktop's path goes red.
+const fsTouched = vi.hoisted(() => ({ names: [] as string[] }));
+vi.mock("fs", () => {
+  const stub = new Proxy(
+    {},
+    {
+      get(_t, name) {
+        if (typeof name === "symbol" || name === "then" || name === "__esModule") return undefined;
+        fsTouched.names.push(String(name));
+        throw new Error(`fs.${String(name)} is not available in the webview`);
+      },
+    },
+  );
+  return { default: stub };
+});
+
 const POSITION_ID = "00000000-0000-4000-8000-000000000042";
 
 let restore: () => void;
 beforeEach(() => {
+  fsTouched.names.length = 0;
   fake.current = createPermissiveSupabase();
   restore = installApiBridge(positionsApi(notInDesktop));
 });
-afterEach(() => restore());
+afterEach(() => {
+  restore();
+  expect(fsTouched.names, "a route touched fs on the desktop's path").toEqual([]);
+});
 
 function post(path: string, body: unknown) {
   return fetch(path, {
@@ -98,6 +120,24 @@ describe("the positions routes in the desktop", () => {
       },
     ]);
   });
+
+  it.each(["apply-request", "geocode-request", "recheck-request", "write-request", "ticket"])(
+    "POST %s answers from the cloud branch without touching fs",
+    async (route) => {
+      fake.current!.rows.positions = [
+        { id: POSITION_ID, legacy_id: 42, status: "scored", write_requested: false, scores: [{ total_score: 80 }] },
+      ];
+      fake.current!.rpcResults.create_position_ticket = {
+        data: { id: "ticket-1", status: "open", position_status: "scored", deduplicated: false },
+        error: null,
+      };
+      const res = await post(`/api/positions/42/${route}`, { request_text: "Una richiesta sintetica" });
+      // Whatever the route decides about these synthetic rows, it answered as
+      // the web does: JSON, and from Supabase (the only place it could read).
+      expect(res.headers.get("content-type")).toContain("application/json");
+      expect(fake.current!.calls.length + fake.current!.rpc.length).toBeGreaterThan(0);
+    },
+  );
 
   it("a signed-out caller gets the web's 401 and nothing is written", async () => {
     fake.current!.user = null;
