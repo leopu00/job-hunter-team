@@ -434,19 +434,28 @@ describe("db_query against db_query.py", () => {
     ];
     // Nothing sent yet: the empty funnel and the sample floor, on both twins.
     for (const args of queries) expectSame(await call("db_query", args), py("db_query.py", args));
-    for (const db of [pyDb, ourDb]) {
+    // One instant for both twins, read once, and the second crossed between them on
+    // purpose: datetime('now') in each twin's own INSERT read the clock twice, and
+    // twins written either side of a tick printed applied_at one second apart (CI
+    // run 36351458155, 27/09).
+    const now = Date.now();
+    const daysAgo = (days: number) => new Date(now - days * 86_400_000).toISOString().slice(0, 19).replace("T", " ");
+    const send = (db: Database) => {
       const sent = db.prepare(
         "INSERT INTO applications (position_id, status, applied, applied_at, applied_via, response, response_at, interview_round) " +
-          "VALUES (?, 'applied', 1, datetime('now', ?), ?, ?, ?, ?)",
+          "VALUES (?, 'applied', 1, ?, ?, ?, ?, ?)",
       );
-      sent.run(2, "-5 days", "email", null, null, null);
-      sent.run(3, "-45 days", "linkedin", null, null, null);
-      sent.run(4, "-10 days", null, "interview", "2026-09-15", 2);
+      sent.run(2, daysAgo(5), "email", null, null, null);
+      sent.run(3, daysAgo(45), "linkedin", null, null, null);
+      sent.run(4, daysAgo(10), null, "interview", "2026-09-15", 2);
       // Written with a derived word, and with a word nobody planned: both must show.
-      sent.run(5, "-3 days", "email", "pending", null, null);
-      sent.run(6, "-400 days", "email", "an outcome nobody planned for", null, null);
-      db.prepare("UPDATE applications SET applied = 1, applied_at = datetime('now', '-2 days') WHERE position_id = 1").run();
-    }
+      sent.run(5, daysAgo(3), "email", "pending", null, null);
+      sent.run(6, daysAgo(400), "email", "an outcome nobody planned for", null, null);
+      db.prepare("UPDATE applications SET applied = 1, applied_at = ? WHERE position_id = 1").run(daysAgo(2));
+    };
+    send(pyDb);
+    crossSecondBoundary();
+    send(ourDb);
     for (const args of queries) expectSame(await call("db_query", args), py("db_query.py", args));
   });
 
