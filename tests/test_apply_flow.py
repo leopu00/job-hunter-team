@@ -258,6 +258,94 @@ def test_authorised_ashby_submission_requires_receipt_before_applied(
     assert checkpoint["receipt"]["confirmation_text"] == "Thank you for applying."
 
 
+# ── The receipt when the password fields cannot be hidden ───────────────────
+
+
+class _HidingFails:
+    """A live page on which hiding the password fields fails (hide and show).
+
+    `frames_answer=False`: the check that the page has no password field
+    cannot get an answer from its frames either (a hung page).
+    """
+
+    def __init__(self, inner, *, frames_answer: bool = True):
+        self._inner = inner
+        self._frames_answer = frames_answer
+
+    def wait_for_function(self, script, **kwargs):
+        if "__jhtHiddenSecrets" in script:
+            raise TimeoutError("synthetic: the fields could not be hidden")
+        return self._inner.wait_for_function(script, **kwargs)
+
+    @property
+    def frames(self):
+        if self._frames_answer:
+            return self._inner.frames
+
+        class Silent:
+            def wait_for_function(self, *_args, **_kwargs):
+                raise TimeoutError("synthetic: the frame does not answer")
+
+        return [Silent()]
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+def _password_on_the_confirmation(page) -> None:
+    """The confirmation page shows a password field, inside an iframe."""
+    page.evaluate(
+        """() => new MutationObserver((_, observer) => {
+          if (!document.querySelector('.ashby-application-form-success-container')) return;
+          observer.disconnect();
+          document.body.insertAdjacentHTML('beforeend', '<iframe srcdoc="<input type=password value=secret>"></iframe>');
+        }).observe(document.body, { childList: true })"""
+    )
+
+
+def test_a_receipt_whose_fields_cannot_be_hidden_is_still_taken_on_a_page_without_passwords(
+    page, tmp_path: Path, cv_path: Path
+):
+    page.set_content(ashby_form())
+    recorded: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, recorded=recorded).run(page=_HidingFails(page), navigate=False)
+
+    assert result.status == "applied"
+    receipt = recorded[0]["receipt"]
+    assert receipt.screenshot_path.is_file() and receipt.screenshot_path.stat().st_size > 0
+
+
+def test_a_receipt_is_not_taken_when_a_frame_shows_a_password_that_cannot_be_hidden(
+    page, tmp_path: Path, cv_path: Path
+):
+    page.set_content(ashby_form())
+    _password_on_the_confirmation(page)
+    recorded: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, recorded=recorded).run(page=_HidingFails(page), navigate=False)
+
+    assert (result.status, result.reason) == ("blocked_human", "receipt_screenshot_failed")
+    assert len(page.frames) == 2  # the password really was there, in the iframe
+    assert recorded == []
+    assert list((tmp_path / "receipts").glob("*.png")) == []
+
+
+def test_a_receipt_is_not_taken_when_the_page_cannot_say_it_has_no_password(
+    page, tmp_path: Path, cv_path: Path
+):
+    page.set_content(ashby_form())
+    recorded: list[dict] = []
+
+    result = build_flow(tmp_path, cv_path, recorded=recorded).run(
+        page=_HidingFails(page, frames_answer=False), navigate=False
+    )
+
+    assert (result.status, result.reason) == ("blocked_human", "receipt_screenshot_failed")
+    assert recorded == []
+    assert list((tmp_path / "receipts").glob("*.png")) == []
+
+
 def test_dry_run_stops_at_review_and_never_clicks_submit(
     page, tmp_path: Path, cv_path: Path
 ):

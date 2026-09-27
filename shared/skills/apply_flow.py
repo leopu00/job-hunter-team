@@ -3200,20 +3200,23 @@ def _fill_secret(control: Any, value: str) -> None:
 def _secrets_hidden(page: Any, *, required: bool = False):
     """No screenshot ever shows a portal password (ats_account's rule).
 
-    Without the module, or on a page that cannot hide them, the screenshot is
-    still taken: these pages have no password field, and a stop without its
-    picture is worse.  A recipe that types a password checks the hiding itself.
+    The fields are hidden for the duration of the screenshot. When that fails
+    (receipt, pre-submit), the screenshot is still taken only if the page is
+    proven to have no password field at all — every reachable frame asked,
+    within a short deadline (`ats_account.no_secret_fields`). That is the
+    normal case of a confirmation page, and its receipt stays as it was. A
+    password field, or a page that cannot answer in time, is a page that is
+    not photographed: the caller's screenshot fails (receipt_screenshot_failed,
+    pre_submit_screenshot_failed) rather than a password in clear in a file.
+    Without the module nothing can be hidden or checked: no screenshot.
 
-    `required`: the stop screenshot. There the hiding comes first — a page
-    that cannot hide its fields is a page that is not photographed (the stop
-    is saved without its picture), never a password in clear to go faster.
+    `required`: the stop screenshot. There the hiding itself comes first — a
+    page that cannot hide its fields is not photographed and the stop is saved
+    without its picture.
     """
     module = _optional_module("ats_account")
     if module is None:
-        if required:
-            raise RuntimeError("secrets_unhideable")
-        yield
-        return
+        raise RuntimeError("secrets_unhideable")
     if required:
         with module.secrets_hidden(page):
             yield
@@ -3222,7 +3225,10 @@ def _secrets_hidden(page: Any, *, required: bool = False):
         with module.secrets_hidden(page):
             yield
     except module.AccountStop:
-        LOG.warning("[apply-flow] password fields could not be hidden before a screenshot")
+        if not module.no_secret_fields(page):
+            LOG.warning("[apply-flow] password fields could not be hidden and the page may have some: no screenshot")
+            raise
+        LOG.warning("[apply-flow] password fields could not be hidden; the page has none, the screenshot goes on")
         yield
 
 
