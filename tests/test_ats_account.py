@@ -170,6 +170,35 @@ def test_a_page_that_never_committed_stops_instead_of_waiting_forever(page):
     assert time.monotonic() - started < acct._SECRET_SCRIPT_TIMEOUT_MS / 1000 + 5
 
 
+def test_a_page_without_passwords_says_so_across_its_frames(page):
+    page.set_content('<input type="text"><iframe srcdoc="<input type=email>"></iframe>')
+    page.wait_for_load_state()
+    assert len(page.frames) == 2
+    assert acct.no_secret_fields(page) is True
+
+
+def test_a_password_in_an_iframe_or_a_marked_field_is_not_no_secret_fields(page):
+    page.set_content('<input type="text"><iframe srcdoc="<input type=password>"></iframe>')
+    page.wait_for_load_state()
+    assert acct.no_secret_fields(page) is False
+
+    page.set_content('<input id="code" type="text">')
+    acct.fill_secret(page.locator("#code"), "123456")
+    assert acct.no_secret_fields(page) is False
+
+
+def test_a_page_that_never_committed_cannot_prove_it_has_no_password(page):
+    import time
+
+    page.route("https://portal.example.test/**", lambda route: None)  # never answers
+    with pytest.raises(Exception):
+        page.goto("https://portal.example.test/done", timeout=1_000)
+
+    started = time.monotonic()
+    assert acct.no_secret_fields(page) is False
+    assert time.monotonic() - started < acct._SECRET_PROBE_TIMEOUT_MS / 1000 + 3
+
+
 def test_a_page_that_cannot_hide_its_secrets_stops():
     class Broken:
         def wait_for_function(self, *_args, **_kwargs):

@@ -32,6 +32,7 @@ import secrets
 import stat
 import string
 import tempfile
+import time
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -239,6 +240,41 @@ def fill_secret(control: Any, password: str) -> None:
     """Type the password and mark the field, so screenshots hide it even if the page shows it as text."""
     control.evaluate(f"el => el.setAttribute('{SECRET_ATTR}', '1')")
     control.fill(password)
+
+
+# What a page answers when asked whether it has anything to hide: the same
+# fields _HIDE_JS hides. An object, so an empty page (0) is still an answer.
+_SECRET_PROBE_JS = """(attr) => ({ count: document.querySelectorAll(`input[type=password], [${attr}]`).length })"""
+_SECRET_PROBE_TIMEOUT_MS = 2_000
+
+
+def no_secret_fields(page: Any, timeout_ms: int = _SECRET_PROBE_TIMEOUT_MS) -> bool:
+    """True only when every frame of the page answered, in time, that it has no password field.
+
+    The fallback for a screenshot whose fields could not be hidden. Absence has
+    to be proven: a frame that does not answer, answers late or goes away is
+    not proof, so any doubt is False. All the frames share one deadline — the
+    main one and every iframe Playwright reaches, same-origin or not.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    try:
+        frames = list(page.frames)
+    except Exception:
+        return False
+    if not frames:
+        return False
+    for frame in frames:
+        remaining = int((deadline - time.monotonic()) * 1000)
+        if remaining <= 0:
+            return False
+        try:
+            handle = frame.wait_for_function(_SECRET_PROBE_JS, arg=SECRET_ATTR, timeout=remaining)
+            answer = handle.json_value()
+        except Exception:
+            return False
+        if not isinstance(answer, dict) or answer.get("count") != 0:
+            return False
+    return True
 
 
 @contextlib.contextmanager
