@@ -32,6 +32,7 @@ import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
 import { cloudSyncHeaders } from './client-identity.js';
+import { createAgentsStatusReader, startAgentsStatusPublisher } from './agents-status.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -210,7 +211,22 @@ export async function reconcileOnce() {
       last_heartbeat_at: nowIso,
     }).catch(() => {});
   }
+  if (reader) ensureAgentsStatusPublisher(reader);
   return { ok: true, action: null };
+}
+
+// Each agent's status for the desktop office's tags (agents-status.js):
+// started once, at the first heartbeat of the daemon, on the direct
+// Supabase path only. Without it the cloud has no agent status and the
+// desktop draws no tag, which is the honest fallback.
+let stopAgentsStatus = null;
+function ensureAgentsStatusPublisher(reader) {
+  if (stopAgentsStatus || process.env.JHT_AGENTS_STATUS === '0') return;
+  stopAgentsStatus = startAgentsStatusPublisher({
+    reader: createAgentsStatusReader({ jhtHome: JHT_HOME }),
+    write: (map) => reader.patchTeamState({ agents_status: map }),
+    log,
+  });
 }
 
 /**
