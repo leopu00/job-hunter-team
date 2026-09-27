@@ -236,21 +236,32 @@ export function agentsStatusWriter({ source, direct, carrier }) {
  * tags alone. So the statuses ride the heartbeat's PATCH, once a minute, and
  * a change waits for the next beat.
  *
- * `fields()` is what the heartbeat adds to its body: the last map, or
- * nothing. A refusal of that body (a web route older than the field answers
+ * `fields()` is what the heartbeat adds to its body: the last map while it
+ * is fresh (CARRY_FRESH_MS), or nothing. A refusal of that body (a web route older than the field answers
  * 403, a shape the route or the database refuses 400) must not take the
  * heartbeat with it: the heartbeat tells the carrier `refused()`, sends
  * itself alone, and for `refusedRetry` the carrier adds nothing.
  */
-export function createHeartbeatCarrier({ source, refusedRetry = REFUSED_RETRY_MS, now = Date.now }) {
+export function createHeartbeatCarrier({ source, refusedRetry = REFUSED_RETRY_MS, fresh = CARRY_FRESH_MS, now = Date.now }) {
   let held = null;
+  let heldAt = 0;
   let refusedUntil = 0;
   return {
-    hold: async (map) => { held = map; },
-    fields: () => (held && now() >= refusedUntil ? agentsStatusPatch(source, held) : {}),
+    hold: async (map) => { held = map; heldAt = now(); },
+    fields: () => (held && now() - heldAt <= fresh && now() >= refusedUntil ? agentsStatusPatch(source, held) : {}),
     refused: () => { refusedUntil = now() + refusedRetry; },
   };
 }
+
+/**
+ * How old the carried map may be. The publisher hands it over at least every
+ * KEEPALIVE_MS while the rule answers; when the rule stops answering (the
+ * pane script fails, the reader says null) the last map would be stamped
+ * fresh by every heartbeat and the desktop would show frozen tags as live.
+ * Past this the heartbeat carries none, and the tags go: an old status shown
+ * as live is an invented one.
+ */
+export const CARRY_FRESH_MS = 2 * 60_000;
 
 /** How often the rule is read, and the longest silence between two writes. */
 export const READ_EVERY_MS = 20_000;
