@@ -1093,6 +1093,266 @@
    }
   },
   {
+   "id": "glass_0",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 242.0,
+    "y": 206.5,
+    "w": 984.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 242.0,
+    "y": 40.5,
+    "w": 984.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_1",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 1406.5,
+    "y": 282.0,
+    "w": 613.5,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 1406.5,
+    "y": 116.0,
+    "w": 613.5,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_2",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 2236.5,
+    "y": 182.5,
+    "w": 925.5,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 2236.5,
+    "y": 16.5,
+    "w": 925.5,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_3",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 242.0,
+    "y": 861.5,
+    "w": 816.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 242.0,
+    "y": 695.5,
+    "w": 816.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_4",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 1366.0,
+    "y": 826.5,
+    "w": 684.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 1366.0,
+    "y": 660.5,
+    "w": 684.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_5",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 2347.0,
+    "y": 893.5,
+    "w": 821.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 2347.0,
+    "y": 727.5,
+    "w": 821.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_6",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 241.0,
+    "y": 1142.5,
+    "w": 807.5,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 241.0,
+    "y": 976.5,
+    "w": 807.5,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_7",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 1240.0,
+    "y": 1389.0,
+    "w": 343.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 1240.0,
+    "y": 1223.0,
+    "w": 343.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_8",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 1809.5,
+    "y": 1389.0,
+    "w": 375.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 1809.5,
+    "y": 1223.0,
+    "w": 375.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_9",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 240.0,
+    "y": 1462.5,
+    "w": 798.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 240.0,
+    "y": 1296.5,
+    "w": 798.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_10",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 2308.5,
+    "y": 1484.0,
+    "w": 856.0,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 2308.5,
+    "y": 1318.0,
+    "w": 856.0,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_11",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 318.0,
+    "y": 1946.0,
+    "w": 857.5,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 318.0,
+    "y": 1780.0,
+    "w": 857.5,
+    "h": 172.0
+   }
+  },
+  {
+   "id": "glass_12",
+   "kind": "glass_partition",
+   "rect": {
+    "x": 2074.5,
+    "y": 1951.0,
+    "w": 956.5,
+    "h": 12.0
+   },
+   "blocking": false,
+   "image": {
+    "src": "/office/furniture/glass_partition_frameless_v2.png"
+   },
+   "draw": {
+    "x": 2074.5,
+    "y": 1785.0,
+    "w": 956.5,
+    "h": 172.0
+   }
+  },
+  {
    "id": "output_shelf",
    "kind": "output_shelf",
    "rect": {
