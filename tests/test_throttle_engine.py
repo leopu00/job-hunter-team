@@ -911,6 +911,11 @@ def _jobs_db(home_dir: Path, monkeypatch, **flags):
     """Un jobs.db vero con UNA posizione e i flag di richiesta dati."""
     db = home_dir / "jobs.db"
     monkeypatch.setenv("JHT_DB", str(db))
+    # Il motore importa db_query, che importa `_db` per nome: un `_db` già in
+    # sys.modules (un altro file di test lo lega al SUO database) conterebbe
+    # le richieste nel db sbagliato. In produzione `throttle` è un processo a sé.
+    import sys
+    monkeypatch.delitem(sys.modules, "_db", raising=False)
     seed = subprocess.run(
         ["python3", "-c",
          "import sys; sys.path.insert(0, %r); "
@@ -968,6 +973,8 @@ def test_an_unreadable_db_keeps_the_brake(home, monkeypatch):
     bad = home / "jobs.db"
     bad.write_text("not a database", encoding="utf-8")
     monkeypatch.setenv("JHT_DB", str(bad))
+    import sys
+    monkeypatch.delitem(sys.modules, "_db", raising=False)
     assert eng.register("analista-1", now=T0)["applied_sec"] == 780
 
 
