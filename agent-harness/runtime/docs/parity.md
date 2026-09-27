@@ -135,6 +135,17 @@ reads:
    (`allowedModelsLine`): one renderer, because two lists that contradict each
    other is the defect being fixed. Without a hub there is no launcher, no
    spawn and no note — an unread limit is never a guessed one.
+   **The same field twice, and the instance is the other one** (B-06, 24/09):
+   the prompt tells the CAPITANO to roll a die for a worker's number and pass it
+   (`roll_worker_number.py`, a script this harness does not have), and the
+   description's `up to 2 at once` — a COUNT — was read as the next number to
+   ask for. Eight of the fourteen refusals of those rounds were an index,
+   including the FOURTH analista with none running and two allowed. So the note
+   says there is no die and no number to pass, the tool's schema says to leave
+   `instance` out, and both name the indices each role really has
+   (`allowedIndicesLine`, the same source). `roll_worker_number.py` in the
+   rendered text no longer becomes `spawn_agent` — which read as a command that
+   returns a number — but "nothing: the launcher picks the instance itself".
 
 ### How it was checked (2026-09-19)
 
@@ -297,6 +308,15 @@ tmux and the throttle engine do for a TUI agent:
    `system`. (The TUI has no verified sender: this is a difference on purpose.)
 4. A turn that ends with no pause and nothing in the inbox ends the run: an
    idle TUI agent waits at its prompt for free, an idle process does not.
+5. **Except while its children work** (B2, 27/09). The TUI CAPITANO delegates,
+   ends its turn, and its session stays: the child's report wakes it. Here the
+   turn that delegated ended the run, the executor stopped every child because
+   its CAPITANO was gone (`capitano_finito`), and nothing delegated finished.
+   A role with `list_agents` (the CAPITANO, with a hub) now waits instead: no
+   model call, its mailbox looked at again every 15 s, the next turn when a
+   report lands. It ends idle once none of its children is queued or running,
+   or after the run's wall-clock limit of silence (`child_wait_limit`). A
+   launcher that cannot answer counts as no children, as before.
 
 **The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
 rehearsals of the whole team on `ashley` ended on the account's rate limit and

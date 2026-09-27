@@ -454,8 +454,14 @@ describe("through the hub", () => {
 
       // The values are the config's, and the roles come with their window and their instances.
       expect(said).toContain("Models allowed: gpt-5.6-luna, gpt-5-mini");
-      expect(said).toContain("scout cap_usd in (0, 0.4], up to 2 at once");
-      expect(said).toContain("analista cap_usd in (0, 0.4], up to 1 at once");
+      expect(said).toContain("scout cap_usd in (0, 0.4], 2 running at once at most");
+      expect(said).toContain("analista cap_usd in (0, 0.4], 1 running at once at most");
+      // B-06: the count was read as the next index to ask for. The indices are named,
+      // and so is who picks them — eight of fourteen live refusals were an index.
+      expect(said).toContain("LEAVE `instance` OUT");
+      expect(said).toContain("scout has indices 1-2");
+      expect(said).toContain("analista has one instance, index 1");
+      expect(said).toContain("not which index to ask for");
       expect(said).toContain("At most 3 children running at once, 6 spawns in the session");
       expect(said).toContain("task of at most 2000 characters");
       // SICUREZZA: the fixed limits are named as FIXED, and what is not fixed is named too.
@@ -480,6 +486,10 @@ describe("through the hub", () => {
        */
       expect(captain.systemPrompt).toContain("the launcher allows exactly these models: gpt-5.6-luna, gpt-5-mini");
       expect(captain.systemPrompt).toContain("That table is the product's tmux team");
+      // B-06 in the prompt too: the die its instructions tell it to roll does not exist here.
+      expect(captain.systemPrompt).toContain("There is no die here and no number to pass");
+      expect(captain.systemPrompt).toContain("scout has indices 1-2");
+      expect(captain.systemPrompt).toContain("never the next index to ask for");
       // The prompt's own table is still there, unedited: the note explains it, it does not hide it.
       expect(captain.systemPrompt).toMatch(/\| Sonnet \|/);
       // `sonnet` is what it asked for in every live round, and it is not in the sentence.
@@ -519,7 +529,8 @@ describe("through the hub", () => {
       const withHub = await prepareProductRole({ ...common, homeDir: join(root, "api", "agents", "e"), hub: new HubClient({ url, token: CAPITANO }) });
       const said = withHub.tools([]).find((t) => t.spec.name === "spawn_agent")!.spec.description;
       expect(said).toContain("Models allowed: gpt-5.6-terra");
-      expect(said).toContain("scorer cap_usd in (0, 0.12], up to 2 at once");
+      expect(said).toContain("scorer cap_usd in (0, 0.12], 2 running at once at most");
+      expect(said).toContain("scorer has indices 1-2");
       expect(said).not.toContain("gpt-5.6-luna");
       expect(said).toContain("At most 1 children running at once");
       // B-05, one source: the note follows the same config as the description.
@@ -538,6 +549,7 @@ describe("through the hub", () => {
     expect(blind).not.toMatch(/cap_usd in \(0,/);
     // And no model is named in the prompt either: an unread limit is never a guessed one.
     expect(deaf.systemPrompt).not.toContain("the launcher allows exactly these models");
+    expect(deaf.systemPrompt).not.toContain("There is no die here");
   });
 
   it("takes spawns from the CAPITANO's token only, and the CAPITANO's runtime has the tools", async () => {

@@ -13,7 +13,7 @@
  * `jobsDbPath`.
  */
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -97,6 +97,44 @@ export function openJobsDb(path: string): Database {
   } catch (error) {
     db.close();
     throw error;
+  }
+}
+
+/** The `source` the mock SCOUT writes (`MOCK_INSERT`, cli/mock-script.ts): «Mock Ltd», jobs.example. */
+export const MOCK_SOURCE = "mock";
+
+/** Positions a mock run left in this database. */
+export function mockRowCount(db: Database): number {
+  const row = db.prepare("SELECT count(*) AS n FROM positions WHERE source = ?").get(MOCK_SOURCE) as { n: number };
+  return row.n;
+}
+
+/**
+ * A jobs.db is a rehearsal's or the team's, never both.
+ *
+ * A mock run writes a fake position («Mock Ltd», Milan) into whatever
+ * database it is given, and on the VPS it is given the same mounts as a live
+ * run: on 20/09 one was left among the real ones, and the live rounds after
+ * it read it as a position. Deleting the row by hand is the one gesture a
+ * parity database must not have (B0: it is rebuilt from the seed instead),
+ * so a run that works for real — a live role, the hub — refuses to start on
+ * a database that holds one, and says how to get a clean one. A missing
+ * file is a new, clean database.
+ */
+export function refuseMockRows(path: string): void {
+  if (path !== ":memory:" && !existsSync(path)) return;
+  const db = openJobsDb(path);
+  try {
+    const n = mockRowCount(db);
+    if (n > 0) {
+      throw new HarnessError(
+        "config_invalid",
+        `${path} holds ${n} position(s) written by a mock run (source='${MOCK_SOURCE}'). ` +
+          "A live run does not work on a rehearsal's database: rebuild it from the seed, or point this run at another one.",
+      );
+    }
+  } finally {
+    db.close();
   }
 }
 

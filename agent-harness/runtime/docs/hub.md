@@ -57,6 +57,12 @@ clear.
 - **Environment:** `JHT_HUB_TOKENS` (the file), `JHT_HUB_DB`, `JHT_HUB_CHANNELS`,
   `JHT_HUB_STATE`, `JHT_HUB_PORT` (default 8788), `JHT_API_PROFILE_DIR`,
   `JHT_API_APP_ROOT=/app`.
+- **A rehearsal's database is not the team's:** the hub refuses to start on a
+  `jobs.db` that holds positions a mock run wrote (`source='mock'`, «Mock
+  Ltd»), and so does a live role without a hub. A hub for mock rehearsals says
+  so with `JHT_HUB_MOCK=1` and is given its own database. To get a clean one,
+  rebuild it from the seed (`scripts/parity/jobsdb_parity.py seed`), never by
+  deleting rows.
 - **Tokens:** one per agent id, random (`openssl rand -hex 32`), written by
   the host into `{ "<token>": "<agent>" }`, readable by the hub's uid only.
   Each role's container gets only its own, as `JHT_HUB_TOKEN`. An agent with

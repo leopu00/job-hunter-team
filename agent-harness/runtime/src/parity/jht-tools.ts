@@ -524,8 +524,21 @@ export const PYTHON_SKILLS: Record<string, string> = {
   "application_answers.py": "application_answers",
 };
 
-/** Scripts with no tool of their own but a native equivalent. */
-const PYTHON_EQUIVALENTS: Record<string, string> = { "throttle_engine.py": "throttle", "roll_worker_number.py": "spawn_agent" };
+/**
+ * Scripts with no tool of their own but a native equivalent — as a PHRASE where
+ * the sentence around them would otherwise read as a command.
+ *
+ * `roll_worker_number.py` was mapped to `spawn_agent`, and capitano.md's line
+ * became "Roll the dice: `N=$(spawn_agent <role>)` … and pass `$N`" — which
+ * tells the CAPITANO to pick an instance number and hand it over. It did: in
+ * eight of fourteen refusals of the live rounds it asked for instance 3 or 4,
+ * once the FOURTH analista with none running and two allowed (VPS, 24/09).
+ * Here the launcher picks the index, so the die does not exist.
+ */
+const PYTHON_EQUIVALENTS: Record<string, string> = {
+  "throttle_engine.py": "throttle",
+  "roll_worker_number.py": "nothing: the launcher picks the instance itself",
+};
 
 /** `python3 [flags] [path/]<script>.py` anywhere in a text. */
 const PYTHON_SCRIPT_TEXT = /\bpython3?(?:\.\d+)?(?:\s+-[A-Za-z]+)*\s+(?:[^\s`"']*\/)?([A-Za-z0-9_-]+\.py)\b/g;

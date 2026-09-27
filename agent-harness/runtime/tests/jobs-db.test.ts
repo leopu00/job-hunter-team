@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { JOBS_DB_SCHEMA_VERSION, jobsDbPath, openJobsDb, type Database } from "../src/db/jobs-db.ts";
+import { JOBS_DB_SCHEMA_VERSION, jobsDbPath, mockRowCount, openJobsDb, refuseMockRows, type Database } from "../src/db/jobs-db.ts";
 import { realPath } from "../src/tools/paths.ts";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
@@ -139,3 +139,41 @@ function available(command: string, args: string[]): boolean {
     return false;
   }
 }
+
+describe("a rehearsal's database is never the team's", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "jht-mock-rows-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function withPosition(path: string, source: string): void {
+    const db = openJobsDb(path);
+    db.prepare("INSERT INTO positions (title, company, url, source) VALUES (?, ?, ?, ?)").run(
+      "Synthetic Engineer",
+      source === "mock" ? "Mock Ltd" : "Example Co",
+      `https://jobs.example/${source}`,
+      source,
+    );
+    db.close();
+  }
+
+  it("lets a live run start on a new file or on a database without mock rows", () => {
+    expect(() => refuseMockRows(join(dir, "missing.db"))).not.toThrow();
+    const clean = join(dir, "clean.db");
+    withPosition(clean, "linkedin");
+    expect(() => refuseMockRows(clean)).not.toThrow();
+  });
+
+  it("refuses a database a mock run wrote into, and says how to get a clean one", () => {
+    const mixed = join(dir, "mixed.db");
+    withPosition(mixed, "linkedin");
+    withPosition(mixed, "mock");
+    const db = openJobsDb(mixed);
+    expect(mockRowCount(db)).toBe(1);
+    db.close();
+    expect(() => refuseMockRows(mixed)).toThrow(/1 position\(s\) written by a mock run.*rebuild it from the seed/);
+  });
+});
