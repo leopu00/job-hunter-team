@@ -19,6 +19,7 @@ Uso:
   python3 db_query.py next-for-recheck-due   # MODALITÀ CURA: recheck cadenzato (vive, score>=70, non verif. da >14gg, score DESC)
                                             # alias legacy: next-for-recheck-weekly
   python3 db_query.py next-for-geocode-missing # MODALITÀ CURA: geocoding vive senza coordinate ufficio
+  python3 db_query.py geocode-check <ID>       # passo 6 ANALISTA: l'ufficio di questa posizione va geocodificato ora?
   python3 db_query.py next-for-logo-missing  # MODALITÀ CURA: aziende (con posizioni vive) senza logo
   python3 db_query.py next-for-harvest       # MODALITÀ RACCOLTO: score alto senza CV, migliori prime
   python3 db_query.py next-for-calibration   # MODALITÀ CALIBRAZIONE: feedback utente non consumato
@@ -538,6 +539,59 @@ def check_history(position_id, as_json=False):
         print(f"     {e['ts']}  {e['by_agent']:<14} {e['action']:<15} "
               f"{e['outcome']}{code}{what}")
     conn.close()
+
+
+def geocode_check(position_id, as_json=False):
+    """Va geocodificato l'ufficio di QUESTA posizione, adesso? Sì/no e perché.
+
+    Il passaggio di pipeline dell'ANALISTA (passo 6) lo chiede per la
+    posizione NUOVA che sta analizzando: dal 31/05 la geocodifica
+    dell'ufficio era solo su richiesta o in modalità cura, e da quando il
+    team lavora in «search» (26/08) nessuna posizione nuova ha più avuto
+    coordinate dell'ufficio. La decisione sta qui, nel codice, con
+    le stesse regole della coda next-for-geocode-missing: la policy di
+    arricchimento (interruttore dell'operatore, modalità risparmio), le
+    remote escluse, la soglia di score. L'arretrato NON passa da qui: si
+    recupera con le richieste dell'utente o con la cura.
+
+    Un «no» non è un errore: exit 0. Posizione inesistente: exit 1.
+    """
+    from enrichment_policy import is_enabled, disabled_reason, geocode_options
+    conn = get_db()
+    ensure_schema(conn)
+    pos = conn.execute(
+        "SELECT status, work_mode, office_lat, office_geocoded FROM positions "
+        "WHERE id = ?", (position_id,)).fetchone()
+    if pos is None:
+        print(f"Position {position_id} not found.")
+        conn.close()
+        sys.exit(1)
+    best = conn.execute(
+        "SELECT MAX(total_score) FROM scores WHERE position_id = ?",
+        (position_id,)).fetchone()[0]
+    conn.close()
+
+    opts = geocode_options()
+    if pos['office_lat'] is not None and pos['office_geocoded']:
+        verdict, reason = False, "already geocoded (office_geocoded=1)"
+    elif pos['status'] == 'excluded':
+        verdict, reason = False, "excluded position"
+    elif not is_enabled('geocode_missing'):
+        verdict, reason = False, f"geocoding OFF — {disabled_reason('geocode_missing')}"
+    elif opts['non_remote_only'] and (pos['work_mode'] or '').lower() == 'remote':
+        verdict, reason = False, "remote position (work_mode=remote): no office to geocode"
+    elif opts['min_score'] is not None and best is None:
+        verdict, reason = False, (f"score gate {opts['min_score']}: not scored yet — "
+                                  "next-for-geocode-missing takes it after scoring")
+    elif opts['min_score'] is not None and best < opts['min_score']:
+        verdict, reason = False, f"score gate {opts['min_score']}: best score {best}"
+    else:
+        verdict, reason = True, "live, not geocoded yet, geocoding policy on"
+
+    if as_json:
+        emit_json({'position_id': position_id, 'geocode': verdict, 'reason': reason})
+        return
+    print(f"GEOCODE #{position_id}: {'YES' if verdict else 'NO'} — {reason}")
 
 
 def maintenance_report(days=7, as_json=False):
@@ -1827,6 +1881,11 @@ def main():
     mr.add_argument('--days', type=int, default=7)
     mr.add_argument('--json', action='store_true', help=JSON_HELP)
 
+    # geocode-check: l'ufficio di questa posizione va geocodificato adesso? (passo 6 ANALISTA)
+    gc = sub.add_parser('geocode-check')
+    gc.add_argument('id', type=int)
+    gc.add_argument('--json', action='store_true', help=JSON_HELP)
+
     # check-history: quando trovata, quante volte ricontrollata, con che esito
     ch = sub.add_parser('check-history')
     ch.add_argument('id', type=int)
@@ -1863,6 +1922,8 @@ def main():
         maintenance_report(days=args.days, as_json=args.json)
     elif args.cmd == 'check-history':
         check_history(args.id, as_json=args.json)
+    elif args.cmd == 'geocode-check':
+        geocode_check(args.id, as_json=args.json)
     elif args.cmd == 'recent-activity':
         recent_activity(args.minutes, args.limit, as_json=args.json)
     elif args.cmd == 'application':
