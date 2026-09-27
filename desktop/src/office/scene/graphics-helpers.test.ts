@@ -88,3 +88,45 @@ describe("cameraBounds", () => {
     expect(cameraBounds(layout)).toEqual(WORLD);
   });
 });
+
+describe("the machines (tesseract, hologram, printer, door)", async () => {
+  const fx = await import("./effects");
+  const pose = (x: number, y: number, mode: "walk" | "work" | "idle" = "work") =>
+    ({ uid: "a", role: "scout", sheet: "s", pos: { x, y }, mode, facing: "down", flipped: false, frame: 0, carrying: false }) as const;
+
+  it("the box has three fading rays at each of its four corners", () => {
+    const rays = fx.tesseractRays(FLOOR);
+    expect(rays).toHaveLength(4 * 3 * (fx.TESSERACT.steps - 1));
+    expect(rays[0].from).toEqual({ x: FLOOR.x, y: FLOOR.y });
+    expect(rays[0].alpha).toBeCloseTo(0.3);
+    expect(rays[fx.TESSERACT.steps - 2].alpha).toBeLessThan(0.01);
+    expect(fx.tesseractPulse(0)).toBeCloseTo(0.8);
+  });
+
+  it("the hologram's meridians turn and squash between 0.05 and 1", () => {
+    const f = fx.hologramFrame(0);
+    expect(f.squash[0]).toBeCloseTo(1);
+    for (const t of [0.3, 1.7, 5]) for (const k of fx.hologramFrame(t).squash) expect(k).toBeGreaterThanOrEqual(0.05);
+    const globe = fx.hologramGlobe({ x: 675, y: 435, w: 200, h: 180 });
+    expect(globe.radius).toBe(60);
+    expect(globe.centre.x).toBe(775);
+  });
+
+  it("the printer works only while someone stands at it, the door opens for anyone near", () => {
+    const printer = { x: 1265, y: 300 };
+    expect(fx.someoneStandsAt([pose(1270, 305)], printer, 70)).toBe(true);
+    expect(fx.someoneStandsAt([pose(1270, 305, "walk")], printer, 70)).toBe(false);
+    expect(fx.someoneStandsAt([pose(1500, 300)], printer, 70)).toBe(false);
+    expect(fx.someoneNear([pose(1700, 1950, "walk")], { x: 1700, y: 2000 }, 120)).toBe(true);
+    expect(fx.printerFrame(0.1)).toEqual({ ledOn: true, sheet: 0.125 });
+  });
+
+  it("the door slides at 3.5 a second and its leaves shrink into the posts", () => {
+    expect(fx.doorStep(0, true, 0.1)).toBeCloseTo(0.35);
+    expect(fx.doorStep(1, false, 1)).toBe(0);
+    const shut = fx.doorLeaves(0);
+    const open = fx.doorLeaves(1);
+    expect(shut[0].w).toBe(70);
+    expect(open[0].w).toBe(2);
+  });
+});

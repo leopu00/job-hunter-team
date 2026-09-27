@@ -166,6 +166,13 @@ export type FurnitureItem = {
    * y-sorted with the agents by the bottom of `draw` (or of `rect`).
    */
   layer?: "floor" | "sorted";
+  /**
+   * The desk's front drawn again over an agent seated at it without a
+   * seated picture (department_defs.gd front_occlusion, furniture_node.gd
+   * _add_front_occluder): the part of the image below this fraction of its
+   * height. Only the "down" desks, whose seat is behind the desk.
+   */
+  frontOcclusion?: number;
   /** the core role that sits here (registry_key "core:<role>"), if any */
   seatOf?: AgentRole;
 };

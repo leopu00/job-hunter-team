@@ -16,6 +16,17 @@ import type {
 } from "../contract";
 import { attachControls } from "./controls";
 import { sheetPlacements, towerHeight, type PaperRule } from "./paper";
+import {
+  doorLeaves,
+  doorStep,
+  hologramFrame,
+  hologramGlobe,
+  printerFrame,
+  someoneNear,
+  someoneStandsAt,
+  tesseractPulse,
+  tesseractRays,
+} from "./effects";
 import { feetAnchor, pickCell } from "./frames";
 import { allFurniture, cameraBounds } from "../layout-items";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
@@ -158,6 +169,46 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex) : counterBadge(pile, dept.color));
   }
 
+  // The box's edges (tesseract_edges.gd): additive rays from the floor's corners, pulsing.
+  const edges = tesseractEdges(layout.floor);
+  lightLayer.addChild(edges);
+
+  // The hologram's meridians and beat over its painted globe (hologram.gd).
+  const holoItem = furniture.find((f) => f.kind === "hologram");
+  const holo = new Graphics();
+  holo.eventMode = "none";
+  if (holoItem) {
+    const where = holoItem.draw ?? holoItem.rect;
+    holo.zIndex = where.y + where.h + 0.05;
+    sortedLayer.addChild(holo);
+  }
+
+  // The printer at work while an agent stands at it (printer_fx.gd).
+  const printerItem = furniture.find((f) => f.kind === "printer");
+  const printerFx = new Graphics();
+  printerFx.eventMode = "none";
+  if (printerItem) {
+    printerFx.position.set(printerItem.rect.x + printerItem.rect.w / 2, printerItem.rect.y + printerItem.rect.h);
+    const where = printerItem.draw ?? printerItem.rect;
+    printerFx.zIndex = where.y + where.h + 0.05;
+    sortedLayer.addChild(printerFx);
+  }
+
+  // The exit door, sliding open while someone passes (exit_door.gd).
+  const door = exitDoor(layout.door);
+  sortedLayer.addChild(door.node);
+
+  // The desks' fronts over an agent seated at them without a seated picture.
+  const occluders = new Map<string, Sprite>();
+  for (const item of furniture) {
+    if (item.frontOcclusion == null || occupiable.has(item.id)) continue;
+    const tex = textureFor(textures, item.image);
+    if (!tex) continue;
+    const o = frontOccluder(item.draw ?? item.rect, tex, item.frontOcclusion, Boolean(item.flip));
+    occluders.set(item.id, o);
+    sortedLayer.addChild(o);
+  }
+
   // Camera: the controls (controls.ts) move it, the world follows.
   const bounds = cameraBounds(layout);
   const floorCentre = { x: layout.floor.x + layout.floor.w / 2, y: layout.floor.y + layout.floor.h / 2 };
@@ -217,6 +268,11 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
         sprite.visible = false;
       }
     }
+    for (const [id, o] of occluders) {
+      const who = poses.find((p) => p.seatedAt === id);
+      o.visible = Boolean(who);
+      if (who) o.zIndex = who.pos.y + 0.01;
+    }
     for (const [id, o] of occupiable) {
       const who = seated.get(id);
       o.sprite.texture = who ? o.taken : o.free;
@@ -264,6 +320,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   };
 
   let grainClock = 0;
+  let clock = 0;
+  let holoClock = 0;
   app.ticker.add((ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 0.1);
     // ScreenGrade's grain moves 9 times a second, like a dirty brush
@@ -274,7 +332,17 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     }
     controls.step(dt);
     engine.step(dt);
+    clock += dt;
+    edges.alpha = tesseractPulse(clock);
+    // the hologram redraws at 20 Hz, as in Godot
+    holoClock += dt;
+    if (holoItem && holoClock >= 0.05) {
+      holoClock = 0;
+      drawHologram(holo, holoItem.rect, clock);
+    }
     const poses = engine.poses();
+    if (printerItem) drawPrinter(printerFx, printerItem.rect.w / 150, layout.pois && someoneStandsAt(poses, layout.pois.printer, 70) ? clock : null);
+    door.step(someoneNear(poses, layout.door, 120), dt);
     drawAgents(poses);
     drawBubbles(poses);
     drawPiles();
@@ -668,4 +736,88 @@ function counterBadge(pile: Container, color: string): (n: number | null) => voi
   return (n) => {
     label.text = n == null ? "—" : String(n);
   };
+}
+
+// ─── The machines: box edges, hologram, printer, door, desk fronts ─────
+
+function tesseractEdges(floor: Rect): Graphics {
+  const g = new Graphics();
+  for (const seg of tesseractRays(floor)) {
+    g.moveTo(seg.from.x, seg.from.y).lineTo(seg.to.x, seg.to.y).stroke({ color: seg.color, alpha: seg.alpha * 0.35, width: 16, cap: "round" });
+    g.moveTo(seg.from.x, seg.from.y).lineTo(seg.to.x, seg.to.y).stroke({ color: seg.color, alpha: seg.alpha, width: 4.5, cap: "round" });
+  }
+  for (const [x, y] of [
+    [floor.x, floor.y],
+    [floor.x + floor.w, floor.y],
+    [floor.x + floor.w, floor.y + floor.h],
+    [floor.x, floor.y + floor.h],
+  ]) {
+    g.circle(x, y, 22).fill({ color: 0x4d9eff, alpha: 0.3 * 0.25 });
+    g.circle(x, y, 10).fill({ color: 0x73d9ff, alpha: 0.3 * 0.8 });
+  }
+  g.blendMode = "add";
+  g.eventMode = "none";
+  return g;
+}
+
+function drawHologram(g: Graphics, rect: Rect, t: number) {
+  const { centre, radius } = hologramGlobe(rect);
+  const { squash, pulse } = hologramFrame(t);
+  g.clear();
+  for (const k of squash) g.ellipse(centre.x, centre.y, radius * k, radius).stroke({ color: GREEN, alpha: 0.2 + 0.18 * pulse, width: 1.2 });
+  g.circle(centre.x, centre.y, radius * 0.08).fill({ color: 0x7fffb2, alpha: 0.35 + 0.3 * pulse });
+}
+
+/** `t` null = idle: nothing drawn (the painted printer stays as it is). */
+function drawPrinter(g: Graphics, s: number, t: number | null) {
+  g.clear();
+  if (t == null) return;
+  const { ledOn, sheet } = printerFrame(t);
+  g.circle(43 * s, -126 * s, 3.2 * s).fill({ color: 0x26f28c, alpha: ledOn ? 1 : 0.25 });
+  const h = 24 * s * sheet;
+  if (h > 0) g.rect(-28 * s, -111 * s, 54 * s, h).fill(0xf7f5eb).stroke({ color: 0x8c8c99, alpha: 0.8, width: 1 });
+}
+
+function exitDoor(at: Vec): { node: Container; step: (someone: boolean, dt: number) => void } {
+  const node = new Container();
+  node.position.set(at.x, at.y);
+  node.zIndex = at.y;
+  node.eventMode = "none";
+  const fixed = new Graphics();
+  fixed.rect(-75, -26, 150, 26).fill({ color: 0xffffff, alpha: 0.045 });
+  for (const sx of [-1, 1]) fixed.rect(sx * 75 - 5, -64, 10, 70).fill(0x1f3d4a).stroke({ color: 0x73f2ff, alpha: 0.85, width: 1.5 });
+  fixed.rect(-30, -92, 60, 22).fill(0x10151c).stroke({ color: GREEN, alpha: 0.8, width: 1.2 });
+  const sign = new Text({ text: "EXIT", style: { fontFamily: FONT, fontSize: 13, fontWeight: "700", fill: GREEN } });
+  sign.anchor.set(0.5);
+  sign.position.set(0, -81);
+  const leaves = new Graphics();
+  node.addChild(fixed, leaves, sign);
+  let open = 0;
+  let hold = 0;
+  let drawn = -1;
+  const draw = () => {
+    leaves.clear();
+    for (const r of doorLeaves(open)) leaves.rect(r.x, r.y, r.w, r.h).fill({ color: 0x59d9ff, alpha: 0.3 }).stroke({ color: 0x73f2ff, alpha: 0.85, width: 1.2 });
+    drawn = open;
+  };
+  draw();
+  return {
+    node,
+    step(someone, dt) {
+      // held open 1.6 s after the last passer, as ExitDoor.swing()
+      hold = someone ? 1.6 : Math.max(0, hold - dt);
+      open = doorStep(open, hold > 0, dt);
+      if (open !== drawn) draw();
+    },
+  };
+}
+
+/** The part of a desk's picture below `cut` of its height, drawn again over the seated agent. */
+function frontOccluder(where: Rect, tex: Texture, cut: number, flip: boolean): Sprite {
+  const f = tex.frame;
+  const part = new Texture({ source: tex.source, frame: new Rectangle(f.x, f.y + f.height * cut, f.width, f.height * (1 - cut)) });
+  const s = placed(new Sprite(part), { x: where.x, y: where.y + where.h * cut, w: where.w, h: where.h * (1 - cut) }, flip);
+  s.visible = false;
+  s.eventMode = "none";
+  return s;
 }
