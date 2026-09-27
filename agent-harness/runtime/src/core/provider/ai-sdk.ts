@@ -378,16 +378,22 @@ function toToolSet(specs: ToolSpec[]): ToolSet {
  * about twice the searches OpenAI charged.
  *
  * Anthropic returns one server tool call per search it ran.
+ *
+ * The item's action is on the part's `output`: that is where `generateText`
+ * puts a provider-run tool's result (the provider layer calls it `result`, and
+ * the SDK renames it). Reading `result` counted no search at all, so neither
+ * the fee nor the T19 cap applied: a SCOUT capped at 0.25 USD spent 0.469 on
+ * 28 searches (giro di parità, 27/09).
  */
 export function billedSearches(
   providerId: ModelProfile["providerId"],
-  content: ReadonlyArray<{ type: string; providerExecuted?: boolean; result?: unknown }>,
+  content: ReadonlyArray<{ type: string; providerExecuted?: boolean; output?: unknown }>,
 ): number {
   if (providerId === "openai") {
     const searches = content.filter(
       (part) =>
         part.type === "tool-result" &&
-        (part.result as { action?: { type?: unknown } } | undefined)?.action?.type === "search",
+        (part.output as { action?: { type?: unknown } } | undefined)?.action?.type === "search",
     ).length;
     return Math.min(searches, MAX_SEARCHES_PER_CALL);
   }

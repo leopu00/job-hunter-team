@@ -35,6 +35,7 @@ const CONFIG: LauncherConfig = {
   models: ["gpt-5.6-luna", "gpt-5-mini"],
   taskChars: 2_000,
   spawnReserveUsd: 0,
+  staggerS: 0,
   team: [
     { role: "scout", instances: 1, cap_usd: 0.1 },
     { role: "analista", instances: 1, model: "gpt-5-mini" },
@@ -86,6 +87,10 @@ describe("the page shows what the launcher will start, read from its configurati
     expect(confirm).toMatch(/scout +×1 +cap \$0\.1000 each +gpt-5\.6-luna/);
     expect(confirm).toMatch(/analista +×1 +cap \$0\.2000 each +gpt-5-mini/);
     expect(confirm).toMatch(/capitano +×1 +cap \$0\.3000 each +gpt-5\.6-luna +after 5s/);
+    // With a stagger, the wait each member really gets: its place in it, plus its own delay_s.
+    const staggered = plain(startPageLines(readTeamPlan(configFile({ ...CONFIG, staggerS: 30 })), hub, { step: "confirm" }, [], true));
+    expect(staggered).toMatch(/analista +×1 +cap \$0\.2000 each +gpt-5-mini +after 30s/);
+    expect(staggered).toMatch(/capitano +×1 +cap \$0\.3000 each +gpt-5\.6-luna +after 65s/);
   });
 
   it("starts nothing, and says why, when the configuration is missing, unreadable, invalid or has no team", () => {

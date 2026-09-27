@@ -26,7 +26,7 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { dirname } from "node:path";
 
-import { LauncherConfigSchema } from "../hub/launcher.ts";
+import { LauncherConfigSchema, teamDelays } from "../hub/launcher.ts";
 import { HUB_PATHS, TOKEN } from "../hub/protocol.ts";
 import { c, usd } from "./render.ts";
 
@@ -76,6 +76,9 @@ export function readTeamPlan(path: string | undefined): TeamPlan {
   if (!parsed.success) return { ok: false, path, reason: "The launcher's configuration does not pass the launcher's own schema." };
   const config = parsed.data;
   if (!config.team || config.team.length === 0) return { ok: false, path, reason: "The launcher's configuration has no team to start." };
+  // The wait each member really gets, stagger included: its first instance's.
+  const delays = teamDelays(config);
+  const firstSeq = config.team.map((_, i) => config.team!.slice(0, i).reduce((n, m) => n + m.instances, 0));
   return {
     ok: true,
     path,
@@ -83,12 +86,12 @@ export function readTeamPlan(path: string | undefined): TeamPlan {
     sessionUsd: config.sessionUsd,
     spawnReserveUsd: config.spawnReserveUsd,
     maxMinutes: config.maxMinutes,
-    members: config.team.map((m) => ({
+    members: config.team.map((m, i) => ({
       role: m.role,
       instances: m.instances,
       capUsd: m.cap_usd ?? (m.role === "capitano" ? config.captainUsd : (config.roles[m.role]?.capUsd ?? 0)),
       model: m.model ?? config.models[0] ?? "",
-      ...(m.delay_s === undefined ? {} : { delayS: m.delay_s }),
+      ...((delays[firstSeq[i] ?? 0] ?? 0) > 0 ? { delayS: delays[firstSeq[i] ?? 0] } : {}),
     })),
   };
 }

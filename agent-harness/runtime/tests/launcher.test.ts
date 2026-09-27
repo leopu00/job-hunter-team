@@ -32,6 +32,7 @@ const CONFIG: LauncherConfig = {
   models: ["gpt-5.6-luna", "gpt-5-mini"],
   taskChars: 2_000,
   spawnReserveUsd: 0,
+  staggerS: 0,
 };
 
 let root: string;
@@ -342,6 +343,50 @@ describe("the base set (T24 run-team)", () => {
     // Under the reserve, the reserve stands; over it, the money really spent is what counts.
     expect(ended(0.1, "under")).toBeCloseTo(10 - 1.6 - 0.3, 6);
     expect(ended(0.5, "over")).toBeCloseTo(10 - 1.6 - 0.5, 6);
+  });
+
+  it("staggers the base set by default, so the members do not hit the provider in the same minute", () => {
+    // 27/09, 21:09 UTC: five members started within two seconds; in that minute the key proxy
+    // passed 942,751 tokens in 52 requests, 12 came back 429, and the CAPITANO died of it.
+    // Read as the hub reads it, through the schema: an operator's file says nothing of a stagger.
+    const { spawnReserveUsd: _reserve, staggerS: _stagger, ...raw } = CONFIG;
+    const l = new Launcher({
+      config: LauncherConfigSchema.parse({ ...raw, sessionUsd: 10, session: "stagger", team: TEAM }),
+      stateDir: join(root, "state"),
+      spoolDir: join(root, "spool"),
+      stopFile: join(root, "STOP"),
+    });
+    expect(l.startTeam("host").ok).toBe(true);
+    // 30 s apart, in the configured order; a member's own delay_s is added to its place.
+    expect(orders().map((o) => o.delay_s)).toEqual([undefined, 30, 60, 90, 125]);
+
+    // The executor refuses an order that waits more than 300 s: a config that would write one is refused here.
+    expect(LauncherConfigSchema.safeParse({ ...raw, team: TEAM, staggerS: 80 }).success).toBe(false);
+    expect(LauncherConfigSchema.safeParse({ ...raw, team: [{ role: "scout", instances: 1, delay_s: 400 }] }).success).toBe(false);
+    expect(LauncherConfigSchema.safeParse({ ...raw, team: TEAM, staggerS: 0 }).success).toBe(true);
+  });
+
+  it("tells the money spent apart from the money booked, so its figure squares with the key proxy's", () => {
+    // Giro di parità, 27/09, 19:35 UTC: the launcher said 0.52 of 2 was left, the key
+    // proxy 0.65. Same spend on both sides; the launcher's figure also held the
+    // CAPITANO's reserve it had not spent, and its answer did not say so.
+    const l = withTeam({ sessionUsd: 2, session: "giro" });
+    const spent: Record<string, number> = { "scout-1": 0.469, "scout-2": 0.2, "analista-1": 0.318, "scorer-1": 0.04, "capitano-1": 0.097 };
+    for (const a of l.startTeam("host").started) if (a.ok) report(a.spawn_id, "done", { exit_code: 0, spent_usd: spent[a.agent] });
+
+    // 1.124 spent as measured; 0.203 of the CAPITANO's 0.3 reserve still booked.
+    const money = listed(l, "host");
+    expect(money.spent_usd).toBeCloseTo(1.124, 6);
+    expect(money.booked_usd).toBeCloseTo(0.203, 6);
+    expect(money.left_usd).toBeCloseTo(2 - 1.124 - 0.203, 6);
+
+    // The team again: scout-1 books its 0.4, and scout-2 no longer fits.
+    const again = l.startTeam("host").started;
+    expect(again[0]).toMatchObject({ ok: true, agent: "scout-1" });
+    const reason = again[1] && !again[1].ok ? again[1].reason : "";
+    expect(reason).toContain("0.273 USD of the session's 2 is left");
+    expect(reason).toContain("1.124 USD spent, as the key proxy measured the runs that ended");
+    expect(reason).toContain("0.603 USD booked");
   });
 
   it("starts the team once per session, and again only when it is down", () => {

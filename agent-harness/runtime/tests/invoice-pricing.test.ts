@@ -93,13 +93,13 @@ describe("A1 — one response, against the published price list", () => {
   });
 });
 
-/** Content parts as the AI SDK returns an OpenAI web search: one tool call and one result per item. */
+/** Content parts as `generateText` returns an OpenAI web search: one tool call and one result per item, the action on `output`. */
 function openAiSearchItems(actions: string[]) {
   return actions.flatMap((action, i) => [
     { type: "tool-call", providerExecuted: true },
     {
       type: "tool-result",
-      result: { action: { type: action === "open_page" ? "openPage" : action === "find_in_page" ? "findInPage" : action } },
+      output: { action: { type: action === "open_page" ? "openPage" : action === "find_in_page" ? "findInPage" : action } },
       id: i,
     },
   ]);
@@ -119,7 +119,7 @@ describe("A4 — web searches, from the items OpenAI returned", () => {
   it("bills nothing when the response searched nothing", () => {
     expect(billedSearches("openai", [{ type: "text" }])).toBe(0);
     // An item whose action is missing is not a search the page says is billed.
-    expect(billedSearches("openai", [{ type: "tool-call", providerExecuted: true }, { type: "tool-result", result: {} }])).toBe(0);
+    expect(billedSearches("openai", [{ type: "tool-call", providerExecuted: true }, { type: "tool-result", output: {} }])).toBe(0);
   });
 
   it("counts Anthropic's server tool calls, one per search it ran", () => {

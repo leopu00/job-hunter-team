@@ -25,6 +25,7 @@ import { createPathRewriter } from "./prompt-paths.ts";
 import { loadPauseRules, PausePolicy, watchInserts, WorkUnit } from "./pause-rules.ts";
 import { hasShell, noShellTool, NO_SHELL_NOTE } from "./shell-policy.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
+import { PROFILE_FLAG_NOTE } from "./skills/profile-flag.ts";
 import {
   createJhtTools,
   FileMailbox,
@@ -184,7 +185,9 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const notes = options.userHistoryDir
     ? `${PARITY_NOTES}\nWhat the team makes goes in ${userDir} (\`cv/\` is the Scrittore's, \`critiche/\` the Critico's).\nThe person's own CVs and letters are in ${options.userHistoryDir}: read them, never write there.`
     : PARITY_NOTES;
-  const roleNotes = `${shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`}${modelNote}`;
+  // The ASSISTENTE's flags: its shell is sandboxed off the person's profile, and the tool is the way in.
+  const flagNote = roleOf(options.agent) === "assistente" ? `\n\n${PROFILE_FLAG_NOTE}` : "";
+  const roleNotes = `${shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`}${modelNote}${flagNote}`;
   const systemPrompt = composeSystemPrompt(prompt, roleNotes, options.homeDir);
   // T43: with a home the executor prepared (and mounted read-only), the runtime
   // checks it instead of rebuilding it — rebuilding is exactly what makes the

@@ -375,6 +375,61 @@ describe("OpenAI web search, as the key proxy admits it", () => {
   });
 });
 
+describe("OpenAI web search, as the SDK hands it back (the per-run cap)", () => {
+  // Giro di parità, 27/09: a SCOUT with a 0.25 USD cap spent 0.469. The key
+  // proxy billed 28 searches; the run counted none, so neither the fee nor the
+  // T19 cap of 8 searches ever applied. The AI SDK hands a provider-run tool's
+  // result back as `output`, and the count read `result`. The fixtures above
+  // build the parts by hand, in the shape the count expected; here the SDK's
+  // real OpenAI provider parses a Responses body, as it does in a live run.
+  async function searchesFor(items: unknown[]) {
+    const body = {
+      id: "resp_1",
+      object: "response",
+      created_at: 1_790_000_000,
+      model: "gpt-5.6-luna",
+      status: "completed",
+      output: [
+        ...items,
+        {
+          type: "message",
+          id: "msg_1",
+          role: "assistant",
+          status: "completed",
+          content: [{ type: "output_text", text: "Two openings in Rome.", annotations: [] }],
+        },
+      ],
+      usage: { input_tokens: 900, input_tokens_details: { cached_tokens: 0 }, output_tokens: 40, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 940 },
+    };
+    const fakeFetch = (async () =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+    const previous = process.env["OPENAI_API_KEY"];
+    process.env["OPENAI_API_KEY"] = "placeholder";
+    try {
+      const provider = new AiSdkProvider({
+        profile: { ...PROFILE, providerId: "openai", modelId: "gpt-5.6-luna", capabilities: { ...PROFILE.capabilities, webSearch: true } },
+        openAI: { baseURL: "http://127.0.0.1:8787/v1" },
+        fetch: fakeFetch,
+      });
+      return (await provider.webSearch({ query: "offerte lavoro Roma" })).searches;
+    } finally {
+      if (previous === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = previous;
+    }
+  }
+  const search = (id: string) => ({ type: "web_search_call", id, status: "completed", action: { type: "search", query: "offerte lavoro Roma" } });
+  const openPage = (id: string) => ({ type: "web_search_call", id, status: "completed", action: { type: "open_page", url: "https://example.com/a" } });
+
+  it("bills the search a response ran, as the key proxy bills it", async () => {
+    expect(await searchesFor([search("ws_1"), search("ws_2")])).toBe(1);
+    expect(await searchesFor([search("ws_1"), openPage("ws_2")])).toBe(1);
+  });
+
+  it("bills nothing for a response that only opened a page", async () => {
+    expect(await searchesFor([openPage("ws_1")])).toBe(0);
+  });
+});
+
 describe("OpenAI without server-side state, as the key proxy admits it", () => {
   it("sends store:false every round and hands the reasoning back encrypted, never by reference", async () => {
     const { RoleSession } = await import("../src/core/role-session.ts");

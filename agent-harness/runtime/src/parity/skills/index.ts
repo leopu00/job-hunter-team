@@ -26,6 +26,7 @@ import { createLogoFetchTool } from "./logo-fetch.ts";
 import { createRecheckLivenessTool } from "./recheck-liveness.ts";
 import { createRenderPdfTool } from "./render-pdf.ts";
 import { createValidateProfileTool } from "./validate-profile.ts";
+import { createProfileFlagTool } from "./profile-flag.ts";
 import { createRoleRegistryTool } from "./role-registry.ts";
 import { createSaveReviewTool } from "./review.ts";
 import { createSafeFetchTool } from "./safe-fetch.ts";
@@ -229,6 +230,10 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   if ((listed.has("profile-schema") || listed.has("profile-yaml")) && options.profileDir) {
     tools.push(createValidateProfileTool({ profileDir: options.profileDir, workdir: options.workdir ?? options.profileDir }));
   }
+  // The ASSISTENTE's two flags (ready.flag, welcomed.flag). Its bash runs in the kernel
+  // sandbox, which does not let it write the person's profile: without this tool the
+  // flag could not be removed at all. Only this role, the one allowed to write there.
+  if (roleOf(options.agent) === "assistente" && options.profileDir) tools.push(createProfileFlagTool({ profileDir: options.profileDir }));
   // T30: the CV's PDF. The renderer is a tool and never a shell command — its
   // arguments are the runtime's (SICUREZZA §10). Only the SCRITTORE lists the skill.
   if (listed.has("cv-structure") && options.userDir) {

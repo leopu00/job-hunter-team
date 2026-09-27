@@ -23,6 +23,22 @@ import { roleOf } from "../db/role-policy.ts";
 
 const ROLE = /^[a-z][a-z0-9]{0,31}$/;
 
+/** The longest `delay_s` the host's executor accepts in an order (run.sh, x_check). */
+const EXECUTOR_MAX_DELAY_S = 300;
+
+/**
+ * Each member's wait, in the order the members start: its place times the
+ * stagger, plus its own `delay_s`. The executor counts it from the moment the
+ * order is written, and the whole set is written at once.
+ */
+export function teamDelays(c: { staggerS?: number | undefined; team?: Array<{ instances?: number | undefined; delay_s?: number | undefined }> | undefined }): number[] {
+  const delays: number[] = [];
+  for (const member of c.team ?? []) {
+    for (let i = 0; i < (member.instances ?? 1); i++) delays.push(delays.length * (c.staggerS ?? 0) + (member.delay_s ?? 0));
+  }
+  return delays;
+}
+
 export const LauncherConfigSchema = z
   .object({
     /** Changing it starts a new session: counts and the piggy bank start over. */
@@ -53,8 +69,8 @@ export const LauncherConfigSchema = z
             cap_usd: z.number().positive().max(5).optional(),
             model: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).optional(),
             task: z.string().optional(),
-            /** Seconds the executor waits before this member, as the product staggers its boot. */
-            delay_s: z.number().int().min(0).max(600).optional(),
+            /** Seconds the executor waits before this member, on top of its place in `staggerS`. */
+            delay_s: z.number().int().min(0).max(EXECUTOR_MAX_DELAY_S).optional(),
           })
           .strict(),
       )
@@ -66,9 +82,19 @@ export const LauncherConfigSchema = z
      * leave the CAPITANO unable to start anyone.
      */
     spawnReserveUsd: z.number().nonnegative().default(0),
+    /**
+     * Seconds between one member of the base set and the next, in the
+     * configured order. 27/09, 21:09 UTC: five members started within two
+     * seconds, the key proxy passed 942,751 tokens that minute, 12 requests
+     * came back 429 and the CAPITANO died of it. 0 starts them together.
+     */
+    staggerS: z.number().int().min(0).max(EXECUTOR_MAX_DELAY_S).default(30),
   })
   .strict()
-  .refine((c) => !Object.hasOwn(c.roles, "capitano"), { message: "capitano is never in the allowlist" });
+  .refine((c) => !Object.hasOwn(c.roles, "capitano"), { message: "capitano is never in the allowlist" })
+  .refine((c) => teamDelays(c).every((d) => d <= EXECUTOR_MAX_DELAY_S), {
+    message: `the base set would wait more than ${EXECUTOR_MAX_DELAY_S} s for a member, and the executor refuses such an order`,
+  });
 export type LauncherConfig = z.infer<typeof LauncherConfigSchema>;
 
 export const SpawnRequest = z
@@ -249,15 +275,17 @@ export class Launcher {
     }
 
     const started: SpawnAnswer[] = [];
+    const delays = teamDelays(c);
     let seq = 0;
     for (const member of c.team) {
       for (let i = 0; i < member.instances; i++) {
+        const delay = delays[seq] ?? 0;
         const answer = this.#start(state, "team", by, {
           role: member.role,
           cap_usd: member.cap_usd ?? (member.role === "capitano" ? c.captainUsd : (c.roles[member.role]?.capUsd ?? 0)),
           model: member.model ?? c.models[0] ?? "",
           task: member.task ?? "Start your cycle.",
-          ...(member.delay_s === undefined ? {} : { delay_s: member.delay_s }),
+          ...(delay > 0 ? { delay_s: delay } : {}),
         }, seq);
         seq += 1;
         started.push(answer);
@@ -334,11 +362,10 @@ export class Launcher {
     const reserve = kind === "team" ? c.spawnReserveUsd : 0;
     const charge = captain ? 0 : request.cap_usd;
     if (used + charge + reserve > c.sessionUsd + 1e-9) {
-      const left = round(c.sessionUsd - used);
       return refuse(
         reserve > 0
-          ? `cap_usd ${request.cap_usd} does not fit with ${reserve} USD kept for the CAPITANO's spawns: ${left} USD of the session's ${c.sessionUsd} is left.`
-          : `cap_usd ${request.cap_usd} does not fit: ${left} USD of the session's ${c.sessionUsd} is left.`,
+          ? `cap_usd ${request.cap_usd} does not fit with ${reserve} USD kept for the CAPITANO's spawns: ${this.#leftLine(state)}`
+          : `cap_usd ${request.cap_usd} does not fit: ${this.#leftLine(state)}`,
       );
     }
 
@@ -390,12 +417,15 @@ export class Launcher {
     return { ok: true };
   }
 
-  list(by: string): { session: string; left_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } | { ok: false; reason: string } {
+  list(by: string): { session: string; left_usd: number; spent_usd: number; booked_usd: number; spawns: Array<Omit<Spawn, "requestedBy">> } | { ok: false; reason: string } {
     const state = this.#readable((reason) => ({ ok: false as const, reason }));
     if (!("spawns" in state)) return state;
+    const { spent, booked } = this.#money(state);
     return {
       session: state.session,
-      left_usd: round(this.#config.sessionUsd - this.#used(state)),
+      left_usd: round(this.#config.sessionUsd - spent - booked),
+      spent_usd: round(spent),
+      booked_usd: round(booked),
       spawns: state.spawns.filter((s) => s.requestedBy === by).map(({ requestedBy: _by, ...rest }) => rest),
     };
   }
@@ -430,17 +460,46 @@ export class Launcher {
 
   /** The CAPITANO's own cap, the children still running at their caps, the ended ones at what they spent. */
   #used(state: State): number {
+    const { spent, booked } = this.#money(state);
+    return spent + booked;
+  }
+
+  /**
+   * What `#used` is made of, in two parts that are not the same kind of money.
+   *
+   * `spent` is what the runs that ended cost, as the executor measured it on
+   * the key proxy's log: the same figure the key proxy counts. `booked` is
+   * money held, not spent: the caps of the runs still going, the cap of an
+   * ended run nobody measured, and what the CAPITANO's reserve has not used.
+   * At 19:35 UTC of the giro di parità the launcher said 0.52 of 2 was left and
+   * the key proxy 0.65: the spend was the same on both sides, and the rest was
+   * the CAPITANO's unspent reserve, which the answer did not name.
+   */
+  #money(state: State): { spent: number; booked: number } {
     // The CAPITANO's cap is reserved from the first moment of the session and
     // counted once: its own order spends that reserve, it does not add to it,
     // so the money left does not jump when the team reaches the CAPITANO.
     // Should it ever end having spent more than the reserve (its run's cap
     // and the key proxy's are what stop it), the measured spend is what
     // counts: a fixed reserve must not hide real money (SICUREZZA, T24).
-    const charge = (s: Spawn) => (s.state === "queued" || s.state === "running" ? s.capUsd : (s.spentUsd ?? s.capUsd));
-    const captain = state.spawns.filter((s) => s.role === "capitano").reduce((sum, s) => sum + charge(s), 0);
+    const going = (s: Spawn) => s.state === "queued" || s.state === "running";
+    const measured = (s: Spawn) => (going(s) ? 0 : (s.spentUsd ?? 0));
+    const held = (s: Spawn) => (going(s) || s.spentUsd === undefined ? s.capUsd : 0);
+    const sum = (list: Spawn[], f: (s: Spawn) => number) => list.reduce((total, s) => total + f(s), 0);
+    const captains = state.spawns.filter((s) => s.role === "capitano");
+    const others = state.spawns.filter((s) => s.role !== "capitano");
+    const captainSpent = sum(captains, measured);
+    const captainHeld = Math.max(this.#config.captainUsd, captainSpent + sum(captains, held)) - captainSpent;
+    return { spent: captainSpent + sum(others, measured), booked: captainHeld + sum(others, held) };
+  }
+
+  /** The line a refusal for money ends with: what is left, and what it is left of. */
+  #leftLine(state: State): string {
+    const { spent, booked } = this.#money(state);
     return (
-      Math.max(this.#config.captainUsd, captain) +
-      state.spawns.filter((s) => s.role !== "capitano").reduce((sum, s) => sum + charge(s), 0)
+      `${round(this.#config.sessionUsd - spent - booked)} USD of the session's ${this.#config.sessionUsd} is left: ` +
+      `${round(spent)} USD spent, as the key proxy measured the runs that ended, and ${round(booked)} USD booked ` +
+      `for the runs still going and the CAPITANO's reserve.`
     );
   }
 
