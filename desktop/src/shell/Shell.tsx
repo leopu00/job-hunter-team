@@ -5,20 +5,11 @@ import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { SETUP_PAGE } from "../lib/pages";
 import { signOut } from "../lib/supabase";
+import { DESKTOP_LINKS } from "./desktop-links";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, ROUTES } from "./routes";
 
-/**
- * The desktop's own pages, after the web's links: they have no web
- * counterpart, so NavLinks (a web file) does not list them. Same look as its
- * NavLink, active on the path.
- */
-export const DESKTOP_LINKS = [
-  { href: "/agents", label: "Agenti" },
-  { href: "/budget", label: "Budget" },
-  { href: "/office", label: "Ufficio" },
-];
-
+/** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
 function DesktopLinks() {
   const { path } = useLocation();
   return (

@@ -49,7 +49,7 @@ export const ROUTES: Route[] = [
   { path: "/team/critico", page: TeamCriticoPage },
   { path: "/messages", page: MessagesPage },
   { path: "/profile", page: ProfilePage },
-  // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in Shell.tsx).
+  // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in desktop-links.ts).
   { path: "/agents", page: AgentsPage },
   { path: "/budget", page: BudgetPage },
   { path: "/office", page: OfficePage, fullBleed: true },
