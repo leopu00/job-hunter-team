@@ -318,3 +318,52 @@ def test_a_box_that_stays_silent_stops_the_round_and_still_gets_its_stop(box: Bo
     report = (rnd.dir / "REPORT.md").read_text()
     assert "NOT VALID" in report and "unreachable" in report
     assert box.fake.now() - box.fake.start < 30 * 60
+
+
+# ── what the night review found (28/09) ──────────────────────────────────
+
+
+@pytest.mark.parametrize("failing_start", ["false", "copy"])
+def test_a_start_that_fails_half_way_still_stops_the_api_team_and_writes_the_report(box: Box, failing_start: str):
+    if failing_start == "false":
+        # the second start command fails after the first one started the team
+        box.config["api"]["start_cmds"] = ["echo start >> {root}/actions.log", "false"]
+    else:
+        # the team starts, then the T0 copy fails (the TUI db is not where the config says)
+        box.config["api"]["start_cmds"] = [
+            "echo start >> {root}/actions.log",
+            f"mv {box.tui / 'jobs.db'} {box.tui / 'away.db'}",
+        ]
+    with pytest.raises(parity_round.RoundError):
+        parity_round.run(box.cfg(), hours=1, budget_usd=2.0, clock=clock_for(box), round_id="round-bad-start")
+    assert box.actions() == ["start", "stop"]
+    report = (box.out / "round-bad-start" / "REPORT.md").read_text()
+    assert "NOT VALID" in report and "interrupted" in report
+
+
+def test_a_plain_path_already_archived_does_not_break_the_known_state_half_way(box: Box):
+    (box.api / "home" / "channels" / "notify.jsonl").unlink()
+    parity_round.run(box.cfg(), hours=1, budget_usd=2.0, clock=clock_for(box), round_id="round-no-notify")
+    control = box.api / "launcher" / "control"
+    assert json.loads((control / "config.json").read_text())["session"] == "round-no-notify"
+    assert (box.api / "archivio-round-no-notify" / "STOP").exists()
+    assert (box.api / "archivio-round-no-notify" / "state" / "roles").is_dir()
+
+
+def test_a_launcher_config_that_cannot_move_aside_is_never_truncated(box: Box):
+    control = box.api / "launcher" / "control"
+    # an earlier attempt with the same round id left its copy: `mv -n` skips the move
+    (control / "config.json.usata-round-again").write_text('{"session": "older"}\n')
+    with pytest.raises(parity_round.RoundError, match="known state failed"):
+        parity_round.run(box.cfg(), hours=1, budget_usd=2.0, clock=clock_for(box), round_id="round-again")
+    assert (control / "config.json").read_text() == '{"session": "old"}\n'
+    assert (control / "config.json.usata-round-again").read_text() == '{"session": "older"}\n'
+    assert box.actions() == []
+
+
+def test_a_leftover_count_that_did_not_run_is_refused_not_read_as_zero(box: Box):
+    cfg = box.cfg()
+    assert parity_round.leftovers(cfg)["home/channels/notify.jsonl"] == 1
+    cfg.api.spec["root"] = str(box.api / "not-there")  # `cd` fails: nothing was counted
+    with pytest.raises(parity_round.RoundError, match="could not be counted"):
+        parity_round.leftovers(cfg)
