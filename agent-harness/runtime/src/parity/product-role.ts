@@ -288,9 +288,15 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
  * hub's, which builds them from the same list with the same rule; the rest
  * run here. The local build of the database tools is only for their specs:
  * its database never opens.
+ *
+ * The local build gets the hub too: `save_review` is built only with a hub or
+ * a database, and without the hub here it came from the database build and
+ * went to `/v1/tool`, where the hub has no such tool — a 403, and the
+ * Critic's verdict written nowhere. With the hub it is a local tool that
+ * posts to `/v1/review`, which the hub writes with its own uid (T34).
  */
 function hubSkillTools(options: Omit<SkillToolsOptions, "jobsDb">, hub: HubClient): ToolHandler[] {
-  const local = createSkillTools(options);
+  const local = createSkillTools({ ...options, hub });
   const names = new Set(local.map((t) => t.spec.name));
   const noDatabase: JobsDbHandle = {
     path: "(jht-hub)",
