@@ -285,15 +285,27 @@ def retire(session: str, reason: str = "", path: Path | None = None) -> bool:
 
 
 def contain(session: str, by: str, reason: str, evidence: str,
-            path: Path | None = None) -> dict:
+            path: Path | None = None, while_mode: str | None = None) -> dict:
     """Applica un containment sticky. La cattura e' responsabilita' del
     chiamante e deve gia' esistere: se il roster non e' persistibile, il
-    wrapper NON deve procedere al kill."""
+    wrapper NON deve procedere al kill.
+
+    `while_mode`: a hold that exists because of a team mode (for example a
+    worker stopped for `saving`) lasts only while the team is in that mode;
+    release_expired() lifts it when the mode ends. Without it the hold is a
+    safety decision and ends only on an explicit release. On leone the
+    SENTINELLA stayed down from 21/08 to 28/09, contained «until mode
+    changes» for a saving mode that had long ended: nothing read the
+    condition, because it was only prose."""
     sess = session.strip().upper()
     state = load(path)
     entry = state["agents"].get(sess)
     if not entry:
         raise ValueError(f"{sess} is not in the expected roster")
+    if while_mode is not None:
+        while_mode = while_mode.strip().lower()
+        if while_mode not in TEAM_MODES:
+            raise ValueError(f"unknown team mode: {while_mode}")
     now = _iso(_now())
     event = {
         "action": "contained",
@@ -302,6 +314,8 @@ def contain(session: str, by: str, reason: str, evidence: str,
         "reason": reason.strip(),
         "evidence": evidence,
     }
+    if while_mode:
+        event["while_mode"] = while_mode
     marker_preexisted = containment_marker(sess, path).exists()
     _write_containment_marker(sess, event, path)
     entry.update({
@@ -310,6 +324,7 @@ def contain(session: str, by: str, reason: str, evidence: str,
         "contained_by": event["by"],
         "contain_reason": event["reason"],
         "contain_evidence": evidence,
+        "contain_while_mode": while_mode,
     })
     entry.setdefault("containment_history", []).append(event)
     entry["containment_history"] = entry["containment_history"][-50:]
@@ -359,6 +374,61 @@ def release(session: str, by: str, reason: str,
     except OSError as exc:
         raise OSError("could not remove the sticky containment marker") from exc
     return entry, original_by
+
+
+# The team modes (enrichment_policy.MODES), repeated here so that the roster
+# does not import the policy to validate a word; a test keeps them equal.
+TEAM_MODES = ("search", "harvest", "care", "calibration", "saving")
+
+
+def _current_team_mode() -> str:
+    """The team's mode as the policy reads it (file absent = search, expired
+    = search, unreadable = unknown)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import enrichment_policy  # noqa: E402  (lazy: only the watchdog needs it)
+
+    return enrichment_policy.current_mode()
+
+
+def release_expired(path: Path | None = None, mode: str | None = None) -> list[dict]:
+    """Lift the holds whose team mode has ended (contain(..., while_mode=)).
+
+    A hold without a mode is a safety decision and is never touched here. An
+    unknown mode (the mode file unreadable) lifts nothing: the safe direction
+    is to keep a worker down, not to wake it on a guess. Each lift is a
+    release by WATCHDOG, recorded in the roster and in agent-containments.jsonl.
+    """
+    current = mode if mode is not None else _current_team_mode()
+    if current not in TEAM_MODES:
+        return []
+    marker_dir = containment_marker("placeholder", path).parent
+    try:
+        markers = sorted(marker_dir.glob("*.hold.json"))
+    except OSError:
+        return []
+    lifted = []
+    for marker in markers:
+        sess = marker.name.removesuffix(".hold.json")
+        data = _load_containment_marker(sess, path)
+        held_for = str(data.get("while_mode") or "").strip().lower()
+        if not held_for or held_for == current:
+            continue
+        reason = f"mode {held_for} ended (the team is in {current})"
+        try:
+            _, original_by = release(sess, "WATCHDOG", reason, path)
+        except (ValueError, OSError):
+            continue
+        event = {"ts": _iso(_now()), "event": "released", "session": sess,
+                 "by": "WATCHDOG", "reason": reason, "original_by": original_by}
+        journal = (path or roster_path()).parent / "agent-containments.jsonl"
+        try:
+            with journal.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+        lifted.append({"session": sess, "while_mode": held_for, "mode": current,
+                       "original_by": original_by})
+    return lifted
 
 
 def is_contained(session: str, path: Path | None = None) -> bool:
@@ -755,6 +825,12 @@ def main(argv=None) -> int:
     pc.add_argument("--by", required=True)
     pc.add_argument("--reason", required=True)
     pc.add_argument("--evidence", required=True)
+    pc.add_argument("--while-mode", choices=TEAM_MODES,
+                    help="the hold lasts only while the team is in this mode")
+
+    pre = sub.add_parser("release-expired",
+                         help="lift the holds whose team mode has ended")
+    pre.add_argument("--tsv", action="store_true")
 
     prelease = sub.add_parser("release", help="explicitly revoke a containment")
     prelease.add_argument("session")
@@ -802,7 +878,8 @@ def main(argv=None) -> int:
         return 0 if ok else 1
     if args.cmd == "contain":
         try:
-            entry = contain(args.session, args.by, args.reason, args.evidence)
+            entry = contain(args.session, args.by, args.reason, args.evidence,
+                            while_mode=args.while_mode)
         except (ValueError, OSError) as exc:
             print(f"team_roster: {exc}", file=sys.stderr)
             return 1
@@ -815,6 +892,15 @@ def main(argv=None) -> int:
             print(f"team_roster: {exc}", file=sys.stderr)
             return 1
         print(json.dumps({"entry": entry, "original_by": original_by}, ensure_ascii=False))
+        return 0
+    if args.cmd == "release-expired":
+        lifted = release_expired()
+        if args.tsv:
+            for item in lifted:
+                print("\t".join((item["session"], item["while_mode"], item["mode"],
+                                  item["original_by"] or "CAPITANO")))
+        else:
+            print(json.dumps(lifted, ensure_ascii=False))
         return 0
     if args.cmd == "is-contained":
         return 0 if is_contained(args.session) else 1

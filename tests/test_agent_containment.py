@@ -298,3 +298,115 @@ def test_the_containment_capture_resolves_an_exact_pane_id():
     assert 'capture-pane -t "$pane_id"' in body, body
     # e una cattura vuota non deve passare per evidenza
     assert '[ ! -s "$evidence" ]' in body, body
+
+
+# ── A hold because of a team mode ends with the mode ─────────────────────────
+# leone, 21/08-28/09: the CAPITANO contained the SENTINELLA for «Saving mode
+# ... until mode changes». The mode ended, the file went back to `search`, and
+# the hold stayed: the condition was prose, and every restart woke the
+# SENTINELLA only for the watchdog to put it down again.
+
+
+def _saving_hold(path: Path, session: str = "SENTINELLA", while_mode: str | None = "saving"):
+    roster.record(session.lower(), None, src="initial", path=path)
+    return roster.contain(session, "CAPITANO", "saving mode", "/evidence/pane.txt",
+                          path=path, while_mode=while_mode)
+
+
+def test_a_mode_hold_is_lifted_when_the_mode_ends_and_only_then(tmp_path):
+    path = tmp_path / "logs" / "team-roster.json"
+    path.parent.mkdir()
+    entry = _saving_hold(path)
+    assert entry["contain_while_mode"] == "saving"
+    assert roster.containment_marker("SENTINELLA", path).exists()
+
+    # Still in saving: nothing moves.
+    assert roster.release_expired(path=path, mode="saving") == []
+    assert roster.is_contained("SENTINELLA", path=path)
+
+    lifted = roster.release_expired(path=path, mode="search")
+    assert lifted == [{"session": "SENTINELLA", "while_mode": "saving", "mode": "search",
+                       "original_by": "CAPITANO"}]
+    assert not roster.is_contained("SENTINELLA", path=path)
+    released = _state(path)["agents"]["SENTINELLA"]
+    assert released["status"] == "active" and released["released_by"] == "WATCHDOG"
+    journal = [json.loads(line) for line in
+               (path.parent / "agent-containments.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert journal[-1]["event"] == "released" and journal[-1]["by"] == "WATCHDOG"
+    # Once: a second pass has nothing left to lift.
+    assert roster.release_expired(path=path, mode="search") == []
+
+
+def test_a_safety_hold_and_an_unknown_mode_are_never_lifted_by_the_mode(tmp_path):
+    path = tmp_path / "logs" / "team-roster.json"
+    path.parent.mkdir()
+    _saving_hold(path, "SCRITTORE-2", while_mode=None)   # a safety decision
+    _saving_hold(path, "SENTINELLA")
+    assert roster.release_expired(path=path, mode="search") == [
+        {"session": "SENTINELLA", "while_mode": "saving", "mode": "search", "original_by": "CAPITANO"}]
+    assert roster.is_contained("SCRITTORE-2", path=path)
+    _saving_hold(path, "SENTINELLA")
+    # The mode file unreadable: keep the worker down, do not wake it on a guess.
+    assert roster.release_expired(path=path, mode="unknown") == []
+    assert roster.is_contained("SENTINELLA", path=path)
+
+
+def test_a_mode_hold_names_a_real_mode(tmp_path):
+    path = tmp_path / "team-roster.json"
+    with pytest.raises(ValueError, match="unknown team mode"):
+        _saving_hold(path, while_mode="holiday")
+    enrichment_policy = _load_python("containment_enrichment_policy",
+                                     ROOT / "shared" / "skills" / "enrichment_policy.py")
+    assert roster.TEAM_MODES == enrichment_policy.MODES
+
+
+@pytest.mark.parametrize("mode_file, lifted", [(None, True), ({"mode": "saving"}, False),
+                                                ({"mode": "saving", "mode_until": "2026-01-01T00:00:00Z"}, True)])
+def test_the_command_reads_the_team_mode_as_the_policy_does(tmp_path, mode_file, lifted):
+    home = tmp_path / "home"
+    (home / "logs").mkdir(parents=True)
+    (home / "profile").mkdir()
+    if mode_file is not None:
+        (home / "profile" / "capitano-maintenance.json").write_text(json.dumps(mode_file), encoding="utf-8")
+    _saving_hold(home / "logs" / "team-roster.json")
+    result = subprocess.run(
+        [sys.executable, str(ROSTER_PATH), "release-expired", "--tsv"], text=True, capture_output=True,
+        env={**os.environ, "JHT_HOME": str(home), "JHT_DB": str(home / "jobs.db")},
+    )
+    assert result.returncode == 0, result.stderr
+    assert (result.stdout.strip() == "SENTINELLA\tsaving\tsearch\tCAPITANO") is lifted
+
+
+def test_watchdog_lifts_an_expired_mode_hold_says_so_and_does_not_recapture_it(tmp_path):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    sender_calls = tmp_path / "sender-calls"
+    tmux_calls = tmp_path / "tmux-calls"
+    fake_roster = tmp_path / "fake-roster.py"
+    fake_roster.write_text(
+        "import sys\n"
+        "if sys.argv[1:] == ['release-expired', '--tsv']:\n"
+        "    print('SENTINELLA\\tsaving\\tsearch\\tCAPITANO')\n",
+        encoding="utf-8", newline="\n",
+    )
+    script = "\n".join((
+        f'JHT_HOME="{_bash_path(tmp_path)}"',
+        f'ROSTER_TOOL="{_bash_path(fake_roster)}"',
+        'TMUX_SENDER="fake_sender"',
+        f'LOG="{_bash_path(logs / "watchdog.log")}"',
+        f'tmux() {{ echo "$*" >> "{_bash_path(tmux_calls)}"; }}',
+        f'fake_sender() {{ echo "$*" >> "{_bash_path(sender_calls)}"; }}',
+        _watchdog_function("log"),
+        _watchdog_function("capture_for_containment"),
+        _watchdog_function("maybe_enforce_containments"),
+        "maybe_enforce_containments",
+    ))
+    script_path = tmp_path / "expired-mode-hold-test.sh"
+    script_path.write_text(script, encoding="utf-8", newline="\n")
+    result = subprocess.run(["bash", _bash_path(script_path)], text=True, capture_output=True,
+                            env={**os.environ, "JHT_HOME": str(tmp_path)})
+    assert result.returncode == 0, result.stderr
+    assert "SENTINELLA released — it was held for mode saving, the team is now in search" in (
+        logs / "watchdog.log").read_text(encoding="utf-8")
+    assert "CAPITANO [CONTAINMENT] SENTINELLA was held down for mode saving" in sender_calls.read_text(encoding="utf-8")
+    assert not tmux_calls.exists()

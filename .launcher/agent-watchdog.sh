@@ -977,7 +977,23 @@ maybe_enforce_containments() {
   # riaccendere la sessione, salviamo di nuovo il pane, la rimettiamo giu' e
   # avvisiamo chi aveva deciso (oltre al Capitano). Nessun override silenzioso.
   [ -f "$ROSTER_TOOL" ] || return 0
-  local plan session actor old_evidence evidence message
+  local plan session actor old_evidence evidence message expired held_for mode
+  # Un hold dovuto a una MODALITA' (contain --while-mode) finisce con la
+  # modalita': si toglie prima di applicare gli altri. Senza, una SENTINELLA
+  # fermata per `saving` resta giu' per sempre (leone, 21/08-28/09): la
+  # condizione «finche' non cambia la modalita'» era solo prosa.
+  expired=$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" release-expired --tsv 2>/dev/null) || expired=""
+  while IFS=$'\t' read -r session held_for mode actor; do
+    [ -z "$session" ] && continue
+    log "containment: $session released — it was held for mode $held_for, the team is now in $mode"
+    message="[CONTAINMENT] $session was held down for mode $held_for; the team is now in $mode, so the hold has ended and normal supervision resumes."
+    "$TMUX_SENDER" "${actor:-CAPITANO}" "$message" >/dev/null 2>&1 || true
+    if [ "${actor:-CAPITANO}" != "CAPITANO" ]; then
+      "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1 || true
+    fi
+  done <<EOF
+$expired
+EOF
   plan=$(JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" contained-live --tsv 2>/dev/null) || return 0
   [ -z "$plan" ] && return 0
   while IFS=$'\t' read -r session actor old_evidence; do
