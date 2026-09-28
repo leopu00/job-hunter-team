@@ -63,8 +63,10 @@ python3 scripts/parity/parity_round.py report <out_dir>/round-<stamp>
    - the diffs;
    - `REPORT.md`.
 
-   The stop covers the window only: if a `start_cmds` command or the first copy fails, the
-   round ends with an error before it, and the API team is stopped by hand.
+   The stop guard opens before the first `start_cmds` command: a start command or the first
+   copy failing, or Ctrl-C, still runs `stop_cmds` and writes `REPORT.md` (NOT VALID). An
+   error before the start (a check, the TUI's T0 copy, the seed, the known state) stops with
+   an error (exit 2 when the round refuses), with no report and nothing started.
 
 Everything lands in `<out_dir>/round-<stamp>/` (0700, files 0600):
 
