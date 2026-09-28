@@ -80,7 +80,7 @@ function diffs(before: ReturnType<typeof snapshot>, after: ReturnType<typeof sna
 }
 
 /** `maintenance_log.record_diffs`: one event per changed field, one when nothing changed. */
-function recordDiffs(
+export function recordDiffs(
   db: Database,
   targetType: string,
   targetId: number,
