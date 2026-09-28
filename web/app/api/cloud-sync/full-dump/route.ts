@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { sanitizedError } from "@/lib/error-response";
+import { fetchPostgrestRowsByKey } from "@/lib/postgrest-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,10 @@ export const dynamic = "force-dynamic";
 //     IS NULL) — è una sostituzione, non un merge per-row.
 //
 // Safety cap: 10000 righe per tabella. Oltre, ritorna 413 con istruzioni
-// per usare push delta inverso (out-of-scope MVP). Il servizio può anche
-// imporre un suo cap più basso: il conteggio esatto sotto impedisce di
-// dichiarare completo un risultato troncato prima di questa soglia.
+// per usare push delta inverso (out-of-scope MVP). Il servizio impone un
+// suo cap più basso per risposta (1000): la lettura va a pagine, e il
+// conteggio esatto sotto impedisce di dichiarare completo un risultato che
+// non lo è (una pagina persa, righe cambiate fra una pagina e l'altra).
 //
 // Auth: Bearer jht_sync_ token (stesso schema di push/pull). Rate limit
 // 5/min/token: il restore è operazione rara, ma cap basso protegge da
@@ -56,12 +58,23 @@ export async function GET(req: NextRequest) {
   const totals: Record<string, number> = {};
 
   for (const table of tables) {
-    const { data, error, count } = await admin
-      .from(table)
-      .select("*", { count: "exact" })
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .limit(ROW_CAP_PER_TABLE + 1);
+    // A pagine per id (keyset), non per posizione: in un colpo solo
+    // arrivavano le prime 1000 righe e il restore di chi ne ha di più finiva
+    // sempre in 413; per offset, un push durante il restore farebbe uscire
+    // una riga due volte e ne perderebbe un'altra con lo stesso totale.
+    const { data, error, count } = await fetchPostgrestRowsByKey(
+      (after) => {
+        // Il totale serve una volta sola, alla prima pagina.
+        const q = admin
+          .from(table)
+          .select("*", after === null ? { count: "exact" } : undefined)
+          .eq("user_id", userId)
+          .is("deleted_at", null);
+        return (after === null ? q : q.gt("id", after)).order("id");
+      },
+      "id",
+      { limit: ROW_CAP_PER_TABLE + 1 },
+    );
     if (error) {
       return sanitizedError(error, {
         status: 500,
@@ -70,23 +83,24 @@ export async function GET(req: NextRequest) {
       });
     }
     const rows = data || [];
-    // Il cap configurato da PostgREST viene applicato dopo la nostra query e
-    // può fermarla molto prima di ROW_CAP_PER_TABLE. Il totale è l'unica
-    // evidenza che tutte le righe richieste siano arrivate: senza, un restore
-    // ricostruirebbe un database parziale credendolo uno snapshot completo.
+    // Il totale è l'unica evidenza che tutte le righe siano arrivate: senza,
+    // un restore ricostruirebbe un database parziale credendolo uno snapshot
+    // completo.
     if (count === null) {
       return NextResponse.json(
         { ok: false, error: `${table}_dump_count_unavailable` },
         { status: 503 },
       );
     }
-    if (count > ROW_CAP_PER_TABLE || rows.length !== count) {
+    // Righe nate durante la lettura possono aggiungersi (id oltre l'ultimo
+    // letto): uno snapshot un po' più nuovo. Meno righe del totale no.
+    if (count > ROW_CAP_PER_TABLE || rows.length < count) {
       return NextResponse.json(
         {
           ok: false,
           error:
             count > ROW_CAP_PER_TABLE
-              ? `${table} oltre cap di ${ROW_CAP_PER_TABLE} righe (full-dump non supporta paginazione in MVP)`
+              ? `${table} oltre cap di ${ROW_CAP_PER_TABLE} righe (il restore da full-dump si ferma lì)`
               : `${table} dump troncato (${rows.length} di ${count} righe ricevute)`,
         },
         { status: 413 },

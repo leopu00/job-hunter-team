@@ -388,8 +388,17 @@ describe("una sola implementazione del ciclo", () => {
     "utf-8",
   );
 
-  it("il file contiene un solo punto che esegue range", () => {
-    expect(source.match(/await query\.range\(/g)).toHaveLength(1);
+  it("il ciclo delle pagine vive in un solo posto, l'helper comune", () => {
+    // Web e desktop leggono a pagine con lo stesso helper: un secondo ciclo
+    // scritto a mano è il modo in cui le due copie hanno cominciato a
+    // divergere. queries.ts lo importa e non ne ha uno suo.
+    const helper = readFileSync(
+      resolve(__dirname, "../../../web/lib/postgrest-pages.ts"),
+      "utf-8",
+    );
+    expect(helper.match(/await query\.range\(/g)).toHaveLength(1);
+    expect(source).toContain('from "@/lib/postgrest-pages"');
+    expect(source.match(/\.range\(/g)).toBeNull();
   });
 
   it("getPositionById ed enrichRecent restano intenzionalmente fuori", () => {

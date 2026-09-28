@@ -15,7 +15,10 @@ import {
 
 // A fake Supabase client that APPLIES the filters it is given (is / not /
 // order / limit / range) to in-memory rows, so a query that forgot a filter
-// returns the wrong rows instead of passing. Synthetic data only.
+// returns the wrong rows instead of passing. Like PostgREST, it never answers
+// more than 1000 rows, even to `.limit(10000)`. Synthetic data only.
+
+const PAGE_CAP = 1000;
 
 type Row = Record<string, any>;
 type Op = { name: string; args: unknown[] };
@@ -48,6 +51,7 @@ function fakeClient(tables: Record<string, Row[]>, failOn?: string) {
         });
         if (limit != null) rows = rows.slice(0, limit);
         if (from != null && to != null) rows = rows.slice(from, to + 1);
+        rows = rows.slice(0, PAGE_CAP);
         return Promise.resolve({ data: rows, error: null });
       };
 
@@ -264,6 +268,28 @@ describe("getSeenPositionIds", () => {
   it("answers an empty set on error", async () => {
     const { client } = fakeClient({}, "position_views");
     await expect(getSeenPositionIds(client)).resolves.toEqual(new Set());
+  });
+
+  it("reads past the 1000-row cap, ordered on the primary key", async () => {
+    const views = Array.from({ length: 1500 }, (_, i) => ({
+      user_id: "u-1",
+      position_id: `p-${String(i).padStart(5, "0")}`,
+    }));
+    const { client, calls } = fakeClient({ position_views: views });
+    const seen = await getSeenPositionIds(client);
+    expect(seen.size).toBe(1500);
+    // Row 1201 lives on the second page.
+    expect(seen.has("p-01200")).toBe(true);
+    expect(calls[0].ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    const orders = calls[0].ops.filter((o) => o.name === "order");
+    expect(orders.map((o) => o.args)).toEqual([
+      ["user_id", { ascending: true }],
+      ["position_id", { ascending: true }],
+    ]);
+    expect(calls[0].ops.map((o) => o.name)).not.toContain("limit");
   });
 });
 

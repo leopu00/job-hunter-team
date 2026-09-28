@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { readLocalOr } from "@/lib/local-workspace";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 import { getScorerActivityLocal } from "@/lib/local-queries";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export async function GET() {
       supabase
         .from("positions")
         .select("id, title, company, location, remote_type, found_at, notes")
+        .is("deleted_at", null)
         .eq("status", "checked")
         .order("found_at", { ascending: false })
         .limit(10),
@@ -45,6 +47,7 @@ export async function GET() {
       supabase
         .from("positions")
         .select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("status", "checked"),
       // Ultime 10 scored (score >= 40)
       supabase
@@ -52,6 +55,7 @@ export async function GET() {
         .select(
           "position_id, total_score, scored_at, scored_by, positions(title, company, location, remote_type)",
         )
+        .is("deleted_at", null)
         .gte("total_score", 40)
         .order("scored_at", { ascending: false })
         .limit(10),
@@ -61,16 +65,27 @@ export async function GET() {
         .select(
           "position_id, total_score, scored_at, scored_by, positions(title, company, location, remote_type)",
         )
+        .is("deleted_at", null)
         .lt("total_score", 40)
         .order("scored_at", { ascending: false })
         .limit(10),
       // Totale scored
-      supabase.from("scores").select("id", { count: "exact", head: true }),
-      // Scored oggi
-      supabase.from("scores").select("total_score").gte("scored_at", todayISO),
+      supabase
+        .from("scores")
+        .select("id", { count: "exact", head: true })
+        .is("deleted_at", null),
+      // Scored oggi: tutte, anche oltre il tetto di 1000 righe di PostgREST
+      fetchPostgrestRows<any>(
+        supabase
+          .from("scores")
+          .select("total_score")
+          .is("deleted_at", null)
+          .gte("scored_at", todayISO)
+          .order("id", { ascending: true }),
+      ),
     ]);
 
-    const todayScores = ((todayScoredRes.data as any[]) ?? []).map(
+    const todayScores = (todayScoredRes.error ? [] : todayScoredRes.data).map(
       (s: any) => s.total_score as number,
     );
     const scoredToday = todayScores.length;

@@ -16,6 +16,7 @@ import { activeDemoPersona } from "@/lib/demo/mode";
 import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
 import { salaryPreference } from "@/lib/salary-source";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 import {
   getLatestFeedbackByLegacyId,
   getSwipeDecksCloud,
@@ -67,46 +68,6 @@ async function ws(): Promise<string | null> {
   const p = await getWorkspacePath();
   if (!p || !workspaceHasDb(p)) return null;
   return p;
-}
-
-// PostgREST applica un massimo server-side (1000 nel progetto) anche quando
-// il chiamante non specifica alcun limite. Una query secca sembra riuscire ma
-// restituisce solo il primo blocco: statistiche, faccette, lista e mappa si
-// ritrovano così con universi diversi. Il builder arriva qui DOPO filtri e
-// order; `.range()` cambia soltanto la finestra, quindi ogni pagina mantiene
-// esattamente la semantica della query del chiamante.
-const POSTGREST_PAGE_SIZE = 1000;
-
-type PostgrestRangeQuery<T> = {
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{ data: T[] | null; error: unknown }>;
-};
-
-async function fetchPostgrestRows<T>(
-  query: PostgrestRangeQuery<T>,
-  opts: { offset?: number; limit?: number } = {},
-): Promise<{ data: T[]; error: unknown | null }> {
-  const rows: T[] = [];
-  let offset = opts.offset ?? 0;
-
-  while (opts.limit == null || rows.length < opts.limit) {
-    const remaining = opts.limit == null ? Infinity : opts.limit - rows.length;
-    const pageSize = Math.min(POSTGREST_PAGE_SIZE, remaining);
-    const { data, error } = await query.range(offset, offset + pageSize - 1);
-    if (error || !data) {
-      return {
-        data: rows,
-        error: error ?? new Error("PostgREST response did not contain data"),
-      };
-    }
-    rows.push(...data);
-    if (data.length < pageSize) break;
-    offset += data.length;
-  }
-
-  return { data: rows, error: null };
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
@@ -898,7 +859,10 @@ export type DashboardPosition = {
 // ── Posizioni viste (position_views, mig 055) ─────────────────────
 // Set degli id posizione già aperti dall'utente corrente: la RLS scopa
 // la select alla sessione, quindi niente .in() (con 1000 uuid la query
-// string esploderebbe). In local mode lo stato vive in localStorage lato
+// string esploderebbe). PostgREST risponde con al massimo 1000 righe
+// anche a `.limit(10000)`: si legge a pagine, in ordine sulla chiave
+// primaria (user_id, position_id), altrimenti le viste oltre la riga
+// 1000 tornano «nuova». In local mode lo stato vive in localStorage lato
 // client (vedi lib/seen-positions) → set vuoto, decide il client.
 export async function getSeenPositionIds(): Promise<Set<string>> {
   const dp = await activeDemoPersona();
@@ -914,12 +878,16 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
   if (await ws()) return new Set();
   if (!isSupabaseConfigured) return new Set();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("position_views")
     .select("position_id")
-    .limit(10000);
+    .order("user_id", { ascending: true })
+    .order("position_id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<{ position_id: unknown }>(
+    query,
+  );
   if (error || !data) return new Set();
-  return new Set((data as any[]).map((r) => String(r.position_id)));
+  return new Set(data.map((r) => String(r.position_id)));
 }
 
 // ── Swipe decks ────────────────────────────────────────────────────
@@ -1541,11 +1509,15 @@ export async function getScorerStats() {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // Tutti gli score vivi, a pagine: con una query secca le statistiche
+  // uscivano sulle prime 1000 righe restituite, in ordine qualunque.
+  const query = supabase
     .from("scores")
     .select("scored_by, total_score")
-    .is("deleted_at", null);
-  if (error || !data) return [];
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
+  if (error) return [];
   const grouped: Record<string, number[]> = {};
   for (const row of data) {
     const key = row.scored_by ?? "sconosciuto";
@@ -1765,9 +1737,11 @@ async function enrichRecent(
 }
 
 // Local: SQLite (getTeamActivityLocal). Cloud: Supabase, una query per
-// timestamp filtrata sulla finestra (.gte) per restare sotto il cap di 1000
-// righe/richiesta e ridurre il traffico. Stesso buildTeamActivity → numeri
-// identici nelle due modalità. Vedi lib/team-activity.ts per le sorgenti.
+// timestamp filtrata sulla finestra (.gte/.lt) per ridurre il traffico e letta
+// a pagine: la finestra arriva a 366 giorni e da sola non resta sotto il tetto
+// di 1000 righe per risposta. Solo righe vive (deleted_at null). Stesso
+// buildTeamActivity → numeri identici nelle due modalità. Vedi
+// lib/team-activity.ts per le sorgenti.
 export async function getTeamActivity(opts?: {
   from?: string;
   to?: string;
@@ -1799,18 +1773,18 @@ export async function getTeamActivity(opts?: {
     actorCol: string | null,
     idCol: string,
     role: TeamActivityRole,
-    softDelete: boolean,
   ): Promise<TeamActivityEvent[]> => {
     const select = [col, actorCol, idCol].filter(Boolean).join(", ");
-    let q = supabase
+    const q = supabase
       .from(table)
       .select(select)
       .gte(col, fromIso)
-      .lt(col, untilIso);
-    if (softDelete) q = q.is("deleted_at", null);
-    const { data, error } = await q;
-    if (error || !data) return [];
-    return (data as any[])
+      .lt(col, untilIso)
+      .is("deleted_at", null)
+      .order("id", { ascending: true });
+    const { data, error } = await fetchPostgrestRows<any>(q);
+    if (error) return [];
+    return data
       .filter((r) => !!r[col])
       .map((r) => ({
         role,
@@ -1834,7 +1808,6 @@ export async function getTeamActivity(opts?: {
               "written_by",
               "position_id",
               "scrittore",
-              true,
             ),
             fetchEvents(
               "applications",
@@ -1842,29 +1815,20 @@ export async function getTeamActivity(opts?: {
               "reviewed_by",
               "position_id",
               "critico",
-              true,
             ),
           ])
         ).flat(),
       ]
     : (
         await Promise.all([
-          fetchEvents("positions", "found_at", "found_by", "id", "scout", true),
-          fetchEvents(
-            "positions",
-            "last_checked",
-            null,
-            "id",
-            "analista",
-            true,
-          ),
+          fetchEvents("positions", "found_at", "found_by", "id", "scout"),
+          fetchEvents("positions", "last_checked", null, "id", "analista"),
           fetchEvents(
             "scores",
             "scored_at",
             "scored_by",
             "position_id",
             "scorer",
-            false,
           ),
           fetchEvents(
             "applications",
@@ -1872,7 +1836,6 @@ export async function getTeamActivity(opts?: {
             "written_by",
             "position_id",
             "scrittore",
-            true,
           ),
           fetchEvents(
             "applications",
@@ -1880,7 +1843,6 @@ export async function getTeamActivity(opts?: {
             "reviewed_by",
             "position_id",
             "critico",
-            true,
           ),
         ])
       ).flat();
@@ -1891,9 +1853,9 @@ export async function getTeamActivity(opts?: {
 }
 
 // ── Activity log: TUTTE le azioni (per la pagina dedicata) ──────────
-// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra),
-// ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
-// per query: ok per gli account attuali (<1000 posizioni/score).
+// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra), letta
+// a pagine oltre il tetto di 1000 righe per risposta, solo righe vive;
+// poi ordinata e arricchita con titolo/azienda/id.
 export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoTeamActivityLog(dp);
@@ -1914,14 +1876,17 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
     actorCol: string | null,
     idCol: string,
     role: TeamActivityRole,
-    softDelete: boolean,
   ): Promise<RecentActivityEvent[]> => {
     const select = [col, actorCol, idCol].filter(Boolean).join(", ");
-    let q = supabase.from(table).select(select).not(col, "is", null);
-    if (softDelete) q = q.is("deleted_at", null);
-    const { data, error } = await q;
-    if (error || !data) return [];
-    return (data as any[]).map((r) => ({
+    const q = supabase
+      .from(table)
+      .select(select)
+      .not(col, "is", null)
+      .is("deleted_at", null)
+      .order("id", { ascending: true });
+    const { data, error } = await fetchPostgrestRows<any>(q);
+    if (error) return [];
+    return data.map((r) => ({
       role,
       actor: normActor(role, actorCol ? r[actorCol] : null),
       ts: r[col] as string,
@@ -1942,7 +1907,6 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
               "written_by",
               "position_id",
               "scrittore",
-              true,
             ),
             fetchAll(
               "applications",
@@ -1950,30 +1914,21 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
               "reviewed_by",
               "position_id",
               "critico",
-              true,
             ),
           ])
         ).flat(),
       ]
     : (
         await Promise.all([
-          fetchAll("positions", "found_at", "found_by", "id", "scout", true),
-          fetchAll("positions", "last_checked", null, "id", "analista", true),
-          fetchAll(
-            "scores",
-            "scored_at",
-            "scored_by",
-            "position_id",
-            "scorer",
-            false,
-          ),
+          fetchAll("positions", "found_at", "found_by", "id", "scout"),
+          fetchAll("positions", "last_checked", null, "id", "analista"),
+          fetchAll("scores", "scored_at", "scored_by", "position_id", "scorer"),
           fetchAll(
             "applications",
             "written_at",
             "written_by",
             "position_id",
             "scrittore",
-            true,
           ),
           fetchAll(
             "applications",
@@ -1981,7 +1936,6 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
             "reviewed_by",
             "position_id",
             "critico",
-            true,
           ),
         ])
       ).flat();

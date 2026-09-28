@@ -16,7 +16,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { USER_DATA_TABLES } from "@/lib/account-data-tables";
-import { EXPORT_COLUMNS } from "@/lib/account-export-columns";
+import { EXPORT_COLUMNS, exportOrderKey } from "@/lib/account-export-columns";
+import {
+  fetchPostgrestRows,
+  fetchPostgrestRowsByKey,
+} from "@/lib/postgrest-pages";
 
 export async function GET() {
   if (!hasSupabaseConfig()) {
@@ -44,10 +48,27 @@ export async function GET() {
       failed.push(table);
       continue;
     }
-    const { data: rows, error } = await admin
-      .from(table)
-      .select(columns.join(","))
-      .eq("user_id", user.id);
+    // A pagine: PostgREST ne restituisce 1000 per risposta, e una tabella
+    // letta in un colpo solo si fermava lì con un 200 e un file che
+    // sembrava completo. Dove la chiave primaria è `id` ed è esportata, per
+    // chiave (keyset): un push durante l'export non sposta le pagine. Le
+    // altre (chiavi composte o non esportate) per offset, in ordine di
+    // chiave primaria.
+    const key = exportOrderKey(table);
+    const base = () =>
+      admin.from(table).select(columns.join(",")).eq("user_id", user.id);
+    const { data: rows, error } =
+      key.length === 1 && key[0] === "id" && columns.includes("id")
+        ? await fetchPostgrestRowsByKey<Record<string, unknown>>(
+            (after) =>
+              (after === null ? base() : base().gt("id", after)).order(
+                "id",
+              ) as never,
+            "id",
+          )
+        : await fetchPostgrestRows(
+            key.reduce((q, column) => q.order(column), base()),
+          );
     if (error) {
       failed.push(table);
       continue;
