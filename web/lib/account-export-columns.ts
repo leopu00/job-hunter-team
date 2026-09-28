@@ -471,3 +471,27 @@ export const FORBIDDEN_EXPORT_FIELDS = [
 // questo elenco, ed è voluto. È dato dell'utente cifrato con una chiave
 // che non possediamo: senza l'envelope completo l'export non sarebbe
 // portabile. Escluderlo sarebbe prudenza apparente e danno reale.
+
+/** La chiave primaria delle tabelle esportate che non ce l'hanno in `id`.
+ *  L'export legge a pagine (PostgREST ne dà 1000 per risposta) e le pagine
+ *  sono stabili solo con un ordine per una chiave unica: senza, una riga
+ *  può uscire due volte e un'altra mai. Il censimento confronta questa
+ *  chiave con le migration. La chiave serve all'ordine, non all'export:
+ *  `device_code` ordina e resta fuori dal file. */
+const PRIMARY_KEYS_NOT_ID: Record<string, readonly string[]> = {
+  candidate_profile_sync_state: ["user_id"],
+  candidate_contacts: ["user_id"],
+  notification_prefs: ["user_id"],
+  user_settings: ["user_id"],
+  position_user_notes: ["user_id", "position_id", "origin"],
+  position_views: ["user_id", "position_id"],
+  team_state: ["user_id"],
+  team_directive_request_ledger: ["user_id", "request_id"],
+  user_onboarding_state: ["user_id"],
+  cloud_sync_pairing_sessions: ["device_code"],
+  cloud_sync_pairing_attempts: ["user_id"],
+};
+
+export function exportOrderKey(table: string): readonly string[] {
+  return PRIMARY_KEYS_NOT_ID[table] ?? ["id"];
+}

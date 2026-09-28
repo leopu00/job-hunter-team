@@ -16,6 +16,7 @@ import { activeDemoPersona } from "@/lib/demo/mode";
 import * as demo from "@/lib/demo/queries";
 import { resolveCityPins } from "@/lib/city-coords";
 import { salaryPreference } from "@/lib/salary-source";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 import {
   getLatestFeedbackByLegacyId,
   getSwipeDecksCloud,
@@ -67,46 +68,6 @@ async function ws(): Promise<string | null> {
   const p = await getWorkspacePath();
   if (!p || !workspaceHasDb(p)) return null;
   return p;
-}
-
-// PostgREST applica un massimo server-side (1000 nel progetto) anche quando
-// il chiamante non specifica alcun limite. Una query secca sembra riuscire ma
-// restituisce solo il primo blocco: statistiche, faccette, lista e mappa si
-// ritrovano così con universi diversi. Il builder arriva qui DOPO filtri e
-// order; `.range()` cambia soltanto la finestra, quindi ogni pagina mantiene
-// esattamente la semantica della query del chiamante.
-const POSTGREST_PAGE_SIZE = 1000;
-
-type PostgrestRangeQuery<T> = {
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{ data: T[] | null; error: unknown }>;
-};
-
-async function fetchPostgrestRows<T>(
-  query: PostgrestRangeQuery<T>,
-  opts: { offset?: number; limit?: number } = {},
-): Promise<{ data: T[]; error: unknown | null }> {
-  const rows: T[] = [];
-  let offset = opts.offset ?? 0;
-
-  while (opts.limit == null || rows.length < opts.limit) {
-    const remaining = opts.limit == null ? Infinity : opts.limit - rows.length;
-    const pageSize = Math.min(POSTGREST_PAGE_SIZE, remaining);
-    const { data, error } = await query.range(offset, offset + pageSize - 1);
-    if (error || !data) {
-      return {
-        data: rows,
-        error: error ?? new Error("PostgREST response did not contain data"),
-      };
-    }
-    rows.push(...data);
-    if (data.length < pageSize) break;
-    offset += data.length;
-  }
-
-  return { data: rows, error: null };
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────

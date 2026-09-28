@@ -20,6 +20,7 @@ import {
   type RoleFamilyCount,
 } from "../../../web/lib/position-classifier";
 import { salaryPreference } from "../../../web/lib/salary-source";
+import { fetchPostgrestRows } from "../../../web/lib/postgrest-pages";
 import type { ApplicationTimelineEvent } from "../../../web/lib/application-timeline";
 import type {
   DashboardStats,
@@ -87,41 +88,6 @@ export type ScoreDistribution = {
 };
 
 export type SourceCount = { source: string; count: number };
-
-// PostgREST caps a response at 1000 rows even when the caller sets no limit:
-// the answer looks complete and is only the first block. The builder arrives
-// here after filters and order; `.range()` only moves the window.
-const POSTGREST_PAGE_SIZE = 1000;
-
-type PostgrestRangeQuery<T> = {
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{ data: T[] | null; error: unknown }>;
-};
-
-async function fetchPostgrestRows<T>(
-  query: PostgrestRangeQuery<T>,
-): Promise<{ data: T[]; error: unknown | null }> {
-  const rows: T[] = [];
-  let offset = 0;
-  for (;;) {
-    const { data, error } = await query.range(
-      offset,
-      offset + POSTGREST_PAGE_SIZE - 1,
-    );
-    if (error || !data) {
-      return {
-        data: rows,
-        error: error ?? new Error("PostgREST response did not contain data"),
-      };
-    }
-    rows.push(...data);
-    if (data.length < POSTGREST_PAGE_SIZE) break;
-    offset += data.length;
-  }
-  return { data: rows, error: null };
-}
 
 const EMPTY_STATS: DashboardStats = {
   total: 0,
