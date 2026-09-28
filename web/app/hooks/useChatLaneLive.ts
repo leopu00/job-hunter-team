@@ -18,15 +18,24 @@
 // riga. `setAuth(jwt)` PRIMA della subscribe è OBBLIGATORIO: senza, il
 // canale parte con role anon e la RLS blocca in silenzio ogni evento
 // (gotcha E2E 2026-05-23).
+//
+// Il canale ascolta SOLO la riga dell'utente loggato: filtro esplicito
+// `user_id=eq.<uid>` sopra la RLS, e l'handler scarta comunque un payload
+// che porta un altro user_id. Senza sessione non si sottoscrive nulla.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatLane } from "@/lib/chat-delivery";
 
 type LaneRow = {
+  user_id?: string | null;
   chat_requested_at?: string | null;
   chat_delivered_at?: string | null;
 };
+
+// Ogni montaggio ha il suo topic: due superfici della chat aperte insieme,
+// o uno smontaggio seguito da un rimontaggio, non riusano lo stesso canale.
+let laneMountSeq = 0;
 
 export interface ChatLaneLive {
   lane: ChatLane | null;
@@ -95,22 +104,39 @@ export function useChatLaneLive(): ChatLaneLive {
     void (async () => {
       try {
         const { data } = (await supabase.auth.getSession()) as {
-          data: { session: { access_token: string } | null };
+          data: {
+            session: { access_token: string; user: { id: string } } | null;
+          };
         };
+        if (cancelled || !data.session) return;
+        const userId = data.session.user.id;
+        if (supabase.realtime?.setAuth)
+          await supabase.realtime.setAuth(data.session.access_token);
+        // Smontato durante setAuth: nessun canale da creare (la cleanup è
+        // già passata e non lo rimuoverebbe più).
         if (cancelled) return;
-        const jwt = data.session?.access_token;
-        if (jwt && supabase.realtime?.setAuth)
-          await supabase.realtime.setAuth(jwt);
         // subscribe() (e il costruttore WebSocket) possono LANCIARE
         // SINCRONO — Safari su http://localhost: "The operation is
         // insecure". Senza Realtime la chat degrada al catch-up, non si
         // rompe.
         channel = supabase
-          .channel("chat-lane")
+          .channel(`chat-lane:${userId}:${++laneMountSeq}`)
           .on(
             "postgres_changes" as never,
-            { event: "UPDATE", schema: "public", table: "team_state" },
-            (payload: { new: LaneRow }) => apply(payload.new),
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "team_state",
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload: { new: LaneRow; old?: LaneRow }) => {
+              // Difesa in profondità: una riga di un altro utente non
+              // muove mai la corsia, qualunque cosa abbia fatto passare.
+              const oldOwner = payload.old?.user_id;
+              if (payload.new?.user_id !== userId) return;
+              if (oldOwner != null && oldOwner !== userId) return;
+              apply(payload.new);
+            },
           )
           .subscribe((status: string) => {
             // Alla (ri)connessione recupera lo stato corrente: gli eventi

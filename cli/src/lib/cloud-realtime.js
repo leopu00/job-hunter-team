@@ -71,18 +71,22 @@ async function persistRefreshToken(newToken) {
  * @returns {Promise<{client, subscribe, trackPresence, close, isConnected}>}
  *
  * - subscribe(name, { table, event='*', filter }, handler): iscrive un listener
- *   postgres_changes; `handler(payload)` è protetto da try/catch. La RLS consegna
- *   solo le righe dell'utente; `filter` (es. `user_id=eq.<id>`) è opzionale.
+ *   postgres_changes; `handler(payload)` è protetto da try/catch. Ogni canale
+ *   porta il filtro `user_id=eq.<utente della sessione>` (quello passato in
+ *   `filter` lo sostituisce), e un payload che nomina un altro user_id non
+ *   arriva all'handler: la RLS non resta l'unica difesa di un evento che fa
+ *   agire il box (lo STOP d'emergenza si legge dal payload di team_state).
  * - trackPresence(key?): segnala "VPS online" via presence del websocket.
  * - close(): rimuove i canali e chiude il socket.
  */
-export async function createRealtimeSync({ config, log = () => {} } = {}) {
+export async function createRealtimeSync({ config, log = () => {}, createClient: create = null } = {}) {
   const creds = getRealtimeCreds(config);
   if (!creds) {
     throw new Error('cloud-realtime: missing credentials (supabase_url / supabase_refresh_token / anon key)');
   }
 
-  const { createClient } = await import('@supabase/supabase-js');
+  // `create`: a client factory for the tests; the daemon passes none.
+  const createClient = create ?? (await import('@supabase/supabase-js')).createClient;
   const client = createClient(creds.supabaseUrl, creds.anonKey, {
     auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
     realtime: { params: { eventsPerSecond: 5 } },
@@ -95,6 +99,10 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
     throw new Error(`cloud-realtime auth: ${error?.message || 'no session from refresh_token'}`);
   }
   await persistRefreshToken(data.session.refresh_token);
+  // L'utente è quello della sessione, non quello scritto in cloud.json: è lui
+  // che la RLS vede, ed è lui che i filtri dei canali devono nominare.
+  const userId = data.session.user?.id || creds.userId;
+  if (!userId) throw new Error('cloud-realtime auth: no user in the session');
 
   // CRUCIALE per postgres_changes con RLS: il socket Realtime DEVE usare lo
   // user-JWT (non l'anon key) PRIMA di qualsiasi subscribe, altrimenti la RLS
@@ -116,11 +124,15 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
   const channels = [];
 
   function subscribe(name, { table, event = '*', filter } = {}, handler, onStatus = () => {}) {
-    const opts = { event, schema: 'public', table };
-    if (filter) opts.filter = filter;
+    const opts = { event, schema: 'public', table, filter: filter || `user_id=eq.${userId}` };
     const ch = client
       .channel(`jht-${name}`)
       .on('postgres_changes', opts, (payload) => {
+        const owners = [payload?.new?.user_id, payload?.old?.user_id].filter((v) => v != null);
+        if (owners.some((owner) => owner !== userId)) {
+          log('warn', `channel ${name}: dropped an event of another user`);
+          return;
+        }
         try { handler(payload); } catch (e) { log('warn', `handler ${name}: ${e.message}`); }
       })
       .subscribe((status, err) => {
@@ -151,5 +163,5 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
     try { return client.realtime.isConnected(); } catch { return false; }
   }
 
-  return { client, subscribe, trackPresence, close, isConnected };
+  return { client, subscribe, trackPresence, close, isConnected, userId };
 }

@@ -304,6 +304,10 @@ const REQUEST_POLL_MS = 1_000;
 const REQUEST_START_TIMEOUT_MS = 15_000;
 const REQUEST_READ_TIMEOUT_MS = 10_000;
 
+// Ogni montaggio ha il suo topic Realtime: uno smontaggio seguito da un
+// rimontaggio (o due pulsanti nella stessa pagina) non riusa lo stesso canale.
+let syncStatusMountSeq = 0;
+
 export function CloudPushQuarantineWarning({
   locale,
   status,
@@ -640,13 +644,17 @@ export default function CloudRefreshButton() {
 
   // [REALTIME] Sottoscrizione ai cambi di team_state — niente polling. Supabase
   // PUSHA l'update sul websocket quando la VPS (o la route di push) scrive
-  // sync_completed_at; la RLS fa sì che il browser riceva SOLO la propria riga.
+  // sync_completed_at. Il browser riceve SOLO la propria riga: filtro esplicito
+  // `user_id=eq.<uid>` sopra la RLS, e l'handler scarta comunque un payload di
+  // un altro user_id (un payload fa partire router.refresh e chiude la
+  // richiesta in corso). Senza sessione nessun canale.
   // All'apertura (e a ogni riconnessione) una lettura di catch-up.
   useEffect(() => {
     if (!remote || !loggedIn) return;
     const supabase = createClient();
 
     type StateRow = {
+      user_id?: string | null;
       sync_requested_at?: string | null;
       sync_completed_at?: string | null;
       last_action?: string | null;
@@ -717,20 +725,36 @@ export default function CloudRefreshButton() {
         // parte con role anon → la RLS blocca in silenzio ogni postgres_changes
         // e il completamento non arriva MAI (root cause del "Sync now morto").
         const { data } = (await supabase.auth.getSession()) as {
-          data: { session: { access_token: string } | null };
+          data: {
+            session: { access_token: string; user: { id: string } } | null;
+          };
         };
-        if (cancelled) return;
-        const jwt = data.session?.access_token;
-        if (jwt && supabase.realtime?.setAuth) {
-          await supabase.realtime.setAuth(jwt);
+        if (cancelled || !data.session) return;
+        const userId = data.session.user.id;
+        if (supabase.realtime?.setAuth) {
+          await supabase.realtime.setAuth(data.session.access_token);
         }
+        // Smontato durante setAuth: la cleanup è già passata e non
+        // rimuoverebbe più un canale creato adesso.
+        if (cancelled) return;
         channel = supabase
-          .channel("cloud-sync-status")
+          .channel(`cloud-sync-status:${userId}:${++syncStatusMountSeq}`)
           .on(
             "postgres_changes",
-            { event: "UPDATE", schema: "public", table: "team_state" },
-            (payload: { new: StateRow }) => {
-              if (!cancelled) apply(payload.new);
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "team_state",
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload: { new: StateRow; old?: StateRow }) => {
+              if (cancelled) return;
+              // Difesa in profondità: la riga di un altro utente non
+              // chiude mai una richiesta né ricarica i dati.
+              const oldOwner = payload.old?.user_id;
+              if (payload.new?.user_id !== userId) return;
+              if (oldOwner != null && oldOwner !== userId) return;
+              apply(payload.new);
             },
           )
           .subscribe((status: string) => {
