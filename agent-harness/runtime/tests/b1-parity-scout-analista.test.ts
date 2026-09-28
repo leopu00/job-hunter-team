@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { openJobsDb } from "../src/db/jobs-db.ts";
 import { parityDiff, pipelineSeed, play, PYTHON_SKILLS, strictDiff, twins, type Step } from "./helpers/b1-twins.ts";
 
 let root: string;
@@ -81,7 +82,7 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · SCOUT: the same inserts and updat
   });
 });
 
-describe.skipIf(PYTHON_SKILLS === null)("B1 · the same refusals", () => {
+describe.skipIf(PYTHON_SKILLS === null)("B1 · the same refusals, and the company the ANALISTA meets again", () => {
   it("skips a duplicate advert on both sides, and writes nothing", async () => {
     const t = twins(root, pipelineSeed);
     const [dup] = await play(t, [["scout-1", "db_insert.py", "db_insert", ["position", "--title", "SWE", "--company", "Acme", "--url", "https://acme.example/jobs/1"]]]);
@@ -89,12 +90,29 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · the same refusals", () => {
     expect(strictDiff(t)).toEqual([]);
   });
 
-  it("B1-T1: fails the same way on both sides to insert a company that positions already point at", async () => {
-    // A product defect, not a parity one (B1-parita-ruoli.md, B1-T1): `INSERT OR REPLACE INTO
-    // companies` deletes the row positions.company_id points at, and the foreign key refuses it.
-    const t = twins(root, pipelineSeed);
-    const [company] = await play(t, [["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Acme", "--verdict", "GO"]]]);
-    expect(company).toMatchObject({ tui: false, api: false, apiSaid: "Error: FOREIGN KEY constraint failed" });
+  it("B1-T1: accepts the second position's company on both sides, keeping its id, its links and what it was not told", async () => {
+    // It was `INSERT OR REPLACE INTO companies` on both sides: a delete and an insert, which the
+    // foreign key refused as soon as a position pointed at the company — the ANALISTA's second
+    // position of a company it already knew. Now an upsert on the name: the row stays, with its id.
+    const t = twins(root, (db) => {
+      pipelineSeed(db);
+      db.prepare("UPDATE companies SET website = 'https://acme.example', logo = 'acme.png', logo_source = 'site', logo_fetched = 1 WHERE id = 1").run();
+    });
+    const [company] = await play(t, [["analista-1", "db_insert.py", "db_insert", [
+      "company", "--name", "Acme", "--sector", "software", "--verdict", "GO", "--analyzed-by", "analista-1",
+    ]]]);
+    expect(company).toMatchObject({ tui: true, api: true, apiSaid: "Company inserted/updated: Acme (ID: 1)" });
+    for (const path of [t.tui, t.api]) {
+      const db = openJobsDb(path);
+      try {
+        expect(db.prepare("SELECT id, name, website, sector, verdict, logo, logo_source, logo_fetched FROM companies").all()).toEqual([
+          { id: 1, name: "Acme", website: "https://acme.example", sector: "software", verdict: "GO", logo: "acme.png", logo_source: "site", logo_fetched: 1 },
+        ]);
+        expect(db.prepare("SELECT id FROM positions WHERE company_id = 1").all()).toEqual([{ id: 1 }]);
+      } finally {
+        db.close();
+      }
+    }
     expect(strictDiff(t)).toEqual([]);
   });
 });

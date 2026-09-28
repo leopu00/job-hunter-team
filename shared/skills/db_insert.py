@@ -389,18 +389,37 @@ def insert_position(args):
 
 
 def insert_company(args):
+    # Upsert sul nome, mai delete+insert (B1-T1, 28/09). Era INSERT OR REPLACE: una
+    # riga cancellata e riscritta. Con le foreign key accese, se una posizione puntava
+    # già all'azienda (positions.company_id: la seconda posizione di un'azienda nota)
+    # la cancellazione veniva rifiutata e l'ANALISTA non salvava l'azienda; quando
+    # passava, cambiava l'id e azzerava i campi non passati (il logo già scaricato).
+    # Ora la riga resta con il suo id, e si aggiornano solo i campi passati.
     conn = get_db()
     ensure_schema(conn)
-    cur = conn.execute("""
-        INSERT OR REPLACE INTO companies (name, website, hq_country, sector, size,
-                                          glassdoor_rating, red_flags, culture_notes,
-                                          analyzed_by, verdict)
+    conn.execute("""
+        INSERT INTO companies (name, website, hq_country, sector, size,
+                               glassdoor_rating, red_flags, culture_notes,
+                               analyzed_by, verdict)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET
+            website          = COALESCE(excluded.website, companies.website),
+            hq_country       = COALESCE(excluded.hq_country, companies.hq_country),
+            sector           = COALESCE(excluded.sector, companies.sector),
+            size             = COALESCE(excluded.size, companies.size),
+            glassdoor_rating = COALESCE(excluded.glassdoor_rating, companies.glassdoor_rating),
+            red_flags        = COALESCE(excluded.red_flags, companies.red_flags),
+            culture_notes    = COALESCE(excluded.culture_notes, companies.culture_notes),
+            analyzed_by      = COALESCE(excluded.analyzed_by, companies.analyzed_by),
+            verdict          = COALESCE(excluded.verdict, companies.verdict),
+            analyzed_at      = CURRENT_TIMESTAMP
     """, (args.name, args.website, args.hq_country, args.sector, args.size,
           args.glassdoor_rating, args.red_flags, args.culture_notes,
           args.analyzed_by, args.verdict))
     conn.commit()
-    print(f"Company inserted/updated: {args.name} (ID: {cur.lastrowid})")
+    # lastrowid non dice niente dopo un aggiornamento: l'id si legge.
+    company_id = conn.execute("SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()[0]
+    print(f"Company inserted/updated: {args.name} (ID: {company_id})")
     conn.close()
 
 

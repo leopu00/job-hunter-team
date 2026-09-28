@@ -122,7 +122,10 @@ function sqliteNow(): string {
   return new Date().toISOString().slice(0, 19).replace("T", " ");
 }
 
-function twins(agent = "scout-1") {
+/** B1-T1 (28/09): `db_insert company` changed on both sides in the same commit, so its Python is this tree's. */
+const TREE = pythonSkillsOfThisTree();
+
+function twins(agent = "scout-1", python: string | null = skills) {
   const pyPath = join(root, "py.db");
   const ourPath = join(root, "ours.db");
   const base = sqliteNow();
@@ -134,7 +137,7 @@ function twins(agent = "scout-1") {
     return tool.execute(tool.spec.schema.parse({ args }), context);
   };
   const py = (script: string, args: string[]) =>
-    runPython(skills!, [script, ...args], {
+    runPython(python!, [script, ...args], {
       JHT_DB: pyPath,
       JHT_HOME: join(root, "py-home"),
       JHT_AGENT_NAME: agent,
@@ -749,23 +752,34 @@ const ANALISTA_INSERTS: string[][] = [
 
 describe("db_insert, as the ANALISTA runs it, against db_insert.py (T14)", () => {
   it.skipIf(skills === null).each(ANALISTA_INSERTS.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
-    const { call, py, pyDb, ourDb } = twins("analista-1");
+    const { call, py, pyDb, ourDb } = twins("analista-1", (args as string[])[0] === "company" ? TREE : skills);
     expectSame(await call("db_insert", args as string[]), py("db_insert.py", args as string[]));
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
     const highlights = (db: Database) => db.prepare("SELECT position_id, type, text FROM position_highlights ORDER BY id").all();
     expect(highlights(ourDb)).toEqual(highlights(pyDb));
   });
 
-  it.skipIf(skills === null)("fails as the Python does where the database refuses: a referenced company replaced, a highlight on no position", async () => {
+  it.skipIf(skills === null)("fails as the Python does where the database refuses: a highlight on no position", async () => {
     const { call, py, pyDb, ourDb } = twins("analista-1");
-    for (const args of [["company", "--name", "Globex", "--verdict", "GO"], ["highlight", "--position-id", "99", "--type", "pro", "--text", "x"]]) {
-      const ours = await call("db_insert", args);
-      const theirs = py("db_insert.py", args);
-      expect([ours.ok, theirs.status], args.join(" ")).toEqual([false, 1]);
-      expect(ours.content).toContain("FOREIGN KEY constraint failed");
-      expect(theirs.stderr).toContain("FOREIGN KEY constraint failed");
-    }
+    const args = ["highlight", "--position-id", "99", "--type", "pro", "--text", "x"];
+    const ours = await call("db_insert", args);
+    const theirs = py("db_insert.py", args);
+    expect([ours.ok, theirs.status]).toEqual([false, 1]);
+    expect(ours.content).toContain("FOREIGN KEY constraint failed");
+    expect(theirs.stderr).toContain("FOREIGN KEY constraint failed");
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+  });
+
+  it.skipIf(TREE === null)("updates a company positions point at, as the Python does, keeping its id (B1-T1)", async () => {
+    // It was INSERT OR REPLACE on both sides, and the foreign key refused it.
+    const { call, py, pyDb, ourDb } = twins("analista-1", TREE);
+    // --analyzed-by as the skill passes it: without it the API still signs the row (SICUREZZA A-2), the Python does not.
+    const args = ["company", "--name", "Globex", "--verdict", "GO", "--analyzed-by", "analista-1"];
+    expectSame(await call("db_insert", args), py("db_insert.py", args));
+    expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
+    const linked = (db: Database) => db.prepare("SELECT p.id FROM positions p JOIN companies c ON c.id = p.company_id WHERE c.name = 'Globex' ORDER BY p.id").all();
+    expect(linked(ourDb).length).toBeGreaterThan(0);
+    expect(linked(ourDb)).toEqual(linked(pyDb));
   });
 
   it("signs a company as this agent, whatever --analyzed-by says (SICUREZZA A-2)", async () => {

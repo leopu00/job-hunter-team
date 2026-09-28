@@ -22,9 +22,11 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
+import { HubClient } from "../src/hub/client.ts";
 import { HUB_PATHS } from "../src/hub/protocol.ts";
 import { MAX_REVIEW_CHARS, reviewFileName, reviewPrefix, saveReview, verdictPosition } from "../src/hub/review.ts";
 import { createHub } from "../src/hub/server.ts";
+import { prepareProductRole } from "../src/parity/product-role.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
 const REPO_ROOT = join(RUNTIME, "..", "..");
@@ -204,4 +206,32 @@ describe("who may save a review", () => {
     expect(String(after.body["content"])).not.toMatch(/no review file/);
   });
 
+  // The endpoint was tested by calling it, and the tool with a hub handed to it
+  // by hand: never the two joined as a role on the hub builds them. There the
+  // local build of the skills had no hub, so `save_review` came from the build
+  // meant for the database tools and went to `/v1/tool`, where the hub has no
+  // such tool: 403, and the Critic's verdict reached nobody.
+  it("is reached by the Critic of a SCRITTORE that runs on the hub, through the review path", async () => {
+    await hub();
+    const profileDir = join(root, "profile");
+    mkdirSync(profileDir, { recursive: true });
+    const role = await prepareProductRole({
+      appRoot: REPO_ROOT,
+      role: "scrittore",
+      agent: "scrittore-1",
+      homeDir: join(root, "api", "agents", "scrittore-1"),
+      apiHome: join(root, "api"),
+      jhtHome: join(root, "jht"),
+      profileDir,
+      env: {},
+      hub: new HubClient({ url, token: SCRITTORE }),
+    });
+    // The Critic is the SCRITTORE's subagent: the tool is the one its child gets.
+    const tool = role.subagentTools([]).find((t) => t.spec.name === "save_review");
+    expect(tool).toBeDefined();
+    const result = await tool!.execute({ position_id: 1, text: "# Review\n\nSCORE: 7.4/10" }, { account: undefined as never, remainingMs: () => 60_000 });
+    expect(result).toMatchObject({ ok: true, content: expect.stringContaining(join("critiche", "review-acme-s-p-a-")) });
+    expect(written()).toHaveLength(1);
+    expect(readFileSync(join(critiche(), written()[0]!), "utf8")).toContain("SCORE: 7.4/10");
+  });
 });

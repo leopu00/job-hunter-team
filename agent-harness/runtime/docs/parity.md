@@ -420,6 +420,23 @@ NO with a stable reason, and an unreadable queue is `queue_unreadable`, never
 `queue_empty` (CL-04). The rule file is a copy shipped with the runtime, held
 byte for byte against `shared/cloud/apply-request-rule.json`.
 
+**The CAPITANO's `wake-idle-closer` has no tool here, on purpose.** In the
+TUI, C-27 step 2 (`capitano.md`) has the CAPITANO run
+`application_answers.py wake-idle-closer` at every tick while the queue is
+ready: it types one line into CLOSER-1's pane, and only when that pane sits
+idle at its prompt. Here that state does not exist. An API role whose turn
+ends with no pause and no message waiting ends its run (`runCycles`,
+`ended: "idle"`), so a CLOSER is either inside its cycle — and reads the
+queue again itself — or gone; and a CLOSER that is gone is step 1, not
+step 2: `list_agents` does not show it running, and the CAPITANO starts it
+again with `spawn_agent`. There is no pane to type into and no idle session
+to find, and waking a live CLOSER with `send_message` instead would be the
+hand wake C-27 forbids. So the CLOSER's own `application_answers` refuses
+the subcommand with that reason, and the CAPITANO has no `application_answers`
+tool at all: its rewritten prompt still names
+`application_answers wake-idle-closer`, and a call to it gets the runtime's
+«there is no tool named» with the list of the tools it does have.
+
 **The CV's layout is measured here too (T39, piece three).**
 `pdf_layout_check.analyze` is ported in `src/parity/skills/pdf-layout.ts`,
 report for report against `--json`; poppler is detected on the box, never

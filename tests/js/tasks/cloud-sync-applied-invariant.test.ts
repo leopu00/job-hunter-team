@@ -14,6 +14,15 @@ type Call = {
 };
 
 let calls: Call[] = [];
+// Every query the route builds, with the filters it puts on it, in order: a
+// read the fake answers without looking at its filters would stay green with
+// the tenant filter removed from the route.
+type Query = {
+  table: string;
+  operation: string;
+  filters: { method: string; column: string; value: unknown }[];
+};
+let queries: Query[] = [];
 let rpcError: string | { code: string; message: string } | null = null;
 let upsertError: { code: string; message: string } | null = null;
 let applicationReceipts: unknown[] | null = null;
@@ -53,27 +62,34 @@ function fakeAdmin() {
       let writtenPayload: any = null;
       const equalFilters = new Map<string, unknown>();
       const inFilters = new Map<string, unknown[]>();
+      const query: Query = { table, operation, filters: [] };
+      queries.push(query);
       const builder: Record<string, any> = {
         select() {
           return builder;
         },
         eq(column: string, value: unknown) {
           equalFilters.set(column, value);
+          query.filters.push({ method: "eq", column, value });
           return builder;
         },
-        is() {
+        is(column: string, value: unknown) {
+          query.filters.push({ method: "is", column, value });
           return builder;
         },
         in(column: string, values: unknown[]) {
           inFilters.set(column, values);
+          query.filters.push({ method: "in", column, value: values });
           return builder;
         },
         update() {
           operation = "update";
+          query.operation = operation;
           return builder;
         },
         upsert(payload: any, options: any) {
           operation = "upsert";
+          query.operation = operation;
           writtenPayload = payload;
           calls.push({ kind: "upsert", table, payload, options });
           return builder;
@@ -152,7 +168,21 @@ function fakeAdmin() {
                                 ? selectedPositions
                                 : operation === "select" &&
                                     table === "applications"
-                                  ? cloudApplications
+                                  ? // What the filters let through, as
+                                    // PostgREST would: a row of another
+                                    // user comes back only if the route
+                                    // forgets to ask for its own.
+                                    (cloudApplications?.filter((row) =>
+                                      query.filters.every((filter) =>
+                                        filter.method === "eq"
+                                          ? row[filter.column] === filter.value
+                                          : filter.method === "in"
+                                            ? (
+                                                filter.value as unknown[]
+                                              ).includes(row[filter.column])
+                                            : true,
+                                      ),
+                                    ) ?? null)
                                   : null;
           return Promise.resolve({
             data: upsertError ? null : data,
@@ -272,6 +302,7 @@ function pushBody(body: Record<string, unknown>) {
 
 beforeEach(() => {
   calls = [];
+  queries = [];
   rpcError = null;
   upsertError = null;
   stalePositionRow = null;
@@ -946,6 +977,7 @@ describe("push sync di una candidatura", () => {
           call.kind === "rpc" && call.name === "sync_confirm_positions_applied",
       );
     const complete = {
+      user_id: "00000000-0000-0000-0000-000000000073",
       position_id: "position-uuid-73",
       status: "applied",
       applied: true,
@@ -993,6 +1025,66 @@ describe("push sync di una candidatura", () => {
       const response = await positionsOnly();
       expect(response.status).toBe(200);
       expect(confirmCall()).toBeUndefined();
+    });
+
+    it("the application it waits for is looked up among the caller's rows only", async () => {
+      // Another user's complete application on the same position uuid: the
+      // fake answers as PostgREST would, so it comes back only if the route
+      // does not filter by its own user.
+      cloudApplications = [
+        { ...complete, user_id: "00000000-0000-0000-0000-000000000099" },
+      ];
+      const response = await positionsOnly();
+      expect(response.status).toBe(200);
+      const lookup = queries.find(
+        (query) =>
+          query.table === "applications" && query.operation === "select",
+      );
+      expect(lookup?.filters).toContainEqual({
+        method: "eq",
+        column: "user_id",
+        value: "00000000-0000-0000-0000-000000000073",
+      });
+      expect(confirmCall()).toBeUndefined();
+      await expect(response.json()).resolves.toMatchObject({
+        positions: { awaiting_application: [73], applied: [] },
+      });
+    });
+
+    it("written without its status, it is listed as awaiting its application, not only acked", async () => {
+      // The receipt alone moves the box's cursor on: if the application never
+      // arrives complete the position stays unpublished, and this list is the
+      // only trace of it the box gets (before, it went to quarantine).
+      const waiting = await positionsOnly();
+      expect(waiting.status).toBe(200);
+      await expect(waiting.json()).resolves.toMatchObject({
+        receipts: { positions: [receiptId("positions", 73)] },
+        positions: { awaiting_application: [73], applied: [] },
+      });
+
+      calls = [];
+      queries = [];
+      cloudApplications = [complete];
+      const published = await positionsOnly();
+      await expect(published.json()).resolves.toMatchObject({
+        positions: { awaiting_application: [], applied: [73] },
+      });
+    });
+
+    it("the applications request that publishes it says so, which ends the box's wait", async () => {
+      const response = await push(
+        {
+          status: "applied",
+          applied: true,
+          applied_at: "2026-08-12T16:30:00.000Z",
+          applied_via: "telegram",
+        },
+        false,
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        positions: { awaiting_application: [], applied: [73] },
+      });
     });
   });
 
