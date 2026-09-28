@@ -64,9 +64,11 @@ prompt can be exercised end to end for free. Each run writes:
 | `JHT_API_KEEP_HOME=1` | keep the role's home between runs |
 
 A 429 from the provider is its queue, not the run's end: the call is tried
-once more, after a wait that grows, carries jitter and obeys `retry-after`
-when the provider sends one. Nothing else is retried, and a refused attempt
-is served nothing, so it bills nothing and books nothing.
+up to four times in all, after a wait that doubles from 2.5 s, carries jitter
+and obeys `retry-after` when the provider sends one — at most 30 s a wait,
+45 s a call, and never past the run's own time budget. Nothing else is
+retried, and a refused attempt is served nothing, so it bills nothing and
+books nothing.
 
 A live run that cannot be priced, capped or recorded does not start. Every live
 run appends one line to the ledger however it ends — completed, failed or
@@ -88,7 +90,7 @@ they set is this:
 | --- | --- |
 | mock run | `run.sh mock scout --agent scout-1 --turns 2 --pause-ms 0`: `--network=none`, `JHT_API_PROVIDER=mock`, same mounts as live |
 | live run | `run.sh live scout <model> <usd> --agent scout-1`: `JHT_API_LIVE=1`, `JHT_API_MODEL`, `JHT_API_BUDGET_USD=<usd>` |
-| caps | the run's USD budget (the cap that counts), the token cap on input not served from the cache, and the proxy's cumulative ceiling across runs with its model allowlist |
+| caps | the run's USD budget (the cap that counts), the token cap (400,000 a run, fixed: input not served from the cache plus output), and the proxy's cumulative ceiling across runs with its model allowlist |
 | key | only the proxy container holds it; the agent gets `OPENAI_BASE_URL=http://127.0.0.1:8787/v1` and a placeholder key |
 | profile | mounted read-only at `/jht_home/profile`, `JHT_API_PROFILE_DIR=/jht_home/profile`: read-only twice, in the container and in the policy |
 | jobs.db | its own volume at `/jht_home/db`, `JHT_API_DB=/jht_home/db/jobs.db`: a new database, never a copy of a person's |

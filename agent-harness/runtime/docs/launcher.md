@@ -67,9 +67,11 @@ The team starts once per session: while a member is up, another
 ```
 
 - `roles` is the allowlist; `capitano` in it and the hub does not start.
-- The piggy bank: `captainUsd` + the caps of the children running + what the
-  ended ones spent, as the executor measured it, must stay within
-  `sessionUsd`. A child that ended with no measured spend stays at its cap.
+- The piggy bank: the CAPITANO's part (`captainUsd`, or what it measured if
+  that is more) + the caps of the runs going on, members and children alike
+  + what the ended ones spent, as the executor measured it, must stay within
+  `sessionUsd`; a member of the base set must also leave `spawnReserveUsd`
+  free. A run that ended with no measured spend stays at its cap.
 - Of that, **spent** is what the ended runs cost on the key proxy's log, the
   same money the key proxy counts; **booked** is money held and not spent (the
   caps of the runs going on, a cap nobody measured, the part of the
@@ -81,7 +83,8 @@ The team starts once per session: while a member is up, another
   version wrote it in. Changing `session` is how the operator starts a run
   over; the file of the session in progress is never ignored, and if it
   cannot be read nothing starts (L-1).
-- A role that failed `maxFailures` times in the session is not started again.
+- A role whose children failed `maxFailures` times in the session is not
+  spawned again. Members of the base set do not count, and are not refused by it.
 - `team` is the base set and its start order; each entry takes `instances`,
   and optionally `cap_usd` (default: the role's cap; the CAPITANO's is
   `captainUsd`), `model` (default: the first allowed), `task` (default
@@ -117,8 +120,9 @@ The team starts once per session: while a member is up, another
 `spawn_id` is 16 lowercase hex characters. `agent` is `<role>-<n>`. `task`
 is text of at most `taskChars` characters; it may hold anything, newlines
 included, and is only ever data. `kind` is `spawn` for a child of the
-CAPITANO and `team` for a member of the base set; `delay_s` appears only
-when the member asks to be staggered. A member also carries `seq`, 0 upward
+CAPITANO and `team` for a member of the base set; `delay_s` appears on a
+member whose wait is above 0 — with the default stagger, every one but the
+first. A member also carries `seq`, 0 upward
 in the configured order, and **that** is the order it starts in: orders
 written in the same millisecond have no order of their own, by date or by
 name. A child has no `seq`; there is only ever one to start.
