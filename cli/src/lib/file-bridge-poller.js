@@ -33,6 +33,13 @@ const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 
 // Cartelle dei file utente sul container (mirror di web/lib/jht-paths.ts).
+//
+// L'ORDINE è anche la precedenza sui nomi: l'indice nel cloud ha una riga per
+// (user_id, name), ma lo stesso nome può stare in due cartelle (un CV PDF in
+// cv/ e in output/). Vince la PRIMA cartella di questa lista, cioè il file che
+// resolveLocalFile() consegna quando il web chiede quel nome: l'indice descrive
+// il file che l'utente riceverà davvero. Mandare entrambe le copie faceva
+// fallire l'upsert del cloud (Postgres 21000) e l'indice non si pubblicava più.
 const JHT_USER_DIR = process.env.JHT_USER_DIR || join(homedir(), 'Documents', 'Job Hunter Team');
 const FILE_DIRS = [
   { dir: join(JHT_USER_DIR, 'cv'), category: 'cv' },
@@ -121,9 +128,13 @@ function resolveLocalFile(name) {
   return null;
 }
 
-/** Costruisce lo snapshot dell'indice dei file presenti sul disco. */
-async function buildIndex() {
+/**
+ * Costruisce lo snapshot dell'indice dei file presenti sul disco: un elemento
+ * per nome, quello della prima cartella di FILE_DIRS che lo contiene.
+ */
+export async function buildIndex() {
   const files = [];
+  const seenNames = new Set();
   for (const { dir, category } of FILE_DIRS) {
     if (!existsSync(dir)) continue;
     let entries;
@@ -134,6 +145,8 @@ async function buildIndex() {
     }
     for (const e of entries) {
       if (!e.isFile()) continue;
+      // Già indicizzato da una cartella che viene prima: vedi FILE_DIRS.
+      if (seenNames.has(e.name)) continue;
       const full = join(dir, e.name);
       try {
         const st = await stat(full);
@@ -146,6 +159,7 @@ async function buildIndex() {
           mime: mimeFor(e.name),
           location_on_vps: full,
         });
+        seenNames.add(e.name);
       } catch {
         /* file sparito/illeggibile: skip */
       }

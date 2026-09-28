@@ -1,0 +1,52 @@
+# Configurazione dello stack LOCALE (`supabase start`), usata solo dal job
+# `e2e-local-supabase` di .github/workflows/test.yml e da chi vuole lo stesso
+# stack sul proprio computer. Non descrive il progetto di produzione e non
+# contiene segreti: le chiavi dello stack locale le genera la CLI.
+project_id = "job-hunter-team-local"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# DA CONFERMARE contro la versione del progetto di produzione.
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+# supabase/seed.sql è il dataset demo storico con un user_id fittizio che non
+# esiste in auth.users: il job e2e crea il proprio utente con
+# supabase/e2e-local/seed.sh, dopo l'avvio.
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = false
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3011"
+additional_redirect_urls = ["http://localhost:3011", "http://127.0.0.1:3011"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[analytics]
+enabled = false
