@@ -138,7 +138,7 @@ function Office({ ready }: { ready: Ready }) {
       live.current ??= createLiveOffice(data.diff, applyEvent);
       live.current.snapshot(next);
       setSnapshot(next);
-      setStatus(next.teamOnline === false ? "Il team è spento: l'ufficio è vuoto." : null);
+      setStatus(next.teamOnline === false ? teamOffMessage(next.roster.length) : null);
       // a team that is not online has no present status to show
       showStatuses(next.teamOnline ? await statuses : null);
     } catch {
@@ -233,6 +233,11 @@ function Office({ ready }: { ready: Ready }) {
       )}
     </div>
   );
+}
+
+/** A team that is off: the core seats are empty, the agents of the last 24 hours stay (office/data/load.ts). */
+function teamOffMessage(agents: number): string {
+  return agents === 0 ? "Il team è spento: l'ufficio è vuoto." : "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.";
 }
 
 function Notice({ children, alert }: { children: React.ReactNode; alert?: boolean }) {

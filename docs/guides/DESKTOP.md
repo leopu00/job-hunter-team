@@ -67,10 +67,14 @@ data is not drawn, a status the team did not publish is not shown.
 
 ### Who is in the office
 
-- Every agent that moved a position in the **last 24 hours**.
+- Every agent that moved a position in the **last 24 hours**, if its role has
+  a seat in the office: Captain, Scout, Analyst, Scorer, Writer, Critic,
+  Sentinel, Assistant, Mentor. A move by any other role is not drawn.
 - The **Captain**, the **Sentinel**, the **Assistant** and the **Mentor** at
   their own seats, while the team is running.
-- If the team is off, the office says so and stays empty.
+- If the team is off, the office says so: the core seats stay empty, and the
+  agents that moved a position in the last 24 hours stay. With no such
+  agent, the office is empty.
 
 Agents come in through the **door** and leave through it. When an agent moves
 a position, it walks the trip: it takes a sheet from the previous
@@ -159,7 +163,7 @@ not in the app.
 | --- | --- |
 | **Download the CV or cover letter PDF** from a position | The download link is signed with a server privilege that does not ship in the app. The button shows its error state. |
 | **Open encrypted contact details** in the profile | They are decrypted with a key that lives only on the server. The app says they are encrypted. |
-| **Edit the profile through the Assistant** | That goes through a chat with the team's Assistant on the team's machine; the app does not talk to it yet. |
+| **Edit the profile from the Profilo page** | The page shows the profile without the edit button, which on the web opens a chat with the Assistant. The chat is in the app: ask the Assistant on the **Agenti** page. |
 | **See what an agent is doing inside its terminal**, its CPU, memory and tokens | That stays on the machine where the team runs; the cloud does not have it. |
 | **See the spend of the team on a server** in Budget | Budget shows the team on this computer. A server team's usage windows stay on its machine and show as «—». |
 | **Change anything from the office** | The office is for looking and understanding. Every action stays where the app already offers it (for example the requests on a position's page). |
