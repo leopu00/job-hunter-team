@@ -114,6 +114,34 @@ describe("real moves become trips, once (D09)", () => {
     expect(trips(events)).toHaveLength(1);
   });
 
+  it("a transition that arrives while a read is in flight is one trip: the read that left before it, and the one after, add none", () => {
+    const events: OfficeEvent[] = [];
+    const live = createLiveOffice(diffOfficeSnapshots, (e) => events.push(e));
+    const t6 = tr("2026-09-28T00:59:00Z", "scorer-1", 6);
+    const t7 = tr("2026-09-28T01:00:05Z", "scorer-1", 7);
+    live.snapshot(snap([t6]));
+    live.transition(t7);
+    live.snapshot(snap([t6])); // left before the INSERT: without it
+    expect(trips(events)).toHaveLength(1);
+    live.transition(t7); // the channel again (a reconnect): still walked
+    live.snapshot(snap([t7, t6])); // the read after: with it
+    live.snapshot(snap([t7, t6]));
+    expect(trips(events)).toHaveLength(1);
+  });
+
+  it("a walked transition does not hide an older one the channel missed (the diff's threshold stays the read's)", () => {
+    const events: OfficeEvent[] = [];
+    const live = createLiveOffice(diffOfficeSnapshots, (e) => events.push(e));
+    const roster = [agent("scorer-1"), agent("scorer-2")];
+    live.snapshot(snap([], roster)); // a team just started: nothing in the last 24 h
+    const t7 = tr("2026-09-28T01:00:05Z", "scorer-1", 7);
+    live.transition(t7);
+    // the channel was not up yet for this one, 2 s older
+    const t8 = tr("2026-09-28T01:00:03Z", "scorer-2", 8);
+    live.snapshot(snap([t7, t8], roster));
+    expect(trips(events).map((e) => (e as { uid: string }).uid)).toEqual(["scorer-1", "scorer-2"]);
+  });
+
   it("a new transition seen only by a read is one trip", () => {
     const events: OfficeEvent[] = [];
     const live = createLiveOffice(diffOfficeSnapshots, (e) => events.push(e));
@@ -189,6 +217,34 @@ describe("the channel", () => {
     expect(h.onStatus).toHaveBeenLastCalledWith(false);
     stop();
     expect(client.removeChannel).toHaveBeenCalled();
+  });
+
+  it("unmounted while the session is being handed to Realtime: no channel is opened after the cleanup", async () => {
+    const { client } = fakeClient(session);
+    let authorised: () => void = () => {};
+    client.realtime.setAuth = vi.fn(() => new Promise<void>((r) => (authorised = r)));
+    const onStatus = vi.fn();
+    const stop = subscribeOffice(client as never, { onChange: vi.fn(), onTransition: vi.fn(), onStatus });
+    await vi.waitFor(() => expect(client.realtime.setAuth).toHaveBeenCalled());
+    stop();
+    authorised();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(client.channel).not.toHaveBeenCalled();
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
+  it("each mount has a topic of its own: coming back to the page does not meet the old channel", async () => {
+    const { client } = fakeClient(session);
+    const h = () => ({ onChange: vi.fn(), onTransition: vi.fn(), onStatus: vi.fn() });
+    const leave = subscribeOffice(client as never, h());
+    await vi.waitFor(() => expect(client.channel).toHaveBeenCalledTimes(1));
+    leave();
+    subscribeOffice(client as never, h());
+    await vi.waitFor(() => expect(client.channel).toHaveBeenCalledTimes(2));
+    const [a, b] = client.channel.mock.calls.map((c) => (c as unknown[])[0] as string);
+    expect(a).toMatch(/^office:user-a:/);
+    expect(b).toMatch(/^office:user-a:/);
+    expect(a).not.toBe(b);
   });
 
   it("without a session there is no channel: the reads fall back to the minute", async () => {
