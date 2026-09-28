@@ -24,6 +24,22 @@ interface IndexedFile {
   location_on_vps?: string;
 }
 
+// Lo stesso nome in due cartelle del box (un CV PDF in cv/ e in output/)
+// arriva come due elementi con la stessa chiave (user_id, name): Postgres
+// rifiuta un upsert che tocca la stessa riga due volte (21000) e l'indice non
+// si pubblica più, DELETE dei file spariti compreso. Regola: vince la PRIMA
+// occorrenza. Il poller manda le cartelle nell'ordine in cui risolve un nome
+// richiesto (cv, allegati, output: FILE_DIRS in file-bridge-poller.js), quindi
+// la prima è il file che l'utente riceve. Il poller deduplica già; qui si
+// ripete perché un box con un poller vecchio non blocchi l'indice.
+function keepFirstEntryPerName(files: IndexedFile[]): IndexedFile[] {
+  const byName = new Map<string, IndexedFile>();
+  for (const file of files) {
+    if (!byName.has(file.name)) byName.set(file.name, file);
+  }
+  return [...byName.values()];
+}
+
 export async function POST(req: NextRequest) {
   const auth = await verifyBearerToken(req);
   if (!auth.ok) return auth.res;
@@ -43,8 +59,10 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const rows = (body.files as IndexedFile[])
-    .filter((f) => f && typeof f.name === "string" && f.name.length > 0)
+  const named = (body.files as IndexedFile[]).filter(
+    (f) => f && typeof f.name === "string" && f.name.length > 0,
+  );
+  const rows = keepFirstEntryPerName(named)
     .slice(0, 500)
     .map((f) => ({
       user_id: userId,
@@ -58,7 +76,7 @@ export async function POST(req: NextRequest) {
       updated_at: now,
     }));
 
-  // Upsert (chiave unica user_id+name).
+  // Upsert (chiave unica user_id+name, un elemento per nome: vedi sopra).
   if (rows.length > 0) {
     const { error: upErr } = await admin
       .from("candidate_files")
