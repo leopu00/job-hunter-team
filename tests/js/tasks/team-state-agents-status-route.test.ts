@@ -110,6 +110,43 @@ describe("PATCH /api/team-state — agents_status from the box", () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
+  // The two kinds of box the route serves once deployed: one older than the
+  // field (heartbeat alone), and one that carries the statuses in the
+  // heartbeat's own PATCH (cli agents-status.js, createHeartbeatCarrier).
+  it("an old box's heartbeat, without the field, is written as before", async () => {
+    asDevice("device-test");
+    const { PATCH } = await import("@/app/api/team-state/route");
+    const body = { last_heartbeat_at: SINCE, is_running: true };
+    const response = await PATCH(request(body));
+    expect(response.status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith({ user_id: "user-test", ...body }, { onConflict: "user_id" });
+  });
+
+  it("a new box's single PATCH writes the heartbeat, is_running and the statuses together", async () => {
+    asDevice("device-test");
+    const { PATCH } = await import("@/app/api/team-state/route");
+    const agents_status = { tui: { agents: { capitano: { status: "idle", since: SINCE } } } };
+    const response = await PATCH(request({ last_heartbeat_at: SINCE, is_running: true, agents_status }));
+    expect(response.status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith(
+      { user_id: "user-test", last_heartbeat_at: SINCE, is_running: true, agents_status },
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("a malformed map in that PATCH refuses the whole body with 400: the box sends its heartbeat again alone", async () => {
+    // The box's rule (team-state-reconciler.js beatThroughRoute): a 400 or 403
+    // on the combined body is the statuses' refusal, and the heartbeat goes
+    // again without them. The route must refuse before writing anything.
+    asDevice("device-test");
+    const { PATCH } = await import("@/app/api/team-state/route");
+    const response = await PATCH(
+      request({ last_heartbeat_at: SINCE, is_running: true, agents_status: { tui: { agents: { capitano: { status: "idle" } } } } }),
+    );
+    expect(response.status).toBe(400);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it("a browser session cannot write it", async () => {
     asDevice("device-test", "session");
     const { PATCH } = await import("@/app/api/team-state/route");
