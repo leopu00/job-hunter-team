@@ -1,6 +1,6 @@
 # 💳 Providers & Pricing
 
-JHT runs on AI subscriptions, **not pay-per-token**. This is a deliberate design choice — see [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) for the full reasoning. Short version: a team of agents working in parallel burns through pay-per-use credits in hours; subscriptions cost ~5x less per token.
+JHT runs on AI subscriptions **by default**, and that is the supported path. A team of agents working in parallel burns through pay-per-use credits in hours; subscriptions cost ~5x less per token — the estimate of [ADR-0004](../adr/0004-subscription-only-no-api-keys.md), which [ADR-0012](../adr/0012-desktop-setup-matrix.md) supersedes. ADR-0012 adds a headless path on metered API calls: the [API team](../guides/API-TEAM.md), in rehearsal, with hard spending caps.
 
 This page tells you which subscription to pick.
 
@@ -44,6 +44,6 @@ For the actual numbers we measured during testing, see [`MONITORING.md`](MONITOR
 
 ## 💸 What about pay-per-use?
 
-Not yet. Future possibility: you give the team a budget + a deadline, the team auto-coordinates within that envelope. But subscription tokens cost ~5x less, so the subscription model wins on every economic axis as long as we can monitor the window precisely.
+In rehearsal. Since [ADR-0012](../adr/0012-desktop-setup-matrix.md) an API key selects a headless team on metered calls: the [API team](../guides/API-TEAM.md), which runs on a test VPS with a hard dollar cap per run and per session, and is held to the subscription team's behaviour with parity rounds. The subscription team remains the default, supported path: its tokens cost ~5x less, so it wins on every economic axis as long as we can monitor the window precisely.
 
 If you're curious about the test data behind these numbers, jump to [`MONITORING.md`](MONITORING.md).
