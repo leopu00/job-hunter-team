@@ -219,28 +219,32 @@ async function count(q: CountQuery): Promise<number> {
 /** Positions found per day over the last `days` days, oldest first (Godot's positions_timeline.gd, for the Scout). */
 export type DayCount = { day: string; n: number };
 
+/**
+ * Days by the calendar, not by 24 hours: the day the clock changes lasts 23
+ * or 25. Each day is counted by PostgREST (a head request), so no row cap
+ * (max_rows) cuts the count.
+ */
 export async function loadFoundPerDay(client: Client, now: number = Date.now(), days = 7): Promise<DayCount[]> {
   const userId = await userOf(client);
-  const start = new Date(now - (days - 1) * 86_400_000);
-  start.setHours(0, 0, 0, 0);
-  const found = rows<{ found_at: string | null }>(
-    await client
-      .from("positions")
-      .select("found_at")
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .gte("found_at", start.toISOString())
-      .limit(5000),
-  );
+  // each midnight built on its own: where the clock changes at midnight, that
+  // day's midnight does not exist, and it must not shift the other days
+  const today = new Date(now);
+  const midnight = (i: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1) + i);
   const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const out = new Map<string, number>();
-  for (let i = 0; i < days; i++) out.set(key(new Date(start.getTime() + i * 86_400_000)), 0);
-  for (const r of found) {
-    if (!r.found_at) continue;
-    const k = key(new Date(r.found_at));
-    if (out.has(k)) out.set(k, out.get(k)! + 1);
-  }
-  return [...out].map(([day, n]) => ({ day, n }));
+  const counts = await Promise.all(
+    Array.from({ length: days }, (_, i) =>
+      count(
+        client
+          .from("positions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .gte("found_at", midnight(i).toISOString())
+          .lt("found_at", midnight(i + 1).toISOString()),
+      ),
+    ),
+  );
+  return counts.map((n, i) => ({ day: key(midnight(i)), n }));
 }
 
 /** The CVs produced (Godot's CV shelf, output_archive_panel.gd): totals and the newest written. */
@@ -265,7 +269,9 @@ export async function loadCvShelf(client: Client): Promise<CvShelfData> {
   ]);
   const ids = rows<{ position_id: string }>(newest).map((a) => a.position_id);
   if (ids.length === 0) return { written, passed, unreviewed, list: [] };
-  const positions = rows<PositionRow>(await client.from("positions").select(POSITION_COLUMNS).eq("user_id", userId).in("id", ids));
+  const positions = rows<PositionRow>(
+    await client.from("positions").select(POSITION_COLUMNS).eq("user_id", userId).is("deleted_at", null).in("id", ids),
+  );
   const order = new Map(ids.map((id, i) => [id, i]));
   const list = (await withDetails(client, userId, positions)).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   return { written, passed, unreviewed, list };
@@ -298,15 +304,42 @@ export async function loadBoard(client: Client): Promise<BoardData> {
 export type PlaceCount = { place: string; n: number };
 export type PlacesData = { located: number; places: PlaceCount[] };
 
+/** How many pages at most a panel reads (a bound, not a sample size). */
+export const PAGES_MAX = 100;
+/** Rows asked per page: PostgREST's max_rows on hosted Supabase, which cuts a longer answer without saying so. */
+export const PAGE_ROWS = 1000;
+
+/**
+ * Every row of a query, page after page by key: `page(after)` is the query
+ * ordered by id, past `after` when there is one (id > after). An insert or a
+ * delete between two pages shifts no row, as an offset would; a server page
+ * shorter than PAGE_ROWS is only a page. Stops at an empty page, or at PAGES_MAX.
+ */
+export async function readAllPages<T extends { id: string }>(
+  page: (after: string | null) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  let after: string | null = null;
+  for (let i = 0; i < PAGES_MAX; i++) {
+    const chunk: T[] = rows<T>(await page(after));
+    if (chunk.length === 0) break;
+    out.push(...chunk);
+    after = chunk[chunk.length - 1]!.id;
+  }
+  return out;
+}
+
 export async function loadPlaces(client: Client, top = 15): Promise<PlacesData> {
   const userId = await userOf(client);
-  const [total, sample] = await Promise.all([
-    count(client.from("positions").select("id", { count: "exact", head: true }).eq("user_id", userId).is("deleted_at", null).not("location", "is", null)),
-    client.from("positions").select("location").eq("user_id", userId).is("deleted_at", null).not("location", "is", null).limit(5000),
-  ]);
-  const located = rows<{ location: string | null }>(sample);
+  const total = await count(
+    client.from("positions").select("id", { count: "exact", head: true }).eq("user_id", userId).is("deleted_at", null).not("location", "is", null),
+  );
+  const all = await readAllPages<{ id: string; location: string | null }>((after) => {
+    const q = client.from("positions").select("id, location").eq("user_id", userId).is("deleted_at", null).not("location", "is", null);
+    return (after === null ? q : q.gt("id", after)).order("id").limit(PAGE_ROWS);
+  });
   const by = new Map<string, number>();
-  for (const r of located) {
+  for (const r of all) {
     const place = (r.location ?? "").trim();
     if (place) by.set(place, (by.get(place) ?? 0) + 1);
   }
