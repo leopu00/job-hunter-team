@@ -18,6 +18,7 @@ import { HubMailbox, HubNotifier, HubUserReplies, remoteTool, type HubClient } f
 import { allowedIndicesLine, allowedModelsLine, createSpawnTools, type SpawnLimits } from "../hub/spawn-tools.ts";
 import { HUB_PATHS } from "../hub/protocol.ts";
 import { roleOf } from "../db/role-policy.ts";
+import { JobsDbNotifier } from "../db/user-messages.ts";
 import type { ToolHandler } from "../tools/registry.ts";
 import { blindReviewTools } from "./blind-review.ts";
 import { deliverableDir, deliverableWriteGuard } from "./deliverables.ts";
@@ -38,6 +39,7 @@ import {
   rewriteThrottleCommands,
   type AgentMessage,
   type Mailbox,
+  type Notifier,
 } from "./jht-tools.ts";
 import {
   composeSystemPrompt,
@@ -206,7 +208,8 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     replyOptions,
     homeDir: options.homeDir,
     mailbox,
-    notifier: hub ? new HubNotifier(hub) : new FileNotifier(join(channels, "notify.jsonl")),
+    // B1-T3: without a hub the role holds the database, and writes the row the hub would.
+    notifier: hub ? new HubNotifier(hub) : notifierOf(join(channels, "notify.jsonl"), options.jobsDb),
     replies: hub ? new HubUserReplies(hub) : new FileUserReplies(join(channels, "replies")),
     pause,
   });
@@ -281,6 +284,12 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     tools: (base) => build(base, isCritic),
     subagentTools: (base) => build(base, blindChild),
   };
+}
+
+/** The record file, and before it the row in `pending_user_messages` when the role has the database (B1-T3). */
+function notifierOf(file: string, jobsDb: JobsDbHandle | undefined): Notifier {
+  const record = new FileNotifier(file);
+  return jobsDb ? new JobsDbNotifier(jobsDb.open, record) : record;
 }
 
 /**

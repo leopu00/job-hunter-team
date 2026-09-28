@@ -326,13 +326,20 @@ export function createJhtTools(options: JhtToolsOptions): ToolHandler[] {
         };
       }
       notified.push(at);
-      await options.notifier.notify({
-        from: self,
-        kind: kind ?? "notification",
-        text,
-        ...(position_id === undefined ? {} : { positionId: position_id }),
-        ts: at,
-      });
+      try {
+        await options.notifier.notify({
+          from: self,
+          kind: kind ?? "notification",
+          text,
+          ...(position_id === undefined ? {} : { positionId: position_id }),
+          ts: at,
+        });
+      } catch (error) {
+        // A message the notifier refused reached no one: its slot is given back (B1-T3).
+        const slot = notified.lastIndexOf(at);
+        if (slot >= 0) notified.splice(slot, 1);
+        throw error;
+      }
       return { ok: true, content: "Notification queued for the person." };
     },
   };
