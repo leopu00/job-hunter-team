@@ -34,15 +34,39 @@ function fakeClient() {
       let withCount = false;
       let limit: number | null = null;
       let window: [number, number] | null = null;
+      // Le relazioni incluse, come PostgREST: `rel!inner` toglie la riga
+      // quando la relazione non passa il filtro, `rel` toglie solo il figlio.
+      const inner = new Set<string>();
+      const embedded: Array<(row: Row) => Row> = [];
       const builder: Record<string, any> = {
-        select(_columns: string, opts?: { count?: string; head?: boolean }) {
+        select(columns: string, opts?: { count?: string; head?: boolean }) {
           head = opts?.head === true;
           withCount = opts?.count === "exact";
+          for (const m of columns.matchAll(/(\w+)!inner/g)) inner.add(m[1]);
           return builder;
         },
         is(column: string, value: null) {
           if (value !== null) throw new Error(`is(${column}) solo con null`);
-          filters.push((row) => row[column] == null);
+          const [rel, field] = column.split(".");
+          if (field === undefined) {
+            filters.push((row) => row[column] == null);
+          } else if (inner.has(rel)) {
+            filters.push((row) =>
+              [row[rel]]
+                .flat()
+                .some((child) => child != null && child[field] == null),
+            );
+          } else {
+            embedded.push((row) => {
+              const kept = [row[rel]]
+                .flat()
+                .filter((child) => child != null && child[field] == null);
+              return {
+                ...row,
+                [rel]: Array.isArray(row[rel]) ? kept : (kept[0] ?? null),
+              };
+            });
+          }
           return builder;
         },
         eq(column: string, value: unknown) {
@@ -95,9 +119,9 @@ function fakeClient() {
           }) => unknown,
           ko?: (error: unknown) => unknown,
         ) {
-          let result = (tables[table] ?? []).filter((row) =>
-            filters.every((keep) => keep(row)),
-          );
+          let result = (tables[table] ?? [])
+            .map((row) => embedded.reduce((r, filter) => filter(r), row))
+            .filter((row) => filters.every((keep) => keep(row)));
           if (orders.length > 0) {
             result = [...result].sort((a, b) => {
               for (const [column, ascending] of orders) {
@@ -353,5 +377,80 @@ describe("scrittore/activity", () => {
 
     expect(out.completed_today).toBe(2000);
     expect(out.avg_critic_score).toBe(7);
+  });
+});
+
+describe("relazioni incluse: un figlio cancellato non parla per una riga viva", () => {
+  it("scorer: lo score vivo di una posizione cancellata non compare fra gli ultimi", async () => {
+    const live = {
+      title: "viva",
+      company: "Acme",
+      location: "",
+      remote_type: "",
+      deleted_at: null,
+    };
+    const dead = { ...live, title: "cancellata", deleted_at: TOMBSTONE };
+    tables.scores = [
+      {
+        id: "s1",
+        position_id: "pos-live",
+        total_score: 80,
+        scored_at: NOW,
+        scored_by: "scorer-1",
+        positions: live,
+        deleted_at: null,
+      },
+      {
+        id: "s2",
+        position_id: "pos-dead",
+        total_score: 85,
+        scored_at: NOW,
+        scored_by: "scorer-1",
+        positions: dead,
+        deleted_at: null,
+      },
+      {
+        id: "s3",
+        position_id: "pos-dead-lo",
+        total_score: 20,
+        scored_at: NOW,
+        scored_by: "scorer-1",
+        positions: dead,
+        deleted_at: null,
+      },
+    ];
+
+    const out = await body(scorer);
+
+    expect(ids(out.recent_scored)).toEqual(["pos-live"]);
+    expect(out.recent_excluded).toEqual([]);
+  });
+
+  it("scrittore: uno score o una candidatura cancellati non danno punteggio né autore", async () => {
+    const deadScore = { total_score: 90, deleted_at: TOMBSTONE };
+    const deadApp = {
+      written_by: "scrittore-9",
+      critic_score: 2,
+      deleted_at: TOMBSTONE,
+    };
+    tables.positions = [
+      position("sc-1", "scored", { scores: [deadScore] }),
+      position("wr-1", "writing", {
+        scores: [deadScore],
+        applications: [deadApp],
+      }),
+    ];
+
+    const out = await body(scrittore);
+
+    // Senza lo score vivo la posizione non ha punteggio, e la coda (>= 50) non la prende.
+    expect(out.queue).toEqual([]);
+    expect(out.in_progress).toHaveLength(1);
+    expect(out.in_progress[0]).toMatchObject({
+      id: "wr-1",
+      total_score: null,
+      written_by: null,
+      critic_score: null,
+    });
   });
 });

@@ -54,15 +54,40 @@ function fakeClient() {
       let window: [number, number] | null = null;
       const record = (name: string, args: unknown[]) =>
         call.operations.push({ name, args });
+      // Le relazioni incluse, come PostgREST: `rel!inner` toglie la riga
+      // quando la relazione non passa il filtro, `rel` toglie solo il figlio.
+      const inner = new Set<string>();
+      const embedded: Array<(row: Row) => Row> = [];
       const builder: Record<string, any> = {
         select(...args: unknown[]) {
           record("select", args);
+          for (const m of String(args[0]).matchAll(/(\w+)\s*!inner/g))
+            inner.add(m[1]);
           return builder;
         },
         is(column: string, value: null) {
           record("is", [column, value]);
           if (value !== null) throw new Error(`is(${column}) solo con null`);
-          filters.push((row) => row[column] == null);
+          const [rel, field] = column.split(".");
+          if (field === undefined) {
+            filters.push((row) => row[column] == null);
+          } else if (inner.has(rel)) {
+            filters.push((row) =>
+              [row[rel]]
+                .flat()
+                .some((child) => child != null && child[field] == null),
+            );
+          } else {
+            embedded.push((row) => {
+              const kept = [row[rel]]
+                .flat()
+                .filter((child) => child != null && child[field] == null);
+              return {
+                ...row,
+                [rel]: Array.isArray(row[rel]) ? kept : (kept[0] ?? null),
+              };
+            });
+          }
           return builder;
         },
         not(column: string, operator: string, value: unknown) {
@@ -116,9 +141,9 @@ function fakeClient() {
           ok: (result: { data: Row[]; error: null }) => unknown,
           ko?: (error: unknown) => unknown,
         ) {
-          let result = (tables[table] ?? []).filter((row) =>
-            filters.every((keep) => keep(row)),
-          );
+          let result = (tables[table] ?? [])
+            .map((row) => embedded.reduce((r, filter) => filter(r), row))
+            .filter((row) => filters.every((keep) => keep(row)));
           if (orders.length > 0) {
             result = [...result].sort((a, b) => {
               for (const [column, ascending] of orders) {
@@ -356,6 +381,31 @@ describe("/api/critico", () => {
     tables.applications = [
       application(0),
       application(3, { deleted_at: TOMBSTONE }),
+      application(1),
+    ];
+
+    const json = await body();
+
+    expect(json.stats).toMatchObject({
+      total: 2,
+      pass: 1,
+      needsWork: 1,
+      reject: 0,
+    });
+    expect(json.feed.map((row: Row) => row.id)).not.toContain(`app-${pad(3)}`);
+  });
+
+  it("la candidatura viva di una posizione cancellata non si conta e non compare nel feed", async () => {
+    tables.applications = [
+      application(0),
+      application(3, {
+        positions: {
+          id: `pos-${pad(3)}`,
+          title: "t 3",
+          company: "Acme",
+          deleted_at: TOMBSTONE,
+        },
+      }),
       application(1),
     ];
 

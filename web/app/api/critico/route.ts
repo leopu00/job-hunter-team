@@ -29,11 +29,14 @@ export async function GET() {
       `
       id, status, critic_score, critic_verdict, critic_round,
       critic_reviewed_at, written_at, written_by, reviewed_by,
-      positions ( id, title, company )
+      positions!inner ( id, title, company )
     `,
     )
     .or("status.eq.review,critic_verdict.not.is.null")
     .is("deleted_at", null)
+    // Solo candidature di posizioni vive: con !inner il filtro sulla
+    // relazione toglie la candidatura dai conteggi e dal feed.
+    .is("positions.deleted_at", null)
     .order("critic_reviewed_at", { ascending: false, nullsFirst: false })
     .order("id", { ascending: true });
   const { data: apps, error } = await fetchPostgrestRows<any>(query);

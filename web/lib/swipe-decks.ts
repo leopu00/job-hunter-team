@@ -94,6 +94,8 @@ export async function getSwipeDecksCloud(
       // legacy_id giudicati non sta in un URL.
       .in("status", ["scored", "ready", "excluded"])
       .is("deleted_at", null)
+      // Uno score cancellato non dà il punteggio alla card.
+      .is("scores.deleted_at", null)
       .order("found_at", { ascending: true })
       .order("id", { ascending: true }),
     { enough: bothFull },

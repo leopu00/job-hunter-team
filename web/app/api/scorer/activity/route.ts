@@ -53,9 +53,12 @@ export async function GET() {
       supabase
         .from("scores")
         .select(
-          "position_id, total_score, scored_at, scored_by, positions(title, company, location, remote_type)",
+          "position_id, total_score, scored_at, scored_by, positions!inner(title, company, location, remote_type)",
         )
         .is("deleted_at", null)
+        // Solo score di posizioni vive: con !inner il filtro sulla relazione
+        // toglie la riga intera, non soltanto il titolo.
+        .is("positions.deleted_at", null)
         .gte("total_score", 40)
         .order("scored_at", { ascending: false })
         .limit(10),
@@ -63,9 +66,12 @@ export async function GET() {
       supabase
         .from("scores")
         .select(
-          "position_id, total_score, scored_at, scored_by, positions(title, company, location, remote_type)",
+          "position_id, total_score, scored_at, scored_by, positions!inner(title, company, location, remote_type)",
         )
         .is("deleted_at", null)
+        // Solo score di posizioni vive: con !inner il filtro sulla relazione
+        // toglie la riga intera, non soltanto il titolo.
+        .is("positions.deleted_at", null)
         .lt("total_score", 40)
         .order("scored_at", { ascending: false })
         .limit(10),

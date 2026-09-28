@@ -31,6 +31,7 @@ function fakeClient() {
       const call: QueryCall = { table, ops: [], ranges: [] };
       calls.push(call);
       const filters: Array<(row: Row) => boolean> = [];
+      const embedded: Array<(row: Row) => Row> = [];
       let window: [number, number] | null = null;
       let limit: number | null = null;
       const builder: Record<string, any> = {};
@@ -47,7 +48,20 @@ function fakeClient() {
       };
       builder.is = (column: string, value: unknown) => {
         call.ops.push(["is", [column, value]]);
-        filters.push((row) => (row[column] ?? null) === value);
+        const [rel, field] = column.split(".");
+        if (field === undefined) {
+          filters.push((row) => (row[column] ?? null) === value);
+        } else {
+          // Una relazione inclusa senza !inner: il filtro toglie il figlio, non la riga.
+          embedded.push((row) => ({
+            ...row,
+            [rel]: [row[rel]]
+              .flat()
+              .filter(
+                (child) => child != null && (child[field] ?? null) === value,
+              ),
+          }));
+        }
         return builder;
       };
       builder.limit = (n: number) => {
@@ -67,7 +81,9 @@ function fakeClient() {
       ) => {
         const source =
           table === "position_feedback" ? feedbackRows : positionRows;
-        const matching = source.filter((row) => filters.every((f) => f(row)));
+        const matching = source
+          .map((row) => embedded.reduce((r, filter) => filter(r), row))
+          .filter((row) => filters.every((f) => f(row)));
         const [from, to] = window ?? [0, (limit ?? Infinity) - 1];
         // Il tetto del server: vale anche quando `.limit()` chiede di più.
         const data = matching.slice(from, to + 1).slice(0, SERVER_MAX_ROWS);
@@ -261,5 +277,24 @@ describe("quante righe si leggono", () => {
 
     expect(pending.map((p) => p.legacy_id)).toEqual([1]);
     expect(reviewed).toEqual([]);
+  });
+});
+
+describe("relazioni incluse", () => {
+  it("uno score cancellato non dà il punteggio alla card", async () => {
+    positionRows = [
+      {
+        ...position(1, "scored"),
+        scores: [{ total_score: 90, deleted_at: "2026-09-01T00:00:00Z" }],
+      },
+      position(2, "scored"),
+    ];
+
+    const { pending } = await getSwipeDecksCloud(supa.client as any);
+
+    expect(pending.map((p) => [p.legacy_id, p.score])).toEqual([
+      [1, undefined],
+      [2, 70],
+    ]);
   });
 });
