@@ -26,17 +26,50 @@ const ROLE = /^[a-z][a-z0-9]{0,31}$/;
 /** The longest `delay_s` the host's executor accepts in an order (run.sh, x_check). */
 const EXECUTOR_MAX_DELAY_S = 300;
 
+/** The stagger when the configuration names none: 30 s, as long as the whole set still fits the executor's limit. */
+export const DEFAULT_STAGGER_S = 30;
+
+type TeamShape = { staggerS?: number | undefined; team?: Array<{ instances?: number | undefined; delay_s?: number | undefined }> | undefined };
+
+/** Each member's own `delay_s`, one entry per instance, in the order the members start. */
+function ownDelays(c: TeamShape): number[] {
+  return (c.team ?? []).flatMap((member) => Array.from({ length: member.instances ?? 1 }, () => member.delay_s ?? 0));
+}
+
+/**
+ * The largest stagger that keeps every member within the executor's limit:
+ * place × stagger + delay_s ≤ 300 for all of them. Null when a member's own
+ * `delay_s` is already over it, since no stagger can help there.
+ */
+export function maxStagger(c: TeamShape): number | null {
+  let max = Infinity;
+  for (const [place, own] of ownDelays(c).entries()) {
+    if (own > EXECUTOR_MAX_DELAY_S) return null;
+    if (place > 0) max = Math.min(max, Math.floor((EXECUTOR_MAX_DELAY_S - own) / place));
+  }
+  return max;
+}
+
+/**
+ * The stagger the set really gets. One the operator wrote is taken as it is
+ * (and refused by the schema if it does not fit). Without one it is 30 s,
+ * lowered to what fits: a base set of 12 at 30 s would make the last member
+ * wait 330 s, and a configuration that never named a stagger would be refused
+ * for it, the hub not starting at all.
+ */
+export function staggerOf(c: TeamShape): number {
+  if (c.staggerS !== undefined) return c.staggerS;
+  return Math.min(DEFAULT_STAGGER_S, maxStagger(c) ?? DEFAULT_STAGGER_S);
+}
+
 /**
  * Each member's wait, in the order the members start: its place times the
  * stagger, plus its own `delay_s`. The executor counts it from the moment the
  * order is written, and the whole set is written at once.
  */
-export function teamDelays(c: { staggerS?: number | undefined; team?: Array<{ instances?: number | undefined; delay_s?: number | undefined }> | undefined }): number[] {
-  const delays: number[] = [];
-  for (const member of c.team ?? []) {
-    for (let i = 0; i < (member.instances ?? 1); i++) delays.push(delays.length * (c.staggerS ?? 0) + (member.delay_s ?? 0));
-  }
-  return delays;
+export function teamDelays(c: TeamShape): number[] {
+  const stagger = staggerOf(c);
+  return ownDelays(c).map((own, place) => place * stagger + own);
 }
 
 export const LauncherConfigSchema = z
@@ -87,13 +120,23 @@ export const LauncherConfigSchema = z
      * configured order. 27/09, 21:09 UTC: five members started within two
      * seconds, the key proxy passed 942,751 tokens that minute, 12 requests
      * came back 429 and the CAPITANO died of it. 0 starts them together.
+     * Left out, it is 30 s or less, so that the set fits (`staggerOf`).
      */
-    staggerS: z.number().int().min(0).max(EXECUTOR_MAX_DELAY_S).default(30),
+    staggerS: z.number().int().min(0).max(EXECUTOR_MAX_DELAY_S).optional(),
   })
   .strict()
   .refine((c) => !Object.hasOwn(c.roles, "capitano"), { message: "capitano is never in the allowlist" })
-  .refine((c) => teamDelays(c).every((d) => d <= EXECUTOR_MAX_DELAY_S), {
-    message: `the base set would wait more than ${EXECUTOR_MAX_DELAY_S} s for a member, and the executor refuses such an order`,
+  .superRefine((c, ctx) => {
+    if (teamDelays(c).every((d) => d <= EXECUTOR_MAX_DELAY_S)) return;
+    const max = maxStagger(c);
+    ctx.addIssue({
+      code: "custom",
+      path: max === null ? ["team"] : ["staggerS"],
+      message:
+        max === null
+          ? `a member's delay_s is over ${EXECUTOR_MAX_DELAY_S} s, and the executor refuses such an order`
+          : `staggerS ${c.staggerS} makes the base set wait more than ${EXECUTOR_MAX_DELAY_S} s for a member, and the executor refuses such an order: set staggerS to ${max} or less, or leave it out`,
+    });
   });
 export type LauncherConfig = z.infer<typeof LauncherConfigSchema>;
 

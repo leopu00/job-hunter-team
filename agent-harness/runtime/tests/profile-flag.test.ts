@@ -8,7 +8,7 @@
  * tool at all. The tool is exactly as wide as that job.
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, lutimesSync, mkdirSync, readdirSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +34,13 @@ afterEach(async () => {
 
 const tool = () => createProfileFlagTool({ profileDir, now: () => new Date("2026-09-28T01:30:12.345Z") });
 const call = (flag: string, action: string) => tool().execute({ flag, action }, CONTEXT);
+/** The temps of a `set` of ready.flag in the profile folder, left behind or in flight. */
+const temps = () => readdirSync(profileDir).filter((name) => /^\.ready\.flag\..+\.tmp$/.test(name));
+/** Five minutes old: well past the age at which a leftover is taken for one. */
+const age = (path: string) => {
+  const old = new Date(Date.now() - 5 * 60_000);
+  utimesSync(path, old, old);
+};
 
 describe("profile_flag", () => {
   it("sets, checks and clears ready.flag, reading the answer back from the disk", async () => {
@@ -79,6 +86,67 @@ describe("profile_flag", () => {
     }
     expect(readFileSync(outside, "utf8")).toBe("someone else's file\n");
     expect(lstatSync(join(profileDir, "ready.flag")).isSymbolicLink()).toBe(true);
+  });
+
+  it("is not blocked by the temp a failed set left behind, and removes it once it is stale", async () => {
+    // The old name: the pid alone, the same after every restart of the container.
+    const leftover = join(profileDir, `.ready.flag.${process.pid}.tmp`);
+    writeFileSync(leftover, "");
+    age(leftover);
+    // Young: possibly another process's write in flight, so left alone.
+    const young = join(profileDir, ".ready.flag.4242.tmp");
+    writeFileSync(young, "");
+    // Not a leftover of ready.flag: not looked at.
+    const others = [".ready.flag.tmp", ".welcomed.flag.7.tmp", "ready.flag.7.tmp", ".ready.flag.7.tmp.bak"];
+    for (const name of others) {
+      writeFileSync(join(profileDir, name), "");
+      age(join(profileDir, name));
+    }
+
+    expect(await call("ready", "set")).toMatchObject({ ok: true, content: "FLAG_OK ready.flag" });
+    expect(readFileSync(join(profileDir, "ready.flag"), "utf8")).toBe("2026-09-28T01:30:12Z\n");
+    expect(existsSync(leftover)).toBe(false);
+    expect(temps()).toEqual([".ready.flag.4242.tmp"]);
+    for (const name of others) expect(existsSync(join(profileDir, name)), name).toBe(true);
+  });
+
+  it("does not follow or remove a link or a directory that has a leftover's name", async () => {
+    const outside = join(root, "not-the-profile.txt");
+    writeFileSync(outside, "someone else's file\n");
+    age(outside);
+    const link = join(profileDir, ".ready.flag.123.tmp");
+    symlinkSync(outside, link);
+    const old = new Date(Date.now() - 5 * 60_000);
+    lutimesSync(link, old, old);
+    const dir = join(profileDir, ".ready.flag.456.tmp");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "inside"), "kept\n");
+    age(dir);
+
+    expect(await call("ready", "set")).toMatchObject({ ok: true, content: "FLAG_OK ready.flag" });
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(outside, "utf8")).toBe("someone else's file\n");
+    expect(lstatSync(dir).isDirectory()).toBe(true);
+    expect(readFileSync(join(dir, "inside"), "utf8")).toBe("kept\n");
+    expect(temps().sort()).toEqual([".ready.flag.123.tmp", ".ready.flag.456.tmp"]);
+  });
+
+  it("leaves no temp behind when the rename fails, and says the flag is missing", async () => {
+    // A directory takes the flag's name after the check and before the rename:
+    // the temp is written, the rename over a directory fails.
+    const racing = createProfileFlagTool({
+      profileDir,
+      now: () => {
+        mkdirSync(join(profileDir, "ready.flag"));
+        return new Date("2026-09-28T01:30:12.345Z");
+      },
+    });
+    const answer = await racing.execute({ flag: "ready", action: "set" }, CONTEXT);
+    expect(answer.ok).toBe(false);
+    expect(answer.content).toContain("could not be written");
+    expect(answer.content).toContain("FLAG_MISSING ready.flag");
+    expect(temps()).toEqual([]);
+    expect(lstatSync(join(profileDir, "ready.flag")).isDirectory()).toBe(true);
   });
 
   it("is the ASSISTENTE's alone", () => {
