@@ -126,7 +126,7 @@ they live in [`CHANGELOG.md`](../../CHANGELOG.md) rather than this future list.
 |---|---|---|
 | **M6** | 🧙‍♂️ Mentor as a first-class citizen — dedicated web + desktop page, deeper tuning | The career-coach agent is live but buried in chat; it deserves its own surface. |
 | **M7** | 📊 Fine-grained observability + user feedback — full who-did-what-when timeline per offer | Builds on the [schema evolution plan](../internal/roadmap/db-schema-optimization.md) (`position_events` is the enabler). |
-| **M8** | 💳 Pay-per-use API mode with a **€-budget** the Sentinel enforces | Turns the budget guardian from "subscription %" into real money limits — and makes JHT usable without any subscription. |
+| **M8** | 💳 Pay-per-use API mode — the [API team](../guides/API-TEAM.md), in rehearsal, with **dollar caps** enforced per run (the runtime), per session (the launcher) and across runs (the key proxy) | Real money limits instead of a subscription's usage window — and makes JHT usable without any subscription. |
 | **M9** | 🎤 Interview practice agent — mock interviews **tailored to a specific position** (its JD, seniority, company), with feedback after each round | Rehearsing for a strong match is a natural extension of the Mentor (pairs with M6). |
 | **M10** | 📮 Opt-in auto-submit lane — **off by default**, per-user explicit opt-in, hard caps, and only for drafts that clear the Critic gate | A possible bounded exception for users who explicitly choose it; quality-over-volume remains the default. |
 
