@@ -84,7 +84,23 @@ describe("the office page", () => {
     parts.value = { createEngine: vi.fn(() => engine), data: { load: vi.fn(async () => snapshot), diff } };
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(applied).toHaveLength(1));
-    expect(diff).toHaveBeenCalledWith(null, snapshot);
+    expect(diff).toHaveBeenCalledWith(null, expect.objectContaining(snapshot));
+  });
+
+  it("with reduced motion a real move changes the pile's number, and nobody walks it", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const applied: OfficeEvent[] = [];
+    const engine = { ...emptyEngine(), apply: (e: OfficeEvent) => applied.push(e) };
+    const snapshot = { teamOnline: true, roster: [], transitions: [] } as unknown as OfficeSnapshot;
+    const position = { id: null, legacyId: 1, title: null, company: null };
+    const diff = vi.fn(() => [
+      { type: "pipeline", uid: "scorer-1", toState: "scored", position, ts: "2026-09-28T01:00:00.000Z" } as OfficeEvent,
+      { type: "piles", piles: { scout: 0, analisti: 0, scorer: 4, scrittori: 0, critici: 0 } } as OfficeEvent,
+    ]);
+    parts.value = { createEngine: vi.fn(() => engine), data: { load: vi.fn(async () => snapshot), diff } };
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
+    expect(applied.filter((e) => e.type === "pipeline")).toEqual([]);
   });
 
   it("hands the scene the published statuses only while the team is online", async () => {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeScene, OfficeSnapshot, Vec } from "../../office/contract";
+import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Vec } from "../../office/contract";
+import { createLiveOffice, createReadScheduler, subscribeOffice, type LiveOffice, type ReadScheduler } from "../../office/live";
+import { watchReducedMotion } from "../../office/scene/motion";
 import OfficePanel from "../../office/panel/OfficePanel";
 import OfficeKeyboard from "../../office/panel/OfficeKeyboard";
 import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
@@ -12,16 +14,15 @@ import { supabase } from "../../lib/supabase";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 
-/** How often the office reads the cloud again: the team pushes about this often. */
-export const SNAPSHOT_EVERY_MS = 20_000;
 
 type Ready = { assets: OfficeAssets; parts: OfficeParts };
 type Load = { state: "loading" } | { state: "ready"; ready: Ready } | { state: "no-assets" } | { state: "failed" };
 
 /**
  * /office: the team's office, as in the Godot game (D05). The page loads the
- * assets and the engine, mounts the PixiJS scene, and every SNAPSHOT_EVERY_MS
- * reads the cloud and hands the engine what changed. A click opens a panel
+ * assets and the engine, mounts the PixiJS scene, and follows the cloud
+ * (office/live.ts: Realtime, at most a read a minute) handing the engine what
+ * changed. A click opens a panel
  * INSIDE the office (D07: agents, piles, departments, the CV shelf and the
  * printer, the corkboard, the hologram), the pointer shows a tag; only the
  * panel's secondary links change page.
@@ -114,41 +115,62 @@ function Office({ ready }: { ready: Ready }) {
     };
   }, [assets, parts]);
 
-  // The data: a snapshot now and then, the difference to the engine.
-  const prev = useRef<OfficeSnapshot | null>(null);
-  const read = useRef<() => void>(() => {});
-  read.current = () => {
+  // The data, alive (D09, office/live.ts): Realtime on what the office reads
+  // asks for a read, at most one a minute; with the channel down, one a
+  // minute anyway. A transition on the channel is a trip at once. Under
+  // prefers-reduced-motion the trips are not walked: the piles' numbers change.
+  const live = useRef<LiveOffice | null>(null);
+  const scheduler = useRef<ReadScheduler | null>(null);
+  const reduced = useRef(false);
+  const applyEvent = (e: OfficeEvent) => {
+    if (reduced.current && e.type === "pipeline") return;
+    engineRef.current?.apply(e);
+  };
+  const read = useRef<() => Promise<void>>(async () => {});
+  read.current = async () => {
     if (!parts.data) return;
     const data = parts.data;
     // The tags' statuses in a query of their own: its failure costs the tags, not the office.
     const statuses = loadAgentStatuses(supabase);
-    data
-      .load(supabase)
-      .then(async (next) => {
-        const engine = engineRef.current;
-        if (!engine) return;
-        for (const event of data.diff(prev.current, next)) engine.apply(event);
-        prev.current = next;
-        setSnapshot(next);
-        setStatus(next.teamOnline === false ? "Il team è spento: l'ufficio è vuoto." : null);
-        // a team that is not online has no present status to show
-        showStatuses(next.teamOnline ? await statuses : null);
-      })
-      .catch(() => {
-        showStatuses(null);
-        setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era.");
-      });
+    try {
+      const next = await data.load(supabase);
+      if (!engineRef.current) return;
+      live.current ??= createLiveOffice(data.diff, applyEvent);
+      live.current.snapshot(next);
+      setSnapshot(next);
+      setStatus(next.teamOnline === false ? "Il team è spento: l'ufficio è vuoto." : null);
+      // a team that is not online has no present status to show
+      showStatuses(next.teamOnline ? await statuses : null);
+    } catch {
+      showStatuses(null);
+      setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era.");
+    }
   };
   useEffect(() => {
     if (!parts.data) {
       setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
       return;
     }
-    read.current();
-    const id = window.setInterval(() => read.current(), SNAPSHOT_EVERY_MS);
-    return () => window.clearInterval(id);
+    const motion = watchReducedMotion((r) => {
+      reduced.current = r;
+    });
+    reduced.current = motion.reduced();
+    const s = createReadScheduler(() => read.current());
+    scheduler.current = s;
+    const unsubscribe = subscribeOffice(supabase, {
+      onChange: () => s.poke(),
+      onTransition: (t) => live.current?.transition(t),
+      onStatus: (up) => s.setChannel(up),
+    });
+    return () => {
+      s.stop();
+      unsubscribe();
+      motion.stop();
+      scheduler.current = null;
+    };
   }, [parts.data]);
-  useRefresh(() => read.current());
+  // «Aggiorna» asks for a read too: the gap holds for it as well
+  useRefresh(() => scheduler.current?.poke());
 
   // Esc closes the panel, as the Godot office's overlays.
   useEffect(() => {
