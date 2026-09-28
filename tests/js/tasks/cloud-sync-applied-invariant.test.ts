@@ -996,6 +996,61 @@ describe("push sync di una candidatura", () => {
     });
   });
 
+  describe("the flags the user sets from the web, pushed by an old box and by a new one", () => {
+    // A box older than a flag does not send it. The route wrote it false (and
+    // its time null): the push of a box older than 12/09 erased an
+    // authorisation to apply given from the web; the same for the older flags.
+    const FLAGS = {
+      write_requested: ["write_requested_at"],
+      geocode_requested: ["geocode_requested_at"],
+      recheck_requested: ["recheck_requested_at"],
+      salary_precise_requested: ["salary_precise_requested_at"],
+      apply_requested: ["apply_requested_at", "apply_requested_by"],
+    } as const;
+    const upserts = () =>
+      calls.filter((call) => call.kind === "upsert" && call.table === "positions");
+    const position = (id: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      title: "Synthetic role",
+      company: "Example",
+      status: "scored",
+      ...extra,
+    });
+
+    it("a box that does not send them leaves the cloud's values as they are", async () => {
+      const response = await pushBody({ positions: [position(73)] });
+      expect(response.status).toBe(200);
+      const [row] = upserts()[0]!.payload;
+      for (const [flag, companions] of Object.entries(FLAGS)) {
+        expect(row, flag).not.toHaveProperty(flag);
+        for (const key of companions) expect(row, key).not.toHaveProperty(key);
+      }
+      expect(upserts()[0]!.options).toMatchObject({ defaultToNull: false });
+    });
+
+    it("an explicit value still changes them, 0 as false", async () => {
+      const response = await pushBody({
+        positions: [position(73, { apply_requested: 0, apply_requested_at: null, apply_requested_by: null, write_requested: 1, write_requested_at: "2026-09-28T00:00:00Z" })],
+      });
+      expect(response.status).toBe(200);
+      const [row] = upserts()[0]!.payload;
+      expect(row).toMatchObject({ apply_requested: false, apply_requested_at: null, apply_requested_by: null, write_requested: true });
+      expect(row).not.toHaveProperty("geocode_requested");
+    });
+
+    it("rows with and without a flag never share an upsert, where the missing one would take the default", async () => {
+      const response = await pushBody({
+        positions: [position(73, { apply_requested: 1, apply_requested_at: "2026-09-28T00:00:00Z", apply_requested_by: "user_web" }), position(74)],
+      });
+      expect(response.status).toBe(200);
+      expect(upserts()).toHaveLength(2);
+      for (const call of upserts()) {
+        const keys = call.payload.map((row: object) => Object.keys(row).sort().join(","));
+        expect(new Set(keys).size).toBe(1);
+      }
+    });
+  });
+
   it("non perde un'application delta quando la position non è nel batch", async () => {
     const response = await push(
       {

@@ -528,7 +528,11 @@ describe("le tre colonne sono nominate ovunque servano", () => {
       "'apply_requested', 'apply_requested_at', 'apply_requested_by'",
     );
     const route = leggi("web/app/api/cloud-sync/push/route.ts");
-    expect(route).toContain("apply_requested_by: p.apply_requested_by ?? null");
+    // The three columns travel together, and only when the box sends the flag
+    // (an absent flag leaves the web's authorisation as it is).
+    expect(route).toMatch(
+      /desiredFlag\(p, "apply_requested", \[\s*"apply_requested_at",\s*"apply_requested_by",?\s*\]\)/,
+    );
   });
 
   it("il push tollera un jobs.db che non ha ancora la colonna", () => {
