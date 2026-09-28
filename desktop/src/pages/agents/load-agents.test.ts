@@ -93,6 +93,26 @@ describe("loadAgents", () => {
     expect(data.messages).toHaveLength(1);
   });
 
+  it("a deleted position keeps its title in the moves but no link: its page is gone", async () => {
+    const { client } = fakeSupabase((q) =>
+      q.table === "positions"
+        ? {
+            data: [
+              { id: "uuid-7", legacy_id: 7, title: "Ruolo sintetico", company: "Azienda finta", deleted_at: null },
+              { id: "uuid-8", legacy_id: 8, title: "Ruolo cancellato", company: "Azienda finta", deleted_at: "2026-09-01T00:00:00Z" },
+            ],
+            error: null,
+          }
+        : answer(q),
+    );
+    const data = await loadAgents(client);
+
+    expect(data.moves.scout).toEqual([
+      expect.objectContaining({ actor: "scout-1", positionId: "uuid-7", title: "Ruolo sintetico" }),
+      expect.objectContaining({ actor: "scout-2", positionId: null, legacyId: 8, title: "Ruolo cancellato" }),
+    ]);
+  });
+
   it("reads the user's own rows only: user_id on every query, on top of the RLS", async () => {
     const { client, queries } = fakeSupabase(answer, "user-a");
     await loadAgents(client);

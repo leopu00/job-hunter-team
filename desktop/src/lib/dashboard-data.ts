@@ -155,6 +155,7 @@ export async function getRecentPositions(
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("found_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -204,6 +205,8 @@ export async function getDashboardPositions(
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("found_at", { ascending: false })
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
@@ -327,6 +330,7 @@ export async function getScoreDistribution(
     .select("scores(total_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return emptyScoreDistribution();
@@ -385,6 +389,8 @@ export async function getPositionTypeDistribution(
     .select("role_family, scores(total_score), applications(critic_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];

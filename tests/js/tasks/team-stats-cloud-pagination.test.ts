@@ -92,9 +92,13 @@ function fakeClient() {
         },
         not(column: string, operator: string, value: unknown) {
           record("not", [column, operator, value]);
-          if (operator !== "is" || value !== null)
+          if (operator === "eq") {
+            filters.push((row) => row[column] !== value);
+          } else if (operator === "is" && value === null) {
+            filters.push((row) => row[column] != null);
+          } else {
             throw new Error(`not(${column}, ${operator}) non supportato`);
-          filters.push((row) => row[column] != null);
+          }
           return builder;
         },
         or(expr: string) {
@@ -418,5 +422,91 @@ describe("/api/critico", () => {
       reject: 0,
     });
     expect(json.feed.map((row: Row) => row.id)).not.toContain(`app-${pad(3)}`);
+  });
+});
+
+describe("relazioni incluse in queries.ts: un figlio cancellato non parla per una posizione viva", () => {
+  it("getDashboardPositions: uno score o una candidatura cancellati non danno punteggio né verdetto", async () => {
+    tables.positions = [
+      {
+        id: "p-live",
+        legacy_id: 1,
+        status: "ready",
+        found_at: at(1),
+        deleted_at: null,
+        scores: {
+          total_score: 80,
+          scored_at: at(1),
+          scored_by: "scorer-1",
+          deleted_at: null,
+        },
+        applications: {
+          critic_score: 8,
+          critic_verdict: "PASS",
+          deleted_at: null,
+        },
+      },
+      {
+        id: "p-orphan",
+        legacy_id: 2,
+        status: "ready",
+        found_at: at(2),
+        deleted_at: null,
+        scores: {
+          total_score: 90,
+          scored_at: at(2),
+          scored_by: "scorer-1",
+          deleted_at: TOMBSTONE,
+        },
+        applications: {
+          critic_score: 2,
+          critic_verdict: "REJECT",
+          deleted_at: TOMBSTONE,
+        },
+      },
+    ];
+
+    const rows = await queries.getDashboardPositions();
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+
+    expect(byId["p-live"]).toMatchObject({
+      score: 80,
+      critic_score: 8,
+      critic_verdict: "PASS",
+    });
+    expect(byId["p-orphan"]).toMatchObject({
+      score: null,
+      critic_score: null,
+      critic_verdict: null,
+    });
+  });
+
+  it("feed: l'evento di una posizione cancellata tiene il titolo ma non il link", async () => {
+    tables.scores = [score(0), score(1)];
+    tables.positions = [
+      {
+        id: `pos-${pad(0)}`,
+        legacy_id: 10,
+        title: "viva",
+        company: "Acme",
+        deleted_at: null,
+      },
+      {
+        id: `pos-${pad(1)}`,
+        legacy_id: 11,
+        title: "cancellata",
+        company: "Acme",
+        deleted_at: TOMBSTONE,
+      },
+    ];
+
+    const act = await queries.getTeamActivity({
+      from: "2026-01-01",
+      to: "2026-12-31",
+    });
+    const byTitle = Object.fromEntries(act.recent.map((e) => [e.title, e]));
+
+    expect(byTitle["viva"].pid).toBe(`pos-${pad(0)}`);
+    expect(byTitle["cancellata"].pid).toBeNull();
   });
 });

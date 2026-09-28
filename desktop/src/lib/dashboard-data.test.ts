@@ -31,6 +31,7 @@ function fakeClient(tables: Record<string, Row[]>, failOn?: string) {
       const call: Call = { table, columns: "", ops: [], ranges: [] };
       calls.push(call);
       const filters: Array<(r: Row) => boolean> = [];
+      const embedded: Array<(r: Row) => Row> = [];
       const orders: Array<[string, boolean]> = [];
       let limit: number | null = null;
 
@@ -38,9 +39,9 @@ function fakeClient(tables: Record<string, Row[]>, failOn?: string) {
         if (failOn === table) {
           return Promise.resolve({ data: null, error: new Error("boom") });
         }
-        let rows = (tables[table] ?? []).filter((r) =>
-          filters.every((f) => f(r)),
-        );
+        let rows = (tables[table] ?? [])
+          .map((r) => embedded.reduce((row, f) => f(row), r))
+          .filter((r) => filters.every((f) => f(r)));
         rows = [...rows].sort((a, b) => {
           for (const [col, asc] of orders) {
             if (a[col] === b[col]) continue;
@@ -62,7 +63,17 @@ function fakeClient(tables: Record<string, Row[]>, failOn?: string) {
         },
         is(col: string, value: unknown) {
           call.ops.push({ name: "is", args: [col, value] });
-          filters.push((r) => (value === null ? r[col] == null : r[col] === value));
+          const [rel, field] = col.split(".");
+          if (field === undefined) {
+            filters.push((r) => (value === null ? r[col] == null : r[col] === value));
+          } else {
+            // An included relation without !inner, as PostgREST does it: the
+            // filter drops the child, the row stays.
+            embedded.push((r) => {
+              const kept = [r[rel]].flat().filter((c) => c != null && (value === null ? c[field] == null : c[field] === value));
+              return { ...r, [rel]: Array.isArray(r[rel]) ? kept : (kept[0] ?? null) };
+            });
+          }
           return builder;
         },
         not(col: string, op: string, value: unknown) {
@@ -231,6 +242,29 @@ describe("getDashboardPositions", () => {
     const orders = calls[0].ops.filter((o) => o.name === "order");
     expect(orders.at(-1)?.args).toEqual(["id", { ascending: true }]);
     expect(calls[0].ranges).toHaveLength(2);
+  });
+});
+
+describe("included relations", () => {
+  it("a deleted score or application gives a live position no score and no verdict", async () => {
+    const { client } = fakeClient({
+      positions: [
+        position(1, {
+          status: "ready",
+          scores: { total_score: 80, scored_at: null, scored_by: null, deleted_at: null },
+          applications: { critic_score: 8, critic_verdict: "PASS", deleted_at: null },
+        }),
+        position(2, {
+          status: "ready",
+          scores: { total_score: 90, scored_at: null, scored_by: null, deleted_at: "2026-09-01T00:00:00Z" },
+          applications: { critic_score: 2, critic_verdict: "REJECT", deleted_at: "2026-09-01T00:00:00Z" },
+        }),
+      ],
+    });
+    const rows = await getDashboardPositions(client);
+    const byLegacy = Object.fromEntries(rows.map((r) => [r.legacy_id, r]));
+    expect(byLegacy[1]).toMatchObject({ score: 80, critic_score: 8, critic_verdict: "PASS" });
+    expect(byLegacy[2]).toMatchObject({ score: null, critic_score: null, critic_verdict: null });
   });
 });
 
