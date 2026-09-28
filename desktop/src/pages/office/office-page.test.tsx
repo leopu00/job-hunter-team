@@ -19,7 +19,12 @@ vi.mock("../../office/scene/pixi-scene", () => ({
     return { resize: scene.resize, destroy: scene.destroy, setAgentStatuses: scene.setAgentStatuses, focus: scene.focus };
   }),
 }));
-vi.mock("../../lib/supabase", () => ({ supabase: { from: vi.fn() } }));
+// The client the page gets: no session by default (no channel, the reads alone);
+// the channel's test gives it one.
+const sb = vi.hoisted(() => ({ client: { from: () => undefined } as Record<string, unknown> }));
+vi.mock("../../lib/supabase", () => ({
+  supabase: new Proxy({}, { get: (_, key) => sb.client[key as string] }),
+}));
 const statuses = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock("../../office/status", () => ({ loadAgentStatuses: vi.fn(async () => statuses.value) }));
 
@@ -29,6 +34,7 @@ vi.mock("../../office/parts", async (importOriginal) => ({
   loadParts: vi.fn(async () => parts.value),
 }));
 
+import { diffOfficeSnapshots } from "../../office/data/diff";
 import OfficePage from "./index";
 
 const LAYOUT = { version: 1, departments: [], furniture: [] } as unknown as OfficeLayout;
@@ -39,6 +45,7 @@ function json(body: unknown, status = 200) {
 }
 
 beforeEach(() => {
+  sb.client = { from: vi.fn() };
   scene.options = null;
   scene.destroy.mockReset();
   parts.value = { createEngine: null, data: null };
@@ -101,6 +108,46 @@ describe("the office page", () => {
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
     expect(applied.filter((e) => e.type === "pipeline")).toEqual([]);
+  });
+
+  it("the channel in the page: a transition that arrives on it is its agent's trip at once, and the page's end removes it", async () => {
+    const inserts: Array<(p: { new: unknown }) => void> = [];
+    let status: (s: string) => void = () => {};
+    const channel = {
+      on: vi.fn((_: string, filter: { table: string }, cb: (p: { new: unknown }) => void) => {
+        if (filter.table === "position_transitions") inserts.push(cb);
+        return channel;
+      }),
+      subscribe: vi.fn((cb: (s: string) => void) => ((status = cb), channel)),
+    };
+    const removeChannel = vi.fn(async () => "ok");
+    sb.client = {
+      from: vi.fn(),
+      auth: { getSession: async () => ({ data: { session: { access_token: "jwt", user: { id: "user-a" } } } }) },
+      realtime: { setAuth: vi.fn(async () => {}) },
+      channel: vi.fn(() => channel),
+      removeChannel,
+    };
+    const applied: OfficeEvent[] = [];
+    const engine = { ...emptyEngine(), apply: (e: OfficeEvent) => applied.push(e) };
+    const snapshot = {
+      teamOnline: true,
+      heartbeatAt: "2026-09-28T01:00:00Z",
+      roster: [{ uid: "scorer-1", role: "scorer", sheet: "" }],
+      piles: { scout: 0, analisti: 3, scorer: 1, scrittori: 0, critici: 0 },
+      transitions: [],
+    } as unknown as OfficeSnapshot;
+    const load = vi.fn(async () => snapshot);
+    parts.value = { createEngine: vi.fn(() => engine), data: { load, diff: diffOfficeSnapshots } };
+    const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
+    await waitFor(() => expect(inserts).toHaveLength(1));
+    act(() => status("SUBSCRIBED"));
+    expect(applied.filter((e) => e.type === "pipeline")).toEqual([]);
+    act(() => inserts[0]!({ new: { ts: "2026-09-28T01:00:05Z", by_agent: "scorer-1", from_state: "checked", to_state: "scored", position_legacy_id: 7 } }));
+    expect(applied.filter((e) => e.type === "pipeline")).toEqual([expect.objectContaining({ uid: "scorer-1", toState: "scored" })]);
+    unmount();
+    expect(removeChannel).toHaveBeenCalledWith(channel);
   });
 
   it("hands the scene the published statuses only while the team is online", async () => {

@@ -5,7 +5,7 @@
   "description": "Job Hunter Team desktop shell built with Tauri 2 and React",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420",
+    "dev": "node scripts/dev-server.mjs --host 127.0.0.1 --port 1420",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",

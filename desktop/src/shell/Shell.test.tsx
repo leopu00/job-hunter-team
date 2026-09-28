@@ -6,7 +6,8 @@ import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
-import Shell, { DESKTOP_LINKS } from "./Shell";
+import { DESKTOP_LINKS } from "./desktop-links";
+import Shell from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
 // The real map needs WebGL, which jsdom has not: the shell only has to route to it.
@@ -82,6 +83,12 @@ describe("Shell", () => {
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
     expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget", "Ufficio"]);
+  });
+
+  it("exports only its component, so an edit is Fast Refreshed instead of reloading the page", async () => {
+    // A component file that also exports data («DESKTOP_LINKS export is
+    // incompatible») makes Vite reload the whole page on every edit.
+    expect(Object.keys(await import("./Shell"))).toEqual(["default"]);
   });
 
   it("gives the office the whole window under the navbar, and leaves every other page in the web's MainChrome", async () => {

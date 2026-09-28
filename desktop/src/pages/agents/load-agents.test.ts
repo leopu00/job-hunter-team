@@ -93,6 +93,22 @@ describe("loadAgents", () => {
     expect(data.messages).toHaveLength(1);
   });
 
+  it("reads the user's own rows only: user_id on every query, on top of the RLS", async () => {
+    const { client, queries } = fakeSupabase(answer, "user-a");
+    await loadAgents(client);
+    expect(new Set(queries.map((q) => q.table))).toEqual(new Set(["team_state", "position_transitions", "positions", "pending_user_messages"]));
+    for (const q of queries) {
+      const ids = q.ops.filter(([op, a]) => op === "eq" && a[0] === "user_id").map(([, a]) => a[1]);
+      expect(ids, `${q.table} ${JSON.stringify(q.ops)}`).toEqual(["user-a"]);
+    }
+  });
+
+  it("without a session nothing is read", async () => {
+    const { client, queries } = fakeSupabase(answer, null);
+    await expect(loadAgents(client)).rejects.toThrow();
+    expect(queries).toHaveLength(0);
+  });
+
   it("a team that never wrote its state is null, not an error", async () => {
     const { client } = fakeSupabase((q) => (q.table === "team_state" ? { data: null, error: null } : answer(q)));
     expect((await loadAgents(client)).team).toBeNull();

@@ -11,6 +11,8 @@ import { clamp, cover, pan, zoomAt, type Camera } from "./camera";
  *   W A S D / arrows                      pan, 1100 world px/s
  *   + / -                                 zoom towards the centre
  *   double click, 0 or Home               back to the starting view
+ * Keys typed in a text field, or inside an element marked OWN_KEYS_ATTR (the
+ * panel, whose list the arrows scroll), are not the camera's.
  * A press that travels less than DRAG_CLICK_TOLERANCE is a click (a tap on
  * a trackpad travels a few pixels), anything longer a drag: while a drag is
  * on, `dragging()` says so and the scene ignores the taps it would fire.
@@ -24,6 +26,8 @@ import { clamp, cover, pan, zoomAt, type Camera } from "./camera";
 export const ZOOM_STEP = 1.12;
 export const DRAG_CLICK_TOLERANCE = 14;
 export const PAN_SPEED = 1100;
+/** On an element whose keys are its own: the camera ignores the keys pressed inside it. */
+export const OWN_KEYS_ATTR = "data-office-own-keys";
 
 export type WheelKind = "zoom" | "pinch" | "pan";
 
@@ -142,12 +146,12 @@ export function attachControls(
 
   // Keys: held for the pan, pressed for zoom and home.
   const held = new Set<string>();
-  const typing = (e: KeyboardEvent) => {
+  const notTheCameras = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement | null;
-    return !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    return !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest?.(`[${OWN_KEYS_ATTR}]`));
   };
   const onKeyDown = (e: KeyboardEvent) => {
-    if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (notTheCameras(e) || e.metaKey || e.ctrlKey || e.altKey) return;
     const key = e.key.toLowerCase();
     if (PAN_KEYS.has(key)) {
       held.add(key);

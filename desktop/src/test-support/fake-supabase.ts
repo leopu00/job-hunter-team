@@ -41,6 +41,8 @@ export function fakeSupabase(
       "or",
       "gte",
       "lte",
+      "lt",
+      "gt",
       "order",
       "limit",
       "range",

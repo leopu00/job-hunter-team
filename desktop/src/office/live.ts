@@ -131,11 +131,16 @@ export function transitionFromRow(row: unknown): Transition | null {
   };
 }
 
+/** The channel's transitions kept at most, waiting for a read to bring them (the oldest are forgotten first). */
+export const WALKED_MAX = 1000;
+
 export type LiveOffice = {
   /** a full read: what changed since the last one */
   snapshot(next: OfficeSnapshot): void;
   /** a transition from the channel: its trip now, never again at the next read */
   transition(t: Transition): void;
+  /** how many channel transitions wait for a read to bring them */
+  pending(): number;
 };
 
 /**
@@ -147,19 +152,30 @@ export type LiveOffice = {
 export function createLiveOffice(diff: (prev: OfficeSnapshot | null, next: OfficeSnapshot) => OfficeEvent[], apply: (e: OfficeEvent) => void): LiveOffice {
   let prev: OfficeSnapshot | null = null;
   const key = (x: Transition) => `${x.ts}|${x.byAgent}|${x.position.legacyId}|${x.from ?? ""}|${x.to ?? ""}`;
+  // The channel's transitions already walked, apart from the last read: a
+  // read that left before the INSERT does not bring them, and must not make
+  // the read after it walk them again. Taken out of what the diff sees as
+  // new (not added to `prev`, whose oldest transition is the diff's
+  // threshold); kept until a read brings them.
+  const walked = new Set<string>();
   return {
     snapshot(next) {
       const n = normalise(next);
-      for (const e of diff(prev, n)) apply(e);
+      const fresh = walked.size > 0 ? { ...n, transitions: n.transitions.filter((x) => !walked.has(key(x))) } : n;
+      for (const e of diff(prev, fresh)) apply(e);
+      for (const x of n.transitions) walked.delete(key(x));
       prev = n;
     },
-    transition(t) {
+    transition(raw) {
+      const t = { ...raw, ts: iso(raw.ts) };
       // before the first read the office is not seated yet; an agent not in it enters with the next read
       if (!prev || t.to === null || !(prev.roster ?? []).some((a) => a.uid === t.byAgent)) return;
-      if (prev.transitions.some((x) => key(x) === key(t))) return;
+      if (walked.has(key(t)) || prev.transitions.some((x) => key(x) === key(t))) return;
       apply({ type: "pipeline", uid: t.byAgent, toState: t.to, position: t.position, ts: t.ts });
-      prev = { ...prev, transitions: [t, ...prev.transitions] };
+      walked.add(key(t));
+      if (walked.size > WALKED_MAX) walked.delete(walked.values().next().value!);
     },
+    pending: () => walked.size,
   };
 }
 
@@ -169,6 +185,8 @@ export function createLiveOffice(diff: (prev: OfficeSnapshot | null, next: Offic
  * `onStatus(true)` when it is up, `(false)` when it falls or is refused.
  * Any failure is a channel that is not up: the reads fall back to the gap.
  */
+let mounts = 0;
+
 export function subscribeOffice(
   client: Pick<SupabaseClient, "auth" | "channel" | "removeChannel" | "realtime">,
   handlers: { onChange: () => void; onTransition: (t: Transition) => void; onStatus: (up: boolean) => void },
@@ -181,10 +199,13 @@ export function subscribeOffice(
       const session = data.session;
       if (gone || !session) return handlers.onStatus(false);
       await client.realtime?.setAuth?.(session.access_token);
+      // unmounted while waiting: no channel, or it would outlive the page
+      if (gone) return;
       const filter = `user_id=eq.${session.user.id}`;
       const on = (table: string, event: "*" | "INSERT", cb: (payload: { new: unknown }) => void) =>
         channel!.on("postgres_changes" as never, { event, schema: "public", table, filter } as never, cb as never);
-      channel = client.channel(`office:${session.user.id}`);
+      // a topic of its own for each mount: the client keeps one channel per topic
+      channel = client.channel(`office:${session.user.id}:${++mounts}`);
       on("positions", "*", () => handlers.onChange());
       on("team_state", "*", () => handlers.onChange());
       on("position_transitions", "INSERT", (payload) => {
