@@ -11,7 +11,8 @@
  * - the database tools of the role's skills (`createSkillTools`, with the
  *   role's `skills.list` read here), `role-policy.ts` deciding per role;
  * - `send`, with `from` set by the hub, and `drain` of the caller's inbox only;
- * - `notify`, with the rate limit kept here too;
+ * - `notify`, with the rate limit kept here too, into `pending_user_messages`
+ *   as `jht-notify-user` writes it (B1-T3) and into `notify.jsonl` as its record;
  * - `take` of the person's replies to the caller.
  *
  * One token per role, in the role's environment. A shell in that role can
@@ -34,6 +35,7 @@ import { DEFAULT_NOTIFY_LIMIT, FileMailbox, FileNotifier, FileUserReplies } from
 import { loadRolePrompt } from "../parity/role-prompt.ts";
 import { createSkillTools } from "../parity/skills/index.ts";
 import { requestWrite } from "../db/write-request.ts";
+import { JobsDbNotifier, UnknownPositionError } from "../db/user-messages.ts";
 import { peerRefusal } from "../parity/peers.ts";
 import { reviewsFor, saveReview, verdictPosition } from "./review.ts";
 import type { ToolContext, ToolHandler } from "../tools/registry.ts";
@@ -144,20 +146,32 @@ export function createHub(options: HubOptions): Server {
   let opened: Database | undefined;
   const db = () => (opened ??= openJobsDb(options.dbPath));
   const mailbox = new FileMailbox(join(options.channelsDir, "mailbox"));
-  const notifier = new FileNotifier(join(options.channelsDir, "notify.jsonl"));
+  // B1-T3: the row is what reaches the person (the chat sync, the web); the file only records it.
+  const notifier = new JobsDbNotifier(db, new FileNotifier(join(options.channelsDir, "notify.jsonl")));
   const replies = new FileUserReplies(join(options.channelsDir, "replies"));
   const notifyLimit = options.notifyLimit ?? DEFAULT_NOTIFY_LIMIT;
   const sendLimit = options.sendLimit ?? DEFAULT_SEND_LIMIT;
   const notified = new Map<string, number[]>();
   const sent = new Map<string, number[]>();
-  /** Counts one more for `agent` in a sliding window, or refuses it past `limit`. */
+  /**
+   * Counts one more for `agent` in a sliding window, or refuses it past
+   * `limit`. The slot is taken before the work, so two requests in flight
+   * cannot both pass the last one; `release` gives it back when the request
+   * itself is refused — a notification about a position that does not exist
+   * was never sent (B1-T3).
+   */
   const within = (log: Map<string, number[]>, agent: string, limit: { max: number; windowMs: number }, what: string) => {
     const at = now();
     const window = (log.get(agent) ?? []).filter((t) => at - t < limit.windowMs);
     if (window.length >= limit.max) throw new HttpError(429, `${what} limit reached (${limit.max} per ${Math.round(limit.windowMs / 60_000)} min).`);
     window.push(at);
     log.set(agent, window);
-    return at;
+    const release = () => {
+      const kept = log.get(agent) ?? [];
+      const i = kept.lastIndexOf(at);
+      if (i >= 0) kept.splice(i, 1);
+    };
+    return { at, release };
   };
   // The agents that exist are the ones with a token: a message to anyone else
   // would sit in an inbox nobody reads (CAPITANO-01 is not capitano-1).
@@ -250,7 +264,7 @@ export function createHub(options: HubOptions): Server {
         // the body's to name, and neither is the exception.
         const refusal = peerRefusal(agent, to);
         if (refusal !== null) throw new HttpError(403, refusal);
-        const at = within(sent, agent, sendLimit, "Message");
+        const { at } = within(sent, agent, sendLimit, "Message");
         // The sender is the token's agent, whatever the role's runtime believes it is.
         await mailbox.send({ from: agent, to, text: request.text, ts: at });
         return {};
@@ -260,8 +274,17 @@ export function createHub(options: HubOptions): Server {
         return { messages: await mailbox.drain(agent) };
       case HUB_PATHS.notify: {
         const request = parse(NotifyRequest, body);
-        const at = within(notified, agent, notifyLimit, "Notification");
-        await notifier.notify({ from: agent, kind: request.kind, text: request.text, ts: at, ...(request.positionId === undefined ? {} : { positionId: request.positionId }) });
+        const { at, release } = within(notified, agent, notifyLimit, "Notification");
+        try {
+          await notifier.notify({ from: agent, kind: request.kind, text: request.text, ts: at, ...(request.positionId === undefined ? {} : { positionId: request.positionId }) });
+        } catch (error) {
+          // The script's exit 2 on the same insert: nothing is sent, the slot is not spent, and the role is told why.
+          if (error instanceof UnknownPositionError) {
+            release();
+            throw new HttpError(400, error.message);
+          }
+          throw error;
+        }
         return {};
       }
       case HUB_PATHS.replies:

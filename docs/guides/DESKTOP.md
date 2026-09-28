@@ -44,7 +44,7 @@ your other devices stay signed in.
 
 | Page | What you find there |
 | --- | --- |
-| **Dashboard** | The overview: how many positions the team found, analysed, scored and prepared, the latest activity, the globe. |
+| **Dashboard** | The overview: how many positions there are, excluded and active, the latest scored ones, the applications over time, and the charts by type, country, city, score and salary. |
 | **Map** | Where the positions are, on a map. |
 | **Posizioni** | Every position, with filters, search, sorting and columns. A row opens the position's page. |
 | **Position page** | One position in full: the job description, the scores, the CV and cover letter status, notes, and the requests you can make to the team (write the CV, re-check, a new score, mark it applied, record an outcome). |
@@ -53,7 +53,7 @@ your other devices stay signed in.
 | **Messaggi** | The chat with the team's agents. |
 | **Profilo** | Your candidate profile as the team reads it, and its export. |
 | **Agenti** | The agents one by one: on the left the list, on the right the chosen agent. For the agents you talk to, the conversation; for the others, their latest moves. |
-| **Budget** | What the team on **this computer** spent: its runs, the spend against each run's cap, per role and per agent. |
+| **Budget** | What the team on **this computer** spent: its runs, the spend against each run's cap, per role and per agent. Below, the tmux team's usage window from the cloud (5 hours, week, reset, projection). |
 | **Ufficio** | The office: see below. |
 
 ## 🏢 The office
@@ -70,7 +70,9 @@ data is not drawn, a status the team did not publish is not shown.
 - Every agent that moved a position in the **last 24 hours**.
 - The **Captain**, the **Sentinel**, the **Assistant** and the **Mentor** at
   their own seats, while the team is running.
-- If the team is off, the office says so and stays empty.
+- If the team is off, the office says so: the Captain, the Sentinel, the
+  Assistant and the Mentor are not there, and the agents that moved a position
+  in the last 24 hours stay, with no status tags.
 
 Agents come in through the **door** and leave through it. When an agent moves
 a position, it walks the trip: it takes a sheet from the previous
@@ -161,5 +163,5 @@ not in the app.
 | **Open encrypted contact details** in the profile | They are decrypted with a key that lives only on the server. The app says they are encrypted. |
 | **Edit the profile through the Assistant** | That goes through a chat with the team's Assistant on the team's machine; the app does not talk to it yet. |
 | **See what an agent is doing inside its terminal**, its CPU, memory and tokens | That stays on the machine where the team runs; the cloud does not have it. |
-| **See the spend of the team on a server** in Budget | Budget shows the team on this computer. A server team's usage windows stay on its machine and show as «—». |
+| **See what a server team spent in dollars** in Budget | Budget shows the runs and spend of the team on this computer. A tmux team, on this computer or a server, shows its usage window from the cloud (5 hours, week, reset, projection), not dollars: it runs on a subscription. |
 | **Change anything from the office** | The office is for looking and understanding. Every action stays where the app already offers it (for example the requests on a position's page). |

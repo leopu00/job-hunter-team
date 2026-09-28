@@ -147,8 +147,14 @@ describe("npm run role -- --role closer (T39)", () => {
     expect(records.at(-1)).toMatchObject({ type: "run_finished", reason: "completed" });
 
     // Nothing moved: not the state, not the authorisation, not a slot of the cap, not a send.
+    // The one new row is the round's message to the person, where the TUI's
+    // jht-notify-user writes it and the web reads it (B1-T3).
     const after = openJobsDb(join(root, "api", "db", "jobs.db"));
-    expect(snapshot(after)).toEqual(before);
+    const { pending_user_messages: messages, ...rest } = snapshot(after);
+    const { pending_user_messages: none, ...restBefore } = before;
+    expect(rest).toEqual(restBefore);
+    expect(none).toEqual([]);
+    expect(messages).toEqual([expect.objectContaining({ agent: "closer", kind: "notification", delivered_via: "web", body: expect.stringContaining("not sent") })]);
     after.close();
 
     // The person heard about it once, for the whole round.

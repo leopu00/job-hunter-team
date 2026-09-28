@@ -110,8 +110,11 @@ describe("db_insert score, native", () => {
   it("refuses the maintenance flags and a runtime with no profile folder, writing nothing", async () => {
     const db = seeded(join(root, "m.db"));
     const insert = scoreTool(db, jhtHome(VIABLE));
+    // B1-T2: `rescore` is taken only on a rescore ticket assigned to this SCORER (b1-parity-rescore), any other action never.
     const rescore = await insert([...SCORE, "--action", "rescore"]);
-    expect(rescore).toMatchObject({ ok: false, content: expect.stringContaining("--action: not available to this agent") });
+    expect(rescore).toMatchObject({ ok: false, content: expect.stringContaining("no rescore ticket assigned to you") });
+    const liveness = await insert([...SCORE, "--action", "liveness_check"]);
+    expect(liveness).toMatchObject({ ok: false, content: expect.stringContaining("only `rescore` is available to this agent") });
 
     const tool = createDbTools({ db: () => db, agent: "scorer-1" }).find((t) => t.spec.name === "db_insert") as ToolHandler;
     const noProfile = await tool.execute({ args: SCORE }, context);

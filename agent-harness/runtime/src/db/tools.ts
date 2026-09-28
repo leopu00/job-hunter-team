@@ -24,7 +24,7 @@ import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } f
 import { insertApplication, insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
-import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, updateApplication, updateCompany, updatePosition } from "./db-update.ts";
+import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, recordDiffs, updateApplication, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
@@ -32,7 +32,7 @@ import { AGENT_NAME } from "../parity/jht-tools.ts";
 import { dbPolicyFor } from "./role-policy.ts";
 import { checkMinimumViableProfile } from "../parity/skills/profile-gate.ts";
 import type { Database } from "./jobs-db.ts";
-import { interpretEscapes, pyJson, pySlice, pythonIsoUtc, pyTruthy } from "./py-format.ts";
+import { interpretEscapes, pyJson, pySlice, pyStr, pythonIsoUtc, pyTruthy } from "./py-format.ts";
 
 export interface DbToolsOptions {
   /** The team's database, opened by the runtime on first use. */
@@ -251,10 +251,19 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
   /** `db_insert.py score` (T15): the SCORER's verdict on one position. */
   const insertScore = (argv: string[]): ScriptResult => {
     const a = parseArgv(SCORE_INSERT, argv);
-    // The maintenance history (`--action rescore`) is the Mantenitore's, and
-    // scorer.md never passes it: a score here is a first score or a plain re-score.
-    if (a["action"] !== null && a["action"] !== undefined) {
-      return { stdout: "", stderr: "--action: not available to this agent. Score with db_insert score and no maintenance flags.\n", exitCode: 2 };
+    // B1-T2: `--action rescore` is how the TUI's SCORER closes the person's
+    // request to score a position again ([RESCORE-TICKET], capitano.md C-15):
+    // on a position already past its queue, with the change in the maintenance
+    // history. Here it is taken only on a rescore ticket assigned to this
+    // agent (checked below, in the write itself); any other maintenance
+    // action is not a score's.
+    const rescore = a["action"] === "rescore";
+    if (a["action"] !== null && a["action"] !== undefined && !rescore) {
+      return {
+        stdout: "",
+        stderr: "--action: only `rescore` is available to this agent, on a rescore ticket assigned to it. Score with db_insert score and no maintenance flags.\n",
+        exitCode: 2,
+      };
     }
     // profile_gate.py, before anything else, as insert_score runs it.
     const gate = options.profilePath
@@ -280,48 +289,90 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     // S-1: only on a position in the SCORER's queue (`checked`, as
     // next-for-scorer reads it), in the same statement: the script would
     // score or rewrite any position, one already in writing or applied too.
+    // A rescore instead needs the person's request, assigned to this agent: the
+    // position may be anywhere past the queue, and nothing else opens it.
     const db = options.db();
-    const written = db
-      .prepare(
-        `INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
-                             salary_fit, experience_fit, strategic_fit,
-                             breakdown, notes, scored_by, scored_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')
-         WHERE EXISTS (SELECT 1 FROM positions WHERE id = ? AND status = 'checked')
-         ON CONFLICT(position_id) DO UPDATE SET
-             total_score = excluded.total_score,
-             stack_match = excluded.stack_match,
-             remote_fit = excluded.remote_fit,
-             salary_fit = excluded.salary_fit,
-             experience_fit = excluded.experience_fit,
-             strategic_fit = excluded.strategic_fit,
-             breakdown = excluded.breakdown,
-             notes = excluded.notes,
-             scored_by = excluded.scored_by,
-             scored_at = excluded.scored_at`,
-      )
-      .run(
-        sql(a["position_id"]),
-        sql(a["total"]),
-        sql(a["stack_match"]),
-        sql(a["remote_fit"]),
-        sql(a["salary_fit"]),
-        sql(a["experience_fit"]),
-        sql(a["strategic_fit"]),
-        sql(a["breakdown"]),
-        sql(a["notes"]),
-        // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
-        options.agent,
-        sql(a["position_id"]),
-      );
-    if (Number(written.changes) === 0) {
-      const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(sql(a["position_id"])) as { status: string } | undefined;
+    const positionId = a["position_id"] as number;
+    const [where, whereParams] = rescore
+      ? [
+          "EXISTS (SELECT 1 FROM position_tickets WHERE position_id = ? AND kind = 'rescore' AND status = 'assigned' " +
+            "AND lower(assigned_agent) IN (?, ?))",
+          [positionId, ownId, ownAlias],
+        ]
+      : ["EXISTS (SELECT 1 FROM positions WHERE id = ? AND status = 'checked')", [positionId]];
+    // The write and its history are one transaction, as the script commits them together.
+    db.exec("BEGIN IMMEDIATE");
+    let unchanged = false;
+    let changed: number;
+    try {
+      const before = scoreSnapshot(db, positionId);
+      const written = db
+        .prepare(
+          `INSERT INTO scores (position_id, total_score, stack_match, remote_fit,
+                               salary_fit, experience_fit, strategic_fit,
+                               breakdown, notes, scored_by, scored_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')
+           WHERE ${where}
+           ON CONFLICT(position_id) DO UPDATE SET
+               total_score = excluded.total_score,
+               stack_match = excluded.stack_match,
+               remote_fit = excluded.remote_fit,
+               salary_fit = excluded.salary_fit,
+               experience_fit = excluded.experience_fit,
+               strategic_fit = excluded.strategic_fit,
+               breakdown = excluded.breakdown,
+               notes = excluded.notes,
+               scored_by = excluded.scored_by,
+               scored_at = excluded.scored_at`,
+        )
+        .run(
+          positionId,
+          sql(a["total"]),
+          sql(a["stack_match"]),
+          sql(a["remote_fit"]),
+          sql(a["salary_fit"]),
+          sql(a["experience_fit"]),
+          sql(a["strategic_fit"]),
+          sql(a["breakdown"]),
+          sql(a["notes"]),
+          // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
+          options.agent,
+          ...whereParams,
+        );
+      changed = Number(written.changes);
+      if (rescore && changed > 0) {
+        // `insert_score` with an action: one event per field that moved, or one saying nothing did.
+        const after = scoreSnapshot(db, positionId);
+        const changes = SCORE_TRACKED.flatMap((field) => {
+          const old = before.get(field) ?? { raw: null, text: "None" };
+          const now = after.get(field) ?? { raw: null, text: "None" };
+          return old.text === now.text ? [] : [{ field, before: old, after: now }];
+        });
+        recordDiffs(db, "position", positionId, "rescore", changes, a, options.agent);
+        unchanged = before.size > 0 && changes.length === 0;
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    if (changed === 0) {
+      if (rescore) {
+        return {
+          stdout:
+            `⚠\ufe0f  SCORE REFUSED: position ${positionId} has no rescore ticket assigned to you. A score is rewritten only on ` +
+            "the person's request (a ticket of kind rescore), assigned to you by the Capitano.\n",
+          exitCode: 1,
+        };
+      }
+      const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(positionId) as { status: string } | undefined;
       const why = row ? `is '${row.status}', not 'checked'` : "does not exist";
       return {
-        stdout: `⚠\ufe0f  SCORE REFUSED: position ${a["position_id"]} ${why}. Score only the positions of your queue (db_query next-for-scorer).\n`,
+        stdout: `⚠\ufe0f  SCORE REFUSED: position ${positionId} ${why}. Score only the positions of your queue (db_query next-for-scorer).\n`,
         exitCode: 1,
       };
     }
+    if (unchanged) return { stdout: `Score unchanged for position ${positionId}: ${a["total"]}/100 (no fields changed)\n`, exitCode: 0 };
     return { stdout: `Score inserted for position ${a["position_id"]}: ${a["total"]}/100\n`, exitCode: 0 };
   };
 
@@ -548,6 +599,19 @@ const SCORE_COMPONENT_LIMITS = {
 } as const;
 
 /** `db_insert.py score`'s arguments, flag for flag, maintenance flags included. */
+/** `SCORE_TRACKED_FIELDS` of db_insert.py: what a rescore records in the maintenance history. */
+const SCORE_TRACKED = ["total_score", "stack_match", "remote_fit", "salary_fit", "experience_fit", "strategic_fit", "breakdown", "notes"];
+
+/** `_snapshot_score`: the position's score as `str()` prints each field, or an empty map when it was never scored. */
+function scoreSnapshot(db: Database, positionId: number): Map<string, { raw: unknown; text: string }> {
+  const statement = db.prepare(`SELECT ${SCORE_TRACKED.join(", ")} FROM scores WHERE position_id = ?`);
+  const declared = Object.fromEntries(statement.columns().map((c) => [c.name, c.type ?? null]));
+  const row = statement.get(positionId) as Record<string, unknown> | undefined;
+  const out = new Map<string, { raw: unknown; text: string }>();
+  if (row) for (const f of SCORE_TRACKED) out.set(f, { raw: row[f], text: pyStr(row[f], declared[f]) });
+  return out;
+}
+
 const SCORE_INSERT: CommandSpec = {
   prog: "db_insert.py score",
   options: [

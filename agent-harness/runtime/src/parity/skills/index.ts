@@ -89,6 +89,9 @@ export interface SkillToolsOptions {
  */
 const ROLE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
   analista: ["ticket", "role_registry", "deadline_extract"],
+  // B1-T2: a rescore ticket goes to a SCORER (capitano.md C-15, [RESCORE-TICKET]), which
+  // touches and resolves it with ticket.py; its skills.list has no skill that names the script.
+  scorer: ["ticket"],
   // T21: capitano.md C-06 reads the person's standing orders at every wake; the enrichment
   // policy is its to show (`set` is refused here: the profile is read-only), and the
   // email check of C-17 runs without the skill listed; C-15 drains the ticket queue, C-17 merges categories.
