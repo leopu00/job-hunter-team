@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HubClient } from "../src/hub/client.ts";
-import { Launcher, LauncherConfigSchema, type LauncherConfig } from "../src/hub/launcher.ts";
+import { Launcher, LauncherConfigSchema, staggerOf, teamDelays, type LauncherConfig } from "../src/hub/launcher.ts";
 import { HUB_PATHS } from "../src/hub/protocol.ts";
 import { createHub } from "../src/hub/server.ts";
 import { prepareProductRole } from "../src/parity/product-role.ts";
@@ -364,6 +364,34 @@ describe("the base set (T24 run-team)", () => {
     expect(LauncherConfigSchema.safeParse({ ...raw, team: TEAM, staggerS: 80 }).success).toBe(false);
     expect(LauncherConfigSchema.safeParse({ ...raw, team: [{ role: "scout", instances: 1, delay_s: 400 }] }).success).toBe(false);
     expect(LauncherConfigSchema.safeParse({ ...raw, team: TEAM, staggerS: 0 }).success).toBe(true);
+  });
+
+  it("lowers the default stagger to what fits, so a big base set is not refused for a stagger it never named", () => {
+    // Revisione della notte del 28/09, #13: at 30 s a set of 12 makes the last member wait 11 × 30 = 330 s,
+    // over the executor's 300, and a configuration that said nothing of a stagger was refused: no hub.
+    const { spawnReserveUsd: _reserve, staggerS: _stagger, ...raw } = CONFIG;
+    const twelve = [{ role: "scout", instances: 4 }, { role: "analista", instances: 4 }, { role: "scorer", instances: 4 }];
+    const four = { capUsd: 0.1, instances: 4 };
+    const parsed = LauncherConfigSchema.safeParse({ ...raw, sessionUsd: 10, session: "twelve", maxActive: 8, maxSpawns: 12, roles: { scout: four, analista: four, scorer: four }, team: twelve });
+    expect(parsed.success).toBe(true);
+    // floor(300 / 11) = 27 s apart: the last one waits 297 s.
+    expect(staggerOf(parsed.data!)).toBe(27);
+    expect(teamDelays(parsed.data!).at(-1)).toBe(297);
+    const l = new Launcher({ config: parsed.data!, stateDir: join(root, "state"), spoolDir: join(root, "spool"), stopFile: join(root, "STOP") });
+    expect(l.startTeam("host").ok).toBe(true);
+    expect(orders().every((o) => ((o["delay_s"] as number | undefined) ?? 0) <= 300)).toBe(true);
+    expect(orders()).toHaveLength(12);
+
+    // A member's own delay_s counts: the stagger leaves room for it.
+    const late = [{ role: "scout", instances: 4 }, { role: "analista", instances: 4 }, { role: "scorer", instances: 3 }, { role: "scrittore", instances: 1, delay_s: 80 }];
+    expect(staggerOf(LauncherConfigSchema.parse({ ...raw, team: late }))).toBe(20);
+    // A small set keeps its 30 s.
+    expect(staggerOf(LauncherConfigSchema.parse({ ...raw, team: TEAM }))).toBe(30);
+
+    // One the operator wrote is taken as written, and a refusal says what would pass.
+    const refused = LauncherConfigSchema.safeParse({ ...raw, team: twelve, staggerS: 30 });
+    expect(refused.success).toBe(false);
+    expect(refused.error!.issues[0]!.message).toContain("set staggerS to 27 or less");
   });
 
   it("tells the money spent apart from the money booked, so its figure squares with the key proxy's", () => {
