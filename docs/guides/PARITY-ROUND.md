@@ -140,10 +140,13 @@ With `--yes`, in order:
 
 The exit code of `start --yes` does not carry the verdict: read the report.
 
-> ⚠️ The stop guard covers the window, not the start. If a start command or
-> the first copy fails, the round ends with an error before its guard, and
-> the API team may already be running: stop it by hand with your
-> `stop_cmds`.
+> ⚠️ The stop guard opens before the first start command. From there on,
+> whatever ends the round (a start command or the first copy failing,
+> Ctrl-C) runs `stop_cmds` and writes `REPORT.md`, marked NOT VALID, before
+> the error comes out. An error before the start (a check, the TUI's T0
+> copy, the seed, the known state) stops with an error (exit 2 when the
+> round refuses), with no report and nothing started; a known state
+> already put in place stays in `archivio-<round>/`.
 
 ## 📄 Reading the output
 
