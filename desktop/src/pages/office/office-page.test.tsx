@@ -150,6 +150,18 @@ describe("the office page", () => {
     expect(removeChannel).toHaveBeenCalledWith(channel);
   });
 
+  it("a team that is off: the office says so, and says empty only when nobody stays", async () => {
+    const off = (roster: unknown[]) =>
+      ({ teamOnline: false, heartbeatAt: null, roster, piles: { scout: 0, analisti: 0, scorer: 0, scrittori: 0, critici: 0 }, transitions: [] }) as unknown as OfficeSnapshot;
+    parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => off([{ uid: "scout-1", role: "scout", sheet: "" }])), diff: vi.fn(() => []) } };
+    const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    expect(await screen.findByText("Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.")).toBeInTheDocument();
+    unmount();
+    parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => off([])), diff: vi.fn(() => []) } };
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    expect(await screen.findByText("Il team è spento: l'ufficio è vuoto.")).toBeInTheDocument();
+  });
+
   it("hands the scene the published statuses only while the team is online", async () => {
     statuses.value = { at: Date.now(), agents: { capitano: { status: "working" } } };
     const online = { teamOnline: true } as OfficeSnapshot;
