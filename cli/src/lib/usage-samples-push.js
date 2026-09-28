@@ -46,13 +46,28 @@ export function usableSample(entry) {
   );
 }
 
+const cleanText = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+/**
+ * The row's key on the cloud, as the route builds it (push/route.ts, 3c):
+ * the upsert is ON CONFLICT (user_id, sample_key), and Postgres refuses a
+ * request that carries the same key twice (21000), for ever, cursor still.
+ */
+export function usageSampleKey(entry) {
+  return (
+    cleanText(entry.sample_key) ??
+    `${new Date(Date.parse(entry.ts)).toISOString()}|${cleanText(entry.provider)}|${cleanText(entry.source) ?? ''}|${cleanText(entry.session_id) ?? ''}`
+  );
+}
+
 /**
  * The samples after `since` (an ISO time), oldest first, at most `limit`:
- * the oldest ones, so the cursor walks the file in order.
+ * the oldest ones, so the cursor walks the file in order. Two lines with the
+ * same key are one row on the cloud: the later line in the file wins.
  */
 export function readUsageSamples(raw, { since = null, now = Date.now(), limit = USAGE_PUSH_MAX_ROWS } = {}) {
   const from = since ? Date.parse(since) : now - USAGE_FIRST_LOOKBACK_MS;
-  const out = [];
+  const byKey = new Map();
   for (const line of String(raw).split(/\r?\n/)) {
     if (!line.startsWith('{')) continue;
     let entry;
@@ -62,8 +77,11 @@ export function readUsageSamples(raw, { since = null, now = Date.now(), limit = 
       continue;
     }
     if (!usableSample(entry) || !(Date.parse(entry.ts) > from)) continue;
-    out.push(entry);
+    const key = usageSampleKey(entry);
+    byKey.delete(key);
+    byKey.set(key, entry);
   }
+  const out = [...byKey.values()];
   out.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   return out.slice(0, limit);
 }

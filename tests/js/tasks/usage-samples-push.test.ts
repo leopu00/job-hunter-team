@@ -9,6 +9,7 @@ import path from "node:path";
 import {
   pushUsageSamples,
   readUsageSamples,
+  usageSampleKey,
   USAGE_FIRST_LOOKBACK_MS,
   USAGE_PUSH_EVERY_MS,
 } from "../../../cli/src/lib/usage-samples-push.js";
@@ -67,6 +68,31 @@ describe("which samples go", () => {
     expect(readUsageSamples(raw, { since, now: NOW, limit: 1 }).map((s) => s.ts)).toEqual([sample(20).ts]);
   });
 
+  it("two lines with the route's key are one row: the later line goes, the request is never refused for it", () => {
+    // The route upserts ON CONFLICT (user_id, sample_key): the same key twice in
+    // one request is Postgres 21000, a 500 on every round, the cursor still.
+    const raw = jsonl([
+      sample(10, { usage: 20 }),
+      sample(10, { usage: 21 }), // same instant, provider, source, no session: same key
+      sample(8, { sample_key: "k-1", usage: 30 }),
+      sample(6, { sample_key: "k-1", usage: 31 }), // same explicit key, later time
+      sample(10, { source: "other" }), // same instant, another source: another key
+    ]);
+    const rows = readUsageSamples(raw, { now: NOW });
+    const keys = rows.map(usageSampleKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(rows).toHaveLength(3);
+    expect(rows.find((r: any) => r.source === "bridge" && !r.sample_key)!.usage).toBe(21);
+    expect(rows.find((r: any) => r.sample_key === "k-1")!.usage).toBe(31);
+  });
+
+  it("the lane's key is the route's key", () => {
+    const src = readFileSync(path.join(REPO, "web/app/api/cloud-sync/push/route.ts"), "utf8");
+    expect(src).toMatch(/cleanText\(t\.sample_key\) \?\?\s*`\$\{isoTs\}\|\$\{provider\}\|\$\{source \?\? ""\}\|\$\{sessionId \?\? ""\}`/);
+    expect(src).toContain('onConflict: "user_id,sample_key"');
+    expect(usageSampleKey(sample(0, { provider: " openai ", session_id: "s1" }))).toBe(`${sample(0).ts}|openai|bridge|s1`);
+  });
+
   it("the first time, only the last day: not the whole history of the box", () => {
     const old = sample(USAGE_FIRST_LOOKBACK_MS / 60_000 + 60);
     expect(readUsageSamples(jsonl([old, sample(10)]), { now: NOW }).map((s) => s.ts)).toEqual([sample(10).ts]);
@@ -77,10 +103,12 @@ describe("the lane (pushUsageSamples)", () => {
   it("sends the new samples in one request, and moves the cursor when the route wrote them all", async () => {
     const b = box([sample(30), sample(10)]);
     const r = route();
-    const first = await pushUsageSamples({ config, ...b, now: NOW, fetchFn: r.fetchFn });
+    const headers = { Authorization: "Bearer jht_sync_synthetic_usage", "Content-Type": "application/json" };
+    const first = await pushUsageSamples({ config, ...b, now: NOW, fetchFn: r.fetchFn, headers });
     expect(first).toEqual({ sent: 2, advanced: true, reason: "written" });
     expect(r.fetchFn).toHaveBeenCalledTimes(1);
     expect(r.fetchFn.mock.calls[0]![0]).toBe("https://cloud.example/api/cloud-sync/push");
+    expect(r.fetchFn.mock.calls[0]![1].headers).toEqual(headers);
     expect(Object.keys(r.bodies[0])).toEqual(["sentinel_ticks"]);
     expect(JSON.parse(readFileSync(b.statePath, "utf8")).last_ts).toBe(sample(10).ts);
 
@@ -126,8 +154,11 @@ describe("the lane (pushUsageSamples)", () => {
 });
 
 describe("the daemon", () => {
-  it("sends the TUI team's usage samples to the cloud, once, in its own request", async () => {
+  // The poll loop and the event-driven loop (JHT_REALTIME_SYNC=1, here without
+  // Realtime credentials: the parachute ticks) both carry the lane.
+  it.each(["0", "1"])("sends the TUI team's usage samples to the cloud, once, in its own request (JHT_REALTIME_SYNC=%s)", async (realtime) => {
     const posts: any[] = [];
+    const auth: (string | undefined)[] = [];
     const server = createServer((req, res) => {
       let raw = "";
       req.on("data", (c) => (raw += c));
@@ -136,6 +167,7 @@ describe("the daemon", () => {
         if (req.method === "POST" && req.url?.startsWith("/api/cloud-sync/push")) {
           const body = JSON.parse(raw || "{}");
           posts.push(body);
+          if (body.sentinel_ticks) auth.push(req.headers.authorization);
           res.end(JSON.stringify({ ok: true, sentinel_ticks: { upserted: body.sentinel_ticks?.length ?? 0 }, receipts: {} }));
           return;
         }
@@ -160,7 +192,7 @@ describe("the daemon", () => {
 
     await new Promise<void>((resolve) => {
       const child = spawn(process.execPath, [path.join(REPO, "cli", "bin", "jht.js"), "cloud", "daemon", "--interval", "5"], {
-        env: { ...process.env, JHT_HOME: home, JHT_DB: path.join(home, "jobs.db"), JHT_REALTIME_SYNC: "0", JHT_SYNC_CHECK_SEC: "1", JHT_AGENTS_STATUS: "0", IS_CONTAINER: "1", NO_COLOR: "1" },
+        env: { ...process.env, JHT_HOME: home, JHT_DB: path.join(home, "jobs.db"), JHT_REALTIME_SYNC: realtime, JHT_SYNC_CHECK_SEC: "1", JHT_AGENTS_STATUS: "0", IS_CONTAINER: "1", NO_COLOR: "1" },
       });
       child.stdout.resume();
       child.stderr.resume();
@@ -169,9 +201,10 @@ describe("the daemon", () => {
     });
 
     const usage = posts.filter((p) => p.sentinel_ticks);
-    // Two heavy rounds at least in 12 s, one request: the lane waits its quarter hour.
+    // In 12 s: two heavy rounds at least (poll) or the first tick (event-driven), one request.
     expect(usage).toHaveLength(1);
     expect(Object.keys(usage[0])).toEqual(["sentinel_ticks"]);
     expect(usage[0].sentinel_ticks).toHaveLength(2);
+    expect(auth).toEqual(["Bearer jht_sync_synthetic_usage"]);
   }, 40_000);
 });
