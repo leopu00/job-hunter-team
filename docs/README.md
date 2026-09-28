@@ -42,7 +42,7 @@ for a real profile.
 
 ## 🏛️ [`adr/`](adr/) — architecture decision records
 The binding choices and their rationale.
-`0001` Colima · `0002` 3 agent CLIs · `0003` single-writer · `0004` no-API-keys · `0005` provider-risk · `0006` user-choice container runtime *(supersedes 0001)* · `0007` provider selection is configuration
+`0001` Colima · `0002` 3 agent CLIs · `0003` single-writer · `0004` no-API-keys *(superseded by 0012)* · `0005` provider-risk · `0006` user-choice container runtime *(supersedes 0001)* · `0007` provider selection is configuration · `0008` Podman behind a `docker` shim *(proposed)* · `0009` one loopback API *(proposed)* · `0010` API Scorer 100-point scale · `0011` Tauri desktop shell · `0012` execution host vs AI authentication in desktop setup *(supersedes 0004)*
 
 ## 🔒 [`security/`](security/) — security
 Historical security audit, current threat model, checklist and comparisons.

@@ -44,7 +44,7 @@ of workers, not against them.**
 **Guiding principles** — the constraints every roadmap item respects:
 
 - **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-mostly. Its authenticated writes include user-owned chat messages, team directives, bounded position feedback/actions and the emergency stop — not generic control of the host or team runtime.
-- **Subscriptions, not API keys.** A parallel agent team burns pay-per-use credits in hours; subscription tokens cost ~5× less ([ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). Pay-per-use returns only as a Sentinel-enforced €-budget (mission M8).
+- **Subscriptions by default, API team in rehearsal.** A parallel agent team burns pay-per-use credits in hours; subscription tokens cost ~5× less (the estimate of [ADR-0004](../adr/0004-subscription-only-no-api-keys.md), superseded by [ADR-0012](../adr/0012-desktop-setup-matrix.md)). The subscription team stays the default, supported path; the [API team](../guides/API-TEAM.md) runs on metered calls under hard spending caps, per run and per session.
 - **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
 - **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
 
