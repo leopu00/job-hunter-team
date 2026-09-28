@@ -1,0 +1,15 @@
+# gitleaks: the default rules, plus one narrow allowlist.
+#
+# .gitleaksignore holds the fingerprints verified by hand; this file exists
+# because one more had to be added, and a file without an allowed extension
+# cannot be committed here. Keep the allowlist as narrow as the finding:
+# one commit AND one path, never a rule or a regex that would hide others.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake PKCE auth_code of the desktop's Supabase test mock (a made-up uuid, no credential), verified by hand 29/09/2026"
+condition = "AND"
+commits = ["ddc16b560aa3fac0db4b11214aa0e75d113b7ca1"]
+paths = ['''^desktop/src/lib/supabase\.test\.ts$''']
