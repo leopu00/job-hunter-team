@@ -859,7 +859,10 @@ export type DashboardPosition = {
 // ── Posizioni viste (position_views, mig 055) ─────────────────────
 // Set degli id posizione già aperti dall'utente corrente: la RLS scopa
 // la select alla sessione, quindi niente .in() (con 1000 uuid la query
-// string esploderebbe). In local mode lo stato vive in localStorage lato
+// string esploderebbe). PostgREST risponde con al massimo 1000 righe
+// anche a `.limit(10000)`: si legge a pagine, in ordine sulla chiave
+// primaria (user_id, position_id), altrimenti le viste oltre la riga
+// 1000 tornano «nuova». In local mode lo stato vive in localStorage lato
 // client (vedi lib/seen-positions) → set vuoto, decide il client.
 export async function getSeenPositionIds(): Promise<Set<string>> {
   const dp = await activeDemoPersona();
@@ -875,12 +878,16 @@ export async function getSeenPositionIds(): Promise<Set<string>> {
   if (await ws()) return new Set();
   if (!isSupabaseConfigured) return new Set();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("position_views")
     .select("position_id")
-    .limit(10000);
+    .order("user_id", { ascending: true })
+    .order("position_id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<{ position_id: unknown }>(
+    query,
+  );
   if (error || !data) return new Set();
-  return new Set((data as any[]).map((r) => String(r.position_id)));
+  return new Set(data.map((r) => String(r.position_id)));
 }
 
 // ── Swipe decks ────────────────────────────────────────────────────

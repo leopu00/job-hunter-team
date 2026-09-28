@@ -264,16 +264,23 @@ export async function getDashboardPositions(
 }
 
 // Set of the position ids the current user already opened: RLS scopes the
-// select to the session, so no .in() over thousands of ids.
+// select to the session, so no .in() over thousands of ids. PostgREST answers
+// at most 1000 rows even to `.limit(10000)`: read every page, ordered on the
+// primary key (user_id, position_id), or the views past row 1000 come back
+// as "new".
 export async function getSeenPositionIds(
   client: DashboardClient,
 ): Promise<Set<string>> {
-  const { data, error } = await client
+  const query = client
     .from("position_views")
     .select("position_id")
-    .limit(10000);
+    .order("user_id", { ascending: true })
+    .order("position_id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<{ position_id: unknown }>(
+    query,
+  );
   if (error || !data) return new Set();
-  return new Set((data as any[]).map((r) => String(r.position_id)));
+  return new Set(data.map((r) => String(r.position_id)));
 }
 
 // An application stays a submission even if the position later changes

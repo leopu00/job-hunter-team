@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 import { salaryPreference } from "@/lib/salary-source";
 import type { PositionWithScore } from "@/lib/types";
 
@@ -23,14 +24,24 @@ export type SwipeReviewedRow = {
 export async function getLatestFeedbackByLegacyId(
   supabase: SwipeClient,
 ): Promise<Map<string, { action: string; score: number | null }>> {
-  const { data, error } = await supabase
-    .from("position_feedback")
-    .select("position_legacy_id, action, score, created_at")
-    .in("action", ["like", "dislike", "hide", "star", "clear"])
-    .order("created_at", { ascending: false })
-    .limit(10000);
+  // Tutto il registro, a pagine: con una risposta sola PostgREST ne dà 1000
+  // e le posizioni giudicate prima tornerebbero nel mazzo da giudicare.
+  // Ordine chiuso da posizione e azione, così le pagine non si sovrappongono.
+  // Non da `id`: la colonna non è nella ricevuta dello schema live di
+  // position_feedback (089.web.columns.position_feedback), e due eventi
+  // della stessa posizione con la stessa azione nello stesso microsecondo
+  // sono la stessa cosa per chi legge.
+  const { data, error } = await fetchPostgrestRows<any>(
+    supabase
+      .from("position_feedback")
+      .select("position_legacy_id, action, score, created_at")
+      .in("action", ["like", "dislike", "hide", "star", "clear"])
+      .order("created_at", { ascending: false })
+      .order("position_legacy_id", { ascending: true })
+      .order("action", { ascending: true }),
+  );
   const map = new Map<string, { action: string; score: number | null }>();
-  if (error || !data) return map;
+  if (error) return map;
   // 'clear' (mig 059) più recente = voto ritirato: la posizione non deve
   // ripescare gli eventi più vecchi → si marca e si salta.
   const cleared = new Set<string>();
@@ -50,7 +61,25 @@ export async function getSwipeDecksCloud(
   pending: PositionWithScore[];
   reviewed: SwipeReviewedRow[];
 }> {
-  const [positionsRes, feedback] = await Promise.all([
+  // Prima il registro dei giudizi, che dice quale mazzo riempie ogni riga;
+  // poi le posizioni a pagine, finché i due mazzi non sono pieni. `limit`
+  // vale per ciascun mazzo, non per le righe lette: con un tetto sulle righe
+  // le prime `limit` per found_at (escluse comprese) riempivano il risultato
+  // e le giudicate più recenti non entravano mai; senza nessun tetto, ogni
+  // resa della pagina scaricava tutte le posizioni.
+  const feedback = await getLatestFeedbackByLegacyId(supabase);
+  const decks = { pending: 0, reviewed: 0 };
+  let counted = 0;
+  const bothFull = (rows: any[]) => {
+    for (; counted < rows.length; counted++) {
+      const p = rows[counted];
+      if (p.legacy_id != null && feedback.has(String(p.legacy_id)))
+        decks.reviewed++;
+      else if (p.status === "scored" || p.status === "ready") decks.pending++;
+    }
+    return decks.pending >= limit && decks.reviewed >= limit;
+  };
+  const { data, error } = await fetchPostgrestRows<any>(
     supabase
       .from("positions")
       .select(
@@ -60,15 +89,16 @@ export async function getSwipeDecksCloud(
         "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, status, score, role_family, loc_country, loc_city, scores ( total_score )",
       )
       // 'excluded' incluso: le posizioni giudicate "non interessante"
-      // devono restare visitabili nel mazzo reviewed.
+      // devono restare visitabili nel mazzo reviewed. Non si filtrano lato
+      // server: servono solo quelle con un feedback, e l'elenco dei
+      // legacy_id giudicati non sta in un URL.
       .in("status", ["scored", "ready", "excluded"])
       .is("deleted_at", null)
       .order("found_at", { ascending: true })
-      .limit(limit),
-    getLatestFeedbackByLegacyId(supabase),
-  ]);
-  const { data, error } = positionsRes;
-  if (error || !data) return { pending: [], reviewed: [] };
+      .order("id", { ascending: true }),
+    { enough: bothFull },
+  );
+  if (error) return { pending: [], reviewed: [] };
 
   const mapRow = (p: any): PositionWithScore => {
     const sc = firstRelated<any>(p.scores);
