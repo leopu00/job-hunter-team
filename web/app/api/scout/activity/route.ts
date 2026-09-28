@@ -30,6 +30,7 @@ export async function GET() {
         supabase
           .from("positions")
           .select("id", { count: "exact", head: true })
+          .is("deleted_at", null)
           .gte("found_at", todayISO),
         // Coda: status=new (in attesa di analisi), ultime 10
         supabase
@@ -37,6 +38,7 @@ export async function GET() {
           .select(
             "id, title, company, location, remote_type, found_at, found_by",
           )
+          .is("deleted_at", null)
           .eq("status", "new")
           .order("found_at", { ascending: false })
           .limit(10),
@@ -46,6 +48,7 @@ export async function GET() {
           .select(
             "id, title, company, location, remote_type, found_at, found_by, status",
           )
+          .is("deleted_at", null)
           .not("status", "eq", "excluded")
           .order("found_at", { ascending: false })
           .limit(10),
@@ -53,6 +56,7 @@ export async function GET() {
         supabase
           .from("positions")
           .select("id, title, company, location, remote_type, found_at, notes")
+          .is("deleted_at", null)
           .eq("status", "excluded")
           .gte("found_at", todayISO)
           .order("found_at", { ascending: false })
@@ -61,6 +65,7 @@ export async function GET() {
         supabase
           .from("positions")
           .select("id", { count: "exact", head: true })
+          .is("deleted_at", null)
           .eq("status", "new"),
       ]);
 

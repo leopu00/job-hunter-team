@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { readLocalOr } from "@/lib/local-workspace";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 import { getScrittoreActivityLocal } from "@/lib/local-queries";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export async function GET() {
       .select(
         "id, title, company, location, remote_type, notes, status, scores(total_score)",
       )
+      .is("deleted_at", null)
       .eq("status", "scored")
       .order("id", { ascending: false })
       .limit(30);
@@ -54,6 +56,7 @@ export async function GET() {
         applications(written_by, critic_score, critic_verdict, critic_round, written_at, critic_reviewed_at)
       `,
       )
+      .is("deleted_at", null)
       .in("status", ["writing", "review"])
       .order("id", { ascending: false })
       .limit(20);
@@ -86,6 +89,7 @@ export async function GET() {
         applications(written_by, critic_score, critic_verdict, critic_round, written_at, critic_reviewed_at)
       `,
       )
+      .is("deleted_at", null)
       .eq("status", "ready")
       .order("last_checked", { ascending: false })
       .limit(10);
@@ -110,24 +114,34 @@ export async function GET() {
     const { count: queueSize } = await supabase
       .from("positions")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .eq("status", "scored");
 
     const { count: writingToday } = await supabase
       .from("applications")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .gte("written_at", today);
 
     const { count: completedToday } = await supabase
       .from("applications")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .not("critic_score", "is", null)
       .gte("critic_reviewed_at", today);
 
-    const { data: avgData } = await supabase
-      .from("applications")
-      .select("critic_score")
-      .not("critic_score", "is", null)
-      .gte("critic_reviewed_at", today);
+    // Media su TUTTE le revisioni di oggi, anche oltre il tetto di 1000
+    // righe di PostgREST.
+    const avgRes = await fetchPostgrestRows<any>(
+      supabase
+        .from("applications")
+        .select("critic_score")
+        .is("deleted_at", null)
+        .not("critic_score", "is", null)
+        .gte("critic_reviewed_at", today)
+        .order("id", { ascending: true }),
+    );
+    const avgData = avgRes.error ? [] : avgRes.data;
 
     let avgCriticScore: number | null = null;
     if (avgData && avgData.length > 0) {

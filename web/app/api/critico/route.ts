@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { readLocalOr } from "@/lib/local-workspace";
 import { getCriticoActivityLocal } from "@/lib/local-queries";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,11 @@ export async function GET() {
   if (fromLocal !== null) return NextResponse.json(fromLocal);
   const supabase = await createClient();
 
-  const { data: apps, error } = await supabase
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  // Solo candidature vive, tutte: una query secca si ferma alle prime 1000
+  // righe e i conteggi PASS/NEEDS_WORK/REJECT restano sotto il vero. L'id
+  // chiude l'ordine, così le pagine non si sovrappongono.
+  const query = supabase
     .from("applications")
     .select(
       `
@@ -28,17 +33,19 @@ export async function GET() {
     `,
     )
     .or("status.eq.review,critic_verdict.not.is.null")
-    .order("critic_reviewed_at", { ascending: false, nullsFirst: false });
+    .is("deleted_at", null)
+    .order("critic_reviewed_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true });
+  const { data: apps, error } = await fetchPostgrestRows<any>(query);
 
-  if (error || !apps) {
+  if (error) {
     return NextResponse.json(
-      { error: error?.message ?? "query error" },
+      { error: (error as { message?: string }).message ?? "query error" },
       { status: 500 },
     );
   }
 
   // Stats globali
-  /* eslint-disable @typescript-eslint/no-explicit-any */
   const allReviewed = (apps as any[]).filter((a) => a.critic_verdict != null);
   const pass = allReviewed.filter((a) => a.critic_verdict === "PASS").length;
   const needsWork = allReviewed.filter(

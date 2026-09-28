@@ -1509,11 +1509,15 @@ export async function getScorerStats() {
   if (!isSupabaseConfigured) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // Tutti gli score vivi, a pagine: con una query secca le statistiche
+  // uscivano sulle prime 1000 righe restituite, in ordine qualunque.
+  const query = supabase
     .from("scores")
     .select("scored_by, total_score")
-    .is("deleted_at", null);
-  if (error || !data) return [];
+    .is("deleted_at", null)
+    .order("id", { ascending: true });
+  const { data, error } = await fetchPostgrestRows<any>(query);
+  if (error) return [];
   const grouped: Record<string, number[]> = {};
   for (const row of data) {
     const key = row.scored_by ?? "sconosciuto";
@@ -1733,9 +1737,11 @@ async function enrichRecent(
 }
 
 // Local: SQLite (getTeamActivityLocal). Cloud: Supabase, una query per
-// timestamp filtrata sulla finestra (.gte) per restare sotto il cap di 1000
-// righe/richiesta e ridurre il traffico. Stesso buildTeamActivity → numeri
-// identici nelle due modalità. Vedi lib/team-activity.ts per le sorgenti.
+// timestamp filtrata sulla finestra (.gte/.lt) per ridurre il traffico e letta
+// a pagine: la finestra arriva a 366 giorni e da sola non resta sotto il tetto
+// di 1000 righe per risposta. Solo righe vive (deleted_at null). Stesso
+// buildTeamActivity → numeri identici nelle due modalità. Vedi
+// lib/team-activity.ts per le sorgenti.
 export async function getTeamActivity(opts?: {
   from?: string;
   to?: string;
@@ -1767,18 +1773,18 @@ export async function getTeamActivity(opts?: {
     actorCol: string | null,
     idCol: string,
     role: TeamActivityRole,
-    softDelete: boolean,
   ): Promise<TeamActivityEvent[]> => {
     const select = [col, actorCol, idCol].filter(Boolean).join(", ");
-    let q = supabase
+    const q = supabase
       .from(table)
       .select(select)
       .gte(col, fromIso)
-      .lt(col, untilIso);
-    if (softDelete) q = q.is("deleted_at", null);
-    const { data, error } = await q;
-    if (error || !data) return [];
-    return (data as any[])
+      .lt(col, untilIso)
+      .is("deleted_at", null)
+      .order("id", { ascending: true });
+    const { data, error } = await fetchPostgrestRows<any>(q);
+    if (error) return [];
+    return data
       .filter((r) => !!r[col])
       .map((r) => ({
         role,
@@ -1802,7 +1808,6 @@ export async function getTeamActivity(opts?: {
               "written_by",
               "position_id",
               "scrittore",
-              true,
             ),
             fetchEvents(
               "applications",
@@ -1810,29 +1815,20 @@ export async function getTeamActivity(opts?: {
               "reviewed_by",
               "position_id",
               "critico",
-              true,
             ),
           ])
         ).flat(),
       ]
     : (
         await Promise.all([
-          fetchEvents("positions", "found_at", "found_by", "id", "scout", true),
-          fetchEvents(
-            "positions",
-            "last_checked",
-            null,
-            "id",
-            "analista",
-            true,
-          ),
+          fetchEvents("positions", "found_at", "found_by", "id", "scout"),
+          fetchEvents("positions", "last_checked", null, "id", "analista"),
           fetchEvents(
             "scores",
             "scored_at",
             "scored_by",
             "position_id",
             "scorer",
-            false,
           ),
           fetchEvents(
             "applications",
@@ -1840,7 +1836,6 @@ export async function getTeamActivity(opts?: {
             "written_by",
             "position_id",
             "scrittore",
-            true,
           ),
           fetchEvents(
             "applications",
@@ -1848,7 +1843,6 @@ export async function getTeamActivity(opts?: {
             "reviewed_by",
             "position_id",
             "critico",
-            true,
           ),
         ])
       ).flat();
@@ -1859,9 +1853,9 @@ export async function getTeamActivity(opts?: {
 }
 
 // ── Activity log: TUTTE le azioni (per la pagina dedicata) ──────────
-// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra),
-// ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
-// per query: ok per gli account attuali (<1000 posizioni/score).
+// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra), letta
+// a pagine oltre il tetto di 1000 righe per risposta, solo righe vive;
+// poi ordinata e arricchita con titolo/azienda/id.
 export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoTeamActivityLog(dp);
@@ -1882,14 +1876,17 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
     actorCol: string | null,
     idCol: string,
     role: TeamActivityRole,
-    softDelete: boolean,
   ): Promise<RecentActivityEvent[]> => {
     const select = [col, actorCol, idCol].filter(Boolean).join(", ");
-    let q = supabase.from(table).select(select).not(col, "is", null);
-    if (softDelete) q = q.is("deleted_at", null);
-    const { data, error } = await q;
-    if (error || !data) return [];
-    return (data as any[]).map((r) => ({
+    const q = supabase
+      .from(table)
+      .select(select)
+      .not(col, "is", null)
+      .is("deleted_at", null)
+      .order("id", { ascending: true });
+    const { data, error } = await fetchPostgrestRows<any>(q);
+    if (error) return [];
+    return data.map((r) => ({
       role,
       actor: normActor(role, actorCol ? r[actorCol] : null),
       ts: r[col] as string,
@@ -1910,7 +1907,6 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
               "written_by",
               "position_id",
               "scrittore",
-              true,
             ),
             fetchAll(
               "applications",
@@ -1918,30 +1914,21 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
               "reviewed_by",
               "position_id",
               "critico",
-              true,
             ),
           ])
         ).flat(),
       ]
     : (
         await Promise.all([
-          fetchAll("positions", "found_at", "found_by", "id", "scout", true),
-          fetchAll("positions", "last_checked", null, "id", "analista", true),
-          fetchAll(
-            "scores",
-            "scored_at",
-            "scored_by",
-            "position_id",
-            "scorer",
-            false,
-          ),
+          fetchAll("positions", "found_at", "found_by", "id", "scout"),
+          fetchAll("positions", "last_checked", null, "id", "analista"),
+          fetchAll("scores", "scored_at", "scored_by", "position_id", "scorer"),
           fetchAll(
             "applications",
             "written_at",
             "written_by",
             "position_id",
             "scrittore",
-            true,
           ),
           fetchAll(
             "applications",
@@ -1949,7 +1936,6 @@ export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
             "reviewed_by",
             "position_id",
             "critico",
-            true,
           ),
         ])
       ).flat();
