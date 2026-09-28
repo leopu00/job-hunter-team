@@ -61,6 +61,12 @@ export interface PositionUpdateRule {
   /** The statuses a row must be in for any update of this role, a move or not; absent: any. */
   touches?: readonly string[];
   /**
+   * Moves open only while this agent holds an assigned `rescore` ticket on
+   * the position: after the person's re-evaluation the new score decides the
+   * status again, from wherever the first score had put it.
+   */
+  rescoreMoves?: Readonly<Record<string, readonly string[]>>;
+  /**
    * Rows in these statuses take only these flags: past the analysis a
    * position is the Scorer's and the Scrittore's, and what is left to the
    * role is keeping it true (liveness, category, office) — never its text,
@@ -237,7 +243,16 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       moves: { scored: ["checked"], excluded: ["checked"] },
       onlyWith: { notes: "excluded" },
       touches: ["checked"],
-      purpose: "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06).",
+      // Revisione incrociata del 28/09: after a rescore the TUI Scorer applies
+      // RULE-04 again with db_update --status from any status. Here only between
+      // the two statuses a score decides, and only on its own rescore ticket: an
+      // excluded position that rises to 84 is shown to the person again, a
+      // scored one that falls under 40 leaves the list. Past `scored` (writing,
+      // ready, applied) the person's own choice stands.
+      rescoreMoves: { scored: ["excluded"], excluded: ["scored"] },
+      purpose:
+        "The SCORER claims a checked position (--last-checked now) and moves it to scored or excluded; notes go only with the exclusion (scorer.md RULE-02/03/04/06). " +
+        "After a rescore on its assigned rescore ticket it applies RULE-04 again: scored ↔ excluded.",
     },
   },
   // T41, dottore.md: the archivist. In the TUI it lists `db-query` to "recover task

@@ -194,3 +194,39 @@ describe("B1-T3 · without a hub, the role's notify_user writes the same row", (
     }
   });
 });
+
+describe("B1-T3 · a record that fails after the row", () => {
+  it("keeps the message sent: one row, the slot spent, the failure said and not raised", async () => {
+    // Revisione incrociata del 28/09 (charles): the record in notify.jsonl failing after the row
+    // made the role hear "not sent"; it sent again and the person got two identical rows.
+    const path = join(root, "jobs.db");
+    const seeded = openJobsDb(path);
+    pipelineSeed(seeded);
+    seeded.close();
+    let db: ReturnType<typeof openJobsDb> | undefined;
+    const open = () => (db ??= openJobsDb(path));
+    const said: unknown[] = [];
+    const brokenRecord = { notify: async () => { throw new Error("ENOSPC: no space left on device"); } };
+    const tools = createJhtTools({
+      agent: "capitano-1",
+      homeDir: join(root, "agents", "capitano-1"),
+      mailbox: new FileMailbox(join(root, "mailbox")),
+      notifier: new JobsDbNotifier(open, brokenRecord, (error) => said.push(error)),
+      replies: new FileUserReplies(join(root, "replies")),
+      pause: new PauseRequest(),
+      notifyLimit: { max: 1, windowMs: 60 * 60_000 },
+    });
+    const notify = tools.find((tool) => tool.spec.name === "notify_user")!;
+    const context = {} as ToolContext;
+    try {
+      expect((await notify.execute({ text: "Candidatura pronta.", position_id: 4 }, context)).ok).toBe(true);
+      // The slot is spent: the message went out, a second one is not a retry of a failure.
+      expect((await notify.execute({ text: "Candidatura pronta.", position_id: 4 }, context)).ok).toBe(false);
+      expect(open().prepare("SELECT body FROM pending_user_messages").all()).toEqual([{ body: "Candidatura pronta." }]);
+      expect(said).toHaveLength(1);
+      expect(String(said[0])).toContain("ENOSPC");
+    } finally {
+      db?.close();
+    }
+  });
+});

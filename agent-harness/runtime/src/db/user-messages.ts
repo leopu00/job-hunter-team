@@ -44,11 +44,14 @@ export class UnknownPositionError extends Error {
 /** Writes the row `jht-notify-user` writes, delivered on the web; returns its id. */
 export function recordUserMessage(db: Database, n: UserNotification): number {
   const positionId = n.positionId ?? null;
-  if (positionId !== null && db.prepare("SELECT 1 FROM positions WHERE id = ?").get(positionId) === undefined) {
-    throw new UnknownPositionError(positionId);
-  }
   db.exec("BEGIN IMMEDIATE");
   try {
+    // Inside the transaction: a position removed between the check and the
+    // insert would otherwise come back as a foreign-key SqliteError, a 500
+    // with the slot spent, instead of the refusal the role can act on.
+    if (positionId !== null && db.prepare("SELECT 1 FROM positions WHERE id = ?").get(positionId) === undefined) {
+      throw new UnknownPositionError(positionId);
+    }
     const { lastInsertRowid } = db
       .prepare("INSERT INTO pending_user_messages (agent, body, kind, related_position_id) VALUES (?, ?, ?, ?)")
       .run(roleOf(n.from), interpretEscapes(n.text), n.kind, positionId);
@@ -65,18 +68,32 @@ export function recordUserMessage(db: Database, n: UserNotification): number {
 /**
  * The row first, then the record: a message the database refused is not
  * written in the record as sent.
+ *
+ * Once the row is written the message is sent: it is what reaches the
+ * person. A record that then fails (notify.jsonl not writable, a full disk)
+ * is said on stderr and not raised: raised, the role heard "not sent", sent
+ * it again, and the person got the same message twice, since the API side
+ * has no idempotency key (the script's `source_id`).
  */
 export class JobsDbNotifier implements Notifier {
   readonly #db: () => Database;
   readonly #record: Notifier;
+  readonly #onRecordError: (error: unknown) => void;
 
-  constructor(db: () => Database, record: Notifier) {
+  constructor(db: () => Database, record: Notifier, onRecordError?: (error: unknown) => void) {
     this.#db = db;
     this.#record = record;
+    this.#onRecordError =
+      onRecordError ??
+      ((error) => process.stderr.write(`notify: the message is sent, its record in notify.jsonl failed: ${error instanceof Error ? error.message : String(error)}\n`));
   }
 
   async notify(n: UserNotification): Promise<void> {
     recordUserMessage(this.#db(), n);
-    await this.#record.notify(n);
+    try {
+      await this.#record.notify(n);
+    } catch (error) {
+      this.#onRecordError(error);
+    }
   }
 }
