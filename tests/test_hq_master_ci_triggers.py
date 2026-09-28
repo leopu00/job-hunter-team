@@ -56,3 +56,73 @@ def test_production_smoke_is_not_part_of_a_branch_gate():
     assert "github.event_name == 'schedule'" in condition
     assert "(github.event_name == 'workflow_dispatch' && inputs.smoke)" in condition
     assert "github.event_name == 'workflow_dispatch')" not in condition
+
+
+def test_local_supabase_e2e_runs_only_on_a_dispatch_that_asks_for_it():
+    # Draft awaiting the operator's decision: the job must never become a
+    # push, PR or cron gate by accident, and a plain branch-gate dispatch
+    # must not start it either.
+    workflow = _workflow("test.yml")
+    local_input = workflow["on"]["workflow_dispatch"]["inputs"]["local_supabase_e2e"]
+    assert local_input["type"] == "boolean"
+    assert local_input["default"] == "false"
+    condition = " ".join(workflow["jobs"]["e2e-local-supabase"]["if"].split())
+    assert "github.event_name == 'workflow_dispatch' && inputs.local_supabase_e2e" in condition
+    for other_event in ("push", "pull_request", "schedule"):
+        assert f"'{other_event}'" not in condition
+    assert "||" not in condition
+
+
+def test_local_supabase_e2e_never_reads_the_production_test_account():
+    job = _workflow("test.yml")["jobs"]["e2e-local-supabase"]
+    text = str(job)
+    assert "secrets." not in text
+    assert "jobhunterteam.ai" not in text
+    assert job["env"]["E2E_EMAIL"].endswith("@example.com")
+
+
+def test_existing_e2e_gate_is_unchanged_by_the_draft():
+    condition = " ".join(_workflow("test.yml")["jobs"]["e2e"]["if"].split())
+    assert condition == (
+        "github.repository == 'leopu00/job-hunter-team' && "
+        "github.event_name != 'schedule'"
+    )
+
+
+def test_production_auth_canary_lives_only_in_smoke():
+    jobs = _workflow("test.yml")["jobs"]
+    owners = [
+        name
+        for name, job in jobs.items()
+        for step in job.get("steps", [])
+        if "canary/playwright.config.ts" in step.get("run", "")
+    ]
+    assert owners == ["smoke"]
+    canary = next(
+        step
+        for step in jobs["smoke"]["steps"]
+        if "canary/playwright.config.ts" in step.get("run", "")
+    )
+    assert canary["env"]["E2E_PROD_CANARY"] == "1"
+    # The canary spec sits outside e2e/tests/, the only testDir of the main
+    # Playwright config, so the `e2e` jobs can never collect it.
+    main_config = (ROOT / "e2e" / "playwright.config.ts").read_text(encoding="utf-8")
+    assert 'testDir: "./tests"' in main_config
+    assert (ROOT / "e2e" / "canary" / "prod-auth-canary.spec.ts").is_file()
+    assert not list((ROOT / "e2e" / "tests").rglob("*canary*"))
+
+
+def test_production_auth_canary_runs_only_on_a_dispatch_that_asks_for_it():
+    # A draft until the operator decides: never on smoke's cron.
+    workflow = _workflow("test.yml")
+    inputs = workflow.get(True, workflow.get("on"))["workflow_dispatch"]["inputs"]
+    assert inputs["prod_canary"]["type"] == "boolean"
+    assert str(inputs["prod_canary"]["default"]).lower() == "false"
+    steps = [
+        step
+        for step in workflow["jobs"]["smoke"]["steps"]
+        if "canary" in (step.get("name", "") + str(step.get("env", "")) + str(step.get("run", ""))).lower()
+    ]
+    assert steps
+    for step in steps:
+        assert "github.event_name == 'workflow_dispatch' && inputs.prod_canary" in str(step.get("if", ""))

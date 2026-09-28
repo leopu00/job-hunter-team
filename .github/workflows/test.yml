@@ -17,6 +17,18 @@ on:
         description: "Also run the production smoke against the live site"
         type: boolean
         default: false
+      # BOZZA in attesa della decisione dell'operatore
+      # (e2e contro Supabase locale invece che contro la produzione): il job
+      # `e2e-local-supabase` parte solo da un dispatch che lo chiede. Mai su
+      # push, PR o cron, finché l'operatore non decide.
+      prod_canary:
+        description: "Also run the read-only production login canary in smoke (draft)"
+        type: boolean
+        default: false
+      local_supabase_e2e:
+        description: "Also run the e2e specs against a local Supabase (draft)"
+        type: boolean
+        default: false
   # Solo per il job `smoke` (vedi in fondo): i test che interrogano la
   # produzione non appartengono al gate della PR, ma la copertura non si
   # butta — si sposta dove ha senso, cioè dopo il deploy.
@@ -674,6 +686,175 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # BOZZA — e2e contro un Supabase LOCALE avviato nel runner (`supabase
+  # start`), in attesa della decisione dell'operatore (opzione C della nota
+  # sull'Auth di produzione). Stesse spec del job `e2e`, ma: schema = le
+  # migrazioni della PR, account di test sintetico creato qui con una password
+  # generata a ogni run, nessun segreto e nessuna chiamata alla produzione.
+  # Il job `e2e` sopra resta com'è; questo parte SOLO da un dispatch con
+  # `local_supabase_e2e: true`.
+  e2e-local-supabase:
+    name: e2e — local Supabase (draft, dispatch only)
+    runs-on: ubuntu-latest
+    # Un job che si appende non e' un verdetto: senza questo tetto il blocco
+    # resta in coda fino alle sei ore del runner e la CI non dice nulla.
+    timeout-minutes: 40
+    if: >-
+      github.repository == 'leopu00/job-hunter-team' &&
+      github.event_name == 'workflow_dispatch' && inputs.local_supabase_e2e
+    env:
+      E2E_EMAIL: e2e@example.com
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            web/package-lock.json
+            shared/package-lock.json
+            e2e/package-lock.json
+
+      # DA FISSARE: il resto del file pinna le action per tag di major
+      # (checkout@v7, setup-node@v7), non per SHA; la versione della CLI va
+      # fissata a una release precisa prima di rendere il job un gate.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      # Il build del web importa shared/config/schema.ts → serve `zod`.
+      - name: Install shared dependencies
+        working-directory: shared
+        run: npm ci
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      # Solo db, Auth (gotrue), PostgREST, Realtime, Storage e il gateway
+      # (kong). Storage resta: 037_file_bridge scrive in storage.buckets.
+      # Realtime resta: il web si iscrive ai canali lato browser.
+      # `supabase start` applica supabase/migrations/ (config.toml:
+      # [db.migrations]); il seed storico è spento ([db.seed] enabled=false).
+      - name: Start local Supabase (migrations applied)
+        run: >-
+          supabase start
+          -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,postgres-meta
+
+      # `status -o env` stampa API_URL, ANON_KEY, SERVICE_ROLE_KEY, DB_URL
+      # dello stack locale: chiavi generate dalla CLI, non segreti del repo.
+      # La password dell'account sintetico nasce qui, a ogni run.
+      - name: Export local Supabase env
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          for v in API_URL ANON_KEY SERVICE_ROLE_KEY DB_URL; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::supabase status non ha stampato $v"; exit 1
+            fi
+          done
+          case "$API_URL" in
+            http://127.0.0.1:*) ;;
+            *) echo "::error::API_URL inattesa: $API_URL"; exit 1 ;;
+          esac
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "LOCAL_SUPABASE_URL=$API_URL"
+            echo "LOCAL_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "LOCAL_SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "LOCAL_SUPABASE_DB_URL=$DB_URL"
+            echo "E2E_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+
+      - name: Seed the synthetic test account
+        env:
+          API_URL: ${{ env.LOCAL_SUPABASE_URL }}
+          SERVICE_ROLE_KEY: ${{ env.LOCAL_SUPABASE_SERVICE_ROLE_KEY }}
+          DB_URL: ${{ env.LOCAL_SUPABASE_DB_URL }}
+        run: bash supabase/seed-e2e.sh
+
+      # Come nel job `e2e`, più URL e anon key dello stack locale: senza, il
+      # codice cade sul default di produzione (web/lib/supabase/config.ts).
+      - name: Build web (cloud mode, local Supabase)
+        working-directory: web
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_JHT_DEPLOY: cloud
+          NEXT_PUBLIC_SITE_URL: http://localhost:3011
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.LOCAL_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.LOCAL_SUPABASE_ANON_KEY }}
+
+      - name: Start web
+        working-directory: web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.LOCAL_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.LOCAL_SUPABASE_ANON_KEY }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/empty-jht"
+          JHT_HOME="$RUNNER_TEMP/empty-jht" \
+          NEXT_PUBLIC_JHT_DEPLOY=cloud \
+          NEXT_PUBLIC_SITE_URL=http://localhost:3011 \
+          npx next start -p 3011 > "$RUNNER_TEMP/next.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:3011/api/demo; then
+              echo "server pronto dopo ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::il server non ha risposto entro 60s"; cat "$RUNNER_TEMP/next.log"; exit 1
+
+      # Stesso script del job `e2e`, puntato allo stack locale via env. Il
+      # cookie si chiama sb-127-auth-token (primo pezzo dell'host), lo stesso
+      # nome che @supabase/ssr ricava dall'URL: se non è così lo script ha
+      # letto il default di produzione, e il job si ferma.
+      - name: Create the test session (local Auth)
+        working-directory: e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.LOCAL_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.LOCAL_SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/refresh-auth-state.mjs
+          if ! grep -q '"name": "sb-127-auth-token' auth-state.json; then
+            echo "::error::la sessione non viene dallo stack locale"; exit 1
+          fi
+
+      - name: Run e2e specs
+        working-directory: e2e
+        env:
+          BASE_URL: http://localhost:3011
+        run: npx playwright test --reporter=list --workers=1
+
+      - name: Wipe the session and stop Supabase
+        if: always()
+        run: |
+          rm -f e2e/auth-state.json
+          supabase stop --no-backup || true
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          # Solo screenshot: account e dati sono sintetici, ma la regola del
+          # repo pubblico resta la stessa del job `e2e`.
+          name: playwright-local-supabase-failure-screenshots
+          path: e2e/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Smoke post-deploy: i 38 test `@pytest.mark.production` che il job `pytest`
   # non esegue più. Non sono stati cancellati, sono stati spostati dove la loro
   # domanda ha senso — «il sito vivo risponde?» è una domanda sul deploy, non
@@ -724,3 +905,33 @@ jobs:
           tests/test_vercel_pages.py
           tests/test_missing_pages.py
           -v -rs -m production
+
+      # Canarino di produzione, SOLA LETTURA (opzione E della nota sull'Auth
+      # di produzione): login dell'account di test, /dashboard reso sul sito
+      # vivo, logout con scope=local e verifica che il token non valga più.
+      # La spec sta in e2e/canary/, fuori da e2e/tests/: il job `e2e` non la
+      # raccoglie mai. Gira anche se lo smoke pytest sopra è rosso: sono due
+      # domande diverse.
+      - uses: actions/setup-node@v7
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.prod_canary }}
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install production canary dependencies
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.prod_canary }}
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Production auth canary (read-only)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.prod_canary }}
+        working-directory: e2e
+        env:
+          E2E_PROD_CANARY: "1"
+          BASE_URL: https://jobhunterteam.ai
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: npx playwright test -c canary/playwright.config.ts --reporter=list

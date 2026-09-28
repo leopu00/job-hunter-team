@@ -52,6 +52,8 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "migration-gate": READ_CONTENTS,
         "pytest": READ_CONTENTS,
         "e2e": READ_CONTENTS,
+        # Draft, dispatch only (input local_supabase_e2e).
+        "e2e-local-supabase": READ_CONTENTS,
         "smoke": READ_CONTENTS,
     },
     "windows-config-acl.yml": {"acl": READ_CONTENTS},
