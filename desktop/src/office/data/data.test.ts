@@ -23,7 +23,9 @@ function pileCount(q: FakeQuery): number {
   return ({ new: 11, checked: 5, scored: 4, review: 3, ready: 6 } as Record<string, number>)[String(status)] ?? -1;
 }
 
-function answer(heartbeat: string | null, running = true) {
+const POSITION_7 = { id: "uuid-7", legacy_id: 7, title: "Ruolo sintetico", company: "Azienda finta", deleted_at: null };
+
+function answer(heartbeat: string | null, running = true, positions: Array<Record<string, unknown>> = [POSITION_7]) {
   return (q: FakeQuery) => {
     if (q.table === "team_state")
       return { data: heartbeat === undefined ? null : { is_running: running, last_heartbeat_at: heartbeat }, error: null };
@@ -31,8 +33,9 @@ function answer(heartbeat: string | null, running = true) {
     if (q.table === "positions") {
       const [columns, options] = q.op("select") as [string, { head?: boolean } | undefined];
       if (options?.head) return { data: null, error: null, count: pileCount(q) };
-      expect(columns).toBe("id, legacy_id, title, company");
-      return { data: [{ id: "uuid-7", legacy_id: 7, title: "Ruolo sintetico", company: "Azienda finta" }], error: null };
+      // deleted_at too: a deleted position keeps its title and loses its link (as on the agents page).
+      expect(columns).toBe("id, legacy_id, title, company, deleted_at");
+      return { data: positions, error: null };
     }
     return { data: null, error: { message: "unexpected " + q.table } };
   };
@@ -76,6 +79,15 @@ describe("loadOfficeSnapshot", () => {
       position: { id: "uuid-7", legacyId: 7, title: "Ruolo sintetico", company: "Azienda finta" },
     });
     expect(snap.transitions[2]!.position).toEqual({ id: null, legacyId: 8, title: null, company: null });
+  });
+
+  it("a transition of a deleted position keeps its title but no id: its page is gone", async () => {
+    const deleted = { id: "uuid-8", legacy_id: 8, title: "Ruolo cancellato", company: "Azienda finta", deleted_at: "2026-09-27T12:00:00Z" };
+    const { client } = fakeSupabase(answer("2026-09-27T17:58:00Z", true, [POSITION_7, deleted]));
+    const snap = await loadOfficeSnapshot(client, NOW);
+
+    expect(snap.transitions[0]!.position).toEqual({ id: "uuid-7", legacyId: 7, title: "Ruolo sintetico", company: "Azienda finta" });
+    expect(snap.transitions[2]!.position).toEqual({ id: null, legacyId: 8, title: "Ruolo cancellato", company: "Azienda finta" });
   });
 
   it("counts the piles as pipeline_queue_defs.gd, on the positions not deleted", async () => {
