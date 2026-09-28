@@ -31,9 +31,9 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { getDirectReader } from './cloud-direct.js';
-import { observeTeamRunning } from './team-observed.js';
+import { observeTeam as observeBoxTeam } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
-import { agentsStatusWriter, createAgentsStatusReader, startAgentsStatusPublisher } from './agents-status.js';
+import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, startAgentsStatusPublisher } from './agents-status.js';
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
@@ -203,11 +203,11 @@ export const HEARTBEAT_TIMEOUT_MS = 30_000;
  *
  * @param {object} [options]
  * @param {AbortSignal} [options.signal] default: HEARTBEAT_TIMEOUT_MS
- * @param {() => boolean | null} [options.observeTeam]
+ * @param {() => boolean | null | Promise<boolean | null>} [options.observeTeam]
  */
 export async function reconcileOnce({
   signal = AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS),
-  observeTeam = observeTeamRunning,
+  observeTeam = observeBoxTeam,
 } = {}) {
   const config = await loadCloudConfig();
   if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
@@ -218,7 +218,7 @@ export async function reconcileOnce({
 
   // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
   const fields = { last_heartbeat_at: new Date().toISOString() };
-  const running = observeTeam();
+  const running = await observeTeam();
   if (running !== null) fields.is_running = running;
   const reader = getDirectReader(config);
   let beat = false;
@@ -226,35 +226,50 @@ export async function reconcileOnce({
     try { await reader.patchTeamState(fields, { signal }); beat = true; }
     catch (err) { log('warn', 'heartbeat.direct-failed', { err: err.message }); }
   }
-  if (!beat) {
-    beat = await apiCall('PATCH', baseUrl, token, '/api/team-state', fields, { signal })
-      .then(() => true, () => false);
-  }
-  ensureAgentsStatusPublisher({ reader, baseUrl, token });
+  if (!beat) beat = await beatThroughRoute({ baseUrl, token, fields, signal });
+  ensureAgentsStatusPublisher({ reader });
   return { ok: true, action: null, beat };
+}
+
+/**
+ * The heartbeat through PATCH /api/team-state, with the agents' statuses in
+ * the same body when the box has no Supabase session (createHeartbeatCarrier):
+ * one Vercel invocation a minute for both. A 400/403 on that body is the
+ * statuses' refusal (a route older than the field, a map it refuses): the
+ * heartbeat goes again alone, and the statuses wait REFUSED_RETRY_MS.
+ */
+async function beatThroughRoute({ baseUrl, token, fields, signal }) {
+  const carried = agentsStatusCarrier?.fields() ?? {};
+  try {
+    await apiCall('PATCH', baseUrl, token, '/api/team-state', { ...fields, ...carried }, { signal });
+    return true;
+  } catch (err) {
+    if (!('agents_status' in carried) || (err?.status !== 400 && err?.status !== 403)) return false;
+    agentsStatusCarrier.refused();
+    log('warn', 'agents-status.refused-with-heartbeat', { status: err.status, err: err.message });
+    return apiCall('PATCH', baseUrl, token, '/api/team-state', fields, { signal }).then(() => true, () => false);
+  }
 }
 
 // Each agent's status for the desktop office's tags (agents-status.js):
 // started once, at the first heartbeat of the daemon. Written direct to
 // Supabase when this box has a session (JHT_SUPABASE_DIRECT), otherwise
-// through PATCH /api/team-state with the box's token, as the heartbeat.
+// carried by the heartbeat's own PATCH /api/team-state (beatThroughRoute).
 // The source is the TUI team's panes, or with JHT_API_TRACES_DIR the JHT API
 // executor's traces (agents-status-traces.js; the test box, own account).
 // JHT_AGENTS_STATUS=0 turns it off.
 let stopAgentsStatus = null;
-function ensureAgentsStatusPublisher({ reader, baseUrl, token }) {
+let agentsStatusCarrier = null;
+function ensureAgentsStatusPublisher({ reader }) {
   if (stopAgentsStatus || process.env.JHT_AGENTS_STATUS === '0') return;
   const tracesDir = process.env.JHT_API_TRACES_DIR;
   const source = tracesDir ? 'api' : 'tui';
+  if (!reader) agentsStatusCarrier = createHeartbeatCarrier({ source });
   stopAgentsStatus = startAgentsStatusPublisher({
     reader: tracesDir
       ? createApiAgentsStatusReader({ logsDir: tracesDir, log })
       : createAgentsStatusReader({ jhtHome: JHT_HOME, log }),
-    write: agentsStatusWriter({
-      source,
-      direct: reader,
-      route: (body) => apiCall('PATCH', baseUrl, token, '/api/team-state', body),
-    }),
+    write: agentsStatusWriter({ source, direct: reader, carrier: agentsStatusCarrier }),
     log,
   });
 }
