@@ -729,7 +729,14 @@ export default function CloudRefreshButton() {
             session: { access_token: string; user: { id: string } } | null;
           };
         };
-        if (cancelled || !data.session) return;
+        if (cancelled) return;
+        // Nessuna sessione: nessun canale (non c'è un utente da filtrare), ma
+        // il catch-up gira lo stesso, come quando il canale parte e arriva a
+        // SUBSCRIBED; senza, lo stato della sync resterebbe sconosciuto.
+        if (!data.session) {
+          void catchUp();
+          return;
+        }
         const userId = data.session.user.id;
         if (supabase.realtime?.setAuth) {
           await supabase.realtime.setAuth(data.session.access_token);

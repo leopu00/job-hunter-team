@@ -253,6 +253,20 @@ describe("CloudRefreshButton — canale dello stato di sync", () => {
     await button.unmount();
   });
 
+  it("senza sessione: nessun canale, ma il catch-up iniziale gira lo stesso", async () => {
+    stubStatus();
+    const fake = fakeSupabase(row);
+    fake.client.auth.getSession = async () =>
+      ({ data: { session: null } }) as never;
+    const from = vi.fn(fake.client.from);
+    fake.client.from = from;
+    const button = await mount(createElement(CloudRefreshButton));
+
+    expect(fake.client.channel).not.toHaveBeenCalled();
+    expect(from).toHaveBeenCalledWith("team_state");
+    await button.unmount();
+  });
+
   it("smontato durante setAuth: nessun canale creato", async () => {
     stubStatus();
     const fake = fakeSupabase(row, true);
