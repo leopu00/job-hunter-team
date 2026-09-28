@@ -559,6 +559,39 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
+/**
+ * A flag the user sets from the web, as the box sends it: SQLite 0|1 (or a
+ * boolean) to BOOLEAN, with its companion fields. ABSENT (a box older than
+ * the field) gives nothing, so the upsert leaves the cloud's value as it is;
+ * an explicit null or 0 still clears it.
+ */
+function desiredFlag(
+  p: object,
+  flag: string,
+  companions: string[],
+): Record<string, unknown> {
+  const row = p as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(row, flag)) return {};
+  const value = row[flag];
+  return {
+    [flag]:
+      value == null ? false : typeof value === "boolean" ? value : value === 1,
+    ...Object.fromEntries(companions.map((key) => [key, row[key] ?? null])),
+  };
+}
+
+/** Rows grouped by their set of columns, in order of first appearance. */
+function sameColumns<T extends object>(rows: T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = Object.keys(row).sort().join(",");
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+  return [...groups.values()];
+}
+
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured) {
     return NextResponse.json(
@@ -878,56 +911,32 @@ export async function POST(req: NextRequest) {
           salary_estimated_max: p.salary_estimated_max ?? null,
           salary_estimated_currency: p.salary_estimated_currency ?? null,
           salary_estimated_source: p.salary_estimated_source ?? null,
-          // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
-          // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
-          // / push legacy).
-          write_requested:
-            p.write_requested == null
-              ? false
-              : typeof p.write_requested === "boolean"
-                ? p.write_requested
-                : p.write_requested === 1,
-          write_requested_at: p.write_requested_at ?? null,
+          // The flags the USER sets from the web (desired state): a box that
+          // does not send one (older than the field) leaves the cloud's value
+          // as it is; only an explicit value changes it (desiredFlag). Before,
+          // an absent flag was written false with its time null: the push of
+          // a box older than 12/09 erased an authorisation to apply given from
+          // the web, and the same held for write/geocode/recheck/salary.
+          ...desiredFlag(p, "write_requested", ["write_requested_at"]),
           // Compat pre-078: assente significa "client non conosce il campo",
-          // non "azzera il desired state cloud". Con defaultToNull=false
-          // PostgREST preserva il valore concorrente su UPDATE; un NULL
-          // esplicito dei client aggiornati continua invece a risolverlo.
+          // non "azzera il desired state cloud". Un NULL esplicito dei client
+          // aggiornati continua invece a risolverlo.
           ...(Object.prototype.hasOwnProperty.call(p, "write_request_kind")
             ? { write_request_kind: p.write_request_kind ?? null }
             : {}),
-          geocode_requested:
-            p.geocode_requested == null
-              ? false
-              : typeof p.geocode_requested === "boolean"
-                ? p.geocode_requested
-                : p.geocode_requested === 1,
-          geocode_requested_at: p.geocode_requested_at ?? null,
-          // Recheck on-demand (mig 042). Flag user-driven default FALSE.
-          recheck_requested:
-            p.recheck_requested == null
-              ? false
-              : typeof p.recheck_requested === "boolean"
-                ? p.recheck_requested
-                : p.recheck_requested === 1,
-          recheck_requested_at: p.recheck_requested_at ?? null,
-          // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
-          salary_precise_requested:
-            p.salary_precise_requested == null
-              ? false
-              : typeof p.salary_precise_requested === "boolean"
-                ? p.salary_precise_requested
-                : p.salary_precise_requested === 1,
-          salary_precise_requested_at: p.salary_precise_requested_at ?? null,
+          ...desiredFlag(p, "geocode_requested", ["geocode_requested_at"]),
+          // Recheck on-demand (mig 042).
+          ...desiredFlag(p, "recheck_requested", ["recheck_requested_at"]),
+          // Salary-precise on-demand (V9, mig 040).
+          ...desiredFlag(p, "salary_precise_requested", [
+            "salary_precise_requested_at",
+          ]),
           salary_precise: p.salary_precise ?? null,
           // [JHT-CLOSER] Autorizzazione alla candidatura (mig 088).
-          apply_requested:
-            p.apply_requested == null
-              ? false
-              : typeof p.apply_requested === "boolean"
-                ? p.apply_requested
-                : p.apply_requested === 1,
-          apply_requested_at: p.apply_requested_at ?? null,
-          apply_requested_by: p.apply_requested_by ?? null,
+          ...desiredFlag(p, "apply_requested", [
+            "apply_requested_at",
+            "apply_requested_by",
+          ]),
         };
       });
 
@@ -943,10 +952,15 @@ export async function POST(req: NextRequest) {
         if (status !== "applied") throw new Error("unreachable_status");
         return deferred;
       });
+    // One upsert per set of columns. With defaultToNull=false a column left
+    // out keeps its value on UPDATE only if NO row of the same upsert carries
+    // it: in a mixed batch the missing ones would take the column's default.
+    // So the deferred status and the absent desired flags each travel in a
+    // batch whose rows all lack them.
     for (const batch of [
-      { rows: regularPayload, defaultToNull: false },
-      { rows: deferredAppliedPayload, defaultToNull: false },
-    ]) {
+      ...sameColumns(regularPayload),
+      ...sameColumns(deferredAppliedPayload),
+    ].map((rows) => ({ rows, defaultToNull: false }))) {
       if (batch.rows.length === 0) continue;
       // Su INSERT lo status assente usa il default `new`; su UPDATE resta
       // quello corrente. Solo l'RPC dopo applications pubblica `applied`.
