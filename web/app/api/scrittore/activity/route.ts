@@ -31,6 +31,9 @@ export async function GET() {
         "id, title, company, location, remote_type, notes, status, scores(total_score)",
       )
       .is("deleted_at", null)
+      // Filtro sulla relazione: uno score cancellato non dà il punteggio a
+      // una posizione viva (la posizione resta, lo score no).
+      .is("scores.deleted_at", null)
       .eq("status", "scored")
       .order("id", { ascending: false })
       .limit(30);
@@ -57,6 +60,8 @@ export async function GET() {
       `,
       )
       .is("deleted_at", null)
+      .is("scores.deleted_at", null)
+      .is("applications.deleted_at", null)
       .in("status", ["writing", "review"])
       .order("id", { ascending: false })
       .limit(20);
@@ -90,6 +95,8 @@ export async function GET() {
       `,
       )
       .is("deleted_at", null)
+      .is("scores.deleted_at", null)
+      .is("applications.deleted_at", null)
       .eq("status", "ready")
       .order("last_checked", { ascending: false })
       .limit(10);
