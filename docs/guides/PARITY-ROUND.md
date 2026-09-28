@@ -26,7 +26,7 @@ went wrong, and each is now enforced by the script rather than remembered:
 | **Known state on the API side** | A CAPITANO that finds old mailbox messages or an old diary acts on them — once it coasted for two hours on a stale "daily overspend" note | Mailboxes, notifications, replies, diaries, the old database and the old `STOP` are **moved** into an archive, never deleted; `check` runs again and refuses anything left over |
 | **One seed** | Two databases that started apart cannot be compared | T0: the TUI database is copied, the seed is made from it, and the API database is prepared from the seed |
 | **Copies on the clock** | Copies taken by hand at hours chosen on the fly compare different moments | One copy of both databases every `snapshot_every_min`, aligned to the clock, and one at the end, each diffed against the seed |
-| **One budget, one backstop** | A launcher cap and a key-proxy cap that disagree stop the round at a moment nobody chose | The launcher's `sessionUsd` is set to the round's budget; `check` refuses a key proxy with too little left or far too much; the round stops itself when the spend since its start reaches the budget |
+| **One budget, one backstop** | A launcher cap and a key-proxy cap that disagree stop the round at a moment nobody chose | The launcher's `sessionUsd` is set to the round's budget; `check` refuses a key proxy with too little left or far too much; the round stops itself when the spend since its start comes within 0.02 USD of the budget |
 | **No API role already running** | A run started before T0 writes into the new database with the old one's memory | `check` refuses while any API role runs |
 
 ## 🛠️ Setup (once, outside git)
@@ -80,8 +80,9 @@ python3 scripts/parity/parity_round.py report <out_dir>/round-<stamp>
 
 Read only. Prints a JSON object — `ok`, the `problems`, and the `facts` it
 read — and exits **0** when ready, **1** when not. A command that fails on a
-box exits **2**; a malformed configuration or a command that times out ends
-with a Python traceback instead.
+box, or a configuration without its `tui` or `api` section, exits **2**; other
+malformed configurations and a command that times out end with a Python
+traceback instead.
 
 It verifies:
 - the two revisions match: the TUI's label, and the one hex tag among the

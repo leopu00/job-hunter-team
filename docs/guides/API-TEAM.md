@@ -91,14 +91,15 @@ Set by `JHT_API_BUDGET_USD` (from the order's `cap_usd` on the VPS). A live
 run without it, or with it at zero, does not start.
 
 - **Before every model call** the runtime prices the call's worst case —
-  the estimated input all at the dearest input price, plus the full output
-  allowance — and does not make the call if that does not fit in what is
+  the estimated input at full input price and again as a cache write, plus
+  the full output allowance — and does not make the call if that does not fit in what is
   left. The run then ends with `budget_exhausted` (exit 1).
 - **Web searches are billed and capped.** Each search costs its per-search
   fee (0.01 USD in the catalogue) plus its tokens, against the same budget.
-  At most `JHT_API_MAX_WEB_SEARCHES` per run (default 8, `0` = none). A
-  search that would not fit in the budget, or one past the count, is not
-  sent: the tool answers the model that searches are over, and the run goes
+  `JHT_API_MAX_WEB_SEARCHES` per run (default 8, `0` = none): once the count
+  is reached no new search starts — one call can bill two, so a run may end
+  one over. A search whose worst case would not fit in the budget is not
+  sent either: the tool answers the model that searches are over, and the run goes
   on with what it has.
 
   > Until 28/09 the search fee never reached the cap: the runtime read the
@@ -134,7 +135,7 @@ task within `taskChars`. The CAPITANO's own cap is `captainUsd`, and
 
 `sessionUsd` (at most 10 USD) bounds everything the session starts, the
 CAPITANO included. The launcher splits the money into two figures, and says
-both in every refusal and in `list_agents`:
+both in every refusal for money and in `list_agents`:
 
 - **spent** — what the runs that ended cost, as the key proxy measured them;
 - **booked** — money held and not yet spent: the caps of the runs still
@@ -192,14 +193,15 @@ purpose, each pinned by a test so that it turns red if either side moves.
 - **The prompt.** An API role reads `agents/<role>/` by the TUI launcher's
   own rules: the localized identity file, the skills in `skills.list` order
   plus the role's private `_skills/`, the `agents/_team/` baselines, the same
-  locale cascade. The identity is sent byte for byte and first, then a short
+  locale cascade. The identity is sent first and unchanged, then a short
   note on where the `_tools` commands went, then an index of the skills.
-- **The commands.** Every `agents/_tools` wrapper and every Python skill a
-  role uses is a native tool with the same arguments, the same output and
-  the same exit code: `jht-tmux-send` becomes `send_message`,
+- **The commands.** Each command a role uses — the team's wrappers and the
+  Python skills — is either a native tool with the same arguments, the same
+  output and the same exit code (`jht-tmux-send` becomes `send_message`,
   `jht-notify-user` becomes `notify_user`, `python3 …/db_insert.py`
-  becomes `db_insert`, and so on. A role that tries the Python command in
-  its shell is refused with the name of the tool that replaces it. The full
+  becomes `db_insert`), or refused with the reason and what to do instead.
+  A role that tries a ported command in its shell is refused with the name
+  of the tool that replaces it. The full
   table is in
   [`docs/parity.md`](../../agent-harness/runtime/docs/parity.md).
 - **The rows.** For the roles that write `jobs.db`, the same commands on
