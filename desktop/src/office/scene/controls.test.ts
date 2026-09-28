@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Rect } from "../contract";
 import { MAX_SCALE, coverScale, toWorld, type Camera } from "./camera";
-import { attachControls, classifyWheel, DRAG_CLICK_TOLERANCE, keyDirection, PAN_SPEED, ZOOM_STEP, type Controls } from "./controls";
+import { attachControls, classifyWheel, DRAG_CLICK_TOLERANCE, keyDirection, OWN_KEYS_ATTR, PAN_SPEED, ZOOM_STEP, type Controls } from "./controls";
 
 // The office as the layout frames it (floor + wall), and a canvas 1200x700.
 const BOUNDS: Rect = { x: 240, y: 20, w: 2920, h: 1980 };
@@ -153,6 +153,29 @@ describe("the office controls", () => {
     controls.step(0.5);
     expect(controls.camera()).toEqual(before);
     input.remove();
+  });
+
+  it("keys pressed inside the panel are the panel's: the arrows scroll its list, + and 0 do nothing to the office", () => {
+    const panel = document.createElement("aside");
+    panel.setAttribute(OWN_KEYS_ATTR, "");
+    const item = document.createElement("button");
+    panel.appendChild(item);
+    document.body.appendChild(panel);
+    const before = controls.camera();
+    for (const k of ["ArrowUp", "w", "+", "0"]) {
+      const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true });
+      item.dispatchEvent(e);
+      expect(e.defaultPrevented, k).toBe(false);
+    }
+    controls.step(0.5);
+    expect(controls.camera()).toEqual(before);
+    for (const k of ["ArrowUp", "w"]) item.dispatchEvent(new KeyboardEvent("keyup", { key: k, bubbles: true }));
+    panel.remove();
+    // outside the panel the arrows are the camera's again
+    key("keydown", "ArrowUp");
+    controls.step(0.5);
+    key("keyup", "ArrowUp");
+    expect(controls.camera()).not.toEqual(before);
   });
 
   it("after destroy nothing moves it", () => {

@@ -3,6 +3,7 @@ import { formatRelative } from "@/lib/message-display";
 import { PUBLIC_STATE_COLORS, publicPositionState, publicPositionStateLabel } from "@/lib/position-state";
 import { useLocale } from "@/lib/use-locale";
 import type { AgentStatuses, DeptId, OfficeClick, OfficeLayout, OfficeSnapshot } from "../contract";
+import { OWN_KEYS_ATTR } from "../scene/controls";
 import { tagOf } from "../status";
 import {
   loadAgentPanel,
@@ -60,6 +61,8 @@ export default function OfficePanel(props: OfficePanelProps) {
     <aside
       ref={self}
       tabIndex={-1}
+      // its keys are its own: the arrows scroll the list, the camera stays (controls.ts)
+      {...{ [OWN_KEYS_ATTR]: "" }}
       aria-label="Dettagli dell'ufficio"
       className="absolute right-3 top-3 bottom-3 z-20 flex w-[380px] focus:outline-none max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}

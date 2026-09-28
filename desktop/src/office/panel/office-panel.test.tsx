@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OfficeLayout } from "../contract";
 import { fakeSupabase } from "../../test-support/fake-supabase";
+import { OWN_KEYS_ATTR } from "../scene/controls";
 import OfficePanel from "./OfficePanel";
 
 const layout = { departments: [{ id: "scout", name: "Research", tagline: "Finds relevant opportunities for you." }] } as unknown as OfficeLayout;
@@ -28,6 +29,10 @@ function open(onNavigate = vi.fn()) {
 describe("the office's panel with a keyboard (D08)", () => {
   it("takes the focus when it opens", () => {
     expect(open()).toHaveFocus();
+  });
+
+  it("keeps its keys: the arrows pressed in it scroll its list and do not move the office's camera", () => {
+    expect(open()).toHaveAttribute(OWN_KEYS_ATTR);
   });
 
   it("every control shows where the keyboard focus is", async () => {
