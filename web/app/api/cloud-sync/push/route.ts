@@ -1768,11 +1768,19 @@ export async function POST(req: NextRequest) {
   }
 
   // 3e. Position transitions (event-log per-istanza → feed "Attività recente").
-  // Append-only: insert-if-new via UNIQUE (user_id, position_legacy_id, ts,
-  // by_agent, to_state). `ignoreDuplicates` = ON CONFLICT DO NOTHING → un
-  // re-push (cursor reset / overlap col backfill manuale) NON duplica, e il
-  // count riflette solo le righe davvero nuove. `position_legacy_id` è l'int
-  // locale stabile: nessun lookup UUID necessario (a differenza di scores/apps).
+  // UNIQUE (user_id, position_legacy_id, ts, by_agent, to_state) e upsert
+  // ON CONFLICT DO UPDATE (non piu' DO NOTHING da 6eb20c010): un re-push
+  // (cursor reset / overlap col backfill manuale) riscrive la stessa riga
+  // invece di duplicarla. `position_legacy_id` è l'int locale stabile: nessun
+  // lookup UUID necessario (a differenza di scores/apps).
+  //
+  // ⚠️ La tabella locale non ha quel vincolo e `ts` è al secondo: due
+  // transizioni uguali nello stesso secondo arrivano nella stessa richiesta,
+  // e Postgres rifiuta un DO UPDATE che tocca due volte la stessa riga
+  // (21000): 500 a ogni giro, cursore fermo per sempre. Stessa chiave = stesso
+  // evento sul cloud: ne va una sola, l'ULTIMA della richiesta, e anche quella
+  // che ha sostituito riceve la sua ricevuta (il client le conta come
+  // multinsieme, una per riga mandata).
   if (positionTransitions.length > 0) {
     if (
       positionTransitions.some(
@@ -1813,10 +1821,36 @@ export async function POST(req: NextRequest) {
       return rowRejection("position_transition_row_rejected");
     }
 
-    if (payload.length > 0) {
+    const transitionKey = (t: {
+      position_legacy_id: number;
+      ts: string;
+      by_agent: string;
+      to_state: string;
+    }) => {
+      const ms = instantMs(t.ts);
+      return JSON.stringify([
+        t.position_legacy_id,
+        Number.isFinite(ms) ? ms : t.ts,
+        t.by_agent,
+        t.to_state,
+      ]);
+    };
+    const lastByKey = new Map<string, number>();
+    payload.forEach((row, index) => lastByKey.set(transitionKey(row), index));
+    const distinctPayload = payload.filter(
+      (row, index) => lastByKey.get(transitionKey(row)) === index,
+    );
+    // Wire rows replaced by a later one with the same key in this request.
+    const superseded = new Set(
+      positionTransitions.filter(
+        (wire, index) => lastByKey.get(transitionKey(payload[index])) !== index,
+      ),
+    );
+
+    if (distinctPayload.length > 0) {
       const { data: upserted, error } = await admin
         .from("position_transitions")
-        .upsert(payload, {
+        .upsert(distinctPayload, {
           onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
         })
         .select("position_legacy_id,ts,by_agent,to_state,from_state,notes");
@@ -1845,8 +1879,9 @@ export async function POST(req: NextRequest) {
         );
         if (
           row &&
-          (row.from_state ?? null) === (wire.from_state ?? null) &&
-          (row.notes ?? null) === (wire.notes ?? null)
+          (superseded.has(wire) ||
+            ((row.from_state ?? null) === (wire.from_state ?? null) &&
+              (row.notes ?? null) === (wire.notes ?? null)))
         ) {
           rowReceipts.position_transitions.push(
             wireReceipt("position_transitions", wire),

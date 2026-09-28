@@ -60,6 +60,7 @@ function fakeAdmin() {
     from(table: string) {
       let operation = "select";
       let writtenPayload: any = null;
+      let cardinalityError: { code: string; message: string } | null = null;
       const equalFilters = new Map<string, unknown>();
       const inFilters = new Map<string, unknown[]>();
       const query: Query = { table, operation, filters: [] };
@@ -91,6 +92,26 @@ function fakeAdmin() {
           operation = "upsert";
           query.operation = operation;
           writtenPayload = payload;
+          // Postgres refuses an ON CONFLICT DO UPDATE that touches the same
+          // row twice in one statement (21000); the conflict key compares
+          // instants, not their spelling.
+          if (table === "position_transitions") {
+            const keys = payload.map((row: any) =>
+              JSON.stringify([
+                row.position_legacy_id,
+                postgrestInstant(row.ts),
+                row.by_agent,
+                row.to_state,
+              ]),
+            );
+            if (new Set(keys).size !== keys.length) {
+              cardinalityError = {
+                code: "21000",
+                message:
+                  "ON CONFLICT DO UPDATE command cannot affect row a second time",
+              };
+            }
+          }
           calls.push({ kind: "upsert", table, payload, options });
           return builder;
         },
@@ -184,9 +205,11 @@ function fakeAdmin() {
                                       ),
                                     ) ?? null)
                                   : null;
+          const error =
+            operation === "upsert" ? (upsertError ?? cardinalityError) : null;
           return Promise.resolve({
-            data: upsertError ? null : data,
-            error: operation === "upsert" ? upsertError : null,
+            data: error ? null : data,
+            error,
           }).then(ok, ko);
         },
       };
@@ -796,6 +819,51 @@ describe("push sync di una candidatura", () => {
         ],
       },
     });
+  });
+
+  /**
+   * The local table has no UNIQUE on the conflict key and `ts` is to the
+   * second: two equal transitions in the same second reached the route in
+   * one request, Postgres refused the upsert (21000), and the box's push
+   * answered 500 on every round, its cursor still, for ever.
+   */
+  it("two transitions with the same key in one request are one row, and both are acked", async () => {
+    const first = {
+      position_legacy_id: 73,
+      ts: "2026-08-16 18:24:28",
+      by_agent: "SCOUT",
+      to_state: "review",
+      notes: "first",
+    };
+    const again = { ...first, ts: "2026-08-16T18:24:28Z", notes: "second" };
+    const other = { ...first, to_state: "scored", notes: null };
+    const response = await pushBody({
+      positions: [{ id: 73, title: "Synthetic", company: "Example" }],
+      position_transitions: [first, other, again],
+    });
+
+    expect(response.status).toBe(200);
+    const upsert = calls.find(
+      (call) => call.kind === "upsert" && call.table === "position_transitions",
+    )!;
+    // The later one of the request wins.
+    expect(upsert.payload.map((row: any) => row.notes)).toEqual([
+      null,
+      "second",
+    ]);
+    const body = await response.json();
+    expect([...body.receipts.position_transitions].sort()).toEqual(
+      [first, other, again]
+        .map((wire) =>
+          quarantineIdentity("position_transitions", {
+            position_legacy_id: wire.position_legacy_id,
+            ts: wire.ts,
+            by_agent: wire.by_agent,
+            to_state: wire.to_state,
+          }),
+        )
+        .sort(),
+    );
   });
 
   it("nega la receipt alla transizione che dal cloud non torna", async () => {
