@@ -131,11 +131,16 @@ export function transitionFromRow(row: unknown): Transition | null {
   };
 }
 
+/** The channel's transitions kept at most, waiting for a read to bring them (the oldest are forgotten first). */
+export const WALKED_MAX = 1000;
+
 export type LiveOffice = {
   /** a full read: what changed since the last one */
   snapshot(next: OfficeSnapshot): void;
   /** a transition from the channel: its trip now, never again at the next read */
   transition(t: Transition): void;
+  /** how many channel transitions wait for a read to bring them */
+  pending(): number;
 };
 
 /**
@@ -168,7 +173,9 @@ export function createLiveOffice(diff: (prev: OfficeSnapshot | null, next: Offic
       if (walked.has(key(t)) || prev.transitions.some((x) => key(x) === key(t))) return;
       apply({ type: "pipeline", uid: t.byAgent, toState: t.to, position: t.position, ts: t.ts });
       walked.add(key(t));
+      if (walked.size > WALKED_MAX) walked.delete(walked.values().next().value!);
     },
+    pending: () => walked.size,
   };
 }
 

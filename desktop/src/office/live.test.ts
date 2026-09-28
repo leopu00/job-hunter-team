@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeEvent, OfficeSnapshot } from "./contract";
 import { diffOfficeSnapshots } from "./data/diff";
-import { createLiveOffice, createReadScheduler, READ_GAP_MS, subscribeOffice, transitionFromRow } from "./live";
+import { createLiveOffice, createReadScheduler, READ_GAP_MS, subscribeOffice, transitionFromRow, WALKED_MAX } from "./live";
 
 describe("the reads: at most one a minute, and one a minute when the channel is down (D09)", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -140,6 +140,19 @@ describe("real moves become trips, once (D09)", () => {
     const t8 = tr("2026-09-28T01:00:03Z", "scorer-2", 8);
     live.snapshot(snap([t7, t8], roster));
     expect(trips(events).map((e) => (e as { uid: string }).uid)).toEqual(["scorer-1", "scorer-2"]);
+  });
+
+  it("the walked transitions wait only until a read brings them, and never more than WALKED_MAX", () => {
+    const live = createLiveOffice(diffOfficeSnapshots, () => {});
+    live.snapshot(snap([]));
+    const t = (i: number) => tr(new Date(Date.parse("2026-09-28T01:00:00Z") + i * 1000).toISOString(), "scorer-1", i);
+    live.transition(t(1));
+    live.transition(t(2));
+    expect(live.pending()).toBe(2);
+    live.snapshot(snap([t(2), t(1)]));
+    expect(live.pending()).toBe(0);
+    for (let i = 0; i < WALKED_MAX + 5; i++) live.transition(t(10 + i));
+    expect(live.pending()).toBe(WALKED_MAX);
   });
 
   it("a new transition seen only by a read is one trip", () => {

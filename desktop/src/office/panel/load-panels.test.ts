@@ -120,6 +120,13 @@ describe("the objects' panels", () => {
     expect({ written: shelf.written, passed: shelf.passed, unreviewed: shelf.unreviewed }).toEqual({ written: 9, passed: 4, unreviewed: 2 });
     expect(shelf.list.map((p) => p.id)).toEqual(["y", "x"]);
     expectUserFilter(queries);
+    // the deleted positions' applications are left out by the same query, before the limit and in the counts
+    const apps = queries.filter((q) => q.table === "applications" && !q.op("in"));
+    expect(apps).toHaveLength(4);
+    for (const q of apps) {
+      expect(String(q.op("select")?.[0])).toContain("positions!inner(id)");
+      expect(q.ops.some(([op, a]) => op === "is" && a[0] === "positions.deleted_at" && a[1] === null), JSON.stringify(q.ops)).toBe(true);
+    }
   });
 
   it("the corkboard counts ready, sent and answered", async () => {

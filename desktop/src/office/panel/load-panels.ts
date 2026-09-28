@@ -250,19 +250,32 @@ export async function loadFoundPerDay(client: Client, now: number = Date.now(), 
 /** The CVs produced (Godot's CV shelf, output_archive_panel.gd): totals and the newest written. */
 export type CvShelfData = { written: number; passed: number; unreviewed: number; list: PanelPosition[] };
 
+/**
+ * The applications of positions not deleted, filtered in the same query
+ * (positions!inner, one foreign key): filtering after the limit left the
+ * list empty when the newest were of deleted positions, and the counts
+ * counted them.
+ */
 export async function loadCvShelf(client: Client): Promise<CvShelfData> {
   const userId = await userOf(client);
   const apps = () =>
-    client.from("applications").select("id", { count: "exact", head: true }).eq("user_id", userId).is("deleted_at", null).not("written_at", "is", null);
+    client
+      .from("applications")
+      .select("id, positions!inner(id)", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .is("positions.deleted_at", null)
+      .not("written_at", "is", null);
   const [written, passed, unreviewed, newest] = await Promise.all([
     count(apps()),
     count(apps().ilike("critic_verdict", "pass")),
     count(apps().is("critic_verdict", null)),
     client
       .from("applications")
-      .select("position_id")
+      .select("position_id, positions!inner(id)")
       .eq("user_id", userId)
       .is("deleted_at", null)
+      .is("positions.deleted_at", null)
       .not("written_at", "is", null)
       .order("written_at", { ascending: false })
       .limit(PANEL_LIST_MAX),
