@@ -23,7 +23,11 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => h.client }));
-vi.mock("next/navigation", () => ({
+// Il file che il componente risolve davvero, non lo specificatore nudo: da
+// tests/js `next/navigation` non esiste (next vive in web/node_modules), e un
+// mock con quel nome non copre l'import del componente. In CI il router vero
+// rispondeva «invariant expected app router to be mounted».
+vi.mock("../../../web/node_modules/next/navigation.js", () => ({
   useRouter: () => ({ refresh: h.refresh }),
 }));
 vi.mock("@/lib/use-locale", () => ({ useLocale: () => "en" }));
