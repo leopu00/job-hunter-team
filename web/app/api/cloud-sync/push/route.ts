@@ -1240,6 +1240,12 @@ export async function POST(req: NextRequest) {
   const awaiting = [...appliedByPosition].filter(
     (legacyId) => !appliedPositionIds.has(legacyId),
   );
+  // The positions written without their applied status because their
+  // application is not complete on the cloud yet. The receipt acks them and
+  // the box's cursor moves on: if the application never arrives complete, the
+  // position stays unpublished and nothing else says so. The box counts the
+  // rounds they stay here and warns (cli cloud-push-awaiting.js).
+  let awaitingApplication: number[] = [];
   if (awaiting.length > 0) {
     const uuids = awaiting
       .map((legacyId) => legacyToUuid.get(legacyId))
@@ -1274,6 +1280,9 @@ export async function POST(req: NextRequest) {
       const uuid = legacyToUuid.get(legacyId);
       if (uuid && complete.has(uuid)) appliedPositionIds.add(legacyId);
     }
+    awaitingApplication = awaiting.filter(
+      (legacyId) => !appliedPositionIds.has(legacyId),
+    );
   }
 
   // Il solo passo che rende la posizione visibile nel filtro applied avviene
@@ -2009,7 +2018,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    positions: { upserted: positionsUpserted },
+    // `applied`: the positions this request published as applied (the RPC
+    // above confirmed them), which is what ends a box's wait for them.
+    positions: {
+      upserted: positionsUpserted,
+      awaiting_application: awaitingApplication,
+      applied: Array.from(appliedPositionIds),
+    },
     scores: { upserted: scoresUpserted, out_of_range: scoresOutOfRange },
     applications: { upserted: applicationsUpserted },
     receipts: {
