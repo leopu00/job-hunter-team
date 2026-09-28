@@ -119,3 +119,85 @@ describe.skipIf(PYTHON_SKILLS === null)("B1-T2 · the API SCORER rescores only o
     expect(await api(t, "scorer-2", "db_insert", [...SCORE, "--action", "rescore"])).toMatchObject({ ok: true });
   });
 });
+
+describe.skipIf(PYTHON_SKILLS === null)("B1-T2 · the rescore ticket must be assigned, and a rescore one", () => {
+  // Revisione incrociata del 28/09 (charles): with `AND status = 'assigned'` or `kind = 'rescore'`
+  // taken out of the rescore's WHERE, the tests above stayed green.
+  it("refuses a rescore on this SCORER's ticket once it is resolved", async () => {
+    const t = twins(root, (db) => {
+      seed(db);
+      db.prepare("UPDATE position_tickets SET status = 'resolved', assigned_agent = 'scorer-1' WHERE id = 1").run();
+    });
+    const again = await api(t, "scorer-1", "db_insert", [...SCORE, "--action", "rescore"]);
+    expect(again).toMatchObject({ ok: false, content: expect.stringContaining("no rescore ticket assigned to you") });
+  });
+
+  it("refuses a rescore on a ticket of another kind assigned to this SCORER", async () => {
+    const t = twins(root, (db) => {
+      seed(db);
+      db.prepare("UPDATE position_tickets SET kind = 'custom', status = 'assigned', assigned_agent = 'scorer-1' WHERE id = 1").run();
+    });
+    const custom = await api(t, "scorer-1", "db_insert", [...SCORE, "--action", "rescore"]);
+    expect(custom).toMatchObject({ ok: false, content: expect.stringContaining("no rescore ticket assigned to you") });
+  });
+});
+
+const LOW = [
+  "score", "--position-id", "4", "--total", "35", "--stack-match", "10", "--remote-fit", "10", "--salary-fit", "5",
+  "--experience-fit", "5", "--strategic-fit", "5", "--breakdown", "The salary is now far below target.", "--scored-by", "scorer-1",
+];
+
+describe.skipIf(PYTHON_SKILLS === null)("B1-T2 · after a rescore the SCORER applies RULE-04 again", () => {
+  it("moves a scored position that falls under 40 to excluded, as the TUI Scorer does", async () => {
+    const t = twins(root, seed);
+    const answers = await play(t, [
+      ["capitano-1", "ticket.py", "ticket", ["assign", "1", "scorer-1"]],
+      ["scorer-1", "db_insert.py", "db_insert", [...LOW, "--action", "rescore"]],
+      ["scorer-1", "db_update.py", "db_update", ["position", "4", "--status", "excluded", "--notes", "EXCLUDED: [SALARY] far below target after the rescore"]],
+      ["scorer-1", "ticket.py", "ticket", ["resolve", "1", "--response", "Nuovo punteggio 35/100: esclusa."]],
+    ]);
+    expect(failed(answers)).toEqual([]);
+    expect(strictDiff(t)).toEqual([]);
+    const db = openJobsDb(t.api);
+    try {
+      expect(db.prepare("SELECT status FROM positions WHERE id = 4").get()).toEqual({ status: "excluded" });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("moves an excluded position that rises to 84 back to scored, so the person sees it", async () => {
+    const t = twins(root, (db) => {
+      seed(db);
+      db.prepare("UPDATE positions SET status = 'excluded' WHERE id = 4").run();
+    });
+    const answers = await play(t, [
+      ["capitano-1", "ticket.py", "ticket", ["assign", "1", "scorer-1"]],
+      ["scorer-1", "db_insert.py", "db_insert", [...SCORE, "--action", "rescore"]],
+      ["scorer-1", "db_update.py", "db_update", ["position", "4", "--status", "scored"]],
+      ["scorer-1", "ticket.py", "ticket", ["resolve", "1", "--response", "Nuovo punteggio 84/100."]],
+    ]);
+    expect(failed(answers)).toEqual([]);
+    expect(strictDiff(t)).toEqual([]);
+  });
+
+  it("moves nothing without its assigned rescore ticket, nor once the ticket is resolved", async () => {
+    const t = twins(root, seed);
+    // No ticket assigned to this SCORER: a scored position is not its to move (the TUI script would).
+    const before = await api(t, "scorer-1", "db_update", ["position", "4", "--status", "excluded"]);
+    expect(before).toMatchObject({ ok: false });
+    expect((await api(t, "capitano-1", "ticket", ["assign", "1", "scorer-1"])).ok).toBe(true);
+    expect((await api(t, "scorer-1", "db_insert", [...LOW, "--action", "rescore"])).ok).toBe(true);
+    expect((await api(t, "scorer-1", "ticket", ["resolve", "1", "--response", "35/100."])).ok).toBe(true);
+    // Resolved: the move closes with the ticket.
+    const after = await api(t, "scorer-1", "db_update", ["position", "4", "--status", "excluded"]);
+    expect(after).toMatchObject({ ok: false });
+    // Nothing moved: the rescored position is still where the first score put it.
+    const db = openJobsDb(t.api);
+    try {
+      expect(db.prepare("SELECT status FROM positions WHERE id = 4").get()).toEqual({ status: "scored" });
+    } finally {
+      db.close();
+    }
+  });
+});

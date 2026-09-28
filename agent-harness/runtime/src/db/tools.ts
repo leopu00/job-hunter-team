@@ -419,6 +419,14 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         );
       }
     }
+    // A rescore reopens the score's own statuses, on the ticket assigned to this agent.
+    const rescoreFrom = pyTruthy(status) ? rule.rescoreMoves?.[status!] : undefined;
+    const rescoreTicket =
+      "EXISTS (SELECT 1 FROM position_tickets WHERE position_id = positions.id AND kind = 'rescore' AND status = 'assigned' AND lower(assigned_agent) IN (?, ?))";
+    const onRescore =
+      rescoreFrom !== undefined &&
+      options.db().prepare(`SELECT 1 FROM positions WHERE id = ? AND ${rescoreTicket}`).get(id, ownId, ownAlias) !== undefined;
+    if (onRescore) from = [...(from ?? []), ...rescoreFrom!];
     const current = options.db().prepare("SELECT status, found_by FROM positions WHERE id = ?").get(id) as
       | { status: string | null; found_by: string | null }
       | undefined;
@@ -447,7 +455,14 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     // The same conditions in the write itself: a row that changed hands or status meanwhile is not touched.
     const where: string[] = [];
     const params: Array<string | number> = [];
-    if (from) {
+    if (from && onRescore) {
+      // The rescore's statuses only while the ticket is still assigned, in the write itself.
+      const plain = from.filter((f) => !rescoreFrom!.includes(f));
+      where.push(
+        `AND (status IN (${plain.map(() => "?").join(", ") || "NULL"}) OR (status IN (${rescoreFrom!.map(() => "?").join(", ")}) AND ${rescoreTicket}))`,
+      );
+      params.push(...plain, ...rescoreFrom!, ownId, ownAlias);
+    } else if (from) {
       where.push(`AND status IN (${from.map(() => "?").join(", ")})`);
       params.push(...from);
     }
