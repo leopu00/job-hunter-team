@@ -183,17 +183,20 @@ async function readMoves(client: Client, userId: string): Promise<Record<AgentRo
   return moves;
 }
 
-type PositionMeta = { id: string; title: string | null; company: string | null };
+type PositionMeta = { id: string | null; title: string | null; company: string | null };
 
-/** legacy_id → the position's uuid and title, as web/lib/queries.ts enrichRecent resolves them; the user's rows only. */
+/**
+ * legacy_id → the position's uuid and title, as web/lib/queries.ts enrichRecent resolves them; the user's rows only.
+ * A deleted position keeps its title (the move happened) but no id: its page is gone, a link would lead to a 404.
+ */
 export async function readPositions(client: Pick<SupabaseClient, "from">, legacyIds: number[], userId: string): Promise<Map<number, PositionMeta>> {
   const out = new Map<number, PositionMeta>();
   for (let i = 0; i < legacyIds.length; i += 150) {
     const chunk = legacyIds.slice(i, i + 150);
-    const { data, error } = await client.from("positions").select("id, legacy_id, title, company").eq("user_id", userId).in("legacy_id", chunk);
+    const { data, error } = await client.from("positions").select("id, legacy_id, title, company, deleted_at").eq("user_id", userId).in("legacy_id", chunk);
     if (error) throw new Error(error.message);
-    for (const r of (data ?? []) as Array<{ id: string; legacy_id: number | null; title: string | null; company: string | null }>) {
-      if (r.legacy_id != null) out.set(r.legacy_id, { id: String(r.id), title: r.title, company: r.company });
+    for (const r of (data ?? []) as Array<{ id: string; legacy_id: number | null; title: string | null; company: string | null; deleted_at: string | null }>) {
+      if (r.legacy_id != null) out.set(r.legacy_id, { id: r.deleted_at == null ? String(r.id) : null, title: r.title, company: r.company });
     }
   }
   return out;

@@ -424,6 +424,13 @@ describe("relazioni incluse: un figlio cancellato non parla per una riga viva", 
 
     expect(ids(out.recent_scored)).toEqual(["pos-live"]);
     expect(out.recent_excluded).toEqual([]);
+    // Nemmeno nei conteggi: solo lo score della posizione viva.
+    expect(out.stats).toMatchObject({
+      scored_total: 1,
+      scored_today: 1,
+      excluded_today: 0,
+      avg_score_today: 80,
+    });
   });
 
   it("scrittore: uno score o una candidatura cancellati non danno punteggio né autore", async () => {

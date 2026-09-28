@@ -174,6 +174,7 @@ export async function getRecentPositions(
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("found_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -340,6 +341,8 @@ export async function getPositions(
       "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("found_at", { ascending: false })
     .order("id", { ascending: true });
 
@@ -690,6 +693,7 @@ export async function getScoreDistribution() {
     .select("scores(total_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return empty;
@@ -792,6 +796,8 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
       "id, title, company, status, role_family, loc_country, loc_city, scores ( total_score ), applications ( critic_score )",
     )
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
@@ -1026,6 +1032,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("found_at", { ascending: false })
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
@@ -1160,6 +1168,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
@@ -1295,6 +1304,7 @@ export async function getPositionLocations(): Promise<LocationCountry[]> {
     .select("id, title, company, loc_country, loc_city, scores ( total_score )")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
@@ -1354,6 +1364,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
@@ -1421,6 +1432,8 @@ export async function getPositionTypeDistribution(): Promise<
     .select("role_family, scores(total_score), applications(critic_score)")
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
+    .is("scores.deleted_at", null)
+    .is("applications.deleted_at", null)
     .order("id", { ascending: true });
   const { data, error } = await fetchPostgrestRows<any>(query);
   if (error || !data) return [];
@@ -1610,6 +1623,7 @@ type PosMeta = {
   company: string | null;
   source: string | null;
   loc_city: string | null;
+  deleted_at: string | null;
 };
 const isLegacyPid = (p: string) => /^\d+$/.test(p);
 
@@ -1668,7 +1682,7 @@ async function enrichRecent(
     const chunk = legacyIds.slice(i, i + 150);
     const { data } = await supabase
       .from("positions")
-      .select("id, legacy_id, title, company, source, loc_city")
+      .select("id, legacy_id, title, company, source, loc_city, deleted_at")
       .in("legacy_id", chunk);
     for (const r of (data ?? []) as unknown as PosMeta[])
       if (r.legacy_id != null) byLegacy.set(r.legacy_id, r);
@@ -1677,7 +1691,7 @@ async function enrichRecent(
     const chunk = uuids.slice(i, i + 150);
     const { data } = await supabase
       .from("positions")
-      .select("id, legacy_id, title, company, source, loc_city")
+      .select("id, legacy_id, title, company, source, loc_city, deleted_at")
       .in("id", chunk);
     for (const r of (data ?? []) as unknown as PosMeta[])
       byUuid.set(String(r.id), r);
@@ -1692,7 +1706,9 @@ async function enrichRecent(
         ev.legacyId = m.legacy_id;
         ev.source = m.source;
         ev.city = m.loc_city;
-        ev.pid = String(m.id);
+        // Una posizione cancellata tiene il titolo (l'evento c'è stato) ma
+        // non il link: la sua pagina non esiste più, porterebbe a un 404.
+        ev.pid = m.deleted_at == null ? String(m.id) : null;
       }
     } else {
       const m = byUuid.get(ev.pid);
@@ -1702,6 +1718,7 @@ async function enrichRecent(
         ev.legacyId = m.legacy_id;
         ev.source = m.source;
         ev.city = m.loc_city;
+        if (m.deleted_at != null) ev.pid = null;
       }
     }
   }
@@ -1722,6 +1739,7 @@ async function enrichRecent(
       const { data } = await supabase
         .from("scores")
         .select("position_id, total_score")
+        .is("deleted_at", null)
         .in("position_id", chunk);
       for (const r of (data ?? []) as {
         position_id: string;

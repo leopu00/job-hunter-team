@@ -75,17 +75,19 @@ export async function GET() {
         .lt("total_score", 40)
         .order("scored_at", { ascending: false })
         .limit(10),
-      // Totale scored
+      // Totale scored: score vivi di posizioni vive
       supabase
         .from("scores")
-        .select("id", { count: "exact", head: true })
-        .is("deleted_at", null),
+        .select("id, positions!inner(id)", { count: "exact", head: true })
+        .is("deleted_at", null)
+        .is("positions.deleted_at", null),
       // Scored oggi: tutte, anche oltre il tetto di 1000 righe di PostgREST
       fetchPostgrestRows<any>(
         supabase
           .from("scores")
-          .select("total_score")
+          .select("total_score, positions!inner(id)")
           .is("deleted_at", null)
+          .is("positions.deleted_at", null)
           .gte("scored_at", todayISO)
           .order("id", { ascending: true }),
       ),
