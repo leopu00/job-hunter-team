@@ -169,7 +169,7 @@ room and the round's budget disagree.
 ### Staggered starts
 
 The base team does not start in the same minute. With `staggerS` (default
-30 s), the member in place *n* — counted in the configured order, instances
+30 s, lowered when the base team would not fit otherwise), the member in place *n* — counted in the configured order, instances
 one by one — waits *n* × `staggerS`, plus its own `delay_s`. The executor
 starts members by `seq`, their place, because orders written in the same
 millisecond have no order of their own.
@@ -178,9 +178,10 @@ millisecond have no order of their own.
 > proxy passed about 940,000 tokens, twelve requests came back 429, and the
 > CAPITANO died of it — on the account's rate limit, not on money.
 
-The executor refuses an order that waits more than 300 s, so a
-configuration whose base team would need one is refused when it is loaded.
-`staggerS: 0` starts them together.
+The executor refuses an order that waits more than 300 s, so a `staggerS`
+or a `delay_s` that would need one is refused when the configuration is
+loaded; left out, the stagger is lowered to fit. `staggerS: 0` starts them
+together.
 
 ## ⚖️ How it compares with the TUI team
 
@@ -217,9 +218,10 @@ purpose, each pinned by a test so that it turns red if either side moves.
 | CAPITANO | the open-ticket queue and its assignments, merging role families |
 | CLOSER | the answers it works out (`application_answers save`) |
 
-On the API side the CRITICO, MENTOR, ASSISTENTE, DOTTORE, SENTINELLA and
-MANTENITORE write nothing in `jobs.db`: their output goes to files, and the
-table below says where that differs from the TUI team.
+On the API side the CRITICO, DOTTORE, SENTINELLA and MANTENITORE write
+nothing in `jobs.db`, and the MENTOR and ASSISTENTE write only their messages
+to the person (`pending_user_messages`): the rest of their output goes to
+files, and the table below says where that differs from the TUI team.
 
 ### Differences kept on purpose
 
@@ -227,10 +229,9 @@ table below says where that differs from the TUI team.
 | --- | --- | --- | --- |
 | **SCOUT** `scout_coord reset` | archives every scout's open assignments, dead scouts included | archives only the caller's own | one scout must not be able to close another's work; the cost is that the assignment of a scout that does not come back stays active and keeps its sources from the others |
 | **SCRITTORE** `db_insert application` on an existing application | replaces the row, losing its PDF paths, the critic's rounds and verdict | refuses, keeps the row, and points to `db_update application` | the API side is the safe one: a replace wipes finished work |
-| **SCORER** re-score | a re-score ticket closes with `db_insert score --action rescore` on a position already scored | `--action` is refused, and a score is written only on a `checked` position | the maintenance history is not the SCORER's to write |
+| **SCORER** re-score | a re-score ticket closes with `db_insert score --action rescore` on a position already scored, whoever runs it | the same, but only on a rescore ticket assigned to the caller; any other `--action` is refused, and a plain score is written only on a `checked` position | a re-score is the person's request, and nothing else opens a position past the queue |
 | **CLOSER** sending | sends applications, takes the daily slot, marks them `applied` | cannot send: no browser, no mail server, nothing leaves the box. It reads the queue the person authorised and saves answers | the only role that acts outward stays on the TUI side; `ask`, `essentials --ask` and `wake-idle-closer` are refused with the reason |
 | **CAPITANO** writes | asks for a CV rework through `apply_gate`, wakes an idle CLOSER, may call `db_update` | `apply_gate` is read-only, no `wake-idle-closer`, `db_update` refused by policy | the CAPITANO coordinates; on the API side it writes only tickets and role families |
-| **MENTOR, ASSISTENTE** messages to the person | queued in `jobs.db` (`pending_user_messages`) | appended to `notify.jsonl` in the team's channels, through the hub | the database is the hub's, and a role writes only what its tools allow |
 | **CRITICO** review | written by the CRITICO into the deliverables | written by the hub, with its own uid, on the SCRITTORE's or CRITICO's request | in-process the CRITICO runs with the SCRITTORE's rights, and the reviewed must not be able to rewrite its own review |
 
 ### Differences in how a role is held

@@ -188,7 +188,8 @@ absent, and office coordinates within 0.01°. It exits 0 when the two agree,
 - It does not set the key proxy's cap: `check` says when it disagrees with
   the budget, and the operator sets it.
 - It deletes nothing on the API side: every earlier file is moved into the
-  round's archive.
+  round's archive, and the old launcher configuration is renamed beside itself
+  (`<file>.usata-<round>`).
 
 ## 🔗 See also
 
