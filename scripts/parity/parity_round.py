@@ -224,9 +224,16 @@ def leftovers(cfg: Config) -> dict[str, int]:
     counts = {}
     for pattern in cfg.api.spec.get("known_state_globs", []):
         # nullglob drops a pattern that matches nothing, but a plain path is kept as
-        # written whether it exists or not: count what exists.
-        cmd = f'cd {shlex.quote(root)} && shopt -s nullglob && n=0 && for f in {pattern}; do [ -e "$f" ] && n=$((n+1)); done; echo $n'
-        counts[pattern] = int(cfg.api.text(cmd) or 0)
+        # written whether it exists or not: count what exists. bash explicitly (the
+        # remote login shell may not know shopt), and the echo inside the chain: a
+        # count that did not run must print nothing, and nothing is refused below.
+        script = (f'cd {shlex.quote(root)} && shopt -s nullglob && n=0 && '
+                  f'for f in {pattern}; do if [ -e "$f" ]; then n=$((n+1)); fi; done && echo "$n"')
+        out = cfg.api.sh(f"bash -c {shlex.quote(script)}", timeout=60)
+        text = out.stdout.decode("utf-8", "replace").strip()
+        if out.returncode != 0 or not text.isdigit():
+            raise RoundError(f"api: leftovers of {pattern} could not be counted (rc={out.returncode})")
+        counts[pattern] = int(text)
     return counts
 
 
@@ -370,14 +377,25 @@ def api_known_state(cfg: Config, rnd: Round, api_db: Path, budget_usd: float) ->
     for pattern in spec.get("known_state_globs", []):
         lines += [
             f"for f in {pattern}; do",
+            # nullglob leaves a plain path as written: one already archived is not there
+            '  [ -e "$f" ] || continue',
             '  d="$A/state/$(dirname "$f")"; mkdir -p "$d"; mv -n "$f" "$d/"',
+            '  [ ! -e "$f" ] || { echo "not moved: $f" >&2; exit 1; }',
             "done",
         ]
     stop = spec.get("stop_file")
     if stop:
-        lines.append(f'[ -e {shlex.quote(stop)} ] && mv -n {shlex.quote(stop)} "$A/" || true')
+        lines += [
+            f'if [ -e {shlex.quote(stop)} ]; then mv -n {shlex.quote(stop)} "$A/"; fi',
+            f'[ ! -e {shlex.quote(stop)} ] || {{ echo "stop file not moved" >&2; exit 1; }}',
+        ]
+    # The old launcher config is moved aside, never truncated: a move that failed or
+    # was skipped (a copy of that name already there) leaves it in place, and then
+    # nothing is written over it (noclobber refuses the write as well).
     lines += [
-        f'[ -e {shlex.quote(config_path)} ] && mv -n {shlex.quote(config_path)} {shlex.quote(config_path + ".usata-" + rnd.id)} || true',
+        f'if [ -e {shlex.quote(config_path)} ]; then mv -n {shlex.quote(config_path)} {shlex.quote(config_path + ".usata-" + rnd.id)}; fi',
+        f'[ ! -e {shlex.quote(config_path)} ] || {{ echo "launcher config not moved aside" >&2; exit 1; }}',
+        "set -C",
         f"cat > {shlex.quote(config_path)} <<'JSON'",
         json.dumps(launcher, ensure_ascii=False),
         "JSON",
@@ -450,20 +468,21 @@ def run(cfg: Config, hours: float, budget_usd: float, clock: Clock | None = None
         raise RoundError("check failed after the known state: " + "; ".join(second.problems))
 
     spent0 = proxy_state(cfg)["spent_usd"]
-    for command in cfg.api.spec.get("start_cmds", []):
-        cfg.api.text(cfg.api.fmt(command), timeout=300)
-    started = last_start = clock.now()
-    rnd.event(started, "start", spent_usd=spent0)
-    rnd.snap(clock.now(), "T0")
-
-    end = started + hours * 3600
     every = cfg.get("snapshot_every_min", 60) * 60
     tick = cfg.get("tick_s", 60)
     relaunch_gap = cfg.get("relaunch_min_s", 600)
     max_misses = cfg.get("max_consecutive_misses", 10)
-    next_snap = (started // every + 1) * every
     reason, valid, misses = "end_of_window", True, 0
+    # From the first start command on, whatever happens (a start command or the T0
+    # copy failing, Ctrl-C) ends in the finally: the API team stopped, the report.
     try:
+        started = last_start = clock.now()
+        rnd.event(started, "start", spent_usd=spent0)
+        for command in cfg.api.spec.get("start_cmds", []):
+            cfg.api.text(cfg.api.fmt(command), timeout=300)
+        rnd.snap(clock.now(), "T0")
+        end = started + hours * 3600
+        next_snap = (started // every + 1) * every
         while True:
             clock.sleep(tick)
             now = clock.now()

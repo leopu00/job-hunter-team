@@ -37,6 +37,14 @@ import {
   retryTables,
   sanitizedQuarantineReason,
 } from '../lib/cloud-push-quarantine.js';
+import {
+  AWAITING_APPLICATION_WARN_ROUNDS,
+  CLOUD_PUSH_AWAITING_FILE,
+  finishAwaitingRound,
+  observeAwaitingResponse,
+  readAwaitingApplication,
+  saveAwaitingApplication,
+} from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
@@ -1307,6 +1315,22 @@ async function performPush(options) {
   const quarantinePath = options.quarantinePath || CLOUD_PUSH_QUARANTINE_FILE;
   let quarantineState = readCloudPushQuarantine(quarantinePath);
   const retryingTables = retryTables(quarantineState);
+  // Positions acked without their applied status, waiting for their
+  // application (cloud-push-awaiting.js). A round counts only when the push
+  // completed: an interrupted one may not have sent the applications yet.
+  const awaitingPath = options.awaitingPath || CLOUD_PUSH_AWAITING_FILE;
+  const awaitingState = readAwaitingApplication(awaitingPath);
+  const closeAwaitingRound = (completed) => {
+    const round = completed ? finishAwaitingRound(awaitingState) : null;
+    if (!saveAwaitingApplication(awaitingState, awaitingPath)) {
+      console.error(pc.yellow('  warn: awaiting-application state save failed'));
+    }
+    if (round?.warn) {
+      console.error(pc.yellow(
+        `⚠ ${round.stuck.length} position(s) applied locally are still unpublished on the cloud after ${AWAITING_APPLICATION_WARN_ROUNDS} push rounds: their application never arrived complete (status applied, applied_at, applied_via). Local position ids: ${round.stuck.slice(0, 20).join(', ')}`
+      ));
+    }
+  };
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -1639,6 +1663,7 @@ async function performPush(options) {
     tombstones.length === 0 && transitions.length === 0 && !sendProfile
   ) {
     console.log(pc.yellow('No data to sync.'));
+    closeAwaitingRound(true);
     if (quarantineState.corrupt === true) {
       clearCorruptQuarantine({ path: quarantinePath });
       quarantineState = readCloudPushQuarantine(quarantinePath);
@@ -1811,6 +1836,7 @@ async function performPush(options) {
             return { confirmed, quarantined };
           }
           addUp(res.body);
+          observeAwaitingResponse(awaitingState, table, rows, res.body);
           confirmed.push(...rows);
           continue;
         }
@@ -1943,6 +1969,8 @@ async function performPush(options) {
       }
     }
   }
+
+  closeAwaitingRound(!outcome.aborted);
 
   // ── Report + cursore ────────────────────────────────────────────────────
   if (outcome.aborted) {
