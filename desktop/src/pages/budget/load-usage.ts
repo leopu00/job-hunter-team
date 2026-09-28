@@ -37,13 +37,22 @@ export const USAGE_SAMPLES = 24;
 export const USAGE_SELECT =
   "ts, provider, usage, weekly_usage, projection, velocity_smooth, status, throttle, reset_at_unix, weekly_reset_at_unix";
 
-type Client = Pick<SupabaseClient, "from">;
+type Client = Pick<SupabaseClient, "from" | "auth">;
 
-/** Newest first. */
+/**
+ * Newest first. The user's own rows, by an explicit filter as every other
+ * page reads them: RLS scopes them too, but a query that relies on RLS alone
+ * reads everyone's the day a policy is wrong or the key is not the user's.
+ * Without a session there is no user, and nothing is read.
+ */
 export async function loadUsage(client: Client): Promise<UsageSample[]> {
+  const { data: session } = await client.auth.getSession();
+  const userId = session.session?.user.id;
+  if (!userId) throw new Error("no session: the usage window is read as the signed-in user");
   const { data, error } = await client
     .from("sentinel_ticks")
     .select(USAGE_SELECT)
+    .eq("user_id", userId)
     .order("ts", { ascending: false })
     .limit(USAGE_SAMPLES);
   if (error) throw new Error(error.message);
