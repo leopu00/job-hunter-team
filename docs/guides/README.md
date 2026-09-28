@@ -33,6 +33,13 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Native-office users — guided setup for an existing VPS |
 | [☁️ VPS-SETUP](VPS-SETUP.md) | CLI users — manual setup for an existing Linux VPS |
 
+## 🔌 API team (in rehearsal)
+
+| Guide | For whom |
+|---|---|
+| [🔌 API-TEAM](API-TEAM.md) | Operators and contributors — how the headless API team runs (hub, launcher, executor, key proxy), what caps its spend, and where it differs from the TUI team on purpose |
+| [🪞 PARITY-ROUND](PARITY-ROUND.md) | Operators — run the TUI and API teams side by side on one seed and compare their databases |
+
 ## 🧪 Testing & feedback
 
 | Guide | For whom |

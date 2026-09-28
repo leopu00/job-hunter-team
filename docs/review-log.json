@@ -1774,6 +1774,21 @@
       "path": "docs/guides/DESKTOP.md",
       "description": "Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'.",
       "last_review": null
+    },
+    {
+      "path": "scripts/parity/README.md",
+      "description": "Riferimento degli strumenti del giro di parita': jobsdb_parity.py (il metro) e parity_round.py (il giro intero da un comando).",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/API-TEAM.md",
+      "description": "Guida pubblica del team API: i pezzi (esecuzione del ruolo, hub, lanciatore, esecutore, keyproxy), i quattro tetti di spesa (per run, per avvio, per sessione, keyproxy), le partenze scaglionate e le differenze volute col team TUI.",
+      "last_review": null
+    },
+    {
+      "path": "docs/guides/PARITY-ROUND.md",
+      "description": "Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai.",
+      "last_review": null
     }
   ]
 }
