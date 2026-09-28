@@ -744,11 +744,25 @@ jobs:
       # Solo db, Auth (gotrue), PostgREST, Realtime, Storage e il gateway
       # (kong). Storage resta: 037_file_bridge scrive in storage.buckets.
       # Realtime resta: il web si iscrive ai canali lato browser.
-      # `supabase start` applica supabase/migrations/ (config.toml:
+      # Il progetto locale NON sta nella radice di supabase/: un config.toml lì
+      # lo leggerebbe ogni comando della CLI lanciato dal repo, anche sul
+      # progetto collegato (migration list --linked, config push). La cartella
+      # di lavoro nasce qui, nel temp del runner: config.toml da
+      # supabase/e2e-local/ e le migrazioni vere copiate accanto.
+      - name: Prepare the local Supabase workdir
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/supabase-e2e"
+          mkdir -p "$W/supabase"
+          cp supabase/e2e-local/config.toml "$W/supabase/config.toml"
+          cp -R supabase/migrations "$W/supabase/migrations"
+          echo "SUPABASE_E2E_WORKDIR=$W" >> "$GITHUB_ENV"
+
+      # `supabase start` applica le migrazioni copiate (config.toml:
       # [db.migrations]); il seed storico è spento ([db.seed] enabled=false).
       - name: Start local Supabase (migrations applied)
         run: >-
-          supabase start
+          supabase --workdir "$SUPABASE_E2E_WORKDIR" start
           -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,postgres-meta
 
       # `status -o env` stampa API_URL, ANON_KEY, SERVICE_ROLE_KEY, DB_URL
@@ -757,7 +771,7 @@ jobs:
       - name: Export local Supabase env
         run: |
           set -euo pipefail
-          eval "$(supabase status -o env)"
+          eval "$(supabase --workdir "$SUPABASE_E2E_WORKDIR" status -o env)"
           for v in API_URL ANON_KEY SERVICE_ROLE_KEY DB_URL; do
             if [ -z "${!v:-}" ]; then
               echo "::error::supabase status non ha stampato $v"; exit 1
@@ -783,7 +797,7 @@ jobs:
           API_URL: ${{ env.LOCAL_SUPABASE_URL }}
           SERVICE_ROLE_KEY: ${{ env.LOCAL_SUPABASE_SERVICE_ROLE_KEY }}
           DB_URL: ${{ env.LOCAL_SUPABASE_DB_URL }}
-        run: bash supabase/seed-e2e.sh
+        run: bash supabase/e2e-local/seed.sh
 
       # Come nel job `e2e`, più URL e anon key dello stack locale: senza, il
       # codice cade sul default di produzione (web/lib/supabase/config.ts).
@@ -842,7 +856,7 @@ jobs:
         if: always()
         run: |
           rm -f e2e/auth-state.json
-          supabase stop --no-backup || true
+          supabase --workdir "$SUPABASE_E2E_WORKDIR" stop --no-backup || true
 
       - name: Upload report on failure
         if: failure()

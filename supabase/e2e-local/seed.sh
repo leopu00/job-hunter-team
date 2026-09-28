@@ -14,7 +14,7 @@
 #
 # Uso (dalla radice del repo, stack già avviato):
 #   API_URL=... SERVICE_ROLE_KEY=... DB_URL=... E2E_PASSWORD=... \
-#     bash supabase/seed-e2e.sh
+#     bash supabase/e2e-local/seed.sh
 set -euo pipefail
 
 : "${API_URL:?API_URL mancante (supabase status -o env)}"
@@ -52,4 +52,4 @@ rm -f /tmp/seed-e2e-user.json
 # Verifica sull'effetto, non sulla risposta: l'utente esiste confermato e non
 # possiede righe applicative.
 psql "$DB_URL" -v ON_ERROR_STOP=1 -v e2e_email="$E2E_EMAIL" \
-  -f "$(dirname "$0")/seed-e2e.sql"
+  -f "$(dirname "$0")/seed.sql"

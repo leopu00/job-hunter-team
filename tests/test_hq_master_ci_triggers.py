@@ -1,5 +1,6 @@
 """Il ramo d'integrazione HQ deve ricevere i gate prima di arrivare in master."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -126,3 +127,22 @@ def test_production_auth_canary_runs_only_on_a_dispatch_that_asks_for_it():
     assert steps
     for step in steps:
         assert "github.event_name == 'workflow_dispatch' && inputs.prod_canary" in str(step.get("if", ""))
+
+
+def test_the_local_supabase_project_is_invisible_to_the_cli_run_from_the_repository():
+    # A config.toml at the root of supabase/ is read by every CLI command run
+    # from the repository, the linked production project included
+    # (`migration list --linked`, `config push`): the local project lives in
+    # its own folder and the job builds its workdir in the runner's temp.
+    assert not (ROOT / "supabase" / "config.toml").exists()
+    assert (ROOT / "supabase" / "e2e-local" / "config.toml").is_file()
+    job = _workflow("test.yml")["jobs"]["e2e-local-supabase"]
+    commands = [
+        line.strip()
+        for step in job["steps"]
+        for line in str(step.get("run", "")).splitlines()
+        if re.search(r"(^|[\s$(\"])supabase\s", line)
+    ]
+    assert commands
+    for command in commands:
+        assert '--workdir "$SUPABASE_E2E_WORKDIR"' in command, command

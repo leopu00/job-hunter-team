@@ -1,4 +1,4 @@
--- Controllo del seed e2e LOCALE (lo chiama supabase/seed-e2e.sh con
+-- Controllo del seed e2e LOCALE (lo chiama supabase/e2e-local/seed.sh con
 -- -v e2e_email=...). L'utente lo crea l'Admin API di GoTrue, che scrive
 -- auth.users e auth.identities nel formato della sua versione: qui si prova
 -- soltanto che il risultato è quello che le spec presuppongono.

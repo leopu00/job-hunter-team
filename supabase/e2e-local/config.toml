@@ -22,7 +22,7 @@ enabled = true
 
 # supabase/seed.sql è il dataset demo storico con un user_id fittizio che non
 # esiste in auth.users: il job e2e crea il proprio utente con
-# supabase/seed-e2e.sh, dopo l'avvio.
+# supabase/e2e-local/seed.sh, dopo l'avvio.
 [db.seed]
 enabled = false
 
