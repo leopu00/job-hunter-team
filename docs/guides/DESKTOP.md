@@ -36,7 +36,7 @@ your other devices stay signed in.
 | --- | --- |
 | **Dashboard · Map · Posizioni · Swipe · Team · Messaggi · Profilo** | The website's pages, run inside the app with your session. |
 | **Agenti · Budget · Ufficio** | The desktop's own pages (no website counterpart). |
-| **AGGIORNA** | Reads the current page's data again, now. |
+| **AGGIORNA** | Reads the current page's data again, now (in the office, as soon as a minute has passed since its last read). |
 | **TEAM LOCALE** | The setup of a team on this computer (container engine, provider key, a first test run). |
 | **ESCI** | Signs this app out. |
 
@@ -74,7 +74,17 @@ data is not drawn, a status the team did not publish is not shown.
 
 Agents come in through the **door** and leave through it. When an agent moves
 a position, it walks the trip: it takes a sheet from the previous
-department's pile, works on it at its desk, and puts it on its own pile.
+department's pile, works on it at its desk, and puts it on its own pile, whose
+number changes when the sheet arrives. Only real moves are walked: when you
+open the office, the moves already made are the past, and nobody walks them.
+
+### The office keeps itself up to date
+
+You do not need to reload it. The office listens to the cloud: when the team
+moves a position, the trip starts at once, and when anything else changes
+(a position, the team's state) the office reads the cloud again. It reads at
+most **once a minute**, however many changes arrive; if the connection to the
+cloud drops, it reads once a minute on its own until it comes back.
 
 ### The departments
 
@@ -134,8 +144,10 @@ reached by moving.
 
 **Screen readers** read each agent and object with the same words as its tag.
 If your system asks for **reduced motion**, the office keeps still: no film
-grain, no pulsing light, the hologram and the printer hold. The agents still
-walk, because where they go is the team's data.
+grain, no pulsing light, the hologram and the printer hold, and the trips are
+not walked: when the team moves a position, the piles' numbers change at
+once. Agents still come in and leave through the door, because who is in the
+office is the team's data.
 
 ## 🚫 What the desktop cannot do, and why
 
