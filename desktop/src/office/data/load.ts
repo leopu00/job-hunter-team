@@ -3,8 +3,9 @@ import { AGENTS, HEARTBEAT_STALE_MS, readPositions } from "../../pages/agents/lo
 import type { AgentRole, OfficeAgent, OfficeSnapshot, Piles } from "../contract";
 
 /**
- * The office's snapshot, read from the cloud with the user's own session
- * (RLS scopes every row). Only what exists (D03):
+ * The office's snapshot, read from the cloud with the user's own session,
+ * the user's own rows only (user_id on every query, on top of the RLS, as
+ * the other desktop pages). Only what exists (D03):
  *  - team_state: is the team running, with a fresh heartbeat;
  *  - position_transitions: who moved which position, the roster's source;
  *  - positions (+ applications): the counts on the handoff piles.
@@ -22,7 +23,7 @@ export const CORE_ROLES: readonly AgentRole[] = ["capitano", "sentinella", "assi
 
 const ROLE_ORDER = AGENTS.map((a) => a.role as AgentRole);
 
-type Client = Pick<SupabaseClient, "from">;
+type Client = Pick<SupabaseClient, "from" | "auth">;
 
 type TransitionRow = {
   position_legacy_id: number;
@@ -43,9 +44,12 @@ export function agentOf(byAgent: string): { role: AgentRole; n: number } | null 
 }
 
 export async function loadOfficeSnapshot(client: Client, now: number = Date.now()): Promise<OfficeSnapshot> {
+  const { data } = await client.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) throw new Error("nessuna sessione");
   const since = new Date(now - ROSTER_WINDOW_MS).toISOString();
-  const [team, rows, piles] = await Promise.all([readTeam(client), readTransitions(client, since), readPiles(client)]);
-  const positions = await readPositions(client, [...new Set(rows.map((r) => r.position_legacy_id))]);
+  const [team, rows, piles] = await Promise.all([readTeam(client, userId), readTransitions(client, userId, since), readPiles(client, userId)]);
+  const positions = await readPositions(client, [...new Set(rows.map((r) => r.position_legacy_id))], userId);
 
   const beat = team?.heartbeatAt ? Date.parse(team.heartbeatAt) : NaN;
   const teamOnline = team ? team.isRunning && !Number.isNaN(beat) && now - beat <= HEARTBEAT_STALE_MS : null;
@@ -78,8 +82,8 @@ export async function loadOfficeSnapshot(client: Client, now: number = Date.now(
   };
 }
 
-async function readTeam(client: Client): Promise<{ isRunning: boolean; heartbeatAt: string | null } | null> {
-  const { data, error } = await client.from("team_state").select("is_running, last_heartbeat_at").maybeSingle();
+async function readTeam(client: Client, userId: string): Promise<{ isRunning: boolean; heartbeatAt: string | null } | null> {
+  const { data, error } = await client.from("team_state").select("is_running, last_heartbeat_at").eq("user_id", userId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
   const row = data as { is_running?: unknown; last_heartbeat_at?: unknown };
@@ -89,10 +93,11 @@ async function readTeam(client: Client): Promise<{ isRunning: boolean; heartbeat
   };
 }
 
-async function readTransitions(client: Client, since: string): Promise<TransitionRow[]> {
+async function readTransitions(client: Client, userId: string, since: string): Promise<TransitionRow[]> {
   const { data, error } = await client
     .from("position_transitions")
     .select("position_legacy_id, from_state, to_state, ts, by_agent")
+    .eq("user_id", userId)
     .gte("ts", since)
     .order("ts", { ascending: false })
     .limit(TRANSITIONS_LIMIT);
@@ -107,13 +112,13 @@ async function readTransitions(client: Client, since: string): Promise<Transitio
  * without the critic's PASS; Critici = ready with the PASS (the output
  * shelf). Counted by PostgREST (head requests), no rows downloaded.
  */
-async function readPiles(client: Client): Promise<Piles> {
+async function readPiles(client: Client, userId: string): Promise<Piles> {
   const count = async (query: PromiseLike<{ count: number | null; error: { message: string } | null }>) => {
     const { count: n, error } = await query;
     if (error) throw new Error(error.message);
     return n ?? 0;
   };
-  const positions = () => client.from("positions").select("id", { count: "exact", head: true }).is("deleted_at", null);
+  const positions = () => client.from("positions").select("id", { count: "exact", head: true }).eq("user_id", userId).is("deleted_at", null);
   const [scout, analisti, scorer, review, ready, passed] = await Promise.all([
     count(positions().eq("status", "new")),
     count(positions().eq("status", "checked")),
@@ -124,6 +129,7 @@ async function readPiles(client: Client): Promise<Piles> {
       client
         .from("positions")
         .select("id, applications!inner(id)", { count: "exact", head: true })
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .eq("status", "ready")
         .ilike("applications.critic_verdict", "pass")

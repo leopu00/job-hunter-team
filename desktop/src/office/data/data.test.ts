@@ -39,6 +39,19 @@ function answer(heartbeat: string | null, running = true) {
 }
 
 describe("loadOfficeSnapshot", () => {
+  it("reads the user's own rows only: user_id on every query, on top of the RLS", async () => {
+    const { client, queries } = fakeSupabase(answer("2026-09-27T17:58:00Z"), "user-a");
+    await loadOfficeSnapshot(client, NOW);
+    expect(new Set(queries.map((q) => q.table))).toEqual(new Set(["team_state", "position_transitions", "positions"]));
+    for (const q of queries) expect(all(q, "eq").filter(([col]) => col === "user_id"), `${q.table} ${JSON.stringify(q.ops)}`).toEqual([["user_id", "user-a"]]);
+  });
+
+  it("without a session nothing is read", async () => {
+    const { client, queries } = fakeSupabase(answer("2026-09-27T17:58:00Z"), null);
+    await expect(loadOfficeSnapshot(client, NOW)).rejects.toThrow();
+    expect(queries).toHaveLength(0);
+  });
+
   it("builds the roster from the last 24 h of transitions, plus the core roles of an online team", async () => {
     const { client, queries } = fakeSupabase(answer("2026-09-27T17:58:00Z"));
     const snap = await loadOfficeSnapshot(client, NOW);

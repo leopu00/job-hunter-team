@@ -102,19 +102,23 @@ export const MESSAGES_SELECT =
 const TEAM_SELECT =
   "is_running, last_heartbeat_at, last_action, last_action_at, last_error, last_error_at, agents_enabled";
 
-type Client = Pick<SupabaseClient, "from">;
+type Client = Pick<SupabaseClient, "from" | "auth">;
 
+/** The user's own rows only: user_id on every query, on top of the RLS (as the other desktop pages). */
 export async function loadAgents(client: Client): Promise<AgentsData> {
+  const { data } = await client.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) throw new Error("nessuna sessione");
   const [team, moves, messages] = await Promise.all([
-    readTeam(client),
-    readMoves(client),
-    readMessages(client),
+    readTeam(client, userId),
+    readMoves(client, userId),
+    readMessages(client, userId),
   ]);
   return { team, moves, messages };
 }
 
-async function readTeam(client: Client): Promise<TeamStatus | null> {
-  const { data, error } = await client.from("team_state").select(TEAM_SELECT).maybeSingle();
+async function readTeam(client: Client, userId: string): Promise<TeamStatus | null> {
+  const { data, error } = await client.from("team_state").select(TEAM_SELECT).eq("user_id", userId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
   const row = data as Record<string, unknown>;
@@ -143,13 +147,14 @@ type TransitionRow = {
   by_agent: string;
 };
 
-async function readMoves(client: Client): Promise<Record<AgentRole, AgentMove[]>> {
+async function readMoves(client: Client, userId: string): Promise<Record<AgentRole, AgentMove[]>> {
   const perRole = await Promise.all(
     AGENTS.map(async ({ role }) => {
       // by_agent is the instance (scout-1) or, for a single one, the role itself.
       const { data, error } = await client
         .from("position_transitions")
         .select("position_legacy_id, from_state, to_state, ts, by_agent")
+        .eq("user_id", userId)
         .or(`by_agent.eq.${role},by_agent.like.${role}-*`)
         .order("ts", { ascending: false })
         .limit(MOVES_PER_ROLE);
@@ -158,7 +163,7 @@ async function readMoves(client: Client): Promise<Record<AgentRole, AgentMove[]>
     }),
   );
   const legacyIds = [...new Set(perRole.flatMap(([, rows]) => rows.map((r) => r.position_legacy_id)))];
-  const positions = await readPositions(client, legacyIds);
+  const positions = await readPositions(client, legacyIds, userId);
   const moves = {} as Record<AgentRole, AgentMove[]>;
   for (const [role, rows] of perRole) {
     moves[role] = rows.map((r) => {
@@ -180,12 +185,12 @@ async function readMoves(client: Client): Promise<Record<AgentRole, AgentMove[]>
 
 type PositionMeta = { id: string; title: string | null; company: string | null };
 
-/** legacy_id → the position's uuid and title, as web/lib/queries.ts enrichRecent resolves them. */
-export async function readPositions(client: Client, legacyIds: number[]): Promise<Map<number, PositionMeta>> {
+/** legacy_id → the position's uuid and title, as web/lib/queries.ts enrichRecent resolves them; the user's rows only. */
+export async function readPositions(client: Pick<SupabaseClient, "from">, legacyIds: number[], userId: string): Promise<Map<number, PositionMeta>> {
   const out = new Map<number, PositionMeta>();
   for (let i = 0; i < legacyIds.length; i += 150) {
     const chunk = legacyIds.slice(i, i + 150);
-    const { data, error } = await client.from("positions").select("id, legacy_id, title, company").in("legacy_id", chunk);
+    const { data, error } = await client.from("positions").select("id, legacy_id, title, company").eq("user_id", userId).in("legacy_id", chunk);
     if (error) throw new Error(error.message);
     for (const r of (data ?? []) as Array<{ id: string; legacy_id: number | null; title: string | null; company: string | null }>) {
       if (r.legacy_id != null) out.set(r.legacy_id, { id: String(r.id), title: r.title, company: r.company });
@@ -194,10 +199,11 @@ export async function readPositions(client: Client, legacyIds: number[]): Promis
   return out;
 }
 
-async function readMessages(client: Client): Promise<PendingMessage[]> {
+async function readMessages(client: Client, userId: string): Promise<PendingMessage[]> {
   const { data, error } = await client
     .from("pending_user_messages")
     .select(MESSAGES_SELECT)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(MESSAGES_LIMIT);
   if (error) throw new Error(error.message);
