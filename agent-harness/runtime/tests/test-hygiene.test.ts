@@ -40,6 +40,9 @@
  * the loop wrote is one second apart and the comparison of the two outputs
  * fails on nothing (T40 in db-query.test.ts, CI 27/09, 1 red in 1299). The
  * instant is read once, outside the loop, and passed in (helpers/clock.ts).
+ * The same holds for a writer called once per twin (`send(pyDb);
+ * crossSecondBoundary(); send(ourDb)`): its body must not read the clock
+ * either.
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -140,29 +143,64 @@ describe("the tests that start the runtime as a process", () => {
   });
 });
 
-describe("the loops that write both twins", () => {
-  it("never read the clock inside, every one of them", async () => {
-    // A loop over two databases, or the `...dbs` of a helper that seeds them
-    // all; its body is the line itself or the block it opens, up to the brace
-    // that closes it at the same indentation.
-    const loop = /^([ \t]*)for \(const \w+ of (?:\[\w+, \w+\]|dbs)\)(.*)$/gm;
-    const clock = /datetime\('now'|CURRENT_TIMESTAMP|Date\.now\(\)|new Date\(\)/;
+describe("the writes to both twins", () => {
+  const clock = /datetime\('now'|CURRENT_TIMESTAMP|Date\.now\(\)|new Date\(\)/;
+
+  /**
+   * From a line that opens a block (`{` at its end) to the brace that closes
+   * it at the same indentation; otherwise the line and the ones below it
+   * that are indented deeper (an arrow body over several lines).
+   */
+  function bodyAt(source: string, index: number, indent: string, line: string): string {
+    const rest = source.slice(index + line.length);
+    if (line.trimEnd().endsWith("{")) {
+      const end = new RegExp(String.raw`^${indent}\}`, "m").exec(rest);
+      return line + (end === null ? rest : rest.slice(0, end.index));
+    }
+    let body = line;
+    for (const next of rest.split("\n").slice(1)) {
+      if (next.trim() !== "" && !next.startsWith(`${indent} `) && !next.startsWith(`${indent}\t`)) break;
+      body += `\n${next}`;
+    }
+    return body;
+  }
+
+  it("never read the clock inside a loop over the twins, every one of them", async () => {
+    // A loop over two databases (pyDb/ourDb, pyDb/tsDb…), or the `...dbs` of
+    // a helper that seeds them all. Only those: a loop over two numbers or
+    // two paths of anything else is not a pair of twins.
+    const loop = /^([ \t]*)for \(const \w+ of (?:\[\w*[Dd]b\w*, \w*[Dd]b\w*\]|dbs)\).*$/gm;
     const reading: string[] = [];
     let checked = 0;
     for (const file of await testFiles()) {
       const source = await readFile(join(HERE, file), "utf8");
       for (const match of source.matchAll(loop)) {
         checked++;
-        let body = match[0];
-        if ((match[2] ?? "").trimEnd().endsWith("{")) {
-          const rest = source.slice(match.index! + match[0].length);
-          const end = new RegExp(String.raw`^${match[1]}\}`, "m").exec(rest);
-          body += end === null ? rest : rest.slice(0, end.index);
-        }
-        if (clock.test(body)) reading.push(`${file}: ${match[0].trim().slice(0, 90)}`);
+        if (clock.test(bodyAt(source, match.index!, match[1] ?? "", match[0]))) reading.push(`${file}: ${match[0].trim().slice(0, 90)}`);
       }
     }
     expect(checked, "no loop over the twins found: the scan is broken, not clean").toBeGreaterThanOrEqual(8);
+    expect(reading).toEqual([]);
+  });
+
+  it("never read the clock inside a writer called on each twin, every one of them", async () => {
+    // T40's fix has this shape: `const send = (db: Database) => {…}`, then
+    // send(pyDb); crossSecondBoundary(); send(ourDb). The loop rule does not
+    // see it, and a datetime('now') back inside `send` is the same flake.
+    const writer = /^([ \t]*)const (\w+) = \(\w+: Database\) =>.*$/gm;
+    const reading: string[] = [];
+    let checked = 0;
+    for (const file of await testFiles()) {
+      const source = await readFile(join(HERE, file), "utf8");
+      for (const match of source.matchAll(writer)) {
+        const name = match[2]!;
+        const args = new Set([...source.matchAll(new RegExp(String.raw`\b${name}\((\w+)\)`, "g"))].map((m) => m[1]));
+        if (args.size < 2) continue;
+        checked++;
+        if (clock.test(bodyAt(source, match.index!, match[1] ?? "", match[0]))) reading.push(`${file}: ${match[0].trim().slice(0, 90)}`);
+      }
+    }
+    expect(checked, "no writer called on two twins found: the scan is broken, not clean").toBeGreaterThanOrEqual(1);
     expect(reading).toEqual([]);
   });
 });
