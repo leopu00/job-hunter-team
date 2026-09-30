@@ -31,6 +31,7 @@ set -euo pipefail
 # temporanea del wrapper production, con JHT_WRAPPER_PATH ancorato all'host.
 JHT_UPGRADE_PROTOCOL=1
 JHT_HOST_RUNTIME_PROTOCOL=1
+JHT_DESKTOP_CHAT_PROTOCOL=1
 
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -434,6 +435,49 @@ compose() {
 
 container_up() {
   docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
+}
+
+# Bridge interno del desktop. Usa solo il runtime host attestato e risolve il
+# container tramite l'esatto progetto Compose JHT: un container omonimo non e'
+# mai sufficiente. Non avvia runtime, container o team.
+desktop_chat_container_id() {
+  require_trusted_runtime || return 1
+  docker_reachable || return 1
+  local container_id details
+  container_id="$(compose ps -q jht 2>/dev/null)" || return 1
+  printf '%s' "$container_id" | grep -Eq '^[0-9a-fA-F]{12,64}$' || return 1
+  details="$(docker inspect "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
+    || return 1
+  [ "$details" = "true jht" ] || return 1
+  printf '%s\n' "$container_id"
+}
+
+desktop_chat() {
+  local action="${1:-}" container_id session="${2:-}"
+  container_id="$(desktop_chat_container_id)" || {
+    err "runtime o container JHT non disponibile"
+    return 1
+  }
+  case "$action" in
+    probe)
+      printf 'true\n'
+      ;;
+    python)
+      [ "$#" -eq 1 ] || return 2
+      docker exec -i "$container_id" python3 -c \
+        'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'
+      ;;
+    send)
+      [ "$#" -eq 2 ] || return 2
+      case "$session" in
+        CAPITANO|ASSISTENTE|MENTOR|SCOUT-1|ANALISTA-1|SCORER-1|SCRITTORE-1|CRITICO) ;;
+        *) return 2 ;;
+      esac
+      docker exec -i "$container_id" sh -c \
+        'msg=$(cat); exec jht-tmux-send "$1" "$msg"' sh "$session"
+      ;;
+    *) return 2 ;;
+  esac
 }
 
 # Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
@@ -1524,6 +1568,11 @@ case "$SUB" in
 
   gui)
     handle_gui_command "${@:2}"
+    ;;
+
+  desktop-chat)
+    shift || true
+    desktop_chat "$@"
     ;;
 
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────

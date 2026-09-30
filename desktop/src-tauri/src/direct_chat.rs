@@ -20,8 +20,6 @@ const READ_TIMEOUT: Duration = Duration::from_secs(20);
 const SEND_TIMEOUT: Duration = Duration::from_secs(105);
 const REMOTE_CONTAINER_PROBE: &str = "docker inspect jht --format '{{.State.Running}}'";
 const REMOTE_PYTHON_STDIN: &str = "docker exec -i jht python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'";
-const PYTHON_BOOTSTRAP: &str =
-    "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())";
 
 const CHAT_READ_PY: &str = r#"import hashlib,json,os,sys
 req=json.loads(sys.stdin.readline())
@@ -102,6 +100,7 @@ struct DirectChatInner {
 struct Connection {
     host: ExecutionHost,
     validated: ValidatedHost,
+    local_wrapper: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
 }
@@ -334,7 +333,16 @@ fn run_connection(
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
     match &connection.validated {
-        ValidatedHost::Local => run_program("docker", local_args, input, timeout).map_err(failure),
+        ValidatedHost::Local => crate::onboarding::run_verified_local_wrapper(
+            connection
+                .local_wrapper
+                .as_deref()
+                .ok_or_else(|| failure("runtime_missing"))?,
+            local_args,
+            input,
+            timeout,
+        )
+        .map_err(failure),
         ValidatedHost::Vps { .. } => run_ssh(
             &connection.validated,
             remote_command,
@@ -356,7 +364,7 @@ fn probe(connection: &Connection) -> DirectChatStatus {
     }
     let result = run_connection(
         connection,
-        &["inspect", "jht", "--format", "{{.State.Running}}"],
+        &["desktop-chat", "probe"],
         REMOTE_CONTAINER_PROBE,
         None,
         CONNECT_TIMEOUT,
@@ -373,17 +381,22 @@ fn connect_impl(
     app: &tauri::AppHandle,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
-    let validated = validate_host(app, &host, true).map_err(failure)?;
-    let (control_path, tunnel) = match &validated {
-        ValidatedHost::Local => (None, None),
+    let validated = validate_host(app, &host).map_err(failure)?;
+    let (local_wrapper, control_path, tunnel) = match &validated {
+        ValidatedHost::Local => (
+            Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
+            None,
+            None,
+        ),
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_tunnel(&validated)?;
-            (Some(path), Some(child))
+            (None, Some(path), Some(child))
         }
     };
     let mut connection = Connection {
         host,
         validated,
+        local_wrapper,
         control_path,
         tunnel,
     };
@@ -515,7 +528,7 @@ fn run_python(
     let mut input = python_input(script, request)?;
     let result = run_connection(
         connection,
-        &["exec", "-i", "jht", "python3", "-c", PYTHON_BOOTSTRAP],
+        &["desktop-chat", "python"],
         REMOTE_PYTHON_STDIN,
         Some(&input),
         timeout,
@@ -611,24 +624,8 @@ fn delivery_command(agent: &str) -> Option<&'static str> {
     })
 }
 
-fn local_delivery_args(session: &str) -> Vec<&str> {
-    vec![
-        "exec",
-        "-i",
-        "jht",
-        "sh",
-        "-c",
-        match session {
-            "CAPITANO" => "msg=$(cat); exec jht-tmux-send CAPITANO \"$msg\"",
-            "ASSISTENTE" => "msg=$(cat); exec jht-tmux-send ASSISTENTE \"$msg\"",
-            "MENTOR" => "msg=$(cat); exec jht-tmux-send MENTOR \"$msg\"",
-            "SCOUT-1" => "msg=$(cat); exec jht-tmux-send SCOUT-1 \"$msg\"",
-            "ANALISTA-1" => "msg=$(cat); exec jht-tmux-send ANALISTA-1 \"$msg\"",
-            "SCORER-1" => "msg=$(cat); exec jht-tmux-send SCORER-1 \"$msg\"",
-            "SCRITTORE-1" => "msg=$(cat); exec jht-tmux-send SCRITTORE-1 \"$msg\"",
-            _ => "msg=$(cat); exec jht-tmux-send CRITICO \"$msg\"",
-        },
-    ]
+fn local_delivery_args(session: &str) -> [&str; 3] {
+    ["desktop-chat", "send", session]
 }
 
 fn send_impl(
@@ -779,8 +776,10 @@ pub(crate) fn direct_chat_close(state: State<'_, DirectChatState>) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::{
-        hex_encode, parse_json, session_for, status, valid_agent, DirectChatPage, ProcessResult,
+        hex_encode, parse_json, probe, session_for, status, valid_agent, Connection,
+        DirectChatPage, ProcessResult,
     };
+    use crate::runtime_host::{ExecutionHost, ValidatedHost};
 
     #[test]
     fn connect_and_status_never_report_ready_without_a_clean_probe() {
@@ -824,5 +823,47 @@ mod tests {
     #[test]
     fn python_payload_is_framed_as_data_not_shell_text() {
         assert_eq!(hex_encode(b"a'b"), "612762");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_probe_uses_verified_wrapper_and_redacts_runtime_failure() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("jht-chat-wrapper-{nonce}"));
+        fs::create_dir_all(&dir).unwrap();
+        let wrapper = dir.join("jht");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\n[ \"$1:$2\" = desktop-chat:probe ] || exit 9\nprintf 'true\\n'\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let connection = Connection {
+            host: ExecutionHost::Local,
+            validated: ValidatedHost::Local,
+            local_wrapper: Some(wrapper.clone()),
+            control_path: None,
+            tunnel: None,
+        };
+        assert_eq!(probe(&connection).state, "ready");
+
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nprintf 'private runtime detail' >&2\nexit 1\n",
+        )
+        .unwrap();
+        let failed = probe(&connection);
+        assert_eq!(failed.state, "error");
+        assert_eq!(failed.code, Some("container_unavailable"));
+        fs::remove_dir_all(dir).unwrap();
     }
 }
