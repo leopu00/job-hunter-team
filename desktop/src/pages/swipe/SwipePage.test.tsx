@@ -25,6 +25,10 @@ const PENDING = {
   role_family: "engineering",
   loc_country: "IT",
   loc_city: "Città Esempio",
+  jd_summary: Array.from(
+    { length: 40 },
+    (_, i) => `Responsabilità sintetica di prova ${i + 1}`,
+  ).join("\n"),
   scores: [{ total_score: 82 }],
 };
 const REVIEWED = { ...PENDING, id: "p-2", legacy_id: 102, title: "Posizione già vista", scores: null };
@@ -36,12 +40,19 @@ function respond(query: FakeQuery) {
   return { data: null, error: null };
 }
 
+function viewport(width: number, height: number, zoom = "1") {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+  document.documentElement.style.setProperty("--zoom", zoom);
+}
+
 beforeEach(() => {
   // Niente rete nei test: i tassi di cambio ripiegano sui valori fissi del web.
   vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  document.documentElement.style.removeProperty("--zoom");
 });
 
 describe("loadSwipe", () => {
@@ -81,4 +92,35 @@ describe("SwipePage", () => {
     render(<SwipePage client={failing} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Non riesco a leggere");
   });
+
+  it.each([
+    [1440, 900, "1"],
+    [900, 420, "1"],
+    [1000, 480, "1.4"],
+  ])(
+    "keeps the card and four actions inside a %sx%s viewport at zoom %s",
+    async (width, height, zoom) => {
+      viewport(Number(width), Number(height), String(zoom));
+      const { client } = fakeSupabase(respond);
+      render(<SwipePage client={client} />);
+      await screen.findByText("Sviluppatrice di prova");
+
+      const page = screen.getByTestId("desktop-swipe-page");
+      const deck = screen.getByTestId("swipe-deck");
+      const card = page.querySelector('[data-swipe-card="active"]');
+      const actions = page.querySelector("[data-swipe-actions]");
+      const summary = page.querySelector("[data-swipe-summary]");
+
+      expect(page).toHaveStyle({ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" });
+      expect(page.className).toMatch(/min-h-0/);
+      expect(page.className).toMatch(/overflow-hidden/);
+      expect(deck).toHaveStyle({ height: "100%", minHeight: 0 });
+      expect(deck.className).toMatch(/max-w-4xl/);
+      expect(card).toHaveClass("flex", "overflow-hidden");
+      expect(summary).toHaveClass("flex-1", "min-h-0", "overflow-y-auto");
+      expect(actions).toHaveClass("shrink-0");
+      expect(actions?.className).not.toMatch(/absolute|fixed/);
+      expect(actions?.querySelectorAll("[data-swipe-verdict]")).toHaveLength(4);
+    },
+  );
 });
