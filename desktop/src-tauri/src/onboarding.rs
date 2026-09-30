@@ -4,6 +4,7 @@ use crate::runtime_host::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{Read, Write},
@@ -20,6 +21,8 @@ use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
 const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
+const INSTALL_SHA256: &str = include_str!("../installer.sha256");
+const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
@@ -101,7 +104,7 @@ pub(crate) struct OnboardingSnapshot {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct OnboardingError {
-    code: &'static str,
+    pub(crate) code: &'static str,
 }
 
 #[derive(Serialize)]
@@ -182,19 +185,64 @@ fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     .find(|path| path.is_file())
 }
 
-fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
-    if let Some(path) = wrapper_path(app) {
-        return Ok(path);
+pub(crate) struct VerifiedInstaller {
+    bytes: Vec<u8>,
+    digest: String,
+}
+
+impl VerifiedInstaller {
+    pub(crate) fn bytes(&self) -> &[u8] {
+        &self.bytes
     }
-    #[cfg(not(unix))]
-    return Err(failure("runtime_install_unsupported"));
-    #[cfg(unix)]
+
+    pub(crate) fn digest(&self) -> &str {
+        &self.digest
+    }
+}
+
+fn expected_installer_digest(value: &str) -> Result<&str, OnboardingError> {
+    let digest = value.trim();
+    if digest.is_empty() {
+        return Err(failure("installer_digest_missing"));
+    }
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
     {
-        let target = std::env::temp_dir().join(format!(
-            "jht-install-{}-{}.sh",
-            std::process::id(),
-            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
+        return Err(failure("installer_digest_invalid"));
+    }
+    Ok(digest)
+}
+
+pub(crate) fn attest_then<T>(
+    bytes: Vec<u8>,
+    expected_digest: &str,
+    execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
+) -> Result<T, OnboardingError> {
+    let expected = expected_installer_digest(expected_digest)?;
+    if bytes.is_empty() || bytes.len() > MAX_INSTALLER_BYTES {
+        return Err(failure("installer_payload_invalid"));
+    }
+    let actual = format!("{:x}", Sha256::digest(&bytes));
+    if actual != expected {
+        return Err(failure("installer_digest_mismatch"));
+    }
+    execute(&VerifiedInstaller {
+        bytes,
+        digest: actual,
+    })
+}
+
+fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+    // Refuse a release without a compiled-in digest before touching the network.
+    expected_installer_digest(expected_digest)?;
+    let target = std::env::temp_dir().join(format!(
+        "jht-download-{}-{}.sh",
+        std::process::id(),
+        SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| {
         let curl_args = [
             "-fsSL",
             INSTALL_URL,
@@ -204,31 +252,86 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
         let downloaded =
             run_program("curl", curl_args, None, Duration::from_secs(90)).map_err(failure)?;
         if !downloaded.success() {
-            let _ = fs::remove_file(&target);
             return Err(failure("runtime_download_failed"));
         }
-        let args = [
-            "JHT_SKIP_ONBOARD=1",
-            "/bin/bash",
-            target.to_str().ok_or_else(|| failure("storage_failed"))?,
-        ];
-        let result = run_program("/usr/bin/env", args, None, PREPARE_TIMEOUT);
-        let _ = fs::remove_file(&target);
-        if !matches!(result, Ok(status) if status.success()) {
-            return Err(failure("runtime_install_failed"));
+        set_private_permissions(&target).map_err(failure)?;
+        let metadata = fs::metadata(&target).map_err(|_| failure("runtime_download_failed"))?;
+        if metadata.len() == 0 || metadata.len() > MAX_INSTALLER_BYTES as u64 {
+            return Err(failure("installer_payload_invalid"));
         }
+        fs::read(&target).map_err(|_| failure("runtime_download_failed"))
+    })();
+    let _ = fs::remove_file(&target);
+    result
+}
+
+fn with_downloaded_installer<T>(
+    execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
+) -> Result<T, OnboardingError> {
+    let expected = expected_installer_digest(INSTALL_SHA256)?;
+    let bytes = download_installer_bytes(expected)?;
+    attest_then(bytes, expected, execute)
+}
+
+fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    if let Some(path) = wrapper_path(app) {
+        return Ok(path);
+    }
+    #[cfg(not(unix))]
+    return Err(failure("runtime_install_unsupported"));
+    #[cfg(unix)]
+    {
+        with_downloaded_installer(|installer| {
+            let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
+            ensure_success(
+                run_program(
+                    "/usr/bin/env",
+                    args,
+                    Some(installer.bytes()),
+                    PREPARE_TIMEOUT,
+                ),
+                "runtime_install_failed",
+            )
+        })?;
         wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
     }
 }
 
 const REMOTE_INSTALL: &str = r#"set -eu
 umask 077
+IFS= read -r JHT_INSTALL_SHA256
 IFS= read -r JHT_PAIRING_TOKEN
 export JHT_SKIP_ONBOARD=1
 jht_installer="$(mktemp)"
 trap 'rm -f "$jht_installer"' EXIT HUP INT TERM
-curl -fsSL https://jobhunterteam.ai/install.sh -o "$jht_installer"
+cat > "$jht_installer"
+if command -v sha256sum >/dev/null 2>&1; then
+  jht_actual_sha256="$(sha256sum "$jht_installer" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  jht_actual_sha256="$(shasum -a 256 "$jht_installer" | awk '{print $1}')"
+else
+  exit 86
+fi
+[ "$jht_actual_sha256" = "$JHT_INSTALL_SHA256" ] || exit 87
 /bin/bash "$jht_installer" --pairing-token "$JHT_PAIRING_TOKEN""#;
+
+pub(crate) fn remote_install_input(
+    installer: &VerifiedInstaller,
+    pairing_token: &str,
+) -> Result<Zeroizing<Vec<u8>>, OnboardingError> {
+    if !valid_pairing_token(pairing_token) {
+        return Err(failure("pairing_token_invalid"));
+    }
+    let mut input = Zeroizing::new(Vec::with_capacity(
+        installer.digest().len() + pairing_token.len() + installer.bytes().len() + 2,
+    ));
+    input.extend_from_slice(installer.digest().as_bytes());
+    input.push(b'\n');
+    input.extend_from_slice(pairing_token.as_bytes());
+    input.push(b'\n');
+    input.extend_from_slice(installer.bytes());
+    Ok(input)
+}
 const REMOTE_JHT_UP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" up"#;
 const REMOTE_USE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use claude"#;
 const REMOTE_USE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use codex"#;
@@ -352,19 +455,21 @@ fn prepare_impl(
             if !valid_pairing_token(token) {
                 return Err(failure("pairing_token_invalid"));
             }
-            let mut input = Zeroizing::new(token.as_bytes().to_vec());
-            input.push(b'\n');
-            ensure_success(
-                run_ssh(
-                    &validated,
-                    REMOTE_INSTALL,
-                    Some(&input),
-                    PREPARE_TIMEOUT,
-                    None,
-                ),
-                "runtime_install_failed",
-            )?;
-            input.zeroize();
+            with_downloaded_installer(|installer| {
+                let mut input = remote_install_input(installer, token)?;
+                let result = ensure_success(
+                    run_ssh(
+                        &validated,
+                        REMOTE_INSTALL,
+                        Some(&input),
+                        PREPARE_TIMEOUT,
+                        None,
+                    ),
+                    "runtime_install_failed",
+                );
+                input.zeroize();
+                result
+            })?;
             ensure_success(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
                 "container_start_failed",
@@ -978,9 +1083,25 @@ pub(crate) async fn onboarding_assistant_open(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_snapshot, redact, valid_pairing_token, valid_profile, OnboardingProfileDraft,
-        StreamRedactor,
+        expected_installer_digest, parse_snapshot, redact, valid_pairing_token, valid_profile,
+        OnboardingProfileDraft, StreamRedactor, INSTALL_SHA256, REMOTE_INSTALL,
     };
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn embedded_installer_digest_matches_the_release_source() {
+        let expected = expected_installer_digest(INSTALL_SHA256).expect("embedded digest");
+        let actual = format!(
+            "{:x}",
+            Sha256::digest(include_bytes!("../../../scripts/install.sh"))
+        );
+        assert_eq!(actual, expected);
+        assert!(!REMOTE_INSTALL.contains("curl"));
+        assert!(
+            REMOTE_INSTALL.find("jht_actual_sha256").unwrap()
+                < REMOTE_INSTALL.find("/bin/bash").unwrap()
+        );
+    }
 
     #[test]
     fn snapshot_needs_each_explicit_fact() {
