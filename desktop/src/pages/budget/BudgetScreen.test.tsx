@@ -69,6 +69,7 @@ describe("BudgetScreen", () => {
   it("with no run says so, and still shows the caps", () => {
     render(<BudgetScreen spend={{ state: "ready", report: { ...REPORT, found: false, runs: [], agents: [] } }} usage={USAGE} now={NOW} />);
     expect(screen.getByText(/Nessun run del team API su questo computer/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
     expect(screen.getByText("Tetto per run")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Run" })).toBeNull();
   });

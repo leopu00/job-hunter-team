@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { goTo, LOGIN_PAGE, SETUP_PAGE } from "../lib/pages";
+import { goTo, LOGIN_PAGE } from "../lib/pages";
 import DashboardApp from "./DashboardApp";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
 import { loadDashboard } from "../pages/dashboard/load-dashboard";
@@ -48,11 +48,5 @@ describe("DashboardApp", () => {
     render(<DashboardApp />);
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(loadDashboard).toHaveBeenCalled();
-  });
-
-  it("keeps the local team setup one click away", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    render(<DashboardApp />);
-    expect(await screen.findByRole("link", { name: "Team locale" })).toHaveAttribute("href", SETUP_PAGE);
   });
 });

@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react";
 import type { SpendRead } from "../../lib/spend";
-import { SETUP_PAGE } from "../../lib/pages";
 import {
   agentsOfRun,
   budgetShare,
@@ -59,11 +58,7 @@ function ApiTeamSpend({ spend }: { spend: SpendRead }) {
       <>
         <Caps team={report.teamCapUsd} agent={report.agentCapUsd} />
         <Notice>
-          Nessun run del team API su questo computer. Si avvia da{" "}
-          <a href={SETUP_PAGE} className="text-[var(--color-blue)] no-underline hover:text-[var(--color-bright)]">
-            Team locale
-          </a>
-          .
+          Nessun run del team API su questo computer. I dati compariranno dopo il primo run.
         </Notice>
       </>
     );
