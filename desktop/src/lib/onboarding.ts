@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { DesktopPlatform } from "./desktop-platform";
 
 export type WorkMode = "remote" | "hybrid" | "onsite" | "flexible";
 
@@ -61,6 +62,7 @@ export interface OnboardingRuntimeSnapshot {
 /** UI boundary: no Supabase, IPC, secrets or routing enter the component. */
 export interface OnboardingFlowProps {
   account: OnboardingAccount;
+  platform: DesktopPlatform;
   initialDraft?: OnboardingProfileDraft;
   runtime: OnboardingRuntimeState;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { connectDirectChat } from "../lib/direct-chat";
+import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   loadOnboardingGate,
   markOnboardingReady,
@@ -57,6 +58,7 @@ function pairingToken(session: Session, submission: OnboardingSubmission): strin
 export default function DashboardApp() {
   const { session, loading } = useSession();
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
+  const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
@@ -77,6 +79,14 @@ export default function DashboardApp() {
   useEffect(() => {
     if (signedOut) goTo(LOGIN_PAGE);
   }, [signedOut]);
+
+  useEffect(() => {
+    let active = true;
+    void readDesktopPlatform().then((detected) => {
+      if (active) setPlatform(detected);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -252,7 +262,7 @@ export default function DashboardApp() {
     return submit(submission);
   }, [fail, finishAssistant, gate, loginProvider, setRuntime, startTeam, submit]);
 
-  if (!session || gate.phase === "loading") {
+  if (!session || gate.phase === "loading" || (gate.phase === "required" && platform === null)) {
     return <DashboardSkeleton label="Caricamento dashboard" />;
   }
   if (gate.phase === "error") {
@@ -267,6 +277,7 @@ export default function DashboardApp() {
     return (
       <OnboardingFlow
         account={gate.account}
+        platform={platform ?? "other"}
         initialDraft={gate.initialDraft}
         runtime={gate.runtime}
         onSubmit={submit}
