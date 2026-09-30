@@ -79,13 +79,19 @@ describe("VoiceInputControl", () => {
     await user.click(screen.getByRole("button", { name: /detta un messaggio/i }));
     expect(bridge.start).toHaveBeenCalledWith("it-IT");
     act(() => bridge.state({ ...IDLE, phase: "requesting-permission" }));
-    expect(screen.getByRole("status")).toHaveTextContent(/attendo i permessi/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/richiesta dei permessi/i);
     act(() => bridge.state({ ...IDLE, phase: "recording", microphonePermission: "granted", speechPermission: "granted" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(2250); });
-    expect(screen.getByRole("status")).toHaveTextContent("00:02");
+    const liveStatus = screen.getByRole("status");
+    expect(liveStatus).toHaveTextContent(/registrazione in corso/i);
+    expect(liveStatus).not.toHaveTextContent(/00:02|ferma e trascrivi|annulla/i);
+    expect(screen.getByText("00:02")).toHaveAttribute("aria-hidden", "true");
 
     await user.click(screen.getByRole("button", { name: /ferma e trascrivi/i }));
     expect(bridge.stop).toHaveBeenCalledOnce();
+    act(() => bridge.state({ ...IDLE, phase: "transcribing" }));
+    expect(screen.getByRole("status")).toHaveTextContent(/trascrizione in corso/i);
+    expect(screen.getByRole("status")).not.toHaveTextContent(/annulla/i);
   });
 
   it("places only the final transcript in the editable composer and never sends it", async () => {
