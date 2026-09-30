@@ -15,8 +15,10 @@ import {
   openOnboardingAssistant,
   prepareOnboardingRuntime,
   readOnboardingSnapshot,
+  sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
+  type OnboardingInteractiveEvent,
 } from "../lib/onboarding-runtime";
 import { goTo, LOGIN_PAGE } from "../lib/pages";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
@@ -46,6 +48,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   openOnboardingAssistant: vi.fn(),
   prepareOnboardingRuntime: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
+  sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
 }));
@@ -61,8 +64,18 @@ vi.mock("../onboarding", () => ({
       <section data-testid="onboarding">
         <p>{props.runtime.status}{stage}</p>
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION)}>submit-onboarding</button>
+        {(["claude", "codex", "kimi"] as const).map((provider) => (
+          <button key={provider} type="button" onClick={() => void props.onSubmit({ ...SUBMISSION, provider })}>submit-{provider}</button>
+        ))}
         {actionStage && (
-          <button type="button" onClick={() => void props.onRuntimeAction(actionStage)}>continue-runtime</button>
+          <button type="button" onClick={() => void props.onRuntimeAction(actionStage).catch(() => undefined)}>continue-runtime</button>
+        )}
+        {props.providerLogin && <pre aria-label="provider-output">{props.providerLogin.output}</pre>}
+        {props.providerLogin?.status === "active" && (
+          <>
+            <button type="button" onClick={() => void props.onProviderInput("verification response")}>send-provider-input</button>
+            <button type="button" onClick={() => void props.onProviderClose().catch(() => undefined)}>close-provider-login</button>
+          </>
         )}
       </section>
     );
@@ -115,6 +128,7 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(loadDashboard).mockResolvedValue(fixtureData());
     vi.mocked(saveOnboardingProfile).mockResolvedValue(SUBMISSION.profile);
     vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
+    vi.mocked(sendOnboardingProviderInput).mockResolvedValue();
   });
 
   it("sends whoever has no session to Google sign-in", () => {
@@ -191,5 +205,42 @@ describe("DashboardApp onboarding router", () => {
       expect.objectContaining({ directChatReady: true }),
     );
     await waitFor(() => expect(loadDashboard).toHaveBeenCalled());
+  });
+
+  it.each(["claude", "codex", "kimi"] as const)("streams and controls the %s login session", async (provider) => {
+    vi.mocked(useSession).mockReturnValue(signedIn);
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Synthetic Person" },
+      runtime: { status: "collecting", stage: "profile" },
+    });
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
+    let emit!: (event: OnboardingInteractiveEvent) => void;
+    vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
+      emit = onEvent;
+      return `session-${provider}`;
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: `submit-${provider}` }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalled());
+    if (provider === "codex") {
+      expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
+    } else {
+      expect(sendOnboardingProviderInput).toHaveBeenCalledWith(`session-${provider}`, "/login");
+    }
+
+    emit({ kind: "output", text: `Use https://login.example.invalid/${provider} with CODE-${provider}` });
+    expect(await screen.findByLabelText("provider-output")).toHaveTextContent(`CODE-${provider}`);
+
+    await user.click(screen.getByRole("button", { name: "send-provider-input" }));
+    expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(`session-${provider}`, "verification response");
+
+    await user.click(screen.getByRole("button", { name: "close-provider-login" }));
+    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith(`session-${provider}`);
+    expect(await screen.findByText("failed:provider-login")).toBeInTheDocument();
   });
 });
