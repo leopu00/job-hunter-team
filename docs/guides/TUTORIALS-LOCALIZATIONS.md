@@ -46,9 +46,9 @@ variare il risultato, ma non è un'operazione da cinque minuti.
    inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del
    setup: conversazioni e posizioni di esempio non avviano un team dal vivo né
    usano un provider.
-4. **Apri la checklist.** Seleziona **Attiva team**. Scegli un runtime locale o
-   collega una VPS. Il runtime locale richiede Docker; su Windows Docker
-   Desktop può richiedere consenso e primo avvio.
+4. **Apri la checklist.** Seleziona **Attiva team**. Su macOS o Linux scegli un
+   runtime locale o collega una VPS. Su Windows 0.4 collega una VPS Linux:
+   l'ufficio nativo non offre ancora l'esecuzione locale.
 5. **Collega un provider.** Nel setup del Coordinatore scegli un provider in
    abbonamento e il piano, poi completa l'autorizzazione nel terminale
    integrato. Un link può aprirsi nel browser, ma codici e scelte restano nel
@@ -223,9 +223,9 @@ no es una tarea de cinco minutos.
    aperturas. Después añade tu nombre si quieres y entra en la oficina. Puedes
    explorarla antes de configurarla: las conversaciones y posiciones de ejemplo
    no inician un equipo real ni usan un proveedor.
-4. **Abre la lista de configuración.** Selecciona **Activar equipo**. Elige un
-   runtime local o conecta una VPS. El runtime local necesita Docker; en
-   Windows Docker Desktop puede requerir consentimiento y su primer inicio.
+4. **Abre la lista de configuración.** Selecciona **Activar equipo**. En macOS
+   o Linux, elige un runtime local o conecta una VPS. En Windows 0.4, conecta
+   una VPS Linux: la oficina nativa todavía no ofrece ejecución local.
 5. **Conecta un proveedor.** En la configuración del Coordinador selecciona un
    proveedor de suscripción y su plan, y completa la autorización en el
    terminal integrado. Un enlace puede abrirse en el navegador, pero los
@@ -406,10 +406,10 @@ Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
    puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration :
    les conversations et positions d'exemple ne lancent pas une équipe en direct
    et n'utilisent pas de fournisseur.
-4. **Ouvrez la liste de configuration.** Sélectionnez **Activer l'équipe**.
-   Choisissez un runtime local ou connectez un VPS. Le runtime local nécessite
-   Docker ; sous Windows, Docker Desktop peut demander son consentement et son
-   premier démarrage.
+4. **Ouvrez la liste de configuration.** Sélectionnez **Activer l'équipe**. Sur
+   macOS ou Linux, choisissez un runtime local ou connectez un VPS. Sous Windows
+   0.4, connectez un VPS Linux : le bureau natif ne propose pas encore
+   d'exécution locale.
 5. **Connectez un fournisseur.** Dans la configuration du Coordinateur,
    sélectionnez un fournisseur par abonnement et son forfait, puis terminez
    l'autorisation dans le terminal intégré. Un lien peut s'ouvrir dans le
@@ -592,10 +592,10 @@ Fünf-Minuten-Aufgabe.
    danach deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst
    es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten
    kein Live-Team und nutzen keinen Provider.
-4. **Öffne die Einrichtungs-Checkliste.** Wähle **Team aktivieren**. Wähle eine
-   lokale Runtime oder verbinde einen VPS. Die lokale Runtime benötigt Docker;
-   unter Windows kann Docker Desktop Zustimmung und seinen ersten Start
-   verlangen.
+4. **Öffne die Einrichtungs-Checkliste.** Wähle **Team aktivieren**. Wähle unter
+   macOS oder Linux eine lokale Runtime oder verbinde einen VPS. Verbinde unter
+   Windows 0.4 einen Linux-VPS; die native Anwendung bietet dort noch keine
+   lokale Ausführung an.
 5. **Verbinde einen Provider.** Wähle in der Koordinator-Einrichtung einen
    Abonnement-Provider und Tarif und schließe die Autorisierung im integrierten
    Terminal ab. Ein Link kann sich im Browser öffnen, Codes und Auswahl bleiben
@@ -780,9 +780,9 @@ de cinco minutos.
    Depois acrescenta o teu nome se quiseres e entra no escritório. Podes
    explorá-lo antes da configuração: as conversas e posições de exemplo não
    iniciam uma equipa real nem usam um fornecedor.
-4. **Abre a lista de configuração.** Seleciona **Ativar equipa**. Escolhe um
-   runtime local ou liga uma VPS. O runtime local precisa de Docker; no Windows
-   o Docker Desktop pode exigir consentimento e o primeiro arranque.
+4. **Abre a lista de configuração.** Seleciona **Ativar equipa**. No macOS ou
+   Linux, escolhe um runtime local ou liga uma VPS. No Windows 0.4, liga uma VPS
+   Linux; o escritório nativo ainda não oferece execução local.
 5. **Liga um fornecedor.** Na configuração do Coordenador, escolhe um
    fornecedor por subscrição e o plano e conclui a autorização no terminal
    integrado. Uma ligação pode abrir no navegador, mas os códigos e as escolhas
@@ -962,9 +962,9 @@ eredményt, de ez nem ötperces feladat.
    előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő
    csapatot és nem használnak szolgáltatót.
 4. **Nyisd meg a beállítási ellenőrzőlistát.** Válaszd a **Csapat aktiválása**
-   lehetőséget. Válassz helyi runtime-ot vagy kapcsolj VPS-t. A helyi runtime
-   Docker-t igényel; Windowson a Docker Desktop hozzájárulást és első indítást
-   kérhet.
+   lehetőséget. macOS vagy Linux alatt válassz helyi runtime-ot vagy kapcsolj
+   VPS-t. Windows 0.4 alatt Linux VPS-t kapcsolj; a natív iroda ott még nem
+   kínál helyi futtatást.
 5. **Kapcsolj szolgáltatót.** A Koordinátor beállításában válassz előfizetéses
    AI-szolgáltatót és csomagot, majd fejezd be az engedélyezést a beépített
    terminálban. A hivatkozás megnyílhat a böngészőben, de a kódok és választások

@@ -192,7 +192,7 @@ def test_version_prints_without_docker_effects(tmp_path):
     res = run_wrapper(["--version"], fake_bin, tmp_path)
 
     assert res.returncode == 0, res.stderr
-    assert res.stdout.splitlines()[0] == "0.3.9"
+    assert res.stdout.splitlines()[0] == "0.4.0"
     assert_no_docker_effect(log)
 
 

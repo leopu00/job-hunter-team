@@ -1,8 +1,10 @@
 # Choose where to run Job Hunter Team
 
 Job Hunter Team (JHT) has one containerized team and more than one place to
-run it. The desktop application stays on the computer you use; the Docker
-container can run on that same computer or on a Linux host reached over SSH.
+run it. The desktop application stays on the computer you use; on macOS and
+Linux the Docker container can run on that same computer or on a Linux host
+reached over SSH. The Windows 0.4 desktop supports only the Linux host over SSH;
+local Windows execution is planned for a later version.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -12,7 +14,8 @@ host.
 ## Decision tree
 
 1. **Do you want the shortest path to a first working team?** Run it on your
-   **local PC**.
+   **local PC** when the desktop is on macOS or Linux. On Windows 0.4, choose a
+   **VPS**: the native office deliberately does not offer a local runtime.
 2. **Do you already have a spare computer that can stay on, and will you use
    it mainly from the same trusted local network?** A **dedicated Linux PC on
    the LAN** can work through the existing SSH transport. This is an advanced
@@ -25,15 +28,15 @@ host.
    Optional cloud sync can show supported mirrored data in the browser, but it
    does not make the remote host reachable over SSH.
 
-If you are unsure, start locally. Moving later is possible, but read
-[Moving an existing team](#moving-an-existing-team) before relying on the
-automated migration flow.
+If you are unsure, start locally on macOS or Linux; on Windows 0.4, start with a
+VPS. Moving later is possible, but read [Moving an existing
+team](#moving-an-existing-team) before relying on the automated migration flow.
 
 ## At a glance
 
 | | Local PC | Dedicated PC on the LAN | VPS |
 |---|---|---|---|
-| **Current product path** | Supported local runtime | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime |
+| **Current product path** | Supported on macOS/Linux; unavailable in the Windows 0.4 office | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
 | **Where the team runs** | Your everyday computer | A Linux computer you own or control | A Linux virtual server from an infrastructure provider |
 | **How the desktop reaches it** | Direct `docker` commands | SSH over your network | SSH over the internet |
 | **Must your everyday PC stay on?** | Yes | No; only while you use the desktop | No; only while you use the desktop |
@@ -76,20 +79,19 @@ desktop, container, SSH and optional-cloud boundaries.
 
 ## Path 1 — Local PC
 
-Choose this when you want the least infrastructure and can leave your computer
-awake while the agents work.
+Choose this on macOS or Linux when you want the least infrastructure and can
+leave your computer awake while the agents work. The Windows 0.4 native office
+does not expose this path; use a Linux VPS instead.
 
 ### What you need
 
-- A supported desktop release: Windows x64, Linux x64, or macOS (Intel 11 or
-  newer; Apple silicon 13 or newer).
+- A supported local-runtime desktop release: Linux x64 or macOS (Intel 11 or
+  newer; Apple silicon 13 or newer). Windows x64 can run the office, but its
+  0.4 onboarding requires a Linux VPS.
 - Docker installed and running. The native setup guide handles the supported
-  runtime choices for each operating system.
+  runtime choices for macOS and Linux.
 - About **8 GB of RAM available before starting the team** for comfortable
-  local use. This is a measured recommendation, not a universal minimum: in a
-  30-minute Windows run, a 12 GB machine retained more than 4 GB free with the
-  team and desktop active, and a 2013 two-core/four-thread CPU did not
-  saturate.
+  local use. This is a measured recommendation, not a universal minimum.
 - Enough unmeasured disk headroom for the image and your data.
 
 ### Availability and operations

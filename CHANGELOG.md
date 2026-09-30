@@ -5,6 +5,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.0] — 2026-09-30
+
+**The distributed desktop experience moves from Godot to Tauri 2, with
+account-backed onboarding and subscription-provider access.**
+
+### Tauri desktop
+
+- The shipped desktop shell is now the Tauri 2 application. The retained
+  Godot project and runtime are not bundled or reachable from the distributed
+  desktop entrypoints.
+- The desktop navigation, assistant composer and direct chat adapt to compact
+  windows without hiding primary actions. Native status and failures remain
+  explicit instead of being replaced with simulated data.
+
+### Access and onboarding
+
+- Desktop sign-in uses Google through a PKCE browser flow and restores the
+  account session before opening protected application surfaces.
+- First-run setup collects the profile and environment, then connects a
+  supported Claude Code, Codex or Kimi subscription through that provider's
+  login flow. Completion waits for the native snapshot and direct chat to be
+  ready instead of reporting success optimistically.
+- The Assistant has a resumable guided introduction with tour, requirements
+  and exploration paths, followed by an editable first message for the free
+  chat. On macOS, on-device dictation can fill supported composers without
+  sending automatically.
+
+### Explicit limits
+
+- Version 0.4.0 is subscription/provider-only. It does not expose the retired
+  API-key/local-team mode, “Team Locale”, API spend data or the Budget API
+  route and native command.
+- On-device dictation depends on the macOS speech services and permissions;
+  unsupported platforms show that limitation rather than pretending to
+  transcribe.
+- This release does not claim a supported local-team runtime on Windows. Host
+  and provider readiness are verified during onboarding, and missing external
+  prerequisites remain actionable failures.
+
 ---
 
 ## [0.3.9] — 2026-08-13

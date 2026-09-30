@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import AgentsPage from "../pages/agents";
-import BudgetPage from "../pages/budget";
 import DashboardPage from "../pages/dashboard";
 import MapPage from "../pages/map";
 import MessagesPage from "../pages/messages";
@@ -51,6 +50,5 @@ export const ROUTES: Route[] = [
   { path: "/profile", page: ProfilePage },
   // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in desktop-links.ts).
   { path: "/agents", page: AgentsPage },
-  { path: "/budget", page: BudgetPage },
   { path: "/office", page: OfficePage, fullBleed: true },
 ];
