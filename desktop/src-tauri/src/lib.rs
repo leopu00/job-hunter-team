@@ -3,18 +3,16 @@ mod auth_store;
 mod browsers;
 mod direct_chat;
 mod live_screen;
+mod onboarding;
 mod podman;
 mod runtime_host;
 mod spend;
-mod team;
-
-use team::TeamRuntimeState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(TeamRuntimeState::default())
         .manage(direct_chat::DirectChatState::default())
+        .manage(onboarding::OnboardingNativeState::default())
         .manage(auth_store::system_key_cache())
         .invoke_handler(tauri::generate_handler![
             auth_login::auth_callback_url,
@@ -34,9 +32,15 @@ pub fn run() {
             direct_chat::direct_chat_subscribe,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
+            onboarding::onboarding_assistant_open,
+            onboarding::onboarding_prepare,
+            onboarding::onboarding_provider_login,
+            onboarding::onboarding_provider_login_close,
+            onboarding::onboarding_provider_login_input,
+            onboarding::onboarding_snapshot,
+            onboarding::onboarding_team_start,
             podman::check_podman,
-            spend::api_team_spend,
-            team::start_api_team
+            spend::api_team_spend
         ])
         .run(tauri::generate_context!())
         .expect("error while running JHT Desktop");

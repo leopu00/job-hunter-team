@@ -3,7 +3,6 @@ import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
-import { SETUP_PAGE } from "../lib/pages";
 import { signOut } from "../lib/supabase";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -36,7 +35,7 @@ function DesktopLinks() {
  * The signed-in app: the web's protected layout (navbar on top, MainChrome
  * around the page) with a client router in place of Next's. The navbar links
  * are the web's NavLinks, then the desktop's own pages; on the right, what
- * the desktop adds: refresh the page's data, the local team setup, sign out.
+ * the desktop adds: refresh the page's data and sign out.
  */
 function Navbar() {
   const button =
@@ -57,9 +56,6 @@ function Navbar() {
           <button type="button" className={button} onClick={refresh}>
             Aggiorna
           </button>
-          <a href={SETUP_PAGE} className={button}>
-            Team locale
-          </a>
           <button type="button" className={button} onClick={() => void signOut()}>
             Esci
           </button>

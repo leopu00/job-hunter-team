@@ -1,308 +1,31 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { openLiveScreen } from "./lib/live-screen";
 import { goTo } from "./lib/pages";
 import { useSession } from "./lib/supabase";
-import { checkPodman } from "./lib/podman";
-import { startApiTeam } from "./lib/team";
-
-vi.mock("./lib/live-screen", () => ({
-  openLiveScreen: vi.fn(),
-}));
 
 vi.mock("./lib/supabase", () => ({ useSession: vi.fn() }));
-
-vi.mock("./components/login-screen", () => ({
-  LoginScreen: () => <p>login-screen</p>,
-}));
-
+vi.mock("./components/login-screen", () => ({ LoginScreen: () => <p>login-screen</p> }));
 vi.mock("./lib/pages", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./lib/pages")>()),
   goTo: vi.fn(),
 }));
 
-vi.mock("./lib/podman", () => ({
-  checkPodman: vi.fn(),
-}));
+describe("authentication entrypoint", () => {
+  beforeEach(() => vi.mocked(goTo).mockReset());
 
-vi.mock("./lib/team", () => ({
-  startApiTeam: vi.fn(),
-  isTeamAgentActivity: (progress: {
-    role?: string;
-    agentId?: string;
-    status?: string;
-  }) => Boolean(progress.role && progress.agentId && progress.status),
-}));
-
-beforeEach(() => {
-  vi.mocked(checkPodman).mockResolvedValue({
-    installed: true,
-    ready: true,
-    version: "podman version 5.5.2",
-    issue: null,
-  });
-  vi.mocked(startApiTeam).mockImplementation(async (_key, onProgress) => {
-    onProgress({ stage: "team", message: "Il team è partito" });
-    return {
-      runId: "run-test-12345678",
-      scored: 5,
-      reviewed: 2,
-      spentUsd: 0.024,
-      agentCount: 11,
-      workspacePath: "C:\\JHT\\api-team",
-      positions: [
-        {
-          sourceId: "job-1",
-          title: "Agentic AI Engineer",
-          company: "Synthetic Company",
-          score: 88,
-          state: "reviewed",
-          criticScore: 9,
-          criticVerdict: "pass",
-          cvMarkdown: "# CV Agentic AI Engineer\n\nEsperienza verificata.",
-        },
-      ],
-      agents: [
-        {
-          agentId: "captain-1",
-          role: "captain",
-          costUsd: 0.001,
-          inputTokens: 100,
-          outputTokens: 50,
-        },
-      ],
-      timeline: [
-        {
-          sequence: 1,
-          sourceId: "job-1",
-          actor: "scout-1",
-          event: "handoff_queued",
-          from: "scout",
-          to: "analyst",
-        },
-      ],
-    };
-  });
-});
-
-describe("desktop first-run flow", () => {
-  it("starts on the welcome page and opens the local API setup", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "La ricerca cambia",
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: /inizia la configurazione/i }),
-    );
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Prepariamo il tuo ambiente",
-    );
-    expect(
-      screen.getByText("Container isolati con Podman"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Consumo sulla tua chiave OpenAI"),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("Podman è pronto")).toBeInTheDocument();
-    expect(screen.getByText("podman version 5.5.2")).toBeInTheDocument();
-  });
-
-  it("requires the API key, starts the team and shows its result", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(
-      screen.getByRole("button", { name: /inizia la configurazione/i }),
-    );
-
-    const submit = screen.getByRole("button", { name: /avvia il team ora/i });
-    const input = screen.getByLabelText("API key");
-    expect(submit).toBeDisabled();
-
-    await user.type(input, "sk-test-only-not-a-real-key");
-    expect(submit).toBeEnabled();
-    await user.click(submit);
-
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: /la squadra ha iniziato/i,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("11")).toBeInTheDocument();
-    expect(screen.getByText("Agentic AI Engineer")).toBeInTheDocument();
-    expect(screen.getByText("CV generato")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Agenti" }));
-    expect(screen.getByText("captain-1")).toBeInTheDocument();
-    expect(screen.getByText("150 token")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Attività" }));
-    expect(screen.getByText("scout-1 · handoff queued")).toBeInTheDocument();
-    expect(screen.getByText("scout → analyst")).toBeInTheDocument();
-    expect(startApiTeam).toHaveBeenCalledWith(
-      "sk-test-only-not-a-real-key",
-      expect.any(Function),
-    );
-    expect(localStorage).toHaveLength(0);
-  });
-
-  it("shows real agent activity while the isolated team is running", async () => {
-    let finishRun!: (value: Awaited<ReturnType<typeof startApiTeam>>) => void;
-    const pending = new Promise<Awaited<ReturnType<typeof startApiTeam>>>(
-      (resolve) => {
-        finishRun = resolve;
-      },
-    );
-    vi.mocked(startApiTeam).mockImplementation((_key, onProgress) => {
-      onProgress({
-        stage: "team",
-        message: "Analista lavora su Agentic AI Engineer",
-        role: "analyst",
-        agentId: "analyst-1",
-        status: "working",
-        positionTitle: "Agentic AI Engineer",
-      });
-      return pending;
-    });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(
-      screen.getByRole("button", { name: /inizia la configurazione/i }),
-    );
-    await user.type(
-      screen.getByLabelText("API key"),
-      "sk-test-only-not-a-real-key",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /avvia il team ora/i }),
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: /la squadra è al lavoro/i,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Analista 1")).toBeInTheDocument();
-    expect(screen.getByText("al lavoro")).toBeInTheDocument();
-    expect(screen.getAllByText("Agentic AI Engineer").length).toBeGreaterThan(
-      0,
-    );
-
-    finishRun({
-      runId: "cancelled-test-run",
-      scored: 0,
-      reviewed: 0,
-      spentUsd: 0,
-      agentCount: 0,
-      workspacePath: "C:\\JHT\\api-team",
-      positions: [],
-      agents: [],
-      timeline: [],
-    });
-  });
-
-  it("explains how to recover when the Podman engine is unavailable", async () => {
-    vi.mocked(checkPodman).mockResolvedValue({
-      installed: true,
-      ready: false,
-      version: "podman version 6.0.2",
-      issue: "engine_unavailable",
-    });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(
-      screen.getByRole("button", { name: /inizia la configurazione/i }),
-    );
-
-    expect(
-      await screen.findByText("Podman è installato, ma il motore non risponde"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/avvia podman/i)).toBeInTheDocument();
-  });
-
-  it("clears the rejected key and reports a safe provider failure", async () => {
-    vi.mocked(startApiTeam).mockRejectedValue({ code: "team_run_failed" });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(
-      screen.getByRole("button", { name: /inizia la configurazione/i }),
-    );
-    const input = screen.getByLabelText("API key");
-    await user.type(input, "sk-test-only-not-a-real-key");
-    await user.click(
-      screen.getByRole("button", { name: /avvia il team ora/i }),
-    );
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Il provider ha rifiutato la richiesta",
-    );
-    expect(screen.getByLabelText("API key")).toHaveValue("");
-  });
-});
-
-describe("CLOSER live screen", () => {
-  it("opens the detached live-screen window from the topbar", async () => {
-    vi.mocked(openLiveScreen).mockResolvedValue(true);
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: /schermo closer/i }));
-
-    expect(openLiveScreen).toHaveBeenCalledTimes(1);
-  });
-
-  it("says so when the window cannot be opened", async () => {
-    vi.mocked(openLiveScreen).mockRejectedValue({ code: "window_failed" });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: /schermo closer/i }));
-
-    expect(
-      await screen.findByRole("button", { name: /schermo non disponibile/i }),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("dashboard link", () => {
-  it("leads from every setup screen back to the dashboard page", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
-    await user.click(screen.getByRole("button", { name: /inizia la configurazione/i }));
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "dashboard.html");
-  });
-});
-
-describe("Google sign-in page", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/index.html?login");
-    vi.mocked(goTo).mockReset();
-  });
-  afterEach(() => {
-    window.history.replaceState(null, "", "/");
-  });
-
-  it("shows the sign-in, with the local setup one click away", () => {
+  it("contains only Google sign-in and no API-key setup entry", () => {
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     render(<App />);
     expect(screen.getByText("login-screen")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Team locale" })).toHaveAttribute("href", "index.html");
+    expect(screen.queryByText(/team locale/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
     expect(goTo).not.toHaveBeenCalled();
   });
 
-  it("goes back to the dashboard once the session is there", () => {
+  it("routes a restored Google session into the gated dashboard entrypoint", () => {
     vi.mocked(useSession).mockReturnValue({
-      session: { user: { id: "user-1" } },
+      session: { user: { id: "synthetic-user" } },
       loading: false,
     } as unknown as ReturnType<typeof useSession>);
     render(<App />);
