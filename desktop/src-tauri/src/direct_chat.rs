@@ -227,9 +227,20 @@ fn persist_host(app: &tauri::AppHandle, host: &ExecutionHost) -> Result<(), Dire
     fs::rename(&temporary, path).map_err(|_| failure("storage_unavailable"))
 }
 
+pub(crate) fn persist_onboarding_host(
+    app: &tauri::AppHandle,
+    host: &ExecutionHost,
+) -> Result<(), &'static str> {
+    persist_host(app, host).map_err(|error| error.code)
+}
+
 fn load_host(app: &tauri::AppHandle) -> Result<ExecutionHost, DirectChatError> {
     let raw = fs::read(connection_config_path(app)?).map_err(|_| failure("host_not_configured"))?;
     serde_json::from_slice(&raw).map_err(|_| failure("host_config_invalid"))
+}
+
+pub(crate) fn load_persisted_host(app: &tauri::AppHandle) -> Result<ExecutionHost, &'static str> {
+    load_host(app).map_err(|error| error.code)
 }
 
 fn control_args(

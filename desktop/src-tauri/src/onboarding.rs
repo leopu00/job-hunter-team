@@ -3,9 +3,10 @@ use crate::runtime_host::{
     ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
+    ffi::OsString,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -23,9 +24,24 @@ use zeroize::{Zeroize, Zeroizing};
 const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
+const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
+const LOCAL_RUNTIME_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
+const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
+const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
+const PODMAN_MACHINE_NAME: &str = "jht-podman";
+#[cfg(target_os = "macos")]
+const LOCAL_PODMAN_INSTALL_ARGS: [&str; 6] = [
+    "JHT_SKIP_ONBOARD=1",
+    "/bin/bash",
+    "-s",
+    "--",
+    "--runtime",
+    "podman",
+];
 static SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -53,19 +69,6 @@ struct InteractiveSession {
     stdin: Mutex<Option<ChildStdin>>,
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct OnboardingProfileDraft {
-    full_name: String,
-    target_role: String,
-    location: String,
-    experience_years: i64,
-    skills: Vec<String>,
-    languages: Vec<String>,
-    work_mode: String,
-    notes: String,
-}
-
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SubscriptionProvider {
@@ -75,8 +78,8 @@ pub(crate) enum SubscriptionProvider {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct OnboardingSubmission {
-    profile: OnboardingProfileDraft,
     host: ExecutionHost,
     provider: SubscriptionProvider,
 }
@@ -84,8 +87,18 @@ pub(crate) struct OnboardingSubmission {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OnboardingProgress {
-    stage: &'static str,
+    stage: OnboardingProgressStage,
     message: &'static str,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum OnboardingProgressStage {
+    Preparing,
+    Runtime,
+    Container,
+    Provider,
+    Team,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -103,8 +116,11 @@ pub(crate) struct OnboardingSnapshot {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct OnboardingError {
     pub(crate) code: &'static str,
+    message: &'static str,
+    retryable: bool,
 }
 
 #[derive(Serialize)]
@@ -121,39 +137,63 @@ pub(crate) enum InteractiveEvent {
 }
 
 fn failure(code: &'static str) -> OnboardingError {
-    OnboardingError { code }
-}
-fn progress(channel: &Channel<OnboardingProgress>, stage: &'static str, message: &'static str) {
-    let _ = channel.send(OnboardingProgress { stage, message });
+    let (message, retryable) = match code {
+        "podman_missing" => (
+            "Podman non è stato installato. Verifica Homebrew e riprova.",
+            true,
+        ),
+        "podman_start_failed" => (
+            "La macchina Podman di JHT non si è avviata. Avviala e riprova.",
+            true,
+        ),
+        "podman_not_ready" => (
+            "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
+            true,
+        ),
+        "container_start_failed" => (
+            "Il container JHT non si è avviato. Controlla il runtime e riprova.",
+            true,
+        ),
+        "container_not_ready" => (
+            "Il container JHT è stato avviato ma non risponde ancora. Riprova.",
+            true,
+        ),
+        "timeout" | "command_timeout" => (
+            "L’operazione ha superato il tempo massimo. Controlla il runtime e riprova.",
+            true,
+        ),
+        "container_timeout" => (
+            "La verifica del container ha superato il tempo massimo. Riprova.",
+            true,
+        ),
+        "provider_timeout" => (
+            "La configurazione del provider ha superato il tempo massimo. Riprova.",
+            true,
+        ),
+        "operation_in_progress" => ("Un’altra operazione è già in corso.", true),
+        code if code.starts_with("invalid_") => ("I dati ricevuti non sono validi.", false),
+        _ => ("L’operazione non è riuscita. Riprova.", true),
+    };
+    OnboardingError {
+        code,
+        message,
+        retryable,
+    }
 }
 
-fn clean(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+#[cfg(debug_assertions)]
+fn trace_local_runtime(stage: &'static str, event: &'static str) {
+    eprintln!("[onboarding-runtime] stage={stage} event={event}");
 }
-fn clean_list(values: &[String]) -> Vec<String> {
-    let mut result = Vec::new();
-    for value in values {
-        let value = clean(value);
-        if !value.is_empty() && !result.contains(&value) {
-            result.push(value);
-        }
-    }
-    result
-}
-fn valid_profile(profile: &OnboardingProfileDraft, email: &str) -> bool {
-    !clean(&profile.full_name).is_empty()
-        && !clean(&profile.target_role).is_empty()
-        && !clean(&profile.location).is_empty()
-        && profile.experience_years >= 0
-        && profile.experience_years <= 80
-        && clean_list(&profile.skills).len() >= 2
-        && clean_list(&profile.languages).len() >= 1
-        && matches!(
-            profile.work_mode.as_str(),
-            "remote" | "hybrid" | "onsite" | "flexible"
-        )
-        && email.contains('@')
-        && email.len() <= 320
+
+#[cfg(not(debug_assertions))]
+fn trace_local_runtime(_stage: &'static str, _event: &'static str) {}
+fn progress(
+    channel: &Channel<OnboardingProgress>,
+    stage: OnboardingProgressStage,
+    message: &'static str,
+) {
+    let _ = channel.send(OnboardingProgress { stage, message });
 }
 
 fn valid_pairing_token(token: &str) -> bool {
@@ -162,18 +202,6 @@ fn valid_pairing_token(token: &str) -> bool {
             byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=' | b'-' | b'_')
         })
 }
-fn seniority(years: i64) -> &'static str {
-    if years < 2 {
-        "entry"
-    } else if years < 5 {
-        "mid"
-    } else if years < 10 {
-        "senior"
-    } else {
-        "lead"
-    }
-}
-
 fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     let home = app.path().home_dir().ok()?;
     [
@@ -182,7 +210,78 @@ fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         PathBuf::from("/opt/homebrew/bin/jht"),
     ]
     .into_iter()
-    .find(|path| path.is_file())
+    .find(|path| valid_wrapper_file(path))
+}
+
+fn valid_wrapper_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > MAX_WRAPPER_BYTES
+    {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return false;
+        }
+    }
+    fs::read_to_string(path).is_ok_and(|source| {
+        source
+            .lines()
+            .any(|line| line.trim_end_matches('\r') == "JHT_HOST_RUNTIME_PROTOCOL=1")
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    app.path()
+        .home_dir()
+        .map(|home| {
+            home.join("Library")
+                .join("Application Support")
+                .join("Job Hunter Team")
+                .join("host-runtime")
+        })
+        .map_err(|_| failure("storage_failed"))
+}
+
+#[cfg(target_os = "macos")]
+fn podman_runtime_selected(app: &tauri::AppHandle) -> bool {
+    local_runtime_dir(app)
+        .ok()
+        .and_then(|dir| fs::read_to_string(dir.join("container-runtime")).ok())
+        .is_some_and(|value| value.trim() == "podman")
+}
+
+#[cfg(target_os = "macos")]
+fn local_podman_install_required(
+    wrapper_present: bool,
+    marker_selected: bool,
+    podman_present: bool,
+) -> bool {
+    !(wrapper_present && marker_selected && podman_present)
+}
+
+#[cfg(target_os = "macos")]
+fn podman_path() -> Option<PathBuf> {
+    let from_path: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|value| {
+            std::env::split_paths(&value)
+                .map(|dir| dir.join("podman"))
+                .collect()
+        })
+        .unwrap_or_default();
+    from_path
+        .into_iter()
+        .chain([
+            PathBuf::from("/opt/homebrew/bin/podman"),
+            PathBuf::from("/usr/local/bin/podman"),
+            PathBuf::from("/opt/podman/bin/podman"),
+        ])
+        .find(|path| path.is_file())
 }
 
 pub(crate) struct VerifiedInstaller {
@@ -274,26 +373,128 @@ fn with_downloaded_installer<T>(
 }
 
 fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
-    if let Some(path) = wrapper_path(app) {
-        return Ok(path);
-    }
     #[cfg(not(unix))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
     {
-        with_downloaded_installer(|installer| {
-            let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
-            ensure_success(
-                run_program(
-                    "/usr/bin/env",
-                    args,
-                    Some(installer.bytes()),
-                    PREPARE_TIMEOUT,
-                ),
-                "runtime_install_failed",
-            )
-        })?;
+        #[cfg(target_os = "macos")]
+        {
+            let install_required = local_podman_install_required(
+                wrapper_path(app).is_some(),
+                podman_runtime_selected(app),
+                podman_path().is_some(),
+            );
+            if install_required {
+                trace_local_runtime("runtime", "install_required");
+                let installed = with_downloaded_installer(|installer| {
+                    ensure_success(
+                        run_program(
+                            "/usr/bin/env",
+                            LOCAL_PODMAN_INSTALL_ARGS,
+                            Some(installer.bytes()),
+                            PREPARE_TIMEOUT,
+                        ),
+                        "runtime_install_failed",
+                    )
+                });
+                if let Err(error) = installed {
+                    trace_local_runtime("runtime", "install_failed");
+                    return if error.code == "timeout" {
+                        Err(error)
+                    } else if podman_path().is_none() {
+                        Err(failure("podman_missing"))
+                    } else {
+                        Err(error)
+                    };
+                }
+            } else {
+                trace_local_runtime("runtime", "install_reused");
+            }
+            let podman = podman_path().ok_or_else(|| failure("podman_missing"))?;
+            ensure_local_podman(&podman)?;
+            if !podman_runtime_selected(app) {
+                return Err(failure("podman_not_ready"));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        if wrapper_path(app).is_none() {
+            with_downloaded_installer(|installer| {
+                let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
+                ensure_success(
+                    run_program(
+                        "/usr/bin/env",
+                        args,
+                        Some(installer.bytes()),
+                        PREPARE_TIMEOUT,
+                    ),
+                    "runtime_install_failed",
+                )
+            })?;
+        }
         wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_local_podman(podman: &Path) -> Result<(), OnboardingError> {
+    let program = podman.to_str().ok_or_else(|| failure("podman_missing"))?;
+    ensure_local_podman_with(|args, timeout| run_program(program, args, None, timeout))
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_local_podman_with(
+    mut run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
+) -> Result<(), OnboardingError> {
+    let info = ["--connection", PODMAN_MACHINE_NAME, "info"];
+    match run(&info, LOCAL_RUNTIME_TIMEOUT) {
+        Ok(result) if result.success() => {
+            trace_local_runtime("runtime", "podman_ready");
+            return Ok(());
+        }
+        Err("process_timeout") => return Err(failure("timeout")),
+        _ => {}
+    }
+
+    let inspect = ["machine", "inspect", PODMAN_MACHINE_NAME];
+    let exists = match run(&inspect, LOCAL_RUNTIME_TIMEOUT) {
+        Ok(result) => result.success(),
+        Err("process_timeout") => return Err(failure("timeout")),
+        Err(_) => false,
+    };
+    let action = if exists {
+        vec![
+            "machine",
+            "start",
+            "--update-connection=false",
+            PODMAN_MACHINE_NAME,
+        ]
+    } else {
+        vec![
+            "machine",
+            "init",
+            "--now",
+            "--update-connection=false",
+            PODMAN_MACHINE_NAME,
+        ]
+    };
+    match run(&action, LOCAL_RUNTIME_TIMEOUT) {
+        Ok(result) if result.success() => {}
+        Err("process_timeout") => return Err(failure("timeout")),
+        _ => {
+            trace_local_runtime("runtime", "podman_start_failed");
+            return Err(failure("podman_start_failed"));
+        }
+    }
+    match run(&info, LOCAL_RUNTIME_TIMEOUT) {
+        Ok(result) if result.success() => {
+            trace_local_runtime("runtime", "podman_ready");
+            Ok(())
+        }
+        Err("process_timeout") => Err(failure("timeout")),
+        _ => {
+            trace_local_runtime("runtime", "podman_not_ready");
+            Err(failure("podman_not_ready"))
+        }
     }
 }
 
@@ -349,9 +550,49 @@ fn ensure_success(
 ) -> Result<(), OnboardingError> {
     match result {
         Ok(value) if value.success() => Ok(()),
-        Err("process_timeout") => Err(failure("command_timeout")),
+        Err("process_timeout") => Err(failure("timeout")),
         _ => Err(failure(code)),
     }
+}
+
+fn ensure_success_with_timeout(
+    result: Result<ProcessResult, &'static str>,
+    code: &'static str,
+    timeout_code: &'static str,
+) -> Result<(), OnboardingError> {
+    match result {
+        Ok(value) if value.success() => Ok(()),
+        Err("process_timeout") => Err(failure(timeout_code)),
+        _ => Err(failure(code)),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn local_wrapper_command(
+    wrapper: &Path,
+    args: &[&str],
+    inherited_path: Option<OsString>,
+) -> Result<(PathBuf, Vec<OsString>), &'static str> {
+    let mut paths = vec![
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/opt/podman/bin"),
+    ];
+    if let Some(value) = inherited_path {
+        for path in std::env::split_paths(&value) {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    let path = std::env::join_paths(paths).map_err(|_| "runtime_missing")?;
+    let mut invocation = Vec::with_capacity(args.len() + 2);
+    let mut path_assignment = OsString::from("PATH=");
+    path_assignment.push(path);
+    invocation.push(path_assignment);
+    invocation.push(wrapper.as_os_str().to_owned());
+    invocation.extend(args.iter().map(OsString::from));
+    Ok((PathBuf::from("/usr/bin/env"), invocation))
 }
 
 fn run_local(
@@ -359,6 +600,17 @@ fn run_local(
     args: &[&str],
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        let (program, invocation) = local_wrapper_command(wrapper, args, std::env::var_os("PATH"))?;
+        return run_program(
+            program.to_str().ok_or("runtime_missing")?,
+            invocation,
+            None,
+            timeout,
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
     run_program(
         wrapper.to_str().ok_or("runtime_missing")?,
         args,
@@ -367,86 +619,97 @@ fn run_local(
     )
 }
 
-fn write_local_profile(
-    app: &tauri::AppHandle,
-    profile: &OnboardingProfileDraft,
-    email: &str,
+fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingError> {
+    start_and_verify_local_container_with(
+        |args, timeout| run_local(wrapper, args, timeout),
+        thread::sleep,
+        LOCAL_CONTAINER_VERIFY_ATTEMPTS,
+    )
+}
+
+fn start_and_verify_local_container_with(
+    mut run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
+    mut pause: impl FnMut(Duration),
+    attempts: usize,
 ) -> Result<(), OnboardingError> {
-    if !valid_profile(profile, email) {
-        return Err(failure("invalid_profile"));
+    match run(&["up"], PREPARE_TIMEOUT) {
+        Ok(result) if result.success() => {}
+        Err("process_timeout") => return Err(failure("container_timeout")),
+        _ => {
+            trace_local_runtime("container", "start_failed");
+            return Err(failure("container_start_failed"));
+        }
     }
-    let home = app
-        .path()
-        .home_dir()
-        .map_err(|_| failure("storage_failed"))?
-        .join(".jht/profile");
-    fs::create_dir_all(&home).map_err(|_| failure("storage_failed"))?;
-    let skills = clean_list(&profile.skills);
-    let languages: Vec<Value> = clean_list(&profile.languages)
-        .into_iter()
-        .map(|language| json!({"language": language, "level": "not_specified"}))
-        .collect();
-    let value = json!({
-        "name": clean(&profile.full_name), "email": clean(email),
-        "target_role": clean(&profile.target_role), "location": clean(&profile.location),
-        "experience_years": profile.experience_years, "seniority_target": seniority(profile.experience_years),
-        "skills": {"primary": skills}, "languages": languages, "work_mode": profile.work_mode,
-        "positioning": {"seniority_target": seniority(profile.experience_years),
-            "preferences": {"work_mode": profile.work_mode}, "free_notes": profile.notes.trim()}
-    });
-    let bytes = serde_json::to_vec_pretty(&value).map_err(|_| failure("profile_write_failed"))?;
-    let target = home.join("candidate_profile.yml");
-    let temporary = home.join(format!("candidate_profile.tmp-{}", std::process::id()));
-    fs::write(&temporary, bytes).map_err(|_| failure("profile_write_failed"))?;
-    set_private_permissions(&temporary).map_err(failure)?;
-    fs::rename(&temporary, &target).map_err(|_| failure("profile_write_failed"))?;
-    let reread: Value =
-        serde_json::from_slice(&fs::read(&target).map_err(|_| failure("profile_verify_failed"))?)
-            .map_err(|_| failure("profile_verify_failed"))?;
-    if reread.get("email").and_then(Value::as_str) != Some(clean(email).as_str())
-        || reread.get("target_role").and_then(Value::as_str)
-            != Some(clean(&profile.target_role).as_str())
-    {
-        return Err(failure("profile_verify_failed"));
+
+    for attempt in 0..attempts.max(1) {
+        match run(&["status"], LOCAL_CONTAINER_VERIFY_TIMEOUT) {
+            Ok(result) if result.success() => {
+                trace_local_runtime("container", "ready");
+                return Ok(());
+            }
+            Err("process_timeout") => return Err(failure("container_timeout")),
+            _ => {}
+        }
+        if attempt + 1 < attempts {
+            pause(LOCAL_CONTAINER_VERIFY_INTERVAL);
+        }
     }
-    Ok(())
+    trace_local_runtime("container", "not_ready");
+    Err(failure("container_not_ready"))
 }
 
 fn prepare_impl(
     app: tauri::AppHandle,
     submission: OnboardingSubmission,
     pairing_token: Option<String>,
-    account_email: String,
     channel: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    if !valid_profile(&submission.profile, &account_email) {
-        return Err(failure("invalid_profile"));
-    }
+    progress(
+        &channel,
+        OnboardingProgressStage::Preparing,
+        "Valido la configurazione locale",
+    );
     let mut pairing = pairing_token.map(Zeroizing::new);
     let validated = validate_host(&app, &submission.host, true).map_err(failure)?;
-    progress(&channel, "runtime", "Preparo il runtime production");
+    progress(
+        &channel,
+        OnboardingProgressStage::Runtime,
+        "Preparo e verifico il runtime",
+    );
     match &validated {
         ValidatedHost::Local => {
             let wrapper = install_local(&app)?;
-            ensure_success(
-                run_local(&wrapper, &["up"], PREPARE_TIMEOUT),
-                "container_start_failed",
-            )?;
-            progress(&channel, "runtime", "Configuro il provider in abbonamento");
+            progress(
+                &channel,
+                OnboardingProgressStage::Container,
+                "Avvio il container Job Hunter Team",
+            );
+            start_and_verify_local_container(&wrapper)?;
+            progress(
+                &channel,
+                OnboardingProgressStage::Container,
+                "Il container è attivo e verificato",
+            );
+            progress(
+                &channel,
+                OnboardingProgressStage::Provider,
+                "Configuro il provider in abbonamento",
+            );
             let use_id = match submission.provider {
                 SubscriptionProvider::Claude => "claude",
                 SubscriptionProvider::Codex => "codex",
                 SubscriptionProvider::Kimi => "kimi",
             };
-            ensure_success(
+            ensure_success_with_timeout(
                 run_local(&wrapper, &["providers", "use", use_id], COMMAND_TIMEOUT),
                 "provider_config_failed",
+                "provider_timeout",
             )?;
-            ensure_success(
+            ensure_success_with_timeout(
                 run_local(&wrapper, &["providers", "update", use_id], PREPARE_TIMEOUT),
                 "provider_install_failed",
+                "provider_timeout",
             )?;
-            write_local_profile(&app, &submission.profile, &account_email)?;
         }
         ValidatedHost::Vps { .. } => {
             let token = pairing
@@ -474,26 +737,38 @@ fn prepare_impl(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
                 "container_start_failed",
             )?;
-            progress(&channel, "runtime", "Configuro il provider in abbonamento");
+            progress(
+                &channel,
+                OnboardingProgressStage::Provider,
+                "Configuro il provider in abbonamento",
+            );
             let (use_command, update_command) = match submission.provider {
                 SubscriptionProvider::Claude => (REMOTE_USE_CLAUDE, REMOTE_UPDATE_CLAUDE),
                 SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
                 SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
             };
-            ensure_success(
+            ensure_success_with_timeout(
                 run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
                 "provider_config_failed",
+                "provider_timeout",
             )?;
-            ensure_success(
+            ensure_success_with_timeout(
                 run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
                 "provider_install_failed",
+                "provider_timeout",
             )?;
         }
     }
     if let Some(value) = pairing.as_mut() {
         value.zeroize();
     }
-    snapshot_impl(&app, &validated)
+    let snapshot = snapshot_impl(&app, &validated)?;
+    if !snapshot.container_running {
+        trace_local_runtime("container", "snapshot_not_ready");
+        return Err(failure("container_not_ready"));
+    }
+    crate::direct_chat::persist_onboarding_host(&app, &submission.host).map_err(failure)?;
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -502,7 +777,6 @@ pub(crate) async fn onboarding_prepare(
     state: State<'_, OnboardingNativeState>,
     submission: OnboardingSubmission,
     pairing_token: Option<String>,
-    account_email: String,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     if state
@@ -513,7 +787,7 @@ pub(crate) async fn onboarding_prepare(
         return Err(failure("operation_in_progress"));
     }
     let result = tauri::async_runtime::spawn_blocking(move || {
-        prepare_impl(app, submission, pairing_token, account_email, on_progress)
+        prepare_impl(app, submission, pairing_token, on_progress)
     })
     .await
     .unwrap_or_else(|_| Err(failure("runtime_failed")));
@@ -665,6 +939,19 @@ pub(crate) async fn onboarding_snapshot(
     host: ExecutionHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     tauri::async_runtime::spawn_blocking(move || {
+        let validated = validate_host(&app, &host, false).map_err(failure)?;
+        snapshot_impl(&app, &validated)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("snapshot_failed")))
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_resume_snapshot(
+    app: tauri::AppHandle,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let host = crate::direct_chat::load_persisted_host(&app).map_err(failure)?;
         let validated = validate_host(&app, &host, false).map_err(failure)?;
         snapshot_impl(&app, &validated)
     })
@@ -1005,7 +1292,11 @@ pub(crate) async fn onboarding_team_start(
     }
     let result = tauri::async_runtime::spawn_blocking(move || {
         let validated = validate_host(&app, &host, false).map_err(failure)?;
-        progress(&on_progress, "team-start", "Avvio container e agenti");
+        progress(
+            &on_progress,
+            OnboardingProgressStage::Team,
+            "Avvio container e agenti",
+        );
         match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
@@ -1067,7 +1358,7 @@ pub(crate) async fn onboarding_assistant_open(
         }
         for _ in 0..40 {
             let snapshot = snapshot_impl(&app, &validated)?;
-            if snapshot.assistant_running && snapshot.profile_ready && snapshot.assistant_welcomed {
+            if assistant_reached(&snapshot) {
                 return Ok(snapshot);
             }
             thread::sleep(Duration::from_secs(3));
@@ -1080,13 +1371,26 @@ pub(crate) async fn onboarding_assistant_open(
     result
 }
 
+fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
+    snapshot.assistant_running
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        expected_installer_digest, parse_snapshot, redact, valid_pairing_token, valid_profile,
-        OnboardingProfileDraft, StreamRedactor, INSTALL_SHA256, REMOTE_INSTALL,
+        assistant_reached, expected_installer_digest, failure, parse_snapshot, redact,
+        start_and_verify_local_container_with, valid_pairing_token, valid_wrapper_file,
+        OnboardingProgress, OnboardingProgressStage, OnboardingSubmission, StreamRedactor,
+        INSTALL_SHA256, REMOTE_INSTALL,
     };
+    #[cfg(target_os = "macos")]
+    use super::{
+        ensure_local_podman, ensure_local_podman_with, local_podman_install_required,
+        local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS, PODMAN_MACHINE_NAME,
+    };
+    use crate::runtime_host::ProcessResult;
     use sha2::{Digest, Sha256};
+    use std::collections::VecDeque;
 
     #[test]
     fn embedded_installer_digest_matches_the_release_source() {
@@ -1103,6 +1407,303 @@ mod tests {
         );
     }
 
+    fn outcome(success: bool) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult {
+            code: if success { 0 } else { 1 },
+            stdout: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn local_runtime_errors_are_structured_and_contain_no_process_output() {
+        let error = failure("podman_start_failed");
+        let serialized = serde_json::to_string(&error).unwrap();
+        assert_eq!(error.code, "podman_start_failed");
+        assert!(serialized.contains("\"retryable\":true"));
+        assert!(serialized.contains("\"message\":"));
+        assert!(!serialized.contains("stderr"));
+        assert!(!serialized.contains("path"));
+    }
+
+    #[test]
+    fn progress_stages_match_the_frontend_contract() {
+        let stages = [
+            OnboardingProgressStage::Preparing,
+            OnboardingProgressStage::Runtime,
+            OnboardingProgressStage::Container,
+            OnboardingProgressStage::Provider,
+            OnboardingProgressStage::Team,
+        ];
+        let serialized = stages
+            .into_iter()
+            .map(|stage| {
+                serde_json::to_value(OnboardingProgress {
+                    stage,
+                    message: "safe",
+                })
+                .unwrap()["stage"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            serialized,
+            ["preparing", "runtime", "container", "provider", "team"]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn local_installer_explicitly_selects_the_attested_podman_path() {
+        assert_eq!(
+            LOCAL_PODMAN_INSTALL_ARGS,
+            [
+                "JHT_SKIP_ONBOARD=1",
+                "/bin/bash",
+                "-s",
+                "--",
+                "--runtime",
+                "podman",
+            ]
+        );
+        assert!(local_podman_install_required(false, false, false));
+        assert!(local_podman_install_required(false, true, true));
+        assert!(local_podman_install_required(true, false, true));
+        assert!(local_podman_install_required(true, true, false));
+        assert!(!local_podman_install_required(true, true, true));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn podman_ready_stopped_and_absent_are_idempotent() {
+        let mut ready_calls = Vec::new();
+        ensure_local_podman_with(|args, _| {
+            ready_calls.push(args.join(" "));
+            outcome(true)
+        })
+        .unwrap();
+        assert_eq!(
+            ready_calls,
+            vec![format!("--connection {PODMAN_MACHINE_NAME} info")]
+        );
+
+        let mut stopped_results = VecDeque::from([false, true, true, true]);
+        let mut stopped_calls = Vec::new();
+        ensure_local_podman_with(|args, _| {
+            stopped_calls.push(args.join(" "));
+            outcome(stopped_results.pop_front().unwrap())
+        })
+        .unwrap();
+        assert_eq!(
+            stopped_calls[1],
+            format!("machine inspect {PODMAN_MACHINE_NAME}")
+        );
+        assert_eq!(
+            stopped_calls[2],
+            format!("machine start --update-connection=false {PODMAN_MACHINE_NAME}")
+        );
+
+        let mut absent_results = VecDeque::from([false, false, true, true]);
+        let mut absent_calls = Vec::new();
+        ensure_local_podman_with(|args, _| {
+            absent_calls.push(args.join(" "));
+            outcome(absent_results.pop_front().unwrap())
+        })
+        .unwrap();
+        assert_eq!(
+            absent_calls[2],
+            format!("machine init --now --update-connection=false {PODMAN_MACHINE_NAME}")
+        );
+
+        let mut start_failed = VecDeque::from([false, true, false]);
+        let error = ensure_local_podman_with(|_, _| outcome(start_failed.pop_front().unwrap()))
+            .unwrap_err();
+        assert_eq!(error.code, "podman_start_failed");
+
+        let mut not_ready = VecDeque::from([false, false, true, false]);
+        let error =
+            ensure_local_podman_with(|_, _| outcome(not_ready.pop_front().unwrap())).unwrap_err();
+        assert_eq!(error.code, "podman_not_ready");
+    }
+
+    #[test]
+    fn container_start_is_verified_and_existing_container_is_safe() {
+        let mut results = VecDeque::from([true, false, true]);
+        let mut calls = Vec::new();
+        let mut pauses = 0;
+        start_and_verify_local_container_with(
+            |args, _| {
+                calls.push(args.join(" "));
+                outcome(results.pop_front().unwrap())
+            },
+            |_| pauses += 1,
+            3,
+        )
+        .unwrap();
+        assert_eq!(calls, vec!["up", "status", "status"]);
+        assert_eq!(pauses, 1);
+
+        let mut active_calls = Vec::new();
+        start_and_verify_local_container_with(
+            |args, _| {
+                active_calls.push(args.join(" "));
+                outcome(true)
+            },
+            |_| panic!("an active container must not wait"),
+            3,
+        )
+        .unwrap();
+        assert_eq!(active_calls, vec!["up", "status"]);
+    }
+
+    #[test]
+    fn local_runtime_timeouts_and_failed_verification_are_distinct() {
+        let timed_out =
+            start_and_verify_local_container_with(|_, _| Err("process_timeout"), |_| {}, 1)
+                .unwrap_err();
+        assert_eq!(timed_out.code, "container_timeout");
+
+        let mut results = VecDeque::from([true, false]);
+        let not_ready = start_and_verify_local_container_with(
+            |_, _| outcome(results.pop_front().unwrap()),
+            |_| {},
+            1,
+        )
+        .unwrap_err();
+        assert_eq!(not_ready.code, "container_not_ready");
+
+        let start_failed =
+            start_and_verify_local_container_with(|_, _| outcome(false), |_| {}, 1).unwrap_err();
+        assert_eq!(start_failed.code, "container_start_failed");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn finder_path_is_augmented_without_shell_concatenation() {
+        use std::{ffi::OsString, path::Path};
+
+        let (program, args) = local_wrapper_command(
+            Path::new("/private/example/jht"),
+            &["providers", "use", "codex"],
+            Some(OsString::from("/usr/bin:/bin:/opt/homebrew/bin")),
+        )
+        .unwrap();
+        assert_eq!(program, Path::new("/usr/bin/env"));
+        let path = args[0].to_string_lossy();
+        assert!(
+            path.starts_with("PATH=/opt/homebrew/bin:/usr/local/bin:/opt/podman/bin:/usr/bin:/bin")
+        );
+        assert_eq!(path.matches("/opt/homebrew/bin").count(), 1);
+        assert_eq!(args[1], OsString::from("/private/example/jht"));
+        assert_eq!(args[2..], ["providers", "use", "codex"].map(OsString::from));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wrapper_must_be_regular_executable_and_have_runtime_protocol() {
+        use std::{
+            fs,
+            os::unix::fs::{symlink, PermissionsExt},
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("jht-wrapper-validation-{nonce}"));
+        fs::create_dir_all(&dir).unwrap();
+        let wrapper = dir.join("jht");
+        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\n").unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(valid_wrapper_file(&wrapper));
+
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(!valid_wrapper_file(&wrapper));
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(&wrapper, "#!/bin/sh\n").unwrap();
+        assert!(!valid_wrapper_file(&wrapper));
+
+        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\n").unwrap();
+        let link = dir.join("jht-link");
+        symlink(&wrapper, &link).unwrap();
+        assert!(!valid_wrapper_file(&link));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn frontend_prepare_payload_has_no_profile_or_account_email() {
+        let submission: OnboardingSubmission = serde_json::from_value(serde_json::json!({
+            "host": {"kind": "local"},
+            "provider": "codex"
+        }))
+        .unwrap();
+        assert!(matches!(
+            submission.provider,
+            super::SubscriptionProvider::Codex
+        ));
+
+        let rejected = serde_json::from_value::<OnboardingSubmission>(serde_json::json!({
+            "profile": {"fullName": "not accepted"},
+            "host": {"kind": "local"},
+            "provider": "codex"
+        }));
+        assert!(rejected.is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn fake_podman_and_wrapper_integration_has_no_real_runtime_side_effects() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("jht-local-runtime-test-{nonce}"));
+        fs::create_dir_all(&dir).unwrap();
+        let podman = dir.join("podman");
+        fs::write(
+            &podman,
+            r#"#!/bin/sh
+state="$(dirname "$0")/podman-ready"
+case "$1:$2" in
+  --connection:jht-podman) [ -f "$state" ] ;;
+  machine:inspect) exit 0 ;;
+  machine:start) : > "$state" ;;
+  *) exit 9 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&podman, fs::Permissions::from_mode(0o700)).unwrap();
+        ensure_local_podman(&podman).unwrap();
+
+        let wrapper = dir.join("jht");
+        fs::write(
+            &wrapper,
+            r#"#!/bin/sh
+state="$(dirname "$0")/container-ready"
+case "$1" in
+  up) : > "$state" ;;
+  status) [ -f "$state" ] ;;
+  *) exit 9 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        super::start_and_verify_local_container(&wrapper).unwrap();
+        assert!(dir.join("podman-ready").is_file());
+        assert!(dir.join("container-ready").is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn snapshot_needs_each_explicit_fact() {
         let snapshot =
@@ -1117,21 +1718,14 @@ mod tests {
     }
 
     #[test]
-    fn profile_minimum_matches_the_frontend_gate() {
-        let profile = OnboardingProfileDraft {
-            full_name: "Synthetic Person".into(),
-            target_role: "Engineer".into(),
-            location: "Example City".into(),
-            experience_years: 3,
-            skills: vec!["Rust".into(), "Testing".into()],
-            languages: vec!["Italian".into()],
-            work_mode: "hybrid".into(),
-            notes: String::new(),
+    fn assistant_open_does_not_wait_for_the_conversational_profile() {
+        let snapshot = super::OnboardingSnapshot {
+            assistant_running: true,
+            profile_ready: false,
+            assistant_welcomed: false,
+            ..Default::default()
         };
-        assert!(valid_profile(&profile, "person@example.invalid"));
-        let mut incomplete = profile;
-        incomplete.skills.pop();
-        assert!(!valid_profile(&incomplete, "person@example.invalid"));
+        assert!(assistant_reached(&snapshot));
     }
 
     #[test]
