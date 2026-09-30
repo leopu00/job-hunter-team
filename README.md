@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **locally in a container** — your machine or your VPS, your profile, your data, your provider account. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install). A local model can currently shadow or replace the Scorer only; running the whole team without a supported provider is not available.
+Everything runs **in your container** — on your macOS/Linux machine or your VPS, with your profile, your data and your provider account. The Windows 0.4 office uses the VPS path. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install). A local model can currently shadow or replace the Scorer only; running the whole team without a supported provider is not available.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -89,10 +89,12 @@ team.
 - Windows x64, Linux x64, or macOS (Intel: 11+; Apple silicon: 13+);
 - a supported subscription dedicated to JHT (the provider login happens in
   your browser; the subscription path does not ask for an API key);
-- a Docker-compatible runtime for the team. The office can guide the install;
-  on Windows, Docker Desktop must complete its own consent and first-run flow;
-- about 8 GB of RAM available before starting a local team for comfortable
-  use. This is a measured recommendation, not a universal minimum.
+- a Docker-compatible runtime for the team. On macOS and Linux, the office can
+  guide a local install. The Windows 0.4 office supports a Linux VPS only;
+  local Windows execution will arrive in a later version;
+- about 8 GB of RAM available before starting a local team on macOS or Linux
+  for comfortable use. This is a measured recommendation, not a universal
+  minimum.
 
 Not sure where the container should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md)
@@ -115,7 +117,8 @@ Linux. The macOS build is signed and notarized; Windows and Linux builds are
 currently unsigned. Open the Tauri 2 office and
 select **Activate team**: the checklist requires all four gates — team runtime,
 provider login with a plan selected, candidate profile and working hours —
-before it starts the agents.
+before it starts the agents. On Windows 0.4, the runtime choice is a Linux VPS;
+the office does not offer or attempt a local Windows installation.
 
 **CLI:** inspect first, then run (macOS / Linux / WSL2). The installer is
 [versioned in this repo](scripts/install.sh) and previews every action:

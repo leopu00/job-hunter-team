@@ -1,12 +1,14 @@
 mod auth_login;
 mod auth_store;
 mod browsers;
+mod desktop_platform;
 mod direct_chat;
 mod live_screen;
 mod onboarding;
+#[cfg(test)]
+mod onboarding_attestation_tests;
 mod podman;
 mod runtime_host;
-mod spend;
 mod voice_input;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,6 +38,7 @@ pub fn run() {
             direct_chat::direct_chat_send,
             direct_chat::direct_chat_status,
             direct_chat::direct_chat_subscribe,
+            desktop_platform::desktop_platform,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             onboarding::onboarding_assistant_open,
@@ -46,7 +49,6 @@ pub fn run() {
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,
-            spend::api_team_spend,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,

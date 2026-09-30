@@ -8,13 +8,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_RELEASE_VERSION = "0.4.0"
 
 
 def run_release_check(root: Path) -> subprocess.CompletedProcess[str]:
-    version = json.loads((ROOT / "package.json").read_text())["version"]
     env = {**os.environ, "JHT_RELEASE_ROOT": str(root)}
     return subprocess.run(
-        [str(ROOT / "scripts/check-release-version.sh"), f"v{version}"],
+        [
+            str(ROOT / "scripts/check-release-version.sh"),
+            f"v{EXPECTED_RELEASE_VERSION}",
+        ],
         cwd=root,
         env=env,
         capture_output=True,
@@ -24,6 +27,7 @@ def run_release_check(root: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_all_release_components_match_root_version() -> None:
+    assert json.loads((ROOT / "package.json").read_text())["version"] == EXPECTED_RELEASE_VERSION
     result = run_release_check(ROOT)
     assert result.returncode == 0, result.stdout + result.stderr
 

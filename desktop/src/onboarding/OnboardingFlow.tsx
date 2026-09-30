@@ -13,6 +13,9 @@ const EMPTY_PROFILE: OnboardingProfileDraft = {
   fullName: "", targetRole: "", location: "", experienceYears: 0,
   skills: [], languages: [], workMode: "flexible", notes: "",
 };
+function emptyVpsHost(): ExecutionHost {
+  return { kind: "vps", address: "", user: "root", port: 22, keyPath: "" };
+}
 const COLLECTION_STEPS = ["Benvenuto", "Profilo", "Preferenze", "Ambiente", "Provider", "Conferma"] as const;
 const WORK_MODES: Array<{ value: WorkMode; label: string }> = [
   { value: "flexible", label: "Flessibile" }, { value: "remote", label: "Da remoto" },
@@ -205,7 +208,8 @@ function RuntimeView({ runtime, onRetry, onRuntimeAction, providerLogin, onProvi
   );
 }
 
-export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRetry, onRuntimeAction, providerLogin, onProviderInput, onProviderClose }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, initialDraft, runtime, onSubmit, onRetry, onRuntimeAction, providerLogin, onProviderInput, onProviderClose }: OnboardingFlowProps) {
+  const localRuntimeSupported = platform === "macos" || platform === "linux";
   const startingProfile = useMemo<OnboardingProfileDraft>(() => ({
     ...EMPTY_PROFILE, ...initialDraft, fullName: initialDraft?.fullName || account.displayName || "",
     skills: initialDraft?.skills ?? [], languages: initialDraft?.languages ?? [],
@@ -214,17 +218,24 @@ export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRet
   const [profile, setProfile] = useState(startingProfile);
   const [skillsText, setSkillsText] = useState(startingProfile.skills.join(", "));
   const [languagesText, setLanguagesText] = useState(startingProfile.languages.join(", "));
-  const [host, setHost] = useState<ExecutionHost>({ kind: "local" });
+  const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
   const [provider, setProvider] = useState<SubscriptionProvider | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
+
+  useEffect(() => {
+    if (!localRuntimeSupported) {
+      setHost((current) => current.kind === "vps" ? current : emptyVpsHost());
+    }
+  }, [localRuntimeSupported]);
 
   if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
 
   const cleanProfile = normalizedProfile(profile, skillsText, languagesText);
   const profileIsValid = Boolean(cleanProfile.fullName && cleanProfile.targetRole && cleanProfile.location);
   const preferencesAreValid = cleanProfile.skills.length >= 2 && cleanProfile.languages.length >= 1;
-  const hostIsValid = host.kind === "local" || Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim());
+  const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
+    (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
 
   function update<K extends keyof OnboardingProfileDraft>(key: K, value: OnboardingProfileDraft[K]) {
     setSubmitError(false); setProfile((current) => ({ ...current, [key]: value }));
@@ -292,10 +303,13 @@ export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRet
           </form>}
 
           {step === 3 && <form onSubmit={next} className="onboarding-panel">
-            <p className="onboarding-eyebrow">Dove lavorerà il team</p><h2>Scegli l’ambiente.</h2><p className="onboarding-lede">Puoi eseguire tutto su questo computer oppure collegare una VPS già disponibile.</p>
+            <p className="onboarding-eyebrow">Dove lavorerà il team</p><h2>Scegli l’ambiente.</h2>
+            {localRuntimeSupported
+              ? <p className="onboarding-lede">Puoi eseguire tutto su questo computer oppure collegare una VPS già disponibile.</p>
+              : <p className="onboarding-lede">{platform === "windows" ? "Su Windows 0.4 il team deve essere eseguito su una VPS Linux. L’esecuzione locale sarà disponibile in una versione successiva." : "Su questa piattaforma il team deve essere eseguito su una VPS Linux. L’esecuzione locale non è ancora disponibile."}</p>}
             <div className="onboarding-choice-grid" role="radiogroup" aria-label="Ambiente di esecuzione">
-              <button className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>Container locali, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>
-              <button className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onClick={() => setHost({ kind: "vps", address: "", user: "root", port: 22, keyPath: "" })}><span className="onboarding-choice__icon">VPS</span><strong>Server VPS</strong><small>Team sempre acceso su una macchina remota.</small><span className="onboarding-choice__check">✓</span></button>
+              {localRuntimeSupported && <button className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>Container locali, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>}
+              <button className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onClick={() => setHost(emptyVpsHost())}><span className="onboarding-choice__icon">VPS</span><strong>Server VPS</strong><small>Team sempre acceso su una macchina remota.</small><span className="onboarding-choice__check">✓</span></button>
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
               <label className="onboarding-field onboarding-field--full"><span>Indirizzo VPS</span><input autoFocus value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder="Hostname o indirizzo IP" required /></label>

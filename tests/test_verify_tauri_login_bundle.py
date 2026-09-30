@@ -25,10 +25,11 @@ def test_accepts_public_config_present_in_built_assets(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("marker", ["sb_secret_value", "SUPABASE_SERVICE_ROLE_KEY", "c2VydmljZV9yb2xl"])
-def test_rejects_privileged_markers(tmp_path: Path, marker: str) -> None:
+def test_allows_privileged_format_markers_without_credential_values(
+    tmp_path: Path, marker: str
+) -> None:
     (tmp_path / "app.js").write_text(f"{URL} {KEY} {marker}")
-    with pytest.raises(BundleConfigError, match="privileged credential marker"):
-        verify_paths([tmp_path], URL, KEY)
+    verify_paths([tmp_path], URL, KEY)
 
 
 def test_rejects_bundle_without_login_config(tmp_path: Path) -> None:

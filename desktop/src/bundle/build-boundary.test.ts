@@ -35,14 +35,22 @@ const SERVER_ONLY = [
 const RETIRED_DESKTOP_MODULES = [
   "desktop/src/components/team-dashboard.tsx",
   "desktop/src/lib/podman.ts",
+  "desktop/src/lib/spend.ts",
   "desktop/src/lib/team.ts",
+  "desktop/src/pages/budget/BudgetScreen.tsx",
+  "desktop/src/pages/budget/index.tsx",
 ];
 
 const RETIRED_UI_TEXT = [
   "Chiave API OpenAI",
   "Consumo sulla tua chiave OpenAI",
+  "Quanto spende il team API",
+  "Nessun run API storico",
   "Team locale",
+  "api-worker",
+  "api_team_spend",
   "openai-api-key",
+  "start_api_team",
 ];
 
 let moduleIds: string[] = [];
@@ -88,6 +96,23 @@ describe("the desktop bundle", () => {
     expect([...chunks.values()].some((code) => code.includes(text))).toBe(false);
   });
 
+  it("keeps retired API mode markers out of every emitted file and emits no sourcemaps", () => {
+    const emitted = [...chunks, ...assets];
+    expect(emitted.map(([name]) => name).filter((name) => name.endsWith(".map"))).toEqual([]);
+    for (const marker of [
+      "start_api_team",
+      "api-worker",
+      "api_team_spend",
+      "Quanto spende il team API",
+      "Nessun run API storico",
+    ]) {
+      expect(
+        emitted.some(([, source]) => Buffer.from(source).includes(Buffer.from(marker))),
+        marker,
+      ).toBe(false);
+    }
+  });
+
   it("does not reach or package the legacy Godot application", () => {
     expect(moduleIds.filter((id) => id.replace(/\\/g, "/").includes("/game/"))).toEqual([]);
     expect([...assets.keys()].filter((name) => /(^|\/)(project\.godot|[^/]+\.pck)$/i.test(name))).toEqual([]);
@@ -119,6 +144,28 @@ describe("the desktop bundle", () => {
     ]) {
       expect(nativeEntrypoint).toContain(`voice_input::${command}`);
     }
+  });
+
+  it("does not register or compile the retired API spend bridge", () => {
+    const nativeEntrypoint = readFileSync(
+      new URL("../../src-tauri/src/lib.rs", import.meta.url),
+      "utf8",
+    );
+    expect(nativeEntrypoint).not.toMatch(/\bmod spend\b|spend::api_team_spend|api_team_spend/);
+
+    const manifest = readFileSync(
+      new URL("../../src-tauri/Cargo.toml", import.meta.url),
+      "utf8",
+    );
+    expect(manifest).not.toMatch(/^rusqlite\s*=/m);
+  });
+
+  it("does not package API runtime resources in Tauri", () => {
+    const config = JSON.parse(
+      readFileSync(new URL("../../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+    ) as { bundle?: { resources?: Record<string, string> } };
+    const resources = Object.entries(config.bundle?.resources ?? {}).flat();
+    expect(resources.filter((resource) => /api-worker|api-team|start_api_team|api_team_spend/i.test(resource))).toEqual([]);
   });
 
   // The web asks for them by absolute path (/agents/capitano.png): without

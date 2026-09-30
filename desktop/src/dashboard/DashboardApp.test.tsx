@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, sendDirectChat } from "../lib/direct-chat";
+import { readDesktopPlatform } from "../lib/desktop-platform";
 import {
   loadOnboardingGate,
   markOnboardingReady,
@@ -66,12 +67,14 @@ vi.mock("../shell/router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shell/router")>()),
   navigate: vi.fn(),
 }));
+vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
     const stage = props.runtime.status === "ready" ? "" : `:${props.runtime.stage}`;
     const actionStage = props.runtime.status === "action-required" ? props.runtime.stage : null;
     return (
       <section data-testid="onboarding">
+        <p>platform:{props.platform}</p>
         <p>{props.runtime.status}{stage}</p>
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION)}>submit-onboarding</button>
         {(["claude", "codex", "kimi"] as const).map((provider) => (
@@ -213,6 +216,7 @@ describe("DashboardApp onboarding router", () => {
       messageId: "synthetic-message",
       at: 1,
     }));
+    vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
   });
 
   it("sends whoever has no session to Google sign-in", () => {
@@ -233,6 +237,20 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
     expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:profile");
     expect(loadDashboard).not.toHaveBeenCalled();
+  });
+
+  it("passes the native Windows target to onboarding before rendering it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedIn);
+    vi.mocked(readDesktopPlatform).mockResolvedValue("windows");
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Synthetic Person" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("platform:windows");
+    expect(readDesktopPlatform).toHaveBeenCalledOnce();
   });
 
   it("opens the dashboard for an account with complete durable evidence", async () => {
