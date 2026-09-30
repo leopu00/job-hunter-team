@@ -207,6 +207,12 @@ export async function signInWithGoogle(
   } catch (backendError) {
     throw toLoginError(backendError);
   }
+  // Il client parte durante il mount, quando lo storage è intenzionalmente
+  // ancora chiuso. Se quella inizializzazione sta eliminando una sessione
+  // vecchia mentre creiamo il nuovo PKCE flow, può rimuovere anche il verifier
+  // appena scritto. Aspettarla dopo lo sblocco rende l'ordine deterministico:
+  // prima il cleanup iniziale, poi il nuovo verifier e il browser.
+  await deps.client.auth.initialize();
   const redirectTo = await deps.invoke<string>("auth_callback_url");
   const { data, error } = await deps.client.auth.signInWithOAuth({
     provider: "google",
