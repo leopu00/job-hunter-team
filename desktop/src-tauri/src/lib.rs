@@ -42,6 +42,7 @@ pub fn run() {
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             onboarding::onboarding_assistant_open,
+            onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

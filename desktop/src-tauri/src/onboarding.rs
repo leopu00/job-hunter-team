@@ -84,6 +84,13 @@ pub(crate) struct OnboardingSubmission {
     provider: SubscriptionProvider,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ExistingTeamConnectRequest {
+    team_id: String,
+    host: ExecutionHost,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OnboardingProgress {
@@ -170,6 +177,21 @@ fn failure(code: &'static str) -> OnboardingError {
             "La configurazione del provider ha superato il tempo massimo. Riprova.",
             true,
         ),
+        "existing_team_vps_required" => (
+            "Seleziona una configurazione VPS valida per collegare il team esistente.",
+            false,
+        ),
+        "existing_team_identity_mismatch" => {
+            ("La VPS appartiene a un altro team o account.", false)
+        }
+        "existing_team_not_active" => (
+            "Il team sulla VPS non risulta attivo. Verificalo e riprova.",
+            true,
+        ),
+        "existing_team_unavailable" => (
+            "La VPS o il runtime JHT non sono raggiungibili. Verifica la connessione e riprova.",
+            true,
+        ),
         "operation_in_progress" => ("Un’altra operazione è già in corso.", true),
         code if code.starts_with("invalid_") => ("I dati ricevuti non sono validi.", false),
         _ => ("L’operazione non è riuscita. Riprova.", true),
@@ -201,6 +223,13 @@ fn valid_pairing_token(token: &str) -> bool {
         && token.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=' | b'-' | b'_')
         })
+}
+
+fn valid_team_id(value: &str) -> bool {
+    (16..=128).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     let home = app.path().home_dir().ok()?;
@@ -541,6 +570,32 @@ pub(crate) fn remote_install_input(
     Ok(input)
 }
 const REMOTE_JHT_UP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" up"#;
+const REMOTE_EXISTING_TEAM_PROBE: &str = r#"set -eu
+IFS= read -r JHT_EXPECTED_TEAM
+[ "${#JHT_EXPECTED_TEAM}" -ge 16 ] && [ "${#JHT_EXPECTED_TEAM}" -le 128 ] || exit 64
+case "$JHT_EXPECTED_TEAM" in *[!A-Za-z0-9_-]*) exit 64 ;; esac
+JHT_BIN="$(command -v jht 2>/dev/null || true)"
+[ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"
+[ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70
+grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$JHT_BIN" || exit 70
+"$JHT_BIN" status >/dev/null 2>&1 || exit 71
+docker exec jht node -e '
+const fs=require("fs"); const path="/jht_home/cloud.json"; const expected=process.argv[1];
+let cloud; try { cloud=JSON.parse(fs.readFileSync(path,"utf8")); } catch { process.exit(72); }
+if (typeof cloud.user_id!=="string" || cloud.user_id!==expected) process.exit(72);
+let cfg={}; try { cfg=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
+const provider=String(cfg.active_provider||"").toLowerCase();
+const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider);
+const marker={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"}[provider];
+console.log("runtimeInstalled=1"); console.log("containerRunning=1");
+console.log("providerConfigured="+(configured?"1":"0"));
+console.log("providerAuthenticated="+(marker&&fs.existsSync(marker)?"1":"0"));
+console.log("profileReady="+(fs.existsSync("/jht_home/profile/ready.flag")?"1":"0"));
+console.log("assistantWelcomed="+(fs.existsSync("/jht_home/profile/welcomed.flag")?"1":"0"));
+' "$JHT_EXPECTED_TEAM" || exit $?
+docker exec jht tmux has-session -t CAPITANO 2>/dev/null || exit 73
+docker exec jht tmux has-session -t ASSISTENTE 2>/dev/null || exit 73
+printf 'captainRunning=1\nassistantRunning=1\n'"#;
 const REMOTE_USE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use claude"#;
 const REMOTE_USE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use codex"#;
 const REMOTE_USE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use kimi"#;
@@ -689,7 +744,7 @@ fn prepare_impl(
         "Valido la configurazione locale",
     );
     let mut pairing = pairing_token.map(Zeroizing::new);
-    let validated = validate_host(&app, &submission.host, true).map_err(failure)?;
+    let validated = validate_host(&app, &submission.host, false).map_err(failure)?;
     progress(
         &channel,
         OnboardingProgressStage::Runtime,
@@ -976,6 +1031,92 @@ pub(crate) async fn onboarding_resume_snapshot(
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")))
+}
+
+fn existing_team_probe_with(
+    team_id: &str,
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    if !valid_team_id(team_id) {
+        return Err(failure("invalid_team_id"));
+    }
+    let mut input = Zeroizing::new(Vec::with_capacity(team_id.len() + 1));
+    input.extend_from_slice(team_id.as_bytes());
+    input.push(b'\n');
+    let result = run(&input).map_err(|_| failure("existing_team_unavailable"));
+    input.zeroize();
+    let result = result?;
+    if !result.success() {
+        return Err(failure(match result.code {
+            64 => "invalid_team_id",
+            72 => "existing_team_identity_mismatch",
+            73 => "existing_team_not_active",
+            _ => "existing_team_unavailable",
+        }));
+    }
+    let snapshot = parse_snapshot(&result.stdout_text());
+    if !snapshot.runtime_installed || !snapshot.container_running {
+        return Err(failure("existing_team_unavailable"));
+    }
+    if !snapshot.captain_running || !snapshot.assistant_running {
+        return Err(failure("existing_team_not_active"));
+    }
+    Ok(snapshot)
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_existing_team_connect(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    request: ExistingTeamConnectRequest,
+    on_progress: Channel<OnboardingProgress>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    if !matches!(&request.host, ExecutionHost::Vps { .. }) {
+        return Err(failure("existing_team_vps_required"));
+    }
+    if !valid_team_id(&request.team_id) {
+        return Err(failure("invalid_team_id"));
+    }
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        progress(
+            &on_progress,
+            OnboardingProgressStage::Runtime,
+            "Verifico la VPS già configurata",
+        );
+        let validated = validate_host(&app, &request.host, false).map_err(failure)?;
+        progress(
+            &on_progress,
+            OnboardingProgressStage::Container,
+            "Verifico runtime e container senza modificarli",
+        );
+        let snapshot = existing_team_probe_with(&request.team_id, |input| {
+            run_ssh(
+                &validated,
+                REMOTE_EXISTING_TEAM_PROBE,
+                Some(input),
+                SNAPSHOT_TIMEOUT,
+                None,
+            )
+        })?;
+        progress(
+            &on_progress,
+            OnboardingProgressStage::Team,
+            "Il team esistente è attivo e verificato",
+        );
+        crate::direct_chat::persist_onboarding_host(&app, &request.host).map_err(failure)?;
+        Ok(snapshot)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
+    state.preparing.store(false, Ordering::Release);
+    result
 }
 
 #[derive(Clone, Copy)]
@@ -1397,10 +1538,11 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        assistant_reached, expected_installer_digest, failure, parse_snapshot, redact,
-        start_and_verify_local_container_with, valid_pairing_token, valid_wrapper_file,
-        OnboardingProgress, OnboardingProgressStage, OnboardingSubmission, StreamRedactor,
-        INSTALL_SHA256, REMOTE_INSTALL,
+        assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
+        parse_snapshot, redact, start_and_verify_local_container_with, valid_pairing_token,
+        valid_wrapper_file, ExistingTeamConnectRequest, OnboardingProgress,
+        OnboardingProgressStage, OnboardingSubmission, StreamRedactor, INSTALL_SHA256,
+        REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
     };
     #[cfg(target_os = "macos")]
     use super::{
@@ -1677,6 +1819,88 @@ mod tests {
             "provider": "codex"
         }));
         assert!(rejected.is_err());
+    }
+
+    #[test]
+    fn existing_team_request_is_opaque_vps_only_data() {
+        let request: ExistingTeamConnectRequest = serde_json::from_value(serde_json::json!({
+            "teamId": "00000000-0000-4000-8000-000000000001",
+            "host": {
+                "kind": "vps",
+                "address": "vps.example.invalid",
+                "user": "deploy",
+                "port": 22,
+                "keyPath": "/tmp/synthetic-key"
+            }
+        }))
+        .unwrap();
+        assert_eq!(request.team_id, "00000000-0000-4000-8000-000000000001");
+        assert!(matches!(
+            request.host,
+            crate::runtime_host::ExecutionHost::Vps { .. }
+        ));
+    }
+
+    #[test]
+    fn existing_team_probe_is_read_only_and_requires_identity_and_live_sessions() {
+        for forbidden in [
+            "jht up",
+            "team start",
+            "docker start",
+            "docker restart",
+            "docker compose",
+            "install",
+            "update",
+            "oauth-login",
+            "pairing",
+            "curl ",
+        ] {
+            assert!(
+                !REMOTE_EXISTING_TEAM_PROBE.contains(forbidden),
+                "mutating command in attach probe: {forbidden}"
+            );
+        }
+        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("\"$JHT_BIN\" status"));
+        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("docker exec jht node"));
+        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t CAPITANO"));
+        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t ASSISTENTE"));
+
+        let team_id = "00000000-0000-4000-8000-000000000001";
+        let active = existing_team_probe_with(team_id, |input| {
+            assert_eq!(input, format!("{team_id}\n").as_bytes());
+            Ok(ProcessResult {
+                code: 0,
+                stdout: b"runtimeInstalled=1\ncontainerRunning=1\nproviderConfigured=1\nproviderAuthenticated=1\ncaptainRunning=1\nassistantRunning=1\nprofileReady=0\nassistantWelcomed=0\n".to_vec(),
+            })
+        })
+        .unwrap();
+        assert!(active.container_running && active.captain_running && active.assistant_running);
+        assert!(!active.profile_ready && !active.assistant_welcomed);
+
+        let mismatch = existing_team_probe_with(team_id, |_| {
+            outcome(false).map(|mut result| {
+                result.code = 72;
+                result
+            })
+        })
+        .unwrap_err();
+        assert_eq!(mismatch.code, "existing_team_identity_mismatch");
+
+        let inactive = existing_team_probe_with(team_id, |_| {
+            outcome(false).map(|mut result| {
+                result.code = 73;
+                result
+            })
+        })
+        .unwrap_err();
+        assert_eq!(inactive.code, "existing_team_not_active");
+
+        let offline =
+            existing_team_probe_with(team_id, |_| Err("process_start_failed")).unwrap_err();
+        assert_eq!(offline.code, "existing_team_unavailable");
+        assert!(serde_json::to_string(&offline)
+            .unwrap()
+            .contains("\"retryable\":true"));
     }
 
     #[cfg(target_os = "macos")]
