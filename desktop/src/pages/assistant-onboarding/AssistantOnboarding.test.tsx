@@ -81,11 +81,13 @@ describe("AssistantOnboarding", () => {
 
     for (const step of [2, 3, 4]) {
       await user.click(screen.getByRole("button", { name: "Avanti" }));
-      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", String(step));
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", String(Math.min(step, 3)));
       expect(onStateChange).toHaveBeenLastCalledWith({ path, step });
     }
 
     expect(screen.getByRole("heading", { name: finalTitle })).toHaveFocus();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+    expect(screen.getByText("3/4")).toBeInTheDocument();
     const firstMessage = screen.getByRole("textbox", { name: /primo messaggio all’assistente/i });
     expect(screen.getByRole("button", { name: /Passa alla chat libera/ })).toBeDisabled();
     await user.type(firstMessage, "Vorrei iniziare dalle opportunità più adatte.");
@@ -94,6 +96,10 @@ describe("AssistantOnboarding", () => {
       { path, step: 4 },
       "Vorrei iniziare dalle opportunità più adatte.",
     );
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
+    expect(screen.getByText("4/4")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /chat verificata/i })).toBeDisabled();
+    expect(firstMessage).toBeDisabled();
   });
 
   it("moves back within a path and returns to the initial choices", async () => {
@@ -148,16 +154,18 @@ describe("AssistantOnboarding", () => {
     await user.click(screen.getByRole("button", { name: /Passa alla chat libera/ }));
     expect(await screen.findByText(/non è stato segnato come completato/i)).toBeInTheDocument();
     expect(screen.queryByText("native marker unavailable")).toBeNull();
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
 
     await user.click(screen.getByRole("button", { name: /Riprova e apri la chat/ }));
     expect(screen.getByRole("button", { name: /Apro la chat/ })).toBeDisabled();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
     expect(onComplete).toHaveBeenLastCalledWith(
       { path: "tour", step: 4 },
       "Cominciamo dalle candidature.",
     );
     release();
-    await waitFor(() => expect(screen.getByRole("button", { name: /Passa alla chat libera/ })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4"));
+    expect(screen.getByRole("button", { name: /chat verificata/i })).toBeDisabled();
   });
 
   it("keeps the final voice transcript editable and hands it off only on confirmation", async () => {
@@ -188,6 +196,7 @@ describe("AssistantOnboarding", () => {
       { path: "tour", step: 4 },
       "iniziamo dalle candidature remote in Europa",
     );
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
