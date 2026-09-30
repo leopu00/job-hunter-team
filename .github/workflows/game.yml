@@ -1,243 +1,123 @@
-name: Game — Native desktop matrix
+name: Desktop — Tauri 2 distribution matrix
 
-# `shared/skills/burn_intent.py` non e' un file di gioco, ma
-# `game/tools/burn_mode_selftest.gd` lo legge e ne confronta il contenuto con la
-# copia GDScript dell'avviso di deroga alla spesa. Senza questa riga il guard
-# del drift non girava proprio nella PR che lo puo' rompere: si tocca il file
-# Python, il workflow non parte, e la copia nel gioco resta indietro
-# promettendo reti di sicurezza che il modulo non ha piu'.
-#
-# `enrichment_policy.py` e `db_query.py` (letti da
-# `tools/coordinator_policy_selftest.py`) hanno la stessa forma e NON sono qui
-# di proposito: quel selftest e' oggi nel tier `watch`, cioe' non blocca, e non
-# vale ~30 minuti di runner su tre OS a ogni modifica Python. Quando passera' a
-# `gate` vanno aggiunti anche loro, altrimenti si ricrea questo stesso buco.
+# Il nome del file resta game.yml per non spezzare link e automazioni storiche,
+# ma il gate distributivo e' Tauri 2. game/ resta nel repository come legacy e
+# non produce piu' gli artefatti pubblici.
 on:
-  # Nessun filtro `branches`: i path di gioco avviano già la matrice anche su
-  # hq-master, quindi il ramo d'integrazione è coperto senza duplicare regole.
   push:
     paths:
-      - "game/**"
-      - "shared/skills/burn_intent.py"
+      - "desktop/**"
+      - "package.json"
       - ".github/workflows/game.yml"
       - ".github/workflows/release.yml"
+      - "scripts/check-release-version.sh"
   pull_request:
     branches:
       - master
     paths:
-      - "game/**"
-      - "shared/skills/burn_intent.py"
+      - "desktop/**"
+      - "package.json"
       - ".github/workflows/game.yml"
       - ".github/workflows/release.yml"
+      - "scripts/check-release-version.sh"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test-export:
-    name: ${{ matrix.label }} — test, export, smoke
+  build-tauri:
+    name: ${{ matrix.label }} — test and bundle Tauri 2
     runs-on: ${{ matrix.os }}
-    # 30 -> 45: gli avvii di Godot per job passano da ~26 a ~49 (i 15 selftest
-    # del tier `watch` che nessuna CI eseguiva, piu' l'import che run.sh fa da
-    # se'). Il margine serve a non far scadere il job proprio mentre osserviamo
-    # i test nuovi: un timeout si legge come un rosso di quei test, e non lo e'.
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-2022
             label: Windows x64
-            preset: Windows Desktop
-            output: builds/windows/job-hunter-team.exe
-            artifact: game-windows-x64
-            artifact_path: game/builds/windows/job-hunter-team.exe
+            args: --bundles nsis
+            artifact: tauri-windows-x64
           - os: macos-14
             label: macOS Universal 2
-            preset: macOS
-            output: builds/macos/job-hunter-team.zip
-            artifact: game-macos-universal
-            artifact_path: game/builds/macos/job-hunter-team.zip
+            args: --target universal-apple-darwin --bundles dmg
+            artifact: tauri-macos-universal
           - os: ubuntu-22.04
             label: Linux x64
-            preset: Linux
-            output: builds/linux/job-hunter-team.x86_64
-            artifact: game-linux-x64
-            artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
+            args: --bundles appimage,deb
+            artifact: tauri-linux-x64
     defaults:
       run:
         shell: bash
-    env:
-      JHT_NOVPS: "1"
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: chickensoft-games/setup-godot@v2.4.2
+      - uses: actions/setup-node@v7
         with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: true
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
 
-      # `audit_instance_portraits.py` e' un gate e ha bisogno di Pillow. Fino al
-      # 21/09 senza Pillow usciva 0 dicendo SKIP: dieci ritratti mancanti erano
-      # rossi in locale e invisibili qui. Ora l'audit e' rosso se non puo'
-      # girare, quindi la libreria va installata prima dei test.
-      # Il `python3` del runner macOS e' quello di Homebrew, che dal 21/09
-      # rifiuta l'installazione di sistema (PEP 668, `externally-managed-
-      # environment`): li' il posto giusto e' un venv, che e' anche la via che
-      # Homebrew stesso indica. `--system-site-packages` perche' gli altri
-      # selftest python devono continuare a vedere quello che vedevano prima.
-      # Il passo finisce SEMPRE con l'import: e' l'effetto che conta, non il
-      # comando — un `pip install` riuscito in un python che i test non usano
-      # lascerebbe l'audit rosso senza dirne il motivo.
-      - name: Install the portrait audit's dependency
-        shell: bash
-        env:
-          PILLOW_VERSION: "12.1.1"
-        run: |
-          set -euo pipefail
-          if ! python3 -c "import PIL" 2>/dev/null; then
-            venv="${RUNNER_TEMP}/jht-pillow-venv"
-            bin="bin"
-            [ "${RUNNER_OS}" = "Windows" ] && bin="Scripts"
-            python3 -m venv --system-site-packages "$venv"
-            # il venv di Windows espone `python`, quello POSIX `python3`
-            py="$venv/$bin/python3"
-            [ -x "$py" ] || py="$venv/$bin/python"
-            # Versione FISSA: un `pip install Pillow` nudo fa entrare in
-            # silenzio qualunque rilascio nuovo, e il giorno che uno rompe
-            # l'audit il rosso esce dove non si guarda. Col pin a rompersi e'
-            # il PASSO, che e' il posto giusto (SICUREZZA, 21/09).
-            "$py" -m pip install --disable-pip-version-check --quiet "Pillow==$PILLOW_VERSION"
-            # ⚠️ Da qui in poi questa cartella e' in testa al PATH di TUTTI i
-            # passi successivi: `python`, `python3` e `pip` sono quelli del
-            # venv. Qui e' voluto e innocuo (eredita i site-packages di
-            # sistema), ma chi aggiunge un passo python lo eredita senza
-            # saperlo: vale la pena saperlo prima di stupirsi.
-            echo "$venv/$bin" >> "$GITHUB_PATH"
-            export PATH="$venv/$bin:$PATH"
-          fi
-          python3 -c "import PIL, sys; print('Pillow', PIL.__version__, 'in', sys.executable)"
-
-      - name: Import and parse project
-        run: godot --headless --path game --import
-
-      # La lista dei test NON e' piu' qui: vive in `game/tools/test-matrix.txt`,
-      # unica fonte consumata anche da run.sh e da run.ps1. Prima del
-      # 2026-07-30 esistevano tre copie divergenti e 15 selftest su 45 non
-      # venivano eseguiti da nessuna CI, fra cui quelli scritti apposta per il
-      # TOUR v3 e per il wizard: il `game/README.md` prometteva piu' di quanto
-      # questo semaforo controllasse.
-      - name: Run deterministic game tests (gate)
-        if: runner.os != 'Windows'
-        run: bash game/tools/run.sh test gate
-
-      - name: Run deterministic game tests through PowerShell (gate)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
-            Select-Object -First 1
-          if (-not $GodotExe) { throw "setup-godot executable not found" }
-          $env:JHT_GODOT_BIN = $GodotExe.FullName
-          ./game/tools/run.ps1 test gate
-
-      # --------------------------- TIER `watch` - IN OSSERVAZIONE, NON ROTTO --
-      # Questi test (marcati `watch` in game/tools/test-matrix.txt) sono verdi
-      # in locale - triage 2026-07-30, Godot 4.7 stable su macOS: 18 su 18 PASS
-      # - ma non hanno MAI girato su un runner pulito. Renderli bloccanti in un
-      # colpo solo significherebbe scoprire su master, e a valle di una PR
-      # innocente, se dipendono da `~/.jht`, dal tempo di boot o dal numero di
-      # core del runner.
-      #
-      # `continue-on-error: true` NON vuol dire "ignorati": il passo compare nel
-      # riepilogo del job con il suo esito, e il runner esegue TUTTA la lista
-      # anche dopo un rosso, proprio per dare il quadro completo che serve a
-      # promuoverli.
-      #
-      # PER TOGLIERE `continue-on-error`: servono ~10 esecuzioni consecutive
-      # verdi sui tre OS (Windows compreso - li' la catena di avvii Godot e'
-      # gia' andata in ACCESS_VIOLATION due volte). Poi si sposta la voce da
-      # `watch` a `gate` in test-matrix.txt, a scaglioni e non tutta insieme; e
-      # quando il tier `watch` resta vuoto questi due passi si cancellano.
-      # ATTENZIONE: promuovendo `coordinator_policy` vanno aggiunti al `paths:`
-      # in cima anche `shared/skills/enrichment_policy.py` e
-      # `shared/skills/db_query.py`.
-      - name: Run game tests under observation (watch - non blocking)
-        if: runner.os != 'Windows'
-        continue-on-error: true
-        run: bash game/tools/run.sh test watch
-
-      - name: Run game tests under observation through PowerShell (watch - non blocking)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
-            Select-Object -First 1
-          if (-not $GodotExe) { throw "setup-godot executable not found" }
-          $env:JHT_GODOT_BIN = $GodotExe.FullName
-          ./game/tools/run.ps1 test watch
-
-      # L'export e' il passo piu' pesante e arriva per ultimo, dopo ~26
-      # invocazioni di Godot nello stesso job. Ogni chiusura lascia risorse
-      # ("N ObjectDB instances were leaked", "N resources still in use") e il
-      # 2026-07-29 il runner Windows e' andato in **segfault** (exit 139) a
-      # meta' impacchettamento — con tutti i test verdi appena sopra. Al
-      # rilancio e' passato: intermittente, cioe' la specie peggiore, perche'
-      # un rosso casuale rende inutile il semaforo di una release.
-      #
-      # `release.yml` non ha mai avuto il problema: la' l'export vive in un job
-      # a se', su un runner fresco. Qui non possiamo separarlo senza spostare
-      # anche i template di export, quindi si riparte da un processo pulito:
-      # una pausa perche' il sistema operativo recuperi gli handle dei
-      # processi appena usciti, e un solo ritentativo. Se serve il ritentativo
-      # lo si vede nel log — se comincia a servire spesso, la separazione in
-      # due job diventa obbligatoria e questo commento e' la traccia.
-      - name: Export native release
-        working-directory: game
-        run: |
-          mkdir -p "$(dirname '${{ matrix.output }}')"
-          sleep 5
-          if ! godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"; then
-            code=$?
-            echo "::warning::export fallito (exit $code) — riprovo una volta su processo pulito"
-            rm -f "${{ matrix.output }}"
-            sleep 15
-            godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
-          fi
-          test -s "${{ matrix.output }}"
-
-      - name: Smoke-test exported runtime
-        working-directory: game
-        run: |
-          case "${{ runner.os }}" in
-            Windows)
-              JHT_NOVPS=1 "${{ matrix.output }}" --headless --quit-after 3
-              ;;
-            Linux)
-              chmod +x "${{ matrix.output }}"
-              JHT_NOVPS=1 "./${{ matrix.output }}" --headless --quit-after 3
-              ;;
-            macOS)
-              mkdir -p builds/macos/unpacked
-              ditto -x -k "${{ matrix.output }}" builds/macos/unpacked
-              GAME_BIN="$(find builds/macos/unpacked -type f -path '*/Contents/MacOS/*' | head -n 1)"
-              test -n "$GAME_BIN"
-              JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
-              ;;
-          esac
-
-      - name: Preserve Linux executable permissions
+      - name: Install Tauri system libraries
         if: runner.os == 'Linux'
-        working-directory: game
         run: |
-          tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
-            job-hunter-team.x86_64
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Prepare Rust targets
+        run: |
+          rustc --version
+          cargo --version
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: tauri-bundle-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: tauri-bundle-${{ runner.os }}-
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Run canonical desktop gates
+        run: |
+          npm --prefix desktop test
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
+
+      # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
+      # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.
+      - name: Build Tauri bundles
+        working-directory: desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm run tauri:build -- ${{ matrix.args }}
+
+      - name: Gate bundled Google login configuration
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
+
+      - name: Collect bundle outputs
+        run: |
+          mkdir -p gate-assets
+          find desktop/src-tauri/target -type f \
+            \( -name '*-setup.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) \
+            -exec cp {} gate-assets/ \;
+          test -n "$(find gate-assets -type f -print -quit)"
+          find gate-assets -type f -size 0 -print -quit | grep -q . && exit 1 || true
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact_path }}
+          path: gate-assets/

@@ -316,7 +316,11 @@ def render_release_notes(
 
 ### Windows
 
-Use `job-hunter-team-windows-x64-setup.exe` for the normal per-user installation. `job-hunter-team-windows-x64-portable.exe` is the optional standalone build. Neither Windows file is code-signed, so Windows may show **\"Windows protected your PC\"**: click **More info** → **Run anyway** only for files downloaded from this release and matching the SHA-256 values below. The macOS `.zip` is signed and notarized by Apple; the Linux `.tar.gz` is unsigned as well.
+Use `job-hunter-team-windows-x64-setup.exe` for the per-user Tauri 2 installation. It is not code-signed, so Windows may show **\"Windows protected your PC\"**: click **More info** → **Run anyway** only for the file downloaded from this release and matching the SHA-256 value below.
+
+### macOS and Linux
+
+`job-hunter-team-macos-universal.dmg` is a universal Tauri 2 build signed with Developer ID, notarized by Apple and stapled. Linux provides the unsigned `job-hunter-team-linux-x64.AppImage` plus `job-hunter-team-linux-x64.deb` for Debian-based systems.
 
 ### SHA-256 checksums
 

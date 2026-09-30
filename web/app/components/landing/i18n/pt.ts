@@ -72,7 +72,7 @@ export const pt: Record<string, string> = {
   dl_windows_portable_label: "Windows: o instalador é a opção recomendada.",
   dl_windows_portable_link: "Descarrega antes a versão portátil",
   dl_desktop_unsigned_note:
-    "No macOS a app está assinada e notarizada: abre com duplo clique. No Windows não está assinada, por isso o SmartScreen mostra «O Windows protegeu o seu PC»: clica em «Mais informações» e depois «Executar mesmo assim». No Linux, extrai o arquivo e torna-o executável.",
+    "No macOS, o DMG está assinado e notarizado. No Windows, o instalador não está assinado; avança após o aviso do SmartScreen apenas com o ficheiro da versão oficial. No Linux, torna a AppImage executável antes de a abrir.",
   dl_help_text: "Descarregaste a app?",
   dl_help_link: "Segue a configuração passo a passo",
 

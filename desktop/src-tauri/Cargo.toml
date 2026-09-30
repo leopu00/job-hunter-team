@@ -1,6 +1,6 @@
 [package]
 name = "jht-desktop"
-version = "0.1.0"
+version = "0.3.9"
 description = "Job Hunter Team desktop shell"
 authors = ["Leone Emanuel Puglisi"]
 edition = "2021"

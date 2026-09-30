@@ -11,11 +11,11 @@ const RELEASE_BASE_URL = 'https://github.com/leopu00/job-hunter-team/releases/do
 
 const ASSETS = Object.freeze({
   windows: 'job-hunter-team-windows-x64-setup.exe',
-  macos: 'job-hunter-team.zip',
-  linux: 'job-hunter-team-linux-x64.tar.gz',
+  macos: 'job-hunter-team-macos-universal.dmg',
+  linux: 'job-hunter-team-linux-x64.AppImage',
 });
 
-const WINDOWS_PORTABLE_ASSET = 'job-hunter-team-windows-x64-portable.exe';
+const LINUX_DEB_ASSET = 'job-hunter-team-linux-x64.deb';
 
 
 function normalizePlatform(value) {
@@ -136,14 +136,14 @@ async function destinationExists(path) {
 }
 
 
-export async function downloadRelease({ platform: requestedPlatform, version: requestedVersion, output, portable }) {
+export async function downloadRelease({ platform: requestedPlatform, version: requestedVersion, output, deb }) {
   const platform = normalizePlatform(requestedPlatform);
   const version = normalizeVersion(requestedVersion);
-  if (portable && platform !== 'windows') {
-    throw new Error('The --portable option is available only for Windows.');
+  if (deb && platform !== 'linux') {
+    throw new Error('The --deb option is available only for Linux.');
   }
 
-  const asset = portable ? WINDOWS_PORTABLE_ASSET : ASSETS[platform];
+  const asset = deb ? LINUX_DEB_ASSET : ASSETS[platform];
   const tag = `v${version}`;
   const base = `${releaseBaseUrl()}/${tag}`;
   const checksumResponse = await fetchReleaseFile(`${base}/SHA256SUMS`);
@@ -202,7 +202,7 @@ async function downloadAction(options) {
       platform: options.os,
       version: options.version,
       output: options.output,
-      portable: options.portable,
+      deb: options.deb,
     });
   } catch (error) {
     console.error(`\n  Error: ${error.message}\n`);
@@ -218,6 +218,6 @@ export function registerDownloadCommand(program) {
     .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
     .requiredOption('--version <release>', 'release version (for example, 0.3.5)')
     .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
-    .option('--portable', 'download the portable app instead of the Windows installer')
+    .option('--deb', 'download the Debian package instead of the Linux AppImage')
     .action(downloadAction);
 }

@@ -133,7 +133,7 @@ See [`release.md`](release.md) for the active release flow (bump four version fi
 
 ### 🍎 macOS code signing & notarization
 
-> ✅ **Required, not optional.** Since the native migration the release job **fails fast** when any of the five Apple secrets is missing (`macOS game releases require signing and notarization credentials`) — there is no unsigned fallback. An unsigned Godot `.app` is blocked by Gatekeeper with "Apple could not verify this app", which is where non-technical users abandon the install.
+> ✅ **Required, not optional.** The release job **fails fast** when any of the five Apple secrets is missing (`macOS Tauri releases require signing and notarization credentials`) — there is no unsigned fallback. An unsigned Tauri `.app` is blocked by Gatekeeper with "Apple could not verify this app", which is where non-technical users abandon the install.
 
 Two independent steps: **code signing** (Developer ID Application certificate) and **notarization** (submit to Apple's notary service + staple the ticket). CI performs both on every tagged release.
 
@@ -164,21 +164,21 @@ All five must be present. If any is missing, the `macos-14` matrix entry stops i
 
 #### What the workflow does
 
-`.github/workflows/release.yml` job `build-game`, matrix entry `macos-14`, on tag push:
+`.github/workflows/release.yml` job `build-desktop`, matrix entry `macos-14`, on tag push:
 
 1. `HAS_MAC_SIGNING` checks that all five secrets are configured; if not, the job fails with an explicit error.
 2. `apple-actions/import-codesign-certs` imports the `.p12` into a temporary keychain.
-3. The Godot `macOS` preset is exported to `builds/macos/job-hunter-team.zip`; the step unpacks it, resolves the `Developer ID Application` identity from the keychain and runs `codesign --deep --force --options runtime --timestamp`, then `codesign --verify --deep --strict`.
-4. The signed `.app` is re-zipped with `ditto -c -k --sequesterRsrc --keepParent` and submitted to `xcrun notarytool submit --wait`, then `xcrun stapler staple` + `stapler validate` + `spctl --assess --type execute`. Any non-zero exit fails the job.
-5. The stapled `.app` is zipped one last time — that final `.zip` is the published asset.
+3. The workflow resolves the `Developer ID Application` identity and passes it to Tauri 2 together with the Apple notarization credentials.
+4. Tauri builds the universal `.app` and DMG, signs, notarizes and staples them.
+5. The job verifies the app with `codesign` and `spctl`, then verifies the final DMG with `stapler` and `hdiutil`; that DMG is the published asset.
 
-Hardened runtime comes from `--options runtime` at signing time; there is no entitlements plist (the Godot binary needs none of the Electron exceptions).
+Hardened runtime is applied by the Tauri macOS bundler; no extra entitlement is currently required.
 
 #### Verifying a build locally
 
 ```bash
-ditto -x -k job-hunter-team.zip /tmp/jht-check
-APP="$(find /tmp/jht-check -maxdepth 2 -type d -name '*.app' | head -n 1)"
+hdiutil attach -nobrowse -readonly job-hunter-team-macos-universal.dmg
+APP="/Volumes/Job Hunter Team/Job Hunter Team.app"
 
 codesign -dv --verbose=4 "$APP"
 # expect: Authority=Developer ID Application: ...
@@ -186,7 +186,7 @@ codesign -dv --verbose=4 "$APP"
 spctl --assess --type execute --verbose=4 "$APP"
 # expect: accepted + source=Notarized Developer ID
 
-xcrun stapler validate "$APP"
+xcrun stapler validate job-hunter-team-macos-universal.dmg
 # expect: The validate action worked!
 ```
 

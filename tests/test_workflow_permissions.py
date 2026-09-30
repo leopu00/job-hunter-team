@@ -22,7 +22,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "docker.yml": {
         "build-and-push": {"contents": "read", "packages": "write"},
     },
-    "game.yml": {"test-export": READ_CONTENTS},
+    "game.yml": {"build-tauri": READ_CONTENTS},
     "lint.yml": {
         # `eslint-desktop-payload` e' caduto con l'albero che lintava:
         # `desktop/app-payload/` non esiste piu' (#177).
@@ -33,7 +33,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     },
     "release.yml": {
         "check-version": READ_CONTENTS,
-        "build-game": READ_CONTENTS,
+        "build-desktop": READ_CONTENTS,
         "publish-runtime": {"contents": "read", "packages": "write"},
         "release": {"contents": "write"},
     },

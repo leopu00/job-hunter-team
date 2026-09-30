@@ -36,7 +36,7 @@ function BackLink() {
   );
 }
 
-// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. I quattro CTA
+// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. I tre CTA
 // passano dagli slug locali `/go/*`: il server risolve la release GitHub più
 // recente da un'allowlist statica e misura solo bucket anonimi aggregati.
 // macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
@@ -421,15 +421,6 @@ function DownloadContent({
                   </a>
                 ))}
               </div>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4 text-center">
-                {t("dl_windows_portable_label")}{" "}
-                <a
-                  href={downloadHref("win-portable", attribution)}
-                  className="font-semibold text-[var(--color-green)] underline underline-offset-2"
-                >
-                  {t("dl_windows_portable_link")}
-                </a>
-              </p>
               {/* Windows e Linux non sono firmati: l'avviso del sistema va
                   detto prima, così non sembra che il file sia guasto. */}
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">

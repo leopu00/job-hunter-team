@@ -217,9 +217,9 @@ const translations = {
     hu: "Helyette a hordozható verzió letöltése",
   },
   dl_desktop_unsigned_note: {
-    it: "Su macOS l'app è firmata e notarizzata: si apre con un doppio clic. Su Windows non è firmata, quindi SmartScreen mostra «Windows ha protetto il PC»: clicca «Ulteriori informazioni» e poi «Esegui comunque». Su Linux l'archivio va estratto e reso eseguibile.",
-    en: "On macOS the app is signed and notarized: it opens with a double click. On Windows it is not signed, so SmartScreen shows “Windows protected your PC”: click “More info”, then “Run anyway”. On Linux, extract the archive and make it executable.",
-    hu: "macOS-en az app aláírt és notarizált: dupla kattintással megnyílik. Windowson nincs aláírva, ezért a SmartScreen kiírja: „A Windows megvédte a számítógépét” — kattints a „További információk”, majd a „Futtatás mindenképp” gombra. Linuxon csomagold ki az archívumot és tedd futtathatóvá.",
+    it: "Su macOS il DMG è firmato e notarizzato. Su Windows l'installer non è firmato, quindi SmartScreen può mostrare «Windows ha protetto il PC»: continua solo con il file della release ufficiale. Su Linux rendi eseguibile l'AppImage prima di aprirla.",
+    en: "On macOS the DMG is signed and notarized. On Windows the installer is unsigned, so SmartScreen may show “Windows protected your PC”: continue only with the file from the official release. On Linux, make the AppImage executable before opening it.",
+    hu: "macOS-en a DMG aláírt és notarizált. Windowson a telepítő nincs aláírva, ezért a SmartScreen figyelmeztethet; csak a hivatalos kiadásból származó fájllal folytasd. Linuxon megnyitás előtt tedd futtathatóvá az AppImage fájlt.",
   },
   dl_help_text: {
     it: "Hai scaricato l'app?",

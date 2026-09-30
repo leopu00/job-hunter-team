@@ -26,16 +26,15 @@ const RELEASE_BASE =
 /** Nome dell'asset di release per sistema operativo. Allineato a
  *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
 const DESKTOP_ASSET: Record<OsId, string> = {
-  macos: "job-hunter-team.zip",
+  macos: "job-hunter-team-macos-universal.dmg",
   windows: "job-hunter-team-windows-x64-setup.exe",
-  linux: "job-hunter-team-linux-x64.tar.gz",
+  linux: "job-hunter-team-linux-x64.AppImage",
 };
 
-/** Asset alternativi, che esistono solo su certi sistemi. Su Windows i
- *  percorsi ufficiali sono due — l'installer (principale) e il portable —
- *  e il contratto vuole che la guida li presenti entrambi. */
+/** Asset alternativi, che esistono solo su certi sistemi. Linux offre anche
+ *  un pacchetto Debian oltre all'AppImage portabile mostrata per prima. */
 export const ALT_ASSET = {
-  windowsPortable: "job-hunter-team-windows-x64-portable.exe",
+  linuxDeb: "job-hunter-team-linux-x64.deb",
 } as const;
 
 /** URL di download diretto. Senza `asset` prende quello predefinito del

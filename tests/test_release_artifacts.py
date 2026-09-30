@@ -168,7 +168,7 @@ def test_release_workflow_verifies_and_publishes_integrity_files() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
     assert "release_artifacts.py record" in workflow
     assert "release_artifacts.py verify" in workflow
-    assert "${{ matrix.artifact_path }}.provenance.json" in workflow
+    assert 'for asset in release-assets/*' in workflow
     assert "release-assets/SHA256SUMS" in workflow
     assert "release-assets/RELEASE-PROVENANCE.json" in workflow
     assert "release-assets/RUNTIME-IMAGE.json" in workflow

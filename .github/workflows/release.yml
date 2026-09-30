@@ -33,42 +33,33 @@ jobs:
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
-  build-game:
-    name: Build Desktop App (Godot) — ${{ matrix.label }}
+  build-desktop:
+    name: Build Desktop App (Tauri 2) — ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     needs: check-version
     permissions:
       contents: read
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-2022
             label: Windows x64
-            preset: Windows Desktop
-            output: builds/windows/job-hunter-team.exe
+            args: --bundles nsis
             artifact_name: app-windows-release
-            artifact_path: game/builds/windows/job-hunter-team-windows-x64-setup.exe
-            additional_artifact_path: game/builds/windows/job-hunter-team-windows-x64-portable.exe
           - os: macos-14
             label: macOS Universal 2
-            preset: macOS
-            output: builds/macos/job-hunter-team.zip
+            args: --target universal-apple-darwin --bundles app,dmg
             artifact_name: app-macos-release
-            artifact_path: game/builds/macos/job-hunter-team.zip
-            additional_artifact_path: ""
           - os: ubuntu-22.04
             label: Linux x64
-            preset: Linux
-            output: builds/linux/job-hunter-team.x86_64
+            args: --bundles appimage,deb
             artifact_name: app-linux-release
-            artifact_path: game/builds/linux/job-hunter-team-linux-x64.tar.gz
-            additional_artifact_path: ""
     defaults:
       run:
         shell: bash
     env:
-      JHT_NOVPS: "1"
       HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
 
     steps:
@@ -78,232 +69,143 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: chickensoft-games/setup-godot@c233594225991af5aec714e52457cc76d6df8fa2 # v2.4.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          version: 4.7.0
-          use-dotnet: false
-          include-templates: true
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Prepare Rust targets
+        run: |
+          rustc --version
+          cargo --version
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: release-tauri-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: release-tauri-${{ runner.os }}-
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Run canonical Tauri release gates
+        run: |
+          npm --prefix desktop test
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
 
       - name: Require Apple release credentials
-        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING != 'true'
+        if: runner.os == 'macOS' && env.HAS_MAC_SIGNING != 'true'
         run: |
-          echo "::error::macOS game releases require signing and notarization credentials."
+          echo "::error::macOS Tauri releases require signing and notarization credentials."
           echo "::error::Configure MACOS_CERTIFICATE, MACOS_CERTIFICATE_PWD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID."
           exit 1
 
       - uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
-        if: matrix.os == 'macos-14' && env.HAS_MAC_SIGNING == 'true'
+        if: runner.os == 'macOS' && env.HAS_MAC_SIGNING == 'true'
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
 
-      # Il tier `gate` vive solo in game/tools/test-matrix.txt. I runner lo
-      # importano e lo eseguono per intero: aggiungere una riga alla matrice la
-      # rende quindi bloccante anche per la release, senza aggiornare una lista
-      # parallela. L'unica esclusione e' causale e dichiarata dalla matrice:
-      # run.ps1 salta a voce i gate `posix`, non eseguibili su Windows.
-      - name: Run canonical desktop release gates
-        if: runner.os != 'Windows'
-        run: bash game/tools/run.sh test gate
-
-      - name: Run canonical desktop release gates through PowerShell
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Select the Developer ID signing identity
+        if: runner.os == 'macOS'
         run: |
-          $GodotExe = Get-ChildItem (Join-Path $HOME "godot") -Filter "Godot*.exe" -File |
-            Select-Object -First 1
-          if (-not $GodotExe) { throw "setup-godot executable not found" }
-          $env:JHT_GODOT_BIN = $GodotExe.FullName
-          ./game/tools/run.ps1 test gate
+          identity="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          test -n "$identity"
+          echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
-      # L'export e' il passo piu' pesante e arriva dopo tutti i gate canonici:
-      # stessa esposizione dello step precedente, stessa difesa (game.yml la ha
-      # dal 2026-07-29). La pausa serve a far chiudere davvero i processi
-      # appena usciti prima di aprirne un altro.
-      - name: Export native game
-        working-directory: game
-        run: |
-          mkdir -p "$(dirname '${{ matrix.output }}')"
-          sleep 5
-          if ! godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"; then
-            code=$?
-            echo "::warning::export fallito (exit $code) — riprovo una volta su processo pulito"
-            rm -f "${{ matrix.output }}"
-            sleep 15
-            godot --headless --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
-          fi
-          test -s "${{ matrix.output }}"
-
-      - name: Sign, notarize and staple macOS game
-        if: matrix.os == 'macos-14'
-        working-directory: game
+      # Tauri firma l'app con Developer ID e usa le credenziali Apple per
+      # notarizzare e fare staple del DMG. Windows e Linux restano unsigned e
+      # sono dichiarati tali nelle note e nelle pagine di download.
+      - name: Build Tauri bundles
+        working-directory: desktop
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          SIGN_DIR="$RUNNER_TEMP/jht-game-sign"
-          rm -rf "$SIGN_DIR"
-          mkdir -p "$SIGN_DIR"
-          ditto -x -k "${{ matrix.output }}" "$SIGN_DIR"
-          GAME_APP="$(find "$SIGN_DIR" -type d -name '*.app' | head -n 1)"
-          test -n "$GAME_APP"
-          IDENTITY="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
-          test -n "$IDENTITY"
-          codesign --deep --force --options runtime --timestamp --sign "$IDENTITY" "$GAME_APP"
-          codesign --verify --deep --strict --verbose=2 "$GAME_APP"
-          rm -f "${{ matrix.output }}"
-          ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
-          # `--wait` fa polling in proprio ed esce 1 al PRIMO errore di rete:
-          # il 2026-07-27 il runner ha perso la rete dopo 45 minuti di attesa
-          # (NSURLErrorDomain -1009) e ha buttato via una submission che era
-          # valida. Quel giorno la coda Apple ha impiegato 4h30 — con attese
-          # così lunghe un singhiozzo è quasi garantito. Quindi: submit senza
-          # attesa, e polling nostro che tollera gli errori di rete e riprova.
-          SUBMIT_ID="$(xcrun notarytool submit "${{ matrix.output }}" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --no-wait --output-format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-          test -n "$SUBMIT_ID"
-          echo "submission: $SUBMIT_ID"
-          NOTARY_STATUS=""
-          NET_FAILS=0
-          # 5h di finestra (300 × 60s): sotto il limite di 6h del job, sopra
-          # la coda peggiore osservata. Gli errori di rete non contano come
-          # verdetto: si riprova al giro dopo.
-          for _ in $(seq 1 300); do
-            if INFO="$(xcrun notarytool info "$SUBMIT_ID" \
-                --apple-id "$APPLE_ID" \
-                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-                --team-id "$APPLE_TEAM_ID" \
-                --output-format json 2>/dev/null)"; then
-              NOTARY_STATUS="$(printf '%s' "$INFO" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
-              NET_FAILS=0
-              echo "notarizzazione: $NOTARY_STATUS"
-              case "$NOTARY_STATUS" in
-                "Accepted") break ;;
-                "In Progress"|"") ;;
-                *) echo "Apple ha respinto la submission: $NOTARY_STATUS"
-                   xcrun notarytool log "$SUBMIT_ID" --apple-id "$APPLE_ID" \
-                     --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-                     --team-id "$APPLE_TEAM_ID" || true
-                   exit 1 ;;
-              esac
-            else
-              NET_FAILS=$((NET_FAILS + 1))
-              echo "interrogazione fallita ($NET_FAILS di fila) — la submission resta viva, riprovo"
-              if [ "$NET_FAILS" -ge 20 ]; then
-                echo "20 tentativi consecutivi falliti: il runner non raggiunge Apple da 20 minuti."
-                exit 1
-              fi
-            fi
-            sleep 60
-          done
-          if [ "$NOTARY_STATUS" != "Accepted" ]; then
-            echo "Notarizzazione non conclusa entro 5h (ultimo stato: ${NOTARY_STATUS:-sconosciuto})."
-            echo "La submission $SUBMIT_ID resta valida lato Apple: verificarla con notarytool info."
-            exit 1
-          fi
-          xcrun stapler staple "$GAME_APP"
-          xcrun stapler validate "$GAME_APP"
-          spctl --assess --type execute --verbose=2 "$GAME_APP"
-          rm -f "${{ matrix.output }}"
-          ditto -c -k --sequesterRsrc --keepParent "$GAME_APP" "${{ matrix.output }}"
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm run tauri:build -- ${{ matrix.args }}
 
-      - name: Smoke-test native game
-        working-directory: game
-        run: |
-          case "${{ runner.os }}" in
-            Windows)
-              JHT_NOVPS=1 "${{ matrix.output }}" --headless --quit-after 3
-              ;;
-            Linux)
-              chmod +x "${{ matrix.output }}"
-              JHT_NOVPS=1 "./${{ matrix.output }}" --headless --quit-after 3
-              ;;
-            macOS)
-              mkdir -p "$RUNNER_TEMP/jht-game"
-              ditto -x -k "${{ matrix.output }}" "$RUNNER_TEMP/jht-game"
-              GAME_BIN="$(find "$RUNNER_TEMP/jht-game" -type f -path '*/Contents/MacOS/*' | head -n 1)"
-              test -n "$GAME_BIN"
-              JHT_NOVPS=1 "$GAME_BIN" --headless --quit-after 3
-              ;;
-          esac
+      - name: Gate bundled Google login configuration
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
 
-      - name: Preserve Linux executable permissions
-        if: runner.os == 'Linux'
-        working-directory: game
-        run: |
-          tar -C builds/linux -czf builds/linux/job-hunter-team-linux-x64.tar.gz \
-            job-hunter-team.x86_64
-
-      - name: Build and smoke-test Windows installer
+      - name: Collect Windows installer
         if: runner.os == 'Windows'
-        shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          ./scripts/build-windows-installer.ps1 -Version $version -Smoke
-          Copy-Item game/builds/windows/job-hunter-team.exe game/builds/windows/job-hunter-team-windows-x64-portable.exe
+          mkdir -p release-assets
+          source="$(find desktop/src-tauri/target/release/bundle/nsis -type f -name '*-setup.exe' -print -quit)"
+          test -n "$source"
+          cp "$source" release-assets/job-hunter-team-windows-x64-setup.exe
 
-      # Questo gate gira sui byte che diventeranno gli asset: portable Windows
-      # dopo il packaging NSIS, binario estratto dal tar Linux e app estratta
-      # dallo zip macOS gia' firmato/notarizzato. Il selftest costruisce la title
-      # vera, pretende il Label visibile e confronta ProjectSettings col tag.
-      - name: Gate packaged title footer and version
-        working-directory: game
-        env:
-          EXPECTED_GAME_VERSION: ${{ github.ref_name }}
+      - name: Collect and verify signed macOS installer
+        if: runner.os == 'macOS'
         run: |
-          set -euo pipefail
-          expected_version="${EXPECTED_GAME_VERSION#v}"
-          game_bin=""
+          mkdir -p release-assets
+          bundle_root=desktop/src-tauri/target/universal-apple-darwin/release/bundle
+          source="$(find "$bundle_root/dmg" -type f -name '*.dmg' -print -quit)"
+          app="$(find "$bundle_root/macos" -type d -name '*.app' -print -quit)"
+          test -n "$source"
+          test -n "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$source"
+          hdiutil verify "$source"
+          cp "$source" release-assets/job-hunter-team-macos-universal.dmg
 
-          case "${{ runner.os }}" in
-            Windows)
-              game_bin="builds/windows/job-hunter-team-windows-x64-portable.exe"
-              ;;
-            Linux)
-              title_dir="$RUNNER_TEMP/jht-title-artifact-gate"
-              mkdir -p "$title_dir"
-              tar -xzf builds/linux/job-hunter-team-linux-x64.tar.gz -C "$title_dir"
-              game_bin="$title_dir/job-hunter-team.x86_64"
-              ;;
-            macOS)
-              title_dir="$RUNNER_TEMP/jht-title-artifact-gate"
-              mkdir -p "$title_dir"
-              ditto -x -k builds/macos/job-hunter-team.zip "$title_dir"
-              game_bin="$(find "$title_dir" -type f -path '*/Contents/MacOS/*' -print -quit)"
-              ;;
-          esac
-          test -n "$game_bin"
-          test -f "$game_bin"
+      - name: Collect and inspect Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release-assets
+          bundle_root=desktop/src-tauri/target/release/bundle
+          appimage="$(find "$bundle_root/appimage" -type f -name '*.AppImage' -print -quit)"
+          deb="$(find "$bundle_root/deb" -type f -name '*.deb' -print -quit)"
+          test -n "$appimage"
+          test -n "$deb"
+          cp "$appimage" release-assets/job-hunter-team-linux-x64.AppImage
+          cp "$deb" release-assets/job-hunter-team-linux-x64.deb
+          chmod +x release-assets/job-hunter-team-linux-x64.AppImage
+          extract_dir="$(mktemp -d)"
+          (cd "$extract_dir" && "$GITHUB_WORKSPACE/release-assets/job-hunter-team-linux-x64.AppImage" --appimage-extract >/dev/null)
+          test -x "$extract_dir/squashfs-root/AppRun"
+          dpkg-deb --info release-assets/job-hunter-team-linux-x64.deb >/dev/null
 
-          set +e
-          title_out="$(env JHT_NOVPS=1 JHT_LANG= JHT_LANGUAGE_PICKER_TEST=1 \
-            JHT_EXPECTED_GAME_VERSION="$expected_version" \
-            "$game_bin" --headless 2>&1)"
-          title_rc=$?
-          set -e
-          printf '%s\n' "$title_out"
-          test "$title_rc" -eq 0
-          printf '%s\n' "$title_out" | tr -d '\r' \
-            | grep -Fx "LANGUAGE-PICKER-TITLE-VERSION v${expected_version}"
-          printf '%s\n' "$title_out" | tr -d '\r' \
-            | grep -Fx "LANGUAGE-PICKER-TITLE-TEST PASS"
+      - name: Gate collected artifact bytes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          assets = sorted(p for p in Path("release-assets").iterdir() if p.is_file())
+          if not assets or any(p.stat().st_size == 0 for p in assets):
+              raise SystemExit(f"missing or empty release assets: {assets}")
+          exe = next((p for p in assets if p.suffix == ".exe"), None)
+          if exe is not None and exe.read_bytes()[:2] != b"MZ":
+              raise SystemExit(f"not a Windows PE executable: {exe}")
+          print("release assets:", ", ".join(p.name for p in assets))
+          PY
 
-      # Il sidecar nasce sullo stesso runner e DOPO firma/notarizzazione e
-      # packaging. Il job release ricalcola l'hash dei byte scaricati e rifiuta
-      # un asset se tag, commit, dimensione o SHA-256 non coincidono: un file
-      # recuperato da un altro run non puo' essere pubblicato per errore.
+      # Il sidecar nasce sul runner che ha prodotto i byte, dopo packaging e
+      # (su macOS) firma/notarizzazione. Il job finale ricalcola tutto.
       - name: Record immutable build identity
-        env:
-          RELEASE_ASSET: ${{ matrix.artifact_path }}
-          ADDITIONAL_RELEASE_ASSET: ${{ matrix.additional_artifact_path }}
         run: |
           TAG_SHA="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
-          for asset in "$RELEASE_ASSET" "$ADDITIONAL_RELEASE_ASSET"; do
-            [ -n "$asset" ] || continue
+          for asset in release-assets/*; do
             python scripts/release_artifacts.py record \
               --asset "$asset" \
               --output "${asset}.provenance.json" \
@@ -314,29 +216,16 @@ jobs:
           done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: runner.os != 'Windows'
         with:
           name: ${{ matrix.artifact_name }}
-          path: |
-            ${{ matrix.artifact_path }}
-            ${{ matrix.artifact_path }}.provenance.json
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: runner.os == 'Windows'
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            ${{ matrix.artifact_path }}
-            ${{ matrix.artifact_path }}.provenance.json
-            ${{ matrix.additional_artifact_path }}
-            ${{ matrix.additional_artifact_path }}.provenance.json
+          path: release-assets/
 
   publish-runtime:
     name: Publish immutable runtime tag
     runs-on: ubuntu-latest
     needs:
       - check-version
-      - build-game
+      - build-desktop
     permissions:
       contents: read
       packages: write
@@ -376,7 +265,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - check-version
-      - build-game
+      - build-desktop
       - publish-runtime
     permissions:
       contents: write
@@ -492,9 +381,9 @@ jobs:
           python scripts/release_artifacts.py verify \
             --directory release-assets \
             --expected-asset job-hunter-team-windows-x64-setup.exe \
-            --expected-asset job-hunter-team-windows-x64-portable.exe \
-            --expected-asset job-hunter-team.zip \
-            --expected-asset job-hunter-team-linux-x64.tar.gz \
+            --expected-asset job-hunter-team-macos-universal.dmg \
+            --expected-asset job-hunter-team-linux-x64.AppImage \
+            --expected-asset job-hunter-team-linux-x64.deb \
             --expected-asset RUNTIME-IMAGE.json \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \
@@ -526,8 +415,9 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             release-assets/*.exe
-            release-assets/*.zip
-            release-assets/*.tar.gz
+            release-assets/*.dmg
+            release-assets/*.AppImage
+            release-assets/*.deb
             release-assets/RUNTIME-IMAGE.json
             release-assets/SHA256SUMS
             release-assets/RELEASE-PROVENANCE.json

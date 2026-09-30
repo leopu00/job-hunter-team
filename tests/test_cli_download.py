@@ -73,7 +73,7 @@ def isolated_env(tmp_path: Path, base_url: str):
 def test_download_help_describes_required_contract():
     result = run_jht("download", "--help")
     assert result.returncode == 0
-    for flag in ("--os <platform>", "--version <release>", "--output <file>", "--portable"):
+    for flag in ("--os <platform>", "--version <release>", "--output <file>", "--deb"):
         assert flag in result.stdout
 
 
@@ -81,8 +81,8 @@ def test_download_help_describes_required_contract():
     ("platform", "asset"),
     [
         ("windows", "job-hunter-team-windows-x64-setup.exe"),
-        ("macos", "job-hunter-team.zip"),
-        ("linux", "job-hunter-team-linux-x64.tar.gz"),
+        ("macos", "job-hunter-team-macos-universal.dmg"),
+        ("linux", "job-hunter-team-linux-x64.AppImage"),
     ],
 )
 def test_downloads_platform_asset_and_verifies_sha256(tmp_path, platform, asset):
@@ -115,20 +115,20 @@ def test_download_version_is_not_intercepted_by_global_version_flag(tmp_path):
     assert result.stdout.strip() != "0.3.5"
 
 
-def test_download_portable_selects_optional_windows_asset(tmp_path):
-    asset = "job-hunter-team-windows-x64-portable.exe"
-    with release_server(release_files(asset, b"portable")) as base_url:
+def test_download_deb_selects_optional_linux_asset(tmp_path):
+    asset = "job-hunter-team-linux-x64.deb"
+    with release_server(release_files(asset, b"deb package")) as base_url:
         result = run_jht(
-            "download", "--os", "windows", "--version", "0.3.5", "--portable",
+            "download", "--os", "linux", "--version", "0.3.5", "--deb",
             env=isolated_env(tmp_path, base_url),
         )
 
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "user" / "downloads" / asset).read_bytes() == b"portable"
+    assert (tmp_path / "user" / "downloads" / asset).read_bytes() == b"deb package"
 
 
 def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
-    asset = "job-hunter-team-linux-x64.tar.gz"
+    asset = "job-hunter-team-linux-x64.AppImage"
     files = release_files(asset, b"corrupt", checksum="0" * 64)
     with release_server(files) as base_url:
         result = run_jht(
@@ -146,9 +146,9 @@ def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
 @pytest.mark.parametrize(
     ("args", "message"),
     [
-            (("--os", "plan9", "--version", "0.3.5"), "Unsupported operating system"),
-            (("--os", "windows", "--version", "not-a-version"), "Invalid version"),
-            (("--os", "linux", "--version", "0.3.5", "--portable"), "only for Windows"),
+        (("--os", "plan9", "--version", "0.3.5"), "Unsupported operating system"),
+        (("--os", "windows", "--version", "not-a-version"), "Invalid version"),
+        (("--os", "windows", "--version", "0.3.5", "--deb"), "only for Linux"),
     ],
 )
 def test_invalid_requests_fail_before_network(tmp_path, args, message):
@@ -167,11 +167,11 @@ def test_network_error_is_nonzero_and_leaves_no_file(tmp_path):
     )
     assert result.returncode != 0
     assert "Download failed" in result.stderr
-    assert not (tmp_path / "user" / "downloads" / "job-hunter-team-linux-x64.tar.gz").exists()
+    assert not (tmp_path / "user" / "downloads" / "job-hunter-team-linux-x64.AppImage").exists()
 
 
 def test_existing_wrong_file_is_not_overwritten(tmp_path):
-    asset = "job-hunter-team.zip"
+    asset = "job-hunter-team-macos-universal.dmg"
     output = tmp_path / asset
     output.write_bytes(b"keep me")
     with release_server(release_files(asset, b"new bytes")) as base_url:

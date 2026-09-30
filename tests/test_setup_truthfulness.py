@@ -146,10 +146,10 @@ def test_truthfulness_oracle_is_executed_by_matrix_and_release_workflow():
     matrix = _src("game/tools/test-matrix.txt")
     release = _src(".github/workflows/release.yml")
     assert matrix.splitlines().count(row) == 1
-    # La release non replica piu' il comando del singolo selftest: entrambi i
-    # runner consumano la riga sopra dalla matrice canonica.
-    assert release.count("bash game/tools/run.sh test gate") == 1
-    assert release.count("./game/tools/run.ps1 test gate") == 1
+    # Il gioco resta verificabile nel suo albero, ma dalla 0.4 non è più il
+    # desktop distribuito e il workflow di release non ne esegue i gate.
+    assert "game/tools/run.sh test gate" not in release
+    assert "game/tools/run.ps1 test gate" not in release
 
 
 def test_unavailable_paper_piles_are_empty_static_and_not_reported():

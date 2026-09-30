@@ -3,9 +3,8 @@ const RELEASE_BASE =
 
 export const DOWNLOAD_TARGETS = {
   "win-setup": `${RELEASE_BASE}/job-hunter-team-windows-x64-setup.exe`,
-  "win-portable": `${RELEASE_BASE}/job-hunter-team-windows-x64-portable.exe`,
-  mac: `${RELEASE_BASE}/job-hunter-team.zip`,
-  linux: `${RELEASE_BASE}/job-hunter-team-linux-x64.tar.gz`,
+  mac: `${RELEASE_BASE}/job-hunter-team-macos-universal.dmg`,
+  linux: `${RELEASE_BASE}/job-hunter-team-linux-x64.AppImage`,
 } as const;
 
 export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;

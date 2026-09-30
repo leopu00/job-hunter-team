@@ -109,10 +109,10 @@ before installing.
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
 The release contains `job-hunter-team-windows-x64-setup.exe` for Windows
-(with `job-hunter-team-windows-x64-portable.exe` as the no-install
-alternative), `job-hunter-team.zip` for macOS, and
-`job-hunter-team-linux-x64.tar.gz` for Linux. The macOS build is signed and
-notarized; Windows and Linux builds are currently unsigned. Open the office and
+`job-hunter-team-macos-universal.dmg` for macOS, and both
+`job-hunter-team-linux-x64.AppImage` and `job-hunter-team-linux-x64.deb` for
+Linux. The macOS build is signed and notarized; Windows and Linux builds are
+currently unsigned. Open the Tauri 2 office and
 select **Activate team**: the checklist requires all four gates — team runtime,
 provider login with a plan selected, candidate profile and working hours —
 before it starts the agents.
@@ -138,9 +138,8 @@ Full walkthrough, expert mode and contributor setup: [`docs/guides/QUICKSTART.md
 
 ## Interfaces
 
-**Native desktop app** (supported Godot office in [`game/`](game/); migration
-started in [`desktop/`](desktop/) with
-[Tauri 2 + React](docs/adr/0011-tauri-desktop-shell.md)) · **CLI** (`jht team
+**Native desktop app** ([Tauri 2 + React](desktop/), with the retired Godot
+office retained in [`game/`](game/) as migration history) · **CLI** (`jht team
 start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
 (Next.js) · **Telegram**
 
@@ -150,19 +149,18 @@ The `jht` CLI is designed to be driven by AI assistants, not just humans. Alread
 
 ## Stack & status
 
-**Stack** — current desktop: Godot 4.7; target desktop: Tauri 2/Rust shell +
-React, with Godot retained as an optional office · Node.js/TypeScript + Python
+**Stack** — desktop: Tauri 2/Rust shell + React; the Godot tree is retained but
+is no longer distributed · Node.js/TypeScript + Python
 (the API-worker direction is Node/TypeScript; the shipped team is still
 Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Docker
 · SQLite · GitHub Actions + Vercel.
 
-**Status** — team, CLI, web dashboard and native Godot application are tested
-across all three providers; onboarding, operations and settings currently live
-in the office. The staged desktop migration is documented in
+**Status** — team, CLI, web dashboard and native Tauri application are tested
+across all three subscription providers; onboarding, operations and settings
+live in the office. The desktop migration is documented in
 [`2026-08-24-desktop-tauri-migration.md`](docs/internal/roadmap/2026-08-24-desktop-tauri-migration.md).
-Its first path is intentionally narrow: the user's own PC, Podman containers
-and Node.js headless agents using the user's own OpenAI API key. The complete
-future setup matrix is documented in
+The metered team API/OpenAI-key path remains rehearsal-only and is not part of
+the 0.4 desktop product. The complete setup matrix is documented in
 [`2026-08-24-desktop-setup-modes.md`](docs/internal/architecture/2026-08-24-desktop-setup-modes.md).
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 

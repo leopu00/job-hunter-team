@@ -2,8 +2,8 @@
 # ──────────────────────────────────────────────────────────────────
 # Job Hunter Team — Pre-release version consistency check
 #
-# Verifies that the git tag matches the root package and every Godot
-# application metadata field. Godot is the only desktop application.
+# Verifies that the git tag matches the root package and every Tauri 2
+# application metadata field. The retained game/ tree is not distributed.
 #
 # Usage:
 #   scripts/check-release-version.sh [TAG]
@@ -59,9 +59,8 @@ read_version() {
 }
 
 ROOT_PKG="$ROOT/package.json"
-GAME_PROJECT="$ROOT/game/project.godot"
-GAME_PRESETS="$ROOT/game/export_presets.cfg"
-NSIS_INSTALLER="$ROOT/game/installer/windows.nsi"
+TAURI_CONFIG="$ROOT/desktop/src-tauri/tauri.conf.json"
+TAURI_CARGO="$ROOT/desktop/src-tauri/Cargo.toml"
 
 # Ogni componente che può finire in un artefatto segue la versione della
 # release. tests/js è intenzionalmente escluso: è un runner interno, non viene
@@ -76,6 +75,7 @@ VERSIONED_PACKAGES=(
   shared/package.json
   shared/cron/package.json
   e2e/package.json
+  desktop/package.json
 )
 
 # Pagine che mostrano la versione senza poter importare il package.json al
@@ -95,23 +95,16 @@ STABLE_SOURCE_ASSERTIONS=(
 )
 
 ROOT_VERSION="$(read_version "$ROOT_PKG")"
-GAME_VERSION="$(awk -F'=' '/^config\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PROJECT")"
-GAME_MAC_SHORT="$(awk -F'=' '/^application\/short_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
-GAME_MAC_VERSION="$(awk -F'=' '/^application\/version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
-GAME_WIN_FILE="$(awk -F'=' '/^application\/file_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
-GAME_WIN_PRODUCT="$(awk -F'=' '/^application\/product_version=/{gsub(/"/, "", $2); print $2; exit}' "$GAME_PRESETS")"
-GAME_NUMERIC_VERSION="${TAG_VERSION%%-*}.0"
-NSIS_VERSION="$(awk -F'"' '/^[[:space:]]*!define VERSION /{print $2; exit}' "$NSIS_INSTALLER")"
+TAURI_CONFIG_VERSION="$(read_version "$TAURI_CONFIG")"
+TAURI_CARGO_VERSION="$(awk -F'"' '/^version[[:space:]]*=/ {print $2; exit}' "$TAURI_CARGO")"
 RUNTIME_PIN_TOOL="$ROOT/scripts/runtime_image_pin.py"
 RUNTIME_PIN_MANIFEST="$ROOT/release/runtime-image.v1.json"
 CONTAINER_IMAGE="$(python3 "$RUNTIME_PIN_TOOL" --manifest "$RUNTIME_PIN_MANIFEST" show --field image_ref)"
 
 info "tag:      $TAG (version $TAG_VERSION)"
 info "root:     $ROOT_VERSION  ($ROOT_PKG)"
-info "game:     $GAME_VERSION  ($GAME_PROJECT)"
-info "game mac: $GAME_MAC_SHORT / $GAME_MAC_VERSION"
-info "game win: $GAME_WIN_FILE / $GAME_WIN_PRODUCT"
-info "NSIS:     $NSIS_VERSION"
+info "tauri:    $TAURI_CONFIG_VERSION  ($TAURI_CONFIG)"
+info "cargo:    $TAURI_CARGO_VERSION  ($TAURI_CARGO)"
 info "container: $CONTAINER_IMAGE"
 
 mismatch=0
@@ -119,15 +112,12 @@ if [ "$ROOT_VERSION" != "$TAG_VERSION" ]; then
   error "root package.json version ($ROOT_VERSION) does not match tag ($TAG_VERSION)"
   mismatch=1
 fi
-if [ "$GAME_VERSION" != "$TAG_VERSION" ] || \
-   [ "$GAME_MAC_SHORT" != "$TAG_VERSION" ] || \
-   [ "$GAME_MAC_VERSION" != "$TAG_VERSION" ]; then
-  error "Godot project/macOS metadata does not match tag ($TAG_VERSION)"
+if [ "$TAURI_CONFIG_VERSION" != "$TAG_VERSION" ]; then
+  error "Tauri config version ($TAURI_CONFIG_VERSION) does not match tag ($TAG_VERSION)"
   mismatch=1
 fi
-if [ "$GAME_WIN_FILE" != "$GAME_NUMERIC_VERSION" ] || \
-   [ "$GAME_WIN_PRODUCT" != "$GAME_NUMERIC_VERSION" ]; then
-  error "Godot Windows metadata must be numeric $GAME_NUMERIC_VERSION"
+if [ "$TAURI_CARGO_VERSION" != "$TAG_VERSION" ]; then
+  error "Tauri Cargo version ($TAURI_CARGO_VERSION) does not match tag ($TAG_VERSION)"
   mismatch=1
 fi
 
@@ -154,11 +144,6 @@ NODE
     fi
   fi
 done
-
-if [ "$NSIS_VERSION" != "$TAG_VERSION" ]; then
-  error "NSIS fallback version ($NSIS_VERSION) does not match tag ($TAG_VERSION)"
-  mismatch=1
-fi
 
 if ! python3 "$RUNTIME_PIN_TOOL" --manifest "$RUNTIME_PIN_MANIFEST" \
     verify-tree --root "$ROOT" --version "$TAG_VERSION"; then
@@ -196,7 +181,7 @@ if ! grep -Fq "## [$TAG_VERSION]" "$ROOT/CHANGELOG.md"; then
 fi
 
 if [ "$mismatch" -ne 0 ]; then
-  error "align component, lock, installer and container versions before tagging"
+  error "align component, lock, Tauri and container versions before tagging"
   exit 3
 fi
 

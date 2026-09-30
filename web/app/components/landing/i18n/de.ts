@@ -73,7 +73,7 @@ export const de: Record<string, string> = {
     "Windows: Das Installationsprogramm wird empfohlen.",
   dl_windows_portable_link: "Stattdessen die portable Version herunterladen",
   dl_desktop_unsigned_note:
-    "Unter macOS ist die App signiert und notarisiert: ein Doppelklick genügt. Unter Windows ist sie nicht signiert, deshalb meldet SmartScreen „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Unter Linux das Archiv entpacken und ausführbar machen.",
+    "Unter macOS ist das DMG signiert und notarisiert. Unter Windows ist der Installer nicht signiert; fahre nach einer SmartScreen-Warnung nur mit der Datei aus dem offiziellen Release fort. Unter Linux muss das AppImage vor dem Öffnen ausführbar gemacht werden.",
   dl_help_text: "Hast du die App heruntergeladen?",
   dl_help_link: "Folge der Einrichtung Schritt für Schritt",
 
