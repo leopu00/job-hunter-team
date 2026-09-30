@@ -46,6 +46,13 @@ const vpsRoute = read("web/app/docs/guides/run-on-a-vps/page.tsx");
 const privacyRoute = read("web/app/privacy/page.tsx");
 const setupGuide = read("web/app/setup-guide/guide-content.ts");
 const chooseWhere = read("docs/guides/CHOOSE-WHERE-TO-RUN.md");
+const nativeOfficeGuides = [
+  read("README.md"),
+  read("docs/guides/QUICKSTART.md"),
+  chooseWhere,
+  read("docs/guides/TUTORIALS.md"),
+  read("docs/guides/TUTORIALS-LOCALIZATIONS.md"),
+];
 
 function runHostSetup(options: {
   display?: string;
@@ -304,5 +311,14 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
     expect(chooseWhere).toMatch(/Run it on your\s+\*\*local PC\*\*/);
     expect(chooseWhere).toContain("If you are unsure, start locally");
     expect(chooseWhere).toContain("advanced topology, not separately validated as a guided path");
+  });
+
+  it("la release 0.4 non promette il runtime locale Windows nelle guide native", () => {
+    for (const guide of nativeOfficeGuides) {
+      expect(guide).toMatch(/Windows 0\.4/i);
+      expect(guide).not.toMatch(/Windows users must complete\s+Docker Desktop/i);
+    }
+    expect(chooseWhere).toContain("unavailable in the Windows 0.4 office");
+    expect(chooseWhere).toContain("use a Linux VPS instead");
   });
 });

@@ -1,6 +1,7 @@
 mod auth_login;
 mod auth_store;
 mod browsers;
+mod desktop_platform;
 mod direct_chat;
 mod live_screen;
 mod onboarding;
@@ -38,6 +39,7 @@ pub fn run() {
             direct_chat::direct_chat_send,
             direct_chat::direct_chat_status,
             direct_chat::direct_chat_subscribe,
+            desktop_platform::desktop_platform,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             onboarding::onboarding_assistant_open,

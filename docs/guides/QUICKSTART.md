@@ -21,12 +21,13 @@ You need an active subscription to **one** of:
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
-For comfortable local use, keep about **8 GB of RAM available before starting
-the team**. This is a measured recommendation, not a universal minimum: a
-30-minute Windows run on a 12 GB machine retained more than 4 GB free with the
-team and desktop active. No universal local disk minimum has been measured;
-leave room for the Docker image and persistent data. The desktop releases
-support Windows x64, Linux x64 and macOS (Intel: 11+; Apple silicon: 13+).
+For comfortable local use on macOS or Linux, keep about **8 GB of RAM available
+before starting the team**. This is a measured recommendation, not a universal
+minimum. No universal local disk minimum has been measured; leave room for the
+Docker image and persistent data. The desktop releases support Windows x64,
+Linux x64 and macOS (Intel: 11+; Apple silicon: 13+), but the Windows 0.4 office
+controls a Linux VPS only. Local Windows execution is planned for a later
+version.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
@@ -63,9 +64,10 @@ Download the current release from
 The office is visible immediately. Select **Activate team** and complete all
 four required gates: a local container or connected VPS runtime, provider login
 in the embedded console with a plan selected, candidate profile, and working
-hours. The office can launch the runtime installer; Windows users must complete
-Docker Desktop's consent and first-run flow. Optional email, Telegram, account
-sync and VPS setup live under **Settings**.
+hours. On macOS and Linux, the office can launch the local runtime installer.
+On Windows 0.4, onboarding offers only a Linux VPS and does not attempt a local
+install. Optional email, Telegram, account sync and VPS setup live under
+**Settings**.
 
 > The office is the interaction cockpit. The web dashboard reflects synced
 > data; the CLI remains available for automation and recovery.
@@ -262,11 +264,12 @@ If you chose the native app:
    are authored in the app and require neither an LLM nor network access. Use
    the suggested replies to prepare your profile, choose local/VPS runtime and
    provider, and set search preferences.
-3. **Complete the native checklist.** Bring up the local container or connect a
-   VPS, authorize Codex, Claude or Kimi in the embedded console and select its
-   plan, fill the Profile page, and configure working hours. Provider links may
-   open in your browser, but codes and terminal interaction remain wrapped
-   inside the office.
+3. **Complete the native checklist.** On macOS or Linux, bring up the local
+   container or connect a VPS. On Windows 0.4, connect a Linux VPS; local
+   execution is not offered yet. Authorize Codex, Claude or Kimi in the embedded
+   console and select its plan, fill the Profile page, and configure working
+   hours. Provider links may open in your browser, but codes and terminal
+   interaction remain wrapped inside the office.
 4. **Activate the team.** Once all four gates — runtime, provider login and
    plan, profile, and working hours — are ready, the Coordinator starts the
    agents. Free-text chat then becomes available next to the authored replies.

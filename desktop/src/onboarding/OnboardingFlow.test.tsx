@@ -18,6 +18,7 @@ const PROFILE: OnboardingProfileDraft = {
 function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
   const props: OnboardingFlowProps = {
     account: { displayName: "Ada" },
+    platform: "macos",
     runtime: { status: "collecting", stage: "profile" },
     onSubmit: vi.fn().mockResolvedValue(undefined),
     onRuntimeAction: vi.fn().mockResolvedValue(undefined),
@@ -57,6 +58,12 @@ async function chooseProviderAndReview(user: ReturnType<typeof userEvent.setup>,
 }
 
 describe("OnboardingFlow", () => {
+  it.each(["macos", "linux"] as const)("keeps local execution available on %s", (platform) => {
+    renderFlow({ platform, runtime: { status: "collecting", stage: "host" }, initialDraft: PROFILE });
+    expect(screen.getByRole("radio", { name: /questo computer/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /server vps/i })).not.toBeChecked();
+  });
+
   it("welcomes the Google account and never asks for an API key", async () => {
     const user = userEvent.setup();
     renderFlow();
@@ -105,6 +112,43 @@ describe("OnboardingFlow", () => {
       profile: PROFILE,
       host: { kind: "vps", address: "vps.example.test", user: "root", port: 22, keyPath: "/tmp/test-key" },
       provider: "codex",
+    });
+  });
+
+  it("offers only a preselected VPS on Windows and never submits a local host", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      platform: "windows",
+      runtime: { status: "collecting", stage: "host" },
+      initialDraft: PROFILE,
+      onSubmit,
+    });
+
+    expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/su windows 0\.4 il team deve essere eseguito su una vps linux/i)).toBeInTheDocument();
+    expect(screen.getByText(/esecuzione locale sarà disponibile in una versione successiva/i)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /server vps/i })).toBeChecked();
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("root");
+    expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
+
+    await user.type(screen.getByLabelText(/indirizzo vps/i), "windows-vps.example.test");
+    await user.type(screen.getByLabelText(/file chiave ssh/i), "C:\\Users\\Ada\\.ssh\\id_ed25519");
+    await user.click(screen.getByRole("button", { name: /continua/i }));
+    await user.click(screen.getByRole("radio", { name: /kimi/i }));
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      profile: PROFILE,
+      host: {
+        kind: "vps",
+        address: "windows-vps.example.test",
+        user: "root",
+        port: 22,
+        keyPath: "C:\\Users\\Ada\\.ssh\\id_ed25519",
+      },
+      provider: "kimi",
     });
   });
 
