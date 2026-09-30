@@ -38,6 +38,13 @@ export type OnboardingRuntimeState =
   | { status: "failed"; stage: OnboardingRuntimeStage; message: string }
   | { status: "ready" };
 
+export interface OnboardingProviderLoginState {
+  provider: SubscriptionProvider;
+  status: "starting" | "active" | "exited";
+  output: string;
+  exitCode?: number | null;
+}
+
 /** Facts independently re-read from the selected runtime host. */
 export interface OnboardingRuntimeSnapshot {
   runtimeInstalled: boolean;
@@ -58,6 +65,9 @@ export interface OnboardingFlowProps {
   runtime: OnboardingRuntimeState;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
   onRuntimeAction: (stage: "provider-login" | "assistant") => Promise<void>;
+  providerLogin: OnboardingProviderLoginState | null;
+  onProviderInput: (input: string) => Promise<void>;
+  onProviderClose: () => Promise<void>;
   onRetry: () => Promise<void>;
 }
 

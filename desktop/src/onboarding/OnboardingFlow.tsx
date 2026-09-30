@@ -58,7 +58,72 @@ function hostName(host: ExecutionHost) {
   return host.kind === "local" ? "Questo computer" : `VPS · ${host.user}@${host.address}:${host.port}`;
 }
 
-function RuntimeView({ runtime, onRetry, onRuntimeAction }: Pick<OnboardingFlowProps, "runtime" | "onRetry" | "onRuntimeAction">) {
+function ProviderLoginConsole({
+  providerLogin,
+  onProviderInput,
+  onProviderClose,
+}: Pick<OnboardingFlowProps, "providerLogin" | "onProviderInput" | "onProviderClose">) {
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [inputFailed, setInputFailed] = useState(false);
+  const [closeFailed, setCloseFailed] = useState(false);
+  const active = providerLogin?.status === "active";
+
+  if (!providerLogin) return null;
+
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    if (!active || sending || !input.trim()) return;
+    const value = input;
+    setSending(true);
+    setInputFailed(false);
+    try { await onProviderInput(value); setInput(""); } catch { setInputFailed(true); } finally { setSending(false); }
+  }
+
+  async function close() {
+    if (!active || closing) return;
+    setClosing(true);
+    setCloseFailed(false);
+    try { await onProviderClose(); } catch { setCloseFailed(true); } finally { setClosing(false); }
+  }
+
+  return (
+    <section className="onboarding-provider-console" aria-label={`Accesso ${providerName(providerLogin.provider)}`}>
+      <div className="onboarding-provider-console__heading">
+        <div><strong>Sessione {providerName(providerLogin.provider)}</strong><small>Output temporaneo e redatto · non viene salvato</small></div>
+        <span>{providerLogin.status === "starting" ? "Apertura…" : providerLogin.status === "active" ? "Attiva" : "Chiusa"}</span>
+      </div>
+      <pre className="onboarding-provider-console__output" role="log" aria-live="polite" aria-label="Output accesso provider">
+        {/* Keep provider-supplied URLs as inert text: never inject terminal output as HTML. */}
+        {providerLogin.output || "Attendo le istruzioni del provider…"}
+      </pre>
+      {providerLogin.provider === "codex" && active && (
+        <p className="onboarding-provider-console__help">Apri nel browser l’URL mostrato sopra e inserisci il codice dispositivo.</p>
+      )}
+      <form className="onboarding-provider-console__input" onSubmit={send}>
+        <label htmlFor="provider-login-input">Risposta alla sessione</label>
+        <div>
+          <input
+            id="provider-login-input"
+            autoComplete="off"
+            spellCheck={false}
+            value={input}
+            onChange={(event) => { setInputFailed(false); setInput(event.target.value); }}
+            disabled={!active || sending}
+            placeholder={active ? "Scrivi una risposta e premi Invio" : "Sessione non attiva"}
+          />
+          <button className="onboarding-secondary" type="submit" disabled={!active || sending || !input.trim()}>{sending ? "Invio…" : "Invia"}</button>
+          <button className="onboarding-secondary" type="button" onClick={() => void close()} disabled={!active || closing}>{closing ? "Chiusura…" : "Chiudi"}</button>
+        </div>
+      </form>
+      {inputFailed && <p className="onboarding-error" role="alert">Invio non riuscito. La sessione resta aperta: riprova.</p>}
+      {closeFailed && <p className="onboarding-error" role="alert">Chiusura non riuscita. Riprova prima di continuare.</p>}
+    </section>
+  );
+}
+
+function RuntimeView({ runtime, onRetry, onRuntimeAction, providerLogin, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "onRetry" | "onRuntimeAction" | "providerLogin" | "onProviderInput" | "onProviderClose">) {
   const [pending, setPending] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
 
@@ -123,6 +188,9 @@ function RuntimeView({ runtime, onRetry, onRuntimeAction }: Pick<OnboardingFlowP
               </li>
             ))}
           </ol>
+          {runtime.stage === "provider-login" && (
+            <ProviderLoginConsole providerLogin={providerLogin} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />
+          )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
           {(failed || actionRequired) && (
             <div className="onboarding-runtime-actions">
@@ -137,7 +205,7 @@ function RuntimeView({ runtime, onRetry, onRuntimeAction }: Pick<OnboardingFlowP
   );
 }
 
-export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRetry, onRuntimeAction }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRetry, onRuntimeAction, providerLogin, onProviderInput, onProviderClose }: OnboardingFlowProps) {
   const startingProfile = useMemo<OnboardingProfileDraft>(() => ({
     ...EMPTY_PROFILE, ...initialDraft, fullName: initialDraft?.fullName || account.displayName || "",
     skills: initialDraft?.skills ?? [], languages: initialDraft?.languages ?? [],
@@ -151,7 +219,7 @@ export function OnboardingFlow({ account, initialDraft, runtime, onSubmit, onRet
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
 
-  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRuntimeAction={onRuntimeAction} />;
+  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
 
   const cleanProfile = normalizedProfile(profile, skillsText, languagesText);
   const profileIsValid = Boolean(cleanProfile.fullName && cleanProfile.targetRole && cleanProfile.location);
