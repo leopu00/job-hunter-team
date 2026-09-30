@@ -25,7 +25,7 @@ const MESSAGES: Record<LoginErrorCode, string> = {
   "browser-failed": "Non riesco ad aprire il browser scelto. Scegline un altro o copia il link.",
   "browser-not-found": "Il browser scelto non c'è più. Scegline un altro.",
   "keychain-failed":
-    "Il Portachiavi non ha dato la chiave della sessione. Riprova.",
+    "Il Portachiavi non ha concesso la chiave della sessione. Chiudi completamente Job Hunter Team e riaprila se vuoi riprovare.",
   denied: "Accesso non concesso.",
   "timed-out": "Il browser non ha risposto entro cinque minuti. Riprova.",
   cancelled: "Accesso annullato.",
@@ -117,6 +117,7 @@ export function LoginScreen({
   }, [authorizeUrl]);
 
   const showCancelled = error?.code === "cancelled";
+  const keychainBlocked = error?.code === "keychain-failed";
   const manual = choice === "manual";
 
   return (
@@ -164,7 +165,7 @@ export function LoginScreen({
               <select
                 value={choice}
                 onChange={(event) => setChoice(event.target.value)}
-                disabled={!configured}
+                disabled={!configured || keychainBlocked}
               >
                 <option value="default">Browser predefinito</option>
                 {browsers.map((browser) => (
@@ -179,9 +180,9 @@ export function LoginScreen({
               className="primary-button login-card__google"
               type="button"
               onClick={start}
-              disabled={!configured}
+              disabled={!configured || keychainBlocked}
             >
-              <GoogleIcon /> Accedi con Google
+              <GoogleIcon /> {keychainBlocked ? "Riavvia per riprovare" : "Accedi con Google"}
             </button>
           </>
         )}
