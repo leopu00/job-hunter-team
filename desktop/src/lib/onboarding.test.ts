@@ -5,6 +5,7 @@ import {
   isOnboardingRuntimeReady,
   loadOnboardingGate,
   markOnboardingReady,
+  markOnboardingStarted,
   OnboardingSaveError,
   runtimeStateFromSnapshot,
   saveOnboardingProfile,
@@ -150,6 +151,19 @@ describe("loadOnboardingGate", () => {
     await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toEqual({ phase: "ready" });
   });
 
+  it("does not bypass an interrupted current flow using legacy team evidence", async () => {
+    const store = markerStore();
+    markOnboardingStarted(USER.id, store);
+    const { client } = fakeClient({
+      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
+      profile: { data: savedProfile(), error: null },
+    });
+    await expect(loadOnboardingGate(client, USER, store)).resolves.toMatchObject({
+      phase: "required",
+      runtime: { status: "collecting", stage: "host" },
+    });
+  });
+
   it("does not silently bypass onboarding when state cannot be read", async () => {
     const { client } = fakeClient({
       milestones: { data: null, error: { message: "offline" } },
@@ -202,16 +216,29 @@ describe("profile persistence and final gate", () => {
 
   it("writes and re-reads the marker only after every runtime fact and direct chat are true", () => {
     const store = markerStore();
+    markOnboardingStarted(USER.id, store);
+    expect([...store.values.values()]).toEqual(["subscription-v1-started"]);
     const incomplete = { ...READY_RUNTIME, directChatReady: false };
     expect(isOnboardingRuntimeReady(incomplete)).toBe(false);
     expect(() => markOnboardingReady(USER.id, incomplete, store)).toThrowError(
       new OnboardingSaveError("runtime-not-ready"),
     );
-    expect(store.values.size).toBe(0);
+    expect([...store.values.values()]).toEqual(["subscription-v1-started"]);
 
     expect(isOnboardingRuntimeReady(READY_RUNTIME)).toBe(true);
     markOnboardingReady(USER.id, READY_RUNTIME, store);
     expect([...store.values.values()]).toEqual(["subscription-v1"]);
+  });
+
+  it("never downgrades a final marker when the start operation is repeated", async () => {
+    const store = markerStore();
+    markOnboardingReady(USER.id, READY_RUNTIME, store);
+    markOnboardingStarted(USER.id, store);
+
+    expect([...store.values.values()]).toEqual(["subscription-v1"]);
+    const { client, calls } = fakeClient({});
+    await expect(loadOnboardingGate(client, USER, store)).resolves.toEqual({ phase: "ready" });
+    expect(calls).toHaveLength(0);
   });
 
   it("does not report ready when the chat fact is absent at runtime", () => {
