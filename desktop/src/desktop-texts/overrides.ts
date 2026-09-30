@@ -50,42 +50,42 @@ export const TEXT_OVERRIDES: TextOverride[] = [
     from: "Tente alargar o intervalo, ou inicie a equipa para preencher os gráficos — os dados vêm do SQLite local (ou do Supabase quando sincronizado).",
     to: "Ainda não há dados da equipa: chegam quando a sua equipa sincronizar com a nuvem.",
   },
-  // /team's status card: this is the desktop control panel, not the web's
-  // mobile view. This release exposes status and emergency stop only.
+  // /team's status card: desktop runtime start is owned by the mandatory
+  // subscription onboarding, never by the retired API-key launcher.
   {
     file: MOBILE_TEAM_STATUS,
     from: "Mobile view is read-only, except for emergency stop.",
-    to: "Here you see the team's status and can stop it.",
+    to: "Here you see the team's status and can stop it. Runtime setup is completed during onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "La vista mobile è sola lettura, tranne lo stop d'emergenza.",
-    to: "Qui vedi lo stato del team e puoi fermarlo.",
+    to: "Qui vedi lo stato del team e puoi fermarlo. Il runtime viene configurato durante l’onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "La vista móvil es de solo lectura, salvo la parada de emergencia.",
-    to: "Aquí ves el estado del equipo y puedes detenerlo.",
+    to: "Aquí ves el estado del equipo y puedes detenerlo. El runtime se configura durante el onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "La vue mobile est en lecture seule, sauf pour l'arrêt d'urgence.",
-    to: "Ici, vous voyez l'état de l'équipe et pouvez l'arrêter.",
+    to: "Ici, vous voyez l'état de l'équipe et pouvez l'arrêter. Le runtime est configuré pendant l’onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "Die mobile Ansicht ist schreibgeschützt – außer für den Not-Aus.",
-    to: "Hier sehen Sie den Status des Teams und können es stoppen.",
+    to: "Hier sehen Sie den Status des Teams und können es stoppen. Die Runtime wird beim Onboarding eingerichtet.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "A mobilnézet csak olvasható, a vészleállítás kivételével.",
-    to: "Itt látod a csapat állapotát, és leállíthatod.",
+    to: "Itt látod a csapat állapotát, és leállíthatod. A runtime beállítása az onboarding során történik.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "A vista móvel é só de leitura, exceto a paragem de emergência.",
-    to: "Aqui vês o estado da equipa e podes pará-la.",
+    to: "Aqui vês o estado da equipa e podes pará-la. O runtime é configurado durante o onboarding.",
   },
 ];
 

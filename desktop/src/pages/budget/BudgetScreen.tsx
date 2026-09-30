@@ -58,7 +58,7 @@ function ApiTeamSpend({ spend }: { spend: SpendRead }) {
       <>
         <Caps team={report.teamCapUsd} agent={report.agentCapUsd} />
         <Notice>
-          Nessun run del team API su questo computer. I dati compariranno dopo il primo run.
+          Nessun run API storico su questo computer. Il percorso 0.4 usa il provider in abbonamento configurato durante l’onboarding.
         </Notice>
       </>
     );

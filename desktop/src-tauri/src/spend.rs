@@ -4,13 +4,22 @@
 //! and nothing here writes, creates or migrates the file. No run yet means no
 //! file, and the page says so.
 
-use crate::team::{workspace_dir, AGENT_MAX_COST_USD, TEAM_MAX_COST_USD};
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use std::path::Path;
+use tauri::Manager;
 
 /// The newest runs the page lists: enough for the history, bounded.
 const RUN_LIMIT: u32 = 50;
+const TEAM_MAX_COST_USD: &str = "0.10";
+const AGENT_MAX_COST_USD: &str = "0.02";
+
+fn historical_workspace(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_local_data_dir()
+        .ok()
+        .map(|path| path.join("api-team"))
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,7 +70,7 @@ pub(crate) struct SpendError {
 
 #[tauri::command]
 pub(crate) async fn api_team_spend(app: tauri::AppHandle) -> Result<SpendReport, SpendError> {
-    let Some(workspace) = workspace_dir(&app) else {
+    let Some(workspace) = historical_workspace(&app) else {
         return Err(SpendError {
             code: "storage_missing",
         });

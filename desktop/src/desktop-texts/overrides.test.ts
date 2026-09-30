@@ -28,8 +28,8 @@ describe("desktop-only texts", () => {
     const id = `${repo}web/app/(protected)/team/MobileTeamStatus.tsx`;
     const desktop = applyTextOverrides(id, readFileSync(id, "utf-8"));
     expect(desktop).not.toMatch(/mobile view|vista mobile|vista móvil|vue mobile|mobile Ansicht|mobilnézet|vista móvel/i);
-    expect(desktop).toContain("Qui vedi lo stato del team e puoi fermarlo.");
-    expect(desktop).not.toMatch(/Team locale/i);
+    expect(desktop).toContain("Qui vedi lo stato del team e puoi fermarlo. Il runtime viene configurato durante l’onboarding.");
+    expect(desktop).not.toContain("Team locale");
   });
 
   it("fails loudly when the web rewords a text instead of shipping the old one", () => {
