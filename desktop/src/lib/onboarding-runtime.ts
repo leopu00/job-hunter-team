@@ -15,7 +15,30 @@ export type OnboardingInteractiveEvent =
   | { kind: "output"; text: string }
   | { kind: "exit"; code: number | null };
 
+export interface SshHostKeyProbe {
+  status: "pinned" | "confirmation_required";
+  algorithm: "ssh-ed25519";
+  fingerprint: `SHA256:${string}`;
+}
+
 function desktopOnly(): never { throw { code: "desktop_only" }; }
+
+export async function probeOnboardingSshHostKey(host: ExecutionHost): Promise<SshHostKeyProbe> {
+  if (!isTauri()) desktopOnly();
+  return invoke<SshHostKeyProbe>("onboarding_ssh_host_key_probe", { host });
+}
+
+export async function confirmOnboardingSshHostKey(
+  host: ExecutionHost,
+  probe: Pick<SshHostKeyProbe, "algorithm" | "fingerprint">,
+): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_ssh_host_key_confirm", {
+    host,
+    algorithm: probe.algorithm,
+    fingerprint: probe.fingerprint,
+  });
+}
 
 export async function prepareOnboardingRuntime(
   submission: OnboardingSubmission,

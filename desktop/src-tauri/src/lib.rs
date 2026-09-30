@@ -48,6 +48,8 @@ pub fn run() {
             onboarding::onboarding_provider_login_close,
             onboarding::onboarding_provider_login_input,
             onboarding::onboarding_resume_snapshot,
+            runtime_host::onboarding_ssh_host_key_confirm,
+            runtime_host::onboarding_ssh_host_key_probe,
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,

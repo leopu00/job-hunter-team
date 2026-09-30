@@ -744,7 +744,7 @@ fn prepare_impl(
         "Valido la configurazione locale",
     );
     let mut pairing = pairing_token.map(Zeroizing::new);
-    let validated = validate_host(&app, &submission.host, false).map_err(failure)?;
+    let validated = validate_host(&app, &submission.host).map_err(failure)?;
     progress(
         &channel,
         OnboardingProgressStage::Runtime,
@@ -1013,7 +1013,7 @@ pub(crate) async fn onboarding_snapshot(
     host: ExecutionHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     tauri::async_runtime::spawn_blocking(move || {
-        let validated = validate_host(&app, &host, false).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
         snapshot_impl(&app, &validated)
     })
     .await
@@ -1026,7 +1026,7 @@ pub(crate) async fn onboarding_resume_snapshot(
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     tauri::async_runtime::spawn_blocking(move || {
         let host = crate::direct_chat::load_persisted_host(&app).map_err(failure)?;
-        let validated = validate_host(&app, &host, false).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
         snapshot_impl(&app, &validated)
     })
     .await
@@ -1090,7 +1090,7 @@ pub(crate) async fn onboarding_existing_team_connect(
             OnboardingProgressStage::Runtime,
             "Verifico la VPS già configurata",
         );
-        let validated = validate_host(&app, &request.host, false).map_err(failure)?;
+        let validated = validate_host(&app, &request.host).map_err(failure)?;
         progress(
             &on_progress,
             OnboardingProgressStage::Container,
@@ -1302,7 +1302,7 @@ pub(crate) fn onboarding_provider_login(
         }
     }
     *slot = None;
-    let validated = validate_host(&app, &host, false).map_err(failure)?;
+    let validated = validate_host(&app, &host).map_err(failure)?;
     let mut command = match &validated {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
@@ -1451,7 +1451,7 @@ pub(crate) async fn onboarding_team_start(
         return Err(failure("operation_in_progress"));
     }
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let validated = validate_host(&app, &host, false).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
         progress(
             &on_progress,
             OnboardingProgressStage::Team,
@@ -1496,7 +1496,7 @@ pub(crate) async fn onboarding_assistant_open(
         return Err(failure("operation_in_progress"));
     }
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let validated = validate_host(&app, &host, false).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
         match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;

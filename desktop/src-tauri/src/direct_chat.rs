@@ -381,7 +381,7 @@ fn connect_impl(
     app: &tauri::AppHandle,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
-    let validated = validate_host(app, &host, false).map_err(failure)?;
+    let validated = validate_host(app, &host).map_err(failure)?;
     let (local_wrapper, control_path, tunnel) = match &validated {
         ValidatedHost::Local => (
             Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
