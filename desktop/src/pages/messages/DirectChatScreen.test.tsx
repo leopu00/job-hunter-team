@@ -86,6 +86,7 @@ describe("DirectChatScreen", () => {
     [1440, 900, "1"],
     [900, 420, "1"],
     [1000, 480, "1.4"],
+    [480, 420, "1.15"],
   ])(
     "confines the chat at %sx%s with zoom %s and only scrolls the transcript",
     async (width, height, zoom) => {
@@ -97,6 +98,8 @@ describe("DirectChatScreen", () => {
       const shell = screen.getByTestId("direct-chat-shell");
       const transcript = screen.getByTestId("direct-chat-transcript");
       const composer = screen.getByTestId("direct-chat-composer");
+      const composerRow = screen.getByTestId("direct-chat-composer-row");
+      const input = screen.getByRole("textbox", { name: "Scrivi a Capitano" });
       const conversation = screen.getByRole("region", { name: "Conversazione con Capitano" });
       expect(shell).toHaveStyle({ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" });
       expect(shell.className).toMatch(/min-h-0/);
@@ -109,6 +112,9 @@ describe("DirectChatScreen", () => {
       expect(shell.querySelectorAll(".overflow-y-auto")).toHaveLength(1);
       expect(composer.className).toMatch(/shrink-0/);
       expect(composer.className).not.toMatch(/absolute|fixed|sticky/);
+      expect(composerRow.className).toMatch(/flex-wrap/);
+      expect(input.className).toMatch(/min-w-0/);
+      expect(input.className).toMatch(/flex-\[1_1_16rem\]/);
     },
   );
 
