@@ -6,6 +6,7 @@ import type {
   AssistantOnboardingStep,
 } from "./contract";
 import { INITIAL_ASSISTANT_ONBOARDING_STATE } from "./contract";
+import { VoiceInputControl } from "../../voice-input";
 import "./assistant-onboarding.css";
 
 type GuideStep = {
@@ -113,10 +114,12 @@ export default function AssistantOnboarding({
   initialState,
   onStateChange,
   onComplete,
+  voiceInputBridge,
 }: AssistantOnboardingProps) {
   const [state, setState] = useState<AssistantOnboardingState>(() => validInitialState(initialState));
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState(false);
+  const [firstMessage, setFirstMessage] = useState("");
   const dialogueTitle = useRef<HTMLHeadingElement>(null);
   const path = state.path;
   const guide = path ? GUIDES[path][state.step - 1] : null;
@@ -149,7 +152,7 @@ export default function AssistantOnboarding({
       setCompleting(true);
       setCompletionError(false);
       try {
-        await onComplete(state);
+        await onComplete(state, firstMessage.trim());
       } catch {
         setCompletionError(true);
       } finally {
@@ -238,6 +241,30 @@ export default function AssistantOnboarding({
               <p className="assistant-onboarding__speaker">{assistantName} · {guide.eyebrow}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{guide.title}</h2>
               <p className="assistant-onboarding__message" aria-live="polite">{guide.message}</p>
+              {state.step === 4 && (
+                <div className="assistant-onboarding__composer">
+                  <label htmlFor="assistant-first-message">Il tuo primo messaggio all’Assistente</label>
+                  <div className="assistant-onboarding__composer-row">
+                    <textarea
+                      id="assistant-first-message"
+                      rows={3}
+                      value={firstMessage}
+                      onChange={(event) => setFirstMessage(event.target.value)}
+                      disabled={completing}
+                      placeholder="Scrivi o detta da dove vuoi cominciare…"
+                    />
+                    <VoiceInputControl
+                      value={firstMessage}
+                      onChange={setFirstMessage}
+                      locale="it-IT"
+                      bridge={voiceInputBridge}
+                      disabled={completing}
+                      className="assistant-onboarding__voice"
+                    />
+                  </div>
+                  <small>La trascrizione resta modificabile e sarà consegnata solo quando confermi.</small>
+                </div>
+              )}
               {completionError && (
                 <p className="assistant-onboarding__error" role="alert">
                   Non riesco ad aprire la chat. Riprova: il percorso non è stato segnato come completato.
@@ -247,7 +274,12 @@ export default function AssistantOnboarding({
                 <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing}>
                   <span aria-hidden="true">←</span> Indietro
                 </button>
-                <button type="button" className="assistant-onboarding__next" onClick={() => void next()} disabled={completing}>
+                <button
+                  type="button"
+                  className="assistant-onboarding__next"
+                  onClick={() => void next()}
+                  disabled={completing || (state.step === 4 && !firstMessage.trim())}
+                >
                   {completing
                     ? "Apro la chat…"
                     : state.step === 4
