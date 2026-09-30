@@ -9,6 +9,7 @@ import {
   signInWithGoogle,
   signOut,
   useSession,
+  type AuthStorage,
   type LoginDeps,
 } from "./supabase";
 
@@ -23,6 +24,7 @@ const RUST_STORE_NAME = /^sb-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?-auth-token(?:|
 
 function fakeClient(overrides: Partial<Record<string, unknown>> = {}) {
   const auth = {
+    initialize: vi.fn().mockResolvedValue({ error: null }),
     signInWithOAuth: vi.fn().mockResolvedValue({
       data: { provider: "google", url: `${PROJECT}/auth/v1/authorize?provider=google`, flowId: FLOW_ID },
       error: null,
@@ -91,6 +93,7 @@ describe("signInWithGoogle", () => {
         queryParams: { prompt: "select_account" },
       },
     });
+    expect(client.auth.initialize).toHaveBeenCalledOnce();
     expect(onAuthorizeUrl).toHaveBeenCalledWith(`${PROJECT}/auth/v1/authorize?provider=google`);
     expect(invoke).toHaveBeenCalledWith("auth_google_login", {
       authorizeUrl: `${PROJECT}/auth/v1/authorize?provider=google`,
@@ -209,6 +212,68 @@ describe("signInWithGoogle", () => {
       expect.objectContaining({ flowId: "parallel_flow_1" }),
       expect.objectContaining({ flowId: "parallel_flow_2" }),
     ]);
+  });
+
+  it("waits for startup cleanup before storing the new PKCE verifier", async () => {
+    const storageKey = "sb-example-ref-auth-token";
+    const values = new Map<string, string>([[storageKey, JSON.stringify({ stale: true })]]);
+    let releaseStartup!: () => void;
+    let startupRead = true;
+    let released = false;
+    const startupGate = new Promise<void>((resolve) => {
+      releaseStartup = () => {
+        if (released) return;
+        released = true;
+        resolve();
+      };
+    });
+    const storage: AuthStorage = {
+      async getItem(key) {
+        if (key === storageKey && startupRead) {
+          startupRead = false;
+          await startupGate;
+        }
+        return values.get(key) ?? null;
+      },
+      async setItem(key, value) {
+        values.set(key, value);
+        // Senza l'attesa esplicita di initialize(), il vecchio percorso arriva
+        // qui mentre il cleanup iniziale è sospeso e perde subito il verifier.
+        if (key === `${storageKey}-code-verifier`) releaseStartup();
+      },
+      async removeItem(key) {
+        values.delete(key);
+      },
+    };
+    const client = createDesktopSupabase(
+      { configured: true, url: PROJECT, anonKey: "anon-test-key" },
+      storage,
+    );
+    const fallback = setTimeout(releaseStartup, 100);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          access_token: "header.payload.signature",
+          token_type: "bearer",
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          refresh_token: "refresh-test",
+          user: { id: "00000000-0000-4000-8000-000000000000", aud: "authenticated" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )),
+    );
+
+    try {
+      await signInWithGoogle({}, deps(client, backend(async () => "code-123")));
+    } finally {
+      clearTimeout(fallback);
+      releaseStartup();
+    }
+
+    const session = await client.auth.getSession();
+    expect(session.data.session?.refresh_token).toBe("refresh-test");
   });
 });
 
