@@ -8,9 +8,10 @@
 //! link: un deep link su macOS esiste solo per l'app installata, e il login
 //! deve funzionare anche da `tauri dev`.
 //!
-//! Il codice che torna da solo non vale nulla: si scambia per una sessione
-//! solo insieme al code verifier, che non esce mai dall'app. Un altro processo
-//! che bussa alla porta con un codice suo fa fallire lo scambio, non entra.
+//! Ogni callback porta l'id casuale del proprio flow PKCE. Il listener accetta
+//! soltanto quell'id e il frontend lo usa per scegliere il verifier della stessa
+//! richiesta: callback parallele o rigiocate non possono prendere il verifier
+//! di un altro login.
 
 use crate::browsers::{self, Browser};
 use serde::Serialize;
@@ -31,6 +32,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_REQUEST_BYTES: usize = 16 * 1024;
 const MAX_ERROR_DESCRIPTION: usize = 300;
+const FLOW_ID_PARAM: &str = "sb_flow_id";
 
 static LOGIN_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static LOGIN_CANCELLED: AtomicBool = AtomicBool::new(false);
@@ -94,8 +96,10 @@ fn resolve_opener(choice: Option<&str>, installed: Vec<Browser>) -> Result<Opene
 pub(crate) async fn auth_google_login(
     authorize_url: String,
     browser: Option<String>,
+    flow_id: String,
 ) -> Result<String, AuthLoginError> {
-    validate_authorize_url(&authorize_url)?;
+    let configured_origin = configured_supabase_origin()?;
+    validate_authorize_url(&authorize_url, &configured_origin, &flow_id)?;
     let opener = resolve_opener(browser.as_deref(), browsers::installed())?;
     if LOGIN_IN_PROGRESS.swap(true, Ordering::SeqCst) {
         return Err(failure("login_in_progress"));
@@ -113,7 +117,12 @@ pub(crate) async fn auth_google_login(
             Opener::Installed(browser) => browsers::open_in(browser, &authorize_url),
         }
         .map_err(|_| failure("browser_failed"))?;
-        wait_for_callback(&listener, Instant::now() + LOGIN_TIMEOUT, &LOGIN_CANCELLED)
+        wait_for_callback(
+            &listener,
+            Instant::now() + LOGIN_TIMEOUT,
+            &LOGIN_CANCELLED,
+            &flow_id,
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("listener_failed")));
@@ -127,6 +136,22 @@ pub(crate) async fn auth_google_login(
     }
 }
 
+fn configured_supabase_origin() -> Result<String, AuthLoginError> {
+    let configured =
+        Url::parse(env!("JHT_SUPABASE_URL")).map_err(|_| failure("auth_not_configured"))?;
+    if configured.scheme() != "https"
+        || configured.host_str().is_none()
+        || !configured.username().is_empty()
+        || configured.password().is_some()
+        || configured.path() != "/"
+        || configured.query().is_some()
+        || configured.fragment().is_some()
+    {
+        return Err(failure("auth_not_configured"));
+    }
+    Ok(configured.origin().ascii_serialization())
+}
+
 /// Interrompe l'attesa del ritorno (l'utente ha chiuso il browser o ci ripensa).
 #[tauri::command]
 pub(crate) fn auth_cancel_login() {
@@ -137,27 +162,91 @@ pub(crate) fn auth_cancel_login() {
 
 /// Solo la pagina di autorizzazione di Supabase, con il ritorno su questa porta:
 /// il comando non apre indirizzi qualsiasi nel browser.
-fn validate_authorize_url(raw: &str) -> Result<(), AuthLoginError> {
+fn validate_authorize_url(
+    raw: &str,
+    configured_origin: &str,
+    expected_flow_id: &str,
+) -> Result<(), AuthLoginError> {
     let url = Url::parse(raw).map_err(|_| failure("invalid_authorize_url"))?;
-    let https = url.scheme() == "https" && url.host_str().is_some();
-    let path = url.path() == "/auth/v1/authorize";
-    let redirect = url
-        .query_pairs()
-        .any(|(key, value)| key == "redirect_to" && value == callback_url());
-    let pkce = url
-        .query_pairs()
-        .any(|(key, value)| key == "code_challenge_method" && value.eq_ignore_ascii_case("s256"));
-    if https && path && redirect && pkce && url.username().is_empty() && url.password().is_none() {
+    let configured =
+        Url::parse(configured_origin).map_err(|_| failure("invalid_supabase_origin"))?;
+    let same_origin = url.scheme() == configured.scheme()
+        && url.host_str() == configured.host_str()
+        && url.port_or_known_default() == configured.port_or_known_default();
+    let safe_configured_origin = configured.scheme() == "https"
+        && configured.host_str().is_some()
+        && configured.username().is_empty()
+        && configured.password().is_none()
+        && configured.path() == "/"
+        && configured.query().is_none()
+        && configured.fragment().is_none();
+    let safe_authorize = url.scheme() == "https"
+        && url.path() == "/auth/v1/authorize"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.fragment().is_none();
+    let provider = query_value(&url, "provider").filter(|value| value == "google");
+    let pkce_method = query_value(&url, "code_challenge_method")
+        .filter(|value| value.eq_ignore_ascii_case("s256"));
+    let challenge = query_value(&url, "code_challenge").filter(|value| {
+        (43..=128).contains(&value.len())
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    });
+    let redirect = query_value(&url, "redirect_to")
+        .and_then(|value| Url::parse(&value).ok())
+        .filter(|redirect| valid_redirect(redirect, expected_flow_id));
+    if safe_configured_origin
+        && safe_authorize
+        && same_origin
+        && valid_flow_id(expected_flow_id)
+        && provider.is_some()
+        && pkce_method.is_some()
+        && challenge.is_some()
+        && redirect.is_some()
+    {
         Ok(())
     } else {
         Err(failure("invalid_authorize_url"))
     }
 }
 
+/// Restituisce un solo valore: parametri duplicati vengono rifiutati invece di
+/// lasciare che backend e browser ne scelgano due diversi.
+fn query_value(url: &Url, wanted: &str) -> Option<String> {
+    let mut values = url
+        .query_pairs()
+        .filter(|(key, _)| key == wanted)
+        .map(|(_, value)| value.into_owned());
+    let value = values.next()?;
+    values.next().is_none().then_some(value)
+}
+
+fn valid_flow_id(flow_id: &str) -> bool {
+    (8..=64).contains(&flow_id.len())
+        && flow_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn valid_redirect(url: &Url, expected_flow_id: &str) -> bool {
+    url.scheme() == "http"
+        && url.host_str() == Some("127.0.0.1")
+        && url.port() == Some(CALLBACK_PORT)
+        && url.path() == CALLBACK_PATH
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.fragment().is_none()
+        && query_value(url, FLOW_ID_PARAM).as_deref() == Some(expected_flow_id)
+        && url.query_pairs().count() == 1
+}
+
 fn wait_for_callback(
     listener: &TcpListener,
     deadline: Instant,
     cancelled: &AtomicBool,
+    expected_flow_id: &str,
 ) -> Result<Callback, AuthLoginError> {
     loop {
         if cancelled.load(Ordering::SeqCst) {
@@ -168,7 +257,7 @@ fn wait_for_callback(
         }
         match listener.accept() {
             Ok((stream, _)) => {
-                if let Some(callback) = serve(stream) {
+                if let Some(callback) = serve(stream, expected_flow_id) {
                     return Ok(callback);
                 }
             }
@@ -180,11 +269,11 @@ fn wait_for_callback(
 
 /// Risponde a una richiesta. `Some` solo per il ritorno vero e proprio: una
 /// richiesta di favicon o una connessione vuota non chiudono l'attesa.
-fn serve(mut stream: TcpStream) -> Option<Callback> {
+fn serve(mut stream: TcpStream, expected_flow_id: &str) -> Option<Callback> {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let target = read_request_target(&mut stream)?;
-    let callback = parse_callback(&target);
+    let callback = parse_callback(&target, expected_flow_id);
     let (status, body) = match &callback {
         Some(Callback::Code(_)) => (
             "200 OK",
@@ -230,7 +319,7 @@ fn read_request_target(stream: &mut TcpStream) -> Option<String> {
     }
 }
 
-fn parse_callback(target: &str) -> Option<Callback> {
+fn parse_callback(target: &str, expected_flow_id: &str) -> Option<Callback> {
     let url = Url::parse(&format!("http://127.0.0.1{target}")).ok()?;
     if url.path() != CALLBACK_PATH {
         return None;
@@ -238,13 +327,23 @@ fn parse_callback(target: &str) -> Option<Callback> {
     let mut code = None;
     let mut error = None;
     let mut description = None;
+    let mut flow_ids = Vec::new();
+    let mut duplicate = false;
     for (key, value) in url.query_pairs() {
         match key.as_ref() {
-            "code" => code = Some(value.into_owned()),
-            "error" => error = Some(value.into_owned()),
-            "error_description" => description = Some(value.into_owned()),
+            "code" => duplicate |= code.replace(value.into_owned()).is_some(),
+            "error" => duplicate |= error.replace(value.into_owned()).is_some(),
+            "error_description" => duplicate |= description.replace(value.into_owned()).is_some(),
+            FLOW_ID_PARAM => flow_ids.push(value.into_owned()),
             _ => {}
         }
+    }
+    if duplicate
+        || (code.is_some() && error.is_some())
+        || flow_ids.len() != 1
+        || flow_ids[0] != expected_flow_id
+    {
+        return None;
     }
     if error.is_some() {
         return Some(Callback::Denied(description.map(|text| {
@@ -277,8 +376,8 @@ main{{text-align:center}}h1{{font-size:1.4rem}}</style></head>\
 #[cfg(test)]
 mod tests {
     use super::{
-        callback_url, parse_callback, resolve_opener, serve, validate_authorize_url,
-        wait_for_callback, Callback, Opener,
+        callback_url, configured_supabase_origin, parse_callback, resolve_opener, serve,
+        validate_authorize_url, wait_for_callback, Callback, Opener,
     };
     use crate::browsers::Browser;
     use std::{
@@ -289,33 +388,84 @@ mod tests {
         time::{Duration, Instant},
     };
 
+    const ORIGIN: &str = "https://example.supabase.co";
+    const FLOW_ID: &str = "flow_12345678";
+
+    fn callback(flow_id: &str) -> String {
+        format!("{}?sb_flow_id={flow_id}", callback_url())
+    }
+
     fn authorize(redirect: &str) -> String {
-        let mut url = tauri::Url::parse("https://example.supabase.co/auth/v1/authorize").unwrap();
+        let mut url = tauri::Url::parse(&format!("{ORIGIN}/auth/v1/authorize")).unwrap();
         url.query_pairs_mut()
             .append_pair("provider", "google")
             .append_pair("redirect_to", redirect)
-            .append_pair("code_challenge", "abc")
+            .append_pair("code_challenge", &"a".repeat(43))
             .append_pair("code_challenge_method", "s256");
         url.to_string()
     }
 
     #[test]
-    fn only_the_supabase_authorize_page_with_our_callback_is_opened() {
-        assert!(validate_authorize_url(&authorize(&callback_url())).is_ok());
-        assert!(validate_authorize_url(&authorize("https://evil.example/cb")).is_err());
+    fn authorize_is_bound_to_the_configured_origin_flow_and_callback() {
+        let valid = authorize(&callback(FLOW_ID));
+        assert!(validate_authorize_url(&valid, ORIGIN, FLOW_ID).is_ok());
+        assert!(validate_authorize_url(&valid, "https://other.supabase.co", FLOW_ID).is_err());
+        assert!(validate_authorize_url(
+            &valid.replace(ORIGIN, "https://evil.example"),
+            ORIGIN,
+            FLOW_ID
+        )
+        .is_err());
         assert!(
-            validate_authorize_url(&authorize(&callback_url()).replace("https://", "http://"))
-                .is_err()
+            validate_authorize_url(&authorize("https://evil.example/cb"), ORIGIN, FLOW_ID).is_err()
+        );
+        assert!(
+            validate_authorize_url(&authorize(&callback("other_flow")), ORIGIN, FLOW_ID).is_err()
         );
         assert!(validate_authorize_url(
-            &authorize(&callback_url()).replace("/auth/v1/authorize", "/elsewhere")
+            &valid.replace("/auth/v1/authorize", "/elsewhere"),
+            ORIGIN,
+            FLOW_ID
         )
         .is_err());
         assert!(validate_authorize_url(
-            &authorize(&callback_url()).replace("code_challenge_method=s256", "x=y")
+            &valid.replace("code_challenge_method=s256", "code_challenge_method=plain"),
+            ORIGIN,
+            FLOW_ID
         )
         .is_err());
-        assert!(validate_authorize_url("file:///etc/passwd").is_err());
+        assert!(validate_authorize_url("file:///etc/passwd", ORIGIN, FLOW_ID).is_err());
+    }
+
+    #[test]
+    fn backend_origin_comes_from_the_build_not_the_command() {
+        let built = env!("JHT_SUPABASE_URL");
+        if built.is_empty() {
+            assert_eq!(
+                configured_supabase_origin().unwrap_err().code,
+                "auth_not_configured"
+            );
+        } else {
+            let expected = tauri::Url::parse(built)
+                .unwrap()
+                .origin()
+                .ascii_serialization();
+            assert_eq!(configured_supabase_origin().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn authorize_rejects_duplicate_security_parameters() {
+        let valid = authorize(&callback(FLOW_ID));
+        for duplicate in [
+            "provider=google",
+            "redirect_to=http%3A%2F%2F127.0.0.1%3A54917%2Fauth%2Fcallback",
+            "code_challenge_method=s256",
+            "code_challenge=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ] {
+            let ambiguous = format!("{valid}&{duplicate}");
+            assert!(validate_authorize_url(&ambiguous, ORIGIN, FLOW_ID).is_err());
+        }
     }
 
     #[test]
@@ -348,18 +498,48 @@ mod tests {
     #[test]
     fn the_callback_yields_the_code_or_the_provider_error() {
         assert_eq!(
-            parse_callback("/auth/callback?code=0b8f1c2e-1234-4d5e-9abc-def012345678"),
+            parse_callback(
+                "/auth/callback?code=0b8f1c2e-1234-4d5e-9abc-def012345678&sb_flow_id=flow_12345678",
+                FLOW_ID
+            ),
             Some(Callback::Code(
                 "0b8f1c2e-1234-4d5e-9abc-def012345678".into()
             ))
         );
         assert_eq!(
-            parse_callback("/auth/callback?error=access_denied&error_description=User+denied"),
+            parse_callback(
+                "/auth/callback?error=access_denied&error_description=User+denied&sb_flow_id=flow_12345678",
+                FLOW_ID
+            ),
             Some(Callback::Denied(Some("User denied".into())))
         );
-        assert_eq!(parse_callback("/favicon.ico"), None);
-        assert_eq!(parse_callback("/auth/callback"), None);
-        assert_eq!(parse_callback("/auth/callback?code=%3Cscript%3E"), None);
+        assert_eq!(parse_callback("/favicon.ico", FLOW_ID), None);
+        assert_eq!(parse_callback("/auth/callback", FLOW_ID), None);
+        assert_eq!(
+            parse_callback("/auth/callback?code=abc&sb_flow_id=old_flow_123", FLOW_ID),
+            None
+        );
+        assert_eq!(
+            parse_callback(
+                "/auth/callback?code=%3Cscript%3E&sb_flow_id=flow_12345678",
+                FLOW_ID
+            ),
+            None
+        );
+        assert_eq!(
+            parse_callback(
+                "/auth/callback?code=first&code=second&sb_flow_id=flow_12345678",
+                FLOW_ID
+            ),
+            None
+        );
+        assert_eq!(
+            parse_callback(
+                "/auth/callback?code=abc&error=denied&sb_flow_id=flow_12345678",
+                FLOW_ID
+            ),
+            None
+        );
     }
 
     fn request(port: u16, target: &str) -> String {
@@ -371,24 +551,27 @@ mod tests {
     }
 
     #[test]
-    fn a_stray_request_does_not_end_the_wait_and_the_callback_does() {
+    fn a_stray_or_replayed_flow_does_not_end_the_wait_and_the_callback_does() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let port = listener.local_addr().unwrap().port();
         let client = thread::spawn(move || {
             let stray = request(port, "/favicon.ico");
-            let done = request(port, "/auth/callback?code=abc-123");
-            (stray, done)
+            let replay = request(port, "/auth/callback?code=old&sb_flow_id=old_flow_123");
+            let done = request(port, "/auth/callback?code=abc-123&sb_flow_id=flow_12345678");
+            (stray, replay, done)
         });
         let cancelled = AtomicBool::new(false);
         let outcome = wait_for_callback(
             &listener,
             Instant::now() + Duration::from_secs(10),
             &cancelled,
+            FLOW_ID,
         );
-        let (stray, done) = client.join().unwrap();
+        let (stray, replay, done) = client.join().unwrap();
         assert_eq!(outcome, Ok(Callback::Code("abc-123".into())));
         assert!(stray.starts_with("HTTP/1.1 404"));
+        assert!(replay.starts_with("HTTP/1.1 404"));
         assert!(done.starts_with("HTTP/1.1 200"));
         assert!(done.contains("Accesso completato"));
     }
@@ -402,10 +585,11 @@ mod tests {
             &listener,
             Instant::now() + Duration::from_secs(10),
             &cancelled,
+            FLOW_ID,
         );
         assert_eq!(outcome.unwrap_err().code, "cancelled");
         let cancelled = AtomicBool::new(false);
-        let outcome = wait_for_callback(&listener, Instant::now(), &cancelled);
+        let outcome = wait_for_callback(&listener, Instant::now(), &cancelled, FLOW_ID);
         assert_eq!(outcome.unwrap_err().code, "timed_out");
     }
 
@@ -416,6 +600,6 @@ mod tests {
         let client = thread::spawn(move || drop(TcpStream::connect(("127.0.0.1", port)).unwrap()));
         let (stream, _) = listener.accept().unwrap();
         client.join().unwrap();
-        assert_eq!(serve(stream), None);
+        assert_eq!(serve(stream, FLOW_ID), None);
     }
 }

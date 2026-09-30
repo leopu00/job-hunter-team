@@ -1,0 +1,62 @@
+.ssh-key-picker {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.ssh-key-picker__label {
+  color: var(--ink, #f5f6f2);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.ssh-key-picker__status {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted, #9ea49e);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.ssh-key-picker__status strong {
+  color: var(--ink, #f5f6f2);
+}
+
+.ssh-key-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.ssh-key-picker__actions button {
+  min-height: 2.6rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line, #292e29);
+  border-radius: 0.7rem;
+  background: var(--panel-soft, #101310);
+  color: var(--ink, #f5f6f2);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ssh-key-picker__actions button:focus-visible {
+  outline: 3px solid var(--accent, #bbf246);
+  outline-offset: 2px;
+}
+
+.ssh-key-picker__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.ssh-key-picker__actions .ssh-key-picker__remove {
+  color: #ff9aa7;
+}
+
+.ssh-key-picker__error {
+  margin: 0;
+  color: #ff9aa7;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
