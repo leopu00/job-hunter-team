@@ -9,8 +9,10 @@
 //!
 //! - il nome della voce è anche dato autenticato: un file rinominato non si
 //!   apre sotto un altro nome;
-//! - un file che non si decifra (chiave cambiata, file rovinato) si cancella e
-//!   vale come assente: l'utente rifà il login, niente di peggio;
+//! - il portachiavi resta chiuso durante avvio, mount e navigazione: soltanto
+//!   `auth_store_prepare`, chiamato dal clic su «Accedi», può interrogarlo;
+//! - un file che non si decifra dopo lo sblocco (chiave cambiata, file rovinato)
+//!   si cancella e vale come assente: l'utente rifà il login, niente di peggio;
 //! - i nomi sono quelli di supabase-js (`sb-<ref>-auth-token`, ...): altro
 //!   non passa, così il comando non diventa uno scrittore di file arbitrari.
 
@@ -74,14 +76,17 @@ pub(crate) fn auth_store_set(
 }
 
 #[tauri::command]
-pub(crate) fn auth_store_remove(app: tauri::AppHandle, name: String) -> Result<(), AuthStoreError> {
-    validate_name(&name)?;
-    remove_entry(&store_dir(&app)?, &name)
+pub(crate) fn auth_store_remove(
+    app: tauri::AppHandle,
+    keys: tauri::State<'_, SystemKeyCache>,
+    name: String,
+) -> Result<(), AuthStoreError> {
+    remove_value(&store_dir(&app)?, &keys, &name)
 }
 
 /// Prima di aprire il browser: la chiave c'è (o si crea) e il portachiavi la
-/// dà. È il solo punto che riprova dopo un rifiuto, perché lo chiede l'utente
-/// con un clic su «Accedi»: una domanda per clic, mai un giro da solo.
+/// dà. È l'unico punto che può chiedere accesso. Un rifiuto resta definitivo
+/// per questo processo: solo un nuovo avvio può tentare di nuovo.
 #[tauri::command]
 pub(crate) fn auth_store_prepare(
     keys: tauri::State<'_, SystemKeyCache>,
@@ -99,9 +104,9 @@ fn get_value<S: KeySource>(
     if fs::symlink_metadata(&path).is_err() {
         return Ok(None);
     }
+    // Prima dell'azione login lo storage appare vuoto, senza interrogare il
+    // portachiavi e soprattutto senza cancellare il file ancora cifrato.
     let Some(key) = keys.existing()? else {
-        // Il file c'è ma la chiave no: illeggibile per sempre.
-        let _ = fs::remove_file(&path);
         return Ok(None);
     };
     read_entry(&path, name, &key)
@@ -117,8 +122,25 @@ fn set_value<S: KeySource>(
     if value.len() > MAX_VALUE_BYTES {
         return Err(failure("value_too_large"));
     }
-    let key = keys.existing_or_new()?;
+    let key = keys
+        .existing()?
+        .ok_or_else(|| failure("auth_store_locked"))?;
     write_entry(dir, name, value, &key)
+}
+
+fn remove_value<S: KeySource>(
+    dir: &Path,
+    keys: &KeyCache<S>,
+    name: &str,
+) -> Result<(), AuthStoreError> {
+    validate_name(name)?;
+    // Supabase può fare pulizia durante il mount. Finché l'utente non ha
+    // premuto «Accedi», quella pulizia non deve né aprire il portachiavi né
+    // cancellare dati che un successivo login potrebbe ancora decifrare.
+    if keys.existing()?.is_none() {
+        return Ok(());
+    }
+    remove_entry(dir, name)
 }
 
 /// Dove sta la chiave: il portachiavi del sistema, o un finto nei test.
@@ -156,7 +178,7 @@ enum KeyState {
     /// Interrogato: la voce non c'è (o ha una forma sbagliata e va rifatta).
     Missing,
     Loaded(Zeroizing<[u8; KEY_LEN]>),
-    /// Rifiuto o errore: niente altre domande finché l'utente non riprova.
+    /// Rifiuto o errore: niente altre domande in questo processo.
     Failed,
 }
 
@@ -187,6 +209,7 @@ impl<S: KeySource> KeyCache<S> {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Chiamato soltanto da `prepare`, quindi soltanto da un login esplicito.
     fn load(&self, state: &mut KeyState) {
         if !matches!(state, KeyState::Unknown) {
             return;
@@ -202,28 +225,23 @@ impl<S: KeySource> KeyCache<S> {
         };
     }
 
-    /// Per leggere: `None` se il portachiavi non ha la chiave.
+    /// Per leggere o scrivere dopo lo sblocco. `None` significa che nessun
+    /// login esplicito ha ancora autorizzato il portachiavi.
     fn existing(&self) -> Result<Option<Zeroizing<[u8; KEY_LEN]>>, AuthStoreError> {
-        let mut state = self.lock();
-        self.load(&mut state);
+        let state = self.lock();
         match &*state {
             KeyState::Loaded(key) => Ok(Some(key.clone())),
-            KeyState::Missing => Ok(None),
-            KeyState::Unknown | KeyState::Failed => Err(failure(KEYCHAIN_UNAVAILABLE)),
+            KeyState::Unknown | KeyState::Missing => Ok(None),
+            KeyState::Failed => Err(failure(KEYCHAIN_UNAVAILABLE)),
         }
-    }
-
-    /// Per scrivere: se manca la crea, una volta.
-    fn existing_or_new(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, AuthStoreError> {
-        let mut state = self.lock();
-        self.load(&mut state);
-        self.create_if_missing(&mut state)
     }
 
     fn prepare(&self) -> Result<(), AuthStoreError> {
         let mut state = self.lock();
-        if matches!(*state, KeyState::Failed) {
-            *state = KeyState::Unknown;
+        match &*state {
+            KeyState::Loaded(_) => return Ok(()),
+            KeyState::Failed => return Err(failure(KEYCHAIN_UNAVAILABLE)),
+            KeyState::Unknown | KeyState::Missing => {}
         }
         self.load(&mut state);
         self.create_if_missing(&mut state).map(|_| ())
@@ -403,8 +421,8 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_path, get_value, read_entry, remove_entry, set_value, validate_name, write_entry,
-        KeyCache, KeySource, KEY_LEN,
+        entry_path, get_value, read_entry, remove_entry, remove_value, set_value, validate_name,
+        write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN,
     };
     use std::{
         fs,
@@ -471,6 +489,7 @@ mod tests {
         let dir = scratch_dir("once");
         let keychain = Arc::new(CountingKeychain::with_key([3u8; KEY_LEN]));
         let keys = KeyCache::new(keychain.clone());
+        keys.prepare().unwrap();
         for round in 0..25 {
             set_value(&dir, &keys, NAME, &format!("session-{round}")).unwrap();
             set_value(&dir, &keys, "sb-abc-auth-token-code-verifier", "verifier").unwrap();
@@ -489,9 +508,15 @@ mod tests {
         let dir = scratch_dir("create");
         let keychain = Arc::new(CountingKeychain::default());
         let keys = KeyCache::new(keychain.clone());
-        // Niente file: il portachiavi non si disturba neanche.
+        // Mount e navigazione vedono uno storage chiuso e non interrogano il
+        // portachiavi. Anche una scrittura accidentale resta bloccata.
         assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
+        assert_eq!(
+            set_value(&dir, &keys, NAME, "session").unwrap_err().code,
+            "auth_store_locked"
+        );
         assert_eq!(keychain.asked(), (0, 0));
+        keys.prepare().unwrap();
         for _ in 0..10 {
             set_value(&dir, &keys, NAME, "session").unwrap();
             assert_eq!(
@@ -504,16 +529,15 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_first_accesses_ask_once() {
+    fn concurrent_explicit_prepares_ask_once() {
         let dir = Arc::new(scratch_dir("concurrent"));
         let keychain = Arc::new(CountingKeychain::with_key([4u8; KEY_LEN]));
         let keys = Arc::new(KeyCache::new(keychain.clone()));
         let workers: Vec<_> = (0..8)
-            .map(|index| {
-                let (dir, keys) = (dir.clone(), keys.clone());
+            .map(|_| {
+                let keys = keys.clone();
                 thread::spawn(move || {
-                    let name = format!("sb-abc-entry-{index}");
-                    set_value(&dir, &keys, &name, "value").unwrap();
+                    keys.prepare().unwrap();
                 })
             })
             .collect();
@@ -521,44 +545,88 @@ mod tests {
             worker.join().unwrap();
         }
         assert_eq!(keychain.asked(), (1, 0));
+        set_value(&dir, &keys, NAME, "value").unwrap();
         fs::remove_dir_all(&*dir).unwrap();
     }
 
     #[test]
-    fn a_refusal_is_not_asked_again_until_the_user_retries() {
+    fn double_mount_and_navigation_are_silent_and_preserve_the_encrypted_file() {
+        let dir = Arc::new(scratch_dir("startup"));
+        let keychain = Arc::new(CountingKeychain::with_key(KEY));
+        let keys = Arc::new(KeyCache::new(keychain.clone()));
+        write_entry(&dir, NAME, "persisted-session", &KEY).unwrap();
+
+        let mounts: Vec<_> = (0..2)
+            .map(|_| {
+                let (dir, keys) = (dir.clone(), keys.clone());
+                thread::spawn(move || {
+                    for _ in 0..10 {
+                        assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
+                        remove_value(&dir, &keys, NAME).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for mount in mounts {
+            mount.join().unwrap();
+        }
+
+        assert_eq!(keychain.asked(), (0, 0));
+        assert!(entry_path(&dir, NAME).exists());
+        keys.prepare().unwrap();
+        assert_eq!(
+            get_value(&dir, &keys, NAME).unwrap().as_deref(),
+            Some("persisted-session")
+        );
+        assert_eq!(keychain.asked(), (1, 0));
+        fs::remove_dir_all(&*dir).unwrap();
+    }
+
+    #[test]
+    fn a_refusal_is_never_asked_again_in_the_same_process() {
         let dir = scratch_dir("denied");
         fs::create_dir_all(&dir).unwrap();
         fs::write(entry_path(&dir, NAME), [0u8; 40]).unwrap();
         let keychain = Arc::new(CountingKeychain::denying());
         let keys = KeyCache::new(keychain.clone());
+
+        // Startup/mount is always silent, even with an encrypted file present.
         for _ in 0..10 {
-            assert_eq!(
-                get_value(&dir, &keys, NAME).unwrap_err().code,
-                "keychain_unavailable"
-            );
+            assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
             assert_eq!(
                 set_value(&dir, &keys, NAME, "session").unwrap_err().code,
-                "keychain_unavailable"
+                "auth_store_locked"
             );
         }
+        assert_eq!(keychain.asked(), (0, 0));
+
+        // Il solo tentativo esplicito viene rifiutato. Né altri clic né le
+        // chiamate SDK successive tornano al portachiavi in questo processo.
+        assert!(keys.prepare().is_err());
+        for _ in 0..10 {
+            assert!(keys.prepare().is_err());
+            assert!(get_value(&dir, &keys, NAME).is_err());
+            assert!(set_value(&dir, &keys, NAME, "session").is_err());
+            assert!(remove_value(&dir, &keys, NAME).is_err());
+        }
         assert_eq!(keychain.asked(), (1, 0));
-        // Il file non si butta per un rifiuto: con la chiave tornerebbe leggibile.
         assert!(entry_path(&dir, NAME).exists());
 
-        // «Accedi» di nuovo: una domanda in più, una sola.
-        assert!(keys.prepare().is_err());
-        assert_eq!(keychain.asked(), (2, 0));
-
+        // Un nuovo processo ha una cache nuova e può fare un solo nuovo
+        // tentativo. Questo simula il riavvio senza indebolire il deny.
         keychain.deny.store(false, Ordering::SeqCst);
         *keychain.stored.lock().unwrap() = Some([5u8; KEY_LEN].to_vec());
-        keys.prepare().unwrap();
-        set_value(&dir, &keys, NAME, "session").unwrap();
-        assert_eq!(
-            get_value(&dir, &keys, NAME).unwrap().as_deref(),
-            Some("session")
-        );
-        assert_eq!(keychain.asked(), (3, 0));
+        let restarted = KeyCache::new(keychain.clone());
+        restarted.prepare().unwrap();
+        assert_eq!(keychain.asked(), (2, 0));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn keychain_service_is_the_stable_bundle_identity() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(config["identifier"], KEYRING_SERVICE);
     }
 
     fn scratch_dir(name: &str) -> PathBuf {

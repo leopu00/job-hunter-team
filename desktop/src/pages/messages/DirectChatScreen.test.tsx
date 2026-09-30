@@ -5,6 +5,8 @@ import DirectChatScreen from "./DirectChatScreen";
 import type {
   DirectChatClient,
   DirectChatEvent,
+  DirectChatPage,
+  DirectChatReceipt,
   DirectChatStatus,
 } from "./direct-chat-contract";
 
@@ -16,14 +18,14 @@ function client(initial: DirectChatStatus = { state: "ready" }) {
       return initial;
     }),
     status: vi.fn(async () => initial),
-    reconnect: vi.fn(async () => ({ state: "ready" })),
-    read: vi.fn(async () => ({
+    reconnect: vi.fn(async (): Promise<DirectChatStatus> => ({ state: "ready" })),
+    read: vi.fn(async (): Promise<DirectChatPage> => ({
       messages: [
         { id: "a1", role: "agent", text: "Messaggio dalla VPS", at: 1 },
       ],
       cursor: "opaque-cursor",
     })),
-    send: vi.fn(async ({ clientMessageId }) => ({
+    send: vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
       clientMessageId,
       accepted: true,
       messageId: "remote-user-1",
