@@ -283,6 +283,7 @@ export default function SwipeDeck({
   reviewed,
   initialVerdicts,
   salaryAxisMaxK = 200,
+  contained = false,
 }: {
   pending: SwipeCardData[];
   reviewed: SwipeCardData[];
@@ -292,6 +293,10 @@ export default function SwipeDeck({
   // preferenza valuta (es. HUF) la scala cambia — lo calcola il server
   // come equivalente di 200k EUR (vedi page.tsx).
   salaryAxisMaxK?: number;
+  // Il guscio desktop conosce gia lo spazio rimasto sotto la navbar. In
+  // quella sede il deck riempie il contenitore, invece di ricalcolare il
+  // viewport (che nel WebView e anche soggetto allo zoom globale).
+  contained?: boolean;
 }) {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
@@ -1037,18 +1042,19 @@ export default function SwipeDeck({
     // niente nuovo contesto di scroll.
     <div
       ref={rootRef}
-      className="max-w-md mx-auto select-none flex flex-col"
+      data-testid="swipe-deck"
+      className={`${contained ? "w-full max-w-4xl" : "max-w-md"} mx-auto select-none flex flex-col`}
       style={{
         overflowX: "clip",
-        height: `calc(100dvh - ${topOffset ?? 170}px)`,
-        minHeight: 420,
+        height: contained ? "100%" : `calc(100dvh - ${topOffset ?? 170}px)`,
+        minHeight: contained ? 0 : 420,
       }}
     >
       {/* Pulse del microfono in registrazione */}
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
       {/* Header minimo: una riga sola, la card vuole spazio */}
-      <div className="flex items-center justify-between mb-1.5">
+      <div data-swipe-header className="flex items-center justify-between mb-1.5">
         <span
           className="text-[13px] font-bold tracking-wide flex items-center gap-1.5"
           style={{ color: "var(--color-white)" }}
@@ -1208,7 +1214,7 @@ export default function SwipeDeck({
         </div>
       ) : (
         <>
-          <div ref={deckRef} className="relative flex-1 min-h-0">
+          <div ref={deckRef} data-swipe-card-stage className="relative flex-1 min-h-0">
             {/* Card corrente + le 2 successive come stack */}
             {cards
               .slice(idx, idx + 3)
@@ -1242,6 +1248,7 @@ export default function SwipeDeck({
                 return (
                   <div
                     key={card.id}
+                    data-swipe-card={isTop ? "active" : "stacked"}
                     className="absolute inset-0 rounded-xl border flex flex-col overflow-hidden"
                     style={{
                       borderColor: "var(--color-border)",
@@ -1281,7 +1288,7 @@ export default function SwipeDeck({
                     )}
 
                     {/* Contenuto card */}
-                    <div className="p-5 flex flex-col gap-3 flex-1 min-h-0">
+                    <div data-swipe-card-content className="p-5 flex flex-col gap-3 flex-1 min-h-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           {/* Titolo cliccabile = apre i dettagli (il vecchio
@@ -1347,6 +1354,7 @@ export default function SwipeDeck({
                         if (text) {
                           return (
                             <div
+                              data-swipe-summary
                               className="text-[12px] leading-relaxed flex-1 min-h-0 overflow-y-auto pr-1"
                               style={{
                                 color: "var(--color-base)",
@@ -1385,7 +1393,7 @@ export default function SwipeDeck({
 
           {/* Bottoni: 4 giudizi + commento (quinto posto, scelta utente
               19/07) */}
-          <div className="shrink-0 flex items-start justify-center gap-2 mt-3">
+          <div data-swipe-actions className="shrink-0 flex items-start justify-center gap-2 mt-3">
             {VERDICT_ORDER.map((v) => (
               <VerdictButton
                 key={v}
@@ -1394,7 +1402,7 @@ export default function SwipeDeck({
                 onClick={() => judge(v)}
               />
             ))}
-            <div className="flex flex-col items-center gap-1 w-[64px]">
+            <div data-swipe-comment className="flex flex-col items-center gap-1 w-[64px]">
               <button
                 type="button"
                 aria-label={t.commentTitle}
@@ -1430,6 +1438,7 @@ export default function SwipeDeck({
           </div>
 
           <p
+            data-swipe-keyboard-hint
             className="hidden md:block text-center text-[10px] mt-2"
             style={{ color: "var(--color-dim)" }}
           >
@@ -2026,7 +2035,7 @@ function VerdictButton({
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
-    <div className="flex flex-col items-center gap-1 w-[64px]">
+    <div data-swipe-verdict={verdict} className="flex flex-col items-center gap-1 w-[64px]">
       <button
         type="button"
         aria-label={label}

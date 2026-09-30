@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { loadSwipe, type SwipeDeckProps } from "./load-swipe";
+import "./swipe.css";
 
 type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { state: "failed" };
 
@@ -39,12 +40,20 @@ export function SwipePage({ client = supabase }: { client?: SupabaseClient }) {
     );
   const { pendingCards, reviewedCards, initialVerdicts, salaryAxisMaxK } = load.deck;
   return (
-    <div className="px-4 pt-2 pb-1" style={{ animation: "fade-in 0.35s ease both" }}>
+    <div
+      data-testid="desktop-swipe-page"
+      className="desktop-swipe-page min-h-0 overflow-hidden"
+      style={{
+        height: "calc(100svh / var(--zoom, 1) - 3.5rem)",
+        animation: "fade-in 0.35s ease both",
+      }}
+    >
       <SwipeDeck
         pending={pendingCards}
         reviewed={reviewedCards}
         initialVerdicts={initialVerdicts}
         salaryAxisMaxK={salaryAxisMaxK}
+        contained
       />
     </div>
   );

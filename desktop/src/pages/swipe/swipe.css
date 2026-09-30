@@ -1,0 +1,68 @@
+/* Il WebView applica lo zoom al body ma calcola svh sul viewport non zoomato.
+   La pagina traduce quindi il viewport nello spazio CSS effettivo e il deck
+   contenuto lo riempie senza una seconda sottrazione. */
+.desktop-swipe-page {
+  padding: 0.5rem clamp(0.75rem, 3vw, 2.5rem) 0.25rem;
+}
+
+/* La barra resta nel normale flusso flex: la card prende solo lo spazio
+   residuo e il testo lungo scorre al suo interno, senza finire sotto i
+   comandi. */
+.desktop-swipe-page [data-swipe-actions] {
+  position: relative;
+  z-index: 11;
+  flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+  .desktop-swipe-page {
+    padding-inline: 0.5rem;
+  }
+
+  .desktop-swipe-page [data-swipe-actions] {
+    gap: 0.125rem;
+  }
+
+  .desktop-swipe-page [data-swipe-verdict],
+  .desktop-swipe-page [data-swipe-comment] {
+    width: calc((100% - 0.5rem) / 5);
+    min-width: 0;
+  }
+
+  .desktop-swipe-page [data-swipe-actions] button {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+
+  .desktop-swipe-page [data-swipe-actions] span {
+    font-size: 0.5rem;
+  }
+}
+
+@media (max-height: 620px) {
+  .desktop-swipe-page {
+    padding-block: 0.25rem 0.125rem;
+  }
+
+  .desktop-swipe-page [data-swipe-header] {
+    margin-bottom: 0.125rem;
+  }
+
+  .desktop-swipe-page [data-swipe-card-content] {
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .desktop-swipe-page [data-swipe-actions] {
+    margin-top: 0.25rem;
+  }
+
+  .desktop-swipe-page [data-swipe-actions] button {
+    width: 2.375rem !important;
+    height: 2.375rem !important;
+  }
+
+  .desktop-swipe-page [data-swipe-keyboard-hint] {
+    display: none;
+  }
+}
