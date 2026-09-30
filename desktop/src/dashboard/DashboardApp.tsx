@@ -8,6 +8,7 @@ import {
   runtimeStateFromSnapshot,
   saveOnboardingProfile,
   type OnboardingGateState,
+  type OnboardingProviderLoginState,
   type OnboardingRuntimeStage,
   type OnboardingRuntimeState,
   type OnboardingSubmission,
@@ -17,6 +18,7 @@ import {
   openOnboardingAssistant,
   prepareOnboardingRuntime,
   readOnboardingSnapshot,
+  sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
 } from "../lib/onboarding-runtime";
@@ -26,6 +28,7 @@ import { OnboardingFlow } from "../onboarding";
 import Shell from "../shell/Shell";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
+const MAX_PROVIDER_OUTPUT = 32_768;
 
 function failureMessage(stage: OnboardingRuntimeStage): string {
   if (stage === "provider-login") return "L’accesso al provider non è stato verificato. Riprova.";
@@ -54,7 +57,11 @@ function pairingToken(session: Session, submission: OnboardingSubmission): strin
 export default function DashboardApp() {
   const { session, loading } = useSession();
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
+  const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
+  const providerSessionRef = useRef<string | null>(null);
+  const providerExitRejectRef = useRef<((error: Error) => void) | null>(null);
+  const providerAttemptRef = useRef(0);
   const signedOut = !loading && !session;
 
   const reloadGate = useCallback(async () => {
@@ -134,8 +141,11 @@ export default function DashboardApp() {
   const loginProvider = useCallback(async () => {
     const submission = submissionRef.current;
     if (!submission) return fail("provider-login", new Error("submission-missing"));
+    const attempt = ++providerAttemptRef.current;
     let sessionId: string | null = null;
+    let exited = false;
     try {
+      setProviderLogin({ provider: submission.provider, status: "starting", output: "" });
       setRuntime({ status: "working", stage: "provider-login", message: "Attendo il login ufficiale del provider." });
       let resolveExit!: () => void;
       let rejectExit!: (error: Error) => void;
@@ -143,23 +153,69 @@ export default function DashboardApp() {
         resolveExit = resolve;
         rejectExit = reject;
       });
+      providerExitRejectRef.current = rejectExit;
       sessionId = await startOnboardingProviderLogin(submission.host, (event) => {
+        if (providerAttemptRef.current !== attempt) return;
+        if (event.kind === "output") {
+          setProviderLogin((current) => {
+            if (!current || current.provider !== submission.provider) return current;
+            const output = `${current.output}${event.text}`.slice(-MAX_PROVIDER_OUTPUT);
+            return { ...current, output };
+          });
+          return;
+        }
+        exited = true;
+        setProviderLogin((current) => current ? {
+          ...current,
+          status: "exited",
+          exitCode: event.code,
+        } : current);
         if (event.kind === "exit") {
           if (event.code === 0) resolveExit();
           else rejectExit(new Error("provider-login-failed"));
         }
       });
+      providerSessionRef.current = sessionId;
+      setProviderLogin((current) => current?.status === "starting" ? { ...current, status: "active" } : current);
+      if (!exited && (submission.provider === "claude" || submission.provider === "kimi")) {
+        await sendOnboardingProviderInput(sessionId, "/login");
+      }
       await exit;
       await closeOnboardingProviderLogin(sessionId);
+      providerSessionRef.current = null;
+      providerExitRejectRef.current = null;
       sessionId = null;
       const snapshot = await readOnboardingSnapshot(submission.host);
       if (!snapshot.providerAuthenticated) throw new Error("provider-login-unverified");
     } catch (error) {
-      if (sessionId) void closeOnboardingProviderLogin(sessionId).catch(() => undefined);
-      fail("provider-login", error);
+      providerExitRejectRef.current = null;
+      if (sessionId && providerSessionRef.current === sessionId) {
+        await closeOnboardingProviderLogin(sessionId).catch(() => undefined);
+        providerSessionRef.current = null;
+      }
+      if (providerAttemptRef.current === attempt) {
+        setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
+      }
+      return fail("provider-login", error);
     }
     await startTeam(submission);
   }, [fail, setRuntime, startTeam]);
+
+  const sendProviderInput = useCallback(async (input: string) => {
+    const sessionId = providerSessionRef.current;
+    if (!sessionId) throw new Error("provider-session-missing");
+    await sendOnboardingProviderInput(sessionId, input);
+  }, []);
+
+  const closeProviderLogin = useCallback(async () => {
+    const sessionId = providerSessionRef.current;
+    if (!sessionId) return;
+    await closeOnboardingProviderLogin(sessionId);
+    if (providerSessionRef.current === sessionId) providerSessionRef.current = null;
+    providerExitRejectRef.current?.(new Error("provider-login-closed"));
+    providerExitRejectRef.current = null;
+    setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
+  }, []);
 
   const finishAssistant = useCallback(async () => {
     const submission = submissionRef.current;
@@ -217,6 +273,9 @@ export default function DashboardApp() {
         runtime={gate.runtime}
         onSubmit={submit}
         onRuntimeAction={runtimeAction}
+        providerLogin={providerLogin}
+        onProviderInput={sendProviderInput}
+        onProviderClose={closeProviderLogin}
         onRetry={retry}
       />
     );

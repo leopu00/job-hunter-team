@@ -6,6 +6,7 @@ import type {
   AssistantOnboardingStep,
 } from "./contract";
 import { INITIAL_ASSISTANT_ONBOARDING_STATE } from "./contract";
+import { VoiceInputControl } from "../../voice-input";
 import "./assistant-onboarding.css";
 
 type GuideStep = {
@@ -113,14 +114,18 @@ export default function AssistantOnboarding({
   initialState,
   onStateChange,
   onComplete,
+  voiceInputBridge,
 }: AssistantOnboardingProps) {
   const [state, setState] = useState<AssistantOnboardingState>(() => validInitialState(initialState));
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState(false);
+  const [completionVerified, setCompletionVerified] = useState(false);
+  const [firstMessage, setFirstMessage] = useState("");
   const dialogueTitle = useRef<HTMLHeadingElement>(null);
   const path = state.path;
   const guide = path ? GUIDES[path][state.step - 1] : null;
   const pathLabel = path ? PATH_LABELS[path] : "";
+  const visibleProgress = state.step === 4 && !completionVerified ? 3 : state.step;
 
   useEffect(() => {
     if (state.step > 0) dialogueTitle.current?.focus();
@@ -128,6 +133,7 @@ export default function AssistantOnboarding({
 
   function move(next: AssistantOnboardingState) {
     setCompletionError(false);
+    setCompletionVerified(false);
     setState(next);
     onStateChange?.(next);
   }
@@ -145,11 +151,12 @@ export default function AssistantOnboarding({
   async function next() {
     if (!state.path) return;
     if (state.step === 4) {
-      if (completing) return;
+      if (completing || completionVerified) return;
       setCompleting(true);
       setCompletionError(false);
       try {
-        await onComplete(state);
+        await onComplete(state, firstMessage.trim());
+        setCompletionVerified(true);
       } catch {
         setCompletionError(true);
       } finally {
@@ -173,7 +180,7 @@ export default function AssistantOnboarding({
           <h1 id="assistant-onboarding-title">Conosci l’app, poi continua in chat.</h1>
         </div>
         <div className="assistant-onboarding__progress-copy" aria-hidden="true">
-          {state.step}/4
+          {visibleProgress}/4
         </div>
         <div
           className="assistant-onboarding__progress"
@@ -181,10 +188,10 @@ export default function AssistantOnboarding({
           aria-label="Avanzamento onboarding Assistente"
           aria-valuemin={0}
           aria-valuemax={4}
-          aria-valuenow={state.step}
+          aria-valuenow={visibleProgress}
         >
           {[1, 2, 3, 4].map((step) => (
-            <span key={step} className={step <= state.step ? "is-complete" : undefined} />
+            <span key={step} className={step <= visibleProgress ? "is-complete" : undefined} />
           ))}
         </div>
       </header>
@@ -238,17 +245,48 @@ export default function AssistantOnboarding({
               <p className="assistant-onboarding__speaker">{assistantName} · {guide.eyebrow}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{guide.title}</h2>
               <p className="assistant-onboarding__message" aria-live="polite">{guide.message}</p>
+              {state.step === 4 && (
+                <div className="assistant-onboarding__composer">
+                  <label htmlFor="assistant-first-message">Il tuo primo messaggio all’Assistente</label>
+                  <div className="assistant-onboarding__composer-row">
+                    <textarea
+                      id="assistant-first-message"
+                      rows={3}
+                      value={firstMessage}
+                      onChange={(event) => setFirstMessage(event.target.value)}
+                      disabled={completing || completionVerified}
+                      placeholder="Scrivi o detta da dove vuoi cominciare…"
+                    />
+                    <VoiceInputControl
+                      value={firstMessage}
+                      onChange={setFirstMessage}
+                      locale="it-IT"
+                      bridge={voiceInputBridge}
+                      disabled={completing || completionVerified}
+                      className="assistant-onboarding__voice"
+                    />
+                  </div>
+                  <small>La trascrizione resta modificabile e sarà consegnata solo quando confermi.</small>
+                </div>
+              )}
               {completionError && (
                 <p className="assistant-onboarding__error" role="alert">
                   Non riesco ad aprire la chat. Riprova: il percorso non è stato segnato come completato.
                 </p>
               )}
               <div className="assistant-onboarding__actions">
-                <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing}>
+                <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing || completionVerified}>
                   <span aria-hidden="true">←</span> Indietro
                 </button>
-                <button type="button" className="assistant-onboarding__next" onClick={() => void next()} disabled={completing}>
-                  {completing
+                <button
+                  type="button"
+                  className="assistant-onboarding__next"
+                  onClick={() => void next()}
+                  disabled={completionVerified || completing || (state.step === 4 && !firstMessage.trim())}
+                >
+                  {completionVerified
+                    ? "Chat verificata"
+                    : completing
                     ? "Apro la chat…"
                     : state.step === 4
                       ? completionError

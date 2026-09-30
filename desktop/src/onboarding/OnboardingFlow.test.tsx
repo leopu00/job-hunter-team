@@ -21,6 +21,9 @@ function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
     runtime: { status: "collecting", stage: "profile" },
     onSubmit: vi.fn().mockResolvedValue(undefined),
     onRuntimeAction: vi.fn().mockResolvedValue(undefined),
+    providerLogin: null,
+    onProviderInput: vi.fn().mockResolvedValue(undefined),
+    onProviderClose: vi.fn().mockResolvedValue(undefined),
     onRetry: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -135,6 +138,50 @@ describe("OnboardingFlow", () => {
     resolveAction();
     expect(await screen.findByRole("button", { name: /accedi al provider/i })).toBeEnabled();
     expect(screen.getByText(/completa il login ufficiale/i)).toBeInTheDocument();
+  });
+
+  it("shows Codex device instructions as safe text and sends typed responses", async () => {
+    const user = userEvent.setup();
+    const onProviderInput = vi.fn().mockResolvedValue(undefined);
+    const onProviderClose = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: { status: "working", stage: "provider-login", message: "Attendo il login ufficiale." },
+      providerLogin: {
+        provider: "codex",
+        status: "active",
+        output: "Open https://auth.example.invalid/device and enter ABCD-EFGH",
+      },
+      onProviderInput,
+      onProviderClose,
+    });
+
+    const output = screen.getByRole("log", { name: /output accesso provider/i });
+    expect(output).toHaveTextContent("https://auth.example.invalid/device");
+    expect(output).toHaveTextContent("ABCD-EFGH");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/risposta alla sessione/i), "yes");
+    await user.click(screen.getByRole("button", { name: "Invia" }));
+    expect(onProviderInput).toHaveBeenCalledWith("yes");
+    expect(screen.getByLabelText(/risposta alla sessione/i)).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: "Chiudi" }));
+    expect(onProviderClose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps provider output visible after an error so the exact stage can be retried", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: { status: "failed", stage: "provider-login", message: "L’accesso non è stato verificato." },
+      providerLogin: { provider: "kimi", status: "exited", output: "Login failed safely", exitCode: 1 },
+      onRetry,
+    });
+
+    expect(screen.getByRole("log", { name: /output accesso provider/i })).toHaveTextContent("Login failed safely");
+    expect(screen.getByLabelText(/risposta alla sessione/i)).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it("opens the Assistant only when its runtime stage requests it", async () => {

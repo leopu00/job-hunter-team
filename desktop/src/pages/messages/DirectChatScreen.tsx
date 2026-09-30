@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { VoiceInputBridge } from "../../lib/voice-input";
+import { VoiceInputControl } from "../../voice-input";
 import type {
   DirectChatClient,
   DirectChatEvent,
@@ -88,7 +90,13 @@ function StatusBar({
   );
 }
 
-export default function DirectChatScreen({ client }: { client: DirectChatClient }) {
+export default function DirectChatScreen({
+  client,
+  voiceInputBridge,
+}: {
+  client: DirectChatClient;
+  voiceInputBridge?: VoiceInputBridge;
+}) {
   const [agentId, setAgentId] = useState<(typeof AGENTS)[number]["id"]>("capitano");
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
@@ -308,7 +316,10 @@ export default function DirectChatScreen({ client }: { client: DirectChatClient 
             void send();
           }}
         >
-          <div className="mx-auto max-w-4xl flex items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]">
+          <div
+            className="mx-auto max-w-4xl flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
+            data-testid="direct-chat-composer-row"
+          >
             <textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
@@ -323,12 +334,20 @@ export default function DirectChatScreen({ client }: { client: DirectChatClient 
               disabled={status.state !== "ready" || sending}
               aria-label={`Scrivi a ${selected.label}`}
               placeholder={status.state === "ready" ? `Scrivi a ${selected.label}…` : "Collega il tunnel VPS per scrivere"}
-              className="max-h-28 min-h-8 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[12px] text-[var(--color-base)] outline-none disabled:opacity-50"
+              className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[12px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
+            />
+            <VoiceInputControl
+              value={text}
+              onChange={setText}
+              locale="it-IT"
+              bridge={voiceInputBridge}
+              disabled={status.state !== "ready" || sending}
+              className="w-full max-w-full sm:w-auto"
             />
             <button
               type="submit"
               disabled={!canSend}
-              className="h-8 shrink-0 rounded-md bg-[var(--color-green)] px-4 text-[10px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
+              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[10px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
             >
               {sending ? "Invio…" : "Invia"}
             </button>
