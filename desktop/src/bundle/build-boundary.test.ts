@@ -53,6 +53,30 @@ const RETIRED_UI_TEXT = [
   "start_api_team",
 ];
 
+// Copy from the retired pay-per-token budget destination. Keep these exact:
+// matching a generic "API" or "token" would also reject the live Supabase
+// authentication and PKCE copy shipped by the desktop app.
+const RETIRED_API_BUDGET_COPY = [
+  "Budget API",
+  "API Budget",
+  "API Költségkeret",
+  "Presupuesto API",
+  "API-Budget",
+  "Orçamento API",
+  "Consumo API e proiezione",
+  "API consumption and projection",
+  "API fogyasztás és előrejelzés",
+  "Consumo de API y proyección",
+  "API-Verbrauch und Prognose",
+  "Consommation API et projection",
+  "Consumo de API e projeção",
+] as const;
+
+function retiredApiBudgetCopyIn(source: Uint8Array | string): string[] {
+  const bytes = Buffer.from(source);
+  return RETIRED_API_BUDGET_COPY.filter((marker) => bytes.includes(Buffer.from(marker)));
+}
+
 let moduleIds: string[] = [];
 let assets = new Map<string, Uint8Array | string>();
 let chunks = new Map<string, string>();
@@ -94,6 +118,25 @@ describe("the desktop bundle", () => {
 
   it.each(RETIRED_UI_TEXT)("does not ship the retired UI text %s", (text) => {
     expect([...chunks.values()].some((code) => code.includes(text))).toBe(false);
+  });
+
+  it.each(RETIRED_API_BUDGET_COPY)("recognizes retired API budget copy: %s", (marker) => {
+    expect(retiredApiBudgetCopyIn(`prefix ${marker} suffix`)).toEqual([marker]);
+  });
+
+  it.each([
+    "Autenticazione Supabase pronta",
+    "Supabase API raggiungibile",
+    "Accesso OAuth protetto da PKCE",
+    "Scambio PKCE tramite API Supabase",
+  ])("does not mistake supported auth copy for retired API budget copy: %s", (copy) => {
+    expect(retiredApiBudgetCopyIn(copy)).toEqual([]);
+  });
+
+  it("does not ship retired API budget copy in any emitted file", () => {
+    for (const [name, source] of [...chunks, ...assets]) {
+      expect(retiredApiBudgetCopyIn(source), name).toEqual([]);
+    }
   });
 
   it("keeps retired API mode markers out of every emitted file and emits no sourcemaps", () => {
