@@ -47,6 +47,7 @@ pub fn run() {
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
             onboarding::onboarding_provider_login_input,
+            onboarding::onboarding_resume_snapshot,
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,
