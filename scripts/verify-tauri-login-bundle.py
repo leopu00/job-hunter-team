@@ -12,17 +12,25 @@ import argparse
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
 
-FORBIDDEN_BYTES = (
-    b"sb_secret_",
-    b"SUPABASE_SERVICE_ROLE_KEY",
-    b"VITE_SUPABASE_SERVICE_ROLE_KEY",
-    b"c2VydmljZV9yb2xl",  # base64url for service_role
-)
 FORBIDDEN_ENV_PARTS = ("SERVICE_ROLE", "SECRET", "PRIVATE", "ADMIN", "DATABASE")
+# Supabase's opaque secret keys are
+# `sb_secret_<22-char-random>_<8-char-checksum>`. Match the value shape and
+# boundaries, not the bare prefix that the SDK legitimately ships in its
+# format recognizer.
+SECRET_KEY_VALUE = re.compile(
+    rb"(?<![A-Za-z0-9_-])sb_secret_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{8}"
+    rb"(?![A-Za-z0-9_-])"
+)
+JWT_VALUE = re.compile(
+    rb"(?<![A-Za-z0-9_-])"
+    rb"(eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,})"
+    rb"(?![A-Za-z0-9_-])"
+)
 
 
 class BundleConfigError(RuntimeError):
@@ -58,8 +66,30 @@ def validate_public_config(url: str, key: str) -> None:
         raise BundleConfigError("the Supabase key is neither an anon JWT nor a publishable key")
 
 
+def contains_privileged_credential(data: bytes) -> bool:
+    """Recognize credential values, not SDK code that recognizes their format."""
+    if SECRET_KEY_VALUE.search(data):
+        return True
+    for match in JWT_VALUE.finditer(data):
+        try:
+            role = _jwt_role(match.group(1).decode("ascii"))
+        except BundleConfigError:
+            continue
+        if role == "service_role":
+            return True
+    return False
+
+
 def verify_paths(paths: list[Path], url: str, key: str) -> None:
-    files = [item for path in paths for item in ([path] if path.is_file() else path.rglob("*")) if item.is_file()]
+    try:
+        files = [
+            item
+            for path in paths
+            for item in ([path] if path.is_file() else path.rglob("*"))
+            if item.is_file()
+        ]
+    except OSError as exc:
+        raise BundleConfigError("built Tauri assets could not be enumerated") from exc
     if not files:
         raise BundleConfigError("no built Tauri assets were found")
 
@@ -68,9 +98,12 @@ def verify_paths(paths: list[Path], url: str, key: str) -> None:
     found_url = False
     found_key = False
     for file in files:
-        data = file.read_bytes()
-        if any(marker in data for marker in FORBIDDEN_BYTES):
-            raise BundleConfigError(f"privileged credential marker found in bundled file {file.name}")
+        try:
+            data = file.read_bytes()
+        except OSError as exc:
+            raise BundleConfigError(f"bundled file {file.name} could not be read") from exc
+        if contains_privileged_credential(data):
+            raise BundleConfigError(f"privileged Supabase credential found in bundled file {file.name}")
         found_url = found_url or url_bytes in data
         found_key = found_key or key_bytes in data
 
@@ -92,7 +125,7 @@ def main() -> int:
 
     validate_public_config(url, key)
     verify_paths(args.path, url, key)
-    print("[tauri-login-bundle] OK — public login configuration is present; no privileged key marker found")
+    print("[tauri-login-bundle] OK — public login configuration is present; no privileged credential found")
     return 0
 
 
