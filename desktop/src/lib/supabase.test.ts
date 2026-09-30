@@ -1,8 +1,10 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDesktopSupabase,
+  deferAuthStorage,
+  initializeDesktopAuth,
   LoginError,
   memoryAuthStorage,
   readSupabaseConfig,
@@ -248,38 +250,35 @@ describe("signInWithGoogle", () => {
     const storageKey = "sb-example-ref-auth-token";
     const values = new Map<string, string>([[storageKey, JSON.stringify({ stale: true })]]);
     let releaseStartup!: () => void;
+    let markStartupRead!: () => void;
     let startupRead = true;
-    let released = false;
+    const startupReadStarted = new Promise<void>((resolve) => { markStartupRead = resolve; });
     const startupGate = new Promise<void>((resolve) => {
-      releaseStartup = () => {
-        if (released) return;
-        released = true;
-        resolve();
-      };
+      releaseStartup = resolve;
     });
+    const writes: string[] = [];
     const storage: AuthStorage = {
       async getItem(key) {
         if (key === storageKey && startupRead) {
           startupRead = false;
+          markStartupRead();
           await startupGate;
         }
         return values.get(key) ?? null;
       },
       async setItem(key, value) {
+        writes.push(key);
         values.set(key, value);
-        // Senza l'attesa esplicita di initialize(), il vecchio percorso arriva
-        // qui mentre il cleanup iniziale è sospeso e perde subito il verifier.
-        if (key === `${storageKey}-code-verifier`) releaseStartup();
       },
       async removeItem(key) {
         values.delete(key);
       },
     };
+    const deferred = deferAuthStorage(storage);
     const client = createDesktopSupabase(
       { configured: true, url: PROJECT, anonKey: "anon-test-key" },
-      storage,
+      deferred.storage,
     );
-    const fallback = setTimeout(releaseStartup, 100);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(
@@ -295,12 +294,14 @@ describe("signInWithGoogle", () => {
       )),
     );
 
-    try {
-      await signInWithGoogle({}, deps(client, backend(async () => "code-123")));
-    } finally {
-      clearTimeout(fallback);
-      releaseStartup();
-    }
+    const attempt = signInWithGoogle({}, {
+      ...deps(client, backend(async () => "code-123")),
+      unlockStorage: deferred.unlock,
+    });
+    await startupReadStarted;
+    expect(writes).toEqual([]);
+    releaseStartup();
+    await attempt;
 
     const session = await client.auth.getSession();
     expect(session.data.session?.refresh_token).toBe("refresh-test");
@@ -308,6 +309,65 @@ describe("signInWithGoogle", () => {
 });
 
 describe("the real supabase-js client against the backend's rules", () => {
+  it("defers initialization until unlock and restores one persisted session once", async () => {
+    const storageKey = "sb-example-ref-auth-token";
+    const persisted = {
+      access_token: "synthetic.header.signature",
+      refresh_token: "synthetic-refresh",
+      token_type: "bearer",
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: "00000000-0000-4000-8000-000000000000", aud: "authenticated" },
+    };
+    let unlocked = false;
+    const reads: string[] = [];
+    const storage: AuthStorage = {
+      async getItem(key) {
+        reads.push(key);
+        return unlocked && key === storageKey ? JSON.stringify(persisted) : null;
+      },
+      async setItem() {},
+      async removeItem() {},
+    };
+    const deferred = deferAuthStorage(storage);
+    const client = createDesktopSupabase(
+      { configured: true, url: PROJECT, anonKey: "anon-test-key" },
+      deferred.storage,
+    );
+    const initialize = vi.spyOn(client.auth, "initialize");
+    const invoke = vi.fn(async (command: string) => {
+      if (command !== "auth_store_prepare") throw new Error(`unexpected command ${command}`);
+      unlocked = true;
+    }) as unknown as LoginDeps["invoke"];
+    const initializationDeps = { ...deps(client, invoke), unlockStorage: deferred.unlock };
+
+    await Promise.resolve();
+    expect(reads).toEqual([]);
+    await initializeDesktopAuth(initializationDeps);
+    await initializeDesktopAuth(initializationDeps);
+
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(initialize).toHaveBeenCalledOnce();
+    expect(reads).toContain(storageKey);
+    const restored = await client.auth.getSession();
+    expect(restored.data.session?.refresh_token).toBe("synthetic-refresh");
+  });
+
+  it("memoizes an initialize failure without a second keychain attempt", async () => {
+    const client = fakeClient({
+      initialize: vi.fn().mockResolvedValue({ error: { name: "SyntheticInitializeError" } }),
+    });
+    const invoke = vi.fn().mockResolvedValue(undefined) as unknown as LoginDeps["invoke"];
+    const initializationDeps = deps(client, invoke);
+
+    await expect(initializeDesktopAuth(initializationDeps)).rejects.toEqual(new LoginError("unknown"));
+    await expect(initializeDesktopAuth(initializationDeps)).rejects.toEqual(new LoginError("unknown"));
+
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(client.auth.initialize).toHaveBeenCalledOnce();
+    expect(client.auth.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
   it("stores parallel PKCE verifiers in separate flow slots", async () => {
     const storage = memoryAuthStorage();
     const setItem = vi.spyOn(storage, "setItem");
@@ -416,11 +476,12 @@ describe("signOut", () => {
 });
 
 describe("useSession", () => {
-  it("is loading until the first auth event, then follows sign-in and sign-out", () => {
+  it("is loading until initialization and the first auth event, then follows sign-in and sign-out", async () => {
     let emit: (event: string, session: Session | null) => void = () => undefined;
     const unsubscribe = vi.fn();
     const client = {
       auth: {
+        initialize: vi.fn().mockResolvedValue({ error: null }),
         onAuthStateChange: vi.fn((callback: typeof emit) => {
           emit = callback;
           return { data: { subscription: { unsubscribe } } };
@@ -430,6 +491,7 @@ describe("useSession", () => {
 
     const { result, unmount } = renderHook(() => useSession(client));
     expect(result.current).toEqual({ session: null, loading: true });
+    await waitFor(() => expect(client.auth.onAuthStateChange).toHaveBeenCalledOnce());
 
     act(() => emit("INITIAL_SESSION", null));
     expect(result.current).toEqual({ session: null, loading: false });
