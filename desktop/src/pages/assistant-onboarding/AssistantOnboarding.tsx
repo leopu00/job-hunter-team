@@ -119,11 +119,13 @@ export default function AssistantOnboarding({
   const [state, setState] = useState<AssistantOnboardingState>(() => validInitialState(initialState));
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState(false);
+  const [completionVerified, setCompletionVerified] = useState(false);
   const [firstMessage, setFirstMessage] = useState("");
   const dialogueTitle = useRef<HTMLHeadingElement>(null);
   const path = state.path;
   const guide = path ? GUIDES[path][state.step - 1] : null;
   const pathLabel = path ? PATH_LABELS[path] : "";
+  const visibleProgress = state.step === 4 && !completionVerified ? 3 : state.step;
 
   useEffect(() => {
     if (state.step > 0) dialogueTitle.current?.focus();
@@ -131,6 +133,7 @@ export default function AssistantOnboarding({
 
   function move(next: AssistantOnboardingState) {
     setCompletionError(false);
+    setCompletionVerified(false);
     setState(next);
     onStateChange?.(next);
   }
@@ -148,11 +151,12 @@ export default function AssistantOnboarding({
   async function next() {
     if (!state.path) return;
     if (state.step === 4) {
-      if (completing) return;
+      if (completing || completionVerified) return;
       setCompleting(true);
       setCompletionError(false);
       try {
         await onComplete(state, firstMessage.trim());
+        setCompletionVerified(true);
       } catch {
         setCompletionError(true);
       } finally {
@@ -176,7 +180,7 @@ export default function AssistantOnboarding({
           <h1 id="assistant-onboarding-title">Conosci l’app, poi continua in chat.</h1>
         </div>
         <div className="assistant-onboarding__progress-copy" aria-hidden="true">
-          {state.step}/4
+          {visibleProgress}/4
         </div>
         <div
           className="assistant-onboarding__progress"
@@ -184,10 +188,10 @@ export default function AssistantOnboarding({
           aria-label="Avanzamento onboarding Assistente"
           aria-valuemin={0}
           aria-valuemax={4}
-          aria-valuenow={state.step}
+          aria-valuenow={visibleProgress}
         >
           {[1, 2, 3, 4].map((step) => (
-            <span key={step} className={step <= state.step ? "is-complete" : undefined} />
+            <span key={step} className={step <= visibleProgress ? "is-complete" : undefined} />
           ))}
         </div>
       </header>
@@ -250,7 +254,7 @@ export default function AssistantOnboarding({
                       rows={3}
                       value={firstMessage}
                       onChange={(event) => setFirstMessage(event.target.value)}
-                      disabled={completing}
+                      disabled={completing || completionVerified}
                       placeholder="Scrivi o detta da dove vuoi cominciare…"
                     />
                     <VoiceInputControl
@@ -258,7 +262,7 @@ export default function AssistantOnboarding({
                       onChange={setFirstMessage}
                       locale="it-IT"
                       bridge={voiceInputBridge}
-                      disabled={completing}
+                      disabled={completing || completionVerified}
                       className="assistant-onboarding__voice"
                     />
                   </div>
@@ -271,16 +275,18 @@ export default function AssistantOnboarding({
                 </p>
               )}
               <div className="assistant-onboarding__actions">
-                <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing}>
+                <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing || completionVerified}>
                   <span aria-hidden="true">←</span> Indietro
                 </button>
                 <button
                   type="button"
                   className="assistant-onboarding__next"
                   onClick={() => void next()}
-                  disabled={completing || (state.step === 4 && !firstMessage.trim())}
+                  disabled={completionVerified || completing || (state.step === 4 && !firstMessage.trim())}
                 >
-                  {completing
+                  {completionVerified
+                    ? "Chat verificata"
+                    : completing
                     ? "Apro la chat…"
                     : state.step === 4
                       ? completionError
