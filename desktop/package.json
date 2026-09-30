@@ -8,6 +8,7 @@
     "dev": "node scripts/dev-server.mjs --host 127.0.0.1 --port 1420",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "verify:integrated": "npm run build && vitest run src/App.test.tsx src/components/login-screen.test.tsx src/dashboard/DashboardApp.test.tsx src/onboarding/OnboardingFlow.test.tsx src/lib/onboarding.test.ts src/pages/messages/index.test.tsx src/pages/messages/DirectChatScreen.test.tsx src/voice-input/VoiceInputControl.test.tsx src/shell/Shell.test.tsx src/shell/theme.test.ts src/pages/swipe/SwipePage.test.tsx src/bundle/build-boundary.test.ts",
     "test:watch": "vitest",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

@@ -29,8 +29,25 @@ const SERVER_ONLY = [
   "web/lib/shell.ts",
 ];
 
+// Il vecchio entrypoint locale chiedeva una chiave OpenAI e avviava un team
+// API separato. I file restano per ora nel sorgente, ma non devono essere
+// raggiungibili da nessuno dei tre entrypoint Vite distribuiti.
+const RETIRED_DESKTOP_MODULES = [
+  "desktop/src/components/team-dashboard.tsx",
+  "desktop/src/lib/podman.ts",
+  "desktop/src/lib/team.ts",
+];
+
+const RETIRED_UI_TEXT = [
+  "Chiave API OpenAI",
+  "Consumo sulla tua chiave OpenAI",
+  "Team locale",
+  "openai-api-key",
+];
+
 let moduleIds: string[] = [];
 let assets = new Map<string, Uint8Array | string>();
+let chunks = new Map<string, string>();
 
 beforeAll(async () => {
   const out = await build({
@@ -46,6 +63,9 @@ beforeAll(async () => {
   assets = new Map(
     outputs.flatMap((o) => o.output.flatMap((item) => (item.type === "asset" ? [[item.fileName, item.source] as const] : []))),
   );
+  chunks = new Map(
+    outputs.flatMap((o) => o.output.flatMap((item) => (item.type === "chunk" ? [[item.fileName, item.code] as const] : []))),
+  );
 }, 180_000);
 
 describe("the desktop bundle", () => {
@@ -58,6 +78,31 @@ describe("the desktop bundle", () => {
 
   it.each(SERVER_ONLY)("never contains %s", (file) => {
     expect(moduleIds.filter((id) => id.replace(/\\/g, "/").endsWith(`/${file}`))).toEqual([]);
+  });
+
+  it.each(RETIRED_DESKTOP_MODULES)("does not reach the retired entrypoint module %s", (file) => {
+    expect(moduleIds.filter((id) => id.replace(/\\/g, "/").endsWith(`/${file}`))).toEqual([]);
+  });
+
+  it.each(RETIRED_UI_TEXT)("does not ship the retired UI text %s", (text) => {
+    expect([...chunks.values()].some((code) => code.includes(text))).toBe(false);
+  });
+
+  it("does not reach or package the legacy Godot application", () => {
+    expect(moduleIds.filter((id) => id.replace(/\\/g, "/").includes("/game/"))).toEqual([]);
+    expect([...assets.keys()].filter((name) => /(^|\/)(project\.godot|[^/]+\.pck)$/i.test(name))).toEqual([]);
+
+    const config = JSON.parse(
+      readFileSync(new URL("../../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+    ) as { bundle?: { resources?: Record<string, string> } };
+    const resources = Object.entries(config.bundle?.resources ?? {}).flat();
+    expect(resources.filter((resource) => /(^|[/\\])(game|api-worker)([/\\]|$)|godot/i.test(resource))).toEqual([]);
+
+    const nativeEntrypoint = readFileSync(
+      new URL("../../src-tauri/src/lib.rs", import.meta.url),
+      "utf8",
+    );
+    expect(nativeEntrypoint).not.toMatch(/\bmod team\b|team::start_api_team|godot/i);
   });
 
   // The web asks for them by absolute path (/agents/capitano.png): without
