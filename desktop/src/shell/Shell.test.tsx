@@ -7,6 +7,7 @@ import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
 import { DESKTOP_LINKS } from "./desktop-links";
+import { THEME_STORAGE_KEY } from "./theme";
 import Shell from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
@@ -26,10 +27,18 @@ vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
 
 let restore: () => void;
 beforeEach(() => {
+  localStorage.removeItem(THEME_STORAGE_KEY);
+  document.documentElement.removeAttribute("data-jht-theme");
+  document.documentElement.removeAttribute("data-theme");
   restore = installApiBridge(shellApi(notInDesktop));
   vi.mocked(loadDashboard).mockResolvedValue(fixtureData());
 });
-afterEach(() => restore());
+afterEach(() => {
+  restore();
+  localStorage.removeItem(THEME_STORAGE_KEY);
+  document.documentElement.removeAttribute("data-jht-theme");
+  document.documentElement.removeAttribute("data-theme");
+});
 
 describe("Shell", () => {
   it("lands on the dashboard when the hash says nothing", async () => {
@@ -96,6 +105,35 @@ describe("Shell", () => {
       expect(within(nav).queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
     },
   );
+  it("selects a theme, persists it, and restores it after a reload", async () => {
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    const first = render(<Shell />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Tema: Scuro. Cambia tema" }),
+    );
+    const menu = screen.getByRole("menu", { name: "Tema dell'app" });
+    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(5);
+    await user.click(within(menu).getByRole("menuitemradio", { name: "Oceano" }));
+
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("ocean");
+    expect(document.documentElement).toHaveAttribute("data-jht-theme", "ocean");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(
+      screen.getByRole("button", { name: "Tema: Oceano. Cambia tema" }),
+    ).toBeInTheDocument();
+
+    first.unmount();
+    document.documentElement.removeAttribute("data-jht-theme");
+    document.documentElement.removeAttribute("data-theme");
+    render(<Shell />);
+
+    expect(
+      screen.getByRole("button", { name: "Tema: Oceano. Cambia tema" }),
+    ).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("data-jht-theme", "ocean");
+  });
 
   it("adds the desktop's own pages after the web's links, and routes to them", async () => {
     navigate("/dashboard", { replace: true });

@@ -7,6 +7,7 @@ import { signOut } from "../lib/supabase";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, ROUTES } from "./routes";
+import ThemePicker from "./ThemePicker";
 
 /** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
 function DesktopLinks() {
@@ -47,11 +48,14 @@ function Navbar() {
         aria-label="Navigazione app"
         className="max-w-full min-w-0 overflow-hidden px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
       >
-        <Link href={HOME} className="flex items-center no-underline group flex-shrink-0">
-          <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
-            JHT
-          </span>
-        </Link>
+        <div className="flex items-center flex-shrink-0">
+          <Link href={HOME} className="flex items-center no-underline group">
+            <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
+              JHT
+            </span>
+          </Link>
+          <ThemePicker />
+        </div>
         <div
           className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain"
           data-testid="navbar-links-scroll"
