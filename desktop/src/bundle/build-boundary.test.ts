@@ -105,6 +105,22 @@ describe("the desktop bundle", () => {
     expect(nativeEntrypoint).not.toMatch(/\bmod team\b|team::start_api_team|godot/i);
   });
 
+  it("keeps the native voice bridge registered in the Tauri entrypoint", () => {
+    const nativeEntrypoint = readFileSync(
+      new URL("../../src-tauri/src/lib.rs", import.meta.url),
+      "utf8",
+    );
+    expect(nativeEntrypoint).toMatch(/\bmod voice_input;/);
+    for (const command of [
+      "voice_input_status",
+      "voice_input_start",
+      "voice_input_stop",
+      "voice_input_cancel",
+    ]) {
+      expect(nativeEntrypoint).toContain(`voice_input::${command}`);
+    }
+  });
+
   // The web asks for them by absolute path (/agents/capitano.png): without
   // them in the build the chat showed broken images (web-public-assets.ts).
   it.each(WEB_PUBLIC_FILES)("ships the web's public file %s, byte for byte", (file) => {
