@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { VoiceInputBridge } from "../../lib/voice-input";
+import { VoiceInputControl } from "../../voice-input";
 import type {
   DirectChatClient,
   DirectChatEvent,
@@ -88,7 +90,13 @@ function StatusBar({
   );
 }
 
-export default function DirectChatScreen({ client }: { client: DirectChatClient }) {
+export default function DirectChatScreen({
+  client,
+  voiceInputBridge,
+}: {
+  client: DirectChatClient;
+  voiceInputBridge?: VoiceInputBridge;
+}) {
   const [agentId, setAgentId] = useState<(typeof AGENTS)[number]["id"]>("capitano");
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
@@ -324,6 +332,14 @@ export default function DirectChatScreen({ client }: { client: DirectChatClient 
               aria-label={`Scrivi a ${selected.label}`}
               placeholder={status.state === "ready" ? `Scrivi a ${selected.label}…` : "Collega il tunnel VPS per scrivere"}
               className="max-h-28 min-h-8 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[12px] text-[var(--color-base)] outline-none disabled:opacity-50"
+            />
+            <VoiceInputControl
+              value={text}
+              onChange={setText}
+              locale="it-IT"
+              bridge={voiceInputBridge}
+              disabled={status.state !== "ready" || sending}
+              className="shrink-0"
             />
             <button
               type="submit"

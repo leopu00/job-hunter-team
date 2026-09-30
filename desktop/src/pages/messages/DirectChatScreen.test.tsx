@@ -1,7 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen from "./DirectChatScreen";
+import type {
+  VoiceInputBridge,
+  VoiceInputSnapshot,
+  VoiceTranscriptEvent,
+} from "../../lib/voice-input";
 import type {
   DirectChatClient,
   DirectChatEvent,
@@ -9,6 +14,35 @@ import type {
   DirectChatReceipt,
   DirectChatStatus,
 } from "./direct-chat-contract";
+
+const VOICE_IDLE: VoiceInputSnapshot = {
+  available: true,
+  phase: "idle",
+  microphonePermission: "unknown",
+  speechPermission: "unknown",
+  transcript: "",
+  error: null,
+};
+
+function voiceBridge(snapshot: VoiceInputSnapshot = VOICE_IDLE) {
+  const transcriptListeners = new Set<(event: VoiceTranscriptEvent) => void>();
+  const mock: VoiceInputBridge = {
+    status: vi.fn(async () => snapshot),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    onState: vi.fn(async () => () => undefined),
+    onTranscript: vi.fn(async (listener) => {
+      transcriptListeners.add(listener);
+      return () => transcriptListeners.delete(listener);
+    }),
+  };
+  return {
+    mock,
+    transcript: (event: VoiceTranscriptEvent) =>
+      transcriptListeners.forEach((listener) => listener(event)),
+  };
+}
 
 function client(initial: DirectChatStatus = { state: "ready" }) {
   let onEvent: ((event: DirectChatEvent) => void) | undefined;
@@ -44,6 +78,7 @@ function viewport(width: number, height: number, zoom = "1.15") {
 
 afterEach(() => {
   document.documentElement.style.removeProperty("--zoom");
+  vi.restoreAllMocks();
 });
 
 describe("DirectChatScreen", () => {
@@ -105,6 +140,33 @@ describe("DirectChatScreen", () => {
       page: { messages: [{ id: "a2", role: "agent", text: "Ne ho trovate tre.", at: 3 }] },
     });
     expect(await screen.findByText("Ne ho trovate tre.")).toBeInTheDocument();
+  });
+
+  it("places a final voice transcript in the editable composer without sending or uploading it", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    const voice = voiceBridge();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} voiceInputBridge={voice.mock} />);
+    await screen.findByRole("button", { name: /detta un messaggio/i });
+
+    act(() => voice.transcript({ text: "controlla i colloqui di domani", isFinal: true }));
+
+    const input = screen.getByRole("textbox", { name: "Scrivi a Capitano" });
+    expect(input).toHaveValue("controlla i colloqui di domani");
+    expect(mock.send).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    await user.type(input, " e prepara un riepilogo");
+    expect(mock.send).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Invia" }));
+    await waitFor(() => expect(mock.send).toHaveBeenCalledWith({
+      agentId: "capitano",
+      text: "controlla i colloqui di domani e prepara un riepilogo",
+      clientMessageId: expect.any(String),
+    }));
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("shows a safe tunnel error and retries without exposing raw transport output", async () => {

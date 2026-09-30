@@ -1,8 +1,13 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+  VoiceInputBridge,
+  VoiceInputSnapshot,
+  VoiceTranscriptEvent,
+} from "../../lib/voice-input";
 import AssistantOnboarding from "./AssistantOnboarding";
-import type { AssistantOnboardingPath } from "./contract";
+import type { AssistantOnboardingPath, AssistantOnboardingState } from "./contract";
 
 const PATHS: Array<{ button: string; path: AssistantOnboardingPath; finalTitle: string }> = [
   { button: "Fammi fare il tour", path: "tour", finalTitle: "Continua con parole tue" },
@@ -11,6 +16,35 @@ const PATHS: Array<{ button: string; path: AssistantOnboardingPath; finalTitle: 
 ];
 
 const complete = () => vi.fn(async () => undefined);
+
+const VOICE_IDLE: VoiceInputSnapshot = {
+  available: true,
+  phase: "idle",
+  microphonePermission: "unknown",
+  speechPermission: "unknown",
+  transcript: "",
+  error: null,
+};
+
+function voiceBridge() {
+  const transcriptListeners = new Set<(event: VoiceTranscriptEvent) => void>();
+  const bridge: VoiceInputBridge = {
+    status: vi.fn(async () => VOICE_IDLE),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    onState: vi.fn(async () => () => undefined),
+    onTranscript: vi.fn(async (listener) => {
+      transcriptListeners.add(listener);
+      return () => transcriptListeners.delete(listener);
+    }),
+  };
+  return {
+    bridge,
+    transcript: (event: VoiceTranscriptEvent) =>
+      transcriptListeners.forEach((listener) => listener(event)),
+  };
+}
 
 function viewport(width: number, height: number, zoom: string) {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
@@ -52,8 +86,14 @@ describe("AssistantOnboarding", () => {
     }
 
     expect(screen.getByRole("heading", { name: finalTitle })).toHaveFocus();
+    const firstMessage = screen.getByRole("textbox", { name: /primo messaggio all’assistente/i });
+    expect(screen.getByRole("button", { name: /Passa alla chat libera/ })).toBeDisabled();
+    await user.type(firstMessage, "Vorrei iniziare dalle opportunità più adatte.");
     await user.click(screen.getByRole("button", { name: /Passa alla chat libera/ }));
-    expect(onComplete).toHaveBeenCalledWith({ path, step: 4 });
+    expect(onComplete).toHaveBeenCalledWith(
+      { path, step: 4 },
+      "Vorrei iniziare dalle opportunità più adatte.",
+    );
   });
 
   it("moves back within a path and returns to the initial choices", async () => {
@@ -91,7 +131,7 @@ describe("AssistantOnboarding", () => {
     const user = userEvent.setup();
     let release!: () => void;
     const onComplete = vi
-      .fn<(state: { path: AssistantOnboardingPath | null; step: 0 | 1 | 2 | 3 | 4 }) => Promise<void>>()
+      .fn<(state: AssistantOnboardingState, firstMessage: string) => Promise<void>>()
       .mockRejectedValueOnce(new Error("native marker unavailable"))
       .mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
     render(
@@ -101,16 +141,54 @@ describe("AssistantOnboarding", () => {
       />,
     );
 
+    await user.type(
+      screen.getByRole("textbox", { name: /primo messaggio all’assistente/i }),
+      "  Cominciamo dalle candidature.  ",
+    );
     await user.click(screen.getByRole("button", { name: /Passa alla chat libera/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("non è stato segnato come completato");
+    expect(await screen.findByText(/non è stato segnato come completato/i)).toBeInTheDocument();
     expect(screen.queryByText("native marker unavailable")).toBeNull();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
 
     await user.click(screen.getByRole("button", { name: /Riprova e apri la chat/ }));
     expect(screen.getByRole("button", { name: /Apro la chat/ })).toBeDisabled();
-    expect(onComplete).toHaveBeenLastCalledWith({ path: "tour", step: 4 });
+    expect(onComplete).toHaveBeenLastCalledWith(
+      { path: "tour", step: 4 },
+      "Cominciamo dalle candidature.",
+    );
     release();
     await waitFor(() => expect(screen.getByRole("button", { name: /Passa alla chat libera/ })).toBeEnabled());
+  });
+
+  it("keeps the final voice transcript editable and hands it off only on confirmation", async () => {
+    const user = userEvent.setup();
+    const voice = voiceBridge();
+    const onComplete = vi.fn(async () => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(
+      <AssistantOnboarding
+        initialState={{ path: "tour", step: 4 }}
+        onComplete={onComplete}
+        voiceInputBridge={voice.bridge}
+      />,
+    );
+    await screen.findByRole("button", { name: /detta un messaggio/i });
+
+    act(() => voice.transcript({ text: "iniziamo dalle candidature remote", isFinal: true }));
+
+    const composer = screen.getByRole("textbox", { name: /primo messaggio all’assistente/i });
+    expect(composer).toHaveValue("iniziamo dalle candidature remote");
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    await user.type(composer, " in Europa");
+    expect(onComplete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /passa alla chat libera/i }));
+    expect(onComplete).toHaveBeenCalledWith(
+      { path: "tour", step: 4 },
+      "iniziamo dalle candidature remote in Europa",
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it.each([

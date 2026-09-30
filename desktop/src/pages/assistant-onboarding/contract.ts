@@ -1,3 +1,5 @@
+import type { VoiceInputBridge } from "../../lib/voice-input";
+
 export const ASSISTANT_ONBOARDING_PATHS = ["tour", "requirements", "explore"] as const;
 
 export type AssistantOnboardingPath = (typeof ASSISTANT_ONBOARDING_PATHS)[number];
@@ -16,7 +18,9 @@ export type AssistantOnboardingProps = {
   assistantName?: string;
   initialState?: AssistantOnboardingState;
   onStateChange?: (state: AssistantOnboardingState) => void;
-  onComplete: (state: AssistantOnboardingState) => Promise<void>;
+  /** Receives the user-confirmed editable draft; the UI never sends it itself. */
+  onComplete: (state: AssistantOnboardingState, firstMessage: string) => Promise<void>;
+  voiceInputBridge?: VoiceInputBridge;
 };
 
 export const INITIAL_ASSISTANT_ONBOARDING_STATE: AssistantOnboardingState = {

@@ -211,6 +211,56 @@
   text-transform: uppercase;
 }
 
+.assistant-onboarding__composer {
+  margin: -8px 0 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-onboarding__composer > label {
+  color: var(--color-bright);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.assistant-onboarding__composer-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.assistant-onboarding__composer textarea {
+  min-width: 0;
+  flex: 1 1 auto;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-base);
+  background: var(--color-card);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.assistant-onboarding__composer textarea:focus {
+  border-color: var(--color-green);
+  outline: 1px solid color-mix(in srgb, var(--color-green) 35%, transparent);
+}
+
+.assistant-onboarding__composer > small {
+  color: var(--color-dim);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.assistant-onboarding__voice {
+  flex: 0 0 auto;
+}
+
 .assistant-onboarding__actions {
   display: flex;
   flex-wrap: wrap;
@@ -313,6 +363,11 @@
 
   .assistant-onboarding__actions button {
     flex: 1 1 auto;
+  }
+
+  .assistant-onboarding__composer-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
