@@ -39,6 +39,16 @@ const MAX_NAME_LEN: usize = 128;
 const MAX_VALUE_BYTES: usize = 64 * 1024;
 const KEYCHAIN_UNAVAILABLE: &str = "keychain_unavailable";
 
+#[cfg(debug_assertions)]
+fn trace_auth_store(event: &str) {
+    if std::env::var_os("JHT_AUTH_STORE_TRACE").is_some() {
+        eprintln!("[auth-store] {event}");
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn trace_auth_store(_event: &str) {}
+
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AuthStoreError {
@@ -53,6 +63,7 @@ fn failure(code: &'static str) -> AuthStoreError {
 pub(crate) type SystemKeyCache = KeyCache<SystemKeychain>;
 
 pub(crate) fn system_key_cache() -> SystemKeyCache {
+    trace_auth_store("cache_initialized");
     KeyCache::new(SystemKeychain)
 }
 
@@ -160,6 +171,7 @@ impl SystemKeychain {
 
 impl KeySource for SystemKeychain {
     fn read(&self) -> Result<Option<Zeroizing<Vec<u8>>>, ()> {
+        trace_auth_store("keychain_read");
         match Self::entry()?.get_secret() {
             Ok(secret) => Ok(Some(Zeroizing::new(secret))),
             Err(keyring::Error::NoEntry) => Ok(None),
@@ -168,6 +180,7 @@ impl KeySource for SystemKeychain {
     }
 
     fn write(&self, key: &[u8]) -> Result<(), ()> {
+        trace_auth_store("keychain_write");
         Self::entry()?.set_secret(key).map_err(|_| ())
     }
 }
