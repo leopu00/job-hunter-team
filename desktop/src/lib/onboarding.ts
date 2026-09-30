@@ -109,6 +109,7 @@ type ProfileRow = {
 
 const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
+const MARKER_STARTED = "subscription-v1-started";
 const WORK_MODES = new Set<WorkMode>(["remote", "hybrid", "onsite", "flexible"]);
 const STATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 
@@ -184,11 +185,15 @@ function displayName(user: User): string | null {
 function markerPresent(store: OnboardingMarkerStore, userId: string): boolean {
   try { return store.getItem(markerKey(userId)) === MARKER_VALUE; } catch { return false; }
 }
+function markerStarted(store: OnboardingMarkerStore, userId: string): boolean {
+  try { return store.getItem(markerKey(userId)) === MARKER_STARTED; } catch { return false; }
+}
 
 export async function loadOnboardingGate(
   client: SupabaseClient, user: User, store: OnboardingMarkerStore = localStorage,
 ): Promise<OnboardingGateState> {
   if (markerPresent(store, user.id)) return { phase: "ready" };
+  const started = markerStarted(store, user.id);
   const [milestonesResult, profileResult] = await Promise.all([
     client.from("user_onboarding_state")
       .select("vps_setup_completed_at, profile_configured_at, first_team_run_at")
@@ -201,7 +206,7 @@ export async function loadOnboardingGate(
   const milestones = milestonesResult.data as OnboardingMilestones | null;
   const profile = profileResult.data as ProfileRow | null;
   const profileReady = isOnboardingProfileReady(profile);
-  if (profileReady && milestones?.first_team_run_at) return { phase: "ready" };
+  if (!started && profileReady && milestones?.first_team_run_at) return { phase: "ready" };
   return {
     phase: "required", account: { displayName: displayName(user) },
     initialDraft: draftFromRow(profile),
@@ -298,5 +303,16 @@ export function markOnboardingReady(
   try {
     store.setItem(markerKey(userId), MARKER_VALUE);
     if (!markerPresent(store, userId)) throw new Error("marker was not persisted");
+  } catch { throw new OnboardingSaveError("marker-failed"); }
+}
+
+/** Prevents an interrupted new 0.4 flow from being mistaken for a legacy completed account. */
+export function markOnboardingStarted(
+  userId: string, store: OnboardingMarkerStore = localStorage,
+): void {
+  try {
+    if (markerPresent(store, userId)) return;
+    store.setItem(markerKey(userId), MARKER_STARTED);
+    if (!markerStarted(store, userId)) throw new Error("marker was not persisted");
   } catch { throw new OnboardingSaveError("marker-failed"); }
 }

@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import { connectDirectChat } from "../lib/direct-chat";
 import {
+  connectDirectChat,
+  directChatStatus,
+  sendDirectChat,
+} from "../lib/direct-chat";
+import {
+  assistantOnboardingMessageId,
+  loadAssistantOnboardingState,
+  saveAssistantOnboardingState,
+} from "../lib/assistant-onboarding";
+import {
+  isOnboardingRuntimeReady,
   loadOnboardingGate,
   markOnboardingReady,
+  markOnboardingStarted,
   runtimeStateFromSnapshot,
   saveOnboardingProfile,
   type OnboardingGateState,
@@ -25,7 +36,12 @@ import {
 import { goTo, LOGIN_PAGE } from "../lib/pages";
 import { supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
+import {
+  AssistantOnboarding,
+  type AssistantOnboardingState,
+} from "../pages/assistant-onboarding";
 import Shell from "../shell/Shell";
+import { navigate } from "../shell/router";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const MAX_PROVIDER_OUTPUT = 32_768;
@@ -58,10 +74,13 @@ export default function DashboardApp() {
   const { session, loading } = useSession();
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
+  const [assistantGuideUserId, setAssistantGuideUserId] = useState<string | null>(null);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerExitRejectRef = useRef<((error: Error) => void) | null>(null);
   const providerAttemptRef = useRef(0);
+  const activeUserIdRef = useRef<string | null>(session?.user.id ?? null);
+  activeUserIdRef.current = session?.user.id ?? null;
   const signedOut = !loading && !session;
 
   const reloadGate = useCallback(async () => {
@@ -80,6 +99,8 @@ export default function DashboardApp() {
 
   useEffect(() => {
     let active = true;
+    setAssistantGuideUserId(null);
+    submissionRef.current = null;
     if (!session) {
       setGate({ phase: "loading" });
       return () => { active = false; };
@@ -120,6 +141,7 @@ export default function DashboardApp() {
     if (!session) throw new Error("session-missing");
     submissionRef.current = submission;
     try {
+      markOnboardingStarted(session.user.id);
       await saveOnboardingProfile(supabase, session.user, submission.profile);
     } catch (error) {
       fail("profile", error);
@@ -224,15 +246,64 @@ export default function DashboardApp() {
       setRuntime({ status: "working", stage: "assistant", message: "Apro l’Assistente e verifico il primo contatto." });
       const nativeSnapshot = await openOnboardingAssistant(submission.host);
       const chat = await connectDirectChat(submission.host);
+      if (activeUserIdRef.current !== session.user.id) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
-      if (!snapshot.directChatReady) throw new Error("direct-chat-unverified");
-      markOnboardingReady(session.user.id, snapshot);
-      setRuntime({ status: "ready" });
-      setGate({ phase: "ready" });
+      if (!isOnboardingRuntimeReady(snapshot)) throw new Error("assistant-unverified");
+      setAssistantGuideUserId(session.user.id);
     } catch (error) {
+      if (activeUserIdRef.current !== session.user.id) throw error;
       fail("assistant", error);
     }
   }, [fail, session, setRuntime]);
+
+  const saveAssistantState = useCallback((state: AssistantOnboardingState) => {
+    if (!session || assistantGuideUserId !== session.user.id) return;
+    try {
+      saveAssistantOnboardingState(session.user.id, state);
+    } catch {
+      setGate({ phase: "error", message: GATE_ERROR });
+    }
+  }, [assistantGuideUserId, session]);
+
+  const completeAssistant = useCallback(async (
+    state: AssistantOnboardingState,
+    firstMessage: string,
+  ) => {
+    const submission = submissionRef.current;
+    if (!submission || !session || assistantGuideUserId !== session.user.id) {
+      return fail("assistant", new Error("submission-missing"));
+    }
+    const message = firstMessage.trim();
+    if (!message) return fail("assistant", new Error("assistant-message-missing"));
+    try {
+      saveAssistantOnboardingState(session.user.id, state);
+      const clientMessageId = await assistantOnboardingMessageId(session.user.id, state, message);
+      const before = await readOnboardingSnapshot(submission.host);
+      const connected = await connectDirectChat(submission.host);
+      if (activeUserIdRef.current !== session.user.id) throw new Error("account-changed");
+      if (!isOnboardingRuntimeReady({ ...before, directChatReady: connected.state === "ready" })) {
+        throw new Error("assistant-unverified");
+      }
+      const receipt = await sendDirectChat("assistente", message, clientMessageId);
+      if (!receipt.accepted || receipt.clientMessageId !== clientMessageId || !receipt.messageId) {
+        throw new Error("assistant-message-unverified");
+      }
+      const [nativeSnapshot, chat] = await Promise.all([
+        readOnboardingSnapshot(submission.host),
+        directChatStatus(),
+      ]);
+      if (activeUserIdRef.current !== session.user.id) throw new Error("account-changed");
+      const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
+      if (!isOnboardingRuntimeReady(snapshot)) throw new Error("assistant-unverified");
+      markOnboardingReady(session.user.id, snapshot);
+      setRuntime({ status: "ready" });
+      navigate("/messages", { replace: true });
+      setGate({ phase: "ready" });
+    } catch (error) {
+      if (activeUserIdRef.current !== session.user.id) throw error;
+      fail("assistant", error);
+    }
+  }, [assistantGuideUserId, fail, session, setRuntime]);
 
   const runtimeAction = useCallback(async (stage: "provider-login" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
@@ -266,6 +337,16 @@ export default function DashboardApp() {
     );
   }
   if (gate.phase === "required") {
+    if (assistantGuideUserId === session.user.id) {
+      return (
+        <AssistantOnboarding
+          key={session.user.id}
+          initialState={loadAssistantOnboardingState(session.user.id)}
+          onStateChange={saveAssistantState}
+          onComplete={completeAssistant}
+        />
+      );
+    }
     return (
       <OnboardingFlow
         account={gate.account}
