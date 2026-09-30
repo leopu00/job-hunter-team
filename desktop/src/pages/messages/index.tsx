@@ -1,13 +1,26 @@
-import WebMessagesPage from "@/app/(protected)/messages/page";
-import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import ServerPage from "../../shell/server-page";
+import {
+  closeDirectChat,
+  directChatStatus,
+  readDirectChat,
+  reconnectDirectChat,
+  sendDirectChat,
+  subscribeDirectChat,
+} from "../../lib/direct-chat";
 import type { PageProps } from "../types";
+import DirectChatScreen from "./DirectChatScreen";
+import type { DirectChatClient } from "./direct-chat-contract";
 
-/**
- * web/app/(protected)/messages, run as it is: the chat with the team (history,
- * replies, new turns, Realtime). Its routes are answered by
- * pages/messages/messages-api.ts.
- */
+const directChatClient: DirectChatClient = {
+  subscribe: ({ onEvent }) => subscribeDirectChat(onEvent),
+  status: directChatStatus,
+  reconnect: reconnectDirectChat,
+  read: ({ agentId, cursor }) => readDirectChat(agentId, cursor),
+  send: ({ agentId, text, clientMessageId }) =>
+    sendDirectChat(agentId, text, clientMessageId),
+  close: closeDirectChat,
+};
+
+/** The desktop Messages route talks only through the direct VPS bridge. */
 export default function MessagesPage(_props: PageProps) {
-  return <ServerPage render={() => WebMessagesPage()} fallback={<DashboardSkeleton label="Caricamento messaggi" />} />;
+  return <DirectChatScreen client={directChatClient} />;
 }
