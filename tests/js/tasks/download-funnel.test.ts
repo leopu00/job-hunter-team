@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   attributionFromPage,
   DOWNLOAD_ATTRIBUTION_ALLOWLIST,
+  DOWNLOAD_RELEASE_TAG,
   DOWNLOAD_TARGETS,
   downloadHref,
+  resolveDownloadTarget,
   type DownloadClick,
 } from "../../../web/lib/download-funnel";
 import {
@@ -50,11 +52,41 @@ const PRIVACY_PAGE = readFileSync(
 
 const FIXED_NOW = new Date("2026-08-09T14:37:58.123Z");
 
-function testDependencies(record = vi.fn(async (_event: DownloadClick) => {})) {
+function releaseFixture(
+  names: string[],
+  tag = DOWNLOAD_RELEASE_TAG,
+  withLinks = true,
+) {
+  return {
+    tag_name: tag,
+    draft: false,
+    prerelease: false,
+    assets: names.map((name) => ({
+      name,
+      state: "uploaded",
+      size: 1,
+      browser_download_url: withLinks
+        ? `https://github.com/leopu00/job-hunter-team/releases/download/${tag}/${name}`
+        : undefined,
+    })),
+  };
+}
+
+const PRIMARY_RELEASE = releaseFixture([
+  "job-hunter-team-windows-x64-setup.exe",
+  "job-hunter-team-macos-universal.dmg",
+  "job-hunter-team-linux-x64.AppImage",
+]);
+
+function testDependencies(
+  record = vi.fn(async (_event: DownloadClick) => {}),
+  release: unknown = PRIMARY_RELEASE,
+) {
   const tasks: Array<() => void | Promise<void>> = [];
   const logFailure = vi.fn();
   return {
     dependencies: {
+      release,
       schedule: (task: () => void | Promise<void>) => tasks.push(task),
       record,
       now: () => FIXED_NOW,
@@ -90,6 +122,84 @@ describe("B8 download funnel", () => {
         utm_campaign: "none",
       });
     }
+  });
+
+  it("prefers the 0.4.0 names when both new and legacy aliases exist", () => {
+    const mixedRelease = releaseFixture([
+      "job-hunter-team-macos-universal.dmg",
+      "job-hunter-team.zip",
+      "job-hunter-team-linux-x64.AppImage",
+      "job-hunter-team-linux-x64.tar.gz",
+    ]);
+
+    expect(resolveDownloadTarget("mac", mixedRelease)).toBe(
+      DOWNLOAD_TARGETS.mac,
+    );
+    expect(resolveDownloadTarget("linux", mixedRelease)).toBe(
+      DOWNLOAD_TARGETS.linux,
+    );
+  });
+
+  it.each([
+    ["mac", "job-hunter-team.zip"],
+    ["linux", "job-hunter-team-linux-x64.tar.gz"],
+  ] as const)(
+    "uses the legacy %s alias only inside the 0.4.0 release",
+    (slug, legacyName) => {
+      const state = testDependencies(undefined, releaseFixture([legacyName]));
+      const response = handleDownloadRedirect(
+        new Request(`https://jobhunterteam.ai/go/${slug}`),
+        slug,
+        state.dependencies,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        `https://github.com/leopu00/job-hunter-team/releases/download/v0.4.0/${legacyName}`,
+      );
+    },
+  );
+
+  it("never falls back to the legacy Godot 0.3.9 release", () => {
+    const godotRelease = releaseFixture(
+      ["job-hunter-team.zip", "job-hunter-team-linux-x64.tar.gz"],
+      "v0.3.9",
+    );
+
+    for (const slug of ["mac", "linux"] as const) {
+      const state = testDependencies(undefined, godotRelease);
+      const response = handleDownloadRedirect(
+        new Request(`https://jobhunterteam.ai/go/${slug}`),
+        slug,
+        state.dependencies,
+      );
+      expect(response.status).toBe(503);
+      expect(response.headers.has("location")).toBe(false);
+      expect(state.tasks).toHaveLength(0);
+    }
+  });
+
+  it("fails closed when the requested 0.4.0 asset link is missing", async () => {
+    const state = testDependencies(
+      undefined,
+      releaseFixture(
+        ["job-hunter-team-macos-universal.dmg"],
+        DOWNLOAD_RELEASE_TAG,
+        false,
+      ),
+    );
+    const response = handleDownloadRedirect(
+      new Request("https://jobhunterteam.ai/go/mac", { method: "HEAD" }),
+      "mac",
+      state.dependencies,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.has("location")).toBe(false);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).toBe("");
+    expect(state.tasks).toHaveLength(0);
   });
 
   it("T2 fails closed for unknown assets without Location or persistence", () => {
@@ -247,6 +357,7 @@ describe("B8 download funnel", () => {
         ),
         "mac",
         {
+          release: PRIMARY_RELEASE,
           schedule: (task) => tasks.push(task),
           record,
           now: () => FIXED_NOW,
@@ -293,6 +404,7 @@ describe("B8 download funnel", () => {
       new Request("https://jobhunterteam.ai/go/linux?utm_source=reddit"),
       "linux",
       {
+        release: PRIMARY_RELEASE,
         schedule: () => {
           throw new Error("scheduler unavailable");
         },
@@ -323,7 +435,7 @@ describe("B8 download funnel", () => {
     expect(MIGRATION).not.toMatch(/CREATE POLICY/i);
   });
 
-  it("T10 gives the four page CTAs local links with only valid current UTM", () => {
+  it("T10 gives the three page CTAs local links with only valid current UTM", () => {
     const attribution = attributionFromPage({
       utm_source: "reddit",
       utm_medium: "paid",
@@ -339,7 +451,9 @@ describe("B8 download funnel", () => {
       );
     }
     expect(DOWNLOAD_PAGE).toContain('windows: "win-setup"');
-    expect(DOWNLOAD_PAGE).toContain('href={downloadHref("win-portable"');
+    expect(DOWNLOAD_PAGE).toContain(
+      "href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}",
+    );
     expect(DOWNLOAD_PAGE).not.toContain("releases/latest/download");
 
     expect(
@@ -394,6 +508,7 @@ describe("B8 download funnel", () => {
         ),
         "mac",
         {
+          release: PRIMARY_RELEASE,
           schedule: (task) => tasks.push(task),
           record: async (event) => {
             recorded.push(event);

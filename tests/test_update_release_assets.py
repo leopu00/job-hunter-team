@@ -11,13 +11,18 @@ DOWNLOADS = (ROOT / "web/lib/download-funnel.ts").read_text(encoding="utf-8")
 
 def test_public_downloads_are_verified_release_assets() -> None:
     expected = set(re.findall(r"--expected-asset ([^ \\\n]+)", WORKFLOW))
-    targets = set(re.findall(r"RELEASE_BASE}/([^`]+)`", DOWNLOADS))
+    primary_targets = DOWNLOADS.split("export const DOWNLOAD_TARGETS", 1)[1].split(
+        "} as const", 1
+    )[0]
+    targets = set(re.findall(r"RELEASE_BASE}/([^`]+)`", primary_targets))
     assert targets == {
         "job-hunter-team-windows-x64-setup.exe",
         "job-hunter-team-macos-universal.dmg",
         "job-hunter-team-linux-x64.AppImage",
     }
     assert targets <= expected
+    assert 'DOWNLOAD_RELEASE_TAG = "v0.4.0"' in DOWNLOADS
+    assert "releases/latest/download" not in DOWNLOADS
 
 
 def test_release_has_linux_debian_alternative() -> None:

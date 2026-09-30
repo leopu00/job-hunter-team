@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "ssh-key-dialog",
+  "description": "Allow only the main onboarding window to choose one existing SSH key file",
+  "windows": ["main"],
+  "permissions": ["dialog:allow-open"]
+}
