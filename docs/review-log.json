@@ -1789,6 +1789,11 @@
       "path": "docs/guides/PARITY-ROUND.md",
       "description": "Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/tauri-onboarding-contract.md",
+      "description": "Contratto Tauri 0.4 door-to-door: gate account-scoped, runtime subscription, onboarding verificato, chat diretta e confini di sicurezza",
+      "last_review": null
     }
   ]
 }
