@@ -51,8 +51,16 @@ function Harness({ bridge, onSend = vi.fn(), initial = "" }: { bridge: VoiceInpu
   );
 }
 
+function VoiceHarness({ bridge, locale = "it-IT", onChange = vi.fn() }: { bridge: VoiceInputBridge; locale?: string; onChange?: (value: string) => void }) {
+  return <VoiceInputControl value="" onChange={onChange} locale={locale} bridge={bridge} />;
+}
+
 async function flush() {
-  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
 }
 
 describe("VoiceInputControl", () => {
@@ -155,5 +163,84 @@ describe("VoiceInputControl", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/riconoscimento sul dispositivo non è disponibile/i);
     expect(screen.queryByRole("button", { name: /detta un messaggio/i })).not.toBeInTheDocument();
     expect(bridge.start).not.toHaveBeenCalled();
+  });
+
+  it.each(["requesting-permission", "recording", "transcribing"] as const)("cancels a %s session on unmount without starting permissions", async (phase) => {
+    const bridge = new FakeBridge();
+    bridge.snapshot = { ...IDLE, phase };
+    const view = render(<VoiceHarness bridge={bridge} />);
+    await flush();
+
+    view.unmount();
+    await flush();
+
+    expect(bridge.cancel).toHaveBeenCalledOnce();
+    expect(bridge.start).not.toHaveBeenCalled();
+  });
+
+  it("treats not_recording as an idempotent cleanup result", async () => {
+    const bridge = new FakeBridge();
+    bridge.snapshot = { ...IDLE, phase: "transcribing" };
+    bridge.cancel.mockRejectedValueOnce({ code: "not_recording" });
+    const view = render(<VoiceHarness bridge={bridge} />);
+    await flush();
+
+    view.unmount();
+    await flush();
+
+    expect(bridge.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("invalidates a late final transcript after unmount", async () => {
+    const bridge = new FakeBridge();
+    bridge.snapshot = { ...IDLE, phase: "transcribing" };
+    const onChange = vi.fn();
+    const view = render(<VoiceHarness bridge={bridge} onChange={onChange} />);
+    await flush();
+    const lateTranscript = Array.from(bridge.transcriptListeners)[0];
+
+    view.unmount();
+    await flush();
+    act(() => lateTranscript({ text: "testo arrivato tardi", isFinal: true }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(bridge.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("finishes cleanup before subscribing to a replacement bridge", async () => {
+    const first = new FakeBridge();
+    const second = new FakeBridge();
+    first.snapshot = { ...IDLE, phase: "recording" };
+    let finishCleanup!: () => void;
+    first.cancel.mockImplementationOnce(() => new Promise<void>((resolve) => { finishCleanup = resolve; }));
+    const view = render(<VoiceHarness bridge={first} />);
+    await flush();
+
+    view.rerender(<VoiceHarness bridge={second} />);
+    await flush();
+    expect(first.cancel).toHaveBeenCalledOnce();
+    expect(second.status).not.toHaveBeenCalled();
+
+    finishCleanup();
+    await flush();
+    expect(second.status).toHaveBeenCalledWith("it-IT");
+    view.unmount();
+    await flush();
+  });
+
+  it("cancels the active session before reinitializing a changed locale", async () => {
+    const bridge = new FakeBridge();
+    bridge.snapshot = { ...IDLE, phase: "requesting-permission" };
+    const view = render(<VoiceHarness bridge={bridge} locale="it-IT" />);
+    await flush();
+
+    view.rerender(<VoiceHarness bridge={bridge} locale="en-US" />);
+    await flush();
+
+    expect(bridge.cancel).toHaveBeenCalledOnce();
+    expect(bridge.status).toHaveBeenLastCalledWith("en-US");
+    expect(bridge.start).not.toHaveBeenCalled();
+    view.unmount();
+    await flush();
   });
 });
