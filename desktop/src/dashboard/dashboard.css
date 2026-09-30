@@ -8,6 +8,241 @@
 @import "@fontsource/jetbrains-mono/700.css";
 @import "../../../web/app/globals.css";
 
+/* The desktop owns five palettes but every screen consumes the same semantic
+   tokens. data-theme keeps reused web views on their light/dark contract;
+   data-jht-theme selects the exact desktop palette. */
+:root[data-jht-theme="dark"] {
+  color-scheme: dark;
+  --color-void: #060608;
+  --color-deep: #0c0c10;
+  --color-panel: #111116;
+  --color-card: #181820;
+  --color-row: #1d1d26;
+  --color-border: #30303d;
+  --color-border-glow: #414153;
+  --color-dim: #777790;
+  --color-muted: #9a9ab1;
+  --color-base: #c4c4d4;
+  --color-bright: #e4e4ee;
+  --color-white: #f7f7fb;
+  --color-grid: rgba(255, 255, 255, 0.022);
+  --color-green: #31dd8a;
+  --color-ready: #7fffb2;
+  --color-yellow: #f5c518;
+  --color-blue: #68adff;
+  --color-red: #ff5f75;
+  --color-orange: #ff9b57;
+  --color-purple: #bd76ff;
+  --sync-warn: #ddb461;
+}
+
+:root[data-jht-theme="light"] {
+  color-scheme: light;
+  --color-void: #f5f6fa;
+  --color-deep: #e9ebf2;
+  --color-panel: #ffffff;
+  --color-card: #edeff5;
+  --color-row: #e4e7ef;
+  --color-border: #b9bdc9;
+  --color-border-glow: #969cab;
+  --color-dim: #656b7d;
+  --color-muted: #4c5264;
+  --color-base: #303647;
+  --color-bright: #181d2c;
+  --color-white: #080c17;
+  --color-grid: rgba(13, 20, 36, 0.035);
+  --color-green: #08713a;
+  --color-ready: #08713a;
+  --color-yellow: #795000;
+  --color-blue: #1d5fa7;
+  --color-red: #b6203a;
+  --color-orange: #914000;
+  --color-purple: #7330a6;
+  --sync-warn: #795000;
+}
+
+:root[data-jht-theme="graphite"] {
+  color-scheme: dark;
+  --color-void: #101111;
+  --color-deep: #151717;
+  --color-panel: #1a1c1c;
+  --color-card: #232626;
+  --color-row: #292c2c;
+  --color-border: #3b4040;
+  --color-border-glow: #535a59;
+  --color-dim: #858d8b;
+  --color-muted: #a4acab;
+  --color-base: #cbd0cf;
+  --color-bright: #e6e9e8;
+  --color-white: #f7f8f8;
+  --color-grid: rgba(255, 255, 255, 0.025);
+  --color-green: #b6e36b;
+  --color-ready: #c9f58a;
+  --color-yellow: #e8c75a;
+  --color-blue: #7eb8dc;
+  --color-red: #ef7a76;
+  --color-orange: #e6a568;
+  --color-purple: #b89bd8;
+  --sync-warn: #e1bd63;
+}
+
+:root[data-jht-theme="ocean"] {
+  color-scheme: dark;
+  --color-void: #06121a;
+  --color-deep: #081923;
+  --color-panel: #0c202c;
+  --color-card: #112b39;
+  --color-row: #163544;
+  --color-border: #245064;
+  --color-border-glow: #337089;
+  --color-dim: #74a0b0;
+  --color-muted: #91b8c5;
+  --color-base: #bad5dc;
+  --color-bright: #dcebef;
+  --color-white: #f3fbfc;
+  --color-grid: rgba(91, 220, 232, 0.035);
+  --color-green: #44d9e6;
+  --color-ready: #7ee9d2;
+  --color-yellow: #efd074;
+  --color-blue: #66b4ff;
+  --color-red: #ff7c8c;
+  --color-orange: #ffae6d;
+  --color-purple: #c49cff;
+  --sync-warn: #e9c86c;
+}
+
+:root[data-jht-theme="paper"] {
+  color-scheme: light;
+  --color-void: #f4efe4;
+  --color-deep: #ebe3d5;
+  --color-panel: #fbf7ee;
+  --color-card: #eee6d8;
+  --color-row: #e5dac9;
+  --color-border: #c2b6a2;
+  --color-border-glow: #a89a84;
+  --color-dim: #746b5f;
+  --color-muted: #594f43;
+  --color-base: #3d352d;
+  --color-bright: #272019;
+  --color-white: #17120e;
+  --color-grid: rgba(68, 51, 32, 0.04);
+  --color-green: #2e6b4c;
+  --color-ready: #2e6b4c;
+  --color-yellow: #765400;
+  --color-blue: #315f8a;
+  --color-red: #a2323e;
+  --color-orange: #8f4a16;
+  --color-purple: #704d86;
+  --sync-warn: #765400;
+}
+
+.theme-picker {
+  position: relative;
+  margin-left: 0.35rem;
+}
+
+.theme-picker__trigger {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  color: var(--color-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-picker__trigger:hover,
+.theme-picker__trigger[aria-expanded="true"] {
+  border-color: var(--color-border);
+  color: var(--color-bright);
+  background: var(--color-card);
+}
+
+.theme-picker__trigger:focus-visible,
+.theme-picker__option:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
+}
+
+.theme-picker__menu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 50;
+  width: 12rem;
+  padding: 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  color: var(--color-base);
+  background: var(--color-panel);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.28);
+}
+
+.theme-picker__heading {
+  display: block;
+  padding: 0.35rem 0.55rem 0.45rem;
+  color: var(--color-dim);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.theme-picker__option {
+  width: 100%;
+  min-height: 2.2rem;
+  display: grid;
+  grid-template-columns: 1.45rem 1fr 1rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 0.35rem;
+  color: var(--color-bright);
+  background: transparent;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-picker__option:hover,
+.theme-picker__option[aria-checked="true"] {
+  background: var(--color-card);
+}
+
+.theme-picker__swatch {
+  width: 1.3rem;
+  height: 1.3rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--preview-border);
+  border-radius: 50%;
+  background: var(--preview-bg);
+}
+
+.theme-picker__swatch i {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--preview-accent);
+}
+
+.theme-picker__swatch[data-theme-preview="dark"] { --preview-bg: #111116; --preview-border: #414153; --preview-accent: #31dd8a; }
+.theme-picker__swatch[data-theme-preview="light"] { --preview-bg: #fff; --preview-border: #b9bdc9; --preview-accent: #08713a; }
+.theme-picker__swatch[data-theme-preview="graphite"] { --preview-bg: #1a1c1c; --preview-border: #535a59; --preview-accent: #b6e36b; }
+.theme-picker__swatch[data-theme-preview="ocean"] { --preview-bg: #0c202c; --preview-border: #337089; --preview-accent: #44d9e6; }
+.theme-picker__swatch[data-theme-preview="paper"] { --preview-bg: #fbf7ee; --preview-border: #a89a84; --preview-accent: #2e6b4c; }
+
+.theme-picker__check {
+  color: var(--color-green);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
 /* Tailwind scans desktop/ on its own; the reused web code lives in web/app
    (components, the protected pages, their routes), web/lib and web/i18n. Whole folders,
    not one per page: a page ported later must not lose its classes (the
