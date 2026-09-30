@@ -35,10 +35,12 @@ in the app. `src/lib/supabase.ts` exports the signed-in client (`supabase`),
   starts and the login screen says the build is not configured.
 - **Flow.** Google refuses embedded webviews, so the authorize page opens in
   the system browser (PKCE). The return lands on a one-shot loopback listener,
-  `http://127.0.0.1:54917/auth/callback`, which must be in the project's
-  allowed redirect URLs. Loopback rather than a deep link because a custom
-  scheme only exists for the installed app on macOS, and sign-in has to work
-  from `tauri dev` too.
+  `http://127.0.0.1:54917/auth/callback?sb_flow_id=<flow>`. The project's
+  allowed redirect URLs must include
+  `http://127.0.0.1:54917/auth/callback?sb_flow_id=*`: the per-request flow id
+  binds the callback to its own PKCE verifier. Loopback rather than a deep link
+  because a custom scheme only exists for the installed app on macOS, and
+  sign-in has to work from `tauri dev` too.
 - **Browser choice.** The login screen lists the browsers found installed
   (macOS: the `.app` bundles in `/Applications` and `~/Applications`;
   Windows: the usual install folders; Linux: `PATH`), plus the system default
@@ -50,10 +52,10 @@ in the app. `src/lib/supabase.ts` exports the signed-in client (`supabase`),
   webview's localStorage: they are encrypted (ChaCha20-Poly1305) in the app's
   local data dir, with the 32-byte key in the OS keychain (macOS Keychain,
   Windows Credential Manager, Linux kernel keyring). A file that no longer
-  decrypts counts as signed out. The key is read from the keychain at most once per
-  process and kept in memory: on macOS every keychain read of an unsigned or
-  rebuilt app can raise a password prompt. A refusal is not asked again until
-  the user clicks "Accedi con Google" once more.
+  decrypts counts as signed out. Startup and navigation never touch the OS
+  credential store: only an explicit "Accedi con Google" action can read or
+  create the key, at most once per process, and the key then stays in memory.
+  A refusal is terminal until the app is fully restarted.
 - **Sign-out** revokes this app's session only (`scope: "local"`): the web and
   other devices stay signed in.
 - The CSP allows `https://*.supabase.co` and `wss://*.supabase.co`; a project
