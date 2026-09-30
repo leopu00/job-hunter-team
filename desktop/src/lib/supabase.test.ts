@@ -154,6 +154,36 @@ describe("signInWithGoogle", () => {
     expect(client.auth.signInWithOAuth).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["returned error", vi.fn().mockResolvedValue({ error: { message: "private startup detail" } })],
+    ["rejection", vi.fn().mockRejectedValue(new Error("private startup failure"))],
+  ])("fails closed on initialize %s without creating a PKCE flow", async (_case, initialize) => {
+    const verifierWrite = vi.fn();
+    const client = fakeClient({
+      initialize,
+      signInWithOAuth: vi.fn(async () => {
+        verifierWrite();
+        return {
+          data: { provider: "google", url: `${PROJECT}/auth/v1/authorize?provider=google`, flowId: FLOW_ID },
+          error: null,
+        };
+      }),
+    });
+    const invoke = backend(async () => "code");
+    const onAuthorizeUrl = vi.fn();
+
+    await expect(signInWithGoogle({ onAuthorizeUrl }, deps(client, invoke))).rejects.toEqual(
+      new LoginError("unknown"),
+    );
+
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith("auth_store_prepare");
+    expect(client.auth.signInWithOAuth).not.toHaveBeenCalled();
+    expect(client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(verifierWrite).not.toHaveBeenCalled();
+    expect(onAuthorizeUrl).not.toHaveBeenCalled();
+  });
+
   it("reports a failed exchange", async () => {
     const client = fakeClient({
       exchangeCodeForSession: vi.fn().mockResolvedValue({
