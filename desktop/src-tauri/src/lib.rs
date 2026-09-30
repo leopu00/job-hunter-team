@@ -14,8 +14,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(direct_chat::DirectChatState::default())
         .manage(onboarding::OnboardingNativeState::default())
-        .manage(auth_store::system_key_cache())
         .manage(voice_input::VoiceInputState::default())
+        .manage(auth_store::system_key_cache())
         .setup(|app| {
             voice_input::attach(app.handle())?;
             Ok(())
@@ -47,10 +47,10 @@ pub fn run() {
             onboarding::onboarding_team_start,
             podman::check_podman,
             spend::api_team_spend,
-            voice_input::voice_input_status,
+            voice_input::voice_input_cancel,
             voice_input::voice_input_start,
-            voice_input::voice_input_stop,
-            voice_input::voice_input_cancel
+            voice_input::voice_input_status,
+            voice_input::voice_input_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running JHT Desktop");
