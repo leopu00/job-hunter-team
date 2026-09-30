@@ -4,6 +4,8 @@ mod browsers;
 mod direct_chat;
 mod live_screen;
 mod onboarding;
+#[cfg(test)]
+mod onboarding_attestation_tests;
 mod podman;
 mod runtime_host;
 mod spend;
