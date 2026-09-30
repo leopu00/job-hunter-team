@@ -212,7 +212,14 @@ export async function signInWithGoogle(
   // vecchia mentre creiamo il nuovo PKCE flow, può rimuovere anche il verifier
   // appena scritto. Aspettarla dopo lo sblocco rende l'ordine deterministico:
   // prima il cleanup iniziale, poi il nuovo verifier e il browser.
-  await deps.client.auth.initialize();
+  let initializeFailed = false;
+  try {
+    const initialized = await deps.client.auth.initialize();
+    initializeFailed = Boolean(initialized.error);
+  } catch {
+    initializeFailed = true;
+  }
+  if (initializeFailed) throw new LoginError("unknown");
   const redirectTo = await deps.invoke<string>("auth_callback_url");
   const { data, error } = await deps.client.auth.signInWithOAuth({
     provider: "google",

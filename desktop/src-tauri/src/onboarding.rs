@@ -567,32 +567,159 @@ pub(crate) async fn onboarding_snapshot(
     .unwrap_or_else(|_| Err(failure("snapshot_failed")))
 }
 
-fn redact(mut text: String) -> String {
-    for prefix in ["jht_sync_", "sk-", "access_token", "refresh_token"] {
-        while let Some(start) = text.find(prefix) {
-            let end = text[start..]
-                .find(char::is_whitespace)
-                .map(|i| start + i)
-                .unwrap_or(text.len());
-            text.replace_range(start..end, "[REDACTED]");
+#[derive(Clone, Copy)]
+enum SecretMarkerKind {
+    Prefix,
+    KeyValue,
+}
+
+const SECRET_MARKERS: [(&str, SecretMarkerKind); 7] = [
+    ("jht_sync_", SecretMarkerKind::Prefix),
+    ("sk-", SecretMarkerKind::Prefix),
+    ("access_token", SecretMarkerKind::KeyValue),
+    ("refresh_token", SecretMarkerKind::KeyValue),
+    ("id_token", SecretMarkerKind::KeyValue),
+    ("code_verifier", SecretMarkerKind::KeyValue),
+    ("bearer", SecretMarkerKind::KeyValue),
+];
+
+#[derive(Default)]
+enum RedactionState {
+    #[default]
+    Scanning,
+    AwaitingValue,
+    Redacting,
+}
+
+#[derive(Default)]
+struct StreamRedactor {
+    pending: String,
+    state: RedactionState,
+}
+
+impl StreamRedactor {
+    fn push(&mut self, text: &str) -> String {
+        self.pending.push_str(text);
+        let mut output = String::new();
+
+        loop {
+            match self.state {
+                RedactionState::Scanning => {
+                    let lowercase = self.pending.to_ascii_lowercase();
+                    let marker = SECRET_MARKERS
+                        .iter()
+                        .filter_map(|(marker, kind)| {
+                            lowercase.find(marker).map(|start| (start, *marker, *kind))
+                        })
+                        .min_by_key(|(start, _, _)| *start);
+                    if let Some((start, marker, kind)) = marker {
+                        output.push_str(&self.pending[..start]);
+                        self.pending.drain(..start + marker.len());
+                        match kind {
+                            SecretMarkerKind::Prefix => {
+                                output.push_str("[REDACTED]");
+                                self.state = RedactionState::Redacting;
+                            }
+                            SecretMarkerKind::KeyValue => {
+                                output.push_str(marker);
+                                output.push_str("=[REDACTED]");
+                                self.state = RedactionState::AwaitingValue;
+                            }
+                        }
+                        continue;
+                    }
+
+                    let lowercase = self.pending.to_ascii_lowercase();
+                    let keep = SECRET_MARKERS
+                        .iter()
+                        .map(|(marker, _)| {
+                            (1..marker.len())
+                                .rev()
+                                .find(|length| lowercase.ends_with(&marker[..*length]))
+                                .unwrap_or(0)
+                        })
+                        .max()
+                        .unwrap_or(0);
+                    let emit = self.pending.len() - keep;
+                    output.push_str(&self.pending[..emit]);
+                    self.pending.drain(..emit);
+                    break;
+                }
+                RedactionState::AwaitingValue => {
+                    let value_start = self.pending.find(|character: char| {
+                        !character.is_whitespace() && !matches!(character, '"' | '\'' | ':' | '=')
+                    });
+                    let Some(value_start) = value_start else {
+                        self.pending.clear();
+                        break;
+                    };
+                    self.pending.drain(..value_start);
+                    if self.pending.starts_with(secret_terminator) {
+                        let delimiter = self.pending.remove(0);
+                        output.push(delimiter);
+                        self.state = RedactionState::Scanning;
+                    } else {
+                        self.state = RedactionState::Redacting;
+                    }
+                }
+                RedactionState::Redacting => {
+                    let terminator = self.pending.find(secret_terminator);
+                    let Some(terminator) = terminator else {
+                        self.pending.clear();
+                        break;
+                    };
+                    self.pending.drain(..terminator);
+                    let delimiter = self.pending.remove(0);
+                    output.push(delimiter);
+                    self.state = RedactionState::Scanning;
+                }
+            }
+        }
+
+        output
+    }
+
+    fn finish(&mut self) -> String {
+        match self.state {
+            RedactionState::Scanning => std::mem::take(&mut self.pending),
+            RedactionState::AwaitingValue | RedactionState::Redacting => {
+                self.pending.clear();
+                String::new()
+            }
         }
     }
-    if text.len() > 32_768 {
-        text.truncate(32_768);
-    }
-    text
+}
+
+fn secret_terminator(character: char) -> bool {
+    character.is_whitespace() || matches!(character, '"' | '\'' | ',' | ';' | '}' | ']' | '\u{1b}')
+}
+
+#[cfg(test)]
+fn redact(text: String) -> String {
+    let mut redactor = StreamRedactor::default();
+    let mut output = redactor.push(&text);
+    output.push_str(&redactor.finish());
+    output
 }
 
 fn stream_reader(mut reader: impl Read + Send + 'static, channel: Channel<InteractiveEvent>) {
     thread::spawn(move || {
         let mut buffer = [0u8; 4096];
+        let mut redactor = StreamRedactor::default();
         loop {
             match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
+                Ok(0) | Err(_) => {
+                    let text = redactor.finish();
+                    if !text.is_empty() {
+                        let _ = channel.send(InteractiveEvent::Output { text });
+                    }
+                    break;
+                }
                 Ok(count) => {
-                    let _ = channel.send(InteractiveEvent::Output {
-                        text: redact(String::from_utf8_lossy(&buffer[..count]).into_owned()),
-                    });
+                    let text = redactor.push(&String::from_utf8_lossy(&buffer[..count]));
+                    if !text.is_empty() {
+                        let _ = channel.send(InteractiveEvent::Output { text });
+                    }
                 }
             }
         }
@@ -852,6 +979,7 @@ pub(crate) async fn onboarding_assistant_open(
 mod tests {
     use super::{
         parse_snapshot, redact, valid_pairing_token, valid_profile, OnboardingProfileDraft,
+        StreamRedactor,
     };
 
     #[test]
@@ -887,8 +1015,42 @@ mod tests {
 
     #[test]
     fn sensitive_output_is_redacted() {
-        let text = redact("refresh_token=secret jht_sync_abcdef next".into());
-        assert!(!text.contains("secret") && !text.contains("abcdef"));
+        let text = redact(
+            r#"{"access_token":"access-secret","refresh_token":"refresh-secret","id_token":"header.payload.signature","code_verifier":"verifier-secret"} Authorization: Bearer bearer-secret jht_sync_transport sk-provider"#.into(),
+        );
+        for secret in [
+            "access-secret",
+            "refresh-secret",
+            "header.payload.signature",
+            "verifier-secret",
+            "bearer-secret",
+            "jht_sync_transport",
+            "sk-provider",
+        ] {
+            assert!(!text.contains(secret));
+        }
+        assert!(text.matches("[REDACTED]").count() >= 7);
+    }
+
+    #[test]
+    fn sensitive_output_is_redacted_across_chunks() {
+        let mut redactor = StreamRedactor::default();
+        let mut output = redactor.push("status access_to");
+        output.push_str(&redactor.push("ken=split-secret next code_ver"));
+        output.push_str(&redactor.push("ifier: another-secret done"));
+        output.push_str(&redactor.finish());
+
+        assert!(output.contains("status "));
+        assert!(output.contains("next "));
+        assert!(!output.contains("split-secret"));
+        assert!(!output.contains("another-secret"));
+    }
+
+    #[test]
+    fn device_authorization_url_and_code_remain_visible() {
+        let text = redact("Open https://auth.example.invalid/device and enter ABCD-EFGH\n".into());
+        assert!(text.contains("https://auth.example.invalid/device"));
+        assert!(text.contains("ABCD-EFGH"));
     }
 
     #[test]

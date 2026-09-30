@@ -177,7 +177,7 @@ export default function DashboardApp() {
       });
       providerSessionRef.current = sessionId;
       setProviderLogin((current) => current?.status === "starting" ? { ...current, status: "active" } : current);
-      if (!exited && submission.provider !== "codex") {
+      if (!exited && (submission.provider === "claude" || submission.provider === "kimi")) {
         await sendOnboardingProviderInput(sessionId, "/login");
       }
       await exit;
@@ -189,12 +189,14 @@ export default function DashboardApp() {
       if (!snapshot.providerAuthenticated) throw new Error("provider-login-unverified");
     } catch (error) {
       providerExitRejectRef.current = null;
-      if (providerSessionRef.current === sessionId) providerSessionRef.current = null;
-      if (sessionId) void closeOnboardingProviderLogin(sessionId).catch(() => undefined);
+      if (sessionId && providerSessionRef.current === sessionId) {
+        await closeOnboardingProviderLogin(sessionId).catch(() => undefined);
+        providerSessionRef.current = null;
+      }
       if (providerAttemptRef.current === attempt) {
         setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
       }
-      fail("provider-login", error);
+      return fail("provider-login", error);
     }
     await startTeam(submission);
   }, [fail, setRuntime, startTeam]);
