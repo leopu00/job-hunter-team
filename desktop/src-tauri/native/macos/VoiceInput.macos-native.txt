@@ -1,0 +1,235 @@
+#import <AVFoundation/AVFoundation.h>
+#import <Foundation/Foundation.h>
+#import <Speech/Speech.h>
+
+typedef void (*JHTVoiceCallback)(int32_t event, const char *payload);
+
+enum {
+  JHTVoicePermissionRequested = 1,
+  JHTVoicePermissionGranted = 2,
+  JHTVoiceRecording = 3,
+  JHTVoiceTranscribing = 4,
+  JHTVoicePartialTranscript = 5,
+  JHTVoiceFinalTranscript = 6,
+  JHTVoiceIdle = 7,
+  JHTVoiceCancelled = 8,
+  JHTVoiceError = 9,
+};
+
+static AVAudioEngine *engine;
+static SFSpeechRecognizer *recognizer;
+static SFSpeechAudioBufferRecognitionRequest *request;
+static SFSpeechRecognitionTask *task;
+static JHTVoiceCallback callback;
+static BOOL tapInstalled = NO;
+static BOOL cancelling = NO;
+static NSUInteger generation = 0;
+
+static void Emit(int32_t event, NSString *payload) {
+  if (callback == NULL) return;
+  callback(event, payload == nil ? NULL : payload.UTF8String);
+}
+
+static NSString *LocaleIdentifier(const char *rawLocale) {
+  if (rawLocale == NULL || rawLocale[0] == '\0') return NSLocale.currentLocale.localeIdentifier;
+  NSString *locale = [NSString stringWithUTF8String:rawLocale];
+  return locale.length > 0 ? locale : NSLocale.currentLocale.localeIdentifier;
+}
+
+static void StopAudio(void) {
+  if (engine != nil) {
+    [engine stop];
+    if (tapInstalled) {
+      [engine.inputNode removeTapOnBus:0];
+      tapInstalled = NO;
+    }
+  }
+}
+
+static void ClearSession(BOOL cancelTask) {
+  StopAudio();
+  if (cancelTask && task != nil) [task cancel];
+  task = nil;
+  request = nil;
+  engine = nil;
+  recognizer = nil;
+}
+
+static BOOL OnDeviceRecognitionAvailable(NSString *localeIdentifier) {
+  if (@available(macOS 10.15, *)) {
+    SFSpeechRecognizer *probe = [[SFSpeechRecognizer alloc]
+        initWithLocale:[[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier]];
+    return probe != nil && probe.available && probe.supportsOnDeviceRecognition;
+  }
+  return NO;
+}
+
+static void Fail(NSString *code) {
+  ClearSession(YES);
+  Emit(JHTVoiceError, code);
+}
+
+static void StartAudio(NSString *localeIdentifier, NSUInteger expectedGeneration) {
+  if (expectedGeneration != generation) return;
+  if (!OnDeviceRecognitionAvailable(localeIdentifier)) {
+    Fail(@"on_device_unsupported");
+    return;
+  }
+
+  recognizer = [[SFSpeechRecognizer alloc]
+      initWithLocale:[[NSLocale alloc] initWithLocaleIdentifier:localeIdentifier]];
+  request = [[SFSpeechAudioBufferRecognitionRequest alloc] init];
+  request.shouldReportPartialResults = YES;
+  request.requiresOnDeviceRecognition = YES;
+  request.taskHint = SFSpeechRecognitionTaskHintDictation;
+  engine = [[AVAudioEngine alloc] init];
+  cancelling = NO;
+
+  AVAudioInputNode *input = engine.inputNode;
+  AVAudioFormat *format = [input outputFormatForBus:0];
+  if (format.sampleRate <= 0 || format.channelCount == 0) {
+    Fail(@"microphone_unavailable");
+    return;
+  }
+
+  @try {
+    [input installTapOnBus:0 bufferSize:1024 format:format
+                     block:^(AVAudioPCMBuffer *buffer, AVAudioTime *when) {
+      (void)when;
+      SFSpeechAudioBufferRecognitionRequest *activeRequest = request;
+      if (activeRequest != nil) [activeRequest appendAudioPCMBuffer:buffer];
+    }];
+    tapInstalled = YES;
+  } @catch (NSException *exception) {
+    (void)exception;
+    Fail(@"microphone_unavailable");
+    return;
+  }
+
+  task = [recognizer recognitionTaskWithRequest:request
+                                  resultHandler:^(SFSpeechRecognitionResult *result, NSError *error) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (expectedGeneration != generation) return;
+      if (result != nil) {
+        NSString *text = result.bestTranscription.formattedString ?: @"";
+        Emit(result.final ? JHTVoiceFinalTranscript : JHTVoicePartialTranscript, text);
+        if (result.final) {
+          ClearSession(NO);
+          Emit(JHTVoiceIdle, nil);
+          return;
+        }
+      }
+      if (error != nil && !cancelling) Fail(@"recognition_failed");
+    });
+  }];
+
+  NSError *startError = nil;
+  [engine prepare];
+  if (![engine startAndReturnError:&startError]) {
+    (void)startError;
+    Fail(@"microphone_unavailable");
+    return;
+  }
+  Emit(JHTVoiceRecording, nil);
+}
+
+static void RequestMicrophone(NSString *localeIdentifier, NSUInteger expectedGeneration) {
+  AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+  if (status == AVAuthorizationStatusAuthorized) {
+    Emit(JHTVoicePermissionGranted, nil);
+    StartAudio(localeIdentifier, expectedGeneration);
+  } else if (status == AVAuthorizationStatusNotDetermined) {
+    [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        if (expectedGeneration != generation) return;
+        if (!granted) Fail(@"microphone_permission_denied");
+        else {
+          Emit(JHTVoicePermissionGranted, nil);
+          StartAudio(localeIdentifier, expectedGeneration);
+        }
+      });
+    }];
+  } else {
+    Fail(@"microphone_permission_denied");
+  }
+}
+
+static void RequestPermissions(NSString *localeIdentifier, NSUInteger expectedGeneration) {
+  SFSpeechRecognizerAuthorizationStatus status = SFSpeechRecognizer.authorizationStatus;
+  if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) {
+    RequestMicrophone(localeIdentifier, expectedGeneration);
+  } else if (status == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
+    [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus newStatus) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        if (expectedGeneration != generation) return;
+        if (newStatus != SFSpeechRecognizerAuthorizationStatusAuthorized) {
+          Fail(@"speech_permission_denied");
+        } else {
+          RequestMicrophone(localeIdentifier, expectedGeneration);
+        }
+      });
+    }];
+  } else {
+    Fail(@"speech_permission_denied");
+  }
+}
+
+int32_t jht_voice_on_device_available(const char *locale) {
+  return OnDeviceRecognitionAvailable(LocaleIdentifier(locale)) ? 1 : 0;
+}
+
+int32_t jht_voice_speech_permission(void) {
+  SFSpeechRecognizerAuthorizationStatus status = SFSpeechRecognizer.authorizationStatus;
+  if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) return 1;
+  if (status == SFSpeechRecognizerAuthorizationStatusNotDetermined) return 0;
+  return 2;
+}
+
+int32_t jht_voice_microphone_permission(void) {
+  AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+  if (status == AVAuthorizationStatusAuthorized) return 1;
+  if (status == AVAuthorizationStatusNotDetermined) return 0;
+  return 2;
+}
+
+void jht_voice_start(const char *locale, JHTVoiceCallback eventCallback) {
+  NSString *localeIdentifier = LocaleIdentifier(locale);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (engine != nil || task != nil) {
+      eventCallback(JHTVoiceError, "busy");
+      return;
+    }
+    generation += 1;
+    NSUInteger expectedGeneration = generation;
+    callback = eventCallback;
+    cancelling = NO;
+    if (!OnDeviceRecognitionAvailable(localeIdentifier)) {
+      Emit(JHTVoiceError, @"on_device_unsupported");
+      return;
+    }
+    Emit(JHTVoicePermissionRequested, nil);
+    RequestPermissions(localeIdentifier, expectedGeneration);
+  });
+}
+
+void jht_voice_stop(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (engine == nil || request == nil) {
+      Emit(JHTVoiceError, @"not_recording");
+      return;
+    }
+    StopAudio();
+    [request endAudio];
+    Emit(JHTVoiceTranscribing, nil);
+  });
+}
+
+void jht_voice_cancel(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    generation += 1;
+    cancelling = YES;
+    ClearSession(YES);
+    Emit(JHTVoiceCancelled, nil);
+    cancelling = NO;
+  });
+}

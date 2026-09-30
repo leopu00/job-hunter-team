@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Job Hunter Team usa il microfono soltanto mentre detti un messaggio e non conserva l’audio.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Job Hunter Team trascrive sul Mac ciò che detti, così puoi rivederlo prima di inviarlo.</string>
+</dict>
+</plist>
