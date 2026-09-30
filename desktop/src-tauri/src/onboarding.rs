@@ -213,6 +213,10 @@ fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     .find(|path| valid_wrapper_file(path))
 }
 
+pub(crate) fn verified_local_wrapper_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+    wrapper_path(app).ok_or("runtime_missing")
+}
+
 fn valid_wrapper_file(path: &Path) -> bool {
     let Ok(metadata) = fs::symlink_metadata(path) else {
         return false;
@@ -229,9 +233,12 @@ fn valid_wrapper_file(path: &Path) -> bool {
         }
     }
     fs::read_to_string(path).is_ok_and(|source| {
-        source
+        let lines = source
             .lines()
-            .any(|line| line.trim_end_matches('\r') == "JHT_HOST_RUNTIME_PROTOCOL=1")
+            .map(|line| line.trim_end_matches('\r'))
+            .collect::<Vec<_>>();
+        lines.contains(&"JHT_HOST_RUNTIME_PROTOCOL=1")
+            && lines.contains(&"JHT_DESKTOP_CHAT_PROTOCOL=1")
     })
 }
 
@@ -600,13 +607,25 @@ fn run_local(
     args: &[&str],
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
+    run_verified_local_wrapper(wrapper, args, None, timeout)
+}
+
+pub(crate) fn run_verified_local_wrapper(
+    wrapper: &Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    if !valid_wrapper_file(wrapper) {
+        return Err("runtime_missing");
+    }
     #[cfg(target_os = "macos")]
     {
         let (program, invocation) = local_wrapper_command(wrapper, args, std::env::var_os("PATH"))?;
         return run_program(
             program.to_str().ok_or("runtime_missing")?,
             invocation,
-            None,
+            input,
             timeout,
         );
     }
@@ -614,7 +633,7 @@ fn run_local(
     run_program(
         wrapper.to_str().ok_or("runtime_missing")?,
         args,
-        None,
+        input,
         timeout,
     )
 }
@@ -1615,7 +1634,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("jht-wrapper-validation-{nonce}"));
         fs::create_dir_all(&dir).unwrap();
         let wrapper = dir.join("jht");
-        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\n").unwrap();
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\n",
+        )
+        .unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
         assert!(valid_wrapper_file(&wrapper));
 
@@ -1625,7 +1648,11 @@ mod tests {
         fs::write(&wrapper, "#!/bin/sh\n").unwrap();
         assert!(!valid_wrapper_file(&wrapper));
 
-        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\n").unwrap();
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\n",
+        )
+        .unwrap();
         let link = dir.join("jht-link");
         symlink(&wrapper, &link).unwrap();
         assert!(!valid_wrapper_file(&link));
@@ -1688,6 +1715,8 @@ esac
         fs::write(
             &wrapper,
             r#"#!/bin/sh
+JHT_HOST_RUNTIME_PROTOCOL=1
+JHT_DESKTOP_CHAT_PROTOCOL=1
 state="$(dirname "$0")/container-ready"
 case "$1" in
   up) : > "$state" ;;
