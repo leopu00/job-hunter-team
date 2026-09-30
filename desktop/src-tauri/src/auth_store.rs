@@ -35,7 +35,7 @@ const KEYRING_ACCOUNT: &str = "auth-store-key";
 const STORE_DIR: &str = "auth";
 const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
-const MAX_NAME_LEN: usize = 128;
+const MAX_NAME_LEN: usize = 161;
 const MAX_VALUE_BYTES: usize = 64 * 1024;
 const KEYCHAIN_UNAVAILABLE: &str = "keychain_unavailable";
 
@@ -282,17 +282,56 @@ impl<S: KeySource> KeyCache<S> {
 }
 
 fn validate_name(name: &str) -> Result<(), AuthStoreError> {
-    let valid = !name.is_empty()
-        && name.len() <= MAX_NAME_LEN
-        && !name.starts_with('.')
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    let valid = name.len() <= MAX_NAME_LEN && valid_supabase_storage_name(name);
     if valid {
         Ok(())
     } else {
         Err(failure("invalid_name"))
     }
+}
+
+/// La desktop non espone un archivio generico alla webview. Sono ammesse
+/// soltanto le voci che auth-js usa con la storage key predefinita
+/// `sb-<project-ref>-auth-token` e i suoi slot PKCE concorrenti.
+fn valid_supabase_storage_name(name: &str) -> bool {
+    let Some(body) = name.strip_prefix("sb-") else {
+        return false;
+    };
+
+    if let Some((project, flow_and_suffix)) = body.split_once("-auth-token-flow-") {
+        let Some(flow_id) = flow_and_suffix.strip_suffix("-code-verifier") else {
+            return false;
+        };
+        return valid_project_ref(project) && valid_flow_id(flow_id);
+    }
+
+    for suffix in [
+        "-auth-token",
+        "-auth-token-user",
+        "-auth-token-code-verifier",
+        "-auth-token-flows-code-verifier",
+    ] {
+        if let Some(project) = body.strip_suffix(suffix) {
+            return valid_project_ref(project);
+        }
+    }
+    false
+}
+
+fn valid_project_ref(project: &str) -> bool {
+    (1..=63).contains(&project.len())
+        && !project.starts_with('-')
+        && !project.ends_with('-')
+        && project
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn valid_flow_id(flow_id: &str) -> bool {
+    (8..=64).contains(&flow_id.len())
+        && flow_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 fn store_dir(app: &tauri::AppHandle) -> Result<PathBuf, AuthStoreError> {
@@ -435,7 +474,7 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 mod tests {
     use super::{
         entry_path, get_value, read_entry, remove_entry, remove_value, set_value, validate_name,
-        write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN,
+        write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN, MAX_NAME_LEN,
     };
     use std::{
         fs,
@@ -656,12 +695,30 @@ mod tests {
     #[test]
     fn names_are_the_supabase_ones_only() {
         assert!(validate_name("sb-abcdef-auth-token").is_ok());
+        assert!(validate_name("sb-abcdef-auth-token-user").is_ok());
         assert!(validate_name("sb-abcdef-auth-token-code-verifier").is_ok());
+        assert!(validate_name("sb-abcdef-auth-token-flows-code-verifier").is_ok());
+        assert!(validate_name("sb-abcdef-auth-token-flow-flow_12345678-code-verifier").is_ok());
+        assert!(validate_name(&format!(
+            "sb-{}-auth-token-flow-{}-code-verifier",
+            "a".repeat(63),
+            "b".repeat(64)
+        ))
+        .is_ok());
         assert!(validate_name("").is_err());
+        assert!(validate_name("sb-abcdef-entry").is_err());
+        assert!(validate_name("sb-abcdef-auth-token-refresh-token").is_err());
+        assert!(validate_name("sb-abcdef-auth-token-flow-short-code-verifier").is_err());
+        assert!(
+            validate_name("sb-abcdef-auth-token-flow-flow_12345678-code-verifier-extra").is_err()
+        );
+        assert!(validate_name("sb-AbCdEf-auth-token").is_err());
+        assert!(validate_name("sb--abcdef-auth-token").is_err());
+        assert!(validate_name("sb-abcdef--auth-token").is_err());
         assert!(validate_name("../escape").is_err());
         assert!(validate_name("a/b").is_err());
         assert!(validate_name(".hidden").is_err());
-        assert!(validate_name(&"a".repeat(129)).is_err());
+        assert!(validate_name(&"a".repeat(MAX_NAME_LEN + 1)).is_err());
     }
 
     #[test]
