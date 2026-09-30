@@ -28,11 +28,21 @@ export function readSupabaseConfig(env: SupabaseEnv): SupabaseConfig {
   if (!url) return { configured: false, reason: "missing-url" };
   if (!anonKey) return { configured: false, reason: "missing-anon-key" };
   try {
-    if (new URL(url).protocol !== "https:") return { configured: false, reason: "invalid-url" };
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return { configured: false, reason: "invalid-url" };
+    }
+    return { configured: true, url: parsed.origin, anonKey };
   } catch {
     return { configured: false, reason: "invalid-url" };
   }
-  return { configured: true, url, anonKey };
 }
 
 export interface AuthStorage {
@@ -85,6 +95,10 @@ export function createDesktopSupabase(config: SupabaseConfig, storage: AuthStora
     {
       auth: {
         flowType: "pkce",
+        // Fa tornare l'id casuale del flow sul loopback: il backend rifiuta
+        // callback di un altro tentativo e lo scambio seleziona il verifier
+        // salvato nello slot di quello stesso flow.
+        experimental: { appendPkceFlowIdToRedirects: true },
         storage,
         persistSession: true,
         autoRefreshToken: config.configured,
@@ -128,6 +142,7 @@ export class LoginError extends Error {
 }
 
 const BACKEND_ERRORS: Record<string, LoginErrorCode> = {
+  auth_not_configured: "not-configured",
   port_busy: "port-busy",
   browser_failed: "browser-failed",
   browser_not_found: "browser-not-found",
@@ -201,21 +216,29 @@ export async function signInWithGoogle(
       queryParams: { prompt: "select_account" },
     },
   });
-  if (error || !data?.url) throw new LoginError("unknown", error?.message ?? null);
+  const flowId = data?.flowId;
+  if (error || !data?.url || !validFlowId(flowId)) {
+    throw new LoginError("unknown", error?.message ?? null);
+  }
   options.onAuthorizeUrl?.(data.url);
   let code: string;
   try {
     code = await deps.invoke<string>("auth_google_login", {
       authorizeUrl: data.url,
       browser: options.browser ?? "default",
+      flowId,
     });
   } catch (backendError) {
     throw toLoginError(backendError);
   }
-  const exchanged = await deps.client.auth.exchangeCodeForSession(code);
+  const exchanged = await deps.client.auth.exchangeCodeForSession(code, { flowId });
   if (exchanged.error || !exchanged.data.session) {
     throw new LoginError("exchange-failed", exchanged.error?.message ?? null);
   }
+}
+
+function validFlowId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(value);
 }
 
 /** Chiude l'attesa del ritorno dal browser: `signInWithGoogle` finisce con `cancelled`. */
