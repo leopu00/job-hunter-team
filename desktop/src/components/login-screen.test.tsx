@@ -107,15 +107,13 @@ describe("LoginScreen", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("says a keychain refusal needs a restart and does not offer another attempt", async () => {
+  it("says the keychain refused without recommending a permissive ACL", async () => {
     const user = userEvent.setup();
     const signIn = vi.fn().mockRejectedValue(new LoginError("keychain-failed"));
     render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
     await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Chiudi completamente Job Hunter Team");
-    expect(screen.getByRole("button", { name: "Riavvia per riprovare" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Apri con" })).toBeDisabled();
-    expect(screen.getByRole("alert")).not.toHaveTextContent(/Consenti sempre|Riprova/);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Riprova");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Consenti sempre");
     expect(signIn).toHaveBeenCalledTimes(1);
   });
 
