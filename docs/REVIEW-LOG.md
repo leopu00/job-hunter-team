@@ -28,11 +28,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-08-24 | ✅ |
+| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-09-30 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-09-12 | ✅ |
-| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-08-13 | ✅ |
+| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-09-30 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
-| [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-08-04 | ✅ |
+| [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-09-30 | ✅ |
 
 
 ## 🐙 .github
@@ -187,8 +187,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-08-04 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers | — | 2026-07-01 | ✅ |
-| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-08-24 | ✅ |
-| [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-07-03 | ✅ |
+| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-09-29 | ✅ |
+| [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-09-29 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-08-04 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-07-03 | ✅ |
 | [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-08-16 | ✅ |
@@ -226,18 +226,18 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-08-24 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-07-25 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
-| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-08-20 | ✅ |
+| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-09-30 | ✅ |
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-09-28 | ✅ |
 | [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-08-08 | ✅ |
 | [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | 2026-08-08 | ✅ |
 | [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | 2026-08-13 | ✅ |
 | [docs/guides/M4-EVIDENCE-BUNDLES.md](./guides/M4-EVIDENCE-BUNDLES.md) | Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits | — | 2026-08-03 | ✅ |
-| [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-08-14 | ✅ |
-| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-08-14 | ✅ |
-| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-08-12 | ✅ |
+| [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-09-30 | ✅ |
+| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-09-30 | ✅ |
+| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-09-30 | ✅ |
 | [docs/guides/DESKTOP.md](./guides/DESKTOP.md) | Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'. | — | 2026-09-28 | ✅ |
-| [docs/guides/API-TEAM.md](./guides/API-TEAM.md) | Guida pubblica del team API: i pezzi (esecuzione del ruolo, hub, lanciatore, esecutore, keyproxy), i quattro tetti di spesa (per run, per avvio, per sessione, keyproxy), le partenze scaglionate e le differenze volute col team TUI. | — | — | ✅ |
-| [docs/guides/PARITY-ROUND.md](./guides/PARITY-ROUND.md) | Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai. | — | — | ✅ |
+| [docs/guides/API-TEAM.md](./guides/API-TEAM.md) | Guida pubblica del team API: i pezzi (esecuzione del ruolo, hub, lanciatore, esecutore, keyproxy), i quattro tetti di spesa (per run, per avvio, per sessione, keyproxy), le partenze scaglionate e le differenze volute col team TUI. | — | 2026-09-28 | ✅ |
+| [docs/guides/PARITY-ROUND.md](./guides/PARITY-ROUND.md) | Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai. | — | 2026-09-28 | ✅ |
 
 
 ## 🛰️ docs/internal
@@ -287,9 +287,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md](./internal/experiments/2026-06-13-kimi-quota-tiers-discovery.md) | 🔍 Kimi Code — i tre tier di quota e il buco totalQuota (scoperta 2026-06-13) — Contesto: deploy del team su VPS betaB (Kimi, 203.0.113.20) con l'immagine | — | 2026-06-14 | ✅ |
 | [docs/internal/landing-image-prompts.md](./internal/landing-image-prompts.md) | 🎨 Prompt immagini — Sito pubblico — Raccolta dei prompt per tutte le immagini del sito pubblico (landing + pagine | — | 2026-07-25 | ✅ |
 | [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | 🏗️ Infrastructure — Job Hunter Team — 📐 High-level deployment diagram. | — | 2026-08-12 | ✅ |
-| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-08-08 | ✅ |
+| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 👥 Maintainers Reference — 🔒 Internal information for project maintainers. | — | 2026-09-30 | ✅ |
 | [docs/internal/ops/access-and-credentials.md](./internal/ops/access-and-credentials.md) | 🔐 Access & Credentials — guida consolidata — Last updated: 2026-05-26. | — | 2026-08-03 | ✅ |
-| [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-08-17 | ✅ |
+| [docs/internal/ops/release.md](./internal/ops/release.md) | 🚢 Release — Cutting a release means pushing a vX.Y.Z tag that points at the production HEAD. | — | 2026-09-30 | ✅ |
 | [docs/internal/ops/triage.md](./internal/ops/triage.md) | 🐛 Issue triage workflow — Internal contract for how we handle incoming issues post-launch. | — | 2026-08-05 | ✅ |
 | [docs/internal/ops/vps.md](./internal/ops/vps.md) | ☁️ JHT su VPS — design, providers, install UX — Doc consolidato il 2026-05-13 unificando | — | 2026-08-12 | ✅ |
 | [docs/internal/postmortems/2026-05-21-halt-weekly-incident.md](./internal/postmortems/2026-05-21-halt-weekly-incident.md) | 🛑 HALT-WEEKLY incident — 2026-05-21 — Manovra di emergenza sulla VPS1 (203.0.113.20, Hetzner CPX22) per evitare la saturazione del weekly cap Codex ProLite… | — | 2026-06-13 | ✅ |
@@ -395,6 +395,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md) | Diario scritto con >> invece di tee -a: l'unico del container che nessuno ruota e che docker logs non vede; il mkdir mancante invece non e' un difetto sul percorso reale | — | 2026-09-01 | ✅ |
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione | — | 2026-09-01 | ✅ |
 | [docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md](./internal/ops/2026-09-13-spawn-observability-live-test-plan.md) | Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log. | — | 2026-09-14 | ✅ |
+| [docs/internal/architecture/tauri-onboarding-contract.md](./internal/architecture/tauri-onboarding-contract.md) | Contratto Tauri 0.4 door-to-door: gate account-scoped, runtime subscription, onboarding verificato, chat diretta e confini di sicurezza | — | 2026-09-30 | ✅ |
 
 
 ## 🔒 docs/security
@@ -447,7 +448,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [assets/README.md](../assets/README.md) | 🖼️ assets — repo-level static assets — Shared static assets used in repo-level docs and the project landing. | — | 2026-07-19 | ✅ |
 | [cli/README.md](../cli/README.md) | ⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team. | 2026-07-30 | 2026-07-30 | 🟢 |
-| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-09-28 | ✅ |
+| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-09-29 | ✅ |
 | [docs/launch/demo-storyboard.md](./launch/demo-storyboard.md) | Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio | — | 2026-08-04 | ✅ |
 | [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-08-08 | ✅ |
 | [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-08-14 | ✅ |
@@ -462,10 +463,10 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
 | [api-worker/README.md](../api-worker/README.md) | Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica | 2026-08-24 | 2026-08-24 | 🟢 |
-| [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-09-26 | ✅ |
+| [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-09-30 | ✅ |
 | [agent-harness/README.md](../agent-harness/README.md) | Harness agenti a consumo API: cosa contiene la cartella e come si usa (inglese). | — | 2026-09-04 | ✅ |
 | [agent-harness/TODO.md](../agent-harness/TODO.md) | Esercizio sul ciclo di un agente: difetti aperti del prototipo Python e come verificarli (inglese). | — | 2026-09-04 | ✅ |
-| [agent-harness/runtime/README.md](../agent-harness/runtime/README.md) | Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run. | — | 2026-09-27 | ✅ |
+| [agent-harness/runtime/README.md](../agent-harness/runtime/README.md) | Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run. | — | 2026-09-28 | ✅ |
 | [agent-harness/runtime/docs/hub.md](../agent-harness/runtime/docs/hub.md) | Broker jht-hub: tiene database e canali, un token per ruolo, e le regole dei tool stanno li. | — | 2026-09-27 | ✅ |
 | [agent-harness/runtime/docs/launcher.md](../agent-harness/runtime/docs/launcher.md) | Lanciatore: come il CAPITANO chiede un agente, come l'host lo avvia e quali limiti decide il lanciatore. | — | 2026-09-28 | ✅ |
 | [agent-harness/runtime/docs/parity.md](../agent-harness/runtime/docs/parity.md) | Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce. | — | 2026-09-28 | ✅ |
