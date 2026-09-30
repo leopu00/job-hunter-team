@@ -9,7 +9,6 @@ mod onboarding;
 mod onboarding_attestation_tests;
 mod podman;
 mod runtime_host;
-mod spend;
 mod voice_input;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,7 +49,6 @@ pub fn run() {
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,
-            spend::api_team_spend,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
