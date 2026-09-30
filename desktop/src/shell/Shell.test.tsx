@@ -143,7 +143,10 @@ describe("Shell", () => {
       expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
-    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Budget", "Ufficio"]);
+    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Ufficio"]);
+    expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
+    expect(DESKTOP_LINKS.some((link) => link.href === "/budget")).toBe(false);
+    expect(matchRoute(ROUTES, "/budget")).toBeNull();
   });
 
   it("exports only its component, so an edit is Fast Refreshed instead of reloading the page", async () => {

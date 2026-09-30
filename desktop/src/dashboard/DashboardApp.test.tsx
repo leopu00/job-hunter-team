@@ -1,10 +1,12 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { connectDirectChat } from "../lib/direct-chat";
+import { connectDirectChat, directChatStatus, sendDirectChat } from "../lib/direct-chat";
+import { readDesktopPlatform } from "../lib/desktop-platform";
 import {
   loadOnboardingGate,
   markOnboardingReady,
+  markOnboardingStarted,
   saveOnboardingProfile,
   type OnboardingFlowProps,
   type OnboardingRuntimeSnapshot,
@@ -21,9 +23,11 @@ import {
   type OnboardingInteractiveEvent,
 } from "../lib/onboarding-runtime";
 import { goTo, LOGIN_PAGE } from "../lib/pages";
+import type { AssistantOnboardingProps } from "../pages/assistant-onboarding";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
 import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { useSession } from "../lib/supabase";
+import { navigate } from "../shell/router";
 import DashboardApp from "./DashboardApp";
 
 vi.mock("../lib/supabase", () => ({
@@ -42,6 +46,7 @@ vi.mock("../lib/onboarding", async (importOriginal) => ({
   loadOnboardingGate: vi.fn(),
   saveOnboardingProfile: vi.fn(),
   markOnboardingReady: vi.fn(),
+  markOnboardingStarted: vi.fn(),
 }));
 vi.mock("../lib/onboarding-runtime", () => ({
   closeOnboardingProviderLogin: vi.fn(),
@@ -55,13 +60,21 @@ vi.mock("../lib/onboarding-runtime", () => ({
 vi.mock("../lib/direct-chat", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/direct-chat")>()),
   connectDirectChat: vi.fn(),
+  directChatStatus: vi.fn(),
+  sendDirectChat: vi.fn(),
 }));
+vi.mock("../shell/router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shell/router")>()),
+  navigate: vi.fn(),
+}));
+vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
     const stage = props.runtime.status === "ready" ? "" : `:${props.runtime.stage}`;
     const actionStage = props.runtime.status === "action-required" ? props.runtime.stage : null;
     return (
       <section data-testid="onboarding">
+        <p>platform:{props.platform}</p>
         <p>{props.runtime.status}{stage}</p>
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION)}>submit-onboarding</button>
         {(["claude", "codex", "kimi"] as const).map((provider) => (
@@ -88,6 +101,24 @@ vi.mock("../onboarding", () => ({
 vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),
+}));
+vi.mock("../pages/assistant-onboarding", () => ({
+  AssistantOnboarding: (props: AssistantOnboardingProps) => (
+    <section data-testid="assistant-guide" data-initial={JSON.stringify(props.initialState)}>
+      <button type="button" onClick={() => props.onStateChange?.({ path: "tour", step: 2 })}>
+        save-assistant-progress
+      </button>
+      <button
+        type="button"
+        onClick={() => void props.onComplete(
+          { path: "tour", step: 4 },
+          "Prima domanda confermata",
+        ).catch(() => undefined)}
+      >
+        complete-assistant-guide
+      </button>
+    </section>
+  ),
 }));
 
 const SUBMISSION: OnboardingSubmission = {
@@ -117,6 +148,18 @@ const SNAPSHOT: OnboardingRuntimeSnapshot = {
   directChatReady: false,
 };
 
+const TEAM_READY: OnboardingRuntimeSnapshot = {
+  ...SNAPSHOT,
+  providerAuthenticated: true,
+  assistantRunning: true,
+  captainRunning: true,
+};
+
+const ASSISTANT_READY: OnboardingRuntimeSnapshot = {
+  ...TEAM_READY,
+  assistantWelcomed: true,
+};
+
 type SessionState = ReturnType<typeof useSession>;
 const signedIn = {
   session: {
@@ -126,13 +169,54 @@ const signedIn = {
   loading: false,
 } as unknown as SessionState;
 
+function signedInAs(userId: string): SessionState {
+  return {
+    session: {
+      user: { id: userId, email: `${userId}@example.invalid` },
+      refresh_token: `synthetic-${userId}`,
+    },
+    loading: false,
+  } as unknown as SessionState;
+}
+
+function arrangeAssistantGuide() {
+  vi.mocked(loadOnboardingGate).mockResolvedValue({
+    phase: "required",
+    account: { displayName: "Synthetic Person" },
+    runtime: { status: "collecting", stage: "profile" },
+  });
+  vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...SNAPSHOT, providerAuthenticated: true });
+  vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+  vi.mocked(openOnboardingAssistant).mockResolvedValue(ASSISTANT_READY);
+  vi.mocked(readOnboardingSnapshot).mockResolvedValue(ASSISTANT_READY);
+  vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
+}
+
+async function reachAssistantGuide(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+  expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+  expect(await screen.findByTestId("assistant-guide")).toBeInTheDocument();
+}
+
 describe("DashboardApp onboarding router", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    window.location.hash = "#/dashboard";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
     vi.mocked(loadDashboard).mockResolvedValue(fixtureData());
     vi.mocked(saveOnboardingProfile).mockResolvedValue(SUBMISSION.profile);
     vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
     vi.mocked(sendOnboardingProviderInput).mockResolvedValue();
+    vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
+    vi.mocked(sendDirectChat).mockImplementation(async (_agent, _text, clientMessageId) => ({
+      clientMessageId,
+      accepted: true,
+      messageId: "synthetic-message",
+      at: 1,
+    }));
+    vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
   });
 
   it("sends whoever has no session to Google sign-in", () => {
@@ -155,6 +239,20 @@ describe("DashboardApp onboarding router", () => {
     expect(loadDashboard).not.toHaveBeenCalled();
   });
 
+  it("passes the native Windows target to onboarding before rendering it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedIn);
+    vi.mocked(readDesktopPlatform).mockResolvedValue("windows");
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Synthetic Person" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("platform:windows");
+    expect(readDesktopPlatform).toHaveBeenCalledOnce();
+  });
+
   it("opens the dashboard for an account with complete durable evidence", async () => {
     vi.mocked(useSession).mockReturnValue(signedIn);
     vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
@@ -163,7 +261,7 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByRole("link", { name: "Team locale" })).not.toBeInTheDocument();
   });
 
-  it("reaches the dashboard only after provider, team, Assistant and direct chat are verified", async () => {
+  it("opens messages only after provider, team, guided Assistant, receipt and re-read facts are verified", async () => {
     vi.mocked(useSession).mockReturnValue(signedIn);
     vi.mocked(loadOnboardingGate).mockResolvedValue({
       phase: "required",
@@ -175,7 +273,13 @@ describe("DashboardApp onboarding router", () => {
       queueMicrotask(() => onEvent({ kind: "exit", code: 0 }));
       return "synthetic-session";
     });
-    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...SNAPSHOT, providerAuthenticated: true });
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({
+      ...SNAPSHOT,
+      providerAuthenticated: true,
+      assistantRunning: true,
+      captainRunning: true,
+      assistantWelcomed: true,
+    });
     vi.mocked(startOnboardingTeam).mockResolvedValue({
       ...SNAPSHOT,
       providerAuthenticated: true,
@@ -202,12 +306,24 @@ describe("DashboardApp onboarding router", () => {
     expect(loadDashboard).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+    expect(await screen.findByTestId("assistant-guide")).toBeInTheDocument();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(connectDirectChat).toHaveBeenCalledWith({ kind: "local" });
+    expect(sendDirectChat).toHaveBeenCalledWith(
+      "assistente",
+      "Prima domanda confermata",
+      expect.stringMatching(/^assistant-onboarding-[a-f0-9]{64}$/),
+    );
+    expect(directChatStatus).toHaveBeenCalled();
     expect(markOnboardingReady).toHaveBeenCalledWith(
       "synthetic-user",
       expect.objectContaining({ directChatReady: true }),
     );
+    expect(navigate).toHaveBeenCalledWith("/messages", { replace: true });
+    expect(markOnboardingStarted).toHaveBeenCalledWith("synthetic-user");
     await waitFor(() => expect(loadDashboard).toHaveBeenCalled());
   });
 
@@ -328,5 +444,82 @@ describe("DashboardApp onboarding router", () => {
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalled());
     expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("keeps the final marker closed when the native snapshot cannot prove readiness", async () => {
+    vi.mocked(useSession).mockReturnValue(signedIn);
+    arrangeAssistantGuide();
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...ASSISTANT_READY, captainRunning: false });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await reachAssistantGuide(user);
+    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
+
+    await waitFor(() => expect(readOnboardingSnapshot).toHaveBeenCalled());
+    expect(sendDirectChat).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.getByTestId("assistant-guide")).toBeInTheDocument();
+  });
+
+  it("retries a post-send chat verification with the same de-duplication id", async () => {
+    vi.mocked(useSession).mockReturnValue(signedIn);
+    arrangeAssistantGuide();
+    vi.mocked(directChatStatus)
+      .mockResolvedValueOnce({ state: "error", code: "synthetic-disconnect" })
+      .mockResolvedValueOnce({ state: "ready" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await reachAssistantGuide(user);
+    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
+    await waitFor(() => expect(directChatStatus).toHaveBeenCalledTimes(1));
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.getByTestId("assistant-guide")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
+    await waitFor(() => expect(markOnboardingReady).toHaveBeenCalledTimes(1));
+    expect(sendDirectChat).toHaveBeenCalledTimes(2);
+    const firstId = vi.mocked(sendDirectChat).mock.calls[0][2];
+    const retryId = vi.mocked(sendDirectChat).mock.calls[1][2];
+    expect(retryId).toBe(firstId);
+  });
+
+  it("does not reuse guided state across logout or an account switch", async () => {
+    arrangeAssistantGuide();
+    localStorage.setItem("jht.desktop.assistant-onboarding.account-a", JSON.stringify({ path: "tour", step: 3 }));
+    localStorage.setItem("jht.desktop.assistant-onboarding.account-b", JSON.stringify({ path: "explore", step: 1 }));
+    let currentSession = signedInAs("account-a");
+    vi.mocked(useSession).mockImplementation(() => currentSession);
+
+    const user = userEvent.setup();
+    const view = render(<DashboardApp />);
+    await reachAssistantGuide(user);
+    expect(screen.getByTestId("assistant-guide")).toHaveAttribute(
+      "data-initial",
+      JSON.stringify({ path: "tour", step: 3 }),
+    );
+    await user.click(screen.getByRole("button", { name: "save-assistant-progress" }));
+    expect(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-a") ?? "null"))
+      .toEqual({ path: "tour", step: 2 });
+
+    currentSession = { session: null, loading: false };
+    view.rerender(<DashboardApp />);
+    await waitFor(() => expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE));
+    expect(screen.queryByTestId("assistant-guide")).not.toBeInTheDocument();
+
+    currentSession = signedInAs("account-b");
+    view.rerender(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-guide")).not.toBeInTheDocument();
+    await reachAssistantGuide(user);
+    expect(screen.getByTestId("assistant-guide")).toHaveAttribute(
+      "data-initial",
+      JSON.stringify({ path: "explore", step: 1 }),
+    );
+    expect(Object.keys(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-a") ?? "{}")))
+      .toEqual(["path", "step"]);
+    expect(Object.keys(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-b") ?? "{}")))
+      .toEqual(["path", "step"]);
   });
 });

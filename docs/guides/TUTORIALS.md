@@ -41,9 +41,9 @@ but this is not a five-minute task.
    if you want and enter the office. It is explorable before setup: its preview
    conversations and example positions do not start a live team or use a
    provider.
-4. **Open the setup checklist.** Select **Activate team**. Choose a local
-   runtime or connect a VPS. A local runtime needs Docker; on Windows, Docker
-   Desktop may need its own consent and first-run flow.
+4. **Open the setup checklist.** Select **Activate team**. On macOS or Linux,
+   choose a local runtime or connect a VPS. On Windows 0.4, connect a Linux VPS;
+   the native office does not offer local execution yet.
 5. **Connect a provider.** In the Coordinator setup, select a supported
    subscription provider and plan, then complete its authorization in the
    embedded terminal. An authorization link can open in your browser, while

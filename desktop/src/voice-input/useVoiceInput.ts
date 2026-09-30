@@ -19,41 +19,65 @@ function stateWithError(current: VoiceInputSnapshot, error: unknown): VoiceInput
   return { ...current, available: code === "unsupported" || code === "on_device_unsupported" ? false : current.available, phase: "error", error: code };
 }
 
+async function cancelForCleanup(bridge: VoiceInputBridge): Promise<void> {
+  try {
+    await bridge.cancel();
+  } catch (error) {
+    // An idle native session is already in the cleanup state we need. Other
+    // failures cannot be rendered after teardown, but are caught so cleanup
+    // never creates an unhandled rejection.
+    if (voiceInputErrorCode(error) === "not_recording") return;
+  }
+}
+
 export function useVoiceInput({ value, onChange, locale, bridge = nativeVoiceInput }: UseVoiceInputOptions) {
   const [state, setState] = useState<VoiceInputSnapshot>(CHECKING_VOICE_INPUT);
   const [preview, setPreview] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  const lifecycleRef = useRef(0);
+  const cleanupRef = useRef<Promise<void>>(Promise.resolve());
   valueRef.current = value;
   onChangeRef.current = onChange;
 
   useEffect(() => {
     let alive = true;
+    const lifecycle = ++lifecycleRef.current;
     const unlisteners: Array<() => void> = [];
-    void bridge.status(locale).then((next) => { if (alive) setState(next); }).catch((error) => {
-      if (alive) setState((current) => stateWithError(current, error));
-    });
-    void bridge.onState((next) => { if (alive) setState(next); }).then((unlisten) => {
-      if (alive) unlisteners.push(unlisten); else unlisten();
-    });
-    void bridge.onTranscript((event) => {
-      if (!alive) return;
-      if (!event.isFinal) {
-        setPreview(event.text);
-        return;
-      }
-      const text = event.text.trim();
-      setPreview("");
-      if (!text) return;
-      const current = valueRef.current.trimEnd();
-      onChangeRef.current(current ? `${current} ${text}` : text);
-    }).then((unlisten) => {
-      if (alive) unlisteners.push(unlisten); else unlisten();
+    const current = () => alive && lifecycleRef.current === lifecycle;
+    const previousCleanup = cleanupRef.current;
+    setState(CHECKING_VOICE_INPUT);
+    setPreview("");
+
+    void previousCleanup.then(() => {
+      if (!current()) return;
+      void bridge.status(locale).then((next) => { if (current()) setState(next); }).catch((error) => {
+        if (current()) setState((snapshot) => stateWithError(snapshot, error));
+      });
+      void bridge.onState((next) => { if (current()) setState(next); }).then((unlisten) => {
+        if (current()) unlisteners.push(unlisten); else unlisten();
+      });
+      void bridge.onTranscript((event) => {
+        if (!current()) return;
+        if (!event.isFinal) {
+          setPreview(event.text);
+          return;
+        }
+        const text = event.text.trim();
+        setPreview("");
+        if (!text) return;
+        const composer = valueRef.current.trimEnd();
+        onChangeRef.current(composer ? `${composer} ${text}` : text);
+      }).then((unlisten) => {
+        if (current()) unlisteners.push(unlisten); else unlisten();
+      });
     });
     return () => {
       alive = false;
+      lifecycleRef.current += 1;
       unlisteners.forEach((unlisten) => unlisten());
+      cleanupRef.current = cleanupRef.current.then(() => cancelForCleanup(bridge));
     };
   }, [bridge, locale]);
 
@@ -69,16 +93,25 @@ export function useVoiceInput({ value, onChange, locale, bridge = nativeVoiceInp
   }, [state.phase]);
 
   const start = useCallback(async () => {
+    const lifecycle = lifecycleRef.current;
     setPreview("");
     setState((current) => ({ ...current, phase: "requesting-permission", error: null }));
-    try { await bridge.start(locale); } catch (error) { setState((current) => stateWithError(current, error)); }
+    try { await bridge.start(locale); } catch (error) {
+      if (lifecycleRef.current === lifecycle) setState((current) => stateWithError(current, error));
+    }
   }, [bridge, locale]);
   const stop = useCallback(async () => {
-    try { await bridge.stop(); } catch (error) { setState((current) => stateWithError(current, error)); }
+    const lifecycle = lifecycleRef.current;
+    try { await bridge.stop(); } catch (error) {
+      if (lifecycleRef.current === lifecycle) setState((current) => stateWithError(current, error));
+    }
   }, [bridge]);
   const cancel = useCallback(async () => {
+    const lifecycle = lifecycleRef.current;
     setPreview("");
-    try { await bridge.cancel(); } catch (error) { setState((current) => stateWithError(current, error)); }
+    try { await bridge.cancel(); } catch (error) {
+      if (lifecycleRef.current === lifecycle) setState((current) => stateWithError(current, error));
+    }
   }, [bridge]);
 
   return { state, preview, elapsedSeconds, start, stop, cancel };
