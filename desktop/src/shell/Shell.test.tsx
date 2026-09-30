@@ -74,6 +74,29 @@ describe("Shell", () => {
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
   });
 
+  it.each([820, 480])(
+    "keeps the header controls reachable at %spx and confines overflow to the links",
+    async (width) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      await screen.findByRole("heading", { name: "Dashboard" });
+
+      const nav = screen.getByRole("navigation", { name: "Navigazione app" });
+      const links = screen.getByTestId("navbar-links-scroll");
+      const actions = screen.getByTestId("navbar-actions");
+      expect(nav.className).toMatch(/min-w-0/);
+      expect(nav.className).toMatch(/overflow-hidden/);
+      expect(links.className).toMatch(/min-w-0/);
+      expect(links.className).toMatch(/flex-1/);
+      expect(links.className).toMatch(/overflow-x-auto/);
+      expect(actions.className).toMatch(/flex-shrink-0/);
+      expect(within(actions).getByRole("button", { name: "Aggiorna" })).toBeInTheDocument();
+      expect(within(actions).getByRole("button", { name: "Esci" })).toBeInTheDocument();
+      expect(within(nav).queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
+    },
+  );
+
   it("adds the desktop's own pages after the web's links, and routes to them", async () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);

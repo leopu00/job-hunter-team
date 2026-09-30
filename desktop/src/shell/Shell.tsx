@@ -3,7 +3,6 @@ import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
-import { SETUP_PAGE } from "../lib/pages";
 import { signOut } from "../lib/supabase";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -35,31 +34,37 @@ function DesktopLinks() {
 /**
  * The signed-in app: the web's protected layout (navbar on top, MainChrome
  * around the page) with a client router in place of Next's. The navbar links
- * are the web's NavLinks, then the desktop's own pages; on the right, what
- * the desktop adds: refresh the page's data, the local team setup, sign out.
+ * are the web's NavLinks, then the desktop's own pages. The centre strip is
+ * the only horizontal overflow plane, so narrow windows keep the brand and
+ * both actions fully visible while every destination remains reachable.
  */
 function Navbar() {
   const button =
     "text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
-      <nav aria-label="Navigazione app" className="px-5 sm:px-6 h-14 flex items-center gap-4">
+      <nav
+        aria-label="Navigazione app"
+        className="max-w-full min-w-0 overflow-hidden px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
+      >
         <Link href={HOME} className="flex items-center no-underline group flex-shrink-0">
           <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
             JHT
           </span>
         </Link>
-        <div className="flex items-center gap-1 mx-auto">
-          <NavLinks />
-          <DesktopLinks />
+        <div
+          className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain"
+          data-testid="navbar-links-scroll"
+        >
+          <div className="flex w-max items-center gap-1 mx-auto">
+            <NavLinks />
+            <DesktopLinks />
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
           <button type="button" className={button} onClick={refresh}>
             Aggiorna
           </button>
-          <a href={SETUP_PAGE} className={button}>
-            Team locale
-          </a>
           <button type="button" className={button} onClick={() => void signOut()}>
             Esci
           </button>
