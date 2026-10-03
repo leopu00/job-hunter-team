@@ -6,7 +6,7 @@
 # ║  Wrapper Bash sottile che instrada i comandi:                            ║
 # ║                                                                          ║
 # ║    LIFECYCLE   → docker compose / docker logs / docker inspect           ║
-# ║    OPERATIVITA → docker exec -it jht node /app/cli/bin/main.js <args>    ║
+# ║    OPERATIVITA → docker exec -it <ID> node /app/cli/bin/main.js <args>   ║
 # ║                                                                          ║
 # ║  Niente Node, Python o tmux sull'host. Niente socket Docker dentro al    ║
 # ║  container. Il CLI Node gira nel container long-running `jht` e ci       ║
@@ -16,7 +16,6 @@
 # ║  comando di operativita', lo si avvia automaticamente via compose.       ║
 # ║                                                                          ║
 # ║  Override via env:                                                       ║
-# ║    JHT_CONTAINER_NAME=jht                                                ║
 # ║    JHT_RUNTIME_DIR=$HOME/.local/share/job-hunter-team/host-runtime       ║
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR/docker-compose.yml                  ║
 # ║                                                                          ║
@@ -34,7 +33,8 @@ JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 
-CONTAINER="${JHT_CONTAINER_NAME:-jht}"
+CONTAINER_SERVICE="jht"
+ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
 elif [ "$(uname -s)" = "Darwin" ]; then
@@ -548,7 +548,9 @@ compose() {
 }
 
 container_up() {
-  read_only_container_id >/dev/null
+  local container_id
+  container_id="$(read_only_container_id)" || return $?
+  ATTESTED_CONTAINER_ID="$container_id"
 }
 
 # `read_only_container_id` distingue un progetto assente (3) da un risultato
@@ -780,7 +782,7 @@ JHTHELP
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
   if docker_reachable && container_up; then
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     return $?
   fi
   local_help
@@ -842,7 +844,7 @@ ensure_up() {
     err "Container JHT esistente non attestabile; avvio automatico negato."
     exit 1
   }
-  info "Container '$CONTAINER' non attivo, lo avvio..."
+  info "Container '$CONTAINER_SERVICE' non attivo, lo avvio..."
   ensure_bind_owner
   compose up -d
   # Attendi che il container sia in stato running e con ownership completa
@@ -851,7 +853,7 @@ ensure_up() {
   while ! container_up; do
     tries=$((tries - 1))
     if [ "$tries" -le 0 ]; then
-      err "Container '$CONTAINER' non e' partito entro 10s. Controlla 'jht logs'."
+      err "Container '$CONTAINER_SERVICE' non e' partito entro 10s. Controlla 'jht logs'."
       exit 1
     fi
     sleep 0.5
@@ -1249,7 +1251,8 @@ handle_gui_command() {
 # gli assegna un path temporaneo interno, poi pubblica i byte sul path host con
 # docker cp + rename nello stesso filesystem della destinazione.
 handle_host_download() {
-  local host_output="" container_tmp="" host_tmp="" arg next
+  local container_id="$1" host_output="" container_tmp="" host_tmp="" arg next
+  shift
   local -a rewritten=()
   local -a download_env=()
 
@@ -1297,8 +1300,9 @@ handle_host_download() {
   # Senza output esplicito il default `/jht_user/downloads` e' gia un bind
   # mount visibile sul computer host: nessuna copia aggiuntiva necessaria.
   if [ -z "$host_output" ]; then
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "${download_env[@]}" \
-      "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+      ${download_env[@]+"${download_env[@]}"} \
+      "$container_id" node "$NODE_ENTRY" download "${rewritten[@]}"
     return $?
   fi
 
@@ -1310,12 +1314,13 @@ handle_host_download() {
   container_tmp="/tmp/jht-download-$$-${RANDOM:-0}"
   rewritten+=(--output "$container_tmp")
   local code
-  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "${download_env[@]}" \
-      "$CONTAINER" node "$NODE_ENTRY" download "${rewritten[@]}"; then
+  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+      ${download_env[@]+"${download_env[@]}"} \
+      "$container_id" node "$NODE_ENTRY" download "${rewritten[@]}"; then
     code=0
   else
     code=$?
-    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
     return "$code"
   fi
 
@@ -1323,17 +1328,17 @@ handle_host_download() {
   parent="$(dirname -- "$host_output")"
   if ! mkdir -p -- "$parent"; then
     err "impossibile creare la directory di destinazione: $parent"
-    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
     return 1
   fi
   host_tmp="${host_output}.part-$$-${RANDOM:-0}"
-  if ! docker cp "$CONTAINER:$container_tmp" "$host_tmp"; then
+  if ! docker cp "$container_id:$container_tmp" "$host_tmp"; then
     err "copia del download verificato verso l'host non riuscita"
     rm -f -- "$host_tmp"
-    docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
     return 1
   fi
-  docker exec "$CONTAINER" rm -f "$container_tmp" >/dev/null 2>&1 || true
+  docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
 
   # `mv -n` non sostituisce un file comparso durante il download. Se il temp
   # esiste ancora dopo il comando, la pubblicazione non e' avvenuta.
@@ -1416,11 +1421,15 @@ upgrade_compose() {
 }
 
 upgrade_image() {
-  docker inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true
+  local container_id
+  container_id="$(read_only_container_id)" || return 0
+  docker inspect "$container_id" --format '{{.Image}}' 2>/dev/null || true
 }
 
 upgrade_version() {
-  docker exec "$CONTAINER" node "$NODE_ENTRY" --version 2>/dev/null \
+  local container_id
+  container_id="$(read_only_container_id)" || return 0
+  docker exec "$container_id" node "$NODE_ENTRY" --version 2>/dev/null \
     | head -n 1 | tr -d '\r\n' || true
 }
 
@@ -1558,14 +1567,14 @@ upgrade_restore_previous() {
 
   if [ "$was_running" = "1" ]; then
     [ -n "$old_image" ] || return 1
-    if ! JHT_IMAGE="$old_image" upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER"; then
+    if ! JHT_IMAGE="$old_image" upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER_SERVICE"; then
       return 1
     fi
     upgrade_verify_running || return 1
   else
     # Prima non c'era un runtime attivo: un candidato fallito non deve restare
     # come container morto che l'utente scambia per un'installazione sana.
-    upgrade_run upgrade_compose "$COMPOSE_FILE" rm -sf "$CONTAINER" || return 1
+    upgrade_run upgrade_compose "$COMPOSE_FILE" rm -sf "$CONTAINER_SERVICE" || return 1
   fi
   UPGRADE_ROLLBACK_DIR="$rollback_dir"
   upgrade_remove_transaction
@@ -1709,7 +1718,7 @@ handle_runtime_upgrade() {
 
   phase="pull"
   upgrade_note "Scarico l immagine piu recente..."
-  if ! upgrade_run upgrade_compose "$candidate_compose" pull "$CONTAINER"; then
+  if ! upgrade_run upgrade_compose "$candidate_compose" pull "$CONTAINER_SERVICE"; then
     upgrade_remove_transaction
     upgrade_result false false pull "$old_version" "$old_image" "$old_version" "$old_image" false "Download immagine non riuscito" false
     return 1
@@ -1747,7 +1756,7 @@ handle_runtime_upgrade() {
 
   phase="activate"
   upgrade_note "Attivo il nuovo runtime..."
-  if ! upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER"; then
+  if ! upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER_SERVICE"; then
     if upgrade_restore_previous; then rolled_back=true; fi
     upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Avvio della nuova versione fallito" "$rolled_back"
     return 1
@@ -1833,7 +1842,7 @@ case "$SUB" in
 
   -V|--version|version)
     if docker_reachable && container_up; then
-      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" --version
+      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" --version
     elif [ -n "${JHT_IMAGE_TAG:-}" ]; then
       printf '%s\n' "$JHT_IMAGE_TAG"
       info "Versione dell'immagine configurata. Per quella del CLI in esecuzione: 'jht up' e poi 'jht --version'."
@@ -1900,7 +1909,7 @@ case "$SUB" in
       err "Container JHT non attestabile; riavvio negato."
       exit 1
     }
-    compose restart "$CONTAINER"
+    compose restart "$CONTAINER_SERVICE"
     container_postcheck_running || exit 1
     ;;
 
@@ -1924,22 +1933,26 @@ case "$SUB" in
   logs)
     require_docker
     shift || true
+    container_id="$(read_only_container_id)" || {
+      err "Container JHT non attestabile; lettura log negata."
+      exit 1
+    }
     # Passa eventuali flag (-f, --tail N) a docker logs.
-    docker logs "$@" "$CONTAINER"
+    docker logs "$@" "$container_id"
     ;;
 
   status)
     # Probe pura: `status` non deve avviare la machine Podman, Docker Desktop
     # o il container. Solo l'arm esplicito `up` puo' accendere la machine.
     if ! docker_reachable; then
-      printf "container '%s' non attivo\n" "$CONTAINER"
+      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       exit 1
     fi
-    if container_up; then
-      docker inspect "$CONTAINER" --format \
+    if container_id="$(read_only_container_id)"; then
+      docker inspect "$container_id" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
     else
-      printf "container '%s' non attivo\n" "$CONTAINER"
+      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       exit 1
     fi
     ;;
@@ -1947,7 +1960,7 @@ case "$SUB" in
   shell)
     require_docker
     ensure_up
-    docker exec $EXEC_FLAGS "$CONTAINER" bash
+    docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" bash
     ;;
 
   # ── OAuth login: lancia il CLI del provider (claude/codex/kimi) per il
@@ -1957,19 +1970,19 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
-    provider="$(docker exec "$CONTAINER" node -e \
+    provider="$(docker exec "$ATTESTED_CONTAINER_ID" node -e \
       "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" \
       2>/dev/null || true)"
     provider_lc="$(printf '%s' "$provider" | tr '[:upper:]' '[:lower:]')"
     case "$provider_lc" in
       openai|codex)
-        docker exec $EXEC_FLAGS "$CONTAINER" codex login --device-auth
+        docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" codex login --device-auth
         ;;
       kimi|moonshot)
-        docker exec $EXEC_FLAGS "$CONTAINER" kimi --yolo
+        docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" kimi --yolo
         ;;
       claude|anthropic|'')
-        docker exec $EXEC_FLAGS "$CONTAINER" claude --dangerously-skip-permissions
+        docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" claude --dangerously-skip-permissions
         ;;
       *)
         die "provider attivo non riconosciuto: $provider"
@@ -2006,7 +2019,7 @@ case "$SUB" in
     unset host_env_value
     JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   # Download verificato dal CLI nel container, pubblicato atomically sul path
@@ -2015,7 +2028,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
-    handle_host_download "${@:2}"
+    handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
@@ -2023,6 +2036,6 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 esac
