@@ -638,6 +638,9 @@ pub(crate) enum InteractiveEvent {
     Exit {
         code: Option<i32>,
     },
+    Failure {
+        code: &'static str,
+    },
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -2280,26 +2283,44 @@ enum TerminalSequenceState {
     Csi,
     Osc,
     OscEscape,
+    OpenBracket,
+    OrphanCsi,
 }
 
 #[derive(Default)]
 struct TerminalTextNormalizer {
     state: TerminalSequenceState,
+    orphan: String,
 }
 
 impl TerminalTextNormalizer {
+    fn push_ground(&mut self, character: char, output: &mut String) {
+        match character {
+            '\u{1b}' => self.state = TerminalSequenceState::Escape,
+            '\u{009b}' => self.state = TerminalSequenceState::Csi,
+            '\u{009d}' => self.state = TerminalSequenceState::Osc,
+            '[' => {
+                self.orphan.clear();
+                self.orphan.push('[');
+                self.state = TerminalSequenceState::OpenBracket;
+            }
+            '\n' | '\t' => output.push(character),
+            value if value.is_control() => {}
+            value => output.push(value),
+        }
+    }
+
+    fn flush_orphan(&mut self, character: char, output: &mut String) {
+        output.push_str(&std::mem::take(&mut self.orphan));
+        self.state = TerminalSequenceState::Text;
+        self.push_ground(character, output);
+    }
+
     fn push(&mut self, text: &str) -> String {
         let mut output = String::with_capacity(text.len());
         for character in text.chars() {
             match self.state {
-                TerminalSequenceState::Text => match character {
-                    '\u{1b}' => self.state = TerminalSequenceState::Escape,
-                    '\u{009b}' => self.state = TerminalSequenceState::Csi,
-                    '\u{009d}' => self.state = TerminalSequenceState::Osc,
-                    '\n' | '\t' => output.push(character),
-                    value if value.is_control() => {}
-                    value => output.push(value),
-                },
+                TerminalSequenceState::Text => self.push_ground(character, &mut output),
                 TerminalSequenceState::Escape => match character {
                     '[' => self.state = TerminalSequenceState::Csi,
                     ']' | 'P' | 'X' | '^' | '_' => self.state = TerminalSequenceState::Osc,
@@ -2327,12 +2348,34 @@ impl TerminalTextNormalizer {
                     '\u{1b}' => {}
                     _ => self.state = TerminalSequenceState::Osc,
                 },
+                TerminalSequenceState::OpenBracket => {
+                    if character.is_ascii_digit() || matches!(character, ';' | ':' | '?' | '>') {
+                        self.orphan.push(character);
+                        self.state = TerminalSequenceState::OrphanCsi;
+                    } else if character == 'm' {
+                        self.orphan.clear();
+                        self.state = TerminalSequenceState::Text;
+                    } else {
+                        self.flush_orphan(character, &mut output);
+                    }
+                }
+                TerminalSequenceState::OrphanCsi => {
+                    if ('\u{20}'..='\u{3f}').contains(&character) {
+                        self.orphan.push(character);
+                    } else if character.is_ascii_alphabetic() || character == '~' {
+                        self.orphan.clear();
+                        self.state = TerminalSequenceState::Text;
+                    } else {
+                        self.flush_orphan(character, &mut output);
+                    }
+                }
             }
         }
         output
     }
 
     fn finish(&mut self) {
+        self.orphan.clear();
         self.state = TerminalSequenceState::Text;
     }
 }
@@ -2464,6 +2507,7 @@ struct InteractiveStateDetector {
     last_url: Option<String>,
     last_code: Option<String>,
     input_pending: bool,
+    invalid_emitted: bool,
     request_sequence: u64,
 }
 
@@ -2475,6 +2519,7 @@ impl InteractiveStateDetector {
             last_url: None,
             last_code: None,
             input_pending: false,
+            invalid_emitted: false,
             request_sequence: 0,
         }
     }
@@ -2515,6 +2560,11 @@ impl InteractiveStateDetector {
                         },
                     });
                 }
+            } else if !self.invalid_emitted && codex_device_attempt_complete(&self.pending) {
+                self.invalid_emitted = true;
+                events.push(InteractiveEvent::Failure {
+                    code: "provider_action_invalid",
+                });
             }
             return events;
         }
@@ -2670,7 +2720,7 @@ fn extract_provider_user_code(provider: SubscriptionProvider, text: &str) -> Opt
                 .any(|byte| byte.is_ascii_digit() || byte == b'-');
         let provider_valid = match provider {
             SubscriptionProvider::Codex => {
-                candidate.len() == 9
+                candidate.len() == 10
                     && candidate.as_bytes()[4] == b'-'
                     && candidate[..4]
                         .bytes()
@@ -2693,6 +2743,13 @@ fn provider_input_prompt(text: &str) -> bool {
             || lowercase.contains("callback"))
         || lowercase.contains("enter authorization code")
         || lowercase.contains("enter the code from your browser")
+}
+
+fn codex_device_attempt_complete(text: &str) -> bool {
+    let lowercase = text.to_ascii_lowercase();
+    text.contains('\n')
+        && lowercase.contains("https://")
+        && (lowercase.contains("code") || lowercase.contains("codice"))
 }
 
 fn stream_reader(
@@ -2743,6 +2800,7 @@ fn emit_interactive_states(
                 ..
             } => Some(input_request.id.clone()),
             InteractiveEvent::State { .. } => None,
+            InteractiveEvent::Failure { .. } => None,
             InteractiveEvent::Output { .. } | InteractiveEvent::Exit { .. } => continue,
         };
         if let Ok(mut pending) = pending_input.lock() {
@@ -4476,7 +4534,7 @@ exit 0
             ),
             (
                 SubscriptionProvider::Codex,
-                "Open https://auth.openai.com/codex/device and enter code WXYZ-9876",
+                "Open https://auth.openai.com/codex/device and enter code WXYZ-98765",
                 vec!["device"],
             ),
             (
@@ -4508,7 +4566,7 @@ exit 0
                             value["action"]["safeUrl"],
                             "https://auth.openai.com/codex/device"
                         );
-                        assert_eq!(value["action"]["userCode"], "WXYZ-9876");
+                        assert_eq!(value["action"]["userCode"], "WXYZ-98765");
                         assert_eq!(value["action"]["requestId"], "codex-device-1");
                         assert!(value["action"].get("inputRequest").is_none());
                     }
@@ -4568,7 +4626,7 @@ exit 0
             "\\Open \u{1b}[",
             "36mhttps://AUTH.OPENAI.COM/codex/device\u{1b}[0",
             "m and enter\r code \u{8}\u{1b}[1mQ7KM",
-            "-2P9R\u{1b}",
+            "-2P9RX\u{1b}",
             "[0m\n",
         ];
         let mut redactor = StreamRedactor::default();
@@ -4594,14 +4652,47 @@ exit 0
             value["action"]["safeUrl"],
             "https://auth.openai.com/codex/device"
         );
-        assert_eq!(value["action"]["userCode"], "Q7KM-2P9R");
+        assert_eq!(value["action"]["userCode"], "Q7KM-2P9RX");
         assert!(!visible.contains('\u{1b}'));
         assert!(!visible.contains("[0m"));
         assert!(!visible.contains("evil.invalid"));
 
-        let contaminated = InteractiveStateDetector::new(SubscriptionProvider::Codex)
-            .push("Open https://auth.openai.com/codex/device[0m and enter code Q7KM-2P9R");
-        assert!(contaminated.is_empty());
+        let mut literal_redactor = StreamRedactor::default();
+        let mut literal_detector = InteractiveStateDetector::new(SubscriptionProvider::Codex);
+        let mut literal_visible = String::new();
+        let mut literal_events = Vec::new();
+        for chunk in [
+            "Open https://auth.openai.com/codex/device[",
+            "0m and enter code Q7KM",
+            "-2P9RX[0",
+            "m\n",
+        ] {
+            let text = literal_redactor.push(chunk);
+            literal_visible.push_str(&text);
+            literal_events.extend(literal_detector.push(&text));
+        }
+        let tail = literal_redactor.finish();
+        literal_visible.push_str(&tail);
+        literal_events.extend(literal_detector.push(&tail));
+        assert_eq!(literal_events.len(), 1);
+        let literal = serde_json::to_value(&literal_events[0]).unwrap();
+        assert_eq!(
+            literal["action"]["safeUrl"],
+            "https://auth.openai.com/codex/device"
+        );
+        assert_eq!(literal["action"]["userCode"], "Q7KM-2P9RX");
+        assert!(!literal_visible.contains("[0m"));
+
+        let rejected = InteractiveStateDetector::new(SubscriptionProvider::Codex)
+            .push("Open https://auth.openai.com/codex/device/other and enter code Q7KM-2P9RX\n");
+        assert_eq!(rejected.len(), 1);
+        assert_eq!(
+            serde_json::to_value(&rejected[0]).unwrap(),
+            serde_json::json!({
+                "kind": "failure",
+                "code": "provider_action_invalid"
+            })
+        );
     }
 
     #[test]
