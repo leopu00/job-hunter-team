@@ -19,7 +19,8 @@ export type OAuthLoginUserAction =
 
 export interface OAuthLoginTakeoverProps {
   providerName: string;
-  action: OAuthLoginUserAction | null;
+  actions: OAuthLoginUserAction[];
+  verifying?: boolean;
   connectionState: OAuthLoginConnectionState;
   elapsedMs: number;
   safeErrorMessage?: string | null;
@@ -47,7 +48,8 @@ export function formatOAuthLoginElapsed(milliseconds: number) {
 
 export function OAuthLoginTakeover({
   providerName,
-  action,
+  actions,
+  verifying = false,
   connectionState,
   elapsedMs,
   safeErrorMessage,
@@ -62,12 +64,16 @@ export function OAuthLoginTakeover({
   const inputDescriptionId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const waitingRef = useRef<HTMLParagraphElement>(null);
   const initialFocusHandledRef = useRef(false);
   const [input, setInput] = useState("");
   const [pendingAction, setPendingAction] = useState<"input" | "cancel" | "restart" | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const inputRequest = action?.kind === "input" ? action.inputRequest : undefined;
+  const urlAction = actions.find((action) => action.kind === "url");
+  const codeAction = actions.find((action) => action.kind === "code");
+  const inputAction = actions.find((action) => action.kind === "input");
+  const inputRequest = inputAction?.kind === "input" ? inputAction.inputRequest : undefined;
   const connected = connectionState === "connected";
   const pending = pendingAction !== null;
 
@@ -82,6 +88,10 @@ export function OAuthLoginTakeover({
     initialFocusHandledRef.current = true;
     if (!inputRequest) titleRef.current?.focus();
   }, [inputRequest]);
+
+  useEffect(() => {
+    if (verifying) waitingRef.current?.focus();
+  }, [verifying]);
 
   async function copy(value: string, label: string) {
     setCopyFeedback(null);
@@ -145,24 +155,34 @@ export function OAuthLoginTakeover({
         </div>
       </header>
 
-      <p id={instructionId} className="oauth-login-takeover__instruction">
-        {action?.instruction ?? "Attendo una richiesta verificata dal provider."}
+      <p
+        id={instructionId}
+        ref={waitingRef}
+        className="oauth-login-takeover__instruction"
+        role={verifying ? "status" : undefined}
+        aria-live={verifying ? "polite" : undefined}
+        aria-atomic={verifying ? "true" : undefined}
+        tabIndex={verifying ? -1 : undefined}
+      >
+        {verifying
+          ? "Risposta inviata, attendo il provider."
+          : inputAction?.instruction ?? codeAction?.instruction ?? urlAction?.instruction ?? "Attendo una richiesta verificata dal provider."}
       </p>
 
-      {(action?.kind === "url" || action?.kind === "code") && (
+      {(urlAction || codeAction) && (
         <dl className="oauth-login-takeover__copy-grid">
-          {action.kind === "url" && (
+          {urlAction?.kind === "url" && (
             <div>
               <dt>URL di accesso</dt>
-              <dd><code>{action.safeUrl}</code></dd>
-              <button type="button" onClick={() => void copy(action.safeUrl!, "URL")}>Copia URL</button>
+              <dd><code>{urlAction.safeUrl}</code></dd>
+              <button type="button" onClick={() => void copy(urlAction.safeUrl, "URL")}>Copia URL</button>
             </div>
           )}
-          {action.kind === "code" && (
+          {codeAction?.kind === "code" && (
             <div>
               <dt>Codice temporaneo</dt>
-              <dd><code>{action.userCode}</code></dd>
-              <button type="button" onClick={() => void copy(action.userCode!, "Codice")}>Copia codice</button>
+              <dd><code>{codeAction.userCode}</code></dd>
+              <button type="button" onClick={() => void copy(codeAction.userCode, "Codice")}>Copia codice</button>
             </div>
           )}
         </dl>

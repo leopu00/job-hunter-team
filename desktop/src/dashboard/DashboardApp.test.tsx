@@ -136,9 +136,10 @@ vi.mock("../onboarding", () => ({
         {props.providerLogin && (
           <>
             <p>provider-state:{props.providerLogin.status}</p>
-            {props.providerLogin.action?.kind === "url" && <p>provider-url:{props.providerLogin.action.safeUrl}</p>}
-            {props.providerLogin.action?.kind === "code" && <p>provider-code:{props.providerLogin.action.userCode}</p>}
-            {props.providerLogin.action?.kind === "input" && (
+            <p>provider-connection:{props.providerLogin.connectionState}</p>
+            {props.providerLogin.actions.map((action) => action.kind === "url" && <p key="url">provider-url:{action.safeUrl}</p>)}
+            {props.providerLogin.actions.map((action) => action.kind === "code" && <p key="code">provider-code:{action.userCode}</p>)}
+            {props.providerLogin.actions.some((action) => action.kind === "input") && (
               <button type="button" onClick={() => void props.onProviderInput("verification response").catch(() => undefined)}>send-provider-input</button>
             )}
             <button type="button" onClick={() => void props.onProviderClose().catch(() => undefined)}>cancel-provider-login</button>
@@ -432,7 +433,8 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Caricamento dashboard")).toBeInTheDocument();
 
-    confirmB();
+    await waitFor(() => expect(activateDesktopAccountScope).toHaveBeenCalledTimes(2));
+    await act(async () => confirmB());
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
     expect(activateDesktopAccountScope).toHaveBeenCalledTimes(2);
   });
@@ -1109,7 +1111,11 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
-  it.each(["claude", "codex", "kimi"] as const)("shows structured %s authentication and accepts input only when requested", async (provider) => {
+  it.each([
+    { provider: "claude" as const, showsCode: true, requestsInput: true },
+    { provider: "codex" as const, showsCode: true, requestsInput: false },
+    { provider: "kimi" as const, showsCode: false, requestsInput: true },
+  ])("keeps a single-push $provider action sequence visible and gates input", async ({ provider, showsCode, requestsInput }) => {
     vi.mocked(useSession).mockReturnValue(signedInAs("provider-account"));
     requireOnboarding();
     vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
@@ -1131,48 +1137,55 @@ describe("DashboardApp onboarding router", () => {
     expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
     expect(await screen.findByText("provider-state:connecting")).toBeInTheDocument();
 
-    expect(screen.queryByText(/provider-url:/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
-    act(() => emit({
-      kind: "state",
-      status: "needs_user_action",
-      action: {
-        kind: "url",
-        instruction: "Completa l’accesso nel browser.",
-        safeUrl: "https://example.invalid/device",
-      },
-    }));
-    expect(await screen.findByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
-    act(() => emit({
-      kind: "state",
-      status: "needs_user_action",
-      action: {
-        kind: "code",
-        instruction: "Inserisci il codice mostrato.",
-        userCode: "ABCD-EFGH",
-      },
-    }));
-    expect(await screen.findByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
-    expect(screen.queryByText(/provider-url:/i)).not.toBeInTheDocument();
-    act(() => emit({
-      kind: "state",
-      status: "needs_user_action",
-      action: {
-        kind: "input",
-        instruction: "Invia la risposta richiesta.",
-        inputRequest: { id: `request-${provider}`, label: "Risposta" },
-      },
-    }));
+    act(() => {
+      emit({
+        kind: "state",
+        status: "needs_user_action",
+        action: {
+          kind: "url",
+          instruction: "Completa l’accesso nel browser.",
+          safeUrl: "https://example.invalid/device",
+        },
+      });
+      if (showsCode) emit({
+        kind: "state",
+        status: "needs_user_action",
+        action: {
+          kind: "code",
+          instruction: "Inserisci il codice mostrato.",
+          userCode: "ABCD-EFGH",
+        },
+      });
+      if (requestsInput) emit({
+        kind: "state",
+        status: "needs_user_action",
+        action: {
+          kind: "input",
+          instruction: "Invia la risposta richiesta.",
+          inputRequest: { id: `request-${provider}`, label: "Risposta" },
+        },
+      });
+    });
+
     expect(await screen.findByText("provider-state:needs_user_action")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "send-provider-input" }));
-    expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(
-      `provider-session-${provider}`,
-      `request-${provider}`,
-      "verification response",
-    );
-    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
-    expect(screen.getByText("provider-state:connecting")).toBeInTheDocument();
+    expect(screen.getByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
+    if (showsCode) expect(screen.getByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
+    else expect(screen.queryByText("provider-code:ABCD-EFGH")).not.toBeInTheDocument();
+    if (requestsInput) {
+      await user.click(screen.getByRole("button", { name: "send-provider-input" }));
+      expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(
+        `provider-session-${provider}`,
+        `request-${provider}`,
+        "verification response",
+      );
+      expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+      expect(screen.getByText("provider-state:verifying")).toBeInTheDocument();
+      expect(screen.getByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
+      if (showsCode) expect(screen.getByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+      expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
+    }
     await user.click(screen.getByRole("button", { name: "cancel-provider-login" }));
     expect(closeOnboardingProviderLogin).toHaveBeenCalledWith(`provider-session-${provider}`);
     expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
@@ -1245,9 +1258,46 @@ describe("DashboardApp onboarding router", () => {
     }));
     await act(async () => resolveStart("stale-provider-session"));
 
+    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("stale-provider-session");
     expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
     expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
+
+    await act(async () => resolveScopeB());
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+  });
+
+  it("closes an already published provider session when the account identity changes", async () => {
+    let current = signedInAs("published-provider-account-a");
+    let resolveScopeB!: () => void;
+    let scopeAttempt = 0;
+    vi.mocked(useSession).mockImplementation(() => current);
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(activateDesktopAccountScope).mockImplementation(() => {
+      scopeAttempt += 1;
+      return scopeAttempt === 1
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => { resolveScopeB = resolve; });
+    });
+    vi.mocked(startOnboardingProviderLogin).mockResolvedValue("published-provider-session");
+
+    const user = userEvent.setup();
+    const view = render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByText("provider-state:connecting")).toBeInTheDocument());
+
+    current = signedInAs("published-provider-account-b");
+    view.rerender(<DashboardApp />);
+
+    await waitFor(() => expect(closeOnboardingProviderLogin)
+      .toHaveBeenCalledWith("published-provider-session"));
+    await waitFor(() => expect(activateDesktopAccountScope).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(closeOnboardingProviderLogin).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(activateDesktopAccountScope).mock.invocationCallOrder[1]);
+    expect(screen.getByLabelText("Caricamento dashboard")).toBeInTheDocument();
 
     await act(async () => resolveScopeB());
     expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
@@ -1293,7 +1343,10 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("provider-success-account"));
     requireOnboarding();
     vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
-    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    let resolveSnapshot!: (snapshot: OnboardingRuntimeSnapshot) => void;
+    vi.mocked(readOnboardingSnapshot).mockReturnValue(new Promise((resolve) => {
+      resolveSnapshot = resolve;
+    }));
     vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
     let emit!: Parameters<typeof startOnboardingProviderLogin>[1];
     vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
@@ -1317,6 +1370,10 @@ describe("DashboardApp onboarding router", () => {
 
     act(() => emit({ kind: "exit", code: 0 }));
 
+    expect(await screen.findByText("provider-state:verifying")).toBeInTheDocument();
+    expect(screen.getByText("provider-connection:connected")).toBeInTheDocument();
+    expect(screen.queryByText("provider-state:error")).not.toBeInTheDocument();
+    await act(async () => resolveSnapshot({ ...PREPARED, providerAuthenticated: true }));
     await waitFor(() => expect(startOnboardingTeam).toHaveBeenCalledOnce());
     expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("provider-session-success");
     expect(readOnboardingSnapshot).toHaveBeenCalledWith(SUBMISSION.host);
