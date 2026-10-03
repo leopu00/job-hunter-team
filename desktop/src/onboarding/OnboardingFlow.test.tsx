@@ -82,6 +82,20 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
+  it("offers VPS profile import only to the local identity while preparing a local runtime", async () => {
+    const user = userEvent.setup();
+    const local = renderFlow({ account: { displayName: "Ada Locale", identity: "local" } });
+    await begin(user);
+    expect(screen.getByRole("button", { name: /importa profilo/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /server VPS/i }));
+    expect(screen.queryByRole("button", { name: /importa profilo/i })).not.toBeInTheDocument();
+    local.unmount();
+
+    renderFlow({ account: { displayName: "Ada", identity: "google" } });
+    await begin(user);
+    expect(screen.queryByRole("button", { name: /importa profilo/i })).not.toBeInTheDocument();
+  });
+
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
