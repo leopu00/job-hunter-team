@@ -25,7 +25,7 @@ export type OnboardingRuntimeStage = CollectionStage | OperationalStage;
 export type OnboardingRuntimeState =
   | { status: "collecting"; stage: CollectionStage }
   | { status: "working"; stage: OperationalStage; message: string }
-  | { status: "action-required"; stage: "ssh-host-key" | "provider-login" | "assistant"; message: string }
+  | { status: "action-required"; stage: "ssh-host-key" | "provider-login" | "team-start" | "assistant"; message: string }
   | { status: "failed"; stage: OnboardingRuntimeStage; message: string; code?: string; retryable?: boolean }
   | { status: "ready" };
 
@@ -83,7 +83,7 @@ export interface OnboardingFlowProps {
   runtime: OnboardingRuntimeState;
   activity?: OnboardingActivityState | null;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
-  onRuntimeAction: (stage: "provider-login" | "assistant") => Promise<void>;
+  onRuntimeAction: (stage: "provider-login" | "team-start" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;
   sshHostKey: OnboardingSshHostKeyConfirmation | null;
   onConfirmHostKey: () => Promise<void>;

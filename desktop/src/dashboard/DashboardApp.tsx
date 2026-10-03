@@ -328,6 +328,14 @@ export default function DashboardApp() {
     setGate((current) => current.phase === "required" ? { ...current, runtime } : current);
   }, []);
 
+  const collectHostAgain = useCallback(() => {
+    setGate((current) => current.phase === "required" ? {
+      ...current,
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    } : current);
+  }, []);
+
   const beginActivityInvocation = useCallback(() => {
     setActivity((current) => beginOnboardingActivityInvocation(current));
   }, []);
@@ -561,11 +569,10 @@ export default function DashboardApp() {
 
   const resumeAssistant = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
-    let phase: "runtime" | "team-start" | "assistant" = "runtime";
     try {
       setActivity(createOnboardingActivity());
       setRuntime({ status: "working", stage: "runtime", message: "Verifico lo stato reale della configurazione." });
-      let nativeSnapshot = await resumeOnboardingSnapshot();
+      const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
       if (prerequisiteFailure) {
@@ -573,16 +580,81 @@ export default function DashboardApp() {
         return;
       }
       if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
-        phase = "team-start";
-        setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
-        beginActivityInvocation();
-        nativeSnapshot = await resumeOnboardingTeamStart(recordActivityProgress);
-        if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
-        if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
-          throw new Error("team-start-unverified");
-        }
+        setRuntime({
+          status: "action-required",
+          stage: "team-start",
+          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+        });
+        return;
       }
-      phase = "assistant";
+      setRuntime({
+        status: "action-required",
+        stage: "assistant",
+        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+      });
+    } catch (error) {
+      if (activeIdentityKeyRef.current !== identityKey) throw error;
+      const backendFailure = resumedBackendFailure(error);
+      if (backendFailure === "collecting-host") {
+        collectHostAgain();
+        return;
+      }
+      if (backendFailure) {
+        setRuntime(backendFailure);
+        throw error;
+      }
+      fail("runtime", error);
+    }
+  }, [collectHostAgain, fail, identityKey, setRuntime]);
+
+  const resumeTeam = useCallback(async () => {
+    if (!identityKey) throw new Error("identity-missing");
+    try {
+      setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
+      beginActivityInvocation();
+      const snapshot = await resumeOnboardingTeamStart(recordActivityProgress);
+      if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+      if (!snapshot.assistantRunning || !snapshot.captainRunning) {
+        throw new Error("team-start-unverified");
+      }
+      setRuntime({
+        status: "action-required",
+        stage: "assistant",
+        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+      });
+    } catch (error) {
+      if (activeIdentityKeyRef.current !== identityKey) throw error;
+      const backendFailure = resumedBackendFailure(error);
+      if (backendFailure === "collecting-host") {
+        collectHostAgain();
+        return;
+      }
+      if (backendFailure) {
+        setRuntime(backendFailure);
+        throw error;
+      }
+      fail("team-start", error);
+    }
+  }, [beginActivityInvocation, collectHostAgain, fail, identityKey, recordActivityProgress, setRuntime]);
+
+  const connectResumedAssistant = useCallback(async () => {
+    if (!identityKey) throw new Error("identity-missing");
+    try {
+      const nativeSnapshot = await resumeOnboardingSnapshot();
+      if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
+      if (prerequisiteFailure) {
+        setRuntime(prerequisiteFailure);
+        return;
+      }
+      if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
+        setRuntime({
+          status: "action-required",
+          stage: "team-start",
+          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+        });
+        return;
+      }
       setRuntime({ status: "working", stage: "assistant", message: "Ricollego la chat verificata con l’Assistente." });
       const chat = await reconnectDirectChat();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
@@ -592,18 +664,9 @@ export default function DashboardApp() {
       navigate("/messages?agent=assistente", { replace: true });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
-      const backendFailure = resumedBackendFailure(error);
-      if (backendFailure === "collecting-host") {
-        await restartOnboarding();
-        return;
-      }
-      if (backendFailure) {
-        setRuntime(backendFailure);
-        throw error;
-      }
-      fail(phase, error);
+      fail("assistant", error);
     }
-  }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, restartOnboarding, setRuntime]);
+  }, [fail, identityKey, setRuntime]);
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
@@ -628,22 +691,30 @@ export default function DashboardApp() {
     void resumeAssistant().catch(() => undefined);
   }, [assistantChatIdentityKey, gate, identityKey, resumeAssistant]);
 
-  const runtimeAction = useCallback(async (stage: "provider-login" | "assistant") => {
+  const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
+    if (stage === "team-start") return resumeTeam();
+    if (gate.phase === "required" && gate.resumeAvailable && !submissionRef.current) {
+      return connectResumedAssistant();
+    }
     return finishAssistant();
-  }, [finishAssistant, loginProvider]);
+  }, [connectResumedAssistant, finishAssistant, gate, loginProvider, resumeTeam]);
 
   const retry = useCallback(async () => {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
     const submission = submissionRef.current;
-    if (gate.resumeAvailable && !submission) return resumeAssistant();
+    if (gate.resumeAvailable && !submission) {
+      if (stage === "team-start") return resumeTeam();
+      if (stage === "assistant") return connectResumedAssistant();
+      return resumeAssistant();
+    }
     if (!submission) return fail(stage, new Error("submission-missing"));
     if (stage === "provider-login") return loginProvider();
     if (stage === "team-start") return startTeam(submission);
     if (stage === "assistant") return finishAssistant();
     return submit(submission);
-  }, [fail, finishAssistant, gate, loginProvider, resumeAssistant, setRuntime, startTeam, submit]);
+  }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, submit]);
 
   if (!identityKey || accountScope?.identityKey !== identityKey || accountScope.phase === "pending") {
     return <DashboardSkeleton label="Caricamento dashboard" />;

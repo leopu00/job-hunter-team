@@ -284,6 +284,23 @@ describe("OnboardingFlow technical setup", () => {
     expect(onRuntimeAction).toHaveBeenCalledWith("provider-login");
   });
 
+  it("starts a resumed team only from its explicit action", async () => {
+    const onRuntimeAction = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: {
+        status: "action-required",
+        stage: "team-start",
+        message: "Le sessioni del team sono ferme.",
+      },
+      onRuntimeAction,
+    });
+
+    expect(onRuntimeAction).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /avvia la squadra/i }));
+    expect(onRuntimeAction).toHaveBeenCalledOnce();
+    expect(onRuntimeAction).toHaveBeenCalledWith("team-start");
+  });
+
   it("does not present the previous completed operation as the current manual action", () => {
     const now = Date.now();
     renderFlow({
