@@ -563,7 +563,7 @@ fn recover_playground_orphan_at(
     owner_marker: &Path,
     scopes: &AccountScopeState,
     teardown: impl FnOnce(&Option<AccountScope>),
-) -> Result<(), &'static str> {
+) -> Result<bool, &'static str> {
     playground_reset_enabled(debug_build)?;
     let active = scopes
         .inner
@@ -572,11 +572,17 @@ fn recover_playground_orphan_at(
     if active.is_some() {
         return Err("playground_reset_scope_active");
     }
+    match fs::symlink_metadata(owner_marker) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Err("playground_reset_owner_unavailable"),
+    }
     let orphan = orphaned_local_scope_at(profiles_root, owner_marker)?;
     direct_chat::verify_optional_playground_local_host_at(accounts_root, &orphan)?;
 
     teardown(&active);
-    fs::remove_file(owner_marker).map_err(|_| "local_account_owner_unavailable")
+    fs::remove_file(owner_marker).map_err(|_| "local_account_owner_unavailable")?;
+    Ok(true)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -658,7 +664,7 @@ pub(crate) fn runtime_playground_local_orphan_recover(
     scopes: State<'_, AccountScopeState>,
     chat: State<'_, direct_chat::DirectChatState>,
     onboarding: State<'_, onboarding::OnboardingNativeState>,
-) -> Result<(), AccountScopeError> {
+) -> Result<bool, AccountScopeError> {
     playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
     #[cfg(target_os = "windows")]
     {
@@ -1001,11 +1007,18 @@ mod tests {
         let state = AccountScopeState::default();
         let torn_down = Cell::new(false);
 
-        recover_playground_orphan_at(true, &profiles, &app_data, &owner, &state, |active| {
-            assert!(active.is_none());
-            torn_down.set(true);
-        })
-        .unwrap();
+        assert!(recover_playground_orphan_at(
+            true,
+            &profiles,
+            &app_data,
+            &owner,
+            &state,
+            |active| {
+                assert!(active.is_none());
+                torn_down.set(true);
+            },
+        )
+        .unwrap());
 
         assert!(torn_down.get());
         assert!(!owner.exists());
@@ -1025,6 +1038,34 @@ mod tests {
             Err("local_account_owner_mismatch")
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn playground_orphan_recovery_is_noop_when_no_owner_exists() {
+        use std::{cell::Cell, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-playground-no-orphan-{nonce}"));
+        let profiles = root.join("missing-local-profiles");
+        let app_data = root.join("missing-app-data");
+        let owner = root.join("missing-home/.jht/.desktop-account-scope");
+        let torn_down = Cell::new(false);
+
+        assert!(!recover_playground_orphan_at(
+            true,
+            &profiles,
+            &app_data,
+            &owner,
+            &AccountScopeState::default(),
+            |_| torn_down.set(true),
+        )
+        .unwrap());
+        assert!(!torn_down.get());
+        assert!(!root.exists());
     }
 
     #[cfg(not(target_os = "windows"))]
