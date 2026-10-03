@@ -18,6 +18,7 @@ import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
+  resetOnboardingMarker,
   type OnboardingFlowProps,
   type OnboardingRuntimeSnapshot,
   type OnboardingSubmission,
@@ -30,6 +31,7 @@ import {
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
   resumeOnboardingSnapshot,
+  resumeOnboardingTeamStart,
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
@@ -55,6 +57,7 @@ vi.mock("../lib/onboarding", async (importOriginal) => ({
   loadOnboardingGate: vi.fn(),
   markOnboardingReady: vi.fn(),
   markOnboardingStarted: vi.fn(),
+  resetOnboardingMarker: vi.fn(),
 }));
 vi.mock("../lib/onboarding-runtime", () => ({
   closeOnboardingProviderLogin: vi.fn(),
@@ -64,6 +67,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   probeOnboardingSshHostKey: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
+  resumeOnboardingTeamStart: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
@@ -126,6 +130,9 @@ vi.mock("../onboarding", () => ({
         )}
         {props.runtime.status === "failed" && props.runtime.retryable !== false && (
           <button type="button" onClick={() => void props.onRetry().catch(() => undefined)}>retry-runtime</button>
+        )}
+        {props.runtime.status !== "collecting" && (
+          <button type="button" onClick={() => void props.onRestart().catch(() => undefined)}>restart-onboarding</button>
         )}
       </section>
     );
@@ -214,6 +221,7 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
     vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
     vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+    vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
     vi.mocked(activateDesktopAccountScope).mockResolvedValue();
     vi.mocked(activateDesktopLocalScope).mockResolvedValue();
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
@@ -683,6 +691,156 @@ describe("DashboardApp onboarding router", () => {
     expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("reconciles a stale resume marker to the first missing real prerequisite", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("stale-resume-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Stale Resume" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      runtimeInstalled: false,
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(/runtime salvato non risulta pronto/i)).toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+  });
+
+  it("starts missing team sessions before reconnecting the resumed Assistant chat", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("assistant-missing-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Assistant Missing" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      assistantRunning: false,
+    });
+    vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(resumeOnboardingSnapshot).toHaveBeenCalled();
+    expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce();
+    expect(reconnectDirectChat).toHaveBeenCalledOnce();
+    expect(vi.mocked(resumeOnboardingSnapshot).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(resumeOnboardingTeamStart).mock.invocationCallOrder[0]);
+    expect(vi.mocked(resumeOnboardingTeamStart).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(reconnectDirectChat).mock.invocationCallOrder[0]);
+  });
+
+  it("keeps a failed resumed team start retryable at the real team stage", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-resume-failed"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Retry" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      captainRunning: false,
+    });
+    vi.mocked(resumeOnboardingTeamStart).mockRejectedValue({ code: "team_start_failed" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(screen.getByText("code:team_start_failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
+  it("returns an unconfigured resumed host to step 1 without reconnecting chat", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("host-missing-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Host Missing" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockRejectedValue({ code: "host_not_configured" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(resetOnboardingMarker).toHaveBeenCalledWith("host-missing-account");
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
+  it.each(["google", "local"] as const)(
+    "restarts only %s onboarding UI without clearing credentials, scope, runtime or team",
+    async (identity) => {
+      const markerId = identity === "google" ? "restart-google" : "local:restart-local";
+      if (identity === "google") {
+        vi.mocked(useSession).mockReturnValue(signedInAs("restart-google"));
+        vi.mocked(loadOnboardingGate).mockResolvedValue({
+          phase: "required",
+          account: { displayName: "Google Restart" },
+          resumeAvailable: true,
+          runtime: { status: "collecting", stage: "host" },
+        });
+      } else {
+        vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+        vi.mocked(localIdentitySelected).mockReturnValue(true);
+        vi.mocked(readLocalProfile).mockReturnValue({
+          profileId: "restart-local",
+          displayName: "Local Restart",
+        });
+        localStorage.setItem(
+          "jht.desktop.onboarding.local:restart-local",
+          "subscription-v1-started",
+        );
+      }
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+        ...TEAM_READY,
+        runtimeInstalled: false,
+      });
+
+      render(<DashboardApp />);
+      await screen.findByText("failed:runtime");
+      await userEvent.click(screen.getByRole("button", { name: "restart-onboarding" }));
+
+      expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+      expect(resetOnboardingMarker).toHaveBeenCalledWith(markerId);
+      expect(clearDesktopAccountScope).not.toHaveBeenCalled();
+      expect(clearLocalIdentitySelection).not.toHaveBeenCalled();
+      expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+      expect(startOnboardingTeam).not.toHaveBeenCalled();
+      expect(reconnectDirectChat).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps restart at host selection when it cancels an active provider login", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("restart-provider-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(startOnboardingProviderLogin).mockResolvedValue("provider-session-restart");
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-claude" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole("button", { name: "restart-onboarding" }));
+
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("provider-session-restart");
+    expect(resetOnboardingMarker).toHaveBeenCalledWith("restart-provider-account");
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
   it.each(["claude", "codex", "kimi"] as const)("streams, closes and retries %s authentication without false team start", async (provider) => {

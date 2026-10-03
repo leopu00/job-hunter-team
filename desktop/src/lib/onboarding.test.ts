@@ -9,6 +9,7 @@ import {
   markOnboardingReady,
   markOnboardingStarted,
   OnboardingSaveError,
+  resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingMarkerStore,
   type OnboardingRuntimeSnapshot,
@@ -186,6 +187,18 @@ describe("loadLocalOnboardingGate", () => {
     expect(loadLocalOnboardingGate("opaque-profile-a", "Ada", store)).toEqual({ phase: "ready" });
     expect(loadLocalOnboardingGate("opaque-profile-b", "Bea", store)).toMatchObject({ phase: "required" });
   });
+
+  it("restarts a local flow without removing its profile or native state", () => {
+    const store = markerStore();
+    markOnboardingReady("local:opaque-profile-a", READY_RUNTIME, store);
+    resetOnboardingMarker("local:opaque-profile-a", store);
+    expect(loadLocalOnboardingGate("opaque-profile-a", "Ada", store)).toMatchObject({
+      phase: "required",
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    expect([...store.values.values()]).toEqual(["subscription-v1-restarted"]);
+  });
 });
 
 describe("technical and conversational gates", () => {
@@ -227,6 +240,22 @@ describe("technical and conversational gates", () => {
     const { client, calls } = fakeClient({});
     await expect(loadOnboardingGate(client, USER, store)).resolves.toEqual({ phase: "ready" });
     expect(calls).toHaveLength(0);
+  });
+
+  it("keeps a Google restart at technical step 1 despite legacy completion evidence", async () => {
+    const store = markerStore();
+    markOnboardingReady(USER.id, READY_RUNTIME, store);
+    resetOnboardingMarker(USER.id, store);
+    const evidence = {
+      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
+      profile: { data: READY_PROFILE, error: null },
+    };
+
+    await expect(loadOnboardingGate(fakeClient(evidence).client, USER, store)).resolves.toMatchObject({
+      phase: "required",
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
   });
 });
 

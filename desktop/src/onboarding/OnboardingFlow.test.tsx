@@ -27,6 +27,7 @@ function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
     onProviderInput: vi.fn().mockResolvedValue(undefined),
     onProviderClose: vi.fn().mockResolvedValue(undefined),
     onRetry: vi.fn().mockResolvedValue(undefined),
+    onRestart: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   return { ...render(<OnboardingFlow {...props} />), props };
@@ -173,6 +174,23 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByText("Container")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("offers a non-destructive restart even when the current failure cannot be retried", async () => {
+    const onRestart = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: {
+        status: "failed",
+        stage: "assistant",
+        message: "Assistente non pronto.",
+        retryable: false,
+      },
+      onRestart,
+    });
+
+    expect(screen.queryByRole("button", { name: /riprova questo passaggio/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Riparti da capo" }));
+    expect(onRestart).toHaveBeenCalledOnce();
   });
 
   it("shows provider progress and invokes only the required interactive action", async () => {

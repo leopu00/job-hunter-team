@@ -51,6 +51,7 @@ export interface LoginScreenProps {
   createLocal?: (displayName: string) => Promise<LocalProfile>;
   activateLocal?: () => Promise<LocalProfile>;
   onLocalReady?: () => void;
+  onChooseGoogle?: () => boolean | Promise<boolean>;
 }
 
 type CopyState = "idle" | "copied" | "failed";
@@ -72,6 +73,7 @@ export function LoginScreen({
   createLocal = createAndActivateLocalProfile,
   activateLocal = activateSavedLocalProfile,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
+  onChooseGoogle,
 }: LoginScreenProps) {
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
@@ -106,6 +108,7 @@ export function LoginScreen({
     setLocalError(false);
     setAuthorizeUrl(null);
     setCopy("idle");
+    if (await onChooseGoogle?.()) return;
     setWaiting(true);
     saveBrowserChoice(choice);
     try {
@@ -116,7 +119,7 @@ export function LoginScreen({
       setWaiting(false);
       setAuthorizeUrl(null);
     }
-  }, [signIn, choice]);
+  }, [choice, onChooseGoogle, signIn]);
 
   const stop = useCallback(() => {
     cancel().catch(() => undefined);
