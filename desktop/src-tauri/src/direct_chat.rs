@@ -6,7 +6,8 @@ use crate::runtime_host::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    fs,
+    fs::{self, OpenOptions},
+    io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
@@ -246,6 +247,56 @@ pub(crate) fn verify_optional_playground_local_host_at(
         Some("local") if object.len() == 1 => Ok(()),
         Some("vps") => Err("playground_reset_host_not_local"),
         _ => Err("playground_reset_host_invalid"),
+    }
+}
+
+pub(crate) fn verify_migration_local_host_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    let path = connection_config_path_at(root, scope);
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options
+        .open(&path)
+        .map_err(|_| "local_migration_host_missing")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "local_migration_host_invalid")?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > 4096 {
+        return Err("local_migration_host_invalid");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let parent = path.parent().ok_or("local_migration_host_invalid")?;
+        let parent_metadata = fs::metadata(parent).map_err(|_| "local_migration_host_invalid")?;
+        if metadata.uid() != parent_metadata.uid()
+            || metadata.permissions().mode() & 0o777 != 0o600
+            || parent_metadata.permissions().mode() & 0o022 != 0
+        {
+            return Err("local_migration_host_invalid");
+        }
+    }
+    let mut raw = Vec::with_capacity(metadata.len() as usize);
+    Read::by_ref(&mut file)
+        .take(4097)
+        .read_to_end(&mut raw)
+        .map_err(|_| "local_migration_host_invalid")?;
+    if raw.len() as u64 != metadata.len() {
+        return Err("local_migration_host_invalid");
+    }
+    let value: Value = serde_json::from_slice(&raw).map_err(|_| "local_migration_host_invalid")?;
+    let object = value.as_object().ok_or("local_migration_host_invalid")?;
+    match object.get("kind").and_then(Value::as_str) {
+        Some("local") if object.len() == 1 => Ok(()),
+        Some("vps") => Err("local_migration_host_not_local"),
+        _ => Err("local_migration_host_invalid"),
     }
 }
 
@@ -938,7 +989,7 @@ pub(crate) fn teardown(state: &DirectChatState) {
 mod tests {
     use super::{
         connection_config_path_at, hex_encode, parse_json, probe, session_for, status, valid_agent,
-        Connection, DirectChatPage, ProcessResult,
+        verify_migration_local_host_at, Connection, DirectChatPage, ProcessResult,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
 
@@ -1007,6 +1058,58 @@ mod tests {
         assert_eq!(connection_config_path_at(root, &a), a_path);
         assert_ne!(a_path, root.join("direct-chat-host.json"));
         assert!(!b_path.starts_with(root.join(a.digest())));
+    }
+
+    #[test]
+    fn migration_host_gate_accepts_only_the_exact_local_record() {
+        use std::{fs, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-migration-host-{nonce}"));
+        let scope = crate::account_scope::AccountScope::synthetic_local(b"synthetic-local");
+        let path = connection_config_path_at(&root, &scope);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, br#"{"kind":"local"}"#).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        assert!(verify_migration_local_host_at(&root, &scope).is_ok());
+
+        fs::write(&path, br#"{"kind":"vps","address":"synthetic.invalid"}"#).unwrap();
+        assert_eq!(
+            verify_migration_local_host_at(&root, &scope).unwrap_err(),
+            "local_migration_host_not_local"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migration_host_gate_never_follows_a_symlink() {
+        use std::{fs, os::unix::fs::symlink, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-migration-host-link-{nonce}"));
+        let scope = crate::account_scope::AccountScope::synthetic_local(b"synthetic-local");
+        let path = connection_config_path_at(&root, &scope);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let target = root.join("synthetic-host.json");
+        fs::write(&target, br#"{"kind":"local"}"#).unwrap();
+        symlink(&target, &path).unwrap();
+
+        assert_eq!(
+            verify_migration_local_host_at(&root, &scope).unwrap_err(),
+            "local_migration_host_missing"
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(unix)]

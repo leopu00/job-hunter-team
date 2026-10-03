@@ -6,13 +6,17 @@ import {
   activateDesktopAccountScope,
   activateDesktopLocalScope,
   clearDesktopAccountScope,
+  migrateDesktopLocalProfileToAccount,
+  probeDesktopLocalProfileMigration,
 } from "../lib/desktop-account-scope";
 import {
+  activateSavedLocalProfile,
   clearLocalIdentitySelection,
+  finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
 } from "../lib/local-profile";
-import { googleIdentitySelected } from "../lib/identity-choice";
+import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
@@ -37,7 +41,7 @@ import {
   startOnboardingProviderLogin,
   startOnboardingTeam,
 } from "../lib/onboarding-runtime";
-import { goTo, LOGIN_PAGE } from "../lib/pages";
+import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
 import DashboardApp from "./DashboardApp";
@@ -82,13 +86,20 @@ vi.mock("../lib/desktop-account-scope", () => ({
   activateDesktopAccountScope: vi.fn(),
   activateDesktopLocalScope: vi.fn(),
   clearDesktopAccountScope: vi.fn(),
+  migrateDesktopLocalProfileToAccount: vi.fn(),
+  probeDesktopLocalProfileMigration: vi.fn(),
 }));
 vi.mock("../lib/local-profile", () => ({
+  activateSavedLocalProfile: vi.fn(),
   clearLocalIdentitySelection: vi.fn(),
+  finalizeLocalProfileMigration: vi.fn(),
   localIdentitySelected: vi.fn(),
   readLocalProfile: vi.fn(),
 }));
-vi.mock("../lib/identity-choice", () => ({ googleIdentitySelected: vi.fn() }));
+vi.mock("../lib/identity-choice", () => ({
+  clearGoogleIdentitySelection: vi.fn(),
+  googleIdentitySelected: vi.fn(),
+}));
 vi.mock("../shell/router", () => ({ navigate: vi.fn() }));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", () => ({
@@ -247,6 +258,14 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(activateDesktopAccountScope).mockResolvedValue();
     vi.mocked(activateDesktopLocalScope).mockResolvedValue();
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
+    vi.mocked(migrateDesktopLocalProfileToAccount).mockResolvedValue({ receiptHash: "a".repeat(64) });
+    vi.mocked(probeDesktopLocalProfileMigration).mockResolvedValue(false);
+    vi.mocked(activateSavedLocalProfile).mockResolvedValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(finalizeLocalProfileMigration).mockReset();
+    vi.mocked(clearGoogleIdentitySelection).mockReset();
     vi.mocked(localIdentitySelected).mockReturnValue(false);
     vi.mocked(readLocalProfile).mockReturnValue(null);
     vi.mocked(googleIdentitySelected).mockReturnValue(true);
@@ -362,6 +381,77 @@ describe("DashboardApp onboarding router", () => {
     expect(vi.mocked(clearDesktopAccountScope).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(clearLocalIdentitySelection).mock.invocationCallOrder[0]);
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
+  });
+
+  it("requires an explicit gesture before migrating local ownership to Google", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    let saved: { profileId: string; displayName: string } | null = {
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    };
+    vi.mocked(readLocalProfile).mockImplementation(() => saved);
+    vi.mocked(probeDesktopLocalProfileMigration).mockResolvedValue(true);
+    vi.mocked(finalizeLocalProfileMigration).mockImplementation(() => { saved = null; });
+    requireOnboarding();
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByRole("heading", {
+      name: "Collega il profilo locale al tuo account Google?",
+    })).toBeInTheDocument();
+    expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+    expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Collega e continua" }));
+
+    await waitFor(() => expect(activateDesktopAccountScope).toHaveBeenCalledOnce());
+    expect(migrateDesktopLocalProfileToAccount).toHaveBeenCalledWith("opaque-local-profile");
+    expect(finalizeLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+    expect(vi.mocked(probeDesktopLocalProfileMigration).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(migrateDesktopLocalProfileToAccount).mock.invocationCallOrder[0]);
+    expect(vi.mocked(migrateDesktopLocalProfileToAccount).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(finalizeLocalProfileMigration).mock.invocationCallOrder[0]);
+    expect(vi.mocked(finalizeLocalProfileMigration).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(activateDesktopAccountScope).mock.invocationCallOrder[0]);
+  });
+
+  it("cancels migration back to local without changing runtime ownership", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockResolvedValue(true);
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "Annulla e resta in locale" }));
+
+    expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+    expect(activateSavedLocalProfile).toHaveBeenCalledOnce();
+    expect(clearGoogleIdentitySelection).toHaveBeenCalledOnce();
+    expect(goTo).toHaveBeenCalledWith(DASHBOARD_PAGE);
+  });
+
+  it("keeps terminal migration failures closed without automatic retry", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockResolvedValue(true);
+    vi.mocked(migrateDesktopLocalProfileToAccount).mockRejectedValue({
+      code: "local_migration_review_pending",
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "Collega e continua" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta intestato/i);
+    expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
+    expect(finalizeLocalProfileMigration).not.toHaveBeenCalled();
+    expect(activateDesktopAccountScope).not.toHaveBeenCalled();
   });
 
   it("routes a new account to technical host setup and a complete account to Shell", async () => {

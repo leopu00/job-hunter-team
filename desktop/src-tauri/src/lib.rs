@@ -9,6 +9,7 @@ mod onboarding;
 #[cfg(test)]
 mod onboarding_attestation_tests;
 mod podman;
+mod profile_migration;
 mod runtime_host;
 mod voice_input;
 
@@ -30,6 +31,8 @@ pub fn run() {
             account_scope::runtime_account_scope_set,
             account_scope::runtime_account_scope_set_local,
             account_scope::runtime_local_profile_create,
+            account_scope::runtime_local_profile_migrate_to_authenticated,
+            account_scope::runtime_local_profile_migration_probe,
             account_scope::runtime_playground_local_orphan_recover,
             account_scope::runtime_playground_local_reset,
             auth_login::auth_callback_url,

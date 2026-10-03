@@ -1,14 +1,16 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 let transitions: Promise<void> = Promise.resolve();
+let migrationInFlight: { profileId: string; promise: Promise<DesktopProfileMigrationReceipt> } | null = null;
 
 export interface DesktopLocalProfile { profileId: string }
+export interface DesktopProfileMigrationReceipt { receiptHash: string }
 
 function desktopOnly(): never { throw { code: "desktop_only" }; }
 
-function serialize(operation: () => Promise<void>): Promise<void> {
+function serialize<T>(operation: () => Promise<T>): Promise<T> {
   const current = transitions.then(operation, operation);
-  transitions = current.catch(() => undefined);
+  transitions = current.then(() => undefined, () => undefined);
   return current;
 }
 
@@ -62,4 +64,37 @@ export async function recoverDesktopPlaygroundLocalOrphan(): Promise<boolean> {
     recovered = await invoke<boolean>("runtime_playground_local_orphan_recover");
   });
   return recovered;
+}
+
+/** Read-only eligibility gate. The authenticated target is derived natively. */
+export async function probeDesktopLocalProfileMigration(profileId: string): Promise<boolean> {
+  if (!isTauri()) desktopOnly();
+  return serialize(() => invoke<boolean>("runtime_local_profile_migration_probe", { profileId }));
+}
+
+/** Explicit local-to-authenticated ownership commit; no account identifier crosses IPC. */
+export function migrateDesktopLocalProfileToAccount(
+  profileId: string,
+): Promise<DesktopProfileMigrationReceipt> {
+  if (!isTauri()) desktopOnly();
+  if (migrationInFlight) {
+    return migrationInFlight.profileId === profileId
+      ? migrationInFlight.promise
+      : Promise.reject({ code: "local_migration_in_progress" });
+  }
+  let current!: Promise<DesktopProfileMigrationReceipt>;
+  current = serialize(() => invoke<DesktopProfileMigrationReceipt>(
+    "runtime_local_profile_migrate_to_authenticated",
+    { profileId },
+  )).then((receipt) => {
+    if (!receipt || typeof receipt.receiptHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(receipt.receiptHash)) {
+      throw { code: "local_migration_receipt_invalid" };
+    }
+    return receipt;
+  }).finally(() => {
+    if (migrationInFlight?.promise === current) migrationInFlight = null;
+  });
+  migrationInFlight = { profileId, promise: current };
+  return current;
 }

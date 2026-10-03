@@ -10,6 +10,7 @@ import {
   clearLocalIdentitySelection,
   createAndActivateLocalProfile,
   createAndActivatePlaygroundLocalProfile,
+  finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
   resetPlaygroundLocalProfile,
@@ -120,6 +121,18 @@ describe("local identity persistence", () => {
     clearLocalIdentitySelection();
     expect(localIdentitySelected()).toBe(false);
     expect(readLocalProfile()?.displayName).toBe("Ada Locale");
+  });
+
+  it("forgets renderer-local profile state only after native migration committed", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
+    await createAndActivateLocalProfile("Synthetic Local");
+    localStorage.setItem("jht.desktop.onboarding.local:opaque-profile-a", "subscription-v1");
+
+    finalizeLocalProfileMigration("opaque-profile-a");
+
+    expect(readLocalProfile()).toBeNull();
+    expect(localIdentitySelected()).toBe(false);
+    expect(localStorage.getItem("jht.desktop.onboarding.local:opaque-profile-a")).toBeNull();
   });
 
   it("resets A before forgetting its playground identity and onboarding marker", async () => {
