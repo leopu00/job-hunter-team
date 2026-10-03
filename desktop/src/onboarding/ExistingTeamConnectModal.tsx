@@ -10,6 +10,7 @@ import {
   type ExistingTeamVpsHost,
   type SshHostKeyProbe,
 } from "../lib/existing-team";
+import { OnboardingArtwork } from "./OnboardingArtwork";
 import "./existing-team-connect.css";
 
 type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "failed";
@@ -213,6 +214,8 @@ export default function ExistingTeamConnectModal({
           <h2 id={titleId} ref={headingRef} tabIndex={-1}>Hai già un team attivo su VPS?</h2>
           <p id={descriptionId}>Collega questa app senza reinstallare o riavviare il team. Host e chiave restano soltanto su questo computer.</p>
         </header>
+
+        <OnboardingArtwork name="environmentVps" className="existing-team-modal__artwork" />
 
         <ol className="existing-team-modal__steps" aria-label="Avanzamento collegamento VPS">
           {["Dati VPS", "Identità SSH", "Verifica team"].map((label, index) => (

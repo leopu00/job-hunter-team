@@ -47,6 +47,8 @@
   text-transform: uppercase;
 }
 
+.existing-team-modal__artwork { width: min(240px, 100%); margin-block: 12px; }
+
 .existing-team-modal__steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

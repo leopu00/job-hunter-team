@@ -1,6 +1,7 @@
 .login-screen { align-items: center; justify-content: center; }
 .login-card { position: relative; z-index: 1; width: min(420px, 100%); padding: 40px 36px; display: flex; flex-direction: column; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; background: rgba(21, 24, 21, .82); animation: enter-left .45s ease both; }
 .login-card__mark { width: 40px; height: 40px; margin-bottom: 26px; }
+.login-card__artwork { width: min(240px, 100%); margin-top: -12px; }
 .login-card h1 { font-size: clamp(38px, 4.4vw, 52px); }
 .login-card__lede { margin: 18px 0 30px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .login-card__google { width: 100%; gap: 12px; }

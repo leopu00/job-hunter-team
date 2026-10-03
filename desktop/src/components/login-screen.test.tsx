@@ -27,6 +27,8 @@ beforeEach(() => {
 describe("LoginScreen", () => {
   it("offers Google and local as independent entry paths without old personal questions", () => {
     render(<LoginScreen loadBrowsers={noBrowsers} configured />);
+    expect(screen.getByRole("img", { name: /due percorsi di identità/i }))
+      .toHaveAttribute("src", "/onboarding/identity.webp");
     expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Usa in locale" })).toBeInTheDocument();
     for (const oldQuestion of [/ruolo/i, /anni di esperienza/i, /località/i]) {
