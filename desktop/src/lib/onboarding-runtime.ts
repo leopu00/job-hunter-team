@@ -34,6 +34,7 @@ export type OnboardingInteractiveEvent =
         ];
       };
     }
+  | { kind: "invalid_action"; code: "provider_action_invalid" }
   | { kind: "exit"; code: number | null };
 
 export interface SshHostKeyProbe {
@@ -161,6 +162,12 @@ function parseDeviceAction(value: Record<string, unknown>): Extract<OnboardingIn
 export function parseOnboardingInteractiveEvent(value: unknown): OnboardingInteractiveEvent | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
+  if (row.kind === "failure") {
+    return row.code === "provider_action_invalid" &&
+      Object.keys(row).every((key) => ["kind", "code"].includes(key))
+      ? { kind: "invalid_action", code: "provider_action_invalid" }
+      : null;
+  }
   if (row.kind === "exit") {
     return row.code === null || (Number.isSafeInteger(row.code) && (row.code as number) >= -1)
       ? { kind: "exit", code: row.code as number | null }
@@ -170,9 +177,13 @@ export function parseOnboardingInteractiveEvent(value: unknown): OnboardingInter
     const actionRow = row.action && typeof row.action === "object" && !Array.isArray(row.action)
       ? row.action as Record<string, unknown>
       : null;
-    const action = actionRow?.kind === "device"
-      ? parseDeviceAction(actionRow)
-      : parseInteractiveAction(row.action);
+    if (actionRow?.kind === "device") {
+      const action = parseDeviceAction(actionRow);
+      return action
+        ? { kind: "state", status: "needs_user_action", action }
+        : { kind: "invalid_action", code: "provider_action_invalid" };
+    }
+    const action = parseInteractiveAction(row.action);
     return action ? { kind: "state", status: "needs_user_action", action } : null;
   }
   return null;

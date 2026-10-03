@@ -68,6 +68,7 @@ import { navigate } from "../shell/router";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
+const PROVIDER_ACTION_INVALID = "La richiesta del provider non è valida. Riavvia l’accesso.";
 const PROFILE_RECHECK_MS = 2_000;
 const SAFE_RUNTIME_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const CONTAINER_RUNTIME_ERRORS = new Set([
@@ -510,6 +511,7 @@ export default function DashboardApp() {
     };
     providerSessionIdentityRef.current = loginIdentityKey;
     let sessionId: string | null = null;
+    let invalidAction = false;
     try {
       providerInputRequestRef.current = null;
       setProviderLogin({
@@ -531,6 +533,20 @@ export default function DashboardApp() {
       providerExitRejectRef.current = { attempt, reject: rejectExit };
       sessionId = await startOnboardingProviderLogin(submission.host, (event) => {
         if (!attemptIsCurrent()) return;
+        if (event.kind === "invalid_action") {
+          invalidAction = true;
+          providerInputRequestRef.current = null;
+          setProviderLogin((current) => current ? {
+            ...current,
+            status: "error",
+            connectionState: "disconnected",
+            actions: [],
+            safeErrorMessage: PROVIDER_ACTION_INVALID,
+            exitCode: null,
+          } : current);
+          rejectExit(new Error(event.code));
+          return;
+        }
         if (event.kind === "state") {
           const actions: OnboardingProviderLoginAction[] = event.action.kind === "device"
             ? event.action.actions
@@ -592,6 +608,10 @@ export default function DashboardApp() {
       }
       if (providerAttemptRef.current !== attempt) return;
       providerInputRequestRef.current = null;
+      if (invalidAction) {
+        providerSessionIdentityRef.current = null;
+        return;
+      }
       setProviderLogin((current) => current ? {
         ...current,
         status: "error",

@@ -137,6 +137,7 @@ vi.mock("../onboarding", () => ({
           <>
             <p>provider-state:{props.providerLogin.status}</p>
             <p>provider-connection:{props.providerLogin.connectionState}</p>
+            {props.providerLogin.safeErrorMessage && <p>provider-error:{props.providerLogin.safeErrorMessage}</p>}
             {props.providerLogin.actions.map((action) => action.kind === "url" && <p key="url">provider-url:{action.safeUrl}</p>)}
             {props.providerLogin.actions.map((action) => action.kind === "code" && <p key="code">provider-code:{action.userCode}</p>)}
             {props.providerLogin.actions.some((action) => action.kind === "input") && (
@@ -1241,6 +1242,38 @@ describe("DashboardApp onboarding router", () => {
     expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("provider-session-first");
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledTimes(2));
     expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("terminates an invalid device action in a safe restartable state", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("provider-invalid-device-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    let emit!: Parameters<typeof startOnboardingProviderLogin>[1];
+    vi.mocked(startOnboardingProviderLogin)
+      .mockImplementationOnce(async (_host, onEvent) => {
+        emit = onEvent;
+        return "provider-session-invalid-device";
+      })
+      .mockResolvedValueOnce("provider-session-restarted");
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+
+    act(() => emit({ kind: "invalid_action", code: "provider_action_invalid" }));
+
+    expect(await screen.findByText("provider-state:error")).toBeInTheDocument();
+    expect(screen.getByText("provider-connection:disconnected")).toBeInTheDocument();
+    expect(screen.getByText("provider-error:La richiesta del provider non è valida. Riavvia l’accesso.")).toBeInTheDocument();
+    expect(screen.queryByText(/provider-url:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/provider-code:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+    await waitFor(() => expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("provider-session-invalid-device"));
+
+    await user.click(screen.getByRole("button", { name: "restart-provider-login" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledTimes(2));
   });
 
   it("ignores stale State and a late session while the next account scope is pending", async () => {
