@@ -127,46 +127,6 @@
   padding: 8px 12px;
 }
 
-.oauth-login-takeover__terminal {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-void);
-}
-
-.oauth-login-takeover__terminal-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px 14px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-bright);
-  font-size: 0.76rem;
-}
-
-.oauth-login-takeover__terminal-heading span { color: var(--color-muted); font-size: 0.7rem; }
-
-.oauth-login-takeover__terminal pre {
-  width: 100%;
-  max-width: 100%;
-  max-height: 240px;
-  min-height: 116px;
-  margin: 0;
-  overflow: auto;
-  padding: 14px;
-  color: var(--color-base);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.78rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.oauth-login-takeover__terminal pre span { display: block; min-width: 0; }
-
 .oauth-login-takeover__input {
   min-width: 0;
   display: grid;

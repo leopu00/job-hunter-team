@@ -9,6 +9,7 @@ import {
   probeOnboardingSshHostKey,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
+  sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
   type SshHostKeyProbe,
@@ -188,19 +189,37 @@ describe("SSH host-key consent contract", () => {
     });
   });
 
-  it("accepts structured user actions without parsing PTY output", async () => {
+  it("accepts each structured user-action variant without parsing PTY output", async () => {
     vi.mocked(invoke).mockResolvedValue({ sessionId: "synthetic-session" });
     const onEvent = vi.fn();
 
     await startOnboardingProviderLogin(host, onEvent, vi.fn());
-    channels[0].onmessage?.({ kind: "output", text: "redacted terminal line" });
+    channels[0].onmessage?.({ kind: "output", text: "https://pty.invalid?token=raw-secret" });
+    expect(onEvent).not.toHaveBeenCalled();
     channels[0].onmessage?.({
       kind: "state",
       status: "needs_user_action",
       action: {
+        kind: "url",
         instruction: "Completa l’accesso nel browser.",
         safeUrl: "https://example.invalid/device",
+      },
+    });
+    channels[0].onmessage?.({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "code",
+        instruction: "Inserisci il codice mostrato.",
         userCode: "ABCD-EFGH",
+      },
+    });
+    channels[0].onmessage?.({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input",
+        instruction: "Invia la risposta richiesta.",
         inputRequest: {
           id: "browser-confirmation",
           label: "Codice restituito",
@@ -209,19 +228,34 @@ describe("SSH host-key consent contract", () => {
       },
     });
 
-    expect(onEvent).toHaveBeenNthCalledWith(1, { kind: "output", text: "redacted terminal line" });
+    expect(onEvent).toHaveBeenNthCalledWith(1, {
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "url",
+        instruction: "Completa l’accesso nel browser.",
+        safeUrl: "https://example.invalid/device",
+      },
+    });
     expect(onEvent).toHaveBeenNthCalledWith(2, {
       kind: "state",
       status: "needs_user_action",
       action: {
-        instruction: "Completa l’accesso nel browser.",
-        safeUrl: "https://example.invalid/device",
+        kind: "code",
+        instruction: "Inserisci il codice mostrato.",
         userCode: "ABCD-EFGH",
+      },
+    });
+    expect(onEvent).toHaveBeenNthCalledWith(3, {
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input",
+        instruction: "Invia la risposta richiesta.",
         inputRequest: {
           id: "browser-confirmation",
           label: "Codice restituito",
           description: "Invialo dopo aver completato il browser.",
-          placeholder: undefined,
           submitLabel: undefined,
           secret: undefined,
           inputMode: undefined,
@@ -234,14 +268,41 @@ describe("SSH host-key consent contract", () => {
     expect(parseOnboardingInteractiveEvent({
       kind: "state",
       status: "needs_user_action",
-      action: { instruction: "Copy token from https://unsafe.invalid" },
+      action: { kind: "url", instruction: "Copy token from https://unsafe.invalid", safeUrl: "https://safe.invalid" },
     })).toBeNull();
     expect(parseOnboardingInteractiveEvent({
       kind: "state",
       status: "needs_user_action",
-      action: { instruction: "Apri il browser.", safeUrl: "http://unsafe.invalid" },
+      action: { kind: "url", instruction: "Apri il browser.", safeUrl: "http://unsafe.invalid" },
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "url", instruction: "Apri il browser.", safeUrl: "https://safe.invalid", userCode: "MIXED",
+      },
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input", instruction: "Rispondi.",
+        inputRequest: { id: "request", label: "Risposta", placeholder: "non-previsto" },
+      },
     })).toBeNull();
     expect(parseOnboardingInteractiveEvent({ kind: "exit", code: "0" })).toBeNull();
     expect(parseOnboardingInteractiveEvent({ kind: "unknown", text: "raw" })).toBeNull();
+  });
+
+  it("binds provider input IPC to the exact session and request id", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await sendOnboardingProviderInput("session-opaque", "request-opaque", "response");
+
+    expect(invoke).toHaveBeenCalledWith("onboarding_provider_login_input", {
+      sessionId: "session-opaque",
+      requestId: "request-opaque",
+      input: "response",
+    });
   });
 });
