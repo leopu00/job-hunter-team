@@ -26,6 +26,7 @@ function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
     onCancelHostKey: vi.fn(),
     onProviderInput: vi.fn().mockResolvedValue(undefined),
     onProviderClose: vi.fn().mockResolvedValue(undefined),
+    onProviderRestart: vi.fn().mockResolvedValue(undefined),
     onRetry: vi.fn().mockResolvedValue(undefined),
     onRestart: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -350,17 +351,60 @@ describe("OnboardingFlow technical setup", () => {
     expect(onCancelHostKey).toHaveBeenCalledOnce();
   });
 
-  it("keeps provider input fail-closed and retryable", async () => {
-    const onProviderInput = vi.fn().mockRejectedValue(new Error("synthetic"));
+  it("mounts the OAuth takeover with structured action data and no inferred input", () => {
     renderFlow({
       runtime: { status: "working", stage: "provider-login", message: "Login in corso" },
-      providerLogin: { provider: "claude", status: "active", output: "Open browser" },
+      providerLogin: {
+        provider: "codex",
+        status: "needs_user_action",
+        sanitizedOutput: ["Authorization: Bearer synthetic-secret"],
+        action: {
+          instruction: "Apri il browser e inserisci il codice temporaneo.",
+          safeUrl: "https://example.invalid/device",
+          userCode: "ABCD-EFGH",
+        },
+        connectionState: "connected",
+        startedAt: Date.now() - 2_000,
+      },
+    });
+
+    expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
+    expect(screen.getByText("https://example.invalid/device")).toBeInTheDocument();
+    expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(screen.getByRole("log")).toHaveTextContent("Bearer [redatto]");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("synthetic-secret");
+  });
+
+  it("keeps requested provider input fail-closed and exposes cancel and restart", async () => {
+    const onProviderInput = vi.fn().mockRejectedValue(new Error("synthetic"));
+    const onProviderClose = vi.fn().mockResolvedValue(undefined);
+    const onProviderRestart = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: { status: "working", stage: "provider-login", message: "Login in corso" },
+      providerLogin: {
+        provider: "claude",
+        status: "needs_user_action",
+        sanitizedOutput: ["Open browser"],
+        action: {
+          instruction: "Conferma la richiesta del provider.",
+          inputRequest: { id: "confirmation", label: "Risposta richiesta" },
+        },
+        connectionState: "connected",
+        startedAt: Date.now(),
+      },
       onProviderInput,
+      onProviderClose,
+      onProviderRestart,
     });
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/risposta alla sessione/i), "response");
-    await user.click(screen.getByRole("button", { name: /^invia/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/invio non riuscito/i);
-    expect(screen.getByLabelText(/risposta alla sessione/i)).toHaveValue("response");
+    await user.type(screen.getByLabelText(/risposta richiesta/i), "response");
+    await user.click(screen.getByRole("button", { name: /invia risposta/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/risposta non è stata inviata/i);
+    expect(screen.getByLabelText(/risposta richiesta/i)).toHaveValue("response");
+    await user.click(screen.getByRole("button", { name: "Annulla" }));
+    expect(onProviderClose).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: /riavvia accesso/i }));
+    expect(onProviderRestart).toHaveBeenCalledOnce();
   });
 });

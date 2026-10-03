@@ -81,6 +81,16 @@ const PROVIDER_RUNTIME_ERRORS = new Set([
   "provider_timeout",
 ]);
 
+function providerLoginInstruction(provider: OnboardingSubmission["provider"]): string {
+  if (provider === "codex") return "Completa l’accesso nel browser quando il provider mostra la richiesta verificata.";
+  return "Segui la richiesta verificata del provider per completare l’accesso al tuo abbonamento.";
+}
+
+function appendProviderOutput(current: string[], text: string): string[] {
+  const bounded = `${current.join("")}${text}`.slice(-MAX_PROVIDER_OUTPUT);
+  return bounded ? [bounded] : [];
+}
+
 function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
     ? error as { code?: unknown; message?: unknown; retryable?: unknown }
@@ -229,7 +239,9 @@ export default function DashboardApp() {
   } | null>(null);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
-  const providerExitRejectRef = useRef<((error: Error) => void) | null>(null);
+  const providerInputRequestRef = useRef<string | null>(null);
+  const providerExitRejectRef = useRef<{ attempt: number; reject: (error: Error) => void } | null>(null);
+  const providerStoppingAttemptRef = useRef<number | null>(null);
   const providerAttemptRef = useRef(0);
   const resumeAttemptedIdentityRef = useRef<string | null>(null);
   const activeIdentityKeyRef = useRef<string | null>(identityKey);
@@ -284,6 +296,13 @@ export default function DashboardApp() {
     setOnboardingUiVersion(0);
     resumeAttemptedIdentityRef.current = null;
     submissionRef.current = null;
+    providerAttemptRef.current += 1;
+    providerSessionRef.current = null;
+    providerInputRequestRef.current = null;
+    providerStoppingAttemptRef.current = null;
+    providerExitRejectRef.current?.reject(new Error("account-changed"));
+    providerExitRejectRef.current = null;
+    setProviderLogin(null);
     if (!identityKey) {
       setGate({ phase: "loading" });
       return;
@@ -451,7 +470,15 @@ export default function DashboardApp() {
     let sessionId: string | null = null;
     let exited = false;
     try {
-      setProviderLogin({ provider: submission.provider, status: "starting", output: "" });
+      providerInputRequestRef.current = null;
+      setProviderLogin({
+        provider: submission.provider,
+        status: "connecting",
+        sanitizedOutput: [],
+        action: { instruction: providerLoginInstruction(submission.provider) },
+        connectionState: "connecting",
+        startedAt: Date.now(),
+      });
       setRuntime({ status: "working", stage: "provider-login", message: "Attendo il login ufficiale del provider." });
       beginActivityInvocation();
       let resolveExit!: () => void;
@@ -460,75 +487,132 @@ export default function DashboardApp() {
         resolveExit = resolve;
         rejectExit = reject;
       });
-      providerExitRejectRef.current = rejectExit;
+      providerExitRejectRef.current = { attempt, reject: rejectExit };
       sessionId = await startOnboardingProviderLogin(submission.host, (event) => {
         if (providerAttemptRef.current !== attempt) return;
         if (event.kind === "output") {
           setProviderLogin((current) => {
             if (!current || current.provider !== submission.provider) return current;
-            const output = `${current.output}${event.text}`.slice(-MAX_PROVIDER_OUTPUT);
-            return { ...current, output };
+            return { ...current, sanitizedOutput: appendProviderOutput(current.sanitizedOutput, event.text) };
           });
           return;
         }
+        if (event.kind === "state") {
+          providerInputRequestRef.current = event.action.inputRequest?.id ?? null;
+          setProviderLogin((current) => current ? {
+            ...current,
+            status: "needs_user_action",
+            connectionState: "connected",
+            action: event.action,
+          } : current);
+          return;
+        }
         exited = true;
+        providerInputRequestRef.current = null;
         setProviderLogin((current) => current ? {
           ...current,
-          status: "exited",
+          status: event.code === 0 ? "needs_user_action" : "error",
+          connectionState: "disconnected",
+          safeErrorMessage: event.code === 0 ? undefined : failureMessage("provider-login"),
           exitCode: event.code,
         } : current);
-        if (event.kind === "exit") {
-          if (event.code === 0) resolveExit();
-          else rejectExit(new Error("provider-login-failed"));
-        }
+        if (event.code === 0) resolveExit();
+        else rejectExit(new Error("provider-login-failed"));
       }, recordActivityProgress);
       providerSessionRef.current = sessionId;
-      setProviderLogin((current) => current?.status === "starting" ? { ...current, status: "active" } : current);
+      setProviderLogin((current) => current?.status === "connecting" ? {
+        ...current,
+        status: "needs_user_action",
+        connectionState: "connected",
+      } : current);
       if (!exited && (submission.provider === "claude" || submission.provider === "kimi")) {
         await sendOnboardingProviderInput(sessionId, "/login");
       }
       await exit;
       await closeOnboardingProviderLogin(sessionId);
       providerSessionRef.current = null;
-      providerExitRejectRef.current = null;
+      if (providerExitRejectRef.current?.attempt === attempt) providerExitRejectRef.current = null;
       sessionId = null;
       const snapshot = await readOnboardingSnapshot(submission.host);
+      if (providerAttemptRef.current !== attempt) return;
       if (!snapshot.providerAuthenticated) throw new Error("provider-login-unverified");
     } catch (error) {
-      providerExitRejectRef.current = null;
+      if (providerExitRejectRef.current?.attempt === attempt) providerExitRejectRef.current = null;
       if (sessionId && providerSessionRef.current === sessionId) {
         await closeOnboardingProviderLogin(sessionId).catch(() => undefined);
         providerSessionRef.current = null;
       }
-      if (providerAttemptRef.current !== attempt) throw error;
-      setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
+      if (providerStoppingAttemptRef.current === attempt) {
+        providerStoppingAttemptRef.current = null;
+        return;
+      }
+      if (providerAttemptRef.current !== attempt) return;
+      providerInputRequestRef.current = null;
+      setProviderLogin((current) => current ? {
+        ...current,
+        status: "error",
+        connectionState: "disconnected",
+        safeErrorMessage: failureMessage("provider-login"),
+        exitCode: null,
+      } : current);
       return fail("provider-login", error);
     }
+    providerInputRequestRef.current = null;
+    setProviderLogin(null);
     await startTeam(submission);
   }, [beginActivityInvocation, fail, recordActivityProgress, setRuntime, startTeam]);
 
   const sendProviderInput = useCallback(async (input: string) => {
     const sessionId = providerSessionRef.current;
-    if (!sessionId) throw new Error("provider-session-missing");
+    if (!sessionId || !providerInputRequestRef.current) throw new Error("provider-input-not-requested");
     await sendOnboardingProviderInput(sessionId, input);
+    providerInputRequestRef.current = null;
+    setProviderLogin((current) => current ? {
+      ...current,
+      action: { instruction: "Risposta inviata. Attendo la verifica del provider." },
+    } : current);
   }, []);
 
   const closeProviderLogin = useCallback(async () => {
     const sessionId = providerSessionRef.current;
-    if (!sessionId) return;
-    await closeOnboardingProviderLogin(sessionId);
-    if (providerSessionRef.current === sessionId) providerSessionRef.current = null;
-    providerExitRejectRef.current?.(new Error("provider-login-closed"));
-    providerExitRejectRef.current = null;
-    setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
-  }, []);
+    const attempt = providerAttemptRef.current;
+    providerStoppingAttemptRef.current = attempt;
+    try {
+      if (sessionId) await closeOnboardingProviderLogin(sessionId);
+    } catch (error) {
+      providerStoppingAttemptRef.current = null;
+      throw error;
+    }
+    providerAttemptRef.current = attempt + 1;
+    if (sessionId && providerSessionRef.current === sessionId) providerSessionRef.current = null;
+    providerInputRequestRef.current = null;
+    const pendingExit = providerExitRejectRef.current;
+    if (pendingExit?.attempt === attempt) {
+      providerExitRejectRef.current = null;
+      pendingExit.reject(new Error("provider-login-closed"));
+    }
+    providerStoppingAttemptRef.current = null;
+    setProviderLogin(null);
+    setRuntime({
+      status: "action-required",
+      stage: "provider-login",
+      message: "L’accesso è stato annullato. Riavvialo quando vuoi continuare.",
+    });
+  }, [setRuntime]);
+
+  const restartProviderLogin = useCallback(async () => {
+    await closeProviderLogin();
+    await loginProvider();
+  }, [closeProviderLogin, loginProvider]);
 
   const restartOnboarding = useCallback(async () => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     const providerSession = providerSessionRef.current;
     providerAttemptRef.current += 1;
     providerSessionRef.current = null;
-    providerExitRejectRef.current?.(new Error("onboarding-restarted"));
+    providerInputRequestRef.current = null;
+    providerStoppingAttemptRef.current = null;
+    providerExitRejectRef.current?.reject(new Error("onboarding-restarted"));
     providerExitRejectRef.current = null;
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
     resetOnboardingMarker(markerId);
@@ -770,6 +854,7 @@ export default function DashboardApp() {
         onCancelHostKey={cancelHostKey}
         onProviderInput={sendProviderInput}
         onProviderClose={closeProviderLogin}
+        onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRestart={restartOnboarding}
       />

@@ -1,6 +1,8 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   ExecutionHost,
+  OnboardingProviderLoginAction,
+  OnboardingProviderLoginInputRequest,
   OnboardingRuntimeSnapshot,
   OnboardingSubmission,
 } from "./onboarding";
@@ -20,6 +22,7 @@ export interface OnboardingNativeProgress {
 
 export type OnboardingInteractiveEvent =
   | { kind: "output"; text: string }
+  | { kind: "state"; status: "needs_user_action"; action: OnboardingProviderLoginAction }
   | { kind: "exit"; code: number | null };
 
 export interface SshHostKeyProbe {
@@ -33,7 +36,9 @@ function desktopOnly(): never { throw { code: "desktop_only" }; }
 const PROGRESS_STAGES = new Set<OnboardingNativeProgressStage>(["engine", "runtime", "container", "provider", "login", "team", "assistant"]);
 const PROGRESS_STATUSES = new Set<OnboardingNativeProgressStatus>(["start", "progress", "done", "error"]);
 const SAFE_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+const SAFE_INTERACTIVE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const UNSAFE_ACTIVITY_TEXT = /[\r\n\0/\\]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b|@/i;
+const UNSAFE_INTERACTIVE_TEXT = /[\r\n\0]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|@/i;
 const FALLBACK_PROGRESS_MESSAGE: Record<OnboardingNativeProgressStage, string> = {
   engine: "Verifico l’ambiente di esecuzione.",
   runtime: "Preparo il runtime verificato.",
@@ -62,6 +67,76 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
   if (code === undefined || retryable === undefined) return null;
   if (status === "error" ? code === null || typeof retryable !== "boolean" : code !== null || retryable !== null) return null;
   return { stage, status, message, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable };
+}
+
+function safeInteractiveText(value: unknown, maximum: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= maximum && !UNSAFE_INTERACTIVE_TEXT.test(text) ? text : null;
+}
+
+function parseInputRequest(value: unknown): OnboardingProviderLoginInputRequest | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = typeof row.id === "string" && SAFE_INTERACTIVE_ID.test(row.id) ? row.id : null;
+  const label = safeInteractiveText(row.label, 120);
+  const description = row.description === undefined ? undefined : safeInteractiveText(row.description, 240);
+  const placeholder = row.placeholder === undefined ? undefined : safeInteractiveText(row.placeholder, 120);
+  const submitLabel = row.submitLabel === undefined ? undefined : safeInteractiveText(row.submitLabel, 80);
+  const secret = row.secret === undefined ? undefined : typeof row.secret === "boolean" ? row.secret : null;
+  const inputMode = row.inputMode === undefined
+    ? undefined
+    : row.inputMode === "text" || row.inputMode === "numeric" ? row.inputMode : null;
+  if (!id || !label || description === null || placeholder === null || submitLabel === null ||
+      secret === null || inputMode === null) return null;
+  return { id, label, description, placeholder, submitLabel, secret, inputMode };
+}
+
+function parseInteractiveAction(value: unknown): OnboardingProviderLoginAction | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const instruction = safeInteractiveText(row.instruction, 240);
+  if (!instruction) return null;
+  let safeUrl: string | undefined;
+  if (row.safeUrl !== undefined) {
+    if (typeof row.safeUrl !== "string" || row.safeUrl.length > 2_048) return null;
+    try {
+      const parsed = new URL(row.safeUrl);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+      safeUrl = parsed.toString();
+    } catch {
+      return null;
+    }
+  }
+  const userCode = row.userCode === undefined
+    ? undefined
+    : typeof row.userCode === "string" && row.userCode.length > 0 && row.userCode.length <= 128 &&
+      !/[\r\n\0]/.test(row.userCode) ? row.userCode : null;
+  const inputRequest = parseInputRequest(row.inputRequest);
+  if (userCode === null || inputRequest === null) return null;
+  return { instruction, safeUrl, userCode, inputRequest };
+}
+
+/** Validates the native interactive boundary without deriving actions from PTY text. */
+export function parseOnboardingInteractiveEvent(value: unknown): OnboardingInteractiveEvent | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.kind === "output") {
+    return typeof row.text === "string" && row.text.length <= 32_768
+      ? { kind: "output", text: row.text }
+      : null;
+  }
+  if (row.kind === "exit") {
+    return row.code === null || (Number.isSafeInteger(row.code) && (row.code as number) >= -1)
+      ? { kind: "exit", code: row.code as number | null }
+      : null;
+  }
+  if (row.kind === "state" && row.status === "needs_user_action") {
+    const action = parseInteractiveAction(row.action);
+    return action ? { kind: "state", status: "needs_user_action", action } : null;
+  }
+  return null;
 }
 
 function progressChannel(onProgress: (progress: OnboardingNativeProgress) => void): Channel<unknown> {
@@ -106,8 +181,11 @@ export async function startOnboardingProviderLogin(
   onProgress: (progress: OnboardingNativeProgress) => void,
 ): Promise<string> {
   if (!isTauri()) desktopOnly();
-  const channel = new Channel<OnboardingInteractiveEvent>();
-  channel.onmessage = onEvent;
+  const channel = new Channel<unknown>();
+  channel.onmessage = (value) => {
+    const event = parseOnboardingInteractiveEvent(value);
+    if (event) onEvent(event);
+  };
   const result = await invoke<{ sessionId: string }>("onboarding_provider_login", {
     host,
     onEvent: channel,
