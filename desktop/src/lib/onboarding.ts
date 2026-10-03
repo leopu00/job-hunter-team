@@ -41,6 +41,28 @@ export interface OnboardingSshHostKeyConfirmation {
   fingerprint: `SHA256:${string}`;
 }
 
+export interface OnboardingActivityEntry {
+  id: string;
+  invocation: number;
+  nativeStage: "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
+  sequence: number;
+  stage: OperationalStage;
+  name: string;
+  description: string;
+  elapsedMs: number;
+  stageElapsedMs: number;
+  updatedAt: number;
+  status: "active" | "completed" | "failed";
+}
+
+export interface OnboardingActivityState {
+  startedAt: number;
+  invocation: number;
+  lastSequence: number;
+  current: OnboardingActivityEntry | null;
+  events: OnboardingActivityEntry[];
+}
+
 /** Facts independently re-read from the selected runtime host. */
 export interface OnboardingRuntimeSnapshot {
   runtimeInstalled: boolean;
@@ -59,6 +81,7 @@ export interface OnboardingFlowProps {
   account: OnboardingAccount;
   platform: DesktopPlatform;
   runtime: OnboardingRuntimeState;
+  activity?: OnboardingActivityState | null;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
   onRuntimeAction: (stage: "provider-login" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;

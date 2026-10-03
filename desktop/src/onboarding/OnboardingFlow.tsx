@@ -121,14 +121,28 @@ function ProviderLoginConsole({
   );
 }
 
-function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose">) {
+function formatElapsed(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose">) {
   const [pending, setPending] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     setPending(false);
     setActionFailed(false);
   }, [runtime.status, "stage" in runtime ? runtime.stage : "ready"]);
+
+  useEffect(() => {
+    if (!activity || runtime.status !== "working") return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [activity?.startedAt, runtime.status]);
 
   if (runtime.status === "ready") {
     return (
@@ -152,6 +166,9 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
   const actionRequired = runtime.status === "action-required";
   const activeIndex = RUNTIME_STAGES.findIndex((stage) => stage.value === runtime.stage);
   const activeLabel = RUNTIME_STAGES[activeIndex]?.label ?? "Configurazione";
+  const completedSteps = Math.max(0, activeIndex);
+  const currentActivity = activity?.current?.stage === runtime.stage ? activity.current : undefined;
+  const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
 
   async function invoke(action: () => Promise<void>) {
     if (pending) return;
@@ -181,6 +198,22 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
           <p className="onboarding-eyebrow">{failed ? "Intervento richiesto" : actionRequired ? "Tocca a te" : "Configurazione in corso"}</p>
           <h2>{failed ? `Configura di nuovo: ${activeLabel}` : actionRequired ? activeLabel : `Prepariamo: ${activeLabel}`}</h2>
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
+          <section className="onboarding-runtime-progress" aria-label="Avanzamento configurazione">
+            <div className="onboarding-runtime-progress__heading">
+              <div><strong>{currentActivity?.name ?? activeLabel}</strong><small>{currentActivity?.description ?? runtime.message}</small></div>
+              <span>Trascorso <time>{elapsed}</time></span>
+            </div>
+            <progress aria-label="Passaggi completati" max={RUNTIME_STAGES.length} value={completedSteps} />
+            <div className="onboarding-runtime-progress__meta"><span>Passaggio {Math.max(1, activeIndex + 1)} di {RUNTIME_STAGES.length}</span><span>{completedSteps} completati</span></div>
+            {runtime.status === "working" && (
+              <div
+                className="onboarding-runtime-progress__indeterminate"
+                role="progressbar"
+                aria-label={`Avanzamento ${currentActivity?.name ?? activeLabel}`}
+                aria-valuetext="Operazione in corso; percentuale non disponibile"
+              ><i /></div>
+            )}
+          </section>
           <div className="onboarding-runtime-status" aria-live="polite" role={failed ? "alert" : "status"}>
             <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
             <div><strong>{failed ? "Operazione interrotta in sicurezza" : actionRequired ? "È necessaria una tua azione" : "Non chiudere l’app"}</strong><small>{runtime.message}</small>{failed && runtime.code && <small>Codice diagnostico: {runtime.code}</small>}</div>
@@ -193,6 +226,20 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
               </li>
             ))}
           </ol>
+          <details className="onboarding-activity-details">
+            <summary>Dettagli attività <span>{activity?.events.length ?? 0}</span></summary>
+            {activity?.events.length ? (
+              <ol>
+                {activity.events.map((event) => (
+                  <li key={event.id} className={event.status === "completed" ? "is-complete" : event.status === "failed" ? "is-failed" : "is-active"}>
+                    <time>{formatElapsed(event.elapsedMs)}</time>
+                    <div><strong>{event.name}</strong><small>{event.description}</small></div>
+                    <span>{event.status === "completed" ? "Completato" : event.status === "failed" ? "Errore" : "In corso"}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : <p>In attesa del primo aggiornamento verificato.</p>}
+          </details>
           {runtime.stage === "provider-login" && (
             <ProviderLoginConsole providerLogin={providerLogin} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />
           )}
@@ -226,7 +273,7 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: OnboardingFlowProps) {
   const localRuntimeSupported = platform === "macos" || platform === "linux";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
@@ -245,7 +292,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
+  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
