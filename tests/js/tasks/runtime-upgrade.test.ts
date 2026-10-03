@@ -25,6 +25,7 @@ const REPO = path.resolve(__dirname, "../../..");
 const WRAPPER = path.join(REPO, "scripts", "jht-wrapper.sh");
 const HOST_SETUP = path.join(REPO, "scripts", "host-setup.sh");
 const POWERSHELL_WRAPPER = path.join(REPO, "scripts", "jht-wrapper.ps1");
+const PODMAN_SYSTEMD_UNIT = `podman-compose${String.fromCharCode(64)}jht.service`;
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
 // Regressione reale che il desktop deve riconoscere prima di invocare il
@@ -168,6 +169,12 @@ function makeSandbox({
       '    if [ -n "$image" ]; then echo jht; fi',
       "    exit 0 ;;",
       "  inspect)",
+      '    if [ "$1:$2" = --type:container ]; then',
+      '      target="$3"; shift 3 || true',
+      '      [ "$target" = aaaaaaaaaaaa ] || exit 1',
+      '      printf "true jht\\n"',
+      '      exit 0',
+      '    fi',
       '    target="$1"; shift || true',
       '    if [ -z "$image" ]; then exit 1; fi',
       '    if [ "$target" = "jht" ]; then echo "$image"; else echo "$FAKE_CANDIDATE"; fi',
@@ -185,10 +192,13 @@ function makeSandbox({
       "  compose)",
       '    args="$*"',
       '    case " $args " in',
+      '      *" ps -q jht "*) if [ -n "$image" ]; then echo aaaaaaaaaaaa; fi; exit 0 ;;',
       '      *" config -q "*) exit 0 ;;',
       '      *" pull "*) exit 0 ;;',
       '      *" rm "*) : > "$image_file"; exit 0 ;;',
-      '      *" up "*) printf "%s" "${JHT_IMAGE:-$FAKE_CANDIDATE}" > "$image_file"; exit 0 ;;',
+      '      *" up "*)',
+      '        case " $args " in *" -f $FAKE_RUNTIME/docker-compose.yml --project-directory $FAKE_RUNTIME "*) ;; *) [ "${FAKE_ALLOW_LEGACY_COMPOSE:-0}" = 1 ] || exit 74 ;; esac',
+      '        printf "%s" "${JHT_IMAGE:-$FAKE_CANDIDATE}" > "$image_file"; exit 0 ;;',
       "      *) exit 0 ;;",
       "    esac ;;",
       "  *) exit 1 ;;",
@@ -208,6 +218,147 @@ function makeSandbox({
       existsSync(dockerLog)
         ? readFileSync(dockerLog, "utf8").trim().split("\n").filter(Boolean)
         : [],
+  };
+}
+
+type PodmanHarness = {
+  env: Record<string, string>;
+  labelHash: () => string;
+  setLabelHash: (value: string) => void;
+  labelConfig: () => string;
+  labelWorking: () => string;
+};
+
+function enableExactPodmanHarness(sb: Sandbox): PodmanHarness {
+  const bin = path.join(sb.root, "bin");
+  const adapterDir = path.join(sb.runtime, "bin");
+  const shim = path.join(adapterDir, "docker");
+  const selection = path.join(sb.runtime, "container-runtime");
+  const machine = path.join(sb.runtime, "podman-machine");
+  const labelHash = path.join(sb.root, "label-hash");
+  const labelConfig = path.join(sb.root, "label-config");
+  const labelWorking = path.join(sb.root, "label-working");
+  const oldHash = "a".repeat(64);
+  mkdirSync(adapterDir);
+  writeFileSync(selection, "podman\n", "utf8");
+  writeFileSync(machine, "jht-podman\n", "utf8");
+  writeFileSync(labelHash, oldHash, "utf8");
+  writeFileSync(labelConfig, path.join(sb.runtime, "docker-compose.yml"), "utf8");
+  writeFileSync(labelWorking, sb.runtime, "utf8");
+
+  writeExec(
+    shim,
+    [
+      "# JHT_PODMAN_DOCKER_SHIM=1",
+      'printf \'docker %s\\n\' "$*" >> "$FAKE_DOCKER_LOG"',
+      'cmd="$1"; shift || true',
+      'case "$cmd" in',
+      "  info) exit 0 ;;",
+      "  inspect)",
+      '    if [ "$1:$2" = --type:container ]; then',
+      '      [ "$3" = aaaaaaaaaaaa ] || exit 91',
+      `      printf "jht|true|jht|jht|jht|jht|1|%s|%s|1.6.0|${PODMAN_SYSTEMD_UNIT}|%s\\n" "$(cat "$FAKE_LABEL_WORKING")" "$(cat "$FAKE_LABEL_CONFIG")" "$(cat "$FAKE_LABEL_HASH")"`,
+      "      exit 0",
+      "    fi",
+      '    target="$1"; shift || true',
+      '    [ -s "$FAKE_STATE" ] || exit 1',
+      '    case "$*" in',
+      '      *".Image"*) cat "$FAKE_STATE" ;;',
+      '      *".State.Running"*) printf "true\\n" ;;',
+      '      *) cat "$FAKE_STATE" ;;',
+      "    esac ;;",
+      "  image) echo \"$FAKE_CANDIDATE\" ;;",
+      "  exec)",
+      '    case "$*" in',
+      '      *"node -e"*) printf "1 1 1" ;;',
+      '      *"tmux has-session"*|*"test -f"*) exit 0 ;;',
+      '      *"--version"*) case "$(cat "$FAKE_STATE")" in *old*) echo 0.3.3 ;; *) echo 0.4.0 ;; esac ;;',
+      "      *) exit 0 ;;",
+      "    esac ;;",
+      "  *) exit 92 ;;",
+      "esac",
+    ].join("\n"),
+  );
+  writeExec(
+    path.join(bin, "podman"),
+    [
+      'if [ "$1" = --version ]; then echo "podman version 6.1.3"; exit 0; fi',
+      'printf \'podman connection=%s argv=%s\\n\' "${CONTAINER_CONNECTION:-}" "$*" >> "$FAKE_DOCKER_LOG"',
+      '[ "$1:$2:$3" = --connection:jht-podman:info ] && exit 0',
+      'if [ "$1" = ps ]; then',
+      '  [ "$CONTAINER_CONNECTION" = jht-podman ] || exit 125',
+      '  case " $* " in *" --connection "*) exit 125 ;; esac',
+      "  exit 0",
+      "fi",
+      "exit 126",
+    ].join("\n"),
+  );
+  writeExec(
+    path.join(bin, "podman-compose"),
+    [
+      'if [ "$1" = --version ]; then echo "podman-compose version 1.6.0"; exit 0; fi',
+      'dry=0; project=""; podman_path=""; file=""',
+      'while [ "$#" -gt 0 ]; do',
+      '  case "$1" in',
+      '    --verbose) shift ;;',
+      '    --dry-run) dry=1; shift ;;',
+      '    --project-name|-p) project="$2"; shift 2 ;;',
+      '    --podman-path) podman_path="$2"; shift 2 ;;',
+      '    -f) file="$2"; shift 2 ;;',
+      '    *) command="$1"; shift; break ;;',
+      "  esac",
+      "done",
+      '[ "$project" = jht ] || exit 118',
+      'printf \'provider dry=%s project=%s file=%s command=%s args=%s\\n\' "$dry" "$project" "$file" "$command" "$*" >> "$FAKE_DOCKER_LOG"',
+      'hash="' + oldHash + '"',
+      'grep -q "example/new" "$file" && hash="' + "b".repeat(64) + '"',
+      'if [ "$dry" = 1 ]; then',
+      '  [ "$command:$*" = "up:-d --force-recreate jht" ] || exit 117',
+      '  "$podman_path" ps -a --filter label=io.podman.compose.project=jht --format "{{.ID}}"',
+      '  printf "INFO --label io.podman.compose.config-hash=%s --label next=value\\n" "$hash" >&2',
+      "  exit 0",
+      "fi",
+      'case "$command" in',
+      '  ps) [ "$*" = -q ] || exit 116; [ -s "$FAKE_STATE" ] && echo aaaaaaaaaaaa ;;',
+      "  config) exit 0 ;;",
+      "  pull) exit 0 ;;",
+      "  up)",
+      '    [ "$file" = "$FAKE_RUNTIME/docker-compose.yml" ] || exit 74',
+      '    [ "$*" = "-d --force-recreate jht" ] || exit 73',
+      '    printf "%s" "${JHT_IMAGE:-$FAKE_CANDIDATE}" > "$FAKE_STATE"',
+      '    printf "%s" "$hash" > "$FAKE_LABEL_HASH"',
+      '    printf "%s" "$FAKE_RUNTIME" > "$FAKE_LABEL_WORKING"',
+      '    printf "%s" "$FAKE_RUNTIME/docker-compose.yml" > "$FAKE_LABEL_CONFIG" ;;',
+      '  rm) : > "$FAKE_STATE" ;;',
+      "  *) exit 115 ;;",
+      "esac",
+    ].join("\n"),
+  );
+
+  copyFileSync(WRAPPER, path.join(sb.root, "release", "jht-wrapper.sh"));
+  chmodSync(path.join(sb.root, "release", "jht-wrapper.sh"), 0o755);
+  const digest = (file: string) =>
+    createHash("sha256").update(readFileSync(file)).digest("hex");
+  const manifest = path.join(sb.runtime, ".runtime-integrity");
+  const lines = readFileSync(manifest, "utf8").trim().split("\n");
+  lines.push(
+    `container-runtime=${digest(selection)}`,
+    `podman-machine=${digest(machine)}`,
+    `docker-shim=${digest(shim)}`,
+    "",
+  );
+  writeFileSync(manifest, lines.join("\n"), "utf8");
+
+  return {
+    env: {
+      FAKE_LABEL_HASH: labelHash,
+      FAKE_LABEL_CONFIG: labelConfig,
+      FAKE_LABEL_WORKING: labelWorking,
+    },
+    labelHash: () => readFileSync(labelHash, "utf8"),
+    setLabelHash: (value: string) => writeFileSync(labelHash, value, "utf8"),
+    labelConfig: () => readFileSync(labelConfig, "utf8"),
+    labelWorking: () => readFileSync(labelWorking, "utf8"),
   };
 }
 
@@ -232,6 +383,7 @@ function run(
       FAKE_RELEASE: path.join(sb.root, "release"),
       FAKE_STATE: path.join(sb.root, "container-image"),
       FAKE_DOCKER_LOG: path.join(sb.root, "docker-calls.log"),
+      FAKE_RUNTIME: sb.runtime,
       FAKE_CANDIDATE: "sha256:new",
       ...extra,
     },
@@ -257,7 +409,11 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     const sb = makeSandbox();
     writeFileSync(sb.wrapper, legacy, "utf8");
     chmodSync(sb.wrapper, 0o755);
-    const result = run(sb, {}, ["upgrade", "--check", "--json"]);
+    const result = run(
+      sb,
+      { FAKE_ALLOW_LEGACY_COMPOSE: "1" },
+      ["upgrade", "--check", "--json"],
+    );
 
     expect(result.code).toBe(0);
     expect(result.stdout).toBe("");
@@ -285,6 +441,71 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.state()).toBe("sha256:new");
     expect(sb.compose()).toContain("example/new");
     expect(sb.journal()).toBe(false);
+    const calls = sb.dockerCalls();
+    const activation = calls.filter(
+      (line) => line.startsWith("compose ") && line.includes(" up -d --force-recreate jht"),
+    );
+    expect(activation).toHaveLength(1);
+    expect(activation[0]).toContain(
+      `-f ${path.join(sb.runtime, "docker-compose.yml")} --project-directory ${sb.runtime}`,
+    );
+    expect(activation[0]).not.toContain(".upgrade-stage.");
+    expect(
+      calls.filter((line) => line.includes("inspect --type container aaaaaaaaaaaa"))
+        .length,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("Podman 6.1.3 applica dal compose canonico e verifica ownership e config-hash", () => {
+    const sb = makeSandbox();
+    const podman = enableExactPodmanHarness(sb);
+    const result = run(sb, podman.env);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      phase: "complete",
+      current: { version: "0.4.0", image: "sha256:new" },
+    });
+    expect(podman.labelHash()).toBe("b".repeat(64));
+    expect(podman.labelWorking()).toBe(sb.runtime);
+    expect(podman.labelConfig()).toBe(path.join(sb.runtime, "docker-compose.yml"));
+
+    const calls = sb.dockerCalls();
+    const realUp = calls.filter(
+      (line) => line.startsWith("provider dry=0 ") && line.includes(" command=up "),
+    );
+    expect(realUp).toHaveLength(1);
+    expect(realUp[0]).toContain(
+      `project=jht file=${path.join(sb.runtime, "docker-compose.yml")}`,
+    );
+    expect(realUp[0]).toContain("args=-d --force-recreate jht");
+    expect(realUp[0]).not.toContain(".upgrade-stage.");
+    expect(
+      calls.filter((line) => line.includes("docker inspect --type container aaaaaaaaaaaa"))
+        .length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      calls.some(
+        (line) =>
+          line.includes("podman connection=jht-podman argv=ps -a") &&
+          line.includes("label=io.podman.compose.project=jht"),
+      ),
+    ).toBe(true);
+
+    const chat = run(sb, podman.env, ["desktop-chat", "probe"]);
+    const snapshot = run(sb, podman.env, ["onboarding-snapshot"]);
+    expect(chat.code).toBe(0);
+    expect(chat.stdout).toBe("true\n");
+    expect(snapshot.code).toBe(0);
+    expect(snapshot.stdout).toContain("containerRunning=1");
+
+    podman.setLabelHash("c".repeat(64));
+    const staleChat = run(sb, podman.env, ["desktop-chat", "probe"]);
+    const staleSnapshot = run(sb, podman.env, ["onboarding-snapshot"]);
+    expect(staleChat.code).toBe(1);
+    expect(staleSnapshot.code).toBe(0);
+    expect(staleSnapshot.stdout).toContain("containerRunning=0");
   });
 
   it("se il candidato non supera la verifica ripristina immagine e compose precedenti", () => {

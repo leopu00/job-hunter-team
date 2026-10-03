@@ -263,6 +263,9 @@ runtime_path_allowed() {
   local runtime_real runtime_declared wrapper_real bind_real docs_real shim_real
   runtime_real="$(cd -P "$RUNTIME_DIR" 2>/dev/null && pwd -P)" || return 1
   runtime_declared="${RUNTIME_DIR%/}"
+  case "$runtime_declared$COMPOSE_FILE" in
+    *'|'*|*$'\n'*|*$'\r'*) return 1 ;;
+  esac
   # Rifiuta anche symlink in qualunque antenato: il path dichiarato deve gia'
   # essere il path fisico canonico consumato dal daemon host.
   [ "$runtime_real" = "$runtime_declared" ] || return 1
@@ -285,6 +288,7 @@ runtime_path_allowed() {
 }
 
 runtime_bundle_trusted() {
+  [ -z "${err_runtime:-}" ] || return 1
   runtime_path_allowed || return 1
   runtime_node_safe "$RUNTIME_DIR" dir || return 1
   runtime_node_safe "$COMPOSE_FILE" file || return 1
@@ -487,6 +491,13 @@ podman_compose_pair_supported() {
   printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0'
 }
 
+compose_project_name() {
+  # Identita' prodotto, non input dell'utente e non derivata dal path. Deve
+  # restare identica per compose canonico e stage di upgrade: podman-compose
+  # 1.6.0 adotta i container esistenti filtrando questa label.
+  printf 'jht\n'
+}
+
 require_compose_file() {
   require_trusted_runtime || exit 1
 }
@@ -494,6 +505,9 @@ require_compose_file() {
 compose_file() {
   local file="$1"
   shift
+  local project
+  project="$(compose_project_name)" \
+    || { err "Identita progetto Compose non valida."; return 1; }
   if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     # `podman --connection NAME compose` delegates through the Docker socket
     # bridge. A named macOS machine created with --update-connection=false is
@@ -517,11 +531,14 @@ compose_file() {
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" \
           --podman-path "$podman_bin" \
+          -p "$project" \
           -f "$file" "$@"
     )
     return $?
   fi
-  # `docker compose` dell'host. MSYS_NO_PATHCONV protegge da git-bash su Windows.
+  # Il project Docker/VPS storico deriva da --project-directory. Non migrarlo
+  # implicitamente al literal Podman: un secondo project colliderebbe sul
+  # container_name jht senza poter adottare il runtime esistente.
   MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@"
 }
 
@@ -531,7 +548,57 @@ compose() {
 }
 
 container_up() {
-  docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
+  read_only_container_id >/dev/null
+}
+
+# `read_only_container_id` distingue un progetto assente (3) da un risultato
+# ambiguo/non posseduto (1). Solo il primo puo' essere creato da un'azione che
+# ha gia' autorizzato esplicitamente una mutazione.
+container_mutation_preflight() {
+  local status=0
+  if read_only_container_id >/dev/null; then
+    return 0
+  else
+    status=$?
+  fi
+  [ "$status" -eq 3 ] && return 0
+  err "Container JHT esistente non attestabile; operazione interrotta."
+  return 1
+}
+
+container_postcheck_running() {
+  read_only_container_id >/dev/null || {
+    err "Container JHT non verificabile dopo l'operazione."
+    return 1
+  }
+}
+
+# podman-compose 1.6.0 calcola la label dalla configurazione servizio risolta,
+# non dal digest dei byte YAML. La sua interfaccia pubblica dry-run applica lo
+# stesso resolver usato da `up`. Il provider puo' fare probe Podman read-only,
+# ma dry-run gli impedisce create/start/remove; force-recreate obbliga inoltre
+# il create-plan a contenere la label anche quando il container esiste gia'.
+# L'output verbose puo' contenere variabili risolte: resta confinato in memoria
+# e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
+podman_expected_config_hash() {
+  local file="$1" podman_bin compose_bin resolved hashes hash
+  podman_bin="$(podman_binary)" || return 1
+  compose_bin="$(podman_compose_binary)" || return 1
+  podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
+  resolved="$({
+    cd "$RUNTIME_DIR" || return 1
+    CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+    PODMAN_COMPOSE_WARNING_LOGS=false \
+      "$compose_bin" --verbose --dry-run --project-name jht \
+        --podman-path "$podman_bin" -f "$file" up -d --force-recreate jht
+  } 2>&1)" || return 1
+  hashes="$(printf '%s\n' "$resolved" \
+    | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p')"
+  unset resolved
+  case "$hashes" in ''|*$'\n'*) return 1 ;; esac
+  hash="$hashes"
+  printf '%s' "$hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  printf '%s\n' "$hash"
 }
 
 # Risolve il container tramite l'esatto progetto Compose JHT senza bootstrap,
@@ -539,12 +606,32 @@ container_up() {
 read_only_container_id() {
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local container_id details
-  container_id="$(compose_file "$COMPOSE_FILE" ps -q jht 2>/dev/null)" || return 1
-  printf '%s' "$container_id" | grep -Eq '^[0-9a-fA-F]{12,64}$' || return 1
-  details="$(docker inspect "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
-    || return 1
-  [ "$details" = "true jht" ] || return 1
+  local container_id details expected_hash expected_project expected_unit
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    # podman-compose 1.6.0 non accetta un operando service su `ps`. Il
+    # controllo service resta sull'inspect attestato subito sotto.
+    container_id="$(compose_file "$COMPOSE_FILE" ps -q 2>/dev/null)" || return 1
+  else
+    container_id="$(compose_file "$COMPOSE_FILE" ps -q jht 2>/dev/null)" || return 1
+  fi
+  [ -n "$container_id" ] || return 3
+  case "$container_id" in *[!0-9a-fA-F]*) return 1 ;; esac
+  [ "${#container_id}" -ge 12 ] && [ "${#container_id}" -le 64 ] || return 1
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    expected_project="$(compose_project_name)" || return 1
+    expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
+    expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE")" || return 1
+    details="$(docker inspect --type container "$container_id" --format '{{.Name}}|{{.State.Running}}|{{index .Config.Labels "io.podman.compose.project"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "io.podman.compose.service"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.container-number"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "io.podman.compose.version"}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}|{{index .Config.Labels "io.podman.compose.config-hash"}}' 2>/dev/null)" \
+      || return 1
+    [ "$details" = "jht|true|$expected_project|$expected_project|jht|jht|1|$RUNTIME_DIR|$COMPOSE_FILE|1.6.0|$expected_unit|$expected_hash" ] \
+      || return 1
+  else
+    # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
+    # project/path/hash e' specifica del provider Podman 1.6.0 qui fissato.
+    details="$(docker inspect --type container "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
+      || return 1
+    [ "$details" = "true jht" ] || return 1
+  fi
   printf '%s\n' "$container_id"
 }
 
@@ -745,21 +832,30 @@ ensure_bind_owner() {
 }
 
 ensure_up() {
-  if ! container_up; then
-    info "Container '$CONTAINER' non attivo, lo avvio..."
-    ensure_bind_owner
-    compose up -d
-    # Attendi che il container sia in stato running prima di proseguire.
-    local tries=20
-    while ! container_up; do
-      tries=$((tries - 1))
-      if [ "$tries" -le 0 ]; then
-        err "Container '$CONTAINER' non e' partito entro 10s. Controlla 'jht logs'."
-        exit 1
-      fi
-      sleep 0.5
-    done
+  local status=0
+  if container_up; then
+    return 0
+  else
+    status=$?
   fi
+  [ "$status" -eq 3 ] || {
+    err "Container JHT esistente non attestabile; avvio automatico negato."
+    exit 1
+  }
+  info "Container '$CONTAINER' non attivo, lo avvio..."
+  ensure_bind_owner
+  compose up -d
+  # Attendi che il container sia in stato running e con ownership completa
+  # prima di inoltrare qualunque comando nel nuovo processo.
+  local tries=20
+  while ! container_up; do
+    tries=$((tries - 1))
+    if [ "$tries" -le 0 ]; then
+      err "Container '$CONTAINER' non e' partito entro 10s. Controlla 'jht logs'."
+      exit 1
+    fi
+    sleep 0.5
+  done
 }
 
 # ── Client desktop nativo (mai Docker) ───────────────────────────────────
@@ -1425,7 +1521,7 @@ upgrade_restore_previous() {
   runtime_node_safe "$UPGRADE_JOURNAL" file || return 1
   runtime_node_safe "$rollback_dir" dir || return 1
   [ "$version" = "1" ] || return 1
-  case "$phase" in prepared|pulled|candidate_started|metadata_committed) ;; *) return 1 ;; esac
+  case "$phase" in prepared|pulled|candidate_metadata|candidate_started|metadata_committed) ;; *) return 1 ;; esac
   case "$was_running" in 0|1) ;; *) return 1 ;; esac
   if [ "$was_running" = "1" ]; then
     printf '%s' "$old_image" | grep -Eq '^sha256:[A-Za-z0-9]+$' || return 1
@@ -1550,25 +1646,31 @@ handle_runtime_upgrade() {
     upgrade_result false false preflight unknown none unknown none false "Runtime compose non disponibile" false
     return 1
   fi
-  # Stesso preflight di `jht up`: su VPS installate da root l'immagine nuova
-  # deve poter riaprire i bind mount al primo boot, non solo il container che
-  # era gia' in vita prima dell'upgrade.
-  ensure_bind_owner
   if [ ! -f "$WRAPPER_PATH" ]; then
     upgrade_result false false preflight unknown none unknown none false "Wrapper host non leggibile" false
     return 1
   fi
 
+  local container_status=0
   if container_up; then
     was_running=1
     old_image="$(upgrade_image)"
     old_version="$(upgrade_version)"
   else
+    container_status=$?
+    if [ "$container_status" -ne 3 ]; then
+      upgrade_result false false preflight unknown none unknown none false "Container esistente non attestabile" false
+      return 1
+    fi
     old_image=""
     old_version="non-installata"
   fi
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
+
+  # Solo dopo avere escluso container estranei/stale e' lecito creare o
+  # riallineare le directory bind-mountate sul percorso Linux/VPS.
+  ensure_bind_owner
 
   UPGRADE_STAGE="$(mktemp -d "$RUNTIME_DIR/.upgrade-stage.XXXXXX")" || {
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Spazio temporaneo non disponibile" false
@@ -1633,9 +1735,19 @@ handle_runtime_upgrade() {
     return 0
   fi
 
+  phase="candidate_metadata"
+  upgrade_note "Pubblico la configurazione candidata attestata..."
+  if ! upgrade_atomic_replace "$candidate_compose" "$COMPOSE_FILE" \
+      || ! runtime_write_manifest \
+      || ! upgrade_write_journal candidate_metadata "$old_image" "$was_running"; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false candidate_metadata "$old_version" "$old_image" "$old_version" "$old_image" false "Configurazione candidata non persistita" "$rolled_back"
+    return 1
+  fi
+
   phase="activate"
   upgrade_note "Attivo il nuovo runtime..."
-  if ! upgrade_run upgrade_compose "$candidate_compose" up -d --force-recreate "$CONTAINER"; then
+  if ! upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER"; then
     if upgrade_restore_previous; then rolled_back=true; fi
     upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Avvio della nuova versione fallito" "$rolled_back"
     return 1
@@ -1657,8 +1769,7 @@ handle_runtime_upgrade() {
   candidate_version="${candidate_version:-sconosciuta}"
 
   phase="commit"
-  if ! upgrade_atomic_replace "$candidate_compose" "$COMPOSE_FILE" \
-      || ! upgrade_atomic_replace "$candidate_wrapper" "$WRAPPER_PATH" 755 \
+  if ! upgrade_atomic_replace "$candidate_wrapper" "$WRAPPER_PATH" 755 \
       || ! runtime_write_manifest \
       || ! upgrade_write_journal metadata_committed "$old_image" "$was_running"; then
     if upgrade_restore_previous; then rolled_back=true; fi
@@ -1757,35 +1868,53 @@ case "$SUB" in
   up)
     require_compose_file
     wake_container_runtime_for_up
+    container_mutation_preflight || exit 1
     ensure_bind_owner
     compose up -d
+    container_postcheck_running || exit 1
     ;;
 
   start-container)
     require_compose_file
     require_docker
+    container_mutation_preflight || exit 1
     ensure_bind_owner
     compose up -d
+    container_postcheck_running || exit 1
     ;;
 
   down|stop-container)
     require_compose_file
     require_docker
+    container_up >/dev/null || {
+      err "Container JHT non attestabile; arresto negato."
+      exit 1
+    }
     compose down
     ;;
 
   restart)
     require_compose_file
     require_docker
+    container_up >/dev/null || {
+      err "Container JHT non attestabile; riavvio negato."
+      exit 1
+    }
     compose restart "$CONTAINER"
+    container_postcheck_running || exit 1
     ;;
 
   recreate)
     require_compose_file
     require_docker
+    container_up >/dev/null || {
+      err "Container JHT non attestabile; ricreazione negata."
+      exit 1
+    }
     ensure_bind_owner
     compose down
     compose up -d
+    container_postcheck_running || exit 1
     ;;
 
   upgrade)
