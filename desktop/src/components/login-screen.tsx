@@ -109,10 +109,10 @@ export function LoginScreen({
     setLocalError(false);
     setAuthorizeUrl(null);
     setCopy("idle");
-    if (await onChooseGoogle?.()) return;
     setWaiting(true);
-    saveBrowserChoice(choice);
     try {
+      if (await onChooseGoogle?.()) return;
+      saveBrowserChoice(choice);
       await signIn({ browser: choice, onAuthorizeUrl: setAuthorizeUrl });
     } catch (failure) {
       setError(failure instanceof LoginError ? failure : new LoginError("unknown"));

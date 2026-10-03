@@ -10,6 +10,7 @@ import {
   readSupabaseConfig,
   signInWithGoogle,
   signOut,
+  useDeferredSession,
   useSession,
   type AuthStorage,
   type LoginDeps,
@@ -495,6 +496,24 @@ describe("signOut", () => {
 });
 
 describe("useSession", () => {
+  it("does nothing while disabled, matching a local identity and an unchosen first frame", async () => {
+    const initialize = vi.fn().mockResolvedValue({ error: null });
+    const onAuthStateChange = vi.fn();
+    const getSession = vi.fn();
+    const client = fakeClient({
+      initialize,
+      onAuthStateChange,
+      getSession,
+    });
+
+    const { result } = renderHook(() => useSession(client, false));
+    expect(result.current).toEqual({ session: null, loading: false });
+    await Promise.resolve();
+    expect(initialize).not.toHaveBeenCalled();
+    expect(onAuthStateChange).not.toHaveBeenCalled();
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
   it("is loading until initialization and the first auth event, then follows sign-in and sign-out", async () => {
     let emit: (event: string, session: Session | null) => void = () => undefined;
     const unsubscribe = vi.fn();
@@ -524,5 +543,33 @@ describe("useSession", () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalled();
+  });
+});
+
+describe("useDeferredSession", () => {
+  it("does not initialize on mount and restores only after the explicit action", async () => {
+    const restored = { access_token: "a", user: { id: "synthetic-user" } } as Session;
+    const unsubscribe = vi.fn();
+    const onAuthStateChange = vi.fn(() => ({ data: { subscription: { unsubscribe } } }));
+    const getSession = vi.fn().mockResolvedValue({ data: { session: restored }, error: null });
+    const client = fakeClient({ onAuthStateChange, getSession });
+
+    const { result, unmount } = renderHook(() => useDeferredSession(client));
+    expect(result.current.session).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(client.auth.initialize).not.toHaveBeenCalled();
+    expect(onAuthStateChange).not.toHaveBeenCalled();
+    expect(getSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await expect(result.current.restore()).resolves.toBe(restored);
+    });
+
+    expect(client.auth.initialize).toHaveBeenCalledOnce();
+    expect(onAuthStateChange).toHaveBeenCalledOnce();
+    expect(getSession).toHaveBeenCalledOnce();
+    expect(result.current).toMatchObject({ session: restored, loading: false });
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 });
