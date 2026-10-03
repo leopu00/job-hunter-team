@@ -143,6 +143,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
             <p className="onboarding-progress__privacy">Nessuna chiave API richiesta</p>
           </aside>
           <OAuthLoginTakeover
+            provider={providerLogin.provider}
             providerName={providerName(providerLogin.provider)}
             actions={providerLogin.actions}
             verifying={providerLogin.status === "verifying"}

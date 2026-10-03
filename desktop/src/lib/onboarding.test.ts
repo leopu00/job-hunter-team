@@ -1,6 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
+  canonicalProviderLoginUrl,
   isOnboardingAssistantReachable,
   isOnboardingProfileReady,
   isOnboardingRuntimeReady,
@@ -14,6 +15,39 @@ import {
   type OnboardingMarkerStore,
   type OnboardingRuntimeSnapshot,
 } from "./onboarding";
+
+describe("canonicalProviderLoginUrl", () => {
+  it.each([
+    ["claude", "https://console.anthropic.com/oauth", "https://console.anthropic.com/oauth"],
+    ["codex", "https://AUTH.OPENAI.COM/device", "https://auth.openai.com/device"],
+    ["kimi", "https://auth.kimi.com/device", "https://auth.kimi.com/device"],
+  ] as const)("canonicalizes an allowlisted %s URL", (provider, input, expected) => {
+    expect(canonicalProviderLoginUrl(provider, input)).toBe(expected);
+  });
+
+  it.each([
+    "https://auth.openai.com/device\u001b[0m",
+    "https://auth.openai.com/device%1B[0m",
+    "https://auth.openai.com/device%0Aextra",
+    " https://auth.openai.com/device",
+    "http://auth.openai.com/device",
+    "https://auth.openai.com:8443/device",
+    "https://auth.openai.com.evil.invalid/device",
+    "https://auth.openai.com/device?device_code=synthetic",
+  ])("rejects a non-canonical or unsafe Codex URL", (input) => {
+    expect(canonicalProviderLoginUrl("codex", input)).toBeNull();
+  });
+
+  it("rejects a valid host belonging to another provider", () => {
+    expect(canonicalProviderLoginUrl("codex", "https://console.anthropic.com/oauth")).toBeNull();
+  });
+
+  it("rejects URL credentials", () => {
+    const input = new URL("https://auth.openai.com/device");
+    input.username = "synthetic-user";
+    expect(canonicalProviderLoginUrl("codex", input.toString())).toBeNull();
+  });
+});
 
 const USER = {
   id: "synthetic-user",
