@@ -17,6 +17,7 @@ import {
   localIdentitySelected,
   readLocalProfile,
 } from "../lib/local-profile";
+import { googleIdentitySelected } from "../lib/identity-choice";
 import type { ExistingTeamConnectionResult } from "../lib/existing-team";
 import {
   isOnboardingAssistantReachable,
@@ -204,8 +205,11 @@ function nativeErrorCode(error: unknown): string | null {
  * the direct-chat connection have been independently verified.
  */
 export default function DashboardApp() {
-  const { session, loading } = useSession();
   const localProfile = localIdentitySelected() ? readLocalProfile() : null;
+  const { session, loading } = useSession(
+    undefined,
+    googleIdentitySelected() && !localProfile,
+  );
   const identityKey = localProfile
     ? `local:${localProfile.profileId}`
     : session ? `google:${session.user.id}` : null;

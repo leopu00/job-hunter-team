@@ -12,6 +12,7 @@ import {
   localIdentitySelected,
   readLocalProfile,
 } from "../lib/local-profile";
+import { googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
@@ -87,6 +88,7 @@ vi.mock("../lib/local-profile", () => ({
   localIdentitySelected: vi.fn(),
   readLocalProfile: vi.fn(),
 }));
+vi.mock("../lib/identity-choice", () => ({ googleIdentitySelected: vi.fn() }));
 vi.mock("../shell/router", () => ({ navigate: vi.fn() }));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", () => ({
@@ -227,6 +229,7 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
     vi.mocked(localIdentitySelected).mockReturnValue(false);
     vi.mocked(readLocalProfile).mockReturnValue(null);
+    vi.mocked(googleIdentitySelected).mockReturnValue(true);
     vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({
       status: "pinned", algorithm: "ssh-ed25519", fingerprint: "SHA256:synthetic",
     });
@@ -235,8 +238,10 @@ describe("DashboardApp onboarding router", () => {
   afterEach(() => vi.useRealTimers());
 
   it("sends whoever has no session to Google sign-in", () => {
+    vi.mocked(googleIdentitySelected).mockReturnValue(false);
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     render(<DashboardApp />);
+    expect(useSession).toHaveBeenCalledWith(undefined, false);
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
     expect(loadOnboardingGate).not.toHaveBeenCalled();
   });
@@ -252,6 +257,7 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
 
     expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(useSession).toHaveBeenCalledWith(undefined, false);
     expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-profile");
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
     expect(loadOnboardingGate).not.toHaveBeenCalled();

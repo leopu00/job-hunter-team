@@ -2,17 +2,22 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import {
+  clearGoogleIdentitySelection,
+  selectGoogleIdentity,
+} from "./lib/identity-choice";
 import { goTo } from "./lib/pages";
-import { useSession } from "./lib/supabase";
-import { clearLocalIdentitySelection, localIdentitySelected } from "./lib/local-profile";
-import { onboardingPlaygroundEnabled } from "./lib/onboarding-playground";
+import { useDeferredSession } from "./lib/supabase";
+import { clearLocalIdentitySelection } from "./lib/local-profile";
 
-vi.mock("./lib/supabase", () => ({ useSession: vi.fn() }));
+vi.mock("./lib/supabase", () => ({ useDeferredSession: vi.fn() }));
 vi.mock("./lib/local-profile", () => ({
   clearLocalIdentitySelection: vi.fn(),
-  localIdentitySelected: vi.fn(),
 }));
-vi.mock("./lib/onboarding-playground", () => ({ onboardingPlaygroundEnabled: vi.fn() }));
+vi.mock("./lib/identity-choice", () => ({
+  clearGoogleIdentitySelection: vi.fn(),
+  selectGoogleIdentity: vi.fn(),
+}));
 vi.mock("./components/login-screen", () => ({
   LoginScreen: ({
     onChooseGoogle,
@@ -34,86 +39,61 @@ vi.mock("./lib/pages", async (importOriginal) => ({
 }));
 
 describe("authentication entrypoint", () => {
+  const restore = vi.fn();
+
   beforeEach(() => {
     vi.mocked(goTo).mockReset();
     vi.mocked(clearLocalIdentitySelection).mockReset();
-    vi.mocked(localIdentitySelected).mockReturnValue(false);
-    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(false);
+    vi.mocked(clearGoogleIdentitySelection).mockReset();
+    vi.mocked(selectGoogleIdentity).mockReset();
+    restore.mockReset().mockResolvedValue(null);
+    vi.mocked(useDeferredSession).mockReturnValue({
+      session: null,
+      loading: false,
+      restore,
+    });
   });
 
-  it("shows the identity entrypoint and no API-key setup entry", () => {
-    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+  it("shows the production identity frame without restoring Google or opening its storage", () => {
     render(<App />);
     expect(screen.getByText("login-screen")).toBeInTheDocument();
     expect(screen.queryByText(/team locale/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
+    expect(restore).not.toHaveBeenCalled();
+    expect(selectGoogleIdentity).not.toHaveBeenCalled();
+    expect(clearGoogleIdentitySelection).toHaveBeenCalledOnce();
     expect(goTo).not.toHaveBeenCalled();
   });
 
-  it("routes a restored local identity into the same gated dashboard entrypoint", () => {
-    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
-    vi.mocked(localIdentitySelected).mockReturnValue(true);
+  it("enters the local path without restoring Google", async () => {
     render(<App />);
+    expect(clearGoogleIdentitySelection).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole("button", { name: "choose-local" }));
+    expect(restore).not.toHaveBeenCalled();
+    expect(clearGoogleIdentitySelection).toHaveBeenCalledTimes(2);
     expect(goTo).toHaveBeenCalledWith("dashboard.html");
   });
 
-  it("routes a restored Google session into the gated dashboard entrypoint", () => {
-    vi.mocked(useSession).mockReturnValue({
-      session: { user: { id: "synthetic-user" } },
-      loading: false,
-    } as unknown as ReturnType<typeof useSession>);
-    render(<App />);
-    expect(goTo).toHaveBeenCalledWith("dashboard.html");
-  });
-
-  it("keeps an existing Google session on step 1 when playground mode is enabled", () => {
-    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
-    vi.mocked(useSession).mockReturnValue({
-      session: { user: { id: "synthetic-user" } },
-      loading: false,
-    } as unknown as ReturnType<typeof useSession>);
-
-    render(<App />);
-
-    expect(screen.getByText("login-screen")).toBeInTheDocument();
-    expect(goTo).not.toHaveBeenCalled();
-  });
-
-  it("keeps an existing local profile on step 1 when playground mode is enabled", () => {
-    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
-    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
-    vi.mocked(localIdentitySelected).mockReturnValue(true);
-
-    render(<App />);
-
-    expect(screen.getByText("login-screen")).toBeInTheDocument();
-    expect(goTo).not.toHaveBeenCalled();
-  });
-
-  it("continues an existing Google session only after the explicit playground choice", async () => {
-    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
-    vi.mocked(useSession).mockReturnValue({
-      session: { user: { id: "synthetic-user" } },
-      loading: false,
-    } as unknown as ReturnType<typeof useSession>);
-    vi.mocked(localIdentitySelected).mockReturnValue(true);
-
+  it("starts reliable Google restore only after the explicit production choice", async () => {
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "choose-google" }));
 
     expect(clearLocalIdentitySelection).toHaveBeenCalledOnce();
-    expect(goTo).toHaveBeenCalledWith("dashboard.html");
+    expect(selectGoogleIdentity).toHaveBeenCalledOnce();
+    expect(restore).toHaveBeenCalledOnce();
+    expect(goTo).not.toHaveBeenCalled();
   });
 
-  it("continues the selected local profile without clearing sessions or profile data", async () => {
-    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
-    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
-    vi.mocked(localIdentitySelected).mockReturnValue(true);
+  it("routes a restored Google session after the explicit choice", async () => {
+    const view = render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "choose-google" }));
+    vi.mocked(useDeferredSession).mockReturnValue({
+      session: { user: { id: "synthetic-user" } },
+      loading: false,
+      restore,
+    } as unknown as ReturnType<typeof useDeferredSession>);
+    view.rerender(<App />);
 
-    render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: "choose-local" }));
-
-    expect(clearLocalIdentitySelection).not.toHaveBeenCalled();
     expect(goTo).toHaveBeenCalledWith("dashboard.html");
   });
 });

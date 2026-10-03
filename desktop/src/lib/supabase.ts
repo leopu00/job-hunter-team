@@ -1,7 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { clearDesktopAccountScope } from "./desktop-account-scope";
+import { clearGoogleIdentitySelection } from "./identity-choice";
 
 /**
  * Il client Supabase della desktop: lo stesso progetto del web, con la
@@ -320,6 +321,7 @@ export async function signOut(
   // boundary before Supabase can expose a different account to the webview.
   await clearAccountScope();
   const { error } = await client.auth.signOut({ scope: "local" });
+  clearGoogleIdentitySelection();
   // Anche se la revoca in rete non riesce, la sessione locale è già cancellata.
   if (error) console.warn("[auth] sign-out revoke failed");
 }
@@ -329,15 +331,74 @@ export interface SessionState {
   loading: boolean;
 }
 
-/** La sessione corrente, aggiornata a ogni login, refresh e logout. */
-export function useSession(client: SupabaseClient = supabase): SessionState {
-  const [state, setState] = useState<SessionState>({ session: null, loading: true });
+export interface DeferredSessionState extends SessionState {
+  restore: () => Promise<Session | null>;
+}
+
+function initializeClient(client: SupabaseClient): Promise<void> {
+  return client === supabase
+    ? initializeDesktopAuth()
+    : initializeDesktopAuth({ client, configured: true, desktop: false, invoke });
+}
+
+/**
+ * Session controller for an identity-choice screen. Merely mounting it is
+ * inert: initialization, encrypted storage and Keychain access begin only
+ * when `restore` is called by the explicit Google action.
+ */
+export function useDeferredSession(client: SupabaseClient = supabase): DeferredSessionState {
+  const [state, setState] = useState<SessionState>({ session: null, loading: false });
+  const active = useRef(true);
+  const subscription = useRef<{ unsubscribe: () => void } | null>(null);
+  const attempt = useRef<Promise<Session | null> | null>(null);
+
   useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      subscription.current?.unsubscribe();
+      subscription.current = null;
+    };
+  }, []);
+
+  const restore = useCallback(() => {
+    if (attempt.current) return attempt.current;
+    setState({ session: null, loading: true });
+    attempt.current = (async () => {
+      await initializeClient(client);
+      if (!active.current) return null;
+      if (!subscription.current) {
+        const { data } = client.auth.onAuthStateChange((_event, session) => {
+          if (active.current) setState({ session, loading: false });
+        });
+        subscription.current = data.subscription;
+      }
+      const { data, error } = await client.auth.getSession();
+      if (error) throw new LoginError("unknown");
+      if (active.current) setState({ session: data.session, loading: false });
+      return data.session;
+    })().catch((error) => {
+      if (active.current) setState({ session: null, loading: false });
+      throw error;
+    });
+    return attempt.current;
+  }, [client]);
+
+  return { ...state, restore };
+}
+
+/** La sessione corrente, aggiornata a ogni login, refresh e logout. */
+export function useSession(client: SupabaseClient = supabase, enabled = true): SessionState {
+  const [state, setState] = useState<SessionState>({ session: null, loading: enabled });
+  useEffect(() => {
+    if (!enabled) {
+      setState({ session: null, loading: false });
+      return;
+    }
     let active = true;
     let unsubscribe: (() => void) | null = null;
-    const initialization = client === supabase
-      ? initializeDesktopAuth()
-      : initializeDesktopAuth({ client, configured: true, desktop: false, invoke });
+    setState((current) => current.loading ? current : { session: null, loading: true });
+    const initialization = initializeClient(client);
     void initialization.then(() => {
       if (!active) return;
       // INITIAL_SESSION arriva soltanto dopo lo sblocco e la rilettura. Un
@@ -354,6 +415,6 @@ export function useSession(client: SupabaseClient = supabase): SessionState {
       active = false;
       unsubscribe?.();
     };
-  }, [client]);
+  }, [client, enabled]);
   return state;
 }

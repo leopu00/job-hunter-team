@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { LoginScreen } from "./components/login-screen";
+import {
+  clearGoogleIdentitySelection,
+  selectGoogleIdentity,
+} from "./lib/identity-choice";
 import { DASHBOARD_PAGE, goTo } from "./lib/pages";
-import { clearLocalIdentitySelection, localIdentitySelected } from "./lib/local-profile";
-import { onboardingPlaygroundEnabled } from "./lib/onboarding-playground";
-import { useSession } from "./lib/supabase";
+import { clearLocalIdentitySelection } from "./lib/local-profile";
+import { useDeferredSession } from "./lib/supabase";
 
 /**
  * The secondary entrypoint is authentication-only. Runtime setup belongs to
@@ -11,31 +14,33 @@ import { useSession } from "./lib/supabase";
  * app has no alternate API-key/team-start route.
  */
 export default function App() {
-  const { session } = useSession();
-  const localSelected = localIdentitySelected();
-  const playground = onboardingPlaygroundEnabled();
-  const [playgroundChoiceMade, setPlaygroundChoiceMade] = useState(false);
+  const { session, restore } = useDeferredSession();
 
   useEffect(() => {
-    if ((session || localSelected) && (!playground || playgroundChoiceMade)) {
-      goTo(DASHBOARD_PAGE);
-    }
-  }, [localSelected, playground, playgroundChoiceMade, session]);
+    // index.html is always the identity boundary. A marker from an earlier
+    // same-window navigation must not authorize a fresh entry frame.
+    clearGoogleIdentitySelection();
+  }, []);
 
-  const chooseGoogle = useCallback(() => {
-    clearLocalIdentitySelection();
-    setPlaygroundChoiceMade(true);
-    return Boolean(session);
+  useEffect(() => {
+    if (session) goTo(DASHBOARD_PAGE);
   }, [session]);
 
+  const chooseGoogle = useCallback(async () => {
+    clearLocalIdentitySelection();
+    selectGoogleIdentity();
+    return Boolean(await restore());
+  }, [restore]);
+
   const localReady = useCallback(() => {
-    setPlaygroundChoiceMade(true);
+    clearGoogleIdentitySelection();
     goTo(DASHBOARD_PAGE);
   }, []);
 
   return (
     <LoginScreen
-      {...(playground ? { onChooseGoogle: chooseGoogle, onLocalReady: localReady } : {})}
+      onChooseGoogle={chooseGoogle}
+      onLocalReady={localReady}
     />
   );
 }

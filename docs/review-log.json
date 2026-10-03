@@ -1794,6 +1794,16 @@
       "path": "docs/internal/architecture/tauri-onboarding-contract.md",
       "description": "Contratto Tauri 0.4 door-to-door: gate account-scoped, runtime subscription, onboarding verificato, chat diretta e confini di sicurezza",
       "last_review": null
+    },
+    {
+      "path": "desktop/public/onboarding/PROMPTS.md",
+      "description": "Prompt, provenienza e mapping degli asset illustrati approvati per l'onboarding Tauri",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/desktop-local-runtime-parity.md",
+      "description": "Parità del percorso runtime locale Electron-Tauri: identità, Podman, container, provider, team e adozione legacy",
+      "last_review": null
     }
   ]
 }

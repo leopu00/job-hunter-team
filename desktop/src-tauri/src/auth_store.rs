@@ -789,6 +789,38 @@ mod tests {
     }
 
     #[test]
+    fn production_first_frame_and_local_choice_never_touch_the_google_keychain() {
+        let dir = scratch_dir("identity-choice");
+        let keychain = Arc::new(CountingKeychain::with_key(KEY));
+        let keys = KeyCache::new(keychain.clone());
+        write_entry(&dir, NAME, "persisted-google-session", &KEY).unwrap();
+
+        // These are the only storage effects auth-js may attempt while its
+        // client exists but the identity screen is still unchosen. The local
+        // branch exercises the same closed state and must not unlock Google.
+        for _phase in ["production-first-frame", "playground-first-frame", "local"] {
+            assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
+            remove_value(&dir, &keys, NAME).unwrap();
+            assert_eq!(
+                set_value(&dir, &keys, NAME, "replacement")
+                    .unwrap_err()
+                    .code,
+                "auth_store_locked"
+            );
+        }
+
+        assert_eq!(keychain.asked(), (0, 0));
+        assert!(entry_path(&dir, NAME).is_file());
+        keys.prepare().unwrap();
+        assert_eq!(keychain.asked(), (1, 0));
+        assert_eq!(
+            get_value(&dir, &keys, NAME).unwrap().as_deref(),
+            Some("persisted-google-session")
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn a_refusal_is_never_asked_again_in_the_same_process() {
         let dir = scratch_dir("denied");
         fs::create_dir_all(&dir).unwrap();

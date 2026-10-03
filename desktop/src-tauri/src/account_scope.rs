@@ -24,11 +24,22 @@ const LOCAL_DIGEST_DOMAIN: &[u8] = b"jht-desktop-local-profile-scope-v1\0";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AccountScope {
     digest: String,
+    authority: AccountScopeAuthority,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AccountScopeAuthority {
+    Authenticated,
+    LocalProfile,
 }
 
 impl AccountScope {
     pub(crate) fn digest(&self) -> &str {
         &self.digest
+    }
+
+    fn is_local_profile(&self) -> bool {
+        self.authority == AccountScopeAuthority::LocalProfile
     }
 
     #[cfg(test)]
@@ -98,19 +109,32 @@ fn failure(code: &'static str) -> AccountScopeError {
 }
 
 fn derive_scope(account_id: &[u8]) -> AccountScope {
-    derive_scope_with_domain(DIGEST_DOMAIN, account_id)
+    derive_scope_with_domain(
+        DIGEST_DOMAIN,
+        account_id,
+        AccountScopeAuthority::Authenticated,
+    )
 }
 
 fn derive_local_scope(secret: &[u8]) -> AccountScope {
-    derive_scope_with_domain(LOCAL_DIGEST_DOMAIN, secret)
+    derive_scope_with_domain(
+        LOCAL_DIGEST_DOMAIN,
+        secret,
+        AccountScopeAuthority::LocalProfile,
+    )
 }
 
-fn derive_scope_with_domain(domain: &[u8], authority: &[u8]) -> AccountScope {
+fn derive_scope_with_domain(
+    domain: &[u8],
+    authority: &[u8],
+    scope_authority: AccountScopeAuthority,
+) -> AccountScope {
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update(authority);
     AccountScope {
         digest: format!("{:x}", hasher.finalize()),
+        authority: scope_authority,
     }
 }
 
@@ -181,6 +205,7 @@ fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'
     }
     Ok(AccountScope {
         digest: record.scope_digest,
+        authority: AccountScopeAuthority::LocalProfile,
     })
 }
 
@@ -287,14 +312,62 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
             .next()
             .is_some()
         {
-            // Never adopt a pre-account-scope home implicitly.
-            return Err("local_account_owner_missing");
+            // Electron used the same ~/.jht bind mount before account scopes
+            // existed. A backend-generated local profile may claim that home
+            // once, but authenticated accounts and unrelated directories must
+            // remain fail-closed. After the marker is written, every access is
+            // subject to the normal exact-digest ownership check.
+            if !scope.is_local_profile() || !recognized_legacy_local_home(home)? {
+                return Err("local_account_owner_missing");
+            }
         }
     } else {
         create_private_dir(home)?;
     }
     write_owner_marker(&marker, scope)?;
     verify_local_owner_marker(&marker, scope)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
+    // These are durable artifacts written by the Electron local flow or by
+    // the authoritative installer it invoked. Merely finding an arbitrary
+    // non-empty directory is deliberately insufficient for migration.
+    const FILE_MARKERS: &[&str] = &[
+        "jht.config.json",
+        "host.env",
+        ".local-token",
+        "cloud.json",
+        "jobs.db",
+    ];
+    const DIRECTORY_MARKERS: &[&str] = &[
+        ".npm-global",
+        ".claude",
+        ".codex",
+        ".kimi",
+        "credentials",
+        "profile",
+        "runtime",
+        "src",
+    ];
+
+    for name in FILE_MARKERS {
+        match fs::symlink_metadata(home.join(name)) {
+            Ok(metadata) if metadata.file_type().is_file() => return Ok(true),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("local_account_owner_unavailable"),
+        }
+    }
+    for name in DIRECTORY_MARKERS {
+        match fs::symlink_metadata(home.join(name)) {
+            Ok(metadata) if metadata.file_type().is_dir() => return Ok(true),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("local_account_owner_unavailable"),
+        }
+    }
+    Ok(false)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -429,8 +502,8 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     use super::validate_or_claim_local_owner;
     use super::{
-        create_local_profile_at, derive_scope, load_local_scope_at, local_runtime_allowed,
-        AccountScopeState,
+        create_local_profile_at, derive_local_scope, derive_scope, load_local_scope_at,
+        local_runtime_allowed, AccountScopeState,
     };
 
     #[test]
@@ -546,7 +619,7 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[test]
-    fn populated_legacy_local_home_is_never_adopted() {
+    fn local_account_owner_missing_legacy_home_is_claimed_by_local_profile_only() {
         use std::{fs, time::SystemTime};
 
         let nonce = SystemTime::now()
@@ -555,10 +628,46 @@ mod tests {
             .as_nanos();
         let home = std::env::temp_dir().join(format!("jht-local-legacy-{nonce}"));
         fs::create_dir_all(&home).unwrap();
-        fs::write(home.join("jht.config.json"), "{}").unwrap();
-        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let config = home.join("jht.config.json");
+        fs::write(&config, "{\"active_provider\":\"claude\"}\n").unwrap();
+        let google = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let local_a = derive_local_scope(b"local-profile-a");
+        let local_b = derive_local_scope(b"local-profile-b");
+
         assert_eq!(
-            validate_or_claim_local_owner(&home, &a),
+            validate_or_claim_local_owner(&home, &google),
+            Err("local_account_owner_missing")
+        );
+        assert!(!home.join(".desktop-account-scope").exists());
+
+        validate_or_claim_local_owner(&home, &local_a).unwrap();
+        assert_eq!(
+            fs::read_to_string(&config).unwrap(),
+            "{\"active_provider\":\"claude\"}\n"
+        );
+        assert_eq!(
+            validate_or_claim_local_owner(&home, &local_b),
+            Err("local_account_owner_mismatch")
+        );
+        validate_or_claim_local_owner(&home, &local_a).unwrap();
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn arbitrary_populated_home_is_not_claimed_as_legacy_jht_data() {
+        use std::{fs, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let home = std::env::temp_dir().join(format!("jht-local-unrelated-{nonce}"));
+        fs::create_dir_all(&home).unwrap();
+        fs::write(home.join("unrelated.txt"), "not a JHT home\n").unwrap();
+        let local = derive_local_scope(b"local-profile-a");
+        assert_eq!(
+            validate_or_claim_local_owner(&home, &local),
             Err("local_account_owner_missing")
         );
         assert!(!home.join(".desktop-account-scope").exists());
