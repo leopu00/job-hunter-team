@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs::{self, OpenOptions},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
@@ -707,6 +707,7 @@ fn recover_receipt(
             }
             Ok(None)
         }
+        ReceiptStatus::Prepared => Err("profile_import_recovery_required"),
         ReceiptStatus::RolledBack => Err("profile_import_recovery_required"),
     }
 }
@@ -942,6 +943,7 @@ pub(crate) async fn profile_import_vps_to_local(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const VALID_PROFILE: &[u8] = br#"schema_version: 1
