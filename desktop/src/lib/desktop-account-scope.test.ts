@@ -11,6 +11,8 @@ import {
   activateDesktopLocalScope,
   clearDesktopAccountScope,
   createDesktopLocalProfile,
+  migrateDesktopLocalProfileToAccount,
+  probeDesktopLocalProfileMigration,
   recoverDesktopPlaygroundLocalOrphan,
   resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
@@ -72,6 +74,46 @@ describe("desktop account scope boundary", () => {
     await expect(recoverDesktopPlaygroundLocalOrphan()).resolves.toBe(true);
     expect(invoke).toHaveBeenCalledWith("runtime_playground_local_orphan_recover");
     expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
+  });
+
+  it("probes and commits local migration without accepting an account identifier", async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce({ receiptHash: "a".repeat(64) });
+
+    await expect(probeDesktopLocalProfileMigration("opaque-local-capability")).resolves.toBe(true);
+    await expect(migrateDesktopLocalProfileToAccount("opaque-local-capability")).resolves.toEqual({
+      receiptHash: "a".repeat(64),
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "runtime_local_profile_migration_probe", {
+      profileId: "opaque-local-capability",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "runtime_local_profile_migrate_to_authenticated", {
+      profileId: "opaque-local-capability",
+    });
+    expect(JSON.stringify(vi.mocked(invoke).mock.calls)).not.toContain("accountId");
+  });
+
+  it("rejects an unverified migration receipt", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ receiptHash: "not-a-receipt" });
+    await expect(migrateDesktopLocalProfileToAccount("opaque-local-capability")).rejects.toEqual({
+      code: "local_migration_receipt_invalid",
+    });
+  });
+
+  it("coalesces a repeated explicit migration gesture into one native command", async () => {
+    let commit!: (value: { receiptHash: string }) => void;
+    vi.mocked(invoke).mockReturnValueOnce(new Promise((resolve) => { commit = resolve; }));
+
+    const first = migrateDesktopLocalProfileToAccount("opaque-local-capability");
+    const second = migrateDesktopLocalProfileToAccount("opaque-local-capability");
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce());
+    commit({ receiptHash: "b".repeat(64) });
+
+    await expect(first).resolves.toEqual({ receiptHash: "b".repeat(64) });
+    await expect(second).resolves.toEqual({ receiptHash: "b".repeat(64) });
+    expect(invoke).toHaveBeenCalledOnce();
   });
 
   it("fails closed outside the desktop runtime", async () => {

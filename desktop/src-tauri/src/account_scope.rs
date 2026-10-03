@@ -38,13 +38,25 @@ impl AccountScope {
         &self.digest
     }
 
-    fn is_local_profile(&self) -> bool {
+    pub(crate) fn is_local_profile(&self) -> bool {
         self.authority == AccountScopeAuthority::LocalProfile
+    }
+
+    pub(crate) fn local_from_digest(digest: String) -> Option<Self> {
+        valid_digest(&digest).then_some(Self {
+            digest,
+            authority: AccountScopeAuthority::LocalProfile,
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn synthetic(label: &[u8]) -> Self {
         derive_scope(label)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn synthetic_local(label: &[u8]) -> Self {
+        derive_local_scope(label)
     }
 }
 
@@ -477,6 +489,140 @@ pub(crate) async fn runtime_account_scope_set(
         .map_err(failure)?;
     let next = derive_scope(account_id.as_bytes());
     activate_scope(&app, &scopes, &chat, &onboarding, next)
+}
+
+fn local_profile_migration_paths(
+    app: &tauri::AppHandle,
+    profile_id: &str,
+) -> Result<crate::profile_migration::MigrationPaths, &'static str> {
+    if !valid_profile_id(profile_id) {
+        return Err("local_profile_invalid");
+    }
+    let app_data = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| "local_profile_storage_unavailable")?;
+    // This resolver must compile on Windows even though both public commands
+    // deny the local runtime before invoking it.
+    let runtime_home = app
+        .path()
+        .home_dir()
+        .map(|home| home.join(".jht"))
+        .map_err(|_| "local_account_owner_unavailable")?;
+    Ok(crate::profile_migration::MigrationPaths {
+        source_capability: app_data
+            .join("local-profiles")
+            .join(format!("{profile_id}.json")),
+        app_data,
+        runtime_home,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn runtime_local_profile_migration_probe(
+    app: tauri::AppHandle,
+    keys: State<'_, auth_store::SystemKeyCache>,
+    scopes: State<'_, AccountScopeState>,
+    profile_id: String,
+) -> Result<bool, AccountScopeError> {
+    if !local_runtime_allowed(std::env::consts::OS) {
+        return Err(failure("local_runtime_unsupported"));
+    }
+    let account_id = auth_store::authenticated_account_id(&app, &keys)
+        .await
+        .map_err(failure)?;
+    let target = derive_scope(account_id.as_bytes());
+    let profiles = local_profiles_dir(&app).map_err(failure)?;
+    let paths = local_profile_migration_paths(&app, &profile_id).map_err(failure)?;
+    let source = match load_local_scope_at(&profiles, &profile_id) {
+        Ok(source) => source,
+        Err("local_profile_not_found") => {
+            crate::profile_migration::recoverable_source(&paths, &target)
+                .map_err(failure)?
+                .ok_or_else(|| failure("local_profile_not_found"))?
+        }
+        Err(error) => return Err(failure(error)),
+    };
+    let active = scopes
+        .inner
+        .read()
+        .map_err(|_| failure("account_scope_state_failed"))?;
+    if active
+        .as_ref()
+        .is_some_and(|scope| scope != &source && scope != &target)
+    {
+        return Err(failure("account_scope_changed"));
+    }
+    crate::profile_migration::probe(&paths, &source, &target, || {
+        direct_chat::verify_migration_local_host_at(&paths.app_data, &source)
+    })
+    .map_err(failure)
+}
+
+#[tauri::command]
+pub(crate) async fn runtime_local_profile_migrate_to_authenticated(
+    app: tauri::AppHandle,
+    keys: State<'_, auth_store::SystemKeyCache>,
+    scopes: State<'_, AccountScopeState>,
+    chat: State<'_, direct_chat::DirectChatState>,
+    onboarding: State<'_, onboarding::OnboardingNativeState>,
+    profile_id: String,
+) -> Result<crate::profile_migration::MigrationCommitted, AccountScopeError> {
+    if !local_runtime_allowed(std::env::consts::OS) {
+        return Err(failure("local_runtime_unsupported"));
+    }
+    let account_id = auth_store::authenticated_account_id(&app, &keys)
+        .await
+        .map_err(failure)?;
+    let target = derive_scope(account_id.as_bytes());
+    let paths = local_profile_migration_paths(&app, &profile_id).map_err(failure)?;
+    let profiles = local_profiles_dir(&app).map_err(failure)?;
+    let source = match load_local_scope_at(&profiles, &profile_id) {
+        Ok(source) => source,
+        Err("local_profile_not_found") => {
+            crate::profile_migration::recoverable_source(&paths, &target)
+                .map_err(failure)?
+                .ok_or_else(|| failure("local_profile_not_found"))?
+        }
+        Err(error) => return Err(failure(error)),
+    };
+    let mut active = scopes
+        .inner
+        .write()
+        .map_err(|_| failure("account_scope_state_failed"))?;
+    if active
+        .as_ref()
+        .is_some_and(|scope| scope != &source && scope != &target)
+    {
+        return Err(failure("account_scope_changed"));
+    }
+    let previous = active.clone();
+    // The write lock excludes every scoped IPC. Native handles are closed
+    // before ownership changes, and no target operation can start early.
+    *active = None;
+    direct_chat::teardown(&chat);
+    onboarding::teardown(&onboarding);
+    crate::live_screen::teardown(&app);
+    match crate::profile_migration::migrate(
+        &paths,
+        &source,
+        &target,
+        || direct_chat::verify_migration_local_host_at(&paths.app_data, &source),
+        || Ok(()),
+    ) {
+        Ok(committed) => {
+            *active = Some(target);
+            Ok(committed)
+        }
+        Err(error) => {
+            *active = if error == "local_migration_recovery_required" {
+                None
+            } else {
+                previous
+            };
+            Err(failure(error))
+        }
+    }
 }
 
 #[tauri::command]

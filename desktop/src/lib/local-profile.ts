@@ -62,6 +62,14 @@ function clearLocalProfile(profileId: string, store: LocalProfileStore): void {
   if (readLocalProfile(store) !== null) throw new Error("local-profile-not-cleared");
 }
 
+/** Renderer cleanup is allowed only after the native committed receipt returned. */
+export function finalizeLocalProfileMigration(
+  profileId: string,
+  store: LocalProfileStore = localStorage,
+): void {
+  clearLocalProfile(profileId, store);
+}
+
 function saveLocalProfile(profile: LocalProfile, store: LocalProfileStore): void {
   store.setItem(PROFILE_KEY, JSON.stringify(profile));
   const saved = readLocalProfile(store);

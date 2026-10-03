@@ -11,13 +11,17 @@ import {
   activateDesktopAccountScope,
   activateDesktopLocalScope,
   clearDesktopAccountScope,
+  migrateDesktopLocalProfileToAccount,
+  probeDesktopLocalProfileMigration,
 } from "../lib/desktop-account-scope";
 import {
+  activateSavedLocalProfile,
   clearLocalIdentitySelection,
+  finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
 } from "../lib/local-profile";
-import { googleIdentitySelected } from "../lib/identity-choice";
+import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import type { ExistingTeamConnectionResult } from "../lib/existing-team";
 import {
   isOnboardingAssistantReachable,
@@ -57,7 +61,7 @@ import {
   beginOnboardingActivityInvocation,
   createOnboardingActivity,
 } from "../lib/onboarding-activity";
-import { goTo, LOGIN_PAGE } from "../lib/pages";
+import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
@@ -67,7 +71,22 @@ import { navigate } from "../shell/router";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
+const MIGRATION_ERROR = "Non riesco a collegare il profilo locale. Il runtime resta intestato all’identità locale.";
 const MAX_PROVIDER_OUTPUT = 32_768;
+
+type LocalMigrationGate = {
+  identityKey: string;
+  profileId: string;
+  phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error";
+  retryable?: boolean;
+};
+
+function migrationRetryable(error: unknown): boolean {
+  return [
+    "local_migration_storage_failed",
+    "local_migration_owner_unavailable",
+  ].includes(nativeErrorCode(error) ?? "");
+}
 const PROFILE_RECHECK_MS = 2_000;
 const CONTAINER_RUNTIME_ERRORS = new Set([
   "container_start_failed",
@@ -217,6 +236,7 @@ function nativeErrorCode(error: unknown): string | null {
  */
 export default function DashboardApp() {
   const localProfile = localIdentitySelected() ? readLocalProfile() : null;
+  const savedLocalProfile = localProfile ? null : readLocalProfile();
   const { session, loading } = useSession(
     undefined,
     googleIdentitySelected() && !localProfile,
@@ -237,6 +257,7 @@ export default function DashboardApp() {
     identityKey: string;
     phase: "pending" | "ready" | "error";
   } | null>(null);
+  const [localMigration, setLocalMigration] = useState<LocalMigrationGate | null>(null);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerInputRequestRef = useRef<string | null>(null);
@@ -247,9 +268,15 @@ export default function DashboardApp() {
   const activeIdentityKeyRef = useRef<string | null>(identityKey);
   activeIdentityKeyRef.current = identityKey;
   const signedOut = !loading && !identityKey;
+  const migrationProfile = session && savedLocalProfile && identityKey
+    ? savedLocalProfile
+    : null;
+  const migrationReady = !migrationProfile ||
+    (localMigration?.identityKey === identityKey &&
+      (localMigration.phase === "not-needed" || localMigration.phase === "completed"));
 
   const initializeAccount = useCallback(async () => {
-    if (!identityKey || !markerId) return;
+    if (!identityKey || !markerId || !migrationReady) return;
     const initializingKey = identityKey;
     setGate({ phase: "loading" });
     setAccountScope({ identityKey: initializingKey, phase: "pending" });
@@ -273,7 +300,71 @@ export default function DashboardApp() {
       if (activeIdentityKeyRef.current !== initializingKey) return;
       setGate({ phase: "error", message: GATE_ERROR });
     }
-  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, session]);
+  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady, session]);
+
+  useEffect(() => {
+    if (!identityKey || !migrationProfile) {
+      setLocalMigration(null);
+      return;
+    }
+    const profileId = migrationProfile.profileId;
+    let active = true;
+    setLocalMigration({ identityKey, profileId, phase: "checking" });
+    void probeDesktopLocalProfileMigration(profileId).then((required) => {
+      if (!active || activeIdentityKeyRef.current !== identityKey) return;
+      setLocalMigration({
+        identityKey,
+        profileId,
+        phase: required ? "required" : "not-needed",
+      });
+    }).catch((error: unknown) => {
+      if (!active || activeIdentityKeyRef.current !== identityKey) return;
+      setLocalMigration({
+        identityKey,
+        profileId,
+        phase: "error",
+        retryable: migrationRetryable(error),
+      });
+    });
+    return () => { active = false; };
+  }, [identityKey, migrationProfile?.profileId]);
+
+  const confirmLocalMigration = useCallback(async () => {
+    if (!identityKey || !localMigration || localMigration.identityKey !== identityKey ||
+        localMigration.phase !== "required") return;
+    const profileId = localMigration.profileId;
+    setLocalMigration({ identityKey, profileId, phase: "migrating" });
+    try {
+      await migrateDesktopLocalProfileToAccount(profileId);
+      finalizeLocalProfileMigration(profileId);
+      setLocalMigration({ identityKey, profileId, phase: "completed" });
+    } catch (error) {
+      if (activeIdentityKeyRef.current !== identityKey) return;
+      setLocalMigration({
+        identityKey,
+        profileId,
+        phase: "error",
+        retryable: migrationRetryable(error),
+      });
+    }
+  }, [identityKey, localMigration]);
+
+  const cancelLocalMigration = useCallback(async () => {
+    if (!localMigration || localMigration.phase === "migrating") return;
+    try {
+      await activateSavedLocalProfile();
+      clearGoogleIdentitySelection();
+      goTo(DASHBOARD_PAGE);
+    } catch {
+      if (!identityKey) return;
+      setLocalMigration({
+        identityKey,
+        profileId: localMigration.profileId,
+        phase: "error",
+        retryable: true,
+      });
+    }
+  }, [identityKey, localMigration]);
 
   useEffect(() => {
     if (signedOut) goTo(LOGIN_PAGE);
@@ -307,8 +398,8 @@ export default function DashboardApp() {
       setGate({ phase: "loading" });
       return;
     }
-    void initializeAccount();
-  }, [identityKey, initializeAccount]);
+    if (migrationReady) void initializeAccount();
+  }, [identityKey, initializeAccount, migrationReady]);
 
   useEffect(() => {
     if (!identityKey || !markerId || assistantChatIdentityKey !== identityKey) return;
@@ -800,6 +891,58 @@ export default function DashboardApp() {
     return submit(submission);
   }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, submit]);
 
+  if (migrationProfile && localMigration?.identityKey === identityKey) {
+    if (localMigration.phase === "checking") {
+      return <DashboardSkeleton label="Verifica profilo locale" />;
+    }
+    if (localMigration.phase === "required" || localMigration.phase === "migrating") {
+      return (
+        <main aria-labelledby="local-migration-title">
+          <h1 id="local-migration-title">Collega il profilo locale al tuo account Google?</h1>
+          <p>
+            Il profilo e il runtime restano su questo Mac. Job Hunter Team trasferirà solo
+            l’intestazione locale all’account con cui hai appena effettuato l’accesso.
+          </p>
+          <button
+            type="button"
+            onClick={() => void confirmLocalMigration()}
+            disabled={localMigration.phase === "migrating"}
+          >
+            {localMigration.phase === "migrating" ? "Collegamento…" : "Collega e continua"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void cancelLocalMigration()}
+            disabled={localMigration.phase === "migrating"}
+          >
+            Annulla e resta in locale
+          </button>
+        </main>
+      );
+    }
+    if (localMigration.phase === "error") {
+      return (
+        <main role="alert">
+          <p>{MIGRATION_ERROR}</p>
+          {localMigration.retryable && (
+            <button
+              type="button"
+              onClick={() => setLocalMigration({
+                identityKey,
+                profileId: localMigration.profileId,
+                phase: "required",
+              })}
+            >
+              Riprova
+            </button>
+          )}
+          <button type="button" onClick={() => void cancelLocalMigration()}>
+            Annulla e resta in locale
+          </button>
+        </main>
+      );
+    }
+  }
   if (!identityKey || accountScope?.identityKey !== identityKey || accountScope.phase === "pending") {
     return <DashboardSkeleton label="Caricamento dashboard" />;
   }
