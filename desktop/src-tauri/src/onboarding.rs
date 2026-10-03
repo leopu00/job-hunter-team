@@ -649,6 +649,15 @@ pub(crate) enum InteractiveStateStatus {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub(crate) enum InteractiveAction {
+    Device {
+        instruction: &'static str,
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(rename = "safeUrl")]
+        safe_url: String,
+        #[serde(rename = "userCode")]
+        user_code: String,
+    },
     Url {
         instruction: &'static str,
         #[serde(rename = "safeUrl")]
@@ -2262,15 +2271,82 @@ enum RedactionState {
     Redacting,
 }
 
+#[derive(Clone, Copy, Default)]
+enum TerminalSequenceState {
+    #[default]
+    Text,
+    Escape,
+    EscapeIntermediate,
+    Csi,
+    Osc,
+    OscEscape,
+}
+
+#[derive(Default)]
+struct TerminalTextNormalizer {
+    state: TerminalSequenceState,
+}
+
+impl TerminalTextNormalizer {
+    fn push(&mut self, text: &str) -> String {
+        let mut output = String::with_capacity(text.len());
+        for character in text.chars() {
+            match self.state {
+                TerminalSequenceState::Text => match character {
+                    '\u{1b}' => self.state = TerminalSequenceState::Escape,
+                    '\u{009b}' => self.state = TerminalSequenceState::Csi,
+                    '\u{009d}' => self.state = TerminalSequenceState::Osc,
+                    '\n' | '\t' => output.push(character),
+                    value if value.is_control() => {}
+                    value => output.push(value),
+                },
+                TerminalSequenceState::Escape => match character {
+                    '[' => self.state = TerminalSequenceState::Csi,
+                    ']' | 'P' | 'X' | '^' | '_' => self.state = TerminalSequenceState::Osc,
+                    '\u{20}'..='\u{2f}' => self.state = TerminalSequenceState::EscapeIntermediate,
+                    '\u{1b}' => {}
+                    _ => self.state = TerminalSequenceState::Text,
+                },
+                TerminalSequenceState::EscapeIntermediate => match character {
+                    '\u{30}'..='\u{7e}' => self.state = TerminalSequenceState::Text,
+                    '\u{1b}' => self.state = TerminalSequenceState::Escape,
+                    _ => {}
+                },
+                TerminalSequenceState::Csi => match character {
+                    '\u{40}'..='\u{7e}' => self.state = TerminalSequenceState::Text,
+                    '\u{1b}' => self.state = TerminalSequenceState::Escape,
+                    _ => {}
+                },
+                TerminalSequenceState::Osc => match character {
+                    '\u{7}' | '\u{009c}' => self.state = TerminalSequenceState::Text,
+                    '\u{1b}' => self.state = TerminalSequenceState::OscEscape,
+                    _ => {}
+                },
+                TerminalSequenceState::OscEscape => match character {
+                    '\\' | '\u{009c}' => self.state = TerminalSequenceState::Text,
+                    '\u{1b}' => {}
+                    _ => self.state = TerminalSequenceState::Osc,
+                },
+            }
+        }
+        output
+    }
+
+    fn finish(&mut self) {
+        self.state = TerminalSequenceState::Text;
+    }
+}
+
 #[derive(Default)]
 struct StreamRedactor {
     pending: String,
     state: RedactionState,
+    terminal: TerminalTextNormalizer,
 }
 
 impl StreamRedactor {
     fn push(&mut self, text: &str) -> String {
-        self.pending.push_str(text);
+        self.pending.push_str(&self.terminal.push(text));
         let mut output = String::new();
 
         loop {
@@ -2351,6 +2427,7 @@ impl StreamRedactor {
     }
 
     fn finish(&mut self) -> String {
+        self.terminal.finish();
         match self.state {
             RedactionState::Scanning => {
                 sanitize_interactive_text(std::mem::take(&mut self.pending))
@@ -2416,10 +2493,31 @@ impl InteractiveStateDetector {
                 .collect();
         }
         let safe_url = extract_provider_url(self.provider, &self.pending);
-        let user_code = extract_provider_user_code(&self.pending);
+        let user_code = extract_provider_user_code(self.provider, &self.pending);
         let needs_input =
             self.provider != SubscriptionProvider::Codex && provider_input_prompt(&self.pending);
         let mut events = Vec::new();
+        if self.provider == SubscriptionProvider::Codex {
+            if let (Some(safe_url), Some(user_code)) = (safe_url, user_code) {
+                if self.last_url.as_ref() != Some(&safe_url)
+                    || self.last_code.as_ref() != Some(&user_code)
+                {
+                    self.last_url = Some(safe_url.clone());
+                    self.last_code = Some(user_code.clone());
+                    self.request_sequence += 1;
+                    events.push(InteractiveEvent::State {
+                        status: InteractiveStateStatus::NeedsUserAction,
+                        action: InteractiveAction::Device {
+                            instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+                            request_id: format!("codex-device-{}", self.request_sequence),
+                            safe_url,
+                            user_code,
+                        },
+                    });
+                }
+            }
+            return events;
+        }
         if let Some(safe_url) = safe_url {
             if self.last_url.as_ref() != Some(&safe_url) {
                 self.last_url = Some(safe_url.clone());
@@ -2485,14 +2583,18 @@ fn extract_provider_url(provider: SubscriptionProvider, text: &str) -> Option<St
                 '.' | ',' | ';' | ':' | ')' | ']' | '}' | '"' | '\''
             )
         });
-        if candidate.is_empty() || candidate.len() > 2048 || candidate.chars().any(char::is_control)
+        if candidate.is_empty()
+            || candidate.len() > 2048
+            || !candidate.is_ascii()
+            || candidate.chars().any(char::is_control)
+            || candidate
+                .bytes()
+                .any(|byte| matches!(byte, b'[' | b']' | b'\\' | b'{' | b'}'))
         {
             return None;
         }
-        let authority = candidate
-            .strip_prefix("https://")?
-            .split(['/', '?', '#'])
-            .next()?;
+        let remainder = candidate.strip_prefix("https://")?;
+        let authority = remainder.split(['/', '?', '#']).next()?;
         if authority.is_empty()
             || authority.contains('@')
             || authority.contains(':')
@@ -2503,18 +2605,21 @@ fn extract_provider_url(provider: SubscriptionProvider, text: &str) -> Option<St
             return None;
         }
         let host = authority.to_ascii_lowercase();
+        let suffix = &remainder[authority.len()..];
+        if suffix.contains('#') {
+            return None;
+        }
+        let path = suffix.split('?').next().unwrap_or("");
         let allowed = match provider {
             SubscriptionProvider::Claude => {
-                provider_domain(&host, "anthropic.com") || provider_domain(&host, "claude.ai")
+                matches!(host.as_str(), "console.anthropic.com" | "claude.ai")
+                    && matches!(path, "/oauth" | "/oauth/" | "/oauth/authorize")
             }
             SubscriptionProvider::Codex => {
-                provider_domain(&host, "openai.com") || provider_domain(&host, "chatgpt.com")
+                host == "auth.openai.com" && matches!(path, "/codex/device" | "/codex/device/")
             }
             SubscriptionProvider::Kimi => {
-                provider_domain(&host, "kimi.com")
-                    || provider_domain(&host, "kimi.ai")
-                    || provider_domain(&host, "moonshot.cn")
-                    || provider_domain(&host, "moonshot.ai")
+                host == "auth.kimi.com" && matches!(path, "/device" | "/device/")
             }
         };
         if !allowed {
@@ -2530,23 +2635,22 @@ fn extract_provider_url(provider: SubscriptionProvider, text: &str) -> Option<St
             "authorization_code=",
             "session_token=",
             "password=",
+            "%00",
+            "%0a",
+            "%0d",
+            "%1b",
+            "%9b",
+            "%9d",
         ] {
             if lowercase.contains(forbidden) {
                 return None;
             }
         }
-        Some(candidate.to_owned())
+        Some(format!("https://{host}{suffix}"))
     })
 }
 
-fn provider_domain(host: &str, expected: &str) -> bool {
-    host == expected
-        || host
-            .strip_suffix(expected)
-            .is_some_and(|prefix| prefix.ends_with('.'))
-}
-
-fn extract_provider_user_code(text: &str) -> Option<String> {
+fn extract_provider_user_code(provider: SubscriptionProvider, text: &str) -> Option<String> {
     if !text.to_ascii_lowercase().contains("code") {
         return None;
     }
@@ -2564,7 +2668,20 @@ fn extract_provider_user_code(text: &str) -> Option<String> {
             && candidate
                 .bytes()
                 .any(|byte| byte.is_ascii_digit() || byte == b'-');
-        valid.then(|| candidate.to_owned())
+        let provider_valid = match provider {
+            SubscriptionProvider::Codex => {
+                candidate.len() == 9
+                    && candidate.as_bytes()[4] == b'-'
+                    && candidate[..4]
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric())
+                    && candidate[5..]
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric())
+            }
+            SubscriptionProvider::Claude | SubscriptionProvider::Kimi => true,
+        };
+        (valid && provider_valid).then(|| candidate.to_owned())
     })
 }
 
@@ -4360,7 +4477,7 @@ exit 0
             (
                 SubscriptionProvider::Codex,
                 "Open https://auth.openai.com/codex/device and enter code WXYZ-9876",
-                vec!["url", "code"],
+                vec!["device"],
             ),
             (
                 SubscriptionProvider::Kimi,
@@ -4386,6 +4503,15 @@ exit 0
                 assert_eq!(value["kind"], "state");
                 assert_eq!(value["status"], "needs_user_action");
                 match value["action"]["kind"].as_str().unwrap() {
+                    "device" => {
+                        assert_eq!(
+                            value["action"]["safeUrl"],
+                            "https://auth.openai.com/codex/device"
+                        );
+                        assert_eq!(value["action"]["userCode"], "WXYZ-9876");
+                        assert_eq!(value["action"]["requestId"], "codex-device-1");
+                        assert!(value["action"].get("inputRequest").is_none());
+                    }
                     "url" => {
                         assert!(value["action"]["safeUrl"]
                             .as_str()
@@ -4432,6 +4558,50 @@ exit 0
                 );
             }
         }
+    }
+
+    #[test]
+    fn codex_device_state_strips_chunked_csi_osc_and_keeps_url_and_code_together() {
+        let chunks = [
+            "\u{1b}]8;;https://evil.invalid/device",
+            "\u{1b}",
+            "\\Open \u{1b}[",
+            "36mhttps://AUTH.OPENAI.COM/codex/device\u{1b}[0",
+            "m and enter\r code \u{8}\u{1b}[1mQ7KM",
+            "-2P9R\u{1b}",
+            "[0m\n",
+        ];
+        let mut redactor = StreamRedactor::default();
+        let mut detector = InteractiveStateDetector::new(SubscriptionProvider::Codex);
+        let mut visible = String::new();
+        let mut events = Vec::new();
+        for chunk in chunks {
+            let text = redactor.push(chunk);
+            visible.push_str(&text);
+            events.extend(detector.push(&text));
+        }
+        let tail = redactor.finish();
+        visible.push_str(&tail);
+        events.extend(detector.push(&tail));
+
+        assert_eq!(events.len(), 1);
+        let value = serde_json::to_value(&events[0]).unwrap();
+        assert_eq!(value["kind"], "state");
+        assert_eq!(value["status"], "needs_user_action");
+        assert_eq!(value["action"]["kind"], "device");
+        assert_eq!(value["action"]["requestId"], "codex-device-1");
+        assert_eq!(
+            value["action"]["safeUrl"],
+            "https://auth.openai.com/codex/device"
+        );
+        assert_eq!(value["action"]["userCode"], "Q7KM-2P9R");
+        assert!(!visible.contains('\u{1b}'));
+        assert!(!visible.contains("[0m"));
+        assert!(!visible.contains("evil.invalid"));
+
+        let contaminated = InteractiveStateDetector::new(SubscriptionProvider::Codex)
+            .push("Open https://auth.openai.com/codex/device[0m and enter code Q7KM-2P9R");
+        assert!(contaminated.is_empty());
     }
 
     #[test]
