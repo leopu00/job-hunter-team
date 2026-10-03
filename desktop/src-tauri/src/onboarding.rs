@@ -17,7 +17,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
@@ -38,6 +38,7 @@ const LOCAL_RUNTIME_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
+const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
 const PODMAN_MACHINE_NAME: &str = "jht-podman";
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
@@ -112,21 +113,37 @@ pub(crate) struct ExistingTeamConnectRequest {
     host: ExecutionHost,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OnboardingProgress {
     stage: OnboardingProgressStage,
+    status: OnboardingProgressStatus,
     message: &'static str,
+    sequence: u64,
+    elapsed_ms: u64,
+    code: Option<&'static str>,
+    retryable: Option<bool>,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum OnboardingProgressStage {
-    Preparing,
+    Engine,
     Runtime,
     Container,
     Provider,
+    Login,
     Team,
+    Assistant,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum OnboardingProgressStatus {
+    Start,
+    Progress,
+    Done,
+    Error,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -269,6 +286,23 @@ fn failure(code: &'static str) -> OnboardingError {
             "La configurazione del provider ha superato il tempo massimo. Riprova.",
             true,
         ),
+        "provider_config_failed" | "provider_install_failed" => (
+            "La configurazione del provider non è riuscita. Riprova.",
+            true,
+        ),
+        "provider_login_start_failed" | "provider_login_pipe_failed" => (
+            "Non riesco ad avviare l’accesso al provider. Riprova.",
+            true,
+        ),
+        "provider_login_failed" => (
+            "L’accesso al provider non è stato completato. Riprova.",
+            true,
+        ),
+        "assistant_start_failed" => ("L’assistente non si è avviato. Riprova.", true),
+        "assistant_verify_timeout" => (
+            "L’assistente è stato avviato ma non risulta ancora pronto. Riprova.",
+            true,
+        ),
         "existing_team_vps_required" => (
             "Seleziona una configurazione VPS valida per collegare il team esistente.",
             false,
@@ -302,12 +336,120 @@ fn trace_local_runtime(stage: &'static str, event: &'static str) {
 
 #[cfg(not(debug_assertions))]
 fn trace_local_runtime(_stage: &'static str, _event: &'static str) {}
-fn progress(
-    channel: &Channel<OnboardingProgress>,
-    stage: OnboardingProgressStage,
-    message: &'static str,
-) {
-    let _ = channel.send(OnboardingProgress { stage, message });
+#[derive(Clone)]
+struct ProgressReporter {
+    emit: Arc<dyn Fn(OnboardingProgress) + Send + Sync>,
+    sequence: Arc<AtomicU64>,
+}
+
+impl ProgressReporter {
+    fn new(channel: Channel<OnboardingProgress>) -> Self {
+        Self::with_emitter(move |event| {
+            let _ = channel.send(event);
+        })
+    }
+
+    fn with_emitter(emit: impl Fn(OnboardingProgress) + Send + Sync + 'static) -> Self {
+        Self {
+            emit: Arc::new(emit),
+            sequence: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    fn send(
+        &self,
+        stage: OnboardingProgressStage,
+        status: OnboardingProgressStatus,
+        message: &'static str,
+        started: Instant,
+        error: Option<&OnboardingError>,
+    ) {
+        let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        (self.emit)(OnboardingProgress {
+            stage,
+            status,
+            message,
+            sequence: self.sequence.fetch_add(1, Ordering::Relaxed),
+            elapsed_ms,
+            code: error.map(|value| value.code),
+            retryable: error.map(|value| value.retryable),
+        });
+    }
+
+    fn run<T>(
+        &self,
+        stage: OnboardingProgressStage,
+        start_message: &'static str,
+        heartbeat_message: &'static str,
+        done_message: &'static str,
+        operation: impl FnOnce() -> Result<T, OnboardingError>,
+    ) -> Result<T, OnboardingError> {
+        self.run_with_interval(
+            stage,
+            start_message,
+            heartbeat_message,
+            done_message,
+            PROGRESS_HEARTBEAT_INTERVAL,
+            operation,
+        )
+    }
+
+    fn run_with_interval<T>(
+        &self,
+        stage: OnboardingProgressStage,
+        start_message: &'static str,
+        heartbeat_message: &'static str,
+        done_message: &'static str,
+        interval: Duration,
+        operation: impl FnOnce() -> Result<T, OnboardingError>,
+    ) -> Result<T, OnboardingError> {
+        let started = Instant::now();
+        self.send(
+            stage,
+            OnboardingProgressStatus::Start,
+            start_message,
+            started,
+            None,
+        );
+        let stopped = Arc::new(AtomicBool::new(false));
+        let heartbeat_stopped = Arc::clone(&stopped);
+        let heartbeat_reporter = self.clone();
+        let heartbeat = thread::spawn(move || loop {
+            thread::park_timeout(interval);
+            if heartbeat_stopped.load(Ordering::Acquire) {
+                break;
+            }
+            heartbeat_reporter.send(
+                stage,
+                OnboardingProgressStatus::Progress,
+                heartbeat_message,
+                started,
+                None,
+            );
+        });
+
+        let result = operation();
+        stopped.store(true, Ordering::Release);
+        heartbeat.thread().unpark();
+        let _ = heartbeat.join();
+        match &result {
+            Ok(_) => self.send(
+                stage,
+                OnboardingProgressStatus::Done,
+                done_message,
+                started,
+                None,
+            ),
+            Err(error) => self.send(
+                stage,
+                OnboardingProgressStatus::Error,
+                error.message,
+                started,
+                Some(error),
+            ),
+        }
+        result
+    }
 }
 
 fn valid_pairing_token(token: &str) -> bool {
@@ -1004,126 +1146,147 @@ fn prepare_impl(
     pairing_token: Option<String>,
     channel: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    progress(
-        &channel,
-        OnboardingProgressStage::Preparing,
-        "Valido la configurazione locale",
-    );
+    let reporter = ProgressReporter::new(channel);
     let mut pairing = pairing_token.map(Zeroizing::new);
-    let validated = validate_host(&app, &submission.host).map_err(failure)?;
-    progress(
-        &channel,
-        OnboardingProgressStage::Runtime,
-        "Preparo e verifico il runtime",
-    );
-    match &validated {
-        ValidatedHost::Local => {
-            let wrapper = install_local(&app)?;
-            progress(
-                &channel,
-                OnboardingProgressStage::Container,
-                "Avvio il container Job Hunter Team",
-            );
-            start_and_verify_local_container_with(
-                |args, timeout| run_scoped_local(&app, &scope, &wrapper, args, timeout),
-                thread::sleep,
-                LOCAL_CONTAINER_VERIFY_ATTEMPTS,
-            )?;
-            progress(
-                &channel,
-                OnboardingProgressStage::Container,
-                "Il container è attivo e verificato",
-            );
-            progress(
-                &channel,
-                OnboardingProgressStage::Provider,
-                "Configuro il provider in abbonamento",
-            );
-            let use_id = match submission.provider {
-                SubscriptionProvider::Claude => "claude",
-                SubscriptionProvider::Codex => "codex",
-                SubscriptionProvider::Kimi => "kimi",
+    let (validated, wrapper) = reporter.run(
+        OnboardingProgressStage::Engine,
+        "Verifico il motore container",
+        "Preparazione del motore container in corso",
+        "Motore container verificato",
+        || {
+            let validated = validate_host(&app, &submission.host).map_err(failure)?;
+            let wrapper = match &validated {
+                ValidatedHost::Local => Some(install_local(&app)?),
+                ValidatedHost::Vps { .. } => {
+                    let token = pairing
+                        .as_ref()
+                        .ok_or_else(|| failure("pairing_token_missing"))?;
+                    if !valid_pairing_token(token) {
+                        return Err(failure("pairing_token_invalid"));
+                    }
+                    with_downloaded_installer(|installer| {
+                        let mut input = remote_install_input(installer, token)?;
+                        let result = ensure_success(
+                            run_ssh(
+                                &validated,
+                                REMOTE_INSTALL,
+                                Some(&input),
+                                PREPARE_TIMEOUT,
+                                None,
+                            ),
+                            "runtime_install_failed",
+                        );
+                        input.zeroize();
+                        result
+                    })?;
+                    None
+                }
             };
-            ensure_success_with_timeout(
-                run_scoped_local(
-                    &app,
-                    &scope,
-                    &wrapper,
-                    &["providers", "use", use_id],
-                    COMMAND_TIMEOUT,
-                ),
-                "provider_config_failed",
-                "provider_timeout",
-            )?;
-            ensure_success_with_timeout(
-                run_scoped_local(
-                    &app,
-                    &scope,
-                    &wrapper,
-                    &["providers", "update", use_id],
-                    PREPARE_TIMEOUT,
-                ),
-                "provider_install_failed",
-                "provider_timeout",
-            )?;
-        }
-        ValidatedHost::Vps { .. } => {
-            let token = pairing
-                .as_ref()
-                .ok_or_else(|| failure("pairing_token_missing"))?;
-            if !valid_pairing_token(token) {
-                return Err(failure("pairing_token_invalid"));
+            Ok((validated, wrapper))
+        },
+    )?;
+
+    reporter.run(
+        OnboardingProgressStage::Runtime,
+        "Avvio il runtime Job Hunter Team",
+        "Avvio del runtime in corso",
+        "Runtime Job Hunter Team avviato",
+        || match &validated {
+            ValidatedHost::Local => {
+                let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
+                start_and_verify_local_container_with(
+                    |args, timeout| run_scoped_local(&app, &scope, wrapper, args, timeout),
+                    thread::sleep,
+                    LOCAL_CONTAINER_VERIFY_ATTEMPTS,
+                )
             }
-            with_downloaded_installer(|installer| {
-                let mut input = remote_install_input(installer, token)?;
-                let result = ensure_success(
-                    run_ssh(
-                        &validated,
-                        REMOTE_INSTALL,
-                        Some(&input),
-                        PREPARE_TIMEOUT,
-                        None,
-                    ),
-                    "runtime_install_failed",
-                );
-                input.zeroize();
-                result
-            })?;
-            ensure_success(
+            ValidatedHost::Vps { .. } => ensure_success(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
                 "container_start_failed",
-            )?;
-            progress(
-                &channel,
-                OnboardingProgressStage::Provider,
-                "Configuro il provider in abbonamento",
-            );
-            let (use_command, update_command) = match submission.provider {
-                SubscriptionProvider::Claude => (REMOTE_USE_CLAUDE, REMOTE_UPDATE_CLAUDE),
-                SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
-                SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
-            };
-            ensure_success_with_timeout(
-                run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
-                "provider_config_failed",
-                "provider_timeout",
-            )?;
-            ensure_success_with_timeout(
-                run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
-                "provider_install_failed",
-                "provider_timeout",
-            )?;
-        }
-    }
+            ),
+        },
+    )?;
+
+    reporter.run(
+        OnboardingProgressStage::Container,
+        "Verifico il container Job Hunter Team",
+        "Verifica del container in corso",
+        "Container Job Hunter Team verificato",
+        || {
+            let snapshot = snapshot_impl(&app, &scope, &validated)?;
+            if !snapshot.container_running {
+                trace_local_runtime("container", "snapshot_not_ready");
+                return Err(failure("container_not_ready"));
+            }
+            Ok(())
+        },
+    )?;
+
+    let snapshot = reporter.run(
+        OnboardingProgressStage::Provider,
+        "Configuro il provider in abbonamento",
+        "Configurazione del provider in corso",
+        "Provider configurato",
+        || {
+            match &validated {
+                ValidatedHost::Local => {
+                    let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
+                    let use_id = match submission.provider {
+                        SubscriptionProvider::Claude => "claude",
+                        SubscriptionProvider::Codex => "codex",
+                        SubscriptionProvider::Kimi => "kimi",
+                    };
+                    ensure_success_with_timeout(
+                        run_scoped_local(
+                            &app,
+                            &scope,
+                            wrapper,
+                            &["providers", "use", use_id],
+                            COMMAND_TIMEOUT,
+                        ),
+                        "provider_config_failed",
+                        "provider_timeout",
+                    )?;
+                    ensure_success_with_timeout(
+                        run_scoped_local(
+                            &app,
+                            &scope,
+                            wrapper,
+                            &["providers", "update", use_id],
+                            PREPARE_TIMEOUT,
+                        ),
+                        "provider_install_failed",
+                        "provider_timeout",
+                    )?;
+                }
+                ValidatedHost::Vps { .. } => {
+                    let (use_command, update_command) = match submission.provider {
+                        SubscriptionProvider::Claude => (REMOTE_USE_CLAUDE, REMOTE_UPDATE_CLAUDE),
+                        SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
+                        SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
+                    };
+                    ensure_success_with_timeout(
+                        run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
+                        "provider_config_failed",
+                        "provider_timeout",
+                    )?;
+                    ensure_success_with_timeout(
+                        run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
+                        "provider_install_failed",
+                        "provider_timeout",
+                    )?;
+                }
+            }
+            let snapshot = snapshot_impl(&app, &scope, &validated)?;
+            crate::direct_chat::persist_onboarding_host(&app, &scope, &submission.host)
+                .map_err(failure)?;
+            Ok(snapshot)
+        },
+    )?;
+
     if let Some(value) = pairing.as_mut() {
         value.zeroize();
     }
-    let snapshot = snapshot_impl(&app, &scope, &validated)?;
-    if !snapshot.container_running {
-        trace_local_runtime("container", "snapshot_not_ready");
-        return Err(failure("container_not_ready"));
-    }
-    crate::direct_chat::persist_onboarding_host(&app, &scope, &submission.host).map_err(failure)?;
     Ok(snapshot)
 }
 
@@ -1403,34 +1566,42 @@ pub(crate) async fn onboarding_existing_team_connect(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        progress(
-            &on_progress,
+        let reporter = ProgressReporter::new(on_progress);
+        let validated = reporter.run(
             OnboardingProgressStage::Runtime,
-            "Verifico la VPS già configurata",
-        );
-        let validated = validate_host(&app, &request.host).map_err(failure)?;
-        progress(
-            &on_progress,
+            "Verifico il runtime già configurato",
+            "Verifica del runtime in corso",
+            "Runtime già configurato verificato",
+            || validate_host(&app, &request.host).map_err(failure),
+        )?;
+        let snapshot = reporter.run(
             OnboardingProgressStage::Container,
-            "Verifico runtime e container senza modificarli",
-        );
-        let snapshot = existing_team_probe_with(&request.team_id, |input| {
-            run_ssh(
-                &validated,
-                REMOTE_EXISTING_TEAM_PROBE,
-                Some(input),
-                SNAPSHOT_TIMEOUT,
-                None,
-            )
-        })?;
-        progress(
-            &on_progress,
+            "Verifico il container esistente",
+            "Verifica del container esistente in corso",
+            "Container esistente verificato",
+            || {
+                existing_team_probe_with(&request.team_id, |input| {
+                    run_ssh(
+                        &validated,
+                        REMOTE_EXISTING_TEAM_PROBE,
+                        Some(input),
+                        SNAPSHOT_TIMEOUT,
+                        None,
+                    )
+                })
+            },
+        )?;
+        reporter.run(
             OnboardingProgressStage::Team,
-            "Il team esistente è attivo e verificato",
-        );
-        crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
-            .map_err(failure)?;
-        Ok(snapshot)
+            "Confermo il team esistente",
+            "Conferma del team esistente in corso",
+            "Team esistente attivo e verificato",
+            || {
+                crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
+                    .map_err(failure)?;
+                Ok(snapshot)
+            },
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
@@ -1605,6 +1776,7 @@ pub(crate) fn onboarding_provider_login(
     scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
     on_event: Channel<InteractiveEvent>,
+    on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
     let mut slot = state
@@ -1624,82 +1796,156 @@ pub(crate) fn onboarding_provider_login(
         }
     }
     *slot = None;
-    let validated = validate_host(&app, &host).map_err(failure)?;
-    let mut command = match &validated {
-        ValidatedHost::Local => {
-            let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
-            #[cfg(target_os = "macos")]
-            {
-                let mut cmd = Command::new("/usr/bin/script");
-                cmd.arg("-q")
-                    .arg("/dev/null")
-                    .arg(wrapper)
-                    .arg("oauth-login");
+    let reporter = ProgressReporter::new(on_progress);
+    let login_started = Instant::now();
+    reporter.send(
+        OnboardingProgressStage::Login,
+        OnboardingProgressStatus::Start,
+        "Avvio l’accesso al provider",
+        login_started,
+        None,
+    );
+    let setup = (|| {
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        let mut command = match &validated {
+            ValidatedHost::Local => {
+                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                #[cfg(target_os = "macos")]
+                {
+                    let mut cmd = Command::new("/usr/bin/script");
+                    cmd.arg("-q")
+                        .arg("/dev/null")
+                        .arg(wrapper)
+                        .arg("oauth-login");
+                    cmd
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let mut cmd = Command::new(wrapper);
+                    cmd.arg("oauth-login");
+                    cmd
+                }
+            }
+            ValidatedHost::Vps { .. } => {
+                let mut args = ssh_base_args(&validated).map_err(failure)?;
+                let destination = args.pop().ok_or_else(|| failure("invalid_host"))?;
+                let mut cmd = Command::new("ssh");
+                cmd.args(args)
+                    .arg("-tt")
+                    .arg(destination)
+                    .arg(REMOTE_OAUTH_LOGIN);
                 cmd
             }
-            #[cfg(not(target_os = "macos"))]
-            {
-                let mut cmd = Command::new(wrapper);
-                cmd.arg("oauth-login");
-                cmd
-            }
-        }
-        ValidatedHost::Vps { .. } => {
-            let mut args = ssh_base_args(&validated).map_err(failure)?;
-            let destination = args.pop().ok_or_else(|| failure("invalid_host"))?;
-            let mut cmd = Command::new("ssh");
-            cmd.args(args)
-                .arg("-tt")
-                .arg(destination)
-                .arg(REMOTE_OAUTH_LOGIN);
-            cmd
+        };
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command
+            .spawn()
+            .map_err(|_| failure("provider_login_start_failed"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| failure("provider_login_pipe_failed"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| failure("provider_login_pipe_failed"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| failure("provider_login_pipe_failed"))?;
+        let id = format!(
+            "login-{}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis(),
+            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        Ok::<_, OnboardingError>((child, stdin, stdout, stderr, id))
+    })();
+    let (child, stdin, stdout, stderr, id) = match setup {
+        Ok(value) => value,
+        Err(error) => {
+            reporter.send(
+                OnboardingProgressStage::Login,
+                OnboardingProgressStatus::Error,
+                error.message,
+                login_started,
+                Some(&error),
+            );
+            return Err(error);
         }
     };
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|_| failure("provider_login_start_failed"))?;
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| failure("provider_login_pipe_failed"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| failure("provider_login_pipe_failed"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| failure("provider_login_pipe_failed"))?;
-    let id = format!(
-        "login-{}-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis(),
-        SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    );
     let child = Arc::new(Mutex::new(child));
     stream_reader(stdout, on_event.clone());
     stream_reader(stderr, on_event.clone());
     let waiter = Arc::clone(&child);
     let exit_channel = on_event.clone();
-    thread::spawn(move || loop {
-        let result = waiter
-            .lock()
-            .ok()
-            .and_then(|mut process| process.try_wait().ok())
-            .flatten();
-        if let Some(status) = result {
-            let _ = exit_channel.send(InteractiveEvent::Exit {
-                code: status.code(),
-            });
-            break;
+    thread::spawn(move || {
+        let mut next_heartbeat = PROGRESS_HEARTBEAT_INTERVAL;
+        loop {
+            let result =
+                waiter
+                    .lock()
+                    .map_err(|_| failure("state_failed"))
+                    .and_then(|mut process| {
+                        process
+                            .try_wait()
+                            .map_err(|_| failure("provider_login_failed"))
+                    });
+            match result {
+                Ok(Some(status)) => {
+                    let _ = exit_channel.send(InteractiveEvent::Exit {
+                        code: status.code(),
+                    });
+                    if status.success() {
+                        reporter.send(
+                            OnboardingProgressStage::Login,
+                            OnboardingProgressStatus::Done,
+                            "Accesso al provider completato",
+                            login_started,
+                            None,
+                        );
+                    } else {
+                        let error = failure("provider_login_failed");
+                        reporter.send(
+                            OnboardingProgressStage::Login,
+                            OnboardingProgressStatus::Error,
+                            error.message,
+                            login_started,
+                            Some(&error),
+                        );
+                    }
+                    break;
+                }
+                Err(error) => {
+                    let _ = exit_channel.send(InteractiveEvent::Exit { code: None });
+                    reporter.send(
+                        OnboardingProgressStage::Login,
+                        OnboardingProgressStatus::Error,
+                        error.message,
+                        login_started,
+                        Some(&error),
+                    );
+                    break;
+                }
+                Ok(None) => {}
+            }
+            if login_started.elapsed() >= next_heartbeat {
+                reporter.send(
+                    OnboardingProgressStage::Login,
+                    OnboardingProgressStatus::Progress,
+                    "Accesso al provider in corso",
+                    login_started,
+                    None,
+                );
+                next_heartbeat += PROGRESS_HEARTBEAT_INTERVAL;
+            }
+            thread::sleep(Duration::from_millis(100));
         }
-        thread::sleep(Duration::from_millis(100));
     });
     *slot = Some(InteractiveSession {
         scope: scope.scope().clone(),
@@ -1835,14 +2081,18 @@ pub(crate) async fn onboarding_team_start(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        progress(
-            &on_progress,
+        let reporter = ProgressReporter::new(on_progress);
+        reporter.run(
             OnboardingProgressStage::Team,
-            "Avvio container e agenti",
-        );
-        start_team_impl(&app, &worker_expected, &validated)?;
-        verified_team_snapshot(&app, &worker_expected, &validated)
+            "Avvio la squadra",
+            "Avvio della squadra in corso",
+            "Squadra avviata e verificata",
+            || {
+                let validated = validate_host(&app, &host).map_err(failure)?;
+                start_team_impl(&app, &worker_expected, &validated)?;
+                verified_team_snapshot(&app, &worker_expected, &validated)
+            },
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("team_start_failed")));
@@ -1856,6 +2106,7 @@ pub(crate) async fn onboarding_resume_team_start(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
+    on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
     if state
@@ -1871,13 +2122,22 @@ pub(crate) async fn onboarding_resume_team_start(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let host =
-            crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        let before = snapshot_impl(&app, &worker_expected, &validated)?;
-        resume_team_prerequisite(&before)?;
-        start_team_impl(&app, &worker_expected, &validated)?;
-        verified_team_snapshot(&app, &worker_expected, &validated)
+        let reporter = ProgressReporter::new(on_progress);
+        reporter.run(
+            OnboardingProgressStage::Team,
+            "Riprendo l’avvio della squadra",
+            "Ripristino della squadra in corso",
+            "Squadra ripristinata e verificata",
+            || {
+                let host = crate::direct_chat::load_persisted_host(&app, &worker_expected)
+                    .map_err(failure)?;
+                let validated = validate_host(&app, &host).map_err(failure)?;
+                let before = snapshot_impl(&app, &worker_expected, &validated)?;
+                resume_team_prerequisite(&before)?;
+                start_team_impl(&app, &worker_expected, &validated)?;
+                verified_team_snapshot(&app, &worker_expected, &validated)
+            },
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("team_start_failed")));
@@ -1892,6 +2152,7 @@ pub(crate) async fn onboarding_assistant_open(
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
+    on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
     if state
@@ -1907,40 +2168,50 @@ pub(crate) async fn onboarding_assistant_open(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        match &validated {
-            ValidatedHost::Local => {
-                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
-                ensure_success(
-                    run_scoped_local(
-                        &app,
-                        &worker_expected,
-                        &wrapper,
-                        &["team", "start", "assistente"],
-                        COMMAND_TIMEOUT,
-                    ),
-                    "assistant_start_failed",
-                )?;
-            }
-            ValidatedHost::Vps { .. } => ensure_success(
-                run_ssh(
-                    &validated,
-                    REMOTE_ASSISTANT_START,
-                    None,
-                    COMMAND_TIMEOUT,
-                    None,
-                ),
-                "assistant_start_failed",
-            )?,
-        }
-        for _ in 0..40 {
-            let snapshot = snapshot_impl(&app, &worker_expected, &validated)?;
-            if assistant_reached(&snapshot) {
-                return Ok(snapshot);
-            }
-            thread::sleep(Duration::from_secs(3));
-        }
-        Err(failure("assistant_verify_timeout"))
+        let reporter = ProgressReporter::new(on_progress);
+        reporter.run(
+            OnboardingProgressStage::Assistant,
+            "Avvio l’assistente",
+            "Avvio dell’assistente in corso",
+            "Assistente avviato e verificato",
+            || {
+                let validated = validate_host(&app, &host).map_err(failure)?;
+                match &validated {
+                    ValidatedHost::Local => {
+                        let wrapper =
+                            wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                        ensure_success(
+                            run_scoped_local(
+                                &app,
+                                &worker_expected,
+                                &wrapper,
+                                &["team", "start", "assistente"],
+                                COMMAND_TIMEOUT,
+                            ),
+                            "assistant_start_failed",
+                        )?;
+                    }
+                    ValidatedHost::Vps { .. } => ensure_success(
+                        run_ssh(
+                            &validated,
+                            REMOTE_ASSISTANT_START,
+                            None,
+                            COMMAND_TIMEOUT,
+                            None,
+                        ),
+                        "assistant_start_failed",
+                    )?,
+                }
+                for _ in 0..40 {
+                    let snapshot = snapshot_impl(&app, &worker_expected, &validated)?;
+                    if assistant_reached(&snapshot) {
+                        return Ok(snapshot);
+                    }
+                    thread::sleep(Duration::from_secs(3));
+                }
+                Err(failure("assistant_verify_timeout"))
+            },
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("assistant_start_failed")));
@@ -1959,8 +2230,8 @@ mod tests {
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
         parse_snapshot, redact, resume_team_prerequisite, start_and_verify_local_container_with,
         valid_pairing_token, valid_wrapper_file, ExistingTeamConnectRequest, OnboardingProgress,
-        OnboardingProgressStage, OnboardingSubmission, StreamRedactor, INSTALL_SHA256,
-        REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
+        OnboardingProgressStage, OnboardingProgressStatus, OnboardingSubmission, ProgressReporter,
+        StreamRedactor, INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
     };
     #[cfg(target_os = "macos")]
     use super::{
@@ -1969,7 +2240,12 @@ mod tests {
     };
     use crate::runtime_host::ProcessResult;
     use sha2::{Digest, Sha256};
-    use std::collections::VecDeque;
+    use std::{
+        collections::VecDeque,
+        sync::{Arc, Mutex},
+        thread,
+        time::Duration,
+    };
 
     #[test]
     fn embedded_installer_digest_matches_the_release_source() {
@@ -2040,29 +2316,138 @@ mod tests {
     #[test]
     fn progress_stages_match_the_frontend_contract() {
         let stages = [
-            OnboardingProgressStage::Preparing,
+            OnboardingProgressStage::Engine,
             OnboardingProgressStage::Runtime,
             OnboardingProgressStage::Container,
             OnboardingProgressStage::Provider,
+            OnboardingProgressStage::Login,
             OnboardingProgressStage::Team,
+            OnboardingProgressStage::Assistant,
         ];
         let serialized = stages
             .into_iter()
-            .map(|stage| {
-                serde_json::to_value(OnboardingProgress {
-                    stage,
-                    message: "safe",
-                })
-                .unwrap()["stage"]
-                    .as_str()
-                    .unwrap()
-                    .to_owned()
-            })
+            .map(|stage| serde_json::to_value(stage).unwrap())
             .collect::<Vec<_>>();
         assert_eq!(
             serialized,
-            ["preparing", "runtime", "container", "provider", "team"]
+            [
+                "engine",
+                "runtime",
+                "container",
+                "provider",
+                "login",
+                "team",
+                "assistant"
+            ]
         );
+        let statuses = [
+            OnboardingProgressStatus::Start,
+            OnboardingProgressStatus::Progress,
+            OnboardingProgressStatus::Done,
+            OnboardingProgressStatus::Error,
+        ]
+        .into_iter()
+        .map(|status| serde_json::to_value(status).unwrap())
+        .collect::<Vec<_>>();
+        assert_eq!(statuses, ["start", "progress", "done", "error"]);
+    }
+
+    #[test]
+    fn progress_sequence_heartbeats_and_errors_are_terminal_and_sanitized() {
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Runtime,
+                "Avvio il runtime Job Hunter Team",
+                "Avvio del runtime in corso",
+                "Runtime Job Hunter Team avviato",
+                Duration::from_millis(2),
+                || {
+                    thread::sleep(Duration::from_millis(8));
+                    Ok::<_, super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+
+        let events = events.lock().unwrap();
+        assert_eq!(
+            events.first().unwrap().status,
+            OnboardingProgressStatus::Start
+        );
+        assert_eq!(
+            events.last().unwrap().status,
+            OnboardingProgressStatus::Done
+        );
+        assert!(events
+            .iter()
+            .any(|event| event.status == OnboardingProgressStatus::Progress));
+        assert!(events.windows(2).all(|pair| {
+            pair[1].sequence == pair[0].sequence + 1 && pair[1].elapsed_ms >= pair[0].elapsed_ms
+        }));
+        assert!(events.iter().all(|event| {
+            event.code.is_none()
+                && event.retryable.is_none()
+                && event.stage == OnboardingProgressStage::Runtime
+        }));
+        drop(events);
+
+        let failures = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&failures);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        let error = reporter
+            .run_with_interval(
+                OnboardingProgressStage::Engine,
+                "Verifico il motore container",
+                "Preparazione del motore container in corso",
+                "Motore container verificato",
+                Duration::from_secs(1),
+                || Err::<(), _>(failure("local_account_owner_mismatch")),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, "local_account_owner_mismatch");
+        let failures = failures.lock().unwrap();
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].status, OnboardingProgressStatus::Start);
+        assert_eq!(failures[1].status, OnboardingProgressStatus::Error);
+        assert_eq!(failures[1].code, Some("local_account_owner_mismatch"));
+        assert_eq!(failures[1].retryable, Some(false));
+        let value = serde_json::to_value(&failures[1]).unwrap();
+        let mut keys = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "code",
+                "elapsedMs",
+                "message",
+                "retryable",
+                "sequence",
+                "stage",
+                "status"
+            ]
+        );
+        let serialized = serde_json::to_string(&*failures).unwrap();
+        for forbidden in [
+            "raw stdout",
+            "raw stderr",
+            "203.0.113.10",
+            "/private/key.pem",
+            "secret-token",
+            "account-user-id",
+        ] {
+            assert!(!serialized.contains(forbidden));
+        }
     }
 
     #[cfg(target_os = "macos")]
