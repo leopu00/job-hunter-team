@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
@@ -171,9 +171,90 @@ describe("OnboardingFlow technical setup", () => {
       onRetry,
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Podman è attivo ma il container non risponde.");
-    expect(screen.getByText("Container")).toBeInTheDocument();
+    expect(screen.getAllByText("Container")).not.toHaveLength(0);
     await userEvent.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("shows verified step progress, elapsed time and a sanitized activity timeline", async () => {
+    const startedAt = Date.now();
+    renderFlow({
+      runtime: { status: "working", stage: "container", message: "Preparo il container." },
+      activity: {
+        startedAt,
+        invocation: 1,
+        lastSequence: 3,
+        current: {
+          id: "1:container:2",
+          invocation: 1,
+          nativeStage: "container",
+          sequence: 2,
+          stage: "container",
+          name: "Preparazione container",
+          description: "Verifico lo stato del container.",
+          elapsedMs: 2_000,
+          stageElapsedMs: 2_000,
+          updatedAt: startedAt,
+          status: "active",
+        },
+        events: [
+          {
+            id: "1:engine:1",
+            invocation: 1,
+            nativeStage: "engine",
+            sequence: 1,
+            stage: "runtime",
+            name: "Verifica ambiente",
+            description: "Ambiente verificato.",
+            elapsedMs: 1_000,
+            stageElapsedMs: 1_000,
+            updatedAt: startedAt,
+            status: "completed",
+          },
+          {
+            id: "1:container:2",
+            invocation: 1,
+            nativeStage: "container",
+            sequence: 2,
+            stage: "container",
+            name: "Preparazione container",
+            description: "Verifico lo stato del container.",
+            elapsedMs: 2_000,
+            stageElapsedMs: 2_000,
+            updatedAt: startedAt,
+            status: "active",
+          },
+          {
+            id: "1:provider:3",
+            invocation: 1,
+            nativeStage: "provider",
+            sequence: 3,
+            stage: "provider",
+            name: "Configurazione provider",
+            description: "Configurazione interrotta.",
+            elapsedMs: 3_000,
+            stageElapsedMs: 1_000,
+            updatedAt: startedAt,
+            status: "failed",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getAllByText("Preparazione container")).toHaveLength(2);
+    expect(screen.getAllByText("Verifico lo stato del container.")).toHaveLength(2);
+    expect(screen.getByText(/Trascorso/)).toHaveTextContent(/00:0\d/);
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "7");
+    const activeProgress = screen.getByRole("progressbar", { name: "Avanzamento Preparazione container" });
+    expect(activeProgress).toHaveAttribute("aria-valuetext", "Operazione in corso; percentuale non disponibile");
+    expect(activeProgress).not.toHaveAttribute("aria-valuenow");
+
+    await userEvent.click(screen.getByText(/Dettagli attività/));
+    expect(screen.getByText("Completato")).toBeInTheDocument();
+    expect(screen.getAllByText("In corso")).toHaveLength(2);
+    expect(screen.getByText("Errore")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/\bETA\b|tempo stimato/i);
   });
 
   it("offers a non-destructive restart even when the current failure cannot be retried", async () => {
@@ -201,6 +282,37 @@ describe("OnboardingFlow technical setup", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: /accedi al provider/i }));
     expect(onRuntimeAction).toHaveBeenCalledWith("provider-login");
+  });
+
+  it("does not present the previous completed operation as the current manual action", () => {
+    const now = Date.now();
+    renderFlow({
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." },
+      activity: {
+        startedAt: now,
+        invocation: 1,
+        lastSequence: 4,
+        current: {
+          id: "1:provider:4",
+          invocation: 1,
+          nativeStage: "provider",
+          sequence: 4,
+          stage: "provider",
+          name: "Configurazione provider",
+          description: "Provider preparato.",
+          elapsedMs: 3_000,
+          stageElapsedMs: 1_000,
+          updatedAt: now,
+          status: "completed",
+        },
+        events: [],
+      },
+    });
+
+    const summary = within(screen.getByRole("region", { name: "Avanzamento configurazione" }));
+    expect(summary.getByText("Accesso provider")).toBeInTheDocument();
+    expect(summary.getByText("Accedi con l’abbonamento scelto.")).toBeInTheDocument();
+    expect(summary.queryByText("Configurazione provider")).not.toBeInTheDocument();
   });
 
   it("shows only the SSH fingerprint and requires explicit confirmation", async () => {

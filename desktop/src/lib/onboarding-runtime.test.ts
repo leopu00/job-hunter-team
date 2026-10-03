@@ -2,10 +2,14 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   confirmOnboardingSshHostKey,
+  openOnboardingAssistant,
+  parseOnboardingNativeProgress,
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
+  startOnboardingProviderLogin,
+  startOnboardingTeam,
   type SshHostKeyProbe,
 } from "./onboarding-runtime";
 
@@ -33,6 +37,16 @@ const firstSeen: SshHostKeyProbe = {
   fingerprint: "SHA256:syntheticFingerprint",
 };
 
+const runtimeStarted = {
+  stage: "runtime",
+  status: "start",
+  message: "Preparo il runtime verificato.",
+  sequence: 1,
+  elapsedMs: 0,
+  code: null,
+  retryable: null,
+} as const;
+
 describe("SSH host-key consent contract", () => {
   beforeEach(() => {
     channels.length = 0;
@@ -58,8 +72,49 @@ describe("SSH host-key consent contract", () => {
     const payload = vi.mocked(invoke).mock.calls[0][1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("accountEmail");
     expect(payload.submission).not.toHaveProperty("profile");
-    channels[0].onmessage?.({ stage: "preparing", message: "Preparo il runtime." });
-    expect(onProgress).toHaveBeenCalledWith({ stage: "preparing", message: "Preparo il runtime." });
+    channels[0].onmessage?.(runtimeStarted);
+    expect(onProgress).toHaveBeenCalledWith(runtimeStarted);
+  });
+
+  it("drops malformed progress and replaces unsafe native text with a fixed stage message", async () => {
+    const onProgress = vi.fn();
+    vi.mocked(invoke).mockResolvedValue({});
+    await prepareOnboardingRuntime(
+      { host: { kind: "local" }, provider: "claude" },
+      null,
+      onProgress,
+    );
+
+    channels[0].onmessage?.({ ...runtimeStarted, sequence: 0 });
+    channels[0].onmessage?.({
+      ...runtimeStarted,
+      stage: "container",
+      message: "token at /private/key for 192.0.2.10 host.example.invalid",
+    });
+
+    expect(onProgress).toHaveBeenCalledOnce();
+    expect(onProgress).toHaveBeenCalledWith({
+      ...runtimeStarted,
+      stage: "container",
+      message: "Preparo il container del team.",
+    });
+    expect(JSON.stringify(onProgress.mock.calls)).not.toMatch(/private|192\.0\.2\.10|example\.invalid|token at/i);
+  });
+
+  it("requires exact terminal error metadata", () => {
+    expect(parseOnboardingNativeProgress({
+      ...runtimeStarted,
+      status: "error",
+      code: "container_timeout",
+      retryable: true,
+    })).toEqual({
+      ...runtimeStarted,
+      status: "error",
+      code: "container_timeout",
+      retryable: true,
+    });
+    expect(parseOnboardingNativeProgress({ ...runtimeStarted, status: "error" })).toBeNull();
+    expect(parseOnboardingNativeProgress({ ...runtimeStarted, code: "unexpected" })).toBeNull();
   });
 
   it("probes without sending a pairing token or confirmation", async () => {
@@ -99,8 +154,36 @@ describe("SSH host-key consent contract", () => {
 
   it("starts missing resumed team sessions without exposing host or account data", async () => {
     vi.mocked(invoke).mockResolvedValue({});
-    await resumeOnboardingTeamStart();
-    expect(invoke).toHaveBeenCalledWith("onboarding_resume_team_start");
-    expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
+    const onProgress = vi.fn();
+    await resumeOnboardingTeamStart(onProgress);
+    expect(invoke).toHaveBeenCalledWith("onboarding_resume_team_start", {
+      onProgress: expect.anything(),
+    });
+    expect(JSON.stringify(vi.mocked(invoke).mock.calls)).not.toMatch(/account|address|keyPath/i);
+  });
+
+  it("adds a sanitized progress channel to login, team and Assistant commands", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => command === "onboarding_provider_login"
+      ? { sessionId: "synthetic-session" }
+      : {});
+    const onProgress = vi.fn();
+
+    await startOnboardingProviderLogin(host, vi.fn(), onProgress);
+    await startOnboardingTeam(host, onProgress);
+    await openOnboardingAssistant(host, onProgress);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "onboarding_provider_login", {
+      host,
+      onEvent: expect.anything(),
+      onProgress: expect.anything(),
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "onboarding_team_start", {
+      host,
+      onProgress: expect.anything(),
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "onboarding_assistant_open", {
+      host,
+      onProgress: expect.anything(),
+    });
   });
 });
