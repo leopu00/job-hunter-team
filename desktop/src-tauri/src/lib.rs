@@ -9,6 +9,7 @@ mod onboarding;
 #[cfg(test)]
 mod onboarding_attestation_tests;
 mod podman;
+mod profile_import;
 mod profile_migration;
 mod runtime_host;
 mod voice_input;
@@ -20,6 +21,7 @@ pub fn run() {
         .manage(account_scope::AccountScopeState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(onboarding::OnboardingNativeState::default())
+        .manage(profile_import::ProfileImportState::default())
         .manage(voice_input::VoiceInputState::default())
         .manage(auth_store::system_key_cache())
         .setup(|app| {
@@ -66,6 +68,7 @@ pub fn run() {
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,
+            profile_import::profile_import_vps_to_local,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
