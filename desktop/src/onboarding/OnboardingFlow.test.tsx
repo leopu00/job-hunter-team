@@ -1,255 +1,349 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { OnboardingFlowProps, OnboardingProfileDraft, OnboardingRuntimeState } from "../lib/onboarding";
+import type { OnboardingFlowProps } from "../lib/onboarding";
 import { OnboardingFlow } from "./OnboardingFlow";
 
-const PROFILE: OnboardingProfileDraft = {
-  fullName: "Ada Rossi",
-  targetRole: "Frontend Engineer",
-  location: "Torino",
-  experienceYears: 6,
-  skills: ["React", "TypeScript"],
-  languages: ["Italiano", "Inglese"],
-  workMode: "remote",
-  notes: "No fintech",
-};
+vi.mock("../components/SshKeyPicker", () => ({
+  default: ({ value, onChange }: { value: string; onChange: (path: string) => void }) => (
+    <div>
+      <button type="button" onClick={() => onChange("/synthetic/private/id_ed25519")}>Scegli chiave SSH</button>
+      {value && <><span>id_ed25519</span><button type="button" onClick={() => onChange("")}>Rimuovi chiave</button></>}
+    </div>
+  ),
+}));
 
 function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
   const props: OnboardingFlowProps = {
     account: { displayName: "Ada" },
     platform: "macos",
-    runtime: { status: "collecting", stage: "profile" },
+    runtime: { status: "collecting", stage: "host" },
     onSubmit: vi.fn().mockResolvedValue(undefined),
     onRuntimeAction: vi.fn().mockResolvedValue(undefined),
     providerLogin: null,
+    sshHostKey: null,
+    onConfirmHostKey: vi.fn().mockResolvedValue(undefined),
+    onCancelHostKey: vi.fn(),
     onProviderInput: vi.fn().mockResolvedValue(undefined),
     onProviderClose: vi.fn().mockResolvedValue(undefined),
     onRetry: vi.fn().mockResolvedValue(undefined),
+    onRestart: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   return { ...render(<OnboardingFlow {...props} />), props };
 }
 
-async function reachProfile(user: ReturnType<typeof userEvent.setup>) {
+async function begin(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /inizia la configurazione/i }));
+  await screen.findByRole("heading", { name: /scegli l’ambiente/i });
 }
 
-async function fillProfile(user: ReturnType<typeof userEvent.setup>) {
-  await reachProfile(user);
-  await user.clear(screen.getByLabelText(/nome completo/i));
-  await user.type(screen.getByLabelText(/nome completo/i), " Ada Rossi ");
-  await user.type(screen.getByLabelText(/ruolo obiettivo/i), " Frontend Engineer ");
-  await user.type(screen.getByLabelText(/^località/i), " Torino ");
-  await user.clear(screen.getByLabelText(/anni di esperienza/i));
-  await user.type(screen.getByLabelText(/anni di esperienza/i), "6");
-  await user.click(screen.getByRole("button", { name: /continua/i }));
-  await user.type(screen.getByLabelText(/competenze principali/i), "React, TypeScript, React");
-  await user.type(screen.getByLabelText(/^lingue/i), "Italiano, Inglese");
-  await user.selectOptions(screen.getByLabelText(/modalità di lavoro/i), "remote");
-  await user.type(screen.getByLabelText(/note per la squadra/i), "  No fintech  ");
-  await user.click(screen.getByRole("button", { name: /continua/i }));
+async function reachProviderLocal(user: ReturnType<typeof userEvent.setup>) {
+  await begin(user);
+  await user.click(screen.getByRole("button", { name: /^continua/i }));
+  await screen.findByRole("heading", { name: /scegli il provider/i });
 }
 
-async function chooseProviderAndReview(user: ReturnType<typeof userEvent.setup>, provider = "Claude Code") {
-  await user.click(screen.getByRole("button", { name: /continua/i }));
-  await user.click(screen.getByRole("radio", { name: new RegExp(provider, "i") }));
-  await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-}
-
-describe("OnboardingFlow", () => {
-  it.each(["macos", "linux"] as const)("keeps local execution available on %s", (platform) => {
-    renderFlow({ platform, runtime: { status: "collecting", stage: "host" }, initialDraft: PROFILE });
-    expect(screen.getByRole("radio", { name: /questo computer/i })).toBeChecked();
-    expect(screen.getByRole("radio", { name: /server vps/i })).not.toBeChecked();
-  });
-
-  it("welcomes the Google account and never asks for an API key", async () => {
+describe("OnboardingFlow technical setup", () => {
+  it("uses the Google name only in the greeting and never asks personal questions", async () => {
     const user = userEvent.setup();
     renderFlow();
 
     expect(screen.getByRole("heading", { name: "Ciao, Ada." })).toBeInTheDocument();
-    expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
-    await reachProfile(user);
-    expect(screen.getByLabelText(/nome completo/i)).toHaveValue("Ada");
+    expect(screen.queryByText(/configura il tuo profilo/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/nome completo|ruolo obiettivo|località|anni di esperienza|competenze|lingue|modalità di lavoro|note/i)).not.toBeInTheDocument();
+
+    await begin(user);
+    expect(screen.queryByText(/configura il tuo profilo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/partiamo da te|mettiamo a fuoco il profilo/i)).not.toBeInTheDocument();
   });
 
-  it("requires core data, two unique skills and one language", async () => {
+  it.each([
+    ["Claude Code", "claude"],
+    ["Codex", "codex"],
+    ["Kimi", "kimi"],
+  ] as const)("lets a local identity choose %s without exposing more personal fields", async (label, provider) => {
     const user = userEvent.setup();
-    renderFlow({ account: { displayName: null } });
+    const { props } = renderFlow({ account: { displayName: "Ada Locale", identity: "local" } });
 
-    await reachProfile(user);
-    expect(screen.getByRole("button", { name: /continua/i })).toBeDisabled();
-    await user.type(screen.getByLabelText(/nome completo/i), "Ada Rossi");
-    await user.type(screen.getByLabelText(/ruolo obiettivo/i), "Engineer");
-    await user.type(screen.getByLabelText(/^località/i), "Torino");
-    await user.click(screen.getByRole("button", { name: /continua/i }));
-
-    const next = screen.getByRole("button", { name: /continua/i });
-    await user.type(screen.getByLabelText(/competenze principali/i), "React, React");
-    await user.type(screen.getByLabelText(/^lingue/i), "Italiano");
-    expect(next).toBeDisabled();
-    await user.type(screen.getByLabelText(/competenze principali/i), ", TypeScript");
-    expect(next).toBeEnabled();
-  });
-
-  it("collects a complete VPS transport without reading key contents", async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    renderFlow({ runtime: { status: "collecting", stage: "host" }, initialDraft: PROFILE, onSubmit });
-
-    await user.click(screen.getByRole("radio", { name: /server vps/i }));
-    await user.type(screen.getByLabelText(/indirizzo vps/i), "vps.example.test");
-    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("root");
-    expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
-    await user.type(screen.getByLabelText(/file chiave ssh/i), "/tmp/test-key");
-    await user.click(screen.getByRole("button", { name: /continua/i }));
-    await user.click(screen.getByRole("radio", { name: /codex/i }));
+    expect(screen.getByText("Profilo locale attivo")).toBeInTheDocument();
+    expect(screen.getByText(/nome resta su questo dispositivo/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/ruolo|esperienza|località/i)).not.toBeInTheDocument();
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("radio", { name: new RegExp(label, "i") }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
-    expect(onSubmit).toHaveBeenCalledWith({
-      profile: PROFILE,
-      host: { kind: "vps", address: "vps.example.test", user: "root", port: 22, keyPath: "/tmp/test-key" },
-      provider: "codex",
-    });
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
+      host: { kind: "local" },
+      provider,
+    }));
   });
 
-  it("offers only a preselected VPS on Windows and never submits a local host", async () => {
+  it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    renderFlow({
-      platform: "windows",
-      runtime: { status: "collecting", stage: "host" },
-      initialDraft: PROFILE,
-      onSubmit,
-    });
-
-    expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/su windows 0\.4 il team deve essere eseguito su una vps linux/i)).toBeInTheDocument();
-    expect(screen.getByText(/esecuzione locale sarà disponibile in una versione successiva/i)).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /server vps/i })).toBeChecked();
-    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("root");
-    expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
-
-    await user.type(screen.getByLabelText(/indirizzo vps/i), "windows-vps.example.test");
-    await user.type(screen.getByLabelText(/file chiave ssh/i), "C:\\Users\\Ada\\.ssh\\id_ed25519");
-    await user.click(screen.getByRole("button", { name: /continua/i }));
-    await user.click(screen.getByRole("radio", { name: /kimi/i }));
+    const { props } = renderFlow();
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
-    expect(onSubmit).toHaveBeenCalledWith({
-      profile: PROFILE,
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
+      host: { kind: "local" },
+      provider: "claude",
+    }));
+    expect(Object.keys(vi.mocked(props.onSubmit).mock.calls[0][0]).sort()).toEqual(["host", "provider"]);
+  });
+
+  it("supports arrow-key selection and focuses every new step", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await begin(user);
+    expect(screen.getByRole("heading", { name: /scegli l’ambiente/i })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("radio", { name: /questo computer/i })).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: /server VPS/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /server VPS/i })).toHaveFocus();
+
+    await user.type(screen.getByLabelText(/indirizzo VPS/i), "host.example.invalid");
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    expect(screen.getByRole("heading", { name: /scegli il provider/i })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("restores focus to the greeting when navigating back", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await begin(user);
+    await user.click(screen.getByRole("button", { name: /indietro/i }));
+    expect(screen.getByRole("heading", { name: "Ciao, Ada." })).toHaveFocus();
+  });
+
+  it("keeps the full SSH path out of the DOM but includes it in the VPS submission", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow();
+    await begin(user);
+    await user.click(screen.getByRole("radio", { name: /server VPS/i }));
+    await user.type(screen.getByLabelText(/indirizzo VPS/i), " host.example.invalid ");
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
+    expect(screen.getByText("id_ed25519")).toBeInTheDocument();
+    expect(screen.queryByText("/synthetic/private/id_ed25519")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    await user.click(screen.getByRole("radio", { name: /Kimi/i }));
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
       host: {
         kind: "vps",
-        address: "windows-vps.example.test",
+        address: "host.example.invalid",
         user: "root",
         port: 22,
-        keyPath: "C:\\Users\\Ada\\.ssh\\id_ed25519",
+        keyPath: "/synthetic/private/id_ed25519",
       },
       provider: "kimi",
-    });
+    }));
   });
 
-  it("submits normalized local setup and does not advance optimistically", async () => {
+  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
     const user = userEvent.setup();
-    let resolveSubmit!: () => void;
-    const onSubmit = vi.fn(() => new Promise<void>((resolve) => { resolveSubmit = resolve; }));
-    renderFlow({ account: { displayName: null }, onSubmit });
-
-    await fillProfile(user);
-    await chooseProviderAndReview(user);
-    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({ profile: PROFILE, host: { kind: "local" }, provider: "claude" });
-    expect(screen.getByRole("button", { name: /avvio del setup/i })).toBeDisabled();
-    expect(screen.queryByText(/prepariamo: runtime/i)).not.toBeInTheDocument();
-    resolveSubmit();
-    await waitFor(() => expect(screen.getByRole("button", { name: /prepara la squadra/i })).toBeEnabled());
+    renderFlow({ platform: "windows" });
+    await begin(user);
+    expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/indirizzo VPS/i), "host.example.invalid");
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
   });
 
-  it("opens only the requested provider login and remains on the same stage", async () => {
-    const user = userEvent.setup();
-    let resolveAction!: () => void;
-    const onRuntimeAction = vi.fn(() => new Promise<void>((resolve) => { resolveAction = resolve; }));
-    const runtime: OnboardingRuntimeState = { status: "action-required", stage: "provider-login", message: "Completa il login ufficiale." };
-    renderFlow({ runtime, onRuntimeAction });
-
-    await user.click(screen.getByRole("button", { name: /accedi al provider/i }));
-    expect(onRuntimeAction).toHaveBeenCalledWith("provider-login");
-    expect(screen.getByRole("button", { name: /attendi/i })).toBeDisabled();
-    resolveAction();
-    expect(await screen.findByRole("button", { name: /accedi al provider/i })).toBeEnabled();
-    expect(screen.getByText(/completa il login ufficiale/i)).toBeInTheDocument();
-  });
-
-  it("shows Codex device instructions as safe text and sends typed responses", async () => {
-    const user = userEvent.setup();
-    const onProviderInput = vi.fn().mockResolvedValue(undefined);
-    const onProviderClose = vi.fn().mockResolvedValue(undefined);
-    renderFlow({
-      runtime: { status: "working", stage: "provider-login", message: "Attendo il login ufficiale." },
-      providerLogin: {
-        provider: "codex",
-        status: "active",
-        output: "Open https://auth.example.invalid/device and enter ABCD-EFGH",
-      },
-      onProviderInput,
-      onProviderClose,
-    });
-
-    const output = screen.getByRole("log", { name: /output accesso provider/i });
-    expect(output).toHaveTextContent("https://auth.example.invalid/device");
-    expect(output).toHaveTextContent("ABCD-EFGH");
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-
-    await user.type(screen.getByLabelText(/risposta alla sessione/i), "yes");
-    await user.click(screen.getByRole("button", { name: "Invia" }));
-    expect(onProviderInput).toHaveBeenCalledWith("yes");
-    expect(screen.getByLabelText(/risposta alla sessione/i)).toHaveValue("");
-
-    await user.click(screen.getByRole("button", { name: "Chiudi" }));
-    expect(onProviderClose).toHaveBeenCalledOnce();
-  });
-
-  it("keeps provider output visible after an error so the exact stage can be retried", async () => {
-    const user = userEvent.setup();
+  it("keeps runtime errors at their verified stage and retries without advancing", async () => {
     const onRetry = vi.fn().mockResolvedValue(undefined);
     renderFlow({
-      runtime: { status: "failed", stage: "provider-login", message: "L’accesso non è stato verificato." },
-      providerLogin: { provider: "kimi", status: "exited", output: "Login failed safely", exitCode: 1 },
+      runtime: { status: "failed", stage: "container", message: "Podman è attivo ma il container non risponde." },
       onRetry,
     });
-
-    expect(screen.getByRole("log", { name: /output accesso provider/i })).toHaveTextContent("Login failed safely");
-    expect(screen.getByLabelText(/risposta alla sessione/i)).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Podman è attivo ma il container non risponde.");
+    expect(screen.getAllByText("Container")).not.toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("opens the Assistant only when its runtime stage requests it", async () => {
-    const user = userEvent.setup();
+  it("shows verified step progress, elapsed time and a sanitized activity timeline", async () => {
+    const startedAt = Date.now();
+    renderFlow({
+      runtime: { status: "working", stage: "container", message: "Preparo il container." },
+      activity: {
+        startedAt,
+        invocation: 1,
+        lastSequence: 3,
+        current: {
+          id: "1:container:2",
+          invocation: 1,
+          nativeStage: "container",
+          sequence: 2,
+          stage: "container",
+          name: "Preparazione container",
+          description: "Verifico lo stato del container.",
+          elapsedMs: 2_000,
+          stageElapsedMs: 2_000,
+          updatedAt: startedAt,
+          status: "active",
+        },
+        events: [
+          {
+            id: "1:engine:1",
+            invocation: 1,
+            nativeStage: "engine",
+            sequence: 1,
+            stage: "runtime",
+            name: "Verifica ambiente",
+            description: "Ambiente verificato.",
+            elapsedMs: 1_000,
+            stageElapsedMs: 1_000,
+            updatedAt: startedAt,
+            status: "completed",
+          },
+          {
+            id: "1:container:2",
+            invocation: 1,
+            nativeStage: "container",
+            sequence: 2,
+            stage: "container",
+            name: "Preparazione container",
+            description: "Verifico lo stato del container.",
+            elapsedMs: 2_000,
+            stageElapsedMs: 2_000,
+            updatedAt: startedAt,
+            status: "active",
+          },
+          {
+            id: "1:provider:3",
+            invocation: 1,
+            nativeStage: "provider",
+            sequence: 3,
+            stage: "provider",
+            name: "Configurazione provider",
+            description: "Configurazione interrotta.",
+            elapsedMs: 3_000,
+            stageElapsedMs: 1_000,
+            updatedAt: startedAt,
+            status: "failed",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getAllByText("Preparazione container")).toHaveLength(2);
+    expect(screen.getAllByText("Verifico lo stato del container.")).toHaveLength(2);
+    expect(screen.getByText(/Trascorso/)).toHaveTextContent(/00:0\d/);
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "7");
+    const activeProgress = screen.getByRole("progressbar", { name: "Avanzamento Preparazione container" });
+    expect(activeProgress).toHaveAttribute("aria-valuetext", "Operazione in corso; percentuale non disponibile");
+    expect(activeProgress).not.toHaveAttribute("aria-valuenow");
+
+    await userEvent.click(screen.getByText(/Dettagli attività/));
+    expect(screen.getByText("Completato")).toBeInTheDocument();
+    expect(screen.getAllByText("In corso")).toHaveLength(2);
+    expect(screen.getByText("Errore")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/\bETA\b|tempo stimato/i);
+  });
+
+  it("offers a non-destructive restart even when the current failure cannot be retried", async () => {
+    const onRestart = vi.fn().mockResolvedValue(undefined);
+    renderFlow({
+      runtime: {
+        status: "failed",
+        stage: "assistant",
+        message: "Assistente non pronto.",
+        retryable: false,
+      },
+      onRestart,
+    });
+
+    expect(screen.queryByRole("button", { name: /riprova questo passaggio/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Riparti da capo" }));
+    expect(onRestart).toHaveBeenCalledOnce();
+  });
+
+  it("shows provider progress and invokes only the required interactive action", async () => {
     const onRuntimeAction = vi.fn().mockResolvedValue(undefined);
-    renderFlow({ runtime: { status: "action-required", stage: "assistant", message: "Presentati al tuo Assistente." }, onRuntimeAction });
-
-    await user.click(screen.getByRole("button", { name: /apri l’assistente/i }));
-    expect(onRuntimeAction).toHaveBeenCalledWith("assistant");
+    renderFlow({
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." },
+      onRuntimeAction,
+    });
+    await userEvent.click(screen.getByRole("button", { name: /accedi al provider/i }));
+    expect(onRuntimeAction).toHaveBeenCalledWith("provider-login");
   });
 
-  it("retries the exact failed stage without hiding its message", async () => {
+  it("does not present the previous completed operation as the current manual action", () => {
+    const now = Date.now();
+    renderFlow({
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." },
+      activity: {
+        startedAt: now,
+        invocation: 1,
+        lastSequence: 4,
+        current: {
+          id: "1:provider:4",
+          invocation: 1,
+          nativeStage: "provider",
+          sequence: 4,
+          stage: "provider",
+          name: "Configurazione provider",
+          description: "Provider preparato.",
+          elapsedMs: 3_000,
+          stageElapsedMs: 1_000,
+          updatedAt: now,
+          status: "completed",
+        },
+        events: [],
+      },
+    });
+
+    const summary = within(screen.getByRole("region", { name: "Avanzamento configurazione" }));
+    expect(summary.getByText("Accesso provider")).toBeInTheDocument();
+    expect(summary.getByText("Accedi con l’abbonamento scelto.")).toBeInTheDocument();
+    expect(summary.queryByText("Configurazione provider")).not.toBeInTheDocument();
+  });
+
+  it("shows only the SSH fingerprint and requires explicit confirmation", async () => {
+    const onConfirmHostKey = vi.fn().mockResolvedValue(undefined);
+    const onCancelHostKey = vi.fn();
+    renderFlow({
+      runtime: { status: "action-required", stage: "ssh-host-key", message: "Confronta il fingerprint." },
+      sshHostKey: { algorithm: "ssh-ed25519", fingerprint: "SHA256:synthetic-fingerprint" },
+      onConfirmHostKey,
+      onCancelHostKey,
+    });
+    expect(screen.getByText("ssh-ed25519")).toBeInTheDocument();
+    expect(screen.getByText("SHA256:synthetic-fingerprint")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("host.example.invalid");
+    await userEvent.click(screen.getByRole("button", { name: /conferma fingerprint/i }));
+    expect(onConfirmHostKey).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole("button", { name: /annulla/i }));
+    expect(onCancelHostKey).toHaveBeenCalledOnce();
+  });
+
+  it("keeps provider input fail-closed and retryable", async () => {
+    const onProviderInput = vi.fn().mockRejectedValue(new Error("synthetic"));
+    renderFlow({
+      runtime: { status: "working", stage: "provider-login", message: "Login in corso" },
+      providerLogin: { provider: "claude", status: "active", output: "Open browser" },
+      onProviderInput,
+    });
     const user = userEvent.setup();
-    const onRetry = vi.fn().mockResolvedValue(undefined);
-    renderFlow({ runtime: { status: "failed", stage: "team-start", message: "Il container non risponde." }, onRetry });
-
-    expect(screen.getByRole("alert")).toHaveTextContent(/container non risponde/i);
-    await user.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
-    expect(onRetry).toHaveBeenCalledOnce();
-  });
-
-  it("shows the team as ready only from verified runtime state", () => {
-    renderFlow({ runtime: { status: "ready" } });
-    expect(screen.getByRole("heading", { name: /squadra è pronta/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/agenti pronti/i)).toHaveTextContent("Assistente");
+    await user.type(screen.getByLabelText(/risposta alla sessione/i), "response");
+    await user.click(screen.getByRole("button", { name: /^invia/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/invio non riuscito/i);
+    expect(screen.getByLabelText(/risposta alla sessione/i)).toHaveValue("response");
   });
 });

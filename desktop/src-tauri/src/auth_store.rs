@@ -28,7 +28,7 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 use tauri::Manager;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 const KEYRING_SERVICE: &str = "ai.jobhunterteam.desktop";
 const KEYRING_ACCOUNT: &str = "auth-store-key";
@@ -37,6 +37,8 @@ const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
 const MAX_NAME_LEN: usize = 161;
 const MAX_VALUE_BYTES: usize = 64 * 1024;
+const MAX_AUTH_RESPONSE_BYTES: u64 = 64 * 1024;
+const AUTH_VERIFY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 const KEYCHAIN_UNAVAILABLE: &str = "keychain_unavailable";
 
 #[cfg(debug_assertions)]
@@ -65,6 +67,146 @@ pub(crate) type SystemKeyCache = KeyCache<SystemKeychain>;
 pub(crate) fn system_key_cache() -> SystemKeyCache {
     trace_auth_store("cache_initialized");
     KeyCache::new(SystemKeychain)
+}
+
+/// Account authority for native runtime state.
+///
+/// The renderer supplies no identifier: the account comes from the encrypted
+/// Supabase session already owned by this backend. Supabase Auth validates the
+/// stored bearer token over HTTPS, and only the server-returned user ID can
+/// become an opaque runtime scope.
+pub(crate) async fn authenticated_account_id(
+    app: &tauri::AppHandle,
+    keys: &SystemKeyCache,
+) -> Result<Zeroizing<String>, &'static str> {
+    let authority = session_authority()?;
+    let raw = get_value(
+        &store_dir(app).map_err(|_| "account_session_unavailable")?,
+        keys,
+        &authority.storage_name,
+    )
+    .map_err(|_| "account_session_unavailable")?
+    .ok_or("account_session_required")?;
+    let raw = Zeroizing::new(raw);
+    let token = stored_access_token(&raw)?;
+    verify_access_token(&authority.user_url, authority.anon_key, &token).await
+}
+
+struct SessionAuthority {
+    storage_name: String,
+    user_url: String,
+    anon_key: &'static str,
+}
+
+fn session_authority() -> Result<SessionAuthority, &'static str> {
+    let origin =
+        tauri::Url::parse(env!("JHT_SUPABASE_URL")).map_err(|_| "account_session_unavailable")?;
+    if origin.scheme() != "https"
+        || !origin.username().is_empty()
+        || origin.password().is_some()
+        || origin.path() != "/"
+        || origin.query().is_some()
+        || origin.fragment().is_some()
+    {
+        return Err("account_session_unavailable");
+    }
+    let host = origin.host_str().ok_or("account_session_unavailable")?;
+    let project = host
+        .split('.')
+        .next()
+        .ok_or("account_session_unavailable")?;
+    if !valid_project_ref(project) {
+        return Err("account_session_unavailable");
+    }
+    let anon_key = env!("JHT_SUPABASE_ANON_KEY").trim();
+    if !(16..=16 * 1024).contains(&anon_key.len())
+        || !anon_key.bytes().all(|byte| matches!(byte, 0x21..=0x7e))
+    {
+        return Err("account_session_unavailable");
+    }
+    Ok(SessionAuthority {
+        storage_name: format!("sb-{project}-auth-token"),
+        user_url: format!("{}/auth/v1/user", origin.origin().ascii_serialization()),
+        anon_key,
+    })
+}
+
+fn stored_access_token(raw: &str) -> Result<Zeroizing<String>, &'static str> {
+    let session: serde_json::Value =
+        serde_json::from_str(raw).map_err(|_| "account_session_invalid")?;
+    let token = session
+        .get("access_token")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| (32..=16 * 1024).contains(&value.len()))
+        .ok_or("account_session_invalid")?;
+    Ok(Zeroizing::new(token.to_owned()))
+}
+
+#[derive(serde::Deserialize)]
+struct VerifiedUser {
+    id: String,
+}
+
+async fn verify_access_token(
+    user_url: &str,
+    anon_key: &str,
+    token: &str,
+) -> Result<Zeroizing<String>, &'static str> {
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(AUTH_VERIFY_TIMEOUT)
+        .timeout(AUTH_VERIFY_TIMEOUT)
+        .build()
+        .map_err(|_| "account_session_verification_unavailable")?;
+    let mut bearer = Zeroizing::new(String::with_capacity(token.len() + 7));
+    bearer.push_str("Bearer ");
+    bearer.push_str(token);
+    let mut authorization =
+        reqwest::header::HeaderValue::from_str(&bearer).map_err(|_| "account_session_invalid")?;
+    authorization.set_sensitive(true);
+    bearer.zeroize();
+    let response = client
+        .get(user_url)
+        .header(reqwest::header::AUTHORIZATION, authorization)
+        .header("apikey", anon_key)
+        .send()
+        .await
+        .map_err(|_| "account_session_verification_unavailable")?;
+    if response.status().is_server_error() || response.status().as_u16() == 429 {
+        return Err("account_session_verification_unavailable");
+    }
+    if !response.status().is_success() {
+        return Err("account_session_invalid");
+    }
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_AUTH_RESPONSE_BYTES)
+    {
+        return Err("account_session_invalid");
+    }
+    let body = response
+        .bytes()
+        .await
+        .map_err(|_| "account_session_verification_unavailable")?;
+    if body.len() as u64 > MAX_AUTH_RESPONSE_BYTES {
+        return Err("account_session_invalid");
+    }
+    parse_verified_user(&body)
+}
+
+fn parse_verified_user(body: &[u8]) -> Result<Zeroizing<String>, &'static str> {
+    let user: VerifiedUser = serde_json::from_slice(body).map_err(|_| "account_session_invalid")?;
+    if !valid_account_id(&user.id) {
+        return Err("account_session_invalid");
+    }
+    Ok(Zeroizing::new(user.id))
+}
+
+fn valid_account_id(value: &str) -> bool {
+    (16..=256).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 #[tauri::command]
@@ -165,6 +307,15 @@ pub(crate) struct SystemKeychain;
 
 impl SystemKeychain {
     fn entry() -> Result<keyring::Entry, ()> {
+        if !matches!(
+            keyring::default::default_credential_builder().persistence(),
+            keyring::credential::CredentialPersistence::UntilDelete
+        ) {
+            // A reboot-volatile store would make existing encrypted sessions
+            // permanently undecipherable. Fail before reading or generating a
+            // key instead of presenting a false successful login.
+            return Err(());
+        }
         keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|_| ())
     }
 }
@@ -473,11 +624,14 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_path, get_value, read_entry, remove_entry, remove_value, set_value, validate_name,
-        write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN, MAX_NAME_LEN,
+        entry_path, get_value, read_entry, remove_entry, remove_value, set_value,
+        stored_access_token, validate_name, verify_access_token, write_entry, KeyCache, KeySource,
+        KEYRING_SERVICE, KEY_LEN, MAX_NAME_LEN,
     };
     use std::{
         fs,
+        io::{Read, Write},
+        net::TcpListener,
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -635,6 +789,38 @@ mod tests {
     }
 
     #[test]
+    fn production_first_frame_and_local_choice_never_touch_the_google_keychain() {
+        let dir = scratch_dir("identity-choice");
+        let keychain = Arc::new(CountingKeychain::with_key(KEY));
+        let keys = KeyCache::new(keychain.clone());
+        write_entry(&dir, NAME, "persisted-google-session", &KEY).unwrap();
+
+        // These are the only storage effects auth-js may attempt while its
+        // client exists but the identity screen is still unchosen. The local
+        // branch exercises the same closed state and must not unlock Google.
+        for _phase in ["production-first-frame", "playground-first-frame", "local"] {
+            assert_eq!(get_value(&dir, &keys, NAME).unwrap(), None);
+            remove_value(&dir, &keys, NAME).unwrap();
+            assert_eq!(
+                set_value(&dir, &keys, NAME, "replacement")
+                    .unwrap_err()
+                    .code,
+                "auth_store_locked"
+            );
+        }
+
+        assert_eq!(keychain.asked(), (0, 0));
+        assert!(entry_path(&dir, NAME).is_file());
+        keys.prepare().unwrap();
+        assert_eq!(keychain.asked(), (1, 0));
+        assert_eq!(
+            get_value(&dir, &keys, NAME).unwrap().as_deref(),
+            Some("persisted-google-session")
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn a_refusal_is_never_asked_again_in_the_same_process() {
         let dir = scratch_dir("denied");
         fs::create_dir_all(&dir).unwrap();
@@ -681,6 +867,40 @@ mod tests {
         assert_eq!(config["identifier"], KEYRING_SERVICE);
     }
 
+    #[test]
+    fn platform_key_store_is_declared_persistent_across_reboots() {
+        assert!(matches!(
+            keyring::default::default_credential_builder().persistence(),
+            keyring::credential::CredentialPersistence::UntilDelete
+        ));
+    }
+
+    #[test]
+    fn a_persisted_key_restores_the_encrypted_session_after_process_restart() {
+        let dir = scratch_dir("process-restart");
+        let keychain = Arc::new(CountingKeychain::default());
+
+        {
+            let first_process = KeyCache::new(keychain.clone());
+            first_process.prepare().unwrap();
+            set_value(&dir, &first_process, NAME, "persisted-session").unwrap();
+        }
+
+        // A fresh cache has no process memory. Only the persistent key source
+        // and encrypted file survive, matching an app restart/reboot boundary.
+        let restarted_process = KeyCache::new(keychain.clone());
+        assert_eq!(get_value(&dir, &restarted_process, NAME).unwrap(), None);
+        restarted_process.prepare().unwrap();
+        assert_eq!(
+            get_value(&dir, &restarted_process, NAME)
+                .unwrap()
+                .as_deref(),
+            Some("persisted-session")
+        );
+        assert_eq!(keychain.asked(), (2, 1));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     fn scratch_dir(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -691,6 +911,77 @@ mod tests {
 
     const KEY: [u8; KEY_LEN] = [7u8; KEY_LEN];
     const NAME: &str = "sb-abc-auth-token";
+
+    fn auth_server(status: &str, body: String) -> (String, thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let status = status.to_owned();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let read = stream.read(&mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+            }
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        (format!("http://{address}/auth/v1/user"), server)
+    }
+
+    #[test]
+    fn renderer_forged_session_is_rejected_without_auth_server_verification() {
+        let token = "synthetic.header.payload.synthetic-signature-segment";
+        let raw = serde_json::json!({
+            "access_token": token,
+            "user": {"id": "00000000-0000-4000-8000-000000000001"}
+        })
+        .to_string();
+        let extracted = stored_access_token(&raw).unwrap();
+        let (url, server) = auth_server("401 Unauthorized", "{}".to_owned());
+        assert_eq!(
+            tauri::async_runtime::block_on(verify_access_token(
+                &url,
+                "public-anon-key-for-test",
+                &extracted,
+            )),
+            Err("account_session_invalid")
+        );
+        let request = server.join().unwrap().to_ascii_lowercase();
+        assert!(request.contains("authorization: bearer synthetic.header.payload"));
+        assert!(request.contains("apikey: public-anon-key-for-test"));
+    }
+
+    #[test]
+    fn account_identity_comes_only_from_authenticated_user_response() {
+        let local_claim = "00000000-0000-4000-8000-000000000001";
+        let verified = "00000000-0000-4000-8000-000000000002";
+        let token = "synthetic.header.payload.synthetic-signature-segment";
+        let raw = serde_json::json!({"access_token":token,"user":{"id":local_claim}}).to_string();
+        let extracted = stored_access_token(&raw).unwrap();
+        let body = serde_json::json!({"id":verified}).to_string();
+        let (url, server) = auth_server("200 OK", body);
+        assert_eq!(
+            tauri::async_runtime::block_on(verify_access_token(
+                &url,
+                "public-anon-key-for-test",
+                &extracted,
+            ))
+            .unwrap()
+            .as_str(),
+            verified
+        );
+        assert_ne!(local_claim, verified);
+        server.join().unwrap();
+    }
 
     #[test]
     fn names_are_the_supabase_ones_only() {

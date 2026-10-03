@@ -8,7 +8,7 @@ import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
-import DashboardApp from "./DashboardApp";
+import { DashboardEntrypoint } from "./DashboardEntrypoint";
 import "./dashboard.css";
 
 // Before the first render: the web components may call /api at mount.
@@ -19,6 +19,6 @@ initializeTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <DashboardApp />
+    <DashboardEntrypoint />
   </StrictMode>,
 );

@@ -1,3 +1,4 @@
+use crate::account_scope::AccountScopeState;
 use serde::Serialize;
 use std::{
     ffi::OsString,
@@ -279,16 +280,35 @@ pub(crate) fn check_podman_sync() -> PodmanStatus {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub(crate) struct PodmanError {
+    code: &'static str,
+}
+
 #[tauri::command]
-pub(crate) async fn check_podman() -> PodmanStatus {
-    tauri::async_runtime::spawn_blocking(check_podman_sync)
-        .await
-        .unwrap_or(PodmanStatus {
-            installed: false,
-            ready: false,
-            version: None,
-            issue: Some("check_failed"),
-        })
+pub(crate) async fn check_podman(
+    app: tauri::AppHandle,
+    scopes: tauri::State<'_, AccountScopeState>,
+) -> Result<PodmanStatus, PodmanError> {
+    let expected = scopes.active().map_err(|code| PodmanError { code })?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(|code| PodmanError { code })?;
+        crate::account_scope::validate_local_runtime(&app, scope.scope())
+            .map_err(|code| PodmanError { code })?;
+        Ok(check_podman_sync())
+    })
+    .await
+    .unwrap_or(Err(PodmanError {
+        code: "check_failed",
+    }));
+    let _scope = scopes
+        .lock_expected(&expected)
+        .map_err(|code| PodmanError { code })?;
+    result
 }
 
 #[cfg(test)]

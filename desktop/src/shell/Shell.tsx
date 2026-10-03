@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
@@ -39,9 +39,24 @@ function DesktopLinks() {
  * the only horizontal overflow plane, so narrow windows keep the brand and
  * both actions fully visible while every destination remains reachable.
  */
-function Navbar() {
+function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const button =
     "text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
+
+  async function logout() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutFailed(false);
+    try {
+      await onLogout();
+    } catch {
+      setSignOutFailed(true);
+      setSigningOut(false);
+    }
+  }
+
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
       <nav
@@ -69,8 +84,9 @@ function Navbar() {
           <button type="button" className={button} onClick={refresh}>
             Aggiorna
           </button>
-          <button type="button" className={button} onClick={() => void signOut()}>
-            Esci
+          {signOutFailed && <span role="alert" className="sr-only">Disconnessione non riuscita. Il runtime resta bloccato su questo account.</span>}
+          <button type="button" className={button} onClick={() => void logout()} disabled={signingOut}>
+            {signingOut ? "Uscita…" : "Esci"}
           </button>
         </div>
       </nav>
@@ -78,7 +94,9 @@ function Navbar() {
   );
 }
 
-export default function Shell() {
+export interface ShellProps { onLogout?: () => Promise<void> }
+
+export default function Shell({ onLogout }: ShellProps) {
   const { path, search } = useLocation();
   const match = matchRoute(ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
@@ -99,7 +117,7 @@ export default function Shell() {
         <div
           style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "calc(100svh / var(--zoom, 1))", overflow: "hidden" }}
         >
-          <Navbar />
+          <Navbar onLogout={onLogout} />
           <main className="relative min-h-0 flex-1" data-testid="full-bleed">
             {page}
           </main>
@@ -110,7 +128,7 @@ export default function Shell() {
   return (
     <DashboardI18nProvider>
       <div style={{ position: "relative", zIndex: 1 }}>
-        <Navbar />
+      <Navbar onLogout={onLogout} />
         <MainChrome>{page}</MainChrome>
       </div>
     </DashboardI18nProvider>

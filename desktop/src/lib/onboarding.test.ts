@@ -1,16 +1,17 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
+  isOnboardingAssistantReachable,
   isOnboardingProfileReady,
   isOnboardingRuntimeReady,
+  loadLocalOnboardingGate,
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
   OnboardingSaveError,
+  resetOnboardingMarker,
   runtimeStateFromSnapshot,
-  saveOnboardingProfile,
   type OnboardingMarkerStore,
-  type OnboardingProfileDraft,
   type OnboardingRuntimeSnapshot,
 } from "./onboarding";
 
@@ -19,17 +20,6 @@ const USER = {
   email: "person@example.invalid",
   user_metadata: { full_name: "Persona Esempio" },
 } as unknown as User;
-
-const DRAFT: OnboardingProfileDraft = {
-  fullName: "Persona Esempio",
-  targetRole: "Software Engineer",
-  location: "Città Esempio",
-  experienceYears: 3,
-  skills: ["TypeScript", "Testing"],
-  languages: ["Italiano", "English"],
-  workMode: "hybrid",
-  notes: "Preferenza sintetica.",
-};
 
 const READY_RUNTIME: OnboardingRuntimeSnapshot = {
   runtimeInstalled: true,
@@ -43,6 +33,18 @@ const READY_RUNTIME: OnboardingRuntimeSnapshot = {
   directChatReady: true,
 };
 
+const READY_PROFILE = {
+  user_id: USER.id,
+  name: "Persona Esempio",
+  email: USER.email,
+  target_role: "Software Engineer",
+  location: "Città Esempio",
+  experience_years: 3,
+  seniority_target: "mid",
+  skills: { primary: ["TypeScript", "Testing"] },
+  languages: [{ language: "Italiano" }],
+};
+
 function markerStore(): OnboardingMarkerStore & { values: Map<string, string> } {
   const values = new Map<string, string>();
   return {
@@ -54,35 +56,22 @@ function markerStore(): OnboardingMarkerStore & { values: Map<string, string> } 
 
 type Result = { data: unknown; error: { message: string } | null };
 
-function fakeClient(options: {
-  milestones?: Result;
-  profile?: Result;
-  writeError?: boolean;
-  reread?: Result;
-}) {
-  const calls: Array<{ table: string; op: string; value?: unknown }> = [];
+function fakeClient(options: { milestones?: Result; profile?: Result; team?: Result }) {
+  const calls: Array<{ table: string; op: string }> = [];
   const client = {
     from(table: string) {
       const chain: Record<string, unknown> = {};
-      for (const op of ["select", "eq"]) {
-        chain[op] = (...args: unknown[]) => {
-          calls.push({ table, op, value: args });
-          return chain;
-        };
+      for (const op of ["select", "eq", "is", "order", "limit"] as const) {
+        chain[op] = () => { calls.push({ table, op }); return chain; };
       }
-      chain.upsert = (value: unknown) => {
-        calls.push({ table, op: "upsert", value });
-        return Promise.resolve({
-          data: null,
-          error: options.writeError ? { message: "synthetic write failure" } : null,
-        });
-      };
+      chain.upsert = () => { calls.push({ table, op: "upsert" }); return Promise.resolve({ error: null }); };
       chain.maybeSingle = () => {
         calls.push({ table, op: "maybeSingle" });
-        if (table === "user_onboarding_state") {
-          return Promise.resolve(options.milestones ?? { data: null, error: null });
-        }
-        return Promise.resolve(options.reread ?? options.profile ?? { data: null, error: null });
+        return Promise.resolve(table === "user_onboarding_state"
+          ? options.milestones ?? { data: null, error: null }
+          : table === "cloud_sync_tokens"
+            ? options.team ?? { data: null, error: null }
+            : options.profile ?? { data: null, error: null });
       };
       return chain;
     },
@@ -90,52 +79,23 @@ function fakeClient(options: {
   return { client, calls };
 }
 
-function savedProfile(extra: Record<string, unknown> = {}) {
-  return {
-    user_id: USER.id,
-    name: DRAFT.fullName,
-    email: USER.email,
-    target_role: DRAFT.targetRole,
-    location: DRAFT.location,
-    experience_years: DRAFT.experienceYears,
-    seniority_target: "mid",
-    skills: { primary: DRAFT.skills },
-    languages: DRAFT.languages.map((language) => ({ language, level: "not_specified" })),
-    location_preferences: [{ type: DRAFT.workMode }],
-    positioning: {
-      seniority_target: "mid",
-      preferences: { work_mode: DRAFT.workMode },
-      free_notes: DRAFT.notes,
-    },
-    ...extra,
-  };
-}
-
 describe("loadOnboardingGate", () => {
-  it("routes a brand-new account to profile collection with a partial draft", async () => {
-    const partial = { name: "Persona Esempio", skills: ["TypeScript"] };
-    const { client } = fakeClient({ profile: { data: partial, error: null } });
+  it("starts a new account at technical host setup without writing personal data", async () => {
+    const { client, calls } = fakeClient({ profile: { data: { name: "Partial" }, error: null } });
+
     await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toEqual({
       phase: "required",
-      account: { displayName: "Persona Esempio" },
-      initialDraft: {
-        fullName: "Persona Esempio",
-        targetRole: "",
-        location: "",
-        experienceYears: 0,
-        skills: ["TypeScript"],
-        languages: [],
-        workMode: "flexible",
-        notes: "",
-      },
-      runtime: { status: "collecting", stage: "profile" },
+      account: { displayName: "Persona Esempio", identity: "google" },
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
     });
+    expect(calls.some((call) => call.op === "upsert")).toBe(false);
   });
 
-  it("does not treat a profile or profile milestone as a completed runtime", async () => {
+  it("does not treat a profile milestone as a completed technical setup", async () => {
     const { client } = fakeClient({
       milestones: { data: { profile_configured_at: "2026-01-01T00:00:00Z" }, error: null },
-      profile: { data: savedProfile(), error: null },
+      profile: { data: READY_PROFILE, error: null },
     });
     await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toMatchObject({
       phase: "required",
@@ -143,36 +103,50 @@ describe("loadOnboardingGate", () => {
     });
   });
 
-  it("admits an established account only with a ready profile and first team run", async () => {
+  it("offers only an opaque account-scoped id for an existing VPS team", async () => {
     const { client } = fakeClient({
-      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
-      profile: { data: savedProfile(), error: null },
+      milestones: { data: { vps_setup_completed_at: "2026-01-01T00:00:00Z" }, error: null },
+      team: { data: { id: "00000000-0000-4000-8000-000000000001" }, error: null },
     });
-    await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toEqual({ phase: "ready" });
+    await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toMatchObject({
+      phase: "required",
+      existingTeam: {
+        teamId: "00000000-0000-4000-8000-000000000001",
+        status: "available",
+      },
+    });
   });
 
-  it("does not bypass an interrupted current flow using legacy team evidence", async () => {
+  it("fails closed when existing-team cloud state is offline", async () => {
+    const { client } = fakeClient({
+      team: { data: null, error: { message: "offline" } },
+    });
+    await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toMatchObject({ phase: "error" });
+  });
+
+  it("keeps the legacy completed-account admission but never uses it after a new flow starts", async () => {
+    const evidence = {
+      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
+      profile: { data: READY_PROFILE, error: null },
+    };
+    await expect(loadOnboardingGate(fakeClient(evidence).client, USER, markerStore()))
+      .resolves.toEqual({ phase: "ready" });
+
     const store = markerStore();
     markOnboardingStarted(USER.id, store);
-    const { client } = fakeClient({
-      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
-      profile: { data: savedProfile(), error: null },
-    });
-    await expect(loadOnboardingGate(client, USER, store)).resolves.toMatchObject({
+    await expect(loadOnboardingGate(fakeClient(evidence).client, USER, store)).resolves.toMatchObject({
       phase: "required",
       runtime: { status: "collecting", stage: "host" },
     });
   });
 
-  it("does not silently bypass onboarding when state cannot be read", async () => {
-    const { client } = fakeClient({
-      milestones: { data: null, error: { message: "offline" } },
-      profile: { data: null, error: { message: "offline" } },
-    });
-    await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toMatchObject({ phase: "error" });
+  it("fails closed when durable account state cannot be read", async () => {
+    const offline = { data: null, error: { message: "offline" } };
+    await expect(loadOnboardingGate(fakeClient({ milestones: offline, profile: offline }).client, USER, markerStore()))
+      .resolves.toMatchObject({ phase: "error" });
   });
 
-  it("accepts only the final account-scoped subscription marker", async () => {
+  it("accepts only the final account-scoped marker", async () => {
     const staleStore = markerStore();
     staleStore.setItem(`jht.desktop.onboarding.${USER.id}`, "profile-v1");
     const stale = fakeClient({});
@@ -187,76 +161,108 @@ describe("loadOnboardingGate", () => {
   });
 });
 
-describe("profile persistence and final gate", () => {
-  it("writes the canonical profile and independently verifies it without marking completion", async () => {
-    const { client, calls } = fakeClient({ reread: { data: savedProfile(), error: null } });
-    await expect(saveOnboardingProfile(client, USER, DRAFT)).resolves.toEqual(DRAFT);
-
-    const write = calls.find((call) => call.op === "upsert");
-    expect(write?.value).toMatchObject({
-      user_id: USER.id,
-      name: DRAFT.fullName,
-      email: USER.email,
-      skills: { primary: DRAFT.skills },
-      job_titles: [DRAFT.targetRole],
-      location_preferences: [{ type: "hybrid" }],
-      positioning: { seniority_target: "mid", preferences: { work_mode: "hybrid" } },
-    });
-    expect(calls.filter((call) => call.op === "maybeSingle")).toHaveLength(1);
-  });
-
-  it("rejects a profile when the independent read cannot prove the write", async () => {
-    const { client } = fakeClient({
-      reread: { data: savedProfile({ target_role: "Different role" }), error: null },
-    });
-    await expect(saveOnboardingProfile(client, USER, DRAFT)).rejects.toEqual(
-      new OnboardingSaveError("profile-verify-failed"),
-    );
-  });
-
-  it("writes and re-reads the marker only after every runtime fact and direct chat are true", () => {
+describe("loadLocalOnboardingGate", () => {
+  it("uses only the device-local profile and never reads cloud state", () => {
     const store = markerStore();
-    markOnboardingStarted(USER.id, store);
-    expect([...store.values.values()]).toEqual(["subscription-v1-started"]);
-    const incomplete = { ...READY_RUNTIME, directChatReady: false };
-    expect(isOnboardingRuntimeReady(incomplete)).toBe(false);
-    expect(() => markOnboardingReady(USER.id, incomplete, store)).toThrowError(
+    expect(loadLocalOnboardingGate("opaque-profile-a", "  Ada   Locale  ", store)).toEqual({
+      phase: "required",
+      account: { displayName: "Ada Locale", identity: "local" },
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
+  });
+
+  it("keeps start and completion markers isolated between local profiles", () => {
+    const store = markerStore();
+    markOnboardingStarted("local:opaque-profile-a", store);
+    expect(loadLocalOnboardingGate("opaque-profile-a", "Ada", store)).toMatchObject({
+      phase: "required",
+      resumeAvailable: true,
+    });
+    expect(loadLocalOnboardingGate("opaque-profile-b", "Bea", store)).toMatchObject({
+      phase: "required",
+      resumeAvailable: false,
+    });
+    markOnboardingReady("local:opaque-profile-a", READY_RUNTIME, store);
+    expect(loadLocalOnboardingGate("opaque-profile-a", "Ada", store)).toEqual({ phase: "ready" });
+    expect(loadLocalOnboardingGate("opaque-profile-b", "Bea", store)).toMatchObject({ phase: "required" });
+  });
+
+  it("restarts a local flow without removing its profile or native state", () => {
+    const store = markerStore();
+    markOnboardingReady("local:opaque-profile-a", READY_RUNTIME, store);
+    resetOnboardingMarker("local:opaque-profile-a", store);
+    expect(loadLocalOnboardingGate("opaque-profile-a", "Ada", store)).toMatchObject({
+      phase: "required",
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    expect([...store.values.values()]).toEqual(["subscription-v1-restarted"]);
+  });
+});
+
+describe("technical and conversational gates", () => {
+  it("opens Assistant chat without a profile but marks ready only after profileReady", () => {
+    const beforeConversation = { ...READY_RUNTIME, profileReady: false, assistantWelcomed: true };
+    expect(isOnboardingAssistantReachable(beforeConversation)).toBe(true);
+    expect(isOnboardingRuntimeReady(beforeConversation)).toBe(false);
+    expect(() => markOnboardingReady(USER.id, beforeConversation, markerStore())).toThrowError(
       new OnboardingSaveError("runtime-not-ready"),
     );
-    expect([...store.values.values()]).toEqual(["subscription-v1-started"]);
 
-    expect(isOnboardingRuntimeReady(READY_RUNTIME)).toBe(true);
-    markOnboardingReady(USER.id, READY_RUNTIME, store);
-    expect([...store.values.values()]).toEqual(["subscription-v1"]);
+    expect(isOnboardingRuntimeReady({ ...beforeConversation, profileReady: true })).toBe(true);
   });
 
-  it("never downgrades a final marker when the start operation is repeated", async () => {
+  it("does not use the one-shot welcomed flag as a final gate", () => {
+    expect(isOnboardingRuntimeReady({ ...READY_RUNTIME, assistantWelcomed: false })).toBe(true);
+  });
+
+  it("reports runtime and container failures at their exact retry stage", () => {
+    expect(runtimeStateFromSnapshot({ ...READY_RUNTIME, runtimeInstalled: false })).toMatchObject({
+      status: "failed", stage: "runtime",
+    });
+    expect(runtimeStateFromSnapshot({ ...READY_RUNTIME, containerRunning: false })).toMatchObject({
+      status: "failed", stage: "container",
+    });
+    expect(runtimeStateFromSnapshot({ ...READY_RUNTIME, providerConfigured: false })).toMatchObject({
+      status: "failed", stage: "provider",
+    });
+  });
+
+  it("writes the final marker monotonically only with verified readiness", async () => {
     const store = markerStore();
+    markOnboardingStarted(USER.id, store);
+    expect([...store.values.values()]).toEqual(["subscription-v1-started"]);
     markOnboardingReady(USER.id, READY_RUNTIME, store);
     markOnboardingStarted(USER.id, store);
-
     expect([...store.values.values()]).toEqual(["subscription-v1"]);
+
     const { client, calls } = fakeClient({});
     await expect(loadOnboardingGate(client, USER, store)).resolves.toEqual({ phase: "ready" });
     expect(calls).toHaveLength(0);
   });
 
-  it("does not report ready when the chat fact is absent at runtime", () => {
-    const withoutChat = { ...READY_RUNTIME } as Partial<OnboardingRuntimeSnapshot>;
-    delete withoutChat.directChatReady;
-    expect(isOnboardingRuntimeReady(withoutChat as OnboardingRuntimeSnapshot)).toBe(false);
-    expect(runtimeStateFromSnapshot({ ...READY_RUNTIME, directChatReady: false })).toEqual({
-      status: "failed",
-      stage: "assistant",
-      message: "La chat diretta non è ancora raggiungibile.",
+  it("keeps a Google restart at technical step 1 despite legacy completion evidence", async () => {
+    const store = markerStore();
+    markOnboardingReady(USER.id, READY_RUNTIME, store);
+    resetOnboardingMarker(USER.id, store);
+    const evidence = {
+      milestones: { data: { first_team_run_at: "2026-01-01T00:00:00Z" }, error: null },
+      profile: { data: READY_PROFILE, error: null },
+    };
+
+    await expect(loadOnboardingGate(fakeClient(evidence).client, USER, store)).resolves.toMatchObject({
+      phase: "required",
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
     });
   });
 });
 
 describe("isOnboardingProfileReady", () => {
-  it("requires the fields that unlock the current profile gate", () => {
-    expect(isOnboardingProfileReady(savedProfile())).toBe(true);
-    expect(isOnboardingProfileReady(savedProfile({ email: null }))).toBe(false);
-    expect(isOnboardingProfileReady(savedProfile({ skills: { primary: ["one"] } }))).toBe(false);
+  it("recognizes only real conversational profile evidence", () => {
+    expect(isOnboardingProfileReady(READY_PROFILE)).toBe(true);
+    expect(isOnboardingProfileReady({ ...READY_PROFILE, email: null })).toBe(false);
+    expect(isOnboardingProfileReady({ ...READY_PROFILE, skills: { primary: ["one"] } })).toBe(false);
   });
 });

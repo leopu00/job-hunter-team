@@ -1,7 +1,12 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { LoginScreen } from "./components/login-screen";
+import {
+  clearGoogleIdentitySelection,
+  selectGoogleIdentity,
+} from "./lib/identity-choice";
 import { DASHBOARD_PAGE, goTo } from "./lib/pages";
-import { useSession } from "./lib/supabase";
+import { clearLocalIdentitySelection } from "./lib/local-profile";
+import { useDeferredSession } from "./lib/supabase";
 
 /**
  * The secondary entrypoint is authentication-only. Runtime setup belongs to
@@ -9,11 +14,33 @@ import { useSession } from "./lib/supabase";
  * app has no alternate API-key/team-start route.
  */
 export default function App() {
-  const { session } = useSession();
+  const { session, restore } = useDeferredSession();
+
+  useEffect(() => {
+    // index.html is always the identity boundary. A marker from an earlier
+    // same-window navigation must not authorize a fresh entry frame.
+    clearGoogleIdentitySelection();
+  }, []);
 
   useEffect(() => {
     if (session) goTo(DASHBOARD_PAGE);
   }, [session]);
 
-  return <LoginScreen />;
+  const chooseGoogle = useCallback(async () => {
+    clearLocalIdentitySelection();
+    selectGoogleIdentity();
+    return Boolean(await restore());
+  }, [restore]);
+
+  const localReady = useCallback(() => {
+    clearGoogleIdentitySelection();
+    goTo(DASHBOARD_PAGE);
+  }, []);
+
+  return (
+    <LoginScreen
+      onChooseGoogle={chooseGoogle}
+      onLocalReady={localReady}
+    />
+  );
 }

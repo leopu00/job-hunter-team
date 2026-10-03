@@ -1,0 +1,175 @@
+.existing-team-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 28px;
+  background: color-mix(in srgb, var(--color-bg, #080b09) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.existing-team-modal {
+  width: min(680px, 100%);
+  max-height: min(820px, calc(100dvh - 56px));
+  overflow: auto;
+  border: 1px solid var(--color-border, #303731);
+  border-radius: 20px;
+  background: var(--color-panel, #111512);
+  color: var(--color-base, #f5f6f2);
+  box-shadow: 0 30px 90px rgb(0 0 0 / 0.48);
+  padding: clamp(24px, 5vw, 42px);
+}
+
+.existing-team-modal__header h2 {
+  margin: 5px 0 10px;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  line-height: 1.08;
+}
+
+.existing-team-modal__header h2:focus { outline: none; }
+
+.existing-team-modal__header > p:last-child,
+.existing-team-modal__confirm > p,
+.existing-team-modal__status p,
+.existing-team-modal__failure p {
+  color: var(--color-muted, #a6ada7);
+  line-height: 1.55;
+}
+
+.existing-team-modal__eyebrow {
+  margin: 0;
+  color: var(--color-accent, #bbf246);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.existing-team-modal__artwork { width: min(240px, 100%); margin-block: 12px; }
+
+.existing-team-modal__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 28px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.existing-team-modal__steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--color-dim, #7f8881);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.existing-team-modal__steps span {
+  display: grid;
+  flex: 0 0 27px;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid var(--color-border, #303731);
+  border-radius: 50%;
+}
+
+.existing-team-modal__steps .is-active,
+.existing-team-modal__steps .is-complete { color: var(--color-base, #f5f6f2); }
+.existing-team-modal__steps .is-active span,
+.existing-team-modal__steps .is-complete span { border-color: var(--color-accent, #bbf246); color: var(--color-accent, #bbf246); }
+
+.existing-team-modal__form,
+.existing-team-modal__confirm { display: grid; gap: 18px; }
+
+.existing-team-modal__form label { display: grid; gap: 7px; min-width: 0; }
+.existing-team-modal__form label > span { font-size: 0.82rem; font-weight: 750; }
+
+.existing-team-modal__form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border, #303731);
+  border-radius: 10px;
+  background: var(--color-bg, #080b09);
+  color: var(--color-base, #f5f6f2);
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.existing-team-modal__form input:focus-visible,
+.existing-team-modal button:focus-visible {
+  outline: 3px solid var(--color-accent, #bbf246);
+  outline-offset: 2px;
+}
+
+.existing-team-modal__row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; }
+
+.existing-team-modal__confirm dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.existing-team-modal__confirm dl > div {
+  min-width: 0;
+  border: 1px solid var(--color-border, #303731);
+  border-radius: 10px;
+  background: var(--color-bg, #080b09);
+  padding: 12px 14px;
+}
+
+.existing-team-modal__confirm dt { color: var(--color-dim, #7f8881); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+.existing-team-modal__confirm dd { overflow-wrap: anywhere; margin: 5px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86rem; }
+
+.existing-team-modal__warning,
+.existing-team-modal__failure,
+.existing-team-modal__status {
+  border: 1px solid color-mix(in srgb, var(--color-accent, #bbf246) 35%, var(--color-border, #303731));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent, #bbf246) 7%, var(--color-panel, #111512));
+  padding: 15px;
+}
+
+.existing-team-modal__status { display: flex; gap: 12px; align-items: flex-start; }
+.existing-team-modal__status p,
+.existing-team-modal__failure p { margin: 4px 0 0; }
+.existing-team-modal__failure.is-terminal { border-color: #a84852; background: rgb(168 72 82 / 0.1); }
+
+.existing-team-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.existing-team-modal__actions button {
+  min-height: 44px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 800;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.existing-team-modal__primary { border: 1px solid var(--color-accent, #bbf246); background: var(--color-accent, #bbf246); color: #10130f; }
+.existing-team-modal__secondary { border: 1px solid var(--color-border, #303731); background: transparent; color: var(--color-base, #f5f6f2); }
+.existing-team-modal__actions button:disabled { cursor: not-allowed; opacity: 0.56; }
+
+@media (max-width: 560px) {
+  .existing-team-modal__backdrop { align-items: end; padding: 0; }
+  .existing-team-modal { width: 100%; max-height: 94dvh; border-radius: 20px 20px 0 0; padding: 24px 18px calc(24px + env(safe-area-inset-bottom)); }
+  .existing-team-modal__steps li { justify-content: center; font-size: 0; }
+  .existing-team-modal__row { grid-template-columns: 1fr; }
+  .existing-team-modal__actions { flex-direction: column-reverse; }
+  .existing-team-modal__actions button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .existing-team-modal__backdrop { backdrop-filter: none; }
+}

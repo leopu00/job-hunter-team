@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
 import { loadDashboard } from "../pages/dashboard/load-dashboard";
+import { signOut } from "../lib/supabase";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
@@ -32,6 +33,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
   restore = installApiBridge(shellApi(notInDesktop));
   vi.mocked(loadDashboard).mockResolvedValue(fixtureData());
+  vi.mocked(signOut).mockReset().mockResolvedValue();
 });
 afterEach(() => {
   restore();
@@ -81,6 +83,34 @@ describe("Shell", () => {
     const before = vi.mocked(loadDashboard).mock.calls.length;
     act(() => screen.getByRole("button", { name: "Aggiorna" }).click());
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
+  });
+
+  it("keeps the signed-in shell mounted when scoped logout teardown fails", async () => {
+    vi.mocked(signOut).mockRejectedValue({ code: "account_scope_reset_failed" });
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    render(<Shell />);
+    await screen.findByRole("heading", { name: "Dashboard" });
+
+    await user.click(screen.getByRole("button", { name: "Esci" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
+    expect(screen.getByRole("button", { name: "Esci" })).toBeEnabled();
+  });
+
+  it("uses the local logout boundary and keeps Shell mounted if its teardown fails", async () => {
+    const localLogout = vi.fn().mockRejectedValue({ code: "account_scope_reset_failed" });
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    render(<Shell onLogout={localLogout} />);
+    await screen.findByRole("heading", { name: "Dashboard" });
+
+    await user.click(screen.getByRole("button", { name: "Esci" }));
+
+    expect(localLogout).toHaveBeenCalledOnce();
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
+    expect(screen.getByRole("button", { name: "Esci" })).toBeEnabled();
   });
 
   it.each([820, 480])(
