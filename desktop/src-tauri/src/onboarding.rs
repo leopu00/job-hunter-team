@@ -212,6 +212,34 @@ fn failure(code: &'static str) -> OnboardingError {
             "La verifica del container ha superato il tempo massimo. Riprova.",
             true,
         ),
+        "resume_runtime_not_ready" => (
+            "Il runtime salvato non risulta più disponibile. Riparti dal primo passaggio.",
+            false,
+        ),
+        "resume_container_not_ready" => (
+            "Il container salvato non risulta più attivo. Riparti dal passaggio container.",
+            false,
+        ),
+        "resume_provider_not_configured" => (
+            "Il provider salvato non risulta più configurato. Riparti dal passaggio provider.",
+            false,
+        ),
+        "resume_provider_not_authenticated" => (
+            "L’accesso al provider non risulta più disponibile. Accedi di nuovo al provider.",
+            false,
+        ),
+        "host_not_configured" | "host_config_invalid" => (
+            "La destinazione salvata non è più disponibile. Seleziona di nuovo l’ambiente.",
+            false,
+        ),
+        "team_start_failed" => (
+            "La sequenza di avvio della squadra non è riuscita. Riprova.",
+            true,
+        ),
+        "team_verify_failed" => (
+            "Assistente e Capitano non risultano entrambi attivi. Riprova.",
+            true,
+        ),
         "provider_timeout" => (
             "La configurazione del provider ha superato il tempo massimo. Riprova.",
             true,
@@ -1573,6 +1601,53 @@ pub(crate) fn onboarding_provider_login_close(
     Ok(())
 }
 
+fn resume_team_prerequisite(snapshot: &OnboardingSnapshot) -> Result<(), OnboardingError> {
+    let missing = if !snapshot.runtime_installed {
+        Some("resume_runtime_not_ready")
+    } else if !snapshot.container_running {
+        Some("resume_container_not_ready")
+    } else if !snapshot.provider_configured {
+        Some("resume_provider_not_configured")
+    } else if !snapshot.provider_authenticated {
+        Some("resume_provider_not_authenticated")
+    } else {
+        None
+    };
+    missing.map_or(Ok(()), |code| Err(failure(code)))
+}
+
+fn start_team_impl(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+) -> Result<(), OnboardingError> {
+    match validated {
+        ValidatedHost::Local => {
+            let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+            ensure_success(
+                run_scoped_local(app, scope, &wrapper, &["team", "start"], PREPARE_TIMEOUT),
+                "team_start_failed",
+            )
+        }
+        ValidatedHost::Vps { .. } => ensure_success(
+            run_ssh(validated, REMOTE_TEAM_START, None, PREPARE_TIMEOUT, None),
+            "team_start_failed",
+        ),
+    }
+}
+
+fn verified_team_snapshot(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    let snapshot = snapshot_impl(app, scope, validated)?;
+    if !snapshot.assistant_running || !snapshot.captain_running {
+        return Err(failure("team_verify_failed"));
+    }
+    Ok(snapshot)
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_team_start(
     app: tauri::AppHandle,
@@ -1601,30 +1676,43 @@ pub(crate) async fn onboarding_team_start(
             OnboardingProgressStage::Team,
             "Avvio container e agenti",
         );
-        match &validated {
-            ValidatedHost::Local => {
-                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
-                ensure_success(
-                    run_scoped_local(
-                        &app,
-                        &worker_expected,
-                        &wrapper,
-                        &["team", "start"],
-                        PREPARE_TIMEOUT,
-                    ),
-                    "team_start_failed",
-                )?;
-            }
-            ValidatedHost::Vps { .. } => ensure_success(
-                run_ssh(&validated, REMOTE_TEAM_START, None, PREPARE_TIMEOUT, None),
-                "team_start_failed",
-            )?,
-        }
-        let snapshot = snapshot_impl(&app, &worker_expected, &validated)?;
-        if !snapshot.assistant_running || !snapshot.captain_running {
-            return Err(failure("team_verify_failed"));
-        }
-        Ok(snapshot)
+        start_team_impl(&app, &worker_expected, &validated)?;
+        verified_team_snapshot(&app, &worker_expected, &validated)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("team_start_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_resume_team_start(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let host =
+            crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        let before = snapshot_impl(&app, &worker_expected, &validated)?;
+        resume_team_prerequisite(&before)?;
+        start_team_impl(&app, &worker_expected, &validated)?;
+        verified_team_snapshot(&app, &worker_expected, &validated)
     })
     .await
     .unwrap_or_else(|_| Err(failure("team_start_failed")));
@@ -1704,8 +1792,8 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
-        parse_snapshot, redact, start_and_verify_local_container_with, valid_pairing_token,
-        valid_wrapper_file, ExistingTeamConnectRequest, OnboardingProgress,
+        parse_snapshot, redact, resume_team_prerequisite, start_and_verify_local_container_with,
+        valid_pairing_token, valid_wrapper_file, ExistingTeamConnectRequest, OnboardingProgress,
         OnboardingProgressStage, OnboardingSubmission, StreamRedactor, INSTALL_SHA256,
         REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
     };
@@ -2198,6 +2286,61 @@ esac
         );
         assert!(!snapshot.provider_authenticated && !snapshot.captain_running);
         assert!(!snapshot.direct_chat_ready);
+    }
+
+    #[test]
+    fn resume_team_start_requires_the_first_real_prerequisite_only() {
+        let mut snapshot = super::OnboardingSnapshot {
+            runtime_installed: true,
+            container_running: true,
+            provider_configured: true,
+            provider_authenticated: true,
+            assistant_running: false,
+            captain_running: false,
+            profile_ready: false,
+            assistant_welcomed: false,
+            direct_chat_ready: false,
+        };
+        assert!(resume_team_prerequisite(&snapshot).is_ok());
+
+        snapshot.runtime_installed = false;
+        assert_eq!(
+            resume_team_prerequisite(&snapshot).unwrap_err().code,
+            "resume_runtime_not_ready"
+        );
+        snapshot.runtime_installed = true;
+        snapshot.container_running = false;
+        assert_eq!(
+            resume_team_prerequisite(&snapshot).unwrap_err().code,
+            "resume_container_not_ready"
+        );
+        snapshot.container_running = true;
+        snapshot.provider_configured = false;
+        assert_eq!(
+            resume_team_prerequisite(&snapshot).unwrap_err().code,
+            "resume_provider_not_configured"
+        );
+        snapshot.provider_configured = true;
+        snapshot.provider_authenticated = false;
+        assert_eq!(
+            resume_team_prerequisite(&snapshot).unwrap_err().code,
+            "resume_provider_not_authenticated"
+        );
+
+        for code in [
+            "resume_runtime_not_ready",
+            "resume_container_not_ready",
+            "resume_provider_not_configured",
+            "resume_provider_not_authenticated",
+            "host_not_configured",
+            "host_config_invalid",
+        ] {
+            let error = failure(code);
+            assert!(!error.retryable);
+            assert_ne!(error.message, "L’operazione non è riuscita. Riprova.");
+        }
+        assert!(failure("team_start_failed").retryable);
+        assert!(failure("team_verify_failed").retryable);
     }
 
     #[test]
