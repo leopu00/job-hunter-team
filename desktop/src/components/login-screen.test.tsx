@@ -25,6 +25,68 @@ beforeEach(() => {
 });
 
 describe("LoginScreen", () => {
+  it("offers Google and local as independent entry paths without old personal questions", () => {
+    render(<LoginScreen loadBrowsers={noBrowsers} configured />);
+    expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Usa in locale" })).toBeInTheDocument();
+    for (const oldQuestion of [/ruolo/i, /anni di esperienza/i, /località/i]) {
+      expect(screen.queryByText(oldQuestion)).not.toBeInTheDocument();
+    }
+  });
+
+  it("creates a local identity with only a device-local display name", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn(async () => undefined);
+    const createLocal = vi.fn(async (displayName: string) => ({
+      profileId: "opaque-local-profile",
+      displayName,
+    }));
+    const onLocalReady = vi.fn();
+    render(
+      <LoginScreen
+        signIn={signIn}
+        loadBrowsers={noBrowsers}
+        configured
+        readLocal={() => null}
+        createLocal={createLocal}
+        onLocalReady={onLocalReady}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Usa in locale" }));
+    expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/ruolo|esperienza|località/i)).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Nome visualizzato" }), "Ada Locale");
+    await user.click(screen.getByRole("button", { name: "Continua in locale" }));
+
+    expect(createLocal).toHaveBeenCalledWith("Ada Locale");
+    expect(signIn).not.toHaveBeenCalled();
+    expect(onLocalReady).toHaveBeenCalledOnce();
+  });
+
+  it("reactivates a saved local profile without asking for its name again", async () => {
+    const user = userEvent.setup();
+    const activateLocal = vi.fn(async () => ({
+      profileId: "opaque-local-profile",
+      displayName: "Ada Locale",
+    }));
+    const onLocalReady = vi.fn();
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        readLocal={() => ({ profileId: "opaque-local-profile", displayName: "Ada Locale" })}
+        activateLocal={activateLocal}
+        onLocalReady={onLocalReady}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Usa in locale" }));
+    expect(activateLocal).toHaveBeenCalledWith();
+    expect(screen.queryByRole("textbox", { name: "Nome visualizzato" })).not.toBeInTheDocument();
+    expect(onLocalReady).toHaveBeenCalledOnce();
+  });
+
   it("starts the Google sign-in and waits for the browser, with a way out", async () => {
     const user = userEvent.setup();
     const pending = deferred();
@@ -32,7 +94,7 @@ describe("LoginScreen", () => {
     const cancel = vi.fn(async () => pending.reject(new LoginError("cancelled")));
     render(<LoginScreen signIn={signIn} cancel={cancel} loadBrowsers={noBrowsers} configured />);
 
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(signIn).toHaveBeenCalledTimes(1);
     expect(signIn.mock.calls[0][0].browser).toBe("default");
     expect(screen.getByRole("status")).toHaveTextContent("Completa l'accesso nel browser");
@@ -41,7 +103,7 @@ describe("LoginScreen", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Accesso annullato.")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Accedi con Google/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeEnabled();
   });
 
   it("lists the detected browsers and remembers the last choice", async () => {
@@ -53,7 +115,7 @@ describe("LoginScreen", () => {
     const select = screen.getByRole("combobox", { name: "Apri con" });
     await screen.findByRole("option", { name: "Google Chrome Canary" });
     await user.selectOptions(select, "chrome-canary");
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(signIn.mock.calls[0][0].browser).toBe("chrome-canary");
     first.unmount();
 
@@ -80,7 +142,7 @@ describe("LoginScreen", () => {
     render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
 
     await user.selectOptions(screen.getByRole("combobox", { name: "Apri con" }), "manual");
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(signIn.mock.calls[0][0].browser).toBe("manual");
     expect(screen.getByRole("status")).toHaveTextContent("Copia il link");
     expect(screen.getByRole("textbox", { name: "Link di accesso" })).toHaveValue(AUTHORIZE);
@@ -99,10 +161,10 @@ describe("LoginScreen", () => {
       .mockResolvedValueOnce(undefined);
     render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
 
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Accesso non concesso. (User denied)");
 
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(signIn).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -111,7 +173,7 @@ describe("LoginScreen", () => {
     const user = userEvent.setup();
     const signIn = vi.fn().mockRejectedValue(new LoginError("keychain-failed"));
     render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
-    await user.click(screen.getByRole("button", { name: /Accedi con Google/ }));
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Chiudi completamente Job Hunter Team");
     expect(screen.getByRole("button", { name: "Riavvia per riprovare" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Apri con" })).toBeDisabled();
@@ -119,9 +181,14 @@ describe("LoginScreen", () => {
     expect(signIn).toHaveBeenCalledTimes(1);
   });
 
-  it("disables the button when the build has no Supabase project", () => {
+  it("disables Google but keeps local setup usable when the build has no Supabase project", async () => {
+    const user = userEvent.setup();
     render(<LoginScreen configured={false} loadBrowsers={noBrowsers} />);
-    expect(screen.getByRole("button", { name: /Accedi con Google/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Usa in locale" })).toBeEnabled();
     expect(screen.getByRole("alert")).toHaveTextContent("VITE_SUPABASE_URL");
+    await user.click(screen.getByRole("button", { name: "Usa in locale" }));
+    expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

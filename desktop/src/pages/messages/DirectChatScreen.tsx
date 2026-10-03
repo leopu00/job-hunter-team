@@ -20,8 +20,15 @@ const AGENTS = [
   { id: "critico", label: "Critico" },
 ] as const;
 
+export type DirectChatAgentId = (typeof AGENTS)[number]["id"];
+
+export function isDirectChatAgentId(value: string | null): value is DirectChatAgentId {
+  return AGENTS.some((agent) => agent.id === value);
+}
+
 const INITIAL_STATUS: DirectChatStatus = { state: "connecting" };
 const MAX_MESSAGE_LENGTH = 4_000;
+const HISTORY_POLL_MS = 1_500;
 
 function safeCode(value: unknown): string | null {
   return typeof value === "string" && /^[a-z0-9_-]{1,48}$/i.test(value)
@@ -60,10 +67,10 @@ function StatusBar({
 }) {
   const failed = status.state === "error" || status.state === "disconnected";
   const code = safeCode(operationError ?? status.code);
-  let text = "Connessione sicura alla VPS…";
-  if (status.state === "ready") text = "Tunnel VPS collegato";
-  if (status.state === "disconnected") text = "Tunnel VPS non collegato.";
-  if (status.state === "error") text = "Tunnel VPS non disponibile.";
+  let text = "Connessione sicura al team…";
+  if (status.state === "ready") text = "Team collegato";
+  if (status.state === "disconnected") text = "Team non collegato.";
+  if (status.state === "error") text = "Team non disponibile.";
 
   return (
     <div
@@ -93,11 +100,13 @@ function StatusBar({
 export default function DirectChatScreen({
   client,
   voiceInputBridge,
+  initialAgentId = "capitano",
 }: {
   client: DirectChatClient;
   voiceInputBridge?: VoiceInputBridge;
+  initialAgentId?: DirectChatAgentId;
 }) {
-  const [agentId, setAgentId] = useState<(typeof AGENTS)[number]["id"]>("capitano");
+  const [agentId, setAgentId] = useState<DirectChatAgentId>(initialAgentId);
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
   const [text, setText] = useState("");
@@ -109,6 +118,10 @@ export default function DirectChatScreen({
   const currentAgent = useRef(agentId);
   currentAgent.current = agentId;
   const selected = useMemo(() => AGENTS.find((agent) => agent.id === agentId)!, [agentId]);
+
+  useEffect(() => {
+    setAgentId(initialAgentId);
+  }, [initialAgentId]);
 
   useEffect(() => {
     let active = true;
@@ -155,20 +168,32 @@ export default function DirectChatScreen({
     setLoading(false);
     if (status.state !== "ready") return;
     let active = true;
-    setLoading(true);
-    void client
-      // A switch asks for a complete recent page. Keeping only the opaque
-      // cursor while clearing the old thread would leave a revisited chat
-      // showing just its delta.
-      .read({ agentId })
-      .then((page) => {
+    let reading = false;
+
+    async function readHistory(initial: boolean) {
+      if (!active || reading) return;
+      reading = true;
+      if (initial) setLoading(true);
+      try {
+        // The native bridge returns the latest bounded page. Re-read it in full
+        // and merge by id: its historical cursor skips the first appended line.
+        const page = await client.read({ agentId });
         if (!active) return;
         setMessages((current) => mergeMessages(current, page));
-      })
-      .catch((error) => active && setOperationError(errorCode(error) ?? "read_failed"))
-      .finally(() => active && setLoading(false));
+        setOperationError(null);
+      } catch (error) {
+        if (active) setOperationError(errorCode(error) ?? "read_failed");
+      } finally {
+        reading = false;
+        if (active && initial) setLoading(false);
+      }
+    }
+
+    void readHistory(true);
+    const interval = setInterval(() => void readHistory(false), HISTORY_POLL_MS);
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, [agentId, client, status.state]);
 
@@ -251,7 +276,7 @@ export default function DirectChatScreen({
       <section className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col" aria-label={`Conversazione con ${selected.label}`}>
         <header className="shrink-0 min-h-14 px-4 sm:px-5 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
           <div>
-            <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--color-dim)]">Chat diretta VPS</div>
+            <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--color-dim)]">Chat diretta</div>
             <h1 className="m-0 text-[15px] font-bold tracking-wide text-[var(--color-white)]">{selected.label}</h1>
           </div>
           <label className="md:hidden text-[9px] uppercase tracking-wider text-[var(--color-dim)]">
@@ -333,7 +358,7 @@ export default function DirectChatScreen({
               maxLength={MAX_MESSAGE_LENGTH}
               disabled={status.state !== "ready" || sending}
               aria-label={`Scrivi a ${selected.label}`}
-              placeholder={status.state === "ready" ? `Scrivi a ${selected.label}…` : "Collega il tunnel VPS per scrivere"}
+              placeholder={status.state === "ready" ? `Scrivi a ${selected.label}…` : "Collega il team per scrivere"}
               className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[12px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
             />
             <VoiceInputControl

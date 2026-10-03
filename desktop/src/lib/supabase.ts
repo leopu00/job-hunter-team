@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
+import { clearDesktopAccountScope } from "./desktop-account-scope";
 
 /**
  * Il client Supabase della desktop: lo stesso progetto del web, con la
@@ -263,10 +264,16 @@ export async function cancelGoogleSignIn(): Promise<void> {
  * Esce da questa app soltanto: `scope: "local"` revoca la sessione della
  * desktop e lascia aperte quelle del web e degli altri dispositivi.
  */
-export async function signOut(client: SupabaseClient = supabase): Promise<void> {
+export async function signOut(
+  client: SupabaseClient = supabase,
+  clearAccountScope: () => Promise<void> = clearDesktopAccountScope,
+): Promise<void> {
+  // The backend closes chat/tunnels and forgets the active runtime ownership
+  // boundary before Supabase can expose a different account to the webview.
+  await clearAccountScope();
   const { error } = await client.auth.signOut({ scope: "local" });
   // Anche se la revoca in rete non riesce, la sessione locale è già cancellata.
-  if (error) console.warn("[auth] sign-out revoke failed:", error.message);
+  if (error) console.warn("[auth] sign-out revoke failed");
 }
 
 export interface SessionState {

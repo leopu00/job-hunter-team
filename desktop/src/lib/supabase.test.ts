@@ -408,10 +408,29 @@ describe("the real supabase-js client against the backend's rules", () => {
 });
 
 describe("signOut", () => {
-  it("revokes only this app's session", async () => {
-    const client = fakeClient();
-    await signOut(client);
+  it("closes scoped runtime resources before revoking only this app's session", async () => {
+    const order: string[] = [];
+    const client = fakeClient({
+      signOut: vi.fn(async () => {
+        order.push("session");
+        return { error: null };
+      }),
+    });
+    const clearAccountScope = vi.fn(async () => { order.push("scope"); });
+
+    await signOut(client, clearAccountScope);
+
+    expect(clearAccountScope).toHaveBeenCalledOnce();
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(order).toEqual(["scope", "session"]);
+  });
+
+  it("keeps the authenticated session when scoped teardown cannot be verified", async () => {
+    const client = fakeClient();
+    const clearAccountScope = vi.fn().mockRejectedValue({ code: "account_scope_reset_failed" });
+
+    await expect(signOut(client, clearAccountScope)).rejects.toEqual({ code: "account_scope_reset_failed" });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
   });
 });
 

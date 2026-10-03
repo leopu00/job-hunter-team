@@ -39,4 +39,11 @@ describe("MessagesPage", () => {
     view.unmount();
     await waitFor(() => expect(closeDirectChat).toHaveBeenCalledOnce());
   });
+
+  it("opens the explicitly requested Assistant conversation on first read", async () => {
+    render(<MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />);
+
+    await waitFor(() => expect(readDirectChat).toHaveBeenCalledWith("assistente", undefined));
+    expect(screen.getByRole("region", { name: "Conversazione con Assistente" })).toBeInTheDocument();
+  });
 });

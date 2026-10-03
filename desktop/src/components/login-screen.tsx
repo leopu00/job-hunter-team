@@ -14,6 +14,13 @@ import {
   type LoginErrorCode,
   type SignInOptions,
 } from "../lib/supabase";
+import {
+  activateSavedLocalProfile,
+  createAndActivateLocalProfile,
+  readLocalProfile,
+  type LocalProfile,
+} from "../lib/local-profile";
+import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import "./login-screen.css";
 
 const MESSAGES: Record<LoginErrorCode, string> = {
@@ -40,6 +47,10 @@ export interface LoginScreenProps {
   cancel?: () => Promise<void>;
   loadBrowsers?: () => Promise<InstalledBrowser[]>;
   configured?: boolean;
+  readLocal?: () => LocalProfile | null;
+  createLocal?: (displayName: string) => Promise<LocalProfile>;
+  activateLocal?: () => Promise<LocalProfile>;
+  onLocalReady?: () => void;
 }
 
 type CopyState = "idle" | "copied" | "failed";
@@ -57,12 +68,20 @@ export function LoginScreen({
   cancel = cancelGoogleSignIn,
   loadBrowsers = listBrowsers,
   configured = supabaseConfigured,
+  readLocal = readLocalProfile,
+  createLocal = createAndActivateLocalProfile,
+  activateLocal = activateSavedLocalProfile,
+  onLocalReady = () => goTo(DASHBOARD_PAGE),
 }: LoginScreenProps) {
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
   const [waiting, setWaiting] = useState(false);
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [copy, setCopy] = useState<CopyState>("idle");
+  const [localSetup, setLocalSetup] = useState(false);
+  const [localName, setLocalName] = useState("");
+  const [localBusy, setLocalBusy] = useState(false);
+  const [localError, setLocalError] = useState(false);
   const linkField = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<LoginError | null>(
     configured ? null : new LoginError("not-configured"),
@@ -84,6 +103,7 @@ export function LoginScreen({
 
   const start = useCallback(async () => {
     setError(null);
+    setLocalError(false);
     setAuthorizeUrl(null);
     setCopy("idle");
     setWaiting(true);
@@ -120,17 +140,71 @@ export function LoginScreen({
   const keychainBlocked = error?.code === "keychain-failed";
   const manual = choice === "manual";
 
+  const useLocal = useCallback(async () => {
+    setError(null);
+    setLocalError(false);
+    const saved = readLocal();
+    if (!saved) {
+      setLocalSetup(true);
+      return;
+    }
+    setLocalBusy(true);
+    try {
+      await activateLocal();
+      onLocalReady();
+    } catch {
+      setLocalError(true);
+    } finally {
+      setLocalBusy(false);
+    }
+  }, [activateLocal, onLocalReady, readLocal]);
+
+  const createLocalIdentity = useCallback(async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!localName.trim() || localBusy) return;
+    setLocalBusy(true);
+    setLocalError(false);
+    try {
+      await createLocal(localName);
+      onLocalReady();
+    } catch {
+      setLocalError(true);
+    } finally {
+      setLocalBusy(false);
+    }
+  }, [createLocal, localBusy, localName, onLocalReady]);
+
   return (
     <main className="page login-screen">
       <section className="login-card" aria-labelledby="login-title">
         <img src="/jht-mark.svg" alt="" className="login-card__mark" />
         <p className="eyebrow">Pannello di controllo</p>
-        <h1 id="login-title">Accedi</h1>
+        <h1 id="login-title">Come vuoi iniziare?</h1>
         <p className="login-card__lede">
-          Entra con il tuo account per vedere le tue posizioni e la tua dashboard.
+          Scegli Google oppure continua solo su questo dispositivo. Host e provider si scelgono dopo.
         </p>
 
-        {waiting ? (
+        {localSetup ? (
+          <form className="login-card__local" onSubmit={createLocalIdentity}>
+            <label>
+              <span>Nome visualizzato</span>
+              <input
+                autoFocus
+                autoComplete="nickname"
+                value={localName}
+                onChange={(event) => setLocalName(event.target.value)}
+                maxLength={80}
+              />
+            </label>
+            <p className="login-card__note">Resta solo su questo dispositivo.</p>
+            <button className="primary-button" type="submit" disabled={!localName.trim() || localBusy}>
+              {localBusy ? "Preparazione…" : "Continua in locale"}
+            </button>
+            <button className="login-card__secondary" type="button" onClick={() => setLocalSetup(false)} disabled={localBusy}>
+              Indietro
+            </button>
+          </form>
+        ) : waiting ? (
           <div className="login-card__waiting" role="status">
             <p>
               {manual
@@ -182,7 +256,16 @@ export function LoginScreen({
               onClick={start}
               disabled={!configured || keychainBlocked}
             >
-              <GoogleIcon /> {keychainBlocked ? "Riavvia per riprovare" : "Accedi con Google"}
+              <GoogleIcon /> {keychainBlocked ? "Riavvia per riprovare" : "Continua con Google"}
+            </button>
+            <div className="login-card__separator" aria-hidden="true"><span>oppure</span></div>
+            <button
+              className="login-card__local-button"
+              type="button"
+              onClick={() => void useLocal()}
+              disabled={localBusy}
+            >
+              {localBusy ? "Preparazione…" : "Usa in locale"}
             </button>
           </>
         )}
@@ -194,6 +277,11 @@ export function LoginScreen({
           </p>
         )}
         {showCancelled && <p className="login-card__note">{MESSAGES.cancelled}</p>}
+        {localError && (
+          <p className="login-card__error" role="alert">
+            Non riesco ad attivare il profilo locale. Nessun runtime è stato aperto.
+          </p>
+        )}
       </section>
     </main>
   );

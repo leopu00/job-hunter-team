@@ -3,11 +3,10 @@ import type {
   ExecutionHost,
   OnboardingRuntimeSnapshot,
   OnboardingSubmission,
-  OperationalStage,
 } from "./onboarding";
 
 export interface OnboardingNativeProgress {
-  stage: OperationalStage;
+  stage: "preparing" | "runtime" | "container" | "provider" | "team";
   message: string;
 }
 
@@ -43,13 +42,12 @@ export async function confirmOnboardingSshHostKey(
 export async function prepareOnboardingRuntime(
   submission: OnboardingSubmission,
   pairingToken: string | null,
-  accountEmail: string,
   onProgress: (progress: OnboardingNativeProgress) => void,
 ): Promise<OnboardingRuntimeSnapshot> {
   if (!isTauri()) desktopOnly();
   const channel = new Channel<OnboardingNativeProgress>();
   channel.onmessage = onProgress;
-  return invoke("onboarding_prepare", { submission, pairingToken, accountEmail, onProgress: channel });
+  return invoke("onboarding_prepare", { submission, pairingToken, onProgress: channel });
 }
 
 export async function startOnboardingProviderLogin(
@@ -86,6 +84,12 @@ export async function startOnboardingTeam(
 export async function readOnboardingSnapshot(host: ExecutionHost): Promise<OnboardingRuntimeSnapshot> {
   if (!isTauri()) desktopOnly();
   return invoke("onboarding_snapshot", { host });
+}
+
+/** Re-reads the privately persisted native host without exposing it to the webview. */
+export async function resumeOnboardingSnapshot(): Promise<OnboardingRuntimeSnapshot> {
+  if (!isTauri()) desktopOnly();
+  return invoke("onboarding_resume_snapshot");
 }
 
 export async function openOnboardingAssistant(host: ExecutionHost): Promise<OnboardingRuntimeSnapshot> {

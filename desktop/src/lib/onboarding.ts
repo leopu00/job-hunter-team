@@ -1,20 +1,11 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { DesktopPlatform } from "./desktop-platform";
 
-export type WorkMode = "remote" | "hybrid" | "onsite" | "flexible";
-
-export interface OnboardingProfileDraft {
-  fullName: string;
-  targetRole: string;
-  location: string;
-  experienceYears: number;
-  skills: string[];
-  languages: string[];
-  workMode: WorkMode;
-  notes: string;
+export interface OnboardingAccount {
+  displayName: string | null;
+  identity?: "google" | "local";
 }
-
-export interface OnboardingAccount { displayName: string | null }
+export interface ExistingTeamHint { teamId: string; status: "available" }
 
 export type ExecutionHost =
   | { kind: "local" }
@@ -23,20 +14,19 @@ export type ExecutionHost =
 export type SubscriptionProvider = "claude" | "codex" | "kimi";
 
 export interface OnboardingSubmission {
-  profile: OnboardingProfileDraft;
   host: ExecutionHost;
   provider: SubscriptionProvider;
 }
 
-export type CollectionStage = "profile" | "host" | "provider";
-export type OperationalStage = "runtime" | "provider-login" | "team-start" | "assistant";
+export type CollectionStage = "host" | "provider";
+export type OperationalStage = "ssh-host-key" | "runtime" | "container" | "provider" | "provider-login" | "team-start" | "assistant";
 export type OnboardingRuntimeStage = CollectionStage | OperationalStage;
 
 export type OnboardingRuntimeState =
   | { status: "collecting"; stage: CollectionStage }
   | { status: "working"; stage: OperationalStage; message: string }
-  | { status: "action-required"; stage: "provider-login" | "assistant"; message: string }
-  | { status: "failed"; stage: OnboardingRuntimeStage; message: string }
+  | { status: "action-required"; stage: "ssh-host-key" | "provider-login" | "assistant"; message: string }
+  | { status: "failed"; stage: OnboardingRuntimeStage; message: string; code?: string; retryable?: boolean }
   | { status: "ready" };
 
 export interface OnboardingProviderLoginState {
@@ -44,6 +34,11 @@ export interface OnboardingProviderLoginState {
   status: "starting" | "active" | "exited";
   output: string;
   exitCode?: number | null;
+}
+
+export interface OnboardingSshHostKeyConfirmation {
+  algorithm: "ssh-ed25519";
+  fingerprint: `SHA256:${string}`;
 }
 
 /** Facts independently re-read from the selected runtime host. */
@@ -63,11 +58,13 @@ export interface OnboardingRuntimeSnapshot {
 export interface OnboardingFlowProps {
   account: OnboardingAccount;
   platform: DesktopPlatform;
-  initialDraft?: OnboardingProfileDraft;
   runtime: OnboardingRuntimeState;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
   onRuntimeAction: (stage: "provider-login" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;
+  sshHostKey: OnboardingSshHostKeyConfirmation | null;
+  onConfirmHostKey: () => Promise<void>;
+  onCancelHostKey: () => void;
   onProviderInput: (input: string) => Promise<void>;
   onProviderClose: () => Promise<void>;
   onRetry: () => Promise<void>;
@@ -78,7 +75,8 @@ export type OnboardingGateState =
   | {
       phase: "required";
       account: OnboardingAccount;
-      initialDraft?: OnboardingProfileDraft;
+      resumeAvailable: boolean;
+      existingTeam?: ExistingTeamHint;
       runtime: OnboardingRuntimeState;
     }
   | { phase: "ready" }
@@ -109,15 +107,15 @@ type ProfileRow = {
   positioning?: unknown;
 };
 
+type ExistingTeamRow = { id?: string | null };
+
 const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
 const MARKER_STARTED = "subscription-v1-started";
-const WORK_MODES = new Set<WorkMode>(["remote", "hybrid", "onsite", "flexible"]);
 const STATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 
 function markerKey(userId: string): string { return `${MARKER_PREFIX}${userId}`; }
 function clean(value: string): string { return value.trim().replace(/\s+/g, " "); }
-function unique(values: string[]): string[] { return [...new Set(values.map(clean).filter(Boolean))]; }
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>) : {};
@@ -147,33 +145,11 @@ function profileSeniority(row: ProfileRow): string | null {
   const value = record(row.positioning).seniority_target;
   return typeof value === "string" && clean(value) ? clean(value) : null;
 }
-function profileWorkMode(row: ProfileRow): WorkMode {
-  const first = Array.isArray(row.location_preferences) ? record(row.location_preferences[0]).type : undefined;
-  const nested = record(record(row.positioning).preferences).work_mode;
-  const value = typeof first === "string" ? first : nested;
-  return typeof value === "string" && WORK_MODES.has(value as WorkMode)
-    ? value as WorkMode : "flexible";
-}
-function profileNotes(row: ProfileRow): string {
-  const value = record(row.positioning).free_notes;
-  return typeof value === "string" ? value : "";
-}
-
 export function isOnboardingProfileReady(row: ProfileRow | null): boolean {
   return Boolean(row && clean(row.name ?? "") && clean(row.email ?? "") &&
     clean(row.target_role ?? "") && clean(row.location ?? "") &&
     Number.isInteger(row.experience_years) && (row.experience_years ?? -1) >= 0 &&
     profileSeniority(row) && profileSkills(row).length >= 2 && profileLanguages(row).length >= 1);
-}
-
-function draftFromRow(row: ProfileRow | null): OnboardingProfileDraft | undefined {
-  if (!row) return undefined;
-  return {
-    fullName: row.name ?? "", targetRole: row.target_role ?? "", location: row.location ?? "",
-    experienceYears: Number.isInteger(row.experience_years) ? row.experience_years ?? 0 : 0,
-    skills: profileSkills(row), languages: profileLanguages(row),
-    workMode: profileWorkMode(row), notes: profileNotes(row),
-  };
 }
 
 function displayName(user: User): string | null {
@@ -196,94 +172,79 @@ export async function loadOnboardingGate(
 ): Promise<OnboardingGateState> {
   if (markerPresent(store, user.id)) return { phase: "ready" };
   const started = markerStarted(store, user.id);
-  const [milestonesResult, profileResult] = await Promise.all([
+  const [milestonesResult, profileResult, teamResult] = await Promise.all([
     client.from("user_onboarding_state")
       .select("vps_setup_completed_at, profile_configured_at, first_team_run_at")
       .eq("user_id", user.id).maybeSingle(),
     client.from("candidate_profiles")
       .select("user_id,name,email,target_role,location,experience_years,seniority_target,skills,languages,location_preferences,positioning")
       .eq("user_id", user.id).maybeSingle(),
+    client.from("cloud_sync_tokens")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .order("last_used_at", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
-  if (milestonesResult.error || profileResult.error) return { phase: "error", message: STATE_ERROR };
+  if (milestonesResult.error || profileResult.error || teamResult.error) return { phase: "error", message: STATE_ERROR };
   const milestones = milestonesResult.data as OnboardingMilestones | null;
   const profile = profileResult.data as ProfileRow | null;
+  const team = teamResult.data as ExistingTeamRow | null;
   const profileReady = isOnboardingProfileReady(profile);
   if (!started && profileReady && milestones?.first_team_run_at) return { phase: "ready" };
   return {
-    phase: "required", account: { displayName: displayName(user) },
-    initialDraft: draftFromRow(profile),
-    runtime: { status: "collecting", stage: profileReady ? "host" : "profile" },
+    phase: "required", account: { displayName: displayName(user), identity: "google" },
+    resumeAvailable: started,
+    ...(milestones?.vps_setup_completed_at && typeof team?.id === "string" && clean(team.id)
+      ? { existingTeam: { teamId: clean(team.id), status: "available" as const } }
+      : {}),
+    runtime: { status: "collecting", stage: "host" },
   };
 }
 
-export type OnboardingSaveErrorCode = "invalid-profile" | "profile-write-failed" |
-  "profile-verify-failed" | "runtime-not-ready" | "marker-failed";
+/** Local profiles have no cloud milestones: only their device-local marker can admit Shell. */
+export function loadLocalOnboardingGate(
+  profileId: string,
+  localDisplayName: string,
+  store: OnboardingMarkerStore = localStorage,
+): OnboardingGateState {
+  const markerId = `local:${profileId}`;
+  if (markerPresent(store, markerId)) return { phase: "ready" };
+  return {
+    phase: "required",
+    account: { displayName: clean(localDisplayName), identity: "local" },
+    resumeAvailable: markerStarted(store, markerId),
+    runtime: { status: "collecting", stage: "host" },
+  };
+}
+
+export type OnboardingSaveErrorCode = "runtime-not-ready" | "marker-failed";
 export class OnboardingSaveError extends Error {
   constructor(readonly code: OnboardingSaveErrorCode) { super(code); this.name = "OnboardingSaveError"; }
 }
 
-function seniorityFor(years: number): string {
-  if (years < 2) return "entry"; if (years < 5) return "mid";
-  if (years < 10) return "senior"; return "lead";
-}
-function normalizeDraft(draft: OnboardingProfileDraft): OnboardingProfileDraft {
-  return { ...draft, fullName: clean(draft.fullName), targetRole: clean(draft.targetRole),
-    location: clean(draft.location), skills: unique(draft.skills), languages: unique(draft.languages),
-    notes: draft.notes.trim() };
-}
-function validDraft(draft: OnboardingProfileDraft, email: string): boolean {
-  return Boolean(draft.fullName && draft.targetRole && draft.location &&
-    Number.isInteger(draft.experienceYears) && draft.experienceYears >= 0 && draft.experienceYears <= 80 &&
-    draft.skills.length >= 2 && draft.languages.length >= 1 &&
-    WORK_MODES.has(draft.workMode) && clean(email));
-}
-function verifiedDraft(row: ProfileRow | null, draft: OnboardingProfileDraft, user: User): boolean {
-  return Boolean(row?.user_id === user.id && isOnboardingProfileReady(row) &&
-    clean(row.name ?? "") === draft.fullName && clean(row.email ?? "") === clean(user.email ?? "") &&
-    clean(row.target_role ?? "") === draft.targetRole && clean(row.location ?? "") === draft.location &&
-    row.experience_years === draft.experienceYears &&
-    draft.skills.every((skill) => profileSkills(row).includes(skill)) &&
-    draft.languages.every((language) => profileLanguages(row).includes(language)) &&
-    profileWorkMode(row) === draft.workMode);
-}
-
-export async function saveOnboardingProfile(
-  client: SupabaseClient, user: User, input: OnboardingProfileDraft,
-): Promise<OnboardingProfileDraft> {
-  const draft = normalizeDraft(input);
-  const email = user.email ?? "";
-  if (!validDraft(draft, email)) throw new OnboardingSaveError("invalid-profile");
-  const seniority = seniorityFor(draft.experienceYears);
-  const payload = {
-    user_id: user.id, name: draft.fullName, email: clean(email), location: draft.location,
-    target_role: draft.targetRole, experience_years: draft.experienceYears,
-    seniority_target: seniority, skills: { primary: draft.skills },
-    languages: draft.languages.map((language) => ({ language, level: "not_specified" })),
-    job_titles: [draft.targetRole], location_preferences: [{ type: draft.workMode }],
-    positioning: { seniority_target: seniority, preferences: { work_mode: draft.workMode },
-      ...(draft.notes ? { free_notes: draft.notes } : {}) },
-  };
-  const written = await client.from("candidate_profiles").upsert(payload, { onConflict: "user_id" });
-  if (written.error) throw new OnboardingSaveError("profile-write-failed");
-  const reread = await client.from("candidate_profiles")
-    .select("user_id,name,email,target_role,location,experience_years,seniority_target,skills,languages,location_preferences,positioning")
-    .eq("user_id", user.id).maybeSingle();
-  const row = reread.data as ProfileRow | null;
-  if (reread.error || !verifiedDraft(row, draft, user)) throw new OnboardingSaveError("profile-verify-failed");
-  return draft;
+/** Technical facts needed to expose the real Assistant chat without claiming profile completion. */
+export function isOnboardingAssistantReachable(snapshot: OnboardingRuntimeSnapshot): boolean {
+  return Boolean(snapshot.runtimeInstalled && snapshot.containerRunning &&
+    snapshot.providerConfigured && snapshot.providerAuthenticated &&
+    snapshot.assistantRunning && snapshot.captainRunning && snapshot.directChatReady);
 }
 
 export function isOnboardingRuntimeReady(snapshot: OnboardingRuntimeSnapshot): boolean {
-  return Boolean(snapshot.runtimeInstalled && snapshot.containerRunning &&
-    snapshot.providerConfigured && snapshot.providerAuthenticated &&
-    snapshot.assistantRunning && snapshot.captainRunning &&
-    snapshot.profileReady && snapshot.assistantWelcomed && snapshot.directChatReady);
+  return isOnboardingAssistantReachable(snapshot) && snapshot.profileReady;
 }
 
 export function runtimeStateFromSnapshot(snapshot: OnboardingRuntimeSnapshot): OnboardingRuntimeState {
   if (isOnboardingRuntimeReady(snapshot)) return { status: "ready" };
-  if (!snapshot.runtimeInstalled || !snapshot.containerRunning || !snapshot.providerConfigured) {
+  if (!snapshot.runtimeInstalled) {
     return { status: "failed", stage: "runtime", message: "Il runtime non ha completato la preparazione." };
+  }
+  if (!snapshot.containerRunning) {
+    return { status: "failed", stage: "container", message: "Il container non risulta attivo." };
+  }
+  if (!snapshot.providerConfigured) {
+    return { status: "failed", stage: "provider", message: "Il provider non ha completato la preparazione." };
   }
   if (!snapshot.providerAuthenticated) {
     return { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." };
@@ -291,7 +252,7 @@ export function runtimeStateFromSnapshot(snapshot: OnboardingRuntimeSnapshot): O
   if (!snapshot.assistantRunning || !snapshot.captainRunning) {
     return { status: "failed", stage: "team-start", message: "Il team non è ancora operativo." };
   }
-  if (snapshot.profileReady && snapshot.assistantWelcomed && !snapshot.directChatReady) {
+  if (snapshot.profileReady && !snapshot.directChatReady) {
     return { status: "failed", stage: "assistant", message: "La chat diretta non è ancora raggiungibile." };
   }
   return { status: "action-required", stage: "assistant",
