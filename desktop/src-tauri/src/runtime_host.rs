@@ -1,3 +1,4 @@
+use crate::account_scope::{self, AccountScope, AccountScopeState};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -101,8 +102,23 @@ pub(crate) fn validate_host(
     app: &tauri::AppHandle,
     host: &ExecutionHost,
 ) -> Result<ValidatedHost, &'static str> {
+    let scopes = app
+        .try_state::<AccountScopeState>()
+        .ok_or("account_scope_required")?;
+    let scope = scopes.active()?;
+    validate_host_for_scope(app, host, &scope)
+}
+
+fn validate_host_for_scope(
+    app: &tauri::AppHandle,
+    host: &ExecutionHost,
+    scope: &AccountScope,
+) -> Result<ValidatedHost, &'static str> {
     match host {
-        ExecutionHost::Local => Ok(ValidatedHost::Local),
+        ExecutionHost::Local => {
+            account_scope::validate_local_runtime(app, scope)?;
+            Ok(ValidatedHost::Local)
+        }
         ExecutionHost::Vps {
             address,
             user,
@@ -127,7 +143,7 @@ pub(crate) fn validate_host(
             if !meta.is_file() || meta.len() == 0 || meta.len() > 64 * 1024 {
                 return Err("invalid_key");
             }
-            let known_hosts = known_hosts_path(app, address, *port)?;
+            let known_hosts = known_hosts_path(app, scope, address, *port)?;
             if !known_hosts.is_file() {
                 return Err("host_key_missing");
             }
@@ -147,6 +163,7 @@ pub(crate) fn validate_host(
 
 fn known_hosts_path(
     app: &tauri::AppHandle,
+    scope: &AccountScope,
     address: &str,
     port: u16,
 ) -> Result<PathBuf, &'static str> {
@@ -155,6 +172,8 @@ fn known_hosts_path(
         .app_local_data_dir()
         .map_err(|_| "storage_unavailable")?;
     Ok(root
+        .join("accounts")
+        .join(scope.digest())
         .join("ssh")
         .join("known_hosts")
         .join(host_hash(address, port)))
@@ -288,18 +307,20 @@ fn write_pinned_host_key(
 #[tauri::command]
 pub(crate) fn onboarding_ssh_host_key_probe(
     app: tauri::AppHandle,
+    scopes: tauri::State<'_, AccountScopeState>,
     host: ExecutionHost,
 ) -> Result<SshHostKeyProbe, &'static str> {
+    let scope = scopes.lock_active()?;
     let ExecutionHost::Vps { address, port, .. } = &host else {
         return Err("not_vps");
     };
     // Validate every host field, including the local private-key path, without
     // creating known_hosts or starting an SSH session.
-    match validate_host(&app, &host) {
+    match validate_host_for_scope(&app, &host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
         Err(error) => return Err(error),
     }
-    let destination = known_hosts_path(&app, address, *port)?;
+    let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
     let status = probe_status(&destination, &scanned)?;
     Ok(SshHostKeyProbe {
@@ -312,21 +333,23 @@ pub(crate) fn onboarding_ssh_host_key_probe(
 #[tauri::command]
 pub(crate) fn onboarding_ssh_host_key_confirm(
     app: tauri::AppHandle,
+    scopes: tauri::State<'_, AccountScopeState>,
     host: ExecutionHost,
     algorithm: String,
     fingerprint: String,
 ) -> Result<(), &'static str> {
+    let scope = scopes.lock_active()?;
     if algorithm != "ssh-ed25519" || !fingerprint.starts_with("SHA256:") {
         return Err("host_key_confirmation_invalid");
     }
     let ExecutionHost::Vps { address, port, .. } = &host else {
         return Err("not_vps");
     };
-    match validate_host(&app, &host) {
+    match validate_host_for_scope(&app, &host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
         Err(error) => return Err(error),
     }
-    let destination = known_hosts_path(&app, address, *port)?;
+    let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
     if scanned.algorithm != algorithm || scanned.fingerprint != fingerprint {
         return Err("host_key_changed");
@@ -404,13 +427,13 @@ pub(crate) fn set_private_permissions(_path: &Path) -> Result<(), &'static str> 
 }
 
 #[cfg(unix)]
-fn set_private_dir_permissions(path: &Path) -> Result<(), &'static str> {
+pub(crate) fn set_private_dir_permissions(path: &Path) -> Result<(), &'static str> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "permissions_failed")
 }
 
 #[cfg(not(unix))]
-fn set_private_dir_permissions(_path: &Path) -> Result<(), &'static str> {
+pub(crate) fn set_private_dir_permissions(_path: &Path) -> Result<(), &'static str> {
     Ok(())
 }
 
