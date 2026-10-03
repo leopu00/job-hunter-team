@@ -5,8 +5,9 @@ import { formatOAuthLoginElapsed, OAuthLoginTakeover, type OAuthLoginTakeoverPro
 
 function props(overrides: Partial<OAuthLoginTakeoverProps> = {}): OAuthLoginTakeoverProps {
   return {
+    provider: "codex",
     providerName: "Codex",
-    actions: [{ kind: "url", instruction: "Apri il link verificato.", safeUrl: "https://example.com/device" }],
+    actions: [{ kind: "url", instruction: "Apri il link verificato.", safeUrl: "https://auth.openai.com/device" }],
     connectionState: "connected",
     elapsedMs: 62_000,
     onSubmitInput: vi.fn().mockResolvedValue(undefined),
@@ -22,32 +23,69 @@ describe("OAuthLoginTakeover", () => {
     const view = render(<OAuthLoginTakeover {...props()} />);
     expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toHaveFocus();
     expect(screen.getByLabelText("Tempo trascorso 01:02")).toBeInTheDocument();
-    expect(screen.getByText("https://example.com/device")).toBeInTheDocument();
+    expect(screen.getByText("https://auth.openai.com/device")).toBeInTheDocument();
     expect(screen.queryByRole("log")).not.toBeInTheDocument();
     expect(view.container.querySelector("input")).not.toBeInTheDocument();
   });
 
-  it("keeps URL and code visible together and copies only their structured values", async () => {
+  it("keeps Codex URL and device code visible together and copies only on explicit gestures", async () => {
     const user = userEvent.setup();
     const onCopy = vi.fn().mockResolvedValue(undefined);
     const base = props({ onCopy });
     const view = render(<OAuthLoginTakeover {...base} />);
     const copyUrl = screen.getByRole("button", { name: /copia url/i });
     await user.click(copyUrl);
-    expect(onCopy).toHaveBeenLastCalledWith("https://example.com/device");
+    expect(onCopy).toHaveBeenLastCalledWith("https://auth.openai.com/device");
     expect(copyUrl).toHaveFocus();
 
     view.rerender(<OAuthLoginTakeover {...base} actions={[
       ...base.actions,
       { kind: "code", instruction: "Inserisci il codice.", userCode: "ABCD-EFGH" },
-      { kind: "input", instruction: "Conferma.", inputRequest: { id: "same-request", label: "Risposta" } },
     ]} />);
+    expect(screen.getByText("Codice dispositivo").closest("div")).toHaveFocus();
     expect(screen.getByRole("button", { name: /copia url/i })).toBeInTheDocument();
     const copyCode = screen.getByRole("button", { name: /copia codice/i });
     await user.click(copyCode);
     expect(onCopy).toHaveBeenLastCalledWith("ABCD-EFGH");
     expect(copyCode).toHaveFocus();
-    expect(screen.getByRole("textbox", { name: "Risposta" })).toBeInTheDocument();
+    expect(onCopy).toHaveBeenCalledTimes(2);
+  });
+
+  it("copies only the canonical allowlisted URL", async () => {
+    const user = userEvent.setup();
+    const onCopy = vi.fn().mockResolvedValue(undefined);
+    render(<OAuthLoginTakeover {...props({
+      actions: [{ kind: "url", instruction: "Apri il link verificato.", safeUrl: "https://AUTH.OPENAI.COM/device" }],
+      onCopy,
+    })} />);
+
+    expect(screen.getByText("https://auth.openai.com/device")).toBeInTheDocument();
+    expect(onCopy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /copia url/i }));
+    expect(onCopy).toHaveBeenCalledOnce();
+    expect(onCopy).toHaveBeenCalledWith("https://auth.openai.com/device");
+  });
+
+  it("rejects an URL with terminal residue without showing or copying it", async () => {
+    const user = userEvent.setup();
+    const onCopy = vi.fn().mockResolvedValue(undefined);
+    const onRestart = vi.fn().mockResolvedValue(undefined);
+    render(<OAuthLoginTakeover {...props({
+      actions: [
+        { kind: "url", instruction: "Testo non attendibile.", safeUrl: "https://auth.openai.com/device\u001b[0m" },
+        { kind: "code", instruction: "Inserisci il codice.", userCode: "ABCD-EFGH" },
+      ],
+      onCopy,
+      onRestart,
+    })} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Il provider ha restituito un indirizzo non valido");
+    expect(screen.queryByText(/auth\.openai\.com/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("ABCD-EFGH")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copia/i })).not.toBeInTheDocument();
+    expect(onCopy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /riavvia accesso/i }));
+    expect(onRestart).toHaveBeenCalledOnce();
   });
 
   it("mounts stdin only for input State, focuses it and never auto-submits", async () => {
@@ -117,7 +155,7 @@ describe("OAuthLoginTakeover", () => {
 
   it("focuses and announces the provider wait after input submission", () => {
     const initial = props({ actions: [
-      { kind: "url", instruction: "Apri il browser.", safeUrl: "https://example.com/device" },
+      { kind: "url", instruction: "Apri il browser.", safeUrl: "https://auth.openai.com/device" },
       { kind: "input", instruction: "Conferma.", inputRequest: { id: "submitted-request", label: "Risposta" } },
     ] });
     const view = render(<OAuthLoginTakeover {...initial} />);
@@ -131,7 +169,7 @@ describe("OAuthLoginTakeover", () => {
     const waiting = screen.getByText("Risposta inviata, attendo il provider.");
     expect(waiting).toHaveAttribute("role", "status");
     expect(waiting).toHaveFocus();
-    expect(screen.getByText("https://example.com/device")).toBeInTheDocument();
+    expect(screen.getByText("https://auth.openai.com/device")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText("Connesso")).toBeInTheDocument();
   });

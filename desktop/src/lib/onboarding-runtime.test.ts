@@ -264,6 +264,46 @@ describe("SSH host-key consent contract", () => {
     });
   });
 
+  it("decodes the Rust-shaped Codex device action atomically into URL and code", async () => {
+    vi.mocked(invoke).mockResolvedValue({ sessionId: "synthetic-session" });
+    const onEvent = vi.fn();
+
+    await startOnboardingProviderLogin(host, onEvent, vi.fn());
+    channels[0].onmessage?.({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "device",
+        instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+        requestId: "codex-device-1",
+        safeUrl: "https://auth.openai.com/codex/device",
+        userCode: "ABCD-EFGH",
+      },
+    });
+
+    expect(onEvent).toHaveBeenCalledOnce();
+    expect(onEvent).toHaveBeenCalledWith({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "device",
+        requestId: "codex-device-1",
+        actions: [
+          {
+            kind: "url",
+            instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+            safeUrl: "https://auth.openai.com/codex/device",
+          },
+          {
+            kind: "code",
+            instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+            userCode: "ABCD-EFGH",
+          },
+        ],
+      },
+    });
+  });
+
   it("drops malformed or unsafe interactive actions at the IPC boundary", () => {
     expect(parseOnboardingInteractiveEvent({
       kind: "state",
@@ -292,6 +332,29 @@ describe("SSH host-key consent contract", () => {
     })).toBeNull();
     expect(parseOnboardingInteractiveEvent({ kind: "exit", code: "0" })).toBeNull();
     expect(parseOnboardingInteractiveEvent({ kind: "unknown", text: "raw" })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "device",
+        instruction: "Apri il browser.",
+        requestId: "codex-device-1",
+        safeUrl: "https://auth.openai.com/codex/device%1B[0m",
+        userCode: "ABCD-EFGH",
+      },
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "device",
+        instruction: "Apri il browser.",
+        requestId: "codex-device-1",
+        safeUrl: "https://auth.openai.com/codex/device",
+        userCode: "ABCD-EFGH",
+        unexpected: "mixed-shape",
+      },
+    })).toBeNull();
   });
 
   it("binds provider input IPC to the exact session and request id", async () => {

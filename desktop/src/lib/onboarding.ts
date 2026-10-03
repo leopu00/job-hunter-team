@@ -13,6 +13,51 @@ export type ExecutionHost =
 
 export type SubscriptionProvider = "claude" | "codex" | "kimi";
 
+const PROVIDER_LOGIN_HOSTS: Record<SubscriptionProvider, readonly string[]> = {
+  claude: ["anthropic.com", "claude.ai"],
+  codex: ["openai.com", "chatgpt.com"],
+  kimi: ["kimi.com", "kimi.ai", "moonshot.cn", "moonshot.ai"],
+};
+const PROVIDER_LOGIN_FORBIDDEN_FIELDS = [
+  "access_token=",
+  "refresh_token=",
+  "id_token=",
+  "client_secret=",
+  "device_code=",
+  "authorization_code=",
+  "session_token=",
+  "password=",
+] as const;
+const URL_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
+const URL_ENCODED_CONTROL_CHARACTERS = /%(?:0[0-9a-f]|1[0-9a-f]|7f|8[0-9a-f]|9[0-9a-f])/i;
+
+export function canonicalProviderLoginUrl(
+  provider: SubscriptionProvider,
+  value: unknown,
+): string | null {
+  if (typeof value !== "string" || !value || value.length > 2_048 ||
+      value !== value.trim() || URL_CONTROL_CHARACTERS.test(value) ||
+      URL_ENCODED_CONTROL_CHARACTERS.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    const allowed = PROVIDER_LOGIN_HOSTS[provider].some(
+      (expected) => host === expected || host.endsWith(`.${expected}`),
+    );
+    const lowercase = value.toLowerCase();
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port ||
+        !allowed || PROVIDER_LOGIN_FORBIDDEN_FIELDS.some((field) => lowercase.includes(field))) {
+      return null;
+    }
+    const canonical = parsed.toString();
+    return URL_CONTROL_CHARACTERS.test(canonical) || URL_ENCODED_CONTROL_CHARACTERS.test(canonical)
+      ? null
+      : canonical;
+  } catch {
+    return null;
+  }
+}
+
 export interface OnboardingSubmission {
   host: ExecutionHost;
   provider: SubscriptionProvider;

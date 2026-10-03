@@ -532,14 +532,18 @@ export default function DashboardApp() {
       sessionId = await startOnboardingProviderLogin(submission.host, (event) => {
         if (!attemptIsCurrent()) return;
         if (event.kind === "state") {
-          providerInputRequestRef.current = event.action.kind === "input"
-            ? event.action.inputRequest.id
+          const actions: OnboardingProviderLoginAction[] = event.action.kind === "device"
+            ? event.action.actions
+            : [event.action];
+          const inputAction = actions.find((action) => action.kind === "input");
+          providerInputRequestRef.current = inputAction?.kind === "input"
+            ? inputAction.inputRequest.id
             : null;
           setProviderLogin((current) => current ? {
             ...current,
             status: "needs_user_action",
             connectionState: "connected",
-            actions: mergeProviderLoginAction(current.actions, event.action),
+            actions: actions.reduce(mergeProviderLoginAction, current.actions),
           } : current);
           return;
         }

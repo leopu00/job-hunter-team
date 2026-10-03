@@ -1,4 +1,8 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import {
+  canonicalProviderLoginUrl,
+  type SubscriptionProvider,
+} from "../lib/onboarding";
 import "./oauth-login-takeover.css";
 
 export type OAuthLoginConnectionState = "connecting" | "connected" | "disconnected";
@@ -18,6 +22,7 @@ export type OAuthLoginUserAction =
   | { kind: "input"; instruction: string; inputRequest: OAuthLoginInputRequest };
 
 export interface OAuthLoginTakeoverProps {
+  provider: SubscriptionProvider;
   providerName: string;
   actions: OAuthLoginUserAction[];
   verifying?: boolean;
@@ -47,6 +52,7 @@ export function formatOAuthLoginElapsed(milliseconds: number) {
 }
 
 export function OAuthLoginTakeover({
+  provider,
   providerName,
   actions,
   verifying = false,
@@ -64,6 +70,7 @@ export function OAuthLoginTakeover({
   const inputDescriptionId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLDivElement>(null);
   const waitingRef = useRef<HTMLParagraphElement>(null);
   const initialFocusHandledRef = useRef(false);
   const [input, setInput] = useState("");
@@ -74,6 +81,10 @@ export function OAuthLoginTakeover({
   const codeAction = actions.find((action) => action.kind === "code");
   const inputAction = actions.find((action) => action.kind === "input");
   const inputRequest = inputAction?.kind === "input" ? inputAction.inputRequest : undefined;
+  const safeUrl = urlAction?.kind === "url"
+    ? canonicalProviderLoginUrl(provider, urlAction.safeUrl)
+    : null;
+  const invalidUrl = urlAction?.kind === "url" && safeUrl === null;
   const connected = connectionState === "connected";
   const pending = pendingAction !== null;
 
@@ -92,6 +103,10 @@ export function OAuthLoginTakeover({
   useEffect(() => {
     if (verifying) waitingRef.current?.focus();
   }, [verifying]);
+
+  useEffect(() => {
+    if (codeAction?.kind === "code" && !inputRequest && !invalidUrl) codeRef.current?.focus();
+  }, [codeAction?.kind === "code" ? codeAction.userCode : null, inputRequest?.id, invalidUrl]);
 
   async function copy(value: string, label: string) {
     setCopyFeedback(null);
@@ -164,23 +179,25 @@ export function OAuthLoginTakeover({
         aria-atomic={verifying ? "true" : undefined}
         tabIndex={verifying ? -1 : undefined}
       >
-        {verifying
+        {invalidUrl
+          ? "L’indirizzo ricevuto non è valido. Riavvia l’accesso."
+          : verifying
           ? "Risposta inviata, attendo il provider."
           : inputAction?.instruction ?? codeAction?.instruction ?? urlAction?.instruction ?? "Attendo una richiesta verificata dal provider."}
       </p>
 
-      {(urlAction || codeAction) && (
+      {!invalidUrl && (safeUrl || codeAction) && (
         <dl className="oauth-login-takeover__copy-grid">
-          {urlAction?.kind === "url" && (
+          {safeUrl && (
             <div>
               <dt>URL di accesso</dt>
-              <dd><code>{urlAction.safeUrl}</code></dd>
-              <button type="button" onClick={() => void copy(urlAction.safeUrl, "URL")}>Copia URL</button>
+              <dd><code>{safeUrl}</code></dd>
+              <button type="button" onClick={() => void copy(safeUrl, "URL")}>Copia URL</button>
             </div>
           )}
           {codeAction?.kind === "code" && (
-            <div>
-              <dt>Codice temporaneo</dt>
+            <div ref={codeRef} role="status" aria-live="polite" aria-atomic="true" tabIndex={-1}>
+              <dt>Codice dispositivo</dt>
               <dd><code>{codeAction.userCode}</code></dd>
               <button type="button" onClick={() => void copy(codeAction.userCode, "Codice")}>Copia codice</button>
             </div>
@@ -188,7 +205,7 @@ export function OAuthLoginTakeover({
         </dl>
       )}
 
-      {inputRequest && (
+      {!invalidUrl && inputRequest && (
         <form className="oauth-login-takeover__input" onSubmit={(event) => void submit(event)}>
           <label htmlFor={inputId}>{inputRequest.label}</label>
           {inputRequest.description && <p id={inputDescriptionId}>{inputRequest.description}</p>}
@@ -213,8 +230,12 @@ export function OAuthLoginTakeover({
         </form>
       )}
 
-      {(safeErrorMessage || operationError) && (
-        <p className="oauth-login-takeover__error" role="alert">{operationError ?? safeErrorMessage}</p>
+      {(invalidUrl || safeErrorMessage || operationError) && (
+        <p className="oauth-login-takeover__error" role="alert">
+          {invalidUrl
+            ? "Il provider ha restituito un indirizzo non valido. Riavvia l’accesso."
+            : operationError ?? safeErrorMessage}
+        </p>
       )}
       <p className="oauth-login-takeover__copy-feedback" role="status" aria-live="polite">{copyFeedback}</p>
 

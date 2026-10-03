@@ -565,7 +565,7 @@ describe("OnboardingFlow technical setup", () => {
         actions: [{
           kind: "url",
           instruction: "Apri il browser e inserisci il codice temporaneo.",
-          safeUrl: "https://example.invalid/device",
+          safeUrl: "https://auth.openai.com/device",
         }],
         connectionState: "connected",
         startedAt: Date.now() - 2_000,
@@ -573,7 +573,7 @@ describe("OnboardingFlow technical setup", () => {
     });
 
     expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
-    expect(screen.getByText("https://example.invalid/device")).toBeInTheDocument();
+    expect(screen.getByText("https://auth.openai.com/device")).toBeInTheDocument();
     expect(screen.queryByRole("log")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("synthetic-secret");
