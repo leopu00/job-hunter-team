@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import "./oauth-login-takeover.css";
 
 export type OAuthLoginConnectionState = "connecting" | "connected" | "disconnected";
@@ -93,6 +93,8 @@ export function OAuthLoginTakeover({
   const instructionId = useId();
   const inputId = useId();
   const inputDescriptionId = useId();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const initialFocusHandledRef = useRef(false);
   const [input, setInput] = useState("");
   const [pendingAction, setPendingAction] = useState<"input" | "cancel" | "restart" | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -106,6 +108,12 @@ export function OAuthLoginTakeover({
     setInput("");
     setOperationError(null);
   }, [inputRequest?.id]);
+
+  useEffect(() => {
+    if (initialFocusHandledRef.current) return;
+    initialFocusHandledRef.current = true;
+    if (!inputRequest) titleRef.current?.focus();
+  }, [inputRequest]);
 
   async function copy(value: string, label: string) {
     setCopyFeedback(null);
@@ -160,12 +168,12 @@ export function OAuthLoginTakeover({
       <header className="oauth-login-takeover__header">
         <div>
           <p className="oauth-login-takeover__eyebrow">Intervento richiesto</p>
-          <h2 id={titleId}>Completa l’accesso a {providerName}</h2>
+          <h2 id={titleId} ref={titleRef} tabIndex={-1}>Completa l’accesso a {providerName}</h2>
         </div>
-        <div className={`oauth-login-takeover__connection is-${connectionState}`} role="status" aria-live="polite">
+        <div className={`oauth-login-takeover__connection is-${connectionState}`}>
           <span aria-hidden="true" />
-          <strong>{CONNECTION_COPY[connectionState]}</strong>
-          <time dateTime={`PT${elapsedSeconds}S`}>{elapsed}</time>
+          <strong role="status" aria-live="polite" aria-atomic="true">{CONNECTION_COPY[connectionState]}</strong>
+          <time dateTime={`PT${elapsedSeconds}S`} aria-label={`Tempo trascorso ${elapsed}`}>{elapsed}</time>
         </div>
       </header>
 
@@ -195,7 +203,7 @@ export function OAuthLoginTakeover({
           <strong>Attività del provider</strong>
           <span>Output temporaneo e redatto</span>
         </div>
-        <pre role="log" aria-live="polite" aria-label="Attività del login provider">
+        <pre role="log" aria-live="off" aria-label="Attività del login provider">
           {output.omitted > 0 && <span>… {output.omitted} righe precedenti omesse.</span>}
           {output.lines.length > 0
             ? output.lines.map((line, index) => <span key={`${index}-${line.slice(0, 24)}`}>{line || " "}</span>)
