@@ -34,6 +34,7 @@ CONTRACT = json.loads(
     {
       "stages": ["engine", "runtime", "container", "provider", "login", "team", "assistant"],
       "statuses": ["start", "progress", "done", "error", "needs_user_action"],
+      "event_statuses": ["start", "progress", "done", "error"],
       "operations": [
         {"id": "probe", "adapter": "Status", "stage": "engine", "argv": ["status"], "exit": 1},
         {"id": "up", "adapter": "Up", "stage": "container", "argv": ["up"], "exit": 0},
@@ -339,7 +340,8 @@ class BackendRunner:
                 status = "done"
             else:
                 status = "error"
-            events.append(self._event(operation, status, sequence * 3))
+            event_status = "error" if status == "error" else "done"
+            events.append(self._event(operation, event_status, sequence * 3))
             completed.append(CompletedOperation(operation["id"], process.returncode, status))
             if status == "error":
                 break
@@ -524,6 +526,9 @@ def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
         "tty": True,
     }]
     assert CompletedOperation("oauth_login", 0, "needs_user_action") in cli.completed
+    assert [
+        event["status"] for event in cli.events if event["stage"] == "login"
+    ] == ["start", "progress", "done"]
 
     assert [row["logical"] for row in cli.command_plan if row["kind"] == "cli"] == [
         ["providers", "use", "codex"],
@@ -554,7 +559,8 @@ def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
         },
     ]
     assert {event["stage"] for event in cli.events} == set(CONTRACT["stages"])
-    assert {event["status"] for event in cli.events} <= set(CONTRACT["statuses"])
+    assert {event["status"] for event in cli.events} <= set(CONTRACT["event_statuses"])
+    assert "needs_user_action" not in {event["status"] for event in cli.events}
     serialized_events = json.dumps(cli.events, ensure_ascii=False).lower()
     assert "fixture-secret" not in serialized_events
     assert "login.example.invalid" not in serialized_events
