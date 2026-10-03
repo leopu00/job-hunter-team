@@ -1,13 +1,13 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_permissions, ssh_base_args, validate_host, ExecutionHost,
-    ProcessResult, ValidatedHost,
+    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     ffi::OsString,
-    fs,
+    fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
@@ -21,9 +21,6 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
-#[cfg(target_os = "macos")]
-use std::fs::OpenOptions;
-
 const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
@@ -35,6 +32,9 @@ const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
+const DIAGNOSTIC_SCHEMA_VERSION: u8 = 1;
+const DIAGNOSTIC_MAX_RECORDS: usize = 128;
+const DIAGNOSTIC_MAX_BYTES: usize = 64 * 1024;
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -47,6 +47,7 @@ const LOCAL_PODMAN_INSTALL_ARGS: [&str; 6] = [
     "podman",
 ];
 static SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static DIAGNOSTIC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 pub(crate) struct OnboardingNativeState {
@@ -142,6 +143,20 @@ impl LocalCliOperation {
             Self::AssistantStart => vec!["team", "start", "assistente"],
         }
     }
+
+    fn diagnostic_id(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Status => "status",
+            Self::ProviderUse(_) => "provider-use",
+            Self::ProviderUpdate(_) => "provider-update",
+            Self::ProviderCurrent => "provider-current",
+            Self::OauthLogin => "oauth-login",
+            Self::TeamStart => "team-start",
+            Self::Snapshot => "snapshot",
+            Self::AssistantStart => "assistant-start",
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -170,7 +185,7 @@ pub(crate) struct OnboardingProgress {
     retryable: Option<bool>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum OnboardingProgressStage {
     Engine,
@@ -182,13 +197,404 @@ enum OnboardingProgressStage {
     Assistant,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum OnboardingProgressStatus {
     Start,
     Progress,
     Done,
     Error,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum OnboardingDiagnosticHostKind {
+    Local,
+    Vps,
+}
+
+impl OnboardingDiagnosticHostKind {
+    fn from_host(host: &ExecutionHost) -> Self {
+        match host {
+            ExecutionHost::Local => Self::Local,
+            ExecutionHost::Vps { .. } => Self::Vps,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum OnboardingDiagnosticExitCategory {
+    NotApplicable,
+    Success,
+    Nonzero,
+    Timeout,
+    Unavailable,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OnboardingDiagnosticSnapshot {
+    runtime_installed: bool,
+    container_running: bool,
+    provider_configured: bool,
+    provider_authenticated: bool,
+    assistant_running: bool,
+    captain_running: bool,
+    profile_ready: bool,
+    assistant_welcomed: bool,
+    direct_chat_ready: bool,
+}
+
+impl From<&OnboardingSnapshot> for OnboardingDiagnosticSnapshot {
+    fn from(snapshot: &OnboardingSnapshot) -> Self {
+        Self {
+            runtime_installed: snapshot.runtime_installed,
+            container_running: snapshot.container_running,
+            provider_configured: snapshot.provider_configured,
+            provider_authenticated: snapshot.provider_authenticated,
+            assistant_running: snapshot.assistant_running,
+            captain_running: snapshot.captain_running,
+            profile_ready: snapshot.profile_ready,
+            assistant_welcomed: snapshot.assistant_welcomed,
+            direct_chat_ready: snapshot.direct_chat_ready,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OnboardingDiagnosticRecord {
+    schema_version: u8,
+    operation_id: String,
+    request_id: String,
+    host_kind: OnboardingDiagnosticHostKind,
+    stage: OnboardingProgressStage,
+    status: OnboardingProgressStatus,
+    code: Option<String>,
+    retryable: Option<bool>,
+    elapsed_ms: u64,
+    exit_category: OnboardingDiagnosticExitCategory,
+    snapshot: Option<OnboardingDiagnosticSnapshot>,
+}
+
+#[derive(Clone)]
+struct OnboardingDiagnosticSink {
+    path: PathBuf,
+    operation_id: String,
+    host_kind: OnboardingDiagnosticHostKind,
+    write_lock: Arc<Mutex<()>>,
+}
+
+impl OnboardingDiagnosticSink {
+    fn new(
+        app: &tauri::AppHandle,
+        scope: &AccountScope,
+        host_kind: OnboardingDiagnosticHostKind,
+    ) -> Option<Self> {
+        let root = app.path().app_local_data_dir().ok()?;
+        Some(Self::at_root(&root, scope, host_kind))
+    }
+
+    fn at_root(root: &Path, scope: &AccountScope, host_kind: OnboardingDiagnosticHostKind) -> Self {
+        Self {
+            path: root
+                .join("accounts")
+                .join(scope.digest())
+                .join("onboarding-diagnostics.jsonl"),
+            operation_id: format!(
+                "prepare-{}",
+                DIAGNOSTIC_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ),
+            host_kind,
+            write_lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    fn record_progress(&self, progress: &OnboardingProgress) {
+        self.record(OnboardingDiagnosticRecord {
+            schema_version: DIAGNOSTIC_SCHEMA_VERSION,
+            operation_id: self.operation_id.clone(),
+            request_id: format!("progress-{}", progress.sequence),
+            host_kind: self.host_kind,
+            stage: progress.stage,
+            status: progress.status,
+            code: progress.code.map(str::to_owned),
+            retryable: progress.retryable,
+            elapsed_ms: progress.elapsed_ms,
+            exit_category: OnboardingDiagnosticExitCategory::NotApplicable,
+            snapshot: None,
+        });
+    }
+
+    fn record_process(
+        &self,
+        request_id: String,
+        stage: OnboardingProgressStage,
+        started: Instant,
+        result: &Result<ProcessResult, &'static str>,
+        failure_code: &'static str,
+        accept_inactive: bool,
+    ) {
+        let (status, code, retryable, exit_category) = match result {
+            Ok(value) if value.success() || (accept_inactive && value.code == 1) => (
+                OnboardingProgressStatus::Done,
+                None,
+                None,
+                OnboardingDiagnosticExitCategory::Success,
+            ),
+            Ok(_) => (
+                OnboardingProgressStatus::Error,
+                Some(failure_code.to_owned()),
+                Some(failure(failure_code).retryable),
+                OnboardingDiagnosticExitCategory::Nonzero,
+            ),
+            Err("process_timeout") => (
+                OnboardingProgressStatus::Error,
+                Some("container_timeout".to_owned()),
+                Some(failure("container_timeout").retryable),
+                OnboardingDiagnosticExitCategory::Timeout,
+            ),
+            Err(_) => (
+                OnboardingProgressStatus::Error,
+                Some(failure_code.to_owned()),
+                Some(failure(failure_code).retryable),
+                OnboardingDiagnosticExitCategory::Unavailable,
+            ),
+        };
+        self.record(OnboardingDiagnosticRecord {
+            schema_version: DIAGNOSTIC_SCHEMA_VERSION,
+            operation_id: self.operation_id.clone(),
+            request_id,
+            host_kind: self.host_kind,
+            stage,
+            status,
+            code,
+            retryable,
+            elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            exit_category,
+            snapshot: None,
+        });
+    }
+
+    fn record_snapshot(
+        &self,
+        request_id: &'static str,
+        started: Instant,
+        result: &Result<OnboardingSnapshot, OnboardingError>,
+    ) {
+        let (status, code, retryable, exit_category, snapshot) = match result {
+            Ok(snapshot) => (
+                OnboardingProgressStatus::Done,
+                None,
+                None,
+                OnboardingDiagnosticExitCategory::Success,
+                Some(OnboardingDiagnosticSnapshot::from(snapshot)),
+            ),
+            Err(error) => (
+                OnboardingProgressStatus::Error,
+                Some(error.code.to_owned()),
+                Some(error.retryable),
+                if error.code.contains("timeout") {
+                    OnboardingDiagnosticExitCategory::Timeout
+                } else {
+                    OnboardingDiagnosticExitCategory::Unavailable
+                },
+                None,
+            ),
+        };
+        self.record(OnboardingDiagnosticRecord {
+            schema_version: DIAGNOSTIC_SCHEMA_VERSION,
+            operation_id: self.operation_id.clone(),
+            request_id: request_id.to_owned(),
+            host_kind: self.host_kind,
+            stage: OnboardingProgressStage::Container,
+            status,
+            code,
+            retryable,
+            elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            exit_category,
+            snapshot,
+        });
+    }
+
+    fn record_boundary(
+        &self,
+        request_id: &'static str,
+        stage: OnboardingProgressStage,
+        started: Instant,
+        result: &Result<(), OnboardingError>,
+    ) {
+        let (status, code, retryable, exit_category) = match result {
+            Ok(()) => (
+                OnboardingProgressStatus::Done,
+                None,
+                None,
+                OnboardingDiagnosticExitCategory::Success,
+            ),
+            Err(error) => (
+                OnboardingProgressStatus::Error,
+                Some(error.code.to_owned()),
+                Some(error.retryable),
+                OnboardingDiagnosticExitCategory::Unavailable,
+            ),
+        };
+        self.record(OnboardingDiagnosticRecord {
+            schema_version: DIAGNOSTIC_SCHEMA_VERSION,
+            operation_id: self.operation_id.clone(),
+            request_id: request_id.to_owned(),
+            host_kind: self.host_kind,
+            stage,
+            status,
+            code,
+            retryable,
+            elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            exit_category,
+            snapshot: None,
+        });
+    }
+
+    fn record(&self, record: OnboardingDiagnosticRecord) {
+        let Ok(_guard) = self.write_lock.lock() else {
+            return;
+        };
+        let _ = write_onboarding_diagnostic(&self.path, record);
+    }
+}
+
+fn diagnostic_identifier_valid(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn diagnostic_code_valid(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+fn diagnostic_record_valid(record: &OnboardingDiagnosticRecord) -> bool {
+    record.schema_version == DIAGNOSTIC_SCHEMA_VERSION
+        && diagnostic_identifier_valid(&record.operation_id)
+        && diagnostic_identifier_valid(&record.request_id)
+        && record.code.as_deref().is_none_or(diagnostic_code_valid)
+}
+
+fn diagnostic_payload(records: &[OnboardingDiagnosticRecord]) -> Result<Vec<u8>, &'static str> {
+    let mut payload = Vec::new();
+    for record in records {
+        serde_json::to_writer(&mut payload, record).map_err(|_| "diagnostic_encode_failed")?;
+        payload.push(b'\n');
+    }
+    Ok(payload)
+}
+
+fn write_onboarding_diagnostic(
+    path: &Path,
+    record: OnboardingDiagnosticRecord,
+) -> Result<(), &'static str> {
+    if !diagnostic_record_valid(&record) {
+        return Err("diagnostic_record_invalid");
+    }
+    let parent = path.parent().ok_or("diagnostic_path_invalid")?;
+    let accounts = parent.parent().ok_or("diagnostic_path_invalid")?;
+    match fs::symlink_metadata(accounts) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return Err("diagnostic_storage_invalid"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(accounts).map_err(|_| "diagnostic_storage_failed")?;
+        }
+        Err(_) => return Err("diagnostic_storage_failed"),
+    }
+    if !fs::symlink_metadata(accounts).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+        return Err("diagnostic_storage_invalid");
+    }
+    match fs::symlink_metadata(parent) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return Err("diagnostic_storage_invalid"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(parent).map_err(|_| "diagnostic_storage_failed")?;
+        }
+        Err(_) => return Err("diagnostic_storage_failed"),
+    }
+    set_private_dir_permissions(parent)?;
+
+    let mut records = Vec::new();
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_file() || metadata.len() > DIAGNOSTIC_MAX_BYTES as u64 {
+                return Err("diagnostic_storage_invalid");
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::{MetadataExt, PermissionsExt};
+                let parent_metadata =
+                    fs::metadata(parent).map_err(|_| "diagnostic_storage_failed")?;
+                if metadata.uid() != parent_metadata.uid()
+                    || metadata.permissions().mode() & 0o077 != 0
+                {
+                    return Err("diagnostic_storage_invalid");
+                }
+            }
+            let previous = fs::read_to_string(path).map_err(|_| "diagnostic_storage_failed")?;
+            for line in previous.lines() {
+                let previous: OnboardingDiagnosticRecord =
+                    serde_json::from_str(line).map_err(|_| "diagnostic_storage_invalid")?;
+                if !diagnostic_record_valid(&previous) {
+                    return Err("diagnostic_storage_invalid");
+                }
+                records.push(previous);
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("diagnostic_storage_failed"),
+    }
+    records.push(record);
+    while records.len() > DIAGNOSTIC_MAX_RECORDS {
+        records.remove(0);
+    }
+    let payload = loop {
+        let payload = diagnostic_payload(&records)?;
+        if payload.len() <= DIAGNOSTIC_MAX_BYTES {
+            break payload;
+        }
+        if records.len() <= 1 {
+            return Err("diagnostic_record_invalid");
+        }
+        records.remove(0);
+    };
+
+    let temporary = parent.join(format!(
+        ".onboarding-diagnostics-{}-{}",
+        std::process::id(),
+        DIAGNOSTIC_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&temporary)
+            .map_err(|_| "diagnostic_storage_failed")?;
+        file.write_all(&payload)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| "diagnostic_storage_failed")?;
+        set_private_permissions(&temporary)?;
+        fs::rename(&temporary, path).map_err(|_| "diagnostic_storage_failed")?;
+        set_private_permissions(path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -305,6 +711,14 @@ fn failure(code: &'static str) -> OnboardingError {
         ),
         "runtime_wrapper_install_failed" => (
             "Il comando locale verificato non è stato aggiornato. Premi Riprova per completare la preparazione.",
+            true,
+        ),
+        "runtime_wrapper_publish_failed" => (
+            "Il comando locale verificato non è stato pubblicato correttamente. Premi Riprova.",
+            true,
+        ),
+        "runtime_wrapper_probe_failed" => (
+            "Il comando locale installato non supera la verifica di sola lettura. Premi Riprova.",
             true,
         ),
         "runtime_install_unsupported" => (
@@ -634,16 +1048,67 @@ fn host_wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
+struct RuntimePublishLock {
+    path: PathBuf,
+}
+
+#[cfg(target_os = "macos")]
+impl RuntimePublishLock {
+    fn acquire(runtime_dir: &Path) -> Result<Self, OnboardingError> {
+        use std::os::unix::{fs::OpenOptionsExt, fs::PermissionsExt};
+
+        let path = runtime_dir.join(".upgrade.lock");
+        fs::create_dir(&path).map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        let result = (|| {
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
+                .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+            let mut pid = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(path.join("pid"))
+                .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+            writeln!(pid, "{}", std::process::id())
+                .and_then(|_| pid.sync_all())
+                .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+            Ok(Self { path: path.clone() })
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(path.join("pid"));
+            let _ = fs::remove_dir(&path);
+        }
+        result
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for RuntimePublishLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(self.path.join("pid"));
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, OnboardingError> {
+    publish_bundled_wrapper_with_failpoint(home, runtime_dir, |_| false)
+}
+
+#[cfg(target_os = "macos")]
+fn publish_bundled_wrapper_with_failpoint(
+    home: &Path,
+    runtime_dir: &Path,
+    failpoint: impl Fn(&str) -> bool,
+) -> Result<PathBuf, OnboardingError> {
     use std::os::unix::{fs::OpenOptionsExt, fs::PermissionsExt};
 
     let source = std::str::from_utf8(BUNDLED_LOCAL_WRAPPER)
-        .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
     if !wrapper_has_protocol(source, "JHT_HOST_RUNTIME_PROTOCOL=1")
         || !wrapper_has_protocol(source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
         || !wrapper_has_protocol(source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     {
-        return Err(failure("runtime_wrapper_install_failed"));
+        return Err(failure("runtime_wrapper_publish_failed"));
     }
 
     let local_dir = home.join(".local");
@@ -651,29 +1116,35 @@ fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, O
     for directory in [&local_dir, &bin_dir] {
         match fs::symlink_metadata(directory) {
             Ok(metadata) if metadata.file_type().is_dir() => {}
-            Ok(_) => return Err(failure("runtime_wrapper_install_failed")),
+            Ok(_) => return Err(failure("runtime_wrapper_publish_failed")),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                fs::create_dir(directory).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+                fs::create_dir(directory).map_err(|_| failure("runtime_wrapper_publish_failed"))?;
             }
-            Err(_) => return Err(failure("runtime_wrapper_install_failed")),
+            Err(_) => return Err(failure("runtime_wrapper_publish_failed")),
         }
+        fs::set_permissions(directory, fs::Permissions::from_mode(0o700))
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
     }
 
     let target = bin_dir.join("jht");
     if fs::symlink_metadata(&target).is_ok_and(|metadata| !metadata.file_type().is_file()) {
-        return Err(failure("runtime_wrapper_install_failed"));
+        return Err(failure("runtime_wrapper_publish_failed"));
     }
     if !fs::symlink_metadata(runtime_dir).is_ok_and(|metadata| metadata.file_type().is_dir()) {
-        return Err(failure("runtime_wrapper_install_failed"));
+        return Err(failure("runtime_wrapper_publish_failed"));
     }
+    let _lock = RuntimePublishLock::acquire(runtime_dir)?;
     let manifest = runtime_dir.join(".runtime-integrity");
     let manifest_metadata =
-        fs::symlink_metadata(&manifest).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::symlink_metadata(&manifest).map_err(|_| failure("runtime_wrapper_publish_failed"))?;
     if !manifest_metadata.file_type().is_file() || manifest_metadata.len() > 64 * 1024 {
-        return Err(failure("runtime_wrapper_install_failed"));
+        return Err(failure("runtime_wrapper_publish_failed"));
+    }
+    if !runtime_bundle_manifest_valid(runtime_dir, &target) {
+        return Err(failure("runtime_wrapper_publish_failed"));
     }
     let current_manifest =
-        fs::read_to_string(&manifest).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::read_to_string(&manifest).map_err(|_| failure("runtime_wrapper_publish_failed"))?;
     let wrapper_digest = format!("{:x}", Sha256::digest(BUNDLED_LOCAL_WRAPPER));
     let mut wrapper_entry_count = 0;
     let updated_manifest = current_manifest
@@ -690,7 +1161,7 @@ fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, O
         .join("\n")
         + "\n";
     if wrapper_entry_count != 1 {
-        return Err(failure("runtime_wrapper_install_failed"));
+        return Err(failure("runtime_wrapper_publish_failed"));
     }
 
     let nonce = SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -700,43 +1171,131 @@ fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, O
         std::process::id(),
         nonce
     ));
+    let wrapper_backup = bin_dir.join(format!(".jht-desktop-backup-{nonce}"));
+    let manifest_backup = runtime_dir.join(format!(".integrity-desktop-backup-{nonce}"));
+    let mut wrapper_backed_up = false;
+    let mut manifest_backed_up = false;
     let result = (|| {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o700)
             .open(&temporary)
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
         file.write_all(BUNDLED_LOCAL_WRAPPER)
             .and_then(|_| file.sync_all())
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
         fs::set_permissions(&temporary, fs::Permissions::from_mode(0o700))
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
         let mut manifest_file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600)
             .open(&manifest_temporary)
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
         manifest_file
             .write_all(updated_manifest.as_bytes())
             .and_then(|_| manifest_file.sync_all())
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
         fs::set_permissions(&manifest_temporary, fs::Permissions::from_mode(0o600))
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        fs::rename(&manifest, &manifest_backup)
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        manifest_backed_up = true;
+        fs::rename(&target, &wrapper_backup)
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        wrapper_backed_up = true;
         fs::rename(&manifest_temporary, &manifest)
-            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
-        fs::rename(&temporary, &target).map_err(|_| failure("runtime_wrapper_install_failed"))?;
-        if !valid_wrapper_file(&target) {
-            return Err(failure("runtime_wrapper_install_failed"));
+            .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        if failpoint("after-manifest") {
+            return Err(failure("runtime_wrapper_publish_failed"));
+        }
+        fs::rename(&temporary, &target).map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+        if !bundled_wrapper_published(runtime_dir, &target) {
+            return Err(failure("runtime_wrapper_publish_failed"));
         }
         Ok(target.clone())
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
         let _ = fs::remove_file(&manifest_temporary);
+        if manifest_backed_up {
+            let _ = fs::remove_file(&manifest);
+            let _ = fs::rename(&manifest_backup, &manifest);
+        }
+        if wrapper_backed_up {
+            let _ = fs::remove_file(&target);
+            let _ = fs::rename(&wrapper_backup, &target);
+        }
+    } else {
+        let _ = fs::remove_file(&manifest_backup);
+        let _ = fs::remove_file(&wrapper_backup);
     }
     result
+}
+
+#[cfg(target_os = "macos")]
+fn file_digest(path: &Path) -> Option<String> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 {
+        return None;
+    }
+    Some(format!("{:x}", Sha256::digest(fs::read(path).ok()?)))
+}
+
+#[cfg(target_os = "macos")]
+fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
+    use std::collections::BTreeMap;
+
+    let manifest = runtime_dir.join(".runtime-integrity");
+    let Ok(source) = fs::read_to_string(manifest) else {
+        return false;
+    };
+    let mut entries = BTreeMap::new();
+    for line in source.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            return false;
+        };
+        if value.is_empty() || entries.insert(key, value).is_some() {
+            return false;
+        }
+    }
+    let expected_keys = [
+        "container-runtime",
+        "docker-compose.yml",
+        "docker-shim",
+        "host-setup.sh",
+        "jht-wrapper.sh",
+        "podman-machine",
+        "version",
+    ];
+    if entries.keys().copied().collect::<Vec<_>>() != expected_keys || entries["version"] != "1" {
+        return false;
+    }
+    let artifacts = [
+        ("docker-compose.yml", runtime_dir.join("docker-compose.yml")),
+        ("host-setup.sh", runtime_dir.join("host-setup.sh")),
+        ("jht-wrapper.sh", wrapper.to_path_buf()),
+        ("container-runtime", runtime_dir.join("container-runtime")),
+        ("podman-machine", runtime_dir.join("podman-machine")),
+        ("docker-shim", runtime_dir.join("bin/docker")),
+    ];
+    if fs::read_to_string(runtime_dir.join("container-runtime"))
+        .ok()
+        .is_none_or(|value| value.trim() != "podman")
+    {
+        return false;
+    }
+    artifacts
+        .into_iter()
+        .all(|(key, path)| file_digest(&path).is_some_and(|digest| digest == entries[key]))
+}
+
+#[cfg(target_os = "macos")]
+fn bundled_wrapper_published(runtime_dir: &Path, wrapper: &Path) -> bool {
+    valid_wrapper_file(wrapper)
+        && fs::read(wrapper).is_ok_and(|bytes| bytes == BUNDLED_LOCAL_WRAPPER)
+        && runtime_bundle_manifest_valid(runtime_dir, wrapper)
 }
 
 #[cfg(target_os = "macos")]
@@ -876,7 +1435,10 @@ fn with_downloaded_installer<T>(
     attest_then(bytes, expected, execute)
 }
 
-fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+fn install_local(
+    app: &tauri::AppHandle,
+    diagnostics: Option<&OnboardingDiagnosticSink>,
+) -> Result<PathBuf, OnboardingError> {
     #[cfg(not(unix))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
@@ -914,31 +1476,68 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
             if !podman_runtime_selected(app) {
                 return Err(failure("podman_not_ready"));
             }
-            if wrapper_path(app).is_none() {
-                let home = app
-                    .path()
-                    .home_dir()
-                    .map_err(|_| failure("runtime_wrapper_install_failed"))?;
-                let runtime_dir = local_runtime_dir(app)?;
-                publish_bundled_wrapper(&home, &runtime_dir)?;
+            let home = app
+                .path()
+                .home_dir()
+                .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
+            let runtime_dir = local_runtime_dir(app)?;
+            let installed_wrapper = home.join(".local/bin/jht");
+            if !bundled_wrapper_published(&runtime_dir, &installed_wrapper) {
+                let started = Instant::now();
+                let published = publish_bundled_wrapper(&home, &runtime_dir).map(|_| ());
+                if let Some(diagnostics) = diagnostics {
+                    diagnostics.record_boundary(
+                        "wrapper-publish",
+                        OnboardingProgressStage::Runtime,
+                        started,
+                        &published,
+                    );
+                }
+                published?;
             }
+            if !bundled_wrapper_published(&runtime_dir, &installed_wrapper) {
+                return Err(failure("runtime_wrapper_publish_failed"));
+            }
+            let mut probe_sequence = 0u8;
+            let snapshot = probe_installed_wrapper_with(|operation, timeout| {
+                probe_sequence = probe_sequence.saturating_add(1);
+                let started = Instant::now();
+                let result = run_local(&installed_wrapper, &operation.argv(), timeout);
+                if let Some(diagnostics) = diagnostics {
+                    diagnostics.record_process(
+                        format!("wrapper-{}-{probe_sequence}", operation.diagnostic_id()),
+                        OnboardingProgressStage::Runtime,
+                        started,
+                        &result,
+                        "runtime_wrapper_probe_failed",
+                        operation == LocalCliOperation::Status,
+                    );
+                }
+                result
+            })?;
+            if !snapshot.runtime_installed {
+                return Err(failure("runtime_wrapper_probe_failed"));
+            }
+            return Ok(installed_wrapper);
         }
         #[cfg(not(target_os = "macos"))]
-        if wrapper_path(app).is_none() {
-            with_downloaded_installer(|installer| {
-                let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
-                ensure_success(
-                    run_program(
-                        "/usr/bin/env",
-                        args,
-                        Some(installer.bytes()),
-                        PREPARE_TIMEOUT,
-                    ),
-                    "runtime_install_failed",
-                )
-            })?;
+        {
+            if wrapper_path(app).is_none() {
+                with_downloaded_installer(|installer| {
+                    let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
+                    ensure_success(
+                        run_program(
+                            "/usr/bin/env",
+                            args,
+                            Some(installer.bytes()),
+                            PREPARE_TIMEOUT,
+                        ),
+                        "runtime_install_failed",
+                    )
+                })?;
+            }
+            wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
         }
-        wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
     }
 }
 
@@ -1169,7 +1768,18 @@ fn prepare_impl(
     pairing_token: Option<String>,
     channel: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let reporter = ProgressReporter::new(channel);
+    let diagnostics = OnboardingDiagnosticSink::new(
+        &app,
+        &scope,
+        OnboardingDiagnosticHostKind::from_host(&submission.host),
+    );
+    let progress_diagnostics = diagnostics.clone();
+    let reporter = ProgressReporter::with_emitter(move |event| {
+        let _ = channel.send(event.clone());
+        if let Some(diagnostics) = progress_diagnostics.as_ref() {
+            diagnostics.record_progress(&event);
+        }
+    });
     let mut pairing = pairing_token.map(Zeroizing::new);
     let (validated, wrapper) = reporter.run(
         OnboardingProgressStage::Engine,
@@ -1179,7 +1789,7 @@ fn prepare_impl(
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(install_local(&app)?),
+                ValidatedHost::Local => Some(install_local(&app, diagnostics.as_ref())?),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -1217,9 +1827,29 @@ fn prepare_impl(
         || match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
+                let mut request_sequence = 0u64;
                 start_and_verify_local_container_with(
                     |operation, timeout| {
-                        run_scoped_local(&app, &scope, wrapper, operation, timeout)
+                        request_sequence = request_sequence.saturating_add(1);
+                        let started = Instant::now();
+                        let result = run_scoped_local(&app, &scope, wrapper, operation, timeout);
+                        if let Some(diagnostics) = diagnostics.as_ref() {
+                            diagnostics.record_process(
+                                format!(
+                                    "container-{}-{request_sequence}",
+                                    operation.diagnostic_id()
+                                ),
+                                OnboardingProgressStage::Container,
+                                started,
+                                &result,
+                                match operation {
+                                    LocalCliOperation::Up => "container_start_failed",
+                                    _ => "container_not_ready",
+                                },
+                                false,
+                            );
+                        }
+                        result
                     },
                     thread::sleep,
                     LOCAL_CONTAINER_VERIFY_ATTEMPTS,
@@ -1238,7 +1868,12 @@ fn prepare_impl(
         "Verifica del container in corso",
         "Container Job Hunter Team verificato",
         || {
-            let snapshot = snapshot_impl(&app, &scope, &validated)?;
+            let started = Instant::now();
+            let snapshot_result = snapshot_impl(&app, &scope, &validated);
+            if let Some(diagnostics) = diagnostics.as_ref() {
+                diagnostics.record_snapshot("container-snapshot", started, &snapshot_result);
+            }
+            let snapshot = snapshot_result?;
             if !snapshot.container_running {
                 trace_local_runtime("container", "snapshot_not_ready");
                 return Err(failure("container_not_ready"));
@@ -1363,6 +1998,58 @@ fn parse_snapshot(text: &str) -> OnboardingSnapshot {
         assistant_welcomed: has("assistantWelcomed"),
         direct_chat_ready: false,
     }
+}
+
+fn parse_verified_snapshot(text: &str) -> Option<OnboardingSnapshot> {
+    let mut values = std::collections::BTreeMap::new();
+    for line in text.lines() {
+        let (key, value) = line.split_once('=')?;
+        if !matches!(value, "0" | "1") || values.insert(key, value == "1").is_some() {
+            return None;
+        }
+    }
+    let expected = [
+        "assistantRunning",
+        "assistantWelcomed",
+        "captainRunning",
+        "containerRunning",
+        "profileReady",
+        "providerAuthenticated",
+        "providerConfigured",
+        "runtimeInstalled",
+    ];
+    if values.keys().copied().collect::<Vec<_>>() != expected {
+        return None;
+    }
+    Some(OnboardingSnapshot {
+        runtime_installed: values["runtimeInstalled"],
+        container_running: values["containerRunning"],
+        provider_configured: values["providerConfigured"],
+        provider_authenticated: values["providerAuthenticated"],
+        assistant_running: values["assistantRunning"],
+        captain_running: values["captainRunning"],
+        profile_ready: values["profileReady"],
+        assistant_welcomed: values["assistantWelcomed"],
+        direct_chat_ready: false,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn probe_installed_wrapper_with(
+    mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    let status = run(LocalCliOperation::Status, LOCAL_CONTAINER_VERIFY_TIMEOUT)
+        .map_err(|_| failure("runtime_wrapper_probe_failed"))?;
+    if !matches!(status.code, 0 | 1) {
+        return Err(failure("runtime_wrapper_probe_failed"));
+    }
+    let snapshot = run(LocalCliOperation::Snapshot, SNAPSHOT_TIMEOUT)
+        .map_err(|_| failure("runtime_wrapper_probe_failed"))?;
+    if !snapshot.success() {
+        return Err(failure("runtime_wrapper_probe_failed"));
+    }
+    parse_verified_snapshot(&snapshot.stdout_text())
+        .ok_or_else(|| failure("runtime_wrapper_probe_failed"))
 }
 
 fn snapshot_impl(
@@ -2514,16 +3201,22 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
-        parse_snapshot, provider_bootstrap_input, redact, resume_team_prerequisite,
-        start_and_verify_local_container_with, valid_interactive_request_id, valid_pairing_token,
-        valid_provider_login_input, valid_wrapper_file, write_provider_input,
-        ExistingTeamConnectRequest, InteractiveStateDetector, LocalCliOperation,
-        OnboardingProgress, OnboardingProgressStage, OnboardingProgressStatus,
-        OnboardingSubmission, ProgressReporter, StreamRedactor, SubscriptionProvider,
-        INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
+        parse_snapshot, parse_verified_snapshot, provider_bootstrap_input, redact,
+        resume_team_prerequisite, start_and_verify_local_container_with,
+        valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
+        valid_wrapper_file, write_provider_input, ExistingTeamConnectRequest,
+        InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
+        OnboardingDiagnosticSink, OnboardingProgress, OnboardingProgressStage,
+        OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StreamRedactor,
+        SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS, INSTALL_SHA256,
+        REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     #[cfg(target_os = "macos")]
-    use super::{local_podman_install_required, local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS};
+    use super::{
+        local_podman_install_required, local_wrapper_command, probe_installed_wrapper_with,
+        LOCAL_PODMAN_INSTALL_ARGS,
+    };
+    use crate::account_scope::AccountScope;
     use crate::runtime_host::ProcessResult;
     use sha2::{Digest, Sha256};
     use std::{
@@ -2565,6 +3258,8 @@ mod tests {
             "runtime_install_failed",
             "runtime_missing",
             "runtime_wrapper_install_failed",
+            "runtime_wrapper_publish_failed",
+            "runtime_wrapper_probe_failed",
             "local_account_owner_unavailable",
             "container_start_failed",
             "container_not_ready",
@@ -2736,6 +3431,225 @@ mod tests {
         }
     }
 
+    #[test]
+    fn diagnostics_are_scoped_bounded_private_and_schema_only() {
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-diagnostics-{nonce}"));
+        let scope = AccountScope::synthetic(b"diagnostic-scope");
+        let sink =
+            OnboardingDiagnosticSink::at_root(&root, &scope, OnboardingDiagnosticHostKind::Local);
+        for sequence in 0..(DIAGNOSTIC_MAX_RECORDS as u64 + 17) {
+            sink.record_progress(&OnboardingProgress {
+                stage: OnboardingProgressStage::Container,
+                status: OnboardingProgressStatus::Progress,
+                message: "raw stdout 203.0.113.10 /private/key.pem secret-token account-user-id",
+                sequence,
+                elapsed_ms: sequence,
+                code: None,
+                retryable: None,
+            });
+        }
+        let failed_process = outcome(false);
+        sink.record_process(
+            "container-status-final".to_owned(),
+            OnboardingProgressStage::Container,
+            std::time::Instant::now(),
+            &failed_process,
+            "container_not_ready",
+            false,
+        );
+        let snapshot = super::OnboardingSnapshot {
+            runtime_installed: true,
+            container_running: false,
+            ..Default::default()
+        };
+        sink.record_snapshot(
+            "container-snapshot",
+            std::time::Instant::now(),
+            &Ok(snapshot),
+        );
+        let bytes = fs::read(&sink.path).unwrap();
+        assert!(bytes.len() <= DIAGNOSTIC_MAX_BYTES);
+        let source = String::from_utf8(bytes).unwrap();
+        assert_eq!(source.lines().count(), DIAGNOSTIC_MAX_RECORDS);
+        assert!(sink
+            .path
+            .starts_with(root.join("accounts").join(scope.digest())));
+        for forbidden in [
+            "raw stdout",
+            "203.0.113.10",
+            "/private/key.pem",
+            "secret-token",
+            "account-user-id",
+            "message",
+            "stdout",
+            "stderr",
+            "hostname",
+            "fingerprint",
+        ] {
+            assert!(!source.contains(forbidden));
+        }
+        assert!(source.contains("\"code\":\"container_not_ready\""));
+        assert!(source.contains("\"exitCategory\":\"nonzero\""));
+        assert!(
+            source.contains("\"snapshot\":{\"runtimeInstalled\":true,\"containerRunning\":false")
+        );
+        for line in source.lines() {
+            let value: serde_json::Value = serde_json::from_str(line).unwrap();
+            let mut keys = value
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            keys.sort_unstable();
+            assert_eq!(
+                keys,
+                [
+                    "code",
+                    "elapsedMs",
+                    "exitCategory",
+                    "hostKind",
+                    "operationId",
+                    "requestId",
+                    "retryable",
+                    "schemaVersion",
+                    "snapshot",
+                    "stage",
+                    "status",
+                ]
+            );
+            assert_eq!(value["hostKind"], "local");
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(sink.path.parent().unwrap())
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+            assert_eq!(
+                fs::metadata(&sink.path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        let vps_sink = OnboardingDiagnosticSink::at_root(
+            &root.join("vps"),
+            &scope,
+            OnboardingDiagnosticHostKind::Vps,
+        );
+        vps_sink.record_progress(&OnboardingProgress {
+            stage: OnboardingProgressStage::Engine,
+            status: OnboardingProgressStatus::Start,
+            message: "ignored",
+            sequence: 1,
+            elapsed_ms: 0,
+            code: None,
+            retryable: None,
+        });
+        assert!(fs::read_to_string(&vps_sink.path)
+            .unwrap()
+            .contains("\"hostKind\":\"vps\""));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn diagnostic_storage_failure_is_best_effort_and_never_follows_symlinks() {
+        use std::{
+            fs,
+            os::unix::fs::symlink,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-diagnostics-symlink-{nonce}"));
+        let scope = AccountScope::synthetic(b"diagnostic-symlink-scope");
+        let sink =
+            OnboardingDiagnosticSink::at_root(&root, &scope, OnboardingDiagnosticHostKind::Vps);
+        fs::create_dir_all(sink.path.parent().unwrap()).unwrap();
+        let sentinel = root.join("sentinel");
+        fs::write(&sentinel, b"unchanged").unwrap();
+        symlink(&sentinel, &sink.path).unwrap();
+        sink.record_progress(&OnboardingProgress {
+            stage: OnboardingProgressStage::Runtime,
+            status: OnboardingProgressStatus::Error,
+            message: "must not persist",
+            sequence: 1,
+            elapsed_ms: 1,
+            code: Some("container_not_ready"),
+            retryable: Some(true),
+        });
+        assert_eq!(fs::read(&sentinel).unwrap(), b"unchanged");
+        assert!(fs::symlink_metadata(&sink.path)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn strict_snapshot_rejects_partial_duplicate_and_unknown_facts() {
+        let complete = "runtimeInstalled=1\ncontainerRunning=0\nproviderConfigured=0\nproviderAuthenticated=0\nassistantWelcomed=0\nassistantRunning=0\ncaptainRunning=0\nprofileReady=0\n";
+        assert!(parse_verified_snapshot(complete).is_some());
+        assert!(parse_verified_snapshot("runtimeInstalled=1\n").is_none());
+        assert!(parse_verified_snapshot(&format!("{complete}runtimeInstalled=1\n")).is_none());
+        assert!(parse_verified_snapshot(&format!("{complete}privatePath=1\n")).is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn installed_wrapper_probe_is_read_only_ordered_and_fail_closed() {
+        let snapshot = b"runtimeInstalled=1\ncontainerRunning=0\nproviderConfigured=0\nproviderAuthenticated=0\nassistantWelcomed=0\nassistantRunning=0\ncaptainRunning=0\nprofileReady=0\n";
+        let mut calls = Vec::new();
+        let verified = probe_installed_wrapper_with(|operation, _| {
+            calls.push(operation.diagnostic_id());
+            Ok(ProcessResult {
+                code: if operation == LocalCliOperation::Status {
+                    1
+                } else {
+                    0
+                },
+                stdout: if operation == LocalCliOperation::Snapshot {
+                    snapshot.to_vec()
+                } else {
+                    Vec::new()
+                },
+            })
+        })
+        .unwrap();
+        assert_eq!(calls, ["status", "snapshot"]);
+        assert!(verified.runtime_installed);
+        assert!(!verified.container_running);
+
+        let mut calls = 0;
+        let error = probe_installed_wrapper_with(|_, _| {
+            calls += 1;
+            Ok(ProcessResult {
+                code: 126,
+                stdout: Vec::new(),
+            })
+        })
+        .unwrap_err();
+        assert_eq!(calls, 1);
+        assert_eq!(error.code, "runtime_wrapper_probe_failed");
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn local_installer_explicitly_selects_the_attested_podman_path() {
@@ -2763,6 +3677,7 @@ mod tests {
         use std::{
             fs,
             os::unix::fs::PermissionsExt,
+            process::Command,
             time::{SystemTime, UNIX_EPOCH},
         };
 
@@ -2770,40 +3685,166 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let home = std::env::temp_dir().join(format!("jht-wrapper-upgrade-{nonce}"));
+        let home_alias = std::env::temp_dir().join(format!("jht-wrapper-upgrade-{nonce}"));
+        fs::create_dir_all(&home_alias).unwrap();
+        let home = fs::canonicalize(&home_alias).unwrap();
         let bin = home.join(".local/bin");
         let runtime = home.join("runtime");
+        let runtime_bin = runtime.join("bin");
+        let fake_bin = home.join("fake-bin");
         fs::create_dir_all(&bin).unwrap();
-        fs::create_dir_all(&runtime).unwrap();
+        fs::create_dir_all(&runtime_bin).unwrap();
+        fs::create_dir_all(&fake_bin).unwrap();
+        for directory in [
+            &home,
+            &home.join(".local"),
+            &bin,
+            &runtime,
+            &runtime_bin,
+            &fake_bin,
+        ] {
+            fs::set_permissions(directory, fs::Permissions::from_mode(0o700)).unwrap();
+        }
         let wrapper = bin.join("jht");
-        fs::write(
-            &wrapper,
-            b"#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n",
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
-        fs::write(
-            runtime.join(".runtime-integrity"),
-            b"version=1\ndocker-compose.yml=compose\nhost-setup.sh=host\njht-wrapper.sh=legacy\ncontainer-runtime=runtime\n",
-        )
-        .unwrap();
+        let old_wrapper = b"#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n";
+        let artifacts = [
+            (wrapper.clone(), old_wrapper.as_slice(), 0o700),
+            (
+                runtime.join("docker-compose.yml"),
+                b"services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n".as_slice(),
+                0o600,
+            ),
+            (
+                runtime.join("host-setup.sh"),
+                b"#!/bin/sh\nJHT_HOST_SETUP_PROTOCOL=1\n".as_slice(),
+                0o700,
+            ),
+            (runtime.join("container-runtime"), b"podman\n".as_slice(), 0o600),
+            (runtime.join("podman-machine"), b"jht-podman\n".as_slice(), 0o600),
+            (
+                runtime_bin.join("docker"),
+                b"#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\n[ \"${1:-}\" = info ] && exit 0\nexit 1\n".as_slice(),
+                0o700,
+            ),
+            (
+                fake_bin.join("podman"),
+                b"#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\n[ \"${1:-}\" = --connection ] && [ \"${3:-}\" = info ] && exit 0\nexit 1\n".as_slice(),
+                0o700,
+            ),
+            (
+                fake_bin.join("podman-compose"),
+                b"#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman-compose version 1.6.0'; exit 0; }\nexit 0\n".as_slice(),
+                0o700,
+            ),
+        ];
+        for (path, bytes, mode) in artifacts {
+            fs::write(&path, bytes).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let digest =
+            |path: &std::path::Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
+        let old_manifest = format!(
+            "version=1\ndocker-compose.yml={}\nhost-setup.sh={}\njht-wrapper.sh={}\ncontainer-runtime={}\npodman-machine={}\ndocker-shim={}\n",
+            digest(&runtime.join("docker-compose.yml")),
+            digest(&runtime.join("host-setup.sh")),
+            digest(&wrapper),
+            digest(&runtime.join("container-runtime")),
+            digest(&runtime.join("podman-machine")),
+            digest(&runtime_bin.join("docker")),
+        );
+        let manifest_path = runtime.join(".runtime-integrity");
+        fs::write(&manifest_path, &old_manifest).unwrap();
+        fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o600)).unwrap();
 
         assert!(super::valid_host_wrapper_file(&wrapper));
         assert!(!valid_wrapper_file(&wrapper));
         assert!(!local_podman_install_required(true, true, true));
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+
+        fs::create_dir(runtime.join(".upgrade.lock")).unwrap();
+        let locked = super::publish_bundled_wrapper(&home, &runtime).unwrap_err();
+        assert_eq!(locked.code, "runtime_wrapper_publish_failed");
+        assert_eq!(fs::read(&wrapper).unwrap(), old_wrapper);
+        assert_eq!(fs::read_to_string(&manifest_path).unwrap(), old_manifest);
+        fs::remove_dir(runtime.join(".upgrade.lock")).unwrap();
+
+        let mixed_manifest = old_manifest.replace(
+            &digest(&runtime.join("docker-compose.yml")),
+            &"0".repeat(64),
+        );
+        fs::write(&manifest_path, &mixed_manifest).unwrap();
+        let mixed = super::publish_bundled_wrapper(&home, &runtime).unwrap_err();
+        assert_eq!(mixed.code, "runtime_wrapper_publish_failed");
+        assert_eq!(fs::read(&wrapper).unwrap(), old_wrapper);
+        assert_eq!(fs::read_to_string(&manifest_path).unwrap(), mixed_manifest);
+        fs::write(&manifest_path, &old_manifest).unwrap();
+
+        let interrupted = super::publish_bundled_wrapper_with_failpoint(&home, &runtime, |step| {
+            step == "after-manifest"
+        })
+        .unwrap_err();
+        assert_eq!(interrupted.code, "runtime_wrapper_publish_failed");
+        assert_eq!(fs::read(&wrapper).unwrap(), old_wrapper);
+        assert_eq!(fs::read_to_string(&manifest_path).unwrap(), old_manifest);
+        assert!(fs::read_dir(&bin).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".jht-desktop")
+        }));
+        assert!(fs::read_dir(&runtime).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".integrity-desktop")
+        }));
 
         let published = super::publish_bundled_wrapper(&home, &runtime).unwrap();
         assert_eq!(published, wrapper);
         assert_eq!(fs::read(&published).unwrap(), super::BUNDLED_LOCAL_WRAPPER);
         assert!(valid_wrapper_file(&published));
         let manifest = fs::read_to_string(runtime.join(".runtime-integrity")).unwrap();
-        let digest = format!("{:x}", Sha256::digest(super::BUNDLED_LOCAL_WRAPPER));
-        assert!(manifest.contains(&format!("jht-wrapper.sh={digest}\n")));
-        assert!(manifest.contains("docker-compose.yml=compose\n"));
+        let wrapper_digest = format!("{:x}", Sha256::digest(super::BUNDLED_LOCAL_WRAPPER));
+        assert!(manifest.contains(&format!("jht-wrapper.sh={wrapper_digest}\n")));
+        assert!(manifest.contains(&format!(
+            "docker-compose.yml={}\n",
+            digest(&runtime.join("docker-compose.yml"))
+        )));
         assert_eq!(
             fs::metadata(&published).unwrap().permissions().mode() & 0o777,
             0o700
         );
+        assert!(super::bundled_wrapper_published(&runtime, &published));
+
+        let inherited_path = format!("{}:/usr/bin:/bin", fake_bin.display());
+        let status = Command::new(&published)
+            .arg("status")
+            .env("HOME", &home)
+            .env("PATH", &inherited_path)
+            .env("JHT_RUNTIME_DIR", &runtime)
+            .env("JHT_WRAPPER_PATH", &published)
+            .env_remove("JHT_PODMAN_MACHINE")
+            .env_remove("CONTAINER_CONNECTION")
+            .output()
+            .unwrap();
+        assert_eq!(status.status.code(), Some(1));
+        let snapshot = Command::new(&published)
+            .arg("onboarding-snapshot")
+            .env("HOME", &home)
+            .env("PATH", inherited_path)
+            .env("JHT_RUNTIME_DIR", &runtime)
+            .env("JHT_WRAPPER_PATH", &published)
+            .env_remove("JHT_PODMAN_MACHINE")
+            .env_remove("CONTAINER_CONNECTION")
+            .output()
+            .unwrap();
+        assert!(snapshot.status.success());
+        let snapshot = super::parse_verified_snapshot(&String::from_utf8(snapshot.stdout).unwrap())
+            .expect("installed wrapper must emit the strict snapshot contract");
+        assert!(snapshot.runtime_installed);
+        assert!(!snapshot.container_running);
 
         fs::remove_dir_all(home).unwrap();
     }
