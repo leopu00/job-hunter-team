@@ -53,3 +53,11 @@ export async function resetDesktopPlaygroundLocalScope(profileId: string): Promi
     await invoke("runtime_playground_local_reset", { profileId });
   });
 }
+
+/** DEV/test-only recovery for an orphaned local owner; accepts no renderer identity. */
+export async function recoverDesktopPlaygroundLocalOrphan(): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await serialize(async () => {
+    await invoke("runtime_playground_local_orphan_recover");
+  });
+}

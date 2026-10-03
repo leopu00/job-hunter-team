@@ -11,6 +11,7 @@ import {
 } from "../lib/local-profile";
 import { onboardingPlaygroundEnabled } from "../lib/onboarding-playground";
 import { useDeferredSession } from "../lib/supabase";
+import { recoverDesktopPlaygroundLocalOrphan } from "../lib/desktop-account-scope";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
 
 vi.mock("../lib/onboarding-playground", () => ({ onboardingPlaygroundEnabled: vi.fn() }));
@@ -23,16 +24,21 @@ vi.mock("../lib/identity-choice", () => ({
   selectGoogleIdentity: vi.fn(),
 }));
 vi.mock("../lib/supabase", () => ({ useDeferredSession: vi.fn() }));
+vi.mock("../lib/desktop-account-scope", () => ({
+  recoverDesktopPlaygroundLocalOrphan: vi.fn(),
+}));
 vi.mock("./DashboardApp", () => ({ default: () => <p>dashboard-app</p> }));
 vi.mock("../components/login-screen", () => ({
   LoginScreen: ({
     onChooseGoogle,
       onLocalReady,
       onResetLocalPlayground,
+      onRecoverLocalPlayground,
     }: {
       onChooseGoogle: () => boolean | Promise<boolean>;
       onLocalReady: () => void;
       onResetLocalPlayground?: () => Promise<void>;
+      onRecoverLocalPlayground?: () => Promise<void>;
   }) => (
     <section>
       <p>identity-choice</p>
@@ -40,6 +46,9 @@ vi.mock("../components/login-screen", () => ({
       <button type="button" onClick={onLocalReady}>choose-local</button>
       {onResetLocalPlayground && (
         <button type="button" onClick={() => void onResetLocalPlayground()}>reset-local</button>
+      )}
+      {onRecoverLocalPlayground && (
+        <button type="button" onClick={() => void onRecoverLocalPlayground()}>recover-local</button>
       )}
     </section>
   ),
@@ -54,6 +63,7 @@ describe("dashboard.html entrypoint", () => {
     vi.mocked(clearGoogleIdentitySelection).mockReset();
     vi.mocked(selectGoogleIdentity).mockReset();
     vi.mocked(resetPlaygroundLocalProfile).mockReset().mockResolvedValue();
+    vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockReset().mockResolvedValue();
     restore.mockReset().mockResolvedValue(null);
     vi.mocked(useDeferredSession).mockReturnValue({ session: null, loading: false, restore });
   });
@@ -117,6 +127,15 @@ describe("dashboard.html entrypoint", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "reset-local" }));
     expect(resetPlaygroundLocalProfile).toHaveBeenCalledOnce();
+    expect(screen.getByText("identity-choice")).toBeInTheDocument();
+  });
+
+  it("exposes no-payload orphan recovery only through the DEV playground entrypoint", async () => {
+    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
+    render(<DashboardEntrypoint />);
+
+    await userEvent.click(screen.getByRole("button", { name: "recover-local" }));
+    expect(recoverDesktopPlaygroundLocalOrphan).toHaveBeenCalledOnce();
     expect(screen.getByText("identity-choice")).toBeInTheDocument();
   });
 });

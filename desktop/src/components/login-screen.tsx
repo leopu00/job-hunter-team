@@ -54,6 +54,7 @@ export interface LoginScreenProps {
   onLocalReady?: () => void;
   onChooseGoogle?: () => boolean | Promise<boolean>;
   onResetLocalPlayground?: () => Promise<void>;
+  onRecoverLocalPlayground?: () => Promise<void>;
 }
 
 type CopyState = "idle" | "copied" | "failed";
@@ -77,6 +78,7 @@ export function LoginScreen({
   onLocalReady = () => goTo(DASHBOARD_PAGE),
   onChooseGoogle,
   onResetLocalPlayground,
+  onRecoverLocalPlayground,
 }: LoginScreenProps) {
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
@@ -195,6 +197,23 @@ export function LoginScreen({
     }
   }, [localBusy, onResetLocalPlayground]);
 
+  const recoverLocalPlayground = useCallback(async () => {
+    if (!onRecoverLocalPlayground || localBusy) return;
+    setLocalBusy(true);
+    setLocalError(false);
+    try {
+      await onRecoverLocalPlayground();
+      setLocalName("");
+      setLocalSetup(true);
+    } catch {
+      setLocalError(true);
+    } finally {
+      setLocalBusy(false);
+    }
+  }, [localBusy, onRecoverLocalPlayground]);
+
+  const hasSavedLocalProfile = Boolean(readLocal());
+
   return (
     <main className="page login-screen">
       <section className="login-card" aria-labelledby="login-title">
@@ -289,7 +308,7 @@ export function LoginScreen({
             >
               {localBusy ? "Preparazione…" : "Usa in locale"}
             </button>
-            {onResetLocalPlayground && readLocal() && (
+            {onResetLocalPlayground && hasSavedLocalProfile && (
               <button
                 className="login-card__secondary"
                 type="button"
@@ -297,6 +316,16 @@ export function LoginScreen({
                 disabled={localBusy}
               >
                 Reimposta identità locale di test
+              </button>
+            )}
+            {onRecoverLocalPlayground && !hasSavedLocalProfile && (
+              <button
+                className="login-card__secondary"
+                type="button"
+                onClick={() => void recoverLocalPlayground()}
+                disabled={localBusy}
+              >
+                Recupera reset locale di test
               </button>
             )}
           </>

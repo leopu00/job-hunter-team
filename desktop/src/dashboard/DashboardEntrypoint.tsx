@@ -8,6 +8,7 @@ import {
   clearLocalIdentitySelection,
   resetPlaygroundLocalProfile,
 } from "../lib/local-profile";
+import { recoverDesktopPlaygroundLocalOrphan } from "../lib/desktop-account-scope";
 import { onboardingPlaygroundEnabled } from "../lib/onboarding-playground";
 import { useDeferredSession } from "../lib/supabase";
 import DashboardApp from "./DashboardApp";
@@ -35,6 +36,11 @@ function PlaygroundDashboardEntry() {
     setChoice(null);
   }, []);
 
+  const recoverLocalPlayground = useCallback(async () => {
+    await recoverDesktopPlaygroundLocalOrphan();
+    setChoice(null);
+  }, []);
+
   if (choice === "local" || (choice === "google" && session)) {
     return <DashboardApp />;
   }
@@ -44,6 +50,7 @@ function PlaygroundDashboardEntry() {
       onChooseGoogle={chooseGoogle}
       onLocalReady={localReady}
       onResetLocalPlayground={resetLocalPlayground}
+      onRecoverLocalPlayground={recoverLocalPlayground}
     />
   );
 }
