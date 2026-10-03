@@ -22,6 +22,9 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
+#[cfg(target_os = "macos")]
+use std::fs::OpenOptions;
+
 const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
@@ -36,6 +39,8 @@ const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const PODMAN_MACHINE_NAME: &str = "jht-podman";
+#[cfg(target_os = "macos")]
+const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
 const LOCAL_PODMAN_INSTALL_ARGS: [&str; 6] = [
     "JHT_SKIP_ONBOARD=1",
@@ -185,6 +190,10 @@ fn failure(code: &'static str) -> OnboardingError {
             "Il runtime locale verificato non è disponibile. Configuralo di nuovo.",
             true,
         ),
+        "runtime_wrapper_install_failed" => (
+            "Il comando locale verificato non è stato aggiornato. Premi Riprova per completare la preparazione.",
+            true,
+        ),
         "runtime_install_unsupported" => (
             "Il runtime locale non è supportato su questo sistema.",
             false,
@@ -314,44 +323,176 @@ fn valid_team_id(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
-fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    let home = app.path().home_dir().ok()?;
+fn wrapper_candidates(home: &Path) -> [PathBuf; 3] {
     [
         home.join(".local/bin/jht"),
         PathBuf::from("/usr/local/bin/jht"),
         PathBuf::from("/opt/homebrew/bin/jht"),
     ]
-    .into_iter()
-    .find(|path| valid_wrapper_file(path))
+}
+
+fn wrapper_path_from_home(home: &Path) -> Option<PathBuf> {
+    wrapper_candidates(home)
+        .into_iter()
+        .find(|path| valid_wrapper_file(path))
+}
+
+fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    wrapper_path_from_home(&app.path().home_dir().ok()?)
 }
 
 pub(crate) fn verified_local_wrapper_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     wrapper_path(app).ok_or("runtime_missing")
 }
 
-fn valid_wrapper_file(path: &Path) -> bool {
+fn wrapper_source(path: &Path) -> Option<String> {
     let Ok(metadata) = fs::symlink_metadata(path) else {
-        return false;
+        return None;
     };
     if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > MAX_WRAPPER_BYTES
     {
-        return false;
+        return None;
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if metadata.permissions().mode() & 0o111 == 0 {
-            return false;
+            return None;
         }
     }
-    fs::read_to_string(path).is_ok_and(|source| {
-        let lines = source
-            .lines()
-            .map(|line| line.trim_end_matches('\r'))
-            .collect::<Vec<_>>();
-        lines.contains(&"JHT_HOST_RUNTIME_PROTOCOL=1")
-            && lines.contains(&"JHT_DESKTOP_CHAT_PROTOCOL=1")
+    fs::read_to_string(path).ok()
+}
+
+fn wrapper_has_protocol(source: &str, protocol: &str) -> bool {
+    source
+        .lines()
+        .map(|line| line.trim_end_matches('\r'))
+        .any(|line| line == protocol)
+}
+
+fn valid_host_wrapper_file(path: &Path) -> bool {
+    wrapper_source(path)
+        .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
+}
+
+fn valid_wrapper_file(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| {
+        wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
+            && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
     })
+}
+
+#[cfg(target_os = "macos")]
+fn host_wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let home = app.path().home_dir().ok()?;
+    wrapper_candidates(&home)
+        .into_iter()
+        .find(|path| valid_host_wrapper_file(path))
+}
+
+#[cfg(target_os = "macos")]
+fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, OnboardingError> {
+    use std::os::unix::{fs::OpenOptionsExt, fs::PermissionsExt};
+
+    let source = std::str::from_utf8(BUNDLED_LOCAL_WRAPPER)
+        .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+    if !wrapper_has_protocol(source, "JHT_HOST_RUNTIME_PROTOCOL=1")
+        || !wrapper_has_protocol(source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
+    {
+        return Err(failure("runtime_wrapper_install_failed"));
+    }
+
+    let local_dir = home.join(".local");
+    let bin_dir = local_dir.join("bin");
+    for directory in [&local_dir, &bin_dir] {
+        match fs::symlink_metadata(directory) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => return Err(failure("runtime_wrapper_install_failed")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(directory).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+            }
+            Err(_) => return Err(failure("runtime_wrapper_install_failed")),
+        }
+    }
+
+    let target = bin_dir.join("jht");
+    if fs::symlink_metadata(&target).is_ok_and(|metadata| !metadata.file_type().is_file()) {
+        return Err(failure("runtime_wrapper_install_failed"));
+    }
+    if !fs::symlink_metadata(runtime_dir).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+        return Err(failure("runtime_wrapper_install_failed"));
+    }
+    let manifest = runtime_dir.join(".runtime-integrity");
+    let manifest_metadata =
+        fs::symlink_metadata(&manifest).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+    if !manifest_metadata.file_type().is_file() || manifest_metadata.len() > 64 * 1024 {
+        return Err(failure("runtime_wrapper_install_failed"));
+    }
+    let current_manifest =
+        fs::read_to_string(&manifest).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+    let wrapper_digest = format!("{:x}", Sha256::digest(BUNDLED_LOCAL_WRAPPER));
+    let mut wrapper_entry_count = 0;
+    let updated_manifest = current_manifest
+        .lines()
+        .map(|line| {
+            if line.starts_with("jht-wrapper.sh=") {
+                wrapper_entry_count += 1;
+                format!("jht-wrapper.sh={wrapper_digest}")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    if wrapper_entry_count != 1 {
+        return Err(failure("runtime_wrapper_install_failed"));
+    }
+
+    let nonce = SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temporary = bin_dir.join(format!(".jht-desktop-{}-{}", std::process::id(), nonce));
+    let manifest_temporary = runtime_dir.join(format!(
+        ".integrity-desktop-{}-{}",
+        std::process::id(),
+        nonce
+    ));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o700)
+            .open(&temporary)
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        file.write_all(BUNDLED_LOCAL_WRAPPER)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o700))
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        let mut manifest_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&manifest_temporary)
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        manifest_file
+            .write_all(updated_manifest.as_bytes())
+            .and_then(|_| manifest_file.sync_all())
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::set_permissions(&manifest_temporary, fs::Permissions::from_mode(0o600))
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::rename(&manifest_temporary, &manifest)
+            .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        fs::rename(&temporary, &target).map_err(|_| failure("runtime_wrapper_install_failed"))?;
+        if !valid_wrapper_file(&target) {
+            return Err(failure("runtime_wrapper_install_failed"));
+        }
+        Ok(target.clone())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+        let _ = fs::remove_file(&manifest_temporary);
+    }
+    result
 }
 
 #[cfg(target_os = "macos")]
@@ -499,7 +640,7 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
         #[cfg(target_os = "macos")]
         {
             let install_required = local_podman_install_required(
-                wrapper_path(app).is_some(),
+                host_wrapper_path(app).is_some(),
                 podman_runtime_selected(app),
                 podman_path().is_some(),
             );
@@ -527,6 +668,14 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
             ensure_local_podman(&podman)?;
             if !podman_runtime_selected(app) {
                 return Err(failure("podman_not_ready"));
+            }
+            if wrapper_path(app).is_none() {
+                let home = app
+                    .path()
+                    .home_dir()
+                    .map_err(|_| failure("runtime_wrapper_install_failed"))?;
+                let runtime_dir = local_runtime_dir(app)?;
+                publish_bundled_wrapper(&home, &runtime_dir)?;
             }
         }
         #[cfg(not(target_os = "macos"))]
@@ -1853,6 +2002,7 @@ mod tests {
             "runtime_download_failed",
             "runtime_install_failed",
             "runtime_missing",
+            "runtime_wrapper_install_failed",
             "local_account_owner_unavailable",
             "container_start_failed",
             "container_not_ready",
@@ -1934,6 +2084,57 @@ mod tests {
         assert!(local_podman_install_required(true, false, true));
         assert!(local_podman_install_required(true, true, false));
         assert!(!local_podman_install_required(true, true, true));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn legacy_host_wrapper_is_upgraded_byte_for_byte_without_runtime_reinstall() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let home = std::env::temp_dir().join(format!("jht-wrapper-upgrade-{nonce}"));
+        let bin = home.join(".local/bin");
+        let runtime = home.join("runtime");
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&runtime).unwrap();
+        let wrapper = bin.join("jht");
+        fs::write(
+            &wrapper,
+            b"#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nexit 0\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(
+            runtime.join(".runtime-integrity"),
+            b"version=1\ndocker-compose.yml=compose\nhost-setup.sh=host\njht-wrapper.sh=legacy\ncontainer-runtime=runtime\n",
+        )
+        .unwrap();
+
+        assert!(super::valid_host_wrapper_file(&wrapper));
+        assert!(!valid_wrapper_file(&wrapper));
+        assert!(!local_podman_install_required(true, true, true));
+
+        let published = super::publish_bundled_wrapper(&home, &runtime).unwrap();
+        assert_eq!(published, wrapper);
+        assert_eq!(fs::read(&published).unwrap(), super::BUNDLED_LOCAL_WRAPPER);
+        assert!(valid_wrapper_file(&published));
+        let manifest = fs::read_to_string(runtime.join(".runtime-integrity")).unwrap();
+        let digest = format!("{:x}", Sha256::digest(super::BUNDLED_LOCAL_WRAPPER));
+        assert!(manifest.contains(&format!("jht-wrapper.sh={digest}\n")));
+        assert!(manifest.contains("docker-compose.yml=compose\n"));
+        assert_eq!(
+            fs::metadata(&published).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[cfg(target_os = "macos")]
