@@ -304,6 +304,52 @@ describe("SSH host-key consent contract", () => {
     });
   });
 
+  it("redacts an invalid Rust-shaped device action into an explicit typed event", async () => {
+    vi.mocked(invoke).mockResolvedValue({ sessionId: "synthetic-session" });
+    const onEvent = vi.fn();
+
+    await startOnboardingProviderLogin(host, onEvent, vi.fn());
+    channels[0].onmessage?.({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "device",
+        instruction: "Apri il browser.",
+        requestId: "codex-device-1",
+        safeUrl: "https://auth.openai.com/codex/device%1B[0m",
+        userCode: "ABCD-EFGH",
+      },
+    });
+
+    expect(onEvent).toHaveBeenCalledOnce();
+    expect(onEvent).toHaveBeenCalledWith({
+      kind: "invalid_action",
+      code: "provider_action_invalid",
+    });
+    expect(JSON.stringify(onEvent.mock.calls)).not.toContain("openai.com");
+    expect(JSON.stringify(onEvent.mock.calls)).not.toContain("ABCD-EFGH");
+  });
+
+  it("maps the native terminal provider failure without exposing payload fields", async () => {
+    vi.mocked(invoke).mockResolvedValue({ sessionId: "synthetic-session" });
+    const onEvent = vi.fn();
+
+    await startOnboardingProviderLogin(host, onEvent, vi.fn());
+    channels[0].onmessage?.({ kind: "failure", code: "provider_action_invalid" });
+
+    expect(onEvent).toHaveBeenCalledOnce();
+    expect(onEvent).toHaveBeenCalledWith({
+      kind: "invalid_action",
+      code: "provider_action_invalid",
+    });
+    expect(parseOnboardingInteractiveEvent({
+      kind: "failure",
+      code: "provider_action_invalid",
+      raw: "not-allowed",
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({ kind: "failure", code: "unknown" })).toBeNull();
+  });
+
   it("drops malformed or unsafe interactive actions at the IPC boundary", () => {
     expect(parseOnboardingInteractiveEvent({
       kind: "state",
@@ -342,7 +388,7 @@ describe("SSH host-key consent contract", () => {
         safeUrl: "https://auth.openai.com/codex/device%1B[0m",
         userCode: "ABCD-EFGH",
       },
-    })).toBeNull();
+    })).toEqual({ kind: "invalid_action", code: "provider_action_invalid" });
     expect(parseOnboardingInteractiveEvent({
       kind: "state",
       status: "needs_user_action",
@@ -354,7 +400,7 @@ describe("SSH host-key consent contract", () => {
         userCode: "ABCD-EFGH",
         unexpected: "mixed-shape",
       },
-    })).toBeNull();
+    })).toEqual({ kind: "invalid_action", code: "provider_action_invalid" });
   });
 
   it("binds provider input IPC to the exact session and request id", async () => {
