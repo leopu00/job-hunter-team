@@ -11,6 +11,7 @@ import {
   activateDesktopLocalScope,
   clearDesktopAccountScope,
   createDesktopLocalProfile,
+  resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 
 beforeEach(() => {
@@ -56,6 +57,13 @@ describe("desktop account scope boundary", () => {
       "runtime_account_scope_reset",
       "runtime_account_scope_set",
     ]);
+  });
+
+  it("exposes the DEV playground reset as one serialized native command", async () => {
+    await resetDesktopPlaygroundLocalScope("opaque-local-capability");
+    expect(invoke).toHaveBeenCalledWith("runtime_playground_local_reset", {
+      profileId: "opaque-local-capability",
+    });
   });
 
   it("fails closed outside the desktop runtime", async () => {

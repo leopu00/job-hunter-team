@@ -497,14 +497,92 @@ pub(crate) fn runtime_account_scope_reset(
     Ok(())
 }
 
+fn playground_reset_enabled(debug_build: bool) -> Result<(), &'static str> {
+    if debug_build {
+        Ok(())
+    } else {
+        Err("playground_reset_unavailable")
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn reset_playground_scope_at(
+    profiles_root: &Path,
+    owner_marker: &Path,
+    scopes: &AccountScopeState,
+    profile_id: &str,
+    teardown: impl FnOnce(&Option<AccountScope>),
+) -> Result<(), &'static str> {
+    playground_reset_enabled(cfg!(debug_assertions))?;
+    let expected = load_local_scope_at(profiles_root, profile_id)?;
+    let mut active = scopes
+        .inner
+        .write()
+        .map_err(|_| "account_scope_state_failed")?;
+    if active.as_ref().is_some_and(|scope| scope != &expected) {
+        return Err("account_scope_changed");
+    }
+
+    let owner_present = match fs::symlink_metadata(owner_marker) {
+        Ok(_) => {
+            verify_local_owner_marker(owner_marker, &expected)?;
+            true
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => return Err("local_account_owner_unavailable"),
+    };
+
+    // The scope becomes unavailable before any native handle is torn down.
+    // Existing profile/scoped data remains on disk and cannot be reached by
+    // the next opaque local profile. Only the exact runtime ownership marker
+    // is released; runtime data, containers and provider credentials are not
+    // touched by this DEV/test-only boundary.
+    *active = None;
+    teardown(&active);
+    if owner_present {
+        fs::remove_file(owner_marker).map_err(|_| "local_account_owner_unavailable")?;
+    }
+    Ok(())
+}
+
+/// DEV/test-only reset used by the onboarding playground. Release builds keep
+/// the command registered so an accidental call fails with a stable code,
+/// before any profile, scope or runtime path is inspected.
+#[tauri::command]
+pub(crate) fn runtime_playground_local_reset(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    chat: State<'_, direct_chat::DirectChatState>,
+    onboarding: State<'_, onboarding::OnboardingNativeState>,
+    profile_id: String,
+) -> Result<(), AccountScopeError> {
+    playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
+    #[cfg(target_os = "windows")]
+    {
+        let _ = (app, scopes, chat, onboarding, profile_id);
+        return Err(failure("local_runtime_unsupported"));
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let profiles = local_profiles_dir(&app).map_err(failure)?;
+        let marker = local_owner_marker_path(&app).map_err(failure)?;
+        reset_playground_scope_at(&profiles, &marker, &scopes, &profile_id, |_| {
+            direct_chat::teardown(&chat);
+            onboarding::teardown(&onboarding);
+            crate::live_screen::teardown(&app);
+        })
+        .map_err(failure)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    #[cfg(not(target_os = "windows"))]
-    use super::validate_or_claim_local_owner;
     use super::{
         create_local_profile_at, derive_local_scope, derive_scope, load_local_scope_at,
-        local_runtime_allowed, AccountScopeState,
+        local_runtime_allowed, playground_reset_enabled, AccountScopeState,
     };
+    #[cfg(not(target_os = "windows"))]
+    use super::{reset_playground_scope_at, validate_or_claim_local_owner};
 
     #[test]
     fn digest_is_stable_opaque_and_account_separated() {
@@ -672,5 +750,112 @@ mod tests {
         );
         assert!(!home.join(".desktop-account-scope").exists());
         fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn playground_reset_is_unavailable_in_production() {
+        assert_eq!(
+            playground_reset_enabled(false),
+            Err("playground_reset_unavailable")
+        );
+        assert!(playground_reset_enabled(true).is_ok());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn playground_a_reset_b_releases_only_exact_runtime_binding() {
+        use std::{cell::Cell, fs, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-playground-reset-{nonce}"));
+        let profiles = root.join("app-data/local-profiles");
+        let accounts = root.join("app-data/accounts");
+        let runtime = root.join("home/.jht");
+        let owner = runtime.join(".desktop-account-scope");
+        let credentials = runtime.join("credentials/provider-preserved");
+        let a = create_local_profile_at(&profiles).unwrap();
+        let b = create_local_profile_at(&profiles).unwrap();
+        let scope_a = load_local_scope_at(&profiles, &a.profile_id).unwrap();
+        let scope_b = load_local_scope_at(&profiles, &b.profile_id).unwrap();
+        fs::create_dir_all(accounts.join(scope_a.digest())).unwrap();
+        fs::write(
+            accounts
+                .join(scope_a.digest())
+                .join("direct-chat-host.json"),
+            b"synthetic-scoped-host\n",
+        )
+        .unwrap();
+        fs::create_dir_all(credentials.parent().unwrap()).unwrap();
+        fs::write(&credentials, b"synthetic-provider-state\n").unwrap();
+        validate_or_claim_local_owner(&runtime, &scope_a).unwrap();
+
+        let state = AccountScopeState::default();
+        *state.inner.write().unwrap() = Some(scope_a.clone());
+        let torn_down = Cell::new(false);
+        reset_playground_scope_at(&profiles, &owner, &state, &a.profile_id, |active| {
+            assert!(active.is_none());
+            torn_down.set(true);
+        })
+        .unwrap();
+
+        assert!(torn_down.get());
+        assert!(state.active().is_err());
+        assert!(!owner.exists());
+        assert!(profiles.join(format!("{}.json", a.profile_id)).is_file());
+        assert!(profiles.join(format!("{}.json", b.profile_id)).is_file());
+        assert_eq!(
+            fs::read(&credentials).unwrap(),
+            b"synthetic-provider-state\n"
+        );
+        assert!(accounts
+            .join(scope_a.digest())
+            .join("direct-chat-host.json")
+            .is_file());
+        assert!(!accounts.join(scope_b.digest()).exists());
+
+        validate_or_claim_local_owner(&runtime, &scope_b).unwrap();
+        assert_eq!(
+            validate_or_claim_local_owner(&runtime, &scope_a),
+            Err("local_account_owner_mismatch")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn playground_reset_rejects_a_foreign_owner_without_teardown_or_mutation() {
+        use std::{cell::Cell, fs, time::SystemTime};
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-playground-deny-{nonce}"));
+        let profiles = root.join("app-data/local-profiles");
+        let runtime = root.join("home/.jht");
+        let owner = runtime.join(".desktop-account-scope");
+        let a = create_local_profile_at(&profiles).unwrap();
+        let foreign = create_local_profile_at(&profiles).unwrap();
+        let scope_a = load_local_scope_at(&profiles, &a.profile_id).unwrap();
+        let scope_foreign = load_local_scope_at(&profiles, &foreign.profile_id).unwrap();
+        validate_or_claim_local_owner(&runtime, &scope_foreign).unwrap();
+        let before = fs::read(&owner).unwrap();
+        let state = AccountScopeState::default();
+        *state.inner.write().unwrap() = Some(scope_a.clone());
+        let torn_down = Cell::new(false);
+
+        assert_eq!(
+            reset_playground_scope_at(&profiles, &owner, &state, &a.profile_id, |_| {
+                torn_down.set(true);
+            }),
+            Err("local_account_owner_mismatch")
+        );
+        assert!(!torn_down.get());
+        assert_eq!(state.active().unwrap(), scope_a);
+        assert_eq!(fs::read(&owner).unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
     }
 }

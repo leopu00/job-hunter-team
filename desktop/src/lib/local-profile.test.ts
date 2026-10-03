@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateDesktopLocalScope,
   createDesktopLocalProfile,
+  resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 import {
   activateSavedLocalProfile,
@@ -9,17 +10,20 @@ import {
   createAndActivateLocalProfile,
   localIdentitySelected,
   readLocalProfile,
+  resetPlaygroundLocalProfile,
 } from "./local-profile";
 
 vi.mock("./desktop-account-scope", () => ({
   activateDesktopLocalScope: vi.fn(),
   createDesktopLocalProfile: vi.fn(),
+  resetDesktopPlaygroundLocalScope: vi.fn(),
 }));
 
 beforeEach(() => {
   localStorage.clear();
   vi.resetAllMocks();
   vi.mocked(activateDesktopLocalScope).mockResolvedValue();
+  vi.mocked(resetDesktopPlaygroundLocalScope).mockResolvedValue();
 });
 
 describe("local identity persistence", () => {
@@ -68,5 +72,38 @@ describe("local identity persistence", () => {
     clearLocalIdentitySelection();
     expect(localIdentitySelected()).toBe(false);
     expect(readLocalProfile()?.displayName).toBe("Ada Locale");
+  });
+
+  it("resets A before forgetting its playground identity and onboarding marker", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
+    await createAndActivateLocalProfile("Ada Locale");
+    localStorage.setItem(
+      "jht.desktop.onboarding.local:opaque-profile-a",
+      "started-v1",
+    );
+
+    await resetPlaygroundLocalProfile();
+
+    expect(resetDesktopPlaygroundLocalScope).toHaveBeenCalledWith("opaque-profile-a");
+    expect(readLocalProfile()).toBeNull();
+    expect(localIdentitySelected()).toBe(false);
+    expect(localStorage.getItem("jht.desktop.onboarding.local:opaque-profile-a")).toBeNull();
+  });
+
+  it("preserves A renderer identity when the native reset fails closed", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
+    await createAndActivateLocalProfile("Ada Locale");
+    vi.mocked(resetDesktopPlaygroundLocalScope).mockRejectedValue({
+      code: "playground_reset_unavailable",
+    });
+
+    await expect(resetPlaygroundLocalProfile()).rejects.toEqual({
+      code: "playground_reset_unavailable",
+    });
+    expect(readLocalProfile()).toEqual({
+      profileId: "opaque-profile-a",
+      displayName: "Ada Locale",
+    });
+    expect(localIdentitySelected()).toBe(true);
   });
 });

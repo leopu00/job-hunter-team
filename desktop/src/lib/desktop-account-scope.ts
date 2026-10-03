@@ -45,3 +45,11 @@ export async function clearDesktopAccountScope(): Promise<void> {
     await invoke("runtime_account_scope_reset");
   });
 }
+
+/** DEV/test-only native reset; release builds reject it before filesystem access. */
+export async function resetDesktopPlaygroundLocalScope(profileId: string): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await serialize(async () => {
+    await invoke("runtime_playground_local_reset", { profileId });
+  });
+}

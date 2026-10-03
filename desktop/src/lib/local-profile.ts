@@ -1,6 +1,7 @@
 import {
   activateDesktopLocalScope,
   createDesktopLocalProfile,
+  resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 
 const PROFILE_KEY = "jht.desktop.local-profile.v1";
@@ -50,6 +51,15 @@ export function clearLocalIdentitySelection(store: LocalProfileStore = localStor
   store.removeItem(ACTIVE_KEY);
 }
 
+function clearLocalProfile(profileId: string, store: LocalProfileStore): void {
+  const current = readLocalProfile(store);
+  if (!current || current.profileId !== profileId) throw new Error("local-profile-changed");
+  store.removeItem(ACTIVE_KEY);
+  store.removeItem(PROFILE_KEY);
+  store.removeItem(`jht.desktop.onboarding.local:${profileId}`);
+  if (readLocalProfile(store) !== null) throw new Error("local-profile-not-cleared");
+}
+
 function saveLocalProfile(profile: LocalProfile, store: LocalProfileStore): void {
   store.setItem(PROFILE_KEY, JSON.stringify(profile));
   const saved = readLocalProfile(store);
@@ -88,4 +98,18 @@ export async function activateSavedLocalProfile(
   await activateDesktopLocalScope(profile.profileId);
   selectLocalIdentity(store);
   return profile;
+}
+
+/**
+ * Product entrypoint for the DEV onboarding playground reset. Native scope and
+ * runtime ownership are released first; renderer identity/checkpoint data is
+ * forgotten only after the backend confirms teardown.
+ */
+export async function resetPlaygroundLocalProfile(
+  store: LocalProfileStore = localStorage,
+): Promise<void> {
+  const profile = readLocalProfile(store);
+  if (!profile) throw new Error("local-profile-missing");
+  await resetDesktopPlaygroundLocalScope(profile.profileId);
+  clearLocalProfile(profile.profileId, store);
 }

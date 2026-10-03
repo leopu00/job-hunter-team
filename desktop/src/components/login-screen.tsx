@@ -53,6 +53,7 @@ export interface LoginScreenProps {
   activateLocal?: () => Promise<LocalProfile>;
   onLocalReady?: () => void;
   onChooseGoogle?: () => boolean | Promise<boolean>;
+  onResetLocalPlayground?: () => Promise<void>;
 }
 
 type CopyState = "idle" | "copied" | "failed";
@@ -75,6 +76,7 @@ export function LoginScreen({
   activateLocal = activateSavedLocalProfile,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
   onChooseGoogle,
+  onResetLocalPlayground,
 }: LoginScreenProps) {
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
@@ -178,6 +180,21 @@ export function LoginScreen({
     }
   }, [createLocal, localBusy, localName, onLocalReady]);
 
+  const resetLocalPlayground = useCallback(async () => {
+    if (!onResetLocalPlayground || localBusy) return;
+    setLocalBusy(true);
+    setLocalError(false);
+    try {
+      await onResetLocalPlayground();
+      setLocalName("");
+      setLocalSetup(true);
+    } catch {
+      setLocalError(true);
+    } finally {
+      setLocalBusy(false);
+    }
+  }, [localBusy, onResetLocalPlayground]);
+
   return (
     <main className="page login-screen">
       <section className="login-card" aria-labelledby="login-title">
@@ -272,6 +289,16 @@ export function LoginScreen({
             >
               {localBusy ? "Preparazione…" : "Usa in locale"}
             </button>
+            {onResetLocalPlayground && readLocal() && (
+              <button
+                className="login-card__secondary"
+                type="button"
+                onClick={() => void resetLocalPlayground()}
+                disabled={localBusy}
+              >
+                Reimposta identità locale di test
+              </button>
+            )}
           </>
         )}
 
