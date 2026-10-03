@@ -1,6 +1,7 @@
+use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_permissions, ssh_base_args, validate_host, ExecutionHost,
-    ProcessResult, ValidatedHost,
+    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -98,9 +99,11 @@ struct DirectChatInner {
 }
 
 struct Connection {
+    scope: AccountScope,
     host: ExecutionHost,
     validated: ValidatedHost,
     local_wrapper: Option<PathBuf>,
+    local_owner_marker: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
 }
@@ -207,17 +210,31 @@ fn emit(inner: &DirectChatInner, event: DirectChatEvent) {
     }
 }
 
-fn connection_config_path(app: &tauri::AppHandle) -> Result<PathBuf, DirectChatError> {
+fn connection_config_path(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+) -> Result<PathBuf, DirectChatError> {
     app.path()
         .app_local_data_dir()
-        .map(|path| path.join("direct-chat-host.json"))
+        .map(|path| connection_config_path_at(&path, scope))
         .map_err(|_| failure("storage_unavailable"))
 }
 
-fn persist_host(app: &tauri::AppHandle, host: &ExecutionHost) -> Result<(), DirectChatError> {
-    let path = connection_config_path(app)?;
+fn connection_config_path_at(root: &Path, scope: &AccountScope) -> PathBuf {
+    root.join("accounts")
+        .join(scope.digest())
+        .join("direct-chat-host.json")
+}
+
+fn persist_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<(), DirectChatError> {
+    let path = connection_config_path(app, scope)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|_| failure("storage_unavailable"))?;
+        set_private_dir_permissions(parent).map_err(failure)?;
     }
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     let bytes = serde_json::to_vec(host).map_err(|_| failure("storage_unavailable"))?;
@@ -228,18 +245,26 @@ fn persist_host(app: &tauri::AppHandle, host: &ExecutionHost) -> Result<(), Dire
 
 pub(crate) fn persist_onboarding_host(
     app: &tauri::AppHandle,
+    scope: &AccountScope,
     host: &ExecutionHost,
 ) -> Result<(), &'static str> {
-    persist_host(app, host).map_err(|error| error.code)
+    persist_host(app, scope, host).map_err(|error| error.code)
 }
 
-fn load_host(app: &tauri::AppHandle) -> Result<ExecutionHost, DirectChatError> {
-    let raw = fs::read(connection_config_path(app)?).map_err(|_| failure("host_not_configured"))?;
+fn load_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+) -> Result<ExecutionHost, DirectChatError> {
+    let raw = fs::read(connection_config_path(app, scope)?)
+        .map_err(|_| failure("host_not_configured"))?;
     serde_json::from_slice(&raw).map_err(|_| failure("host_config_invalid"))
 }
 
-pub(crate) fn load_persisted_host(app: &tauri::AppHandle) -> Result<ExecutionHost, &'static str> {
-    load_host(app).map_err(|error| error.code)
+pub(crate) fn load_persisted_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+) -> Result<ExecutionHost, &'static str> {
+    load_host(app, scope).map_err(|error| error.code)
 }
 
 fn control_args(
@@ -333,16 +358,31 @@ fn run_connection(
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
     match &connection.validated {
-        ValidatedHost::Local => crate::onboarding::run_verified_local_wrapper(
-            connection
-                .local_wrapper
-                .as_deref()
-                .ok_or_else(|| failure("runtime_missing"))?,
-            local_args,
-            input,
-            timeout,
-        )
-        .map_err(failure),
+        ValidatedHost::Local => {
+            #[cfg(target_os = "windows")]
+            return Err(failure("local_runtime_unsupported"));
+            #[cfg(not(target_os = "windows"))]
+            {
+                crate::account_scope::verify_local_runtime_owner(
+                    connection
+                        .local_owner_marker
+                        .as_deref()
+                        .ok_or_else(|| failure("local_account_owner_unavailable"))?,
+                    &connection.scope,
+                )
+                .map_err(failure)?;
+                crate::onboarding::run_verified_local_wrapper(
+                    connection
+                        .local_wrapper
+                        .as_deref()
+                        .ok_or_else(|| failure("runtime_missing"))?,
+                    local_args,
+                    input,
+                    timeout,
+                )
+                .map_err(failure)
+            }
+        }
         ValidatedHost::Vps { .. } => run_ssh(
             &connection.validated,
             remote_command,
@@ -379,24 +419,33 @@ fn probe(connection: &Connection) -> DirectChatStatus {
 
 fn connect_impl(
     app: &tauri::AppHandle,
+    scope: AccountScope,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
     let validated = validate_host(app, &host).map_err(failure)?;
-    let (local_wrapper, control_path, tunnel) = match &validated {
-        ValidatedHost::Local => (
-            Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
-            None,
-            None,
-        ),
+    let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
+        ValidatedHost::Local => {
+            #[cfg(target_os = "windows")]
+            return Err(failure("local_runtime_unsupported"));
+            #[cfg(not(target_os = "windows"))]
+            (
+                Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
+                Some(crate::account_scope::local_owner_marker_path(app).map_err(failure)?),
+                None,
+                None,
+            )
+        }
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_tunnel(&validated)?;
-            (None, Some(path), Some(child))
+            (None, None, Some(path), Some(child))
         }
     };
     let mut connection = Connection {
+        scope: scope.clone(),
         host,
         validated,
         local_wrapper,
+        local_owner_marker,
         control_path,
         tunnel,
     };
@@ -405,36 +454,45 @@ fn connect_impl(
         close_connection(&mut connection);
         return Err(failure(state.code.unwrap_or("connect_failed")));
     }
-    persist_host(app, &connection.host)?;
+    persist_host(app, &scope, &connection.host)?;
     Ok(connection)
 }
 
-#[tauri::command]
-pub(crate) async fn direct_chat_connect(
+async fn connect_scoped(
     app: tauri::AppHandle,
-    state: State<'_, DirectChatState>,
+    state: &DirectChatState,
+    scopes: AccountScopeState,
+    expected: AccountScope,
     host: ExecutionHost,
 ) -> Result<DirectChatStatus, DirectChatError> {
-    // A reconnect owns exactly one transport. Dropping the previous value
-    // sends `ssh -O exit`, kills the master if necessary and removes its
-    // control socket before a new one is attempted.
-    state
-        .inner
-        .connection
-        .lock()
-        .map_err(|_| failure("state_failed"))?
-        .take();
-    emit(
-        &state.inner,
-        DirectChatEvent::Status {
-            status: status("connecting", None),
-        },
-    );
-    let result = tauri::async_runtime::spawn_blocking(move || connect_impl(&app, host))
-        .await
-        .map_err(|_| failure("connect_failed"))?;
+    {
+        let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+        state
+            .inner
+            .connection
+            .lock()
+            .map_err(|_| failure("state_failed"))?
+            .take();
+        emit(
+            &state.inner,
+            DirectChatEvent::Status {
+                status: status("connecting", None),
+            },
+        );
+    }
+    let worker_scopes = scopes.clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = worker_scopes
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        connect_impl(&app, worker_expected, host)
+    })
+    .await
+    .map_err(|_| failure("connect_failed"))?;
     match result {
         Ok(connection) => {
+            let _scope = scopes.lock_expected(&expected).map_err(failure)?;
             let mut slot = state
                 .inner
                 .connection
@@ -451,6 +509,7 @@ pub(crate) async fn direct_chat_connect(
             Ok(ready)
         }
         Err(error) => {
+            let _scope = scopes.lock_expected(&expected).map_err(failure)?;
             let failed = status("error", Some(error.code));
             emit(
                 &state.inner,
@@ -464,41 +523,68 @@ pub(crate) async fn direct_chat_connect(
 }
 
 #[tauri::command]
+pub(crate) async fn direct_chat_connect(
+    app: tauri::AppHandle,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    host: ExecutionHost,
+) -> Result<DirectChatStatus, DirectChatError> {
+    let expected = scopes.active().map_err(failure)?;
+    connect_scoped(app, &state, scopes.inner().clone(), expected, host).await
+}
+
+#[tauri::command]
 pub(crate) fn direct_chat_subscribe(
     state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
     on_event: Channel<DirectChatEvent>,
 ) -> Result<DirectChatStatus, DirectChatError> {
+    let scope = scopes.lock_active().map_err(failure)?;
     state
         .inner
         .subscribers
         .lock()
         .map_err(|_| failure("state_failed"))?
         .push(on_event);
-    direct_chat_status(state)
+    status_for_scope(&state.inner, scope.scope())
+}
+
+fn status_for_scope(
+    inner: &DirectChatInner,
+    scope: &AccountScope,
+) -> Result<DirectChatStatus, DirectChatError> {
+    let slot = inner
+        .connection
+        .lock()
+        .map_err(|_| failure("state_failed"))?;
+    match slot.as_ref() {
+        Some(connection) if &connection.scope == scope => Ok(probe(connection)),
+        Some(_) => Err(failure("account_scope_mismatch")),
+        None => Ok(status("disconnected", None)),
+    }
 }
 
 #[tauri::command]
 pub(crate) fn direct_chat_status(
     state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
 ) -> Result<DirectChatStatus, DirectChatError> {
-    let slot = state
-        .inner
-        .connection
-        .lock()
-        .map_err(|_| failure("state_failed"))?;
-    Ok(slot
-        .as_ref()
-        .map(probe)
-        .unwrap_or_else(|| status("disconnected", None)))
+    let scope = scopes.lock_active().map_err(failure)?;
+    status_for_scope(&state.inner, scope.scope())
 }
 
 #[tauri::command]
 pub(crate) async fn direct_chat_reconnect(
     app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
 ) -> Result<DirectChatStatus, DirectChatError> {
-    let host = load_host(&app)?;
-    direct_chat_connect(app, state, host).await
+    let expected = scopes.active().map_err(failure)?;
+    let host = {
+        let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+        load_host(&app, &expected)?
+    };
+    connect_scoped(app, &state, scopes.inner().clone(), expected, host).await
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -550,6 +636,7 @@ fn parse_json<T: for<'de> Deserialize<'de>>(
 #[tauri::command]
 pub(crate) async fn direct_chat_read(
     state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
     agent_id: String,
     cursor: Option<String>,
 ) -> Result<DirectChatPage, DirectChatError> {
@@ -560,14 +647,23 @@ pub(crate) async fn direct_chat_read(
     {
         return Err(failure("invalid_request"));
     }
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let inner = Arc::clone(&state.inner);
     let agent_for_event = agent_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
         let slot = inner
             .connection
             .lock()
             .map_err(|_| failure("state_failed"))?;
         let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+        if &connection.scope != scope.scope() {
+            return Err(failure("account_scope_mismatch"));
+        }
         parse_json::<DirectChatPage>(
             run_python(
                 connection,
@@ -580,6 +676,7 @@ pub(crate) async fn direct_chat_read(
     })
     .await
     .map_err(|_| failure("read_failed"))?;
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     match result {
         Ok(page) => {
             emit(
@@ -705,6 +802,7 @@ fn send_impl(
 #[tauri::command]
 pub(crate) async fn direct_chat_send(
     state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
     agent_id: String,
     text: String,
     client_message_id: String,
@@ -722,15 +820,34 @@ pub(crate) async fn direct_chat_send(
     {
         return Err(failure("invalid_request"));
     }
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let inner = Arc::clone(&state.inner);
     let agent = agent_id;
     let id = client_message_id;
     let mut sensitive = Zeroizing::new(trimmed.to_string());
     let owned = sensitive.to_string();
     sensitive.zeroize();
-    let result = tauri::async_runtime::spawn_blocking(move || send_impl(&inner, agent, owned, id))
-        .await
-        .map_err(|_| failure("send_failed"))?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        {
+            let slot = inner
+                .connection
+                .lock()
+                .map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            if &connection.scope != scope.scope() {
+                return Err(failure("account_scope_mismatch"));
+            }
+        }
+        send_impl(&inner, agent, owned, id)
+    })
+    .await
+    .map_err(|_| failure("send_failed"))?;
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     match result {
         Ok(receipt) => {
             emit(
@@ -755,12 +872,22 @@ pub(crate) async fn direct_chat_send(
 }
 
 #[tauri::command]
-pub(crate) fn direct_chat_close(state: State<'_, DirectChatState>) -> Result<(), DirectChatError> {
+pub(crate) fn direct_chat_close(
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), DirectChatError> {
+    let scope = scopes.lock_active().map_err(failure)?;
     let mut slot = state
         .inner
         .connection
         .lock()
         .map_err(|_| failure("state_failed"))?;
+    if slot
+        .as_ref()
+        .is_some_and(|connection| &connection.scope != scope.scope())
+    {
+        return Err(failure("account_scope_mismatch"));
+    }
     if let Some(mut connection) = slot.take() {
         close_connection(&mut connection);
     }
@@ -773,11 +900,22 @@ pub(crate) fn direct_chat_close(state: State<'_, DirectChatState>) -> Result<(),
     Ok(())
 }
 
+pub(crate) fn teardown(state: &DirectChatState) {
+    if let Ok(mut slot) = state.inner.connection.lock() {
+        if let Some(mut connection) = slot.take() {
+            close_connection(&mut connection);
+        }
+    }
+    if let Ok(mut subscribers) = state.inner.subscribers.lock() {
+        subscribers.clear();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        hex_encode, parse_json, probe, session_for, status, valid_agent, Connection,
-        DirectChatPage, ProcessResult,
+        connection_config_path_at, hex_encode, parse_json, probe, session_for, status, valid_agent,
+        Connection, DirectChatPage, ProcessResult,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
 
@@ -825,6 +963,29 @@ mod tests {
         assert_eq!(hex_encode(b"a'b"), "612762");
     }
 
+    #[test]
+    fn vps_host_store_is_a_to_logout_to_b_empty_to_a_restored_without_legacy_fallback() {
+        use std::path::Path;
+
+        let root = Path::new("/synthetic/app-data");
+        let a =
+            crate::account_scope::AccountScope::synthetic(b"00000000-0000-4000-8000-000000000001");
+        let b =
+            crate::account_scope::AccountScope::synthetic(b"00000000-0000-4000-8000-000000000002");
+        let a_path = connection_config_path_at(root, &a);
+        let b_path = connection_config_path_at(root, &b);
+        assert_ne!(a_path, b_path);
+        assert_eq!(
+            a_path,
+            root.join("accounts")
+                .join(a.digest())
+                .join("direct-chat-host.json")
+        );
+        assert_eq!(connection_config_path_at(root, &a), a_path);
+        assert_ne!(a_path, root.join("direct-chat-host.json"));
+        assert!(!b_path.starts_with(root.join(a.digest())));
+    }
+
     #[cfg(unix)]
     #[test]
     fn local_probe_uses_verified_wrapper_and_redacts_runtime_failure() {
@@ -847,10 +1008,15 @@ mod tests {
         )
         .unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-a");
+        let owner = dir.join(".desktop-account-scope");
+        fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
         let connection = Connection {
+            scope,
             host: ExecutionHost::Local,
             validated: ValidatedHost::Local,
             local_wrapper: Some(wrapper.clone()),
+            local_owner_marker: Some(owner),
             control_path: None,
             tunnel: None,
         };

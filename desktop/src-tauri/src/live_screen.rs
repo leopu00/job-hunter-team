@@ -13,15 +13,22 @@
 //!   `~/.jht/live-screen/viewer-password` (0600, bind-mount del container):
 //!   si legge solo se è un file regolare, piccolo e con la forma attesa.
 
+use crate::account_scope::AccountScopeState;
 use serde::Serialize;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 use zeroize::Zeroizing;
 
 pub(crate) const WINDOW_LABEL: &str = "live-screen";
+
+pub(crate) fn teardown(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+        let _ = window.close();
+    }
+}
 const DEFAULT_PORT: u16 = 6080;
 const PASSWORD_RELATIVE_PATH: [&str; 2] = ["live-screen", "viewer-password"];
 const PASSWORD_LEN: usize = 8;
@@ -44,7 +51,12 @@ pub(crate) struct LiveScreenSession {
 /// `async` è obbligatorio: su Windows creare una finestra da un comando
 /// sincrono blocca il thread che dovrebbe disegnarla.
 #[tauri::command]
-pub(crate) async fn open_live_screen(app: tauri::AppHandle) -> Result<(), LiveScreenError> {
+pub(crate) async fn open_live_screen(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), LiveScreenError> {
+    let scope = scopes.lock_active().map_err(failure)?;
+    crate::account_scope::validate_local_runtime(&app, scope.scope()).map_err(failure)?;
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
         let _ = window.unminimize();
         let _ = window.show();
@@ -70,7 +82,10 @@ pub(crate) async fn open_live_screen(app: tauri::AppHandle) -> Result<(), LiveSc
 #[tauri::command]
 pub(crate) fn live_screen_session(
     app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
 ) -> Result<LiveScreenSession, LiveScreenError> {
+    let scope = scopes.lock_active().map_err(failure)?;
+    crate::account_scope::validate_local_runtime(&app, scope.scope()).map_err(failure)?;
     let port = parse_port(std::env::var("JHT_LIVE_SCREEN_PORT").ok().as_deref())?;
     let jht_home = jht_home_dir(
         std::env::var_os("JHT_HOME").map(PathBuf::from),

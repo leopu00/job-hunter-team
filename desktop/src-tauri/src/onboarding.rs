@@ -1,3 +1,4 @@
+use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::runtime_host::{
     run_program, run_ssh, set_private_permissions, ssh_base_args, validate_host, ExecutionHost,
     ProcessResult, ValidatedHost,
@@ -29,6 +30,8 @@ const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
 const LOCAL_RUNTIME_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+const LOCAL_RUNTIME_VERIFY_ATTEMPTS: usize = 8;
+const LOCAL_RUNTIME_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
@@ -63,7 +66,20 @@ impl Drop for OnboardingNativeState {
     }
 }
 
+pub(crate) fn teardown(state: &OnboardingNativeState) {
+    if let Ok(mut slot) = state.interactive.lock() {
+        if let Some(session) = slot.take() {
+            if let Ok(mut process) = session.child.lock() {
+                let _ = process.kill();
+                let _ = process.wait();
+            }
+        }
+    }
+    state.preparing.store(false, Ordering::Release);
+}
+
 struct InteractiveSession {
+    scope: AccountScope,
     id: String,
     child: Arc<Mutex<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
@@ -156,6 +172,29 @@ fn failure(code: &'static str) -> OnboardingError {
         "podman_not_ready" => (
             "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
             true,
+        ),
+        "runtime_download_failed" => (
+            "Non riesco a scaricare il runtime verificato. Controlla la connessione e riprova.",
+            true,
+        ),
+        "runtime_install_failed" => (
+            "Il runtime locale non è stato installato correttamente. Riprova.",
+            true,
+        ),
+        "runtime_missing" => (
+            "Il runtime locale verificato non è disponibile. Configuralo di nuovo.",
+            true,
+        ),
+        "runtime_install_unsupported" => (
+            "Il runtime locale non è supportato su questo sistema.",
+            false,
+        ),
+        "installer_digest_missing"
+        | "installer_digest_invalid"
+        | "installer_digest_mismatch"
+        | "installer_payload_invalid" => (
+            "Il pacchetto runtime non supera la verifica di integrità.",
+            false,
         ),
         "container_start_failed" => (
             "Il container JHT non si è avviato. Controlla il runtime e riprova.",
@@ -435,13 +474,7 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
                 });
                 if let Err(error) = installed {
                     trace_local_runtime("runtime", "install_failed");
-                    return if error.code == "timeout" {
-                        Err(error)
-                    } else if podman_path().is_none() {
-                        Err(failure("podman_missing"))
-                    } else {
-                        Err(error)
-                    };
+                    return Err(error);
                 }
             } else {
                 trace_local_runtime("runtime", "install_reused");
@@ -479,7 +512,16 @@ fn ensure_local_podman(podman: &Path) -> Result<(), OnboardingError> {
 
 #[cfg(target_os = "macos")]
 fn ensure_local_podman_with(
+    run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
+) -> Result<(), OnboardingError> {
+    ensure_local_podman_with_retry(run, thread::sleep, LOCAL_RUNTIME_VERIFY_ATTEMPTS)
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_local_podman_with_retry(
     mut run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
+    mut pause: impl FnMut(Duration),
+    attempts: usize,
 ) -> Result<(), OnboardingError> {
     let info = ["--connection", PODMAN_MACHINE_NAME, "info"];
     match run(&info, LOCAL_RUNTIME_TIMEOUT) {
@@ -517,21 +559,34 @@ fn ensure_local_podman_with(
         Ok(result) if result.success() => {}
         Err("process_timeout") => return Err(failure("timeout")),
         _ => {
-            trace_local_runtime("runtime", "podman_start_failed");
-            return Err(failure("podman_start_failed"));
+            // `machine start` can race another starter and report failure even
+            // though the requested effect is already true. Verify once before
+            // returning the sanitized start error.
+            return match run(&info, LOCAL_RUNTIME_TIMEOUT) {
+                Ok(result) if result.success() => Ok(()),
+                Err("process_timeout") => Err(failure("timeout")),
+                _ => {
+                    trace_local_runtime("runtime", "podman_start_failed");
+                    Err(failure("podman_start_failed"))
+                }
+            };
         }
     }
-    match run(&info, LOCAL_RUNTIME_TIMEOUT) {
-        Ok(result) if result.success() => {
-            trace_local_runtime("runtime", "podman_ready");
-            Ok(())
+    for attempt in 0..attempts.max(1) {
+        match run(&info, LOCAL_RUNTIME_TIMEOUT) {
+            Ok(result) if result.success() => {
+                trace_local_runtime("runtime", "podman_ready");
+                return Ok(());
+            }
+            Err("process_timeout") => return Err(failure("timeout")),
+            _ => {}
         }
-        Err("process_timeout") => Err(failure("timeout")),
-        _ => {
-            trace_local_runtime("runtime", "podman_not_ready");
-            Err(failure("podman_not_ready"))
+        if attempt + 1 < attempts.max(1) {
+            pause(LOCAL_RUNTIME_VERIFY_INTERVAL);
         }
     }
+    trace_local_runtime("runtime", "podman_not_ready");
+    Err(failure("podman_not_ready"))
 }
 
 const REMOTE_INSTALL: &str = r#"set -eu
@@ -665,6 +720,17 @@ fn run_local(
     run_verified_local_wrapper(wrapper, args, None, timeout)
 }
 
+fn run_scoped_local(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    wrapper: &Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    crate::account_scope::validate_local_runtime(app, scope)?;
+    run_local(wrapper, args, timeout)
+}
+
 pub(crate) fn run_verified_local_wrapper(
     wrapper: &Path,
     args: &[&str],
@@ -693,6 +759,7 @@ pub(crate) fn run_verified_local_wrapper(
     )
 }
 
+#[cfg(test)]
 fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingError> {
     start_and_verify_local_container_with(
         |args, timeout| run_local(wrapper, args, timeout),
@@ -706,14 +773,11 @@ fn start_and_verify_local_container_with(
     mut pause: impl FnMut(Duration),
     attempts: usize,
 ) -> Result<(), OnboardingError> {
-    match run(&["up"], PREPARE_TIMEOUT) {
-        Ok(result) if result.success() => {}
-        Err("process_timeout") => return Err(failure("container_timeout")),
-        _ => {
-            trace_local_runtime("container", "start_failed");
-            return Err(failure("container_start_failed"));
-        }
-    }
+    let requested = match run(&["up"], PREPARE_TIMEOUT) {
+        Ok(result) if result.success() => Ok(()),
+        Err("process_timeout") => Err("container_timeout"),
+        _ => Err("container_start_failed"),
+    };
 
     for attempt in 0..attempts.max(1) {
         match run(&["status"], LOCAL_CONTAINER_VERIFY_TIMEOUT) {
@@ -728,12 +792,21 @@ fn start_and_verify_local_container_with(
             pause(LOCAL_CONTAINER_VERIFY_INTERVAL);
         }
     }
-    trace_local_runtime("container", "not_ready");
-    Err(failure("container_not_ready"))
+    match requested {
+        Err(code) => {
+            trace_local_runtime("container", "start_failed");
+            Err(failure(code))
+        }
+        Ok(()) => {
+            trace_local_runtime("container", "not_ready");
+            Err(failure("container_not_ready"))
+        }
+    }
 }
 
 fn prepare_impl(
     app: tauri::AppHandle,
+    scope: AccountScope,
     submission: OnboardingSubmission,
     pairing_token: Option<String>,
     channel: Channel<OnboardingProgress>,
@@ -758,7 +831,11 @@ fn prepare_impl(
                 OnboardingProgressStage::Container,
                 "Avvio il container Job Hunter Team",
             );
-            start_and_verify_local_container(&wrapper)?;
+            start_and_verify_local_container_with(
+                |args, timeout| run_scoped_local(&app, &scope, &wrapper, args, timeout),
+                thread::sleep,
+                LOCAL_CONTAINER_VERIFY_ATTEMPTS,
+            )?;
             progress(
                 &channel,
                 OnboardingProgressStage::Container,
@@ -775,12 +852,24 @@ fn prepare_impl(
                 SubscriptionProvider::Kimi => "kimi",
             };
             ensure_success_with_timeout(
-                run_local(&wrapper, &["providers", "use", use_id], COMMAND_TIMEOUT),
+                run_scoped_local(
+                    &app,
+                    &scope,
+                    &wrapper,
+                    &["providers", "use", use_id],
+                    COMMAND_TIMEOUT,
+                ),
                 "provider_config_failed",
                 "provider_timeout",
             )?;
             ensure_success_with_timeout(
-                run_local(&wrapper, &["providers", "update", use_id], PREPARE_TIMEOUT),
+                run_scoped_local(
+                    &app,
+                    &scope,
+                    &wrapper,
+                    &["providers", "update", use_id],
+                    PREPARE_TIMEOUT,
+                ),
                 "provider_install_failed",
                 "provider_timeout",
             )?;
@@ -836,12 +925,12 @@ fn prepare_impl(
     if let Some(value) = pairing.as_mut() {
         value.zeroize();
     }
-    let snapshot = snapshot_impl(&app, &validated)?;
+    let snapshot = snapshot_impl(&app, &scope, &validated)?;
     if !snapshot.container_running {
         trace_local_runtime("container", "snapshot_not_ready");
         return Err(failure("container_not_ready"));
     }
-    crate::direct_chat::persist_onboarding_host(&app, &submission.host).map_err(failure)?;
+    crate::direct_chat::persist_onboarding_host(&app, &scope, &submission.host).map_err(failure)?;
     Ok(snapshot)
 }
 
@@ -849,10 +938,12 @@ fn prepare_impl(
 pub(crate) async fn onboarding_prepare(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     submission: OnboardingSubmission,
     pairing_token: Option<String>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -860,12 +951,18 @@ pub(crate) async fn onboarding_prepare(
     {
         return Err(failure("operation_in_progress"));
     }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        prepare_impl(app, submission, pairing_token, on_progress)
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        prepare_impl(app, worker_expected, submission, pairing_token, on_progress)
     })
     .await
     .unwrap_or_else(|_| Err(failure("runtime_failed")));
     state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
 }
 
@@ -943,6 +1040,7 @@ fn local_profile_ready(home: &Path) -> bool {
 
 fn snapshot_impl(
     app: &tauri::AppHandle,
+    scope: &AccountScope,
     host: &ValidatedHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     match host {
@@ -955,13 +1053,14 @@ fn snapshot_impl(
             Ok(parse_snapshot(&result.stdout_text()))
         }
         ValidatedHost::Local => {
+            crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
             let Some(wrapper) = wrapper_path(app) else {
                 return Ok(OnboardingSnapshot::default());
             };
-            let container =
-                run_local(&wrapper, &["status"], SNAPSHOT_TIMEOUT).is_ok_and(|r| r.success());
+            let container = run_scoped_local(app, scope, &wrapper, &["status"], SNAPSHOT_TIMEOUT)
+                .is_ok_and(|r| r.success());
             let team = if container {
-                run_local(&wrapper, &["team", "status"], SNAPSHOT_TIMEOUT)
+                run_scoped_local(app, scope, &wrapper, &["team", "status"], SNAPSHOT_TIMEOUT)
                     .ok()
                     .map(|r| r.stdout_text())
                     .unwrap_or_default()
@@ -1010,27 +1109,46 @@ fn snapshot_impl(
 #[tauri::command]
 pub(crate) async fn onboarding_snapshot(
     app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
         let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &validated)
+        snapshot_impl(&app, &worker_expected, &validated)
     })
     .await
-    .unwrap_or_else(|_| Err(failure("snapshot_failed")))
+    .unwrap_or_else(|_| Err(failure("snapshot_failed")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
 }
 
 #[tauri::command]
 pub(crate) async fn onboarding_resume_snapshot(
     app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let host = crate::direct_chat::load_persisted_host(&app).map_err(failure)?;
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let host =
+            crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
         let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &validated)
+        snapshot_impl(&app, &worker_expected, &validated)
     })
     .await
-    .unwrap_or_else(|_| Err(failure("snapshot_failed")))
+    .unwrap_or_else(|_| Err(failure("snapshot_failed")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
 }
 
 fn existing_team_probe_with(
@@ -1068,9 +1186,11 @@ fn existing_team_probe_with(
 pub(crate) async fn onboarding_existing_team_connect(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     request: ExistingTeamConnectRequest,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
     if !matches!(&request.host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
     }
@@ -1084,7 +1204,12 @@ pub(crate) async fn onboarding_existing_team_connect(
     {
         return Err(failure("operation_in_progress"));
     }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
         progress(
             &on_progress,
             OnboardingProgressStage::Runtime,
@@ -1110,12 +1235,14 @@ pub(crate) async fn onboarding_existing_team_connect(
             OnboardingProgressStage::Team,
             "Il team esistente è attivo e verificato",
         );
-        crate::direct_chat::persist_onboarding_host(&app, &request.host).map_err(failure)?;
+        crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
+            .map_err(failure)?;
         Ok(snapshot)
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
     state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
 }
 
@@ -1282,9 +1409,11 @@ fn stream_reader(mut reader: impl Read + Send + 'static, channel: Channel<Intera
 pub(crate) fn onboarding_provider_login(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
     on_event: Channel<InteractiveEvent>,
 ) -> Result<InteractiveStart, OnboardingError> {
+    let scope = scopes.lock_active().map_err(failure)?;
     let mut slot = state
         .interactive
         .lock()
@@ -1380,6 +1509,7 @@ pub(crate) fn onboarding_provider_login(
         thread::sleep(Duration::from_millis(100));
     });
     *slot = Some(InteractiveSession {
+        scope: scope.scope().clone(),
         id: id.clone(),
         child,
         stdin: Mutex::new(Some(stdin)),
@@ -1390,9 +1520,11 @@ pub(crate) fn onboarding_provider_login(
 #[tauri::command]
 pub(crate) fn onboarding_provider_login_input(
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     session_id: String,
     input: String,
 ) -> Result<(), OnboardingError> {
+    let scope = scopes.lock_active().map_err(failure)?;
     if input.len() > 4096 || input.contains('\0') {
         return Err(failure("invalid_input"));
     }
@@ -1403,7 +1535,7 @@ pub(crate) fn onboarding_provider_login_input(
         .map_err(|_| failure("state_failed"))?;
     let session = slot
         .as_ref()
-        .filter(|value| value.id == session_id)
+        .filter(|value| value.id == session_id && &value.scope == scope.scope())
         .ok_or_else(|| failure("session_not_found"))?;
     let mut stdin = session.stdin.lock().map_err(|_| failure("state_failed"))?;
     let writer = stdin.as_mut().ok_or_else(|| failure("session_closed"))?;
@@ -1419,13 +1551,18 @@ pub(crate) fn onboarding_provider_login_input(
 #[tauri::command]
 pub(crate) fn onboarding_provider_login_close(
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     session_id: String,
 ) -> Result<(), OnboardingError> {
+    let scope = scopes.lock_active().map_err(failure)?;
     let mut slot = state
         .interactive
         .lock()
         .map_err(|_| failure("state_failed"))?;
-    if !slot.as_ref().is_some_and(|value| value.id == session_id) {
+    if !slot
+        .as_ref()
+        .is_some_and(|value| value.id == session_id && &value.scope == scope.scope())
+    {
         return Err(failure("session_not_found"));
     }
     let session = slot.take().ok_or_else(|| failure("session_not_found"))?;
@@ -1440,9 +1577,11 @@ pub(crate) fn onboarding_provider_login_close(
 pub(crate) async fn onboarding_team_start(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -1450,7 +1589,12 @@ pub(crate) async fn onboarding_team_start(
     {
         return Err(failure("operation_in_progress"));
     }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
         let validated = validate_host(&app, &host).map_err(failure)?;
         progress(
             &on_progress,
@@ -1461,7 +1605,13 @@ pub(crate) async fn onboarding_team_start(
             ValidatedHost::Local => {
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
                 ensure_success(
-                    run_local(&wrapper, &["team", "start"], PREPARE_TIMEOUT),
+                    run_scoped_local(
+                        &app,
+                        &worker_expected,
+                        &wrapper,
+                        &["team", "start"],
+                        PREPARE_TIMEOUT,
+                    ),
                     "team_start_failed",
                 )?;
             }
@@ -1470,7 +1620,7 @@ pub(crate) async fn onboarding_team_start(
                 "team_start_failed",
             )?,
         }
-        let snapshot = snapshot_impl(&app, &validated)?;
+        let snapshot = snapshot_impl(&app, &worker_expected, &validated)?;
         if !snapshot.assistant_running || !snapshot.captain_running {
             return Err(failure("team_verify_failed"));
         }
@@ -1479,6 +1629,7 @@ pub(crate) async fn onboarding_team_start(
     .await
     .unwrap_or_else(|_| Err(failure("team_start_failed")));
     state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
 }
 
@@ -1486,8 +1637,10 @@ pub(crate) async fn onboarding_team_start(
 pub(crate) async fn onboarding_assistant_open(
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -1495,13 +1648,24 @@ pub(crate) async fn onboarding_assistant_open(
     {
         return Err(failure("operation_in_progress"));
     }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
         let validated = validate_host(&app, &host).map_err(failure)?;
         match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
                 ensure_success(
-                    run_local(&wrapper, &["team", "start", "assistente"], COMMAND_TIMEOUT),
+                    run_scoped_local(
+                        &app,
+                        &worker_expected,
+                        &wrapper,
+                        &["team", "start", "assistente"],
+                        COMMAND_TIMEOUT,
+                    ),
                     "assistant_start_failed",
                 )?;
             }
@@ -1517,7 +1681,7 @@ pub(crate) async fn onboarding_assistant_open(
             )?,
         }
         for _ in 0..40 {
-            let snapshot = snapshot_impl(&app, &validated)?;
+            let snapshot = snapshot_impl(&app, &worker_expected, &validated)?;
             if assistant_reached(&snapshot) {
                 return Ok(snapshot);
             }
@@ -1528,6 +1692,7 @@ pub(crate) async fn onboarding_assistant_open(
     .await
     .unwrap_or_else(|_| Err(failure("assistant_start_failed")));
     state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
 }
 
@@ -1546,7 +1711,7 @@ mod tests {
     };
     #[cfg(target_os = "macos")]
     use super::{
-        ensure_local_podman, ensure_local_podman_with, local_podman_install_required,
+        ensure_local_podman, ensure_local_podman_with_retry, local_podman_install_required,
         local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS, PODMAN_MACHINE_NAME,
     };
     use crate::runtime_host::ProcessResult;
@@ -1576,14 +1741,42 @@ mod tests {
     }
 
     #[test]
-    fn local_runtime_errors_are_structured_and_contain_no_process_output() {
-        let error = failure("podman_start_failed");
-        let serialized = serde_json::to_string(&error).unwrap();
-        assert_eq!(error.code, "podman_start_failed");
-        assert!(serialized.contains("\"retryable\":true"));
-        assert!(serialized.contains("\"message\":"));
-        assert!(!serialized.contains("stderr"));
-        assert!(!serialized.contains("path"));
+    fn local_runtime_prepare_errors_preserve_sanitized_contract() {
+        for code in [
+            "podman_missing",
+            "podman_start_failed",
+            "podman_not_ready",
+            "runtime_download_failed",
+            "runtime_install_failed",
+            "runtime_missing",
+            "container_start_failed",
+            "container_not_ready",
+            "container_timeout",
+        ] {
+            let error = failure(code);
+            let serialized = serde_json::to_value(&error).unwrap();
+            assert_eq!(error.code, code);
+            assert_eq!(serialized["code"], code);
+            assert_eq!(serialized["retryable"], true);
+            assert!(serialized["message"].as_str().is_some_and(|value| {
+                !value.is_empty() && value != "L’operazione non è riuscita. Riprova."
+            }));
+            let serialized = serialized.to_string();
+            assert!(!serialized.contains("stderr"));
+            assert!(!serialized.contains("path"));
+        }
+
+        for code in [
+            "runtime_install_unsupported",
+            "installer_digest_missing",
+            "installer_digest_invalid",
+            "installer_digest_mismatch",
+            "installer_payload_invalid",
+        ] {
+            let serialized = serde_json::to_value(failure(code)).unwrap();
+            assert_eq!(serialized["code"], code);
+            assert_eq!(serialized["retryable"], false);
+        }
     }
 
     #[test]
@@ -1637,24 +1830,33 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn podman_ready_stopped_and_absent_are_idempotent() {
+    fn local_runtime_prepare_podman_success_failure_and_retry() {
         let mut ready_calls = Vec::new();
-        ensure_local_podman_with(|args, _| {
-            ready_calls.push(args.join(" "));
-            outcome(true)
-        })
+        ensure_local_podman_with_retry(
+            |args, _| {
+                ready_calls.push(args.join(" "));
+                outcome(true)
+            },
+            |_| panic!("an already ready machine must not wait"),
+            3,
+        )
         .unwrap();
         assert_eq!(
             ready_calls,
             vec![format!("--connection {PODMAN_MACHINE_NAME} info")]
         );
 
-        let mut stopped_results = VecDeque::from([false, true, true, true]);
+        let mut stopped_results = VecDeque::from([false, true, true, false, true]);
         let mut stopped_calls = Vec::new();
-        ensure_local_podman_with(|args, _| {
-            stopped_calls.push(args.join(" "));
-            outcome(stopped_results.pop_front().unwrap())
-        })
+        let mut stopped_pauses = 0;
+        ensure_local_podman_with_retry(
+            |args, _| {
+                stopped_calls.push(args.join(" "));
+                outcome(stopped_results.pop_front().unwrap())
+            },
+            |_| stopped_pauses += 1,
+            3,
+        )
         .unwrap();
         assert_eq!(
             stopped_calls[1],
@@ -1664,32 +1866,55 @@ mod tests {
             stopped_calls[2],
             format!("machine start --update-connection=false {PODMAN_MACHINE_NAME}")
         );
+        assert_eq!(stopped_pauses, 1);
 
         let mut absent_results = VecDeque::from([false, false, true, true]);
         let mut absent_calls = Vec::new();
-        ensure_local_podman_with(|args, _| {
-            absent_calls.push(args.join(" "));
-            outcome(absent_results.pop_front().unwrap())
-        })
+        ensure_local_podman_with_retry(
+            |args, _| {
+                absent_calls.push(args.join(" "));
+                outcome(absent_results.pop_front().unwrap())
+            },
+            |_| panic!("a machine ready after init must not wait"),
+            3,
+        )
         .unwrap();
         assert_eq!(
             absent_calls[2],
             format!("machine init --now --update-connection=false {PODMAN_MACHINE_NAME}")
         );
 
-        let mut start_failed = VecDeque::from([false, true, false]);
-        let error = ensure_local_podman_with(|_, _| outcome(start_failed.pop_front().unwrap()))
-            .unwrap_err();
+        let mut raced_start = VecDeque::from([false, true, false, true]);
+        ensure_local_podman_with_retry(
+            |_, _| outcome(raced_start.pop_front().unwrap()),
+            |_| panic!("effect verification after a raced start must not wait"),
+            3,
+        )
+        .unwrap();
+
+        let mut start_failed = VecDeque::from([false, true, false, false]);
+        let error = ensure_local_podman_with_retry(
+            |_, _| outcome(start_failed.pop_front().unwrap()),
+            |_| {},
+            3,
+        )
+        .unwrap_err();
         assert_eq!(error.code, "podman_start_failed");
 
-        let mut not_ready = VecDeque::from([false, false, true, false]);
-        let error =
-            ensure_local_podman_with(|_, _| outcome(not_ready.pop_front().unwrap())).unwrap_err();
+        let mut not_ready = VecDeque::from([false, false, true, false, false]);
+        let mut not_ready_pauses = 0;
+        let error = ensure_local_podman_with_retry(
+            |_, _| outcome(not_ready.pop_front().unwrap()),
+            |_| not_ready_pauses += 1,
+            2,
+        )
+        .unwrap_err();
         assert_eq!(error.code, "podman_not_ready");
+        assert_eq!(not_ready_pauses, 1);
     }
 
     #[test]
-    fn container_start_is_verified_and_existing_container_is_safe() {
+    fn local_runtime_prepare_container_success_failure_and_retry() {
         let mut results = VecDeque::from([true, false, true]);
         let mut calls = Vec::new();
         let mut pauses = 0;
@@ -1716,10 +1941,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(active_calls, vec!["up", "status"]);
-    }
 
-    #[test]
-    fn local_runtime_timeouts_and_failed_verification_are_distinct() {
+        let mut raced_start = VecDeque::from([Err("process_timeout"), outcome(true)]);
+        start_and_verify_local_container_with(
+            |_, _| raced_start.pop_front().unwrap(),
+            |_| panic!("verified effect after a timed-out request must not wait"),
+            2,
+        )
+        .unwrap();
+
         let timed_out =
             start_and_verify_local_container_with(|_, _| Err("process_timeout"), |_| {}, 1)
                 .unwrap_err();

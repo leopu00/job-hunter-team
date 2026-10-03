@@ -26,6 +26,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
 use zeroize::Zeroizing;
@@ -65,6 +66,139 @@ pub(crate) type SystemKeyCache = KeyCache<SystemKeychain>;
 pub(crate) fn system_key_cache() -> SystemKeyCache {
     trace_auth_store("cache_initialized");
     KeyCache::new(SystemKeychain)
+}
+
+/// Account authority for native runtime state.
+///
+/// The renderer supplies no identifier: the account comes from the encrypted
+/// Supabase session already owned by this backend.  The token claims must agree
+/// with the stored user and this build's Supabase issuer before an opaque scope
+/// can be derived.
+pub(crate) fn authenticated_account_id(
+    app: &tauri::AppHandle,
+    keys: &SystemKeyCache,
+) -> Result<Zeroizing<String>, &'static str> {
+    let (storage_name, issuer) = session_authority()?;
+    let raw = get_value(
+        &store_dir(app).map_err(|_| "account_session_unavailable")?,
+        keys,
+        &storage_name,
+    )
+    .map_err(|_| "account_session_unavailable")?
+    .ok_or("account_session_required")?;
+    let raw = Zeroizing::new(raw);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "account_session_invalid")?
+        .as_secs();
+    parse_authenticated_account(&raw, &issuer, now)
+}
+
+fn session_authority() -> Result<(String, String), &'static str> {
+    let origin =
+        tauri::Url::parse(env!("JHT_SUPABASE_URL")).map_err(|_| "account_session_unavailable")?;
+    if origin.scheme() != "https"
+        || !origin.username().is_empty()
+        || origin.password().is_some()
+        || origin.path() != "/"
+        || origin.query().is_some()
+        || origin.fragment().is_some()
+    {
+        return Err("account_session_unavailable");
+    }
+    let host = origin.host_str().ok_or("account_session_unavailable")?;
+    let project = host
+        .split('.')
+        .next()
+        .ok_or("account_session_unavailable")?;
+    if !valid_project_ref(project) {
+        return Err("account_session_unavailable");
+    }
+    Ok((
+        format!("sb-{project}-auth-token"),
+        format!("{}/auth/v1", origin.origin().ascii_serialization()),
+    ))
+}
+
+fn parse_authenticated_account(
+    raw: &str,
+    expected_issuer: &str,
+    now: u64,
+) -> Result<Zeroizing<String>, &'static str> {
+    let session: serde_json::Value =
+        serde_json::from_str(raw).map_err(|_| "account_session_invalid")?;
+    let account_id = session
+        .get("user")
+        .and_then(|user| user.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| valid_account_id(value))
+        .ok_or("account_session_invalid")?;
+    let token = session
+        .get("access_token")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| (32..=16 * 1024).contains(&value.len()))
+        .ok_or("account_session_invalid")?;
+    let mut parts = token.split('.');
+    let _header = parts.next().ok_or("account_session_invalid")?;
+    let payload = parts.next().ok_or("account_session_invalid")?;
+    let _signature = parts.next().ok_or("account_session_invalid")?;
+    if parts.next().is_some() {
+        return Err("account_session_invalid");
+    }
+    let claims: serde_json::Value =
+        serde_json::from_slice(&decode_base64_url(payload).ok_or("account_session_invalid")?)
+            .map_err(|_| "account_session_invalid")?;
+    let subject = claims
+        .get("sub")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("account_session_invalid")?;
+    let issuer = claims
+        .get("iss")
+        .and_then(serde_json::Value::as_str)
+        .map(|value| value.trim_end_matches('/'))
+        .ok_or("account_session_invalid")?;
+    let expires = claims
+        .get("exp")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or("account_session_invalid")?;
+    if subject != account_id || issuer != expected_issuer || expires <= now {
+        return Err("account_session_invalid");
+    }
+    Ok(Zeroizing::new(account_id.to_owned()))
+}
+
+fn valid_account_id(value: &str) -> bool {
+    (16..=256).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn decode_base64_url(value: &str) -> Option<Vec<u8>> {
+    if value.is_empty() || value.len() % 4 == 1 || value.contains('=') {
+        return None;
+    }
+    let mut output = Vec::with_capacity(value.len() * 3 / 4);
+    let mut accumulator = 0u32;
+    let mut bits = 0u8;
+    for byte in value.bytes() {
+        let digit = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'-' => 62,
+            b'_' => 63,
+            _ => return None,
+        } as u32;
+        accumulator = (accumulator << 6) | digit;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            output.push((accumulator >> bits) as u8);
+            accumulator &= (1 << bits) - 1;
+        }
+    }
+    (accumulator == 0).then_some(output)
 }
 
 #[tauri::command]
@@ -473,8 +607,9 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_path, get_value, read_entry, remove_entry, remove_value, set_value, validate_name,
-        write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN, MAX_NAME_LEN,
+        entry_path, get_value, parse_authenticated_account, read_entry, remove_entry, remove_value,
+        set_value, validate_name, write_entry, KeyCache, KeySource, KEYRING_SERVICE, KEY_LEN,
+        MAX_NAME_LEN,
     };
     use std::{
         fs,
@@ -691,6 +826,66 @@ mod tests {
 
     const KEY: [u8; KEY_LEN] = [7u8; KEY_LEN];
     const NAME: &str = "sb-abc-auth-token";
+
+    fn base64_url(bytes: &[u8]) -> String {
+        const ALPHABET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut output = String::new();
+        for chunk in bytes.chunks(3) {
+            let value = ((chunk[0] as u32) << 16)
+                | ((chunk.get(1).copied().unwrap_or(0) as u32) << 8)
+                | chunk.get(2).copied().unwrap_or(0) as u32;
+            output.push(ALPHABET[((value >> 18) & 63) as usize] as char);
+            output.push(ALPHABET[((value >> 12) & 63) as usize] as char);
+            if chunk.len() > 1 {
+                output.push(ALPHABET[((value >> 6) & 63) as usize] as char);
+            }
+            if chunk.len() > 2 {
+                output.push(ALPHABET[(value & 63) as usize] as char);
+            }
+        }
+        output
+    }
+
+    fn session(account: &str, subject: &str, issuer: &str, expires: u64) -> String {
+        let claims = serde_json::json!({"sub":subject,"iss":issuer,"exp":expires});
+        let token = format!(
+            "{}.{}.{}",
+            base64_url(br#"{"alg":"ES256"}"#),
+            base64_url(serde_json::to_string(&claims).unwrap().as_bytes()),
+            "synthetic-signature-segment"
+        );
+        serde_json::json!({"access_token":token,"user":{"id":account}}).to_string()
+    }
+
+    #[test]
+    fn backend_session_account_requires_matching_subject_issuer_and_expiry() {
+        let account = "00000000-0000-4000-8000-000000000001";
+        let issuer = "https://project.example.invalid/auth/v1";
+        let valid = session(account, account, issuer, 200);
+        assert_eq!(
+            parse_authenticated_account(&valid, issuer, 100)
+                .unwrap()
+                .as_str(),
+            account
+        );
+        assert_eq!(
+            parse_authenticated_account(
+                &session(account, "00000000-0000-4000-8000-000000000002", issuer, 200),
+                issuer,
+                100,
+            ),
+            Err("account_session_invalid")
+        );
+        assert_eq!(
+            parse_authenticated_account(&valid, "https://other.invalid/auth/v1", 100),
+            Err("account_session_invalid")
+        );
+        assert_eq!(
+            parse_authenticated_account(&valid, issuer, 200),
+            Err("account_session_invalid")
+        );
+    }
 
     #[test]
     fn names_are_the_supabase_ones_only() {

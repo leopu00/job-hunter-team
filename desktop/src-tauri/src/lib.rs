@@ -1,3 +1,4 @@
+mod account_scope;
 mod auth_login;
 mod auth_store;
 mod browsers;
@@ -15,6 +16,7 @@ mod voice_input;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(account_scope::AccountScopeState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(onboarding::OnboardingNativeState::default())
         .manage(voice_input::VoiceInputState::default())
@@ -24,6 +26,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            account_scope::runtime_account_scope_reset,
+            account_scope::runtime_account_scope_set,
+            account_scope::runtime_account_scope_set_local,
+            account_scope::runtime_local_profile_create,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
