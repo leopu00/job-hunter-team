@@ -10,6 +10,17 @@ import { applyTextOverrides } from "./src/desktop-texts/overrides";
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
+function comparableFsPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+export function isWebSourceImporter(importer: string | undefined, webDir: string): boolean {
+  if (!importer) return false;
+  const directory = `${comparableFsPath(webDir).replace(/\/+$/, "")}/`;
+  return comparableFsPath(importer).startsWith(directory);
+}
+
 /**
  * The web's files live in ../web, which has no node_modules of its own here
  * (nor in CI, which installs desktop/ only). A package they import
@@ -27,7 +38,7 @@ function webDepsFromDesktop(): Plugin {
     name: "jht-web-deps-from-desktop",
     enforce: "pre",
     resolveId(source, importer, options) {
-      if (!importer?.startsWith(webDir)) return null;
+      if (!isWebSourceImporter(importer, webDir)) return null;
       if (/^[./\0]/.test(source) || source.startsWith(fromHere("./"))) return null;
       // Node built-ins stay with Vite, which then names the web file that
       // pulled one in (instead of the desktop importer used below).
