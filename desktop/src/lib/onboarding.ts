@@ -26,7 +26,14 @@ export type OnboardingRuntimeState =
   | { status: "collecting"; stage: CollectionStage }
   | { status: "working"; stage: OperationalStage; message: string }
   | { status: "action-required"; stage: "ssh-host-key" | "provider-login" | "team-start" | "assistant"; message: string }
-  | { status: "failed"; stage: OnboardingRuntimeStage; message: string; code?: string; retryable?: boolean }
+  | {
+      status: "failed";
+      stage: OnboardingRuntimeStage;
+      title?: string;
+      message: string;
+      code?: string;
+      retryable?: boolean;
+    }
   | { status: "ready" };
 
 export interface OnboardingProviderLoginInputRequest {
@@ -114,6 +121,7 @@ export interface OnboardingFlowProps {
   onProviderRestart: () => Promise<void>;
   onRetry: () => Promise<void>;
   onRestart: () => Promise<void>;
+  onExitFailure: () => void;
 }
 
 export type OnboardingGateState =

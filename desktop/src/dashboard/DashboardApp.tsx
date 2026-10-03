@@ -69,10 +69,12 @@ const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Ri
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
 const MAX_PROVIDER_OUTPUT = 32_768;
 const PROFILE_RECHECK_MS = 2_000;
+const SAFE_RUNTIME_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const CONTAINER_RUNTIME_ERRORS = new Set([
   "container_start_failed",
   "container_not_ready",
   "container_timeout",
+  "container_version_incompatible",
 ]);
 
 const PROVIDER_RUNTIME_ERRORS = new Set([
@@ -95,7 +97,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
     ? error as { code?: unknown; message?: unknown; retryable?: unknown }
     : {};
-  if (typeof value.code !== "string" || !value.code ||
+  if (typeof value.code !== "string" || !SAFE_RUNTIME_ERROR_CODE.test(value.code) ||
       typeof value.message !== "string" || !value.message.trim() ||
       typeof value.retryable !== "boolean") {
     return { status: "failed", stage: "runtime", message: failureMessage("runtime"), retryable: true };
@@ -103,6 +105,26 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const stage = CONTAINER_RUNTIME_ERRORS.has(value.code)
     ? "container"
     : PROVIDER_RUNTIME_ERRORS.has(value.code) ? "provider" : "runtime";
+  if (value.code === "container_version_incompatible") {
+    return {
+      status: "failed",
+      stage: "container",
+      title: "Versione del container non compatibile",
+      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      code: value.code,
+      retryable: false,
+    };
+  }
+  if (stage === "container") {
+    return {
+      status: "failed",
+      stage,
+      title: "Avvio del container non riuscito",
+      message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+      code: value.code,
+      retryable: value.retryable,
+    };
+  }
   return {
     status: "failed",
     stage,
@@ -416,7 +438,7 @@ export default function DashboardApp() {
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
-    setActivity(createOnboardingActivity());
+    setActivity((current) => current ?? createOnboardingActivity());
     try {
       markOnboardingStarted(markerId);
     } catch (error) {
@@ -631,6 +653,17 @@ export default function DashboardApp() {
       runtime: { status: "collecting", stage: "host" },
     } : current);
   }, [identityKey, markerId]);
+
+  const exitTechnicalFailure = useCallback(() => {
+    submissionRef.current = null;
+    setProviderLogin(null);
+    setSshHostKey(null);
+    setActivity(null);
+    setGate((current) => current.phase === "required" ? {
+      ...current,
+      runtime: { status: "collecting", stage: "host" },
+    } : current);
+  }, []);
 
   const finishAssistant = useCallback(async () => {
     const submission = submissionRef.current;
@@ -857,6 +890,7 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRestart={restartOnboarding}
+        onExitFailure={exitTechnicalFailure}
       />
     );
   }

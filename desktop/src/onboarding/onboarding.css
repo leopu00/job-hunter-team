@@ -790,6 +790,11 @@
 .onboarding-activity-details li > span { color: var(--color-blue); font-size: 7px; text-transform: uppercase; letter-spacing: .07em; }
 .onboarding-activity-details li.is-complete > span { color: var(--color-ready); }
 .onboarding-activity-details li.is-failed > span { color: var(--color-red); }
+.onboarding-technical-details dl { margin: 0; padding: 0 14px 14px; }
+.onboarding-technical-details dl > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.onboarding-technical-details dt { color: var(--color-muted); font-size: 8px; }
+.onboarding-technical-details dd { min-width: 0; margin: 0; color: var(--color-bright); font-size: 8px; overflow-wrap: anywhere; }
+.onboarding-technical-details code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 .onboarding-runtime-card--failed .onboarding-runtime-status {
   border-color: var(--color-red);
