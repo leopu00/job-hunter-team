@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -78,10 +80,15 @@ esac
     podman = binary.parent / "podman"
     podman.write_text(
         """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
 printf 'podman %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 if [ "$1:$2" = machine:start ] && [ "${JHT_TEST_WAKE_SUCCESS:-0}" = 1 ]; then
   : > "$JHT_TEST_RUNTIME_STATE"
   exit 0
+fi
+if [ "$1:$2:$3" = --connection:jht-podman:info ]; then
+  [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] || [ -f "$JHT_TEST_RUNTIME_STATE" ]
+  exit $?
 fi
 exit 93
 """,
@@ -91,6 +98,7 @@ exit 93
     provider = binary.parent / "podman-compose"
     provider.write_text(
         """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit 0; fi
 printf 'podman-compose %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   *" ps -q jht") printf '%s\n' aaaaaaaaaaaa ;;
@@ -152,7 +160,9 @@ def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: 
     assert result.stdout == "true\n"
     calls = log.read_text(encoding="utf-8")
     assert "podman-compose --podman-path " in calls
-    assert "--podman-args --connection jht-podman" in calls
+    compose_calls = [line for line in calls.splitlines() if line.startswith("podman-compose ")]
+    assert all("--podman-args" not in line and "--connection" not in line for line in compose_calls)
+    assert "podman --connection jht-podman info" in calls
     assert " ps -q jht" in calls
     assert "docker inspect aaaaaaaaaaaa" in calls
     assert "inspect jht" not in calls
@@ -225,9 +235,191 @@ def test_explicit_up_uses_the_same_named_podman_compose_adapter_idempotently(
     compose_calls = [line for line in calls if line.startswith("podman-compose ")]
     assert len(compose_calls) == 2
     assert compose_calls[0] == compose_calls[1]
-    assert "--podman-args --connection jht-podman" in compose_calls[0]
+    assert "--podman-args" not in compose_calls[0]
     assert compose_calls[0].endswith(" up -d")
     assert not any("machine start" in line or "machine init" in line for line in calls)
+
+
+def test_podman_compose_1_6_uses_podman_6_named_connection_before_subcommand(
+    tmp_path: Path,
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["CONTAINER_CONNECTION"] = "external-default"
+    podman = wrapper.parent / "podman"
+    podman.write_text(
+        """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
+printf 'podman-6.1.3 connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
+[ "$1:$2:$3" = --connection:jht-podman:info ] && exit 0
+case "$1" in
+  ps)
+    [ "$CONTAINER_CONNECTION" = jht-podman ] || exit 124
+    case " $* " in *" --connection "*) exit 125 ;; esac
+    exit 0 ;;
+  *) exit 126 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    podman.chmod(0o700)
+    provider = wrapper.parent / "podman-compose"
+    provider.write_text(
+        """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit 0; fi
+printf 'podman-compose-1.6.0 connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
+[ "$1" = --podman-path ] || exit 120
+podman_path="$2"
+shift 2
+[ "$1" = -f ] || exit 121
+shift 2
+[ "$1:$2" = up:-d ] || exit 122
+"$podman_path" ps --filter label=io.podman.compose.project=jht
+""",
+        encoding="utf-8",
+    )
+    provider.chmod(0o700)
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert "podman-6.1.3 connection= argv=--connection jht-podman info" in calls
+    assert any(
+        line.startswith("podman-compose-1.6.0 connection=jht-podman argv=--podman-path ")
+        for line in calls
+    )
+    assert (
+        "podman-6.1.3 connection=jht-podman "
+        "argv=ps --filter label=io.podman.compose.project=jht"
+    ) in calls
+    assert not any("argv=ps --connection" in line for line in calls)
+
+
+def test_podman_compose_fails_closed_when_named_connection_capability_fails(
+    tmp_path: Path,
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    podman = wrapper.parent / "podman"
+    podman.write_text(
+        """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
+printf 'podman-capability connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
+exit 125
+""",
+        encoding="utf-8",
+    )
+    podman.chmod(0o700)
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "connessione Podman JHT non supporta" in result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman-capability connection= argv=--connection jht-podman info" in calls
+    assert "podman-compose " not in calls
+
+
+@pytest.mark.parametrize("component", ("podman", "podman-compose"))
+def test_podman_compose_fails_closed_on_unpinned_version(
+    tmp_path: Path, component: str
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    binary = wrapper.parent / component
+    expected = "podman version 6.2.0" if component == "podman" else "podman-compose version 1.7.0"
+    binary.write_text(
+        f"#!/bin/sh\nif [ \"$1\" = --version ]; then printf '%s\\n' '{expected}'; exit 0; fi\n"
+        f"printf '{component}-unexpected %s\\n' \"$*\" >> \"$JHT_TEST_DOCKER_LOG\"\nexit 125\n",
+        encoding="utf-8",
+    )
+    binary.chmod(0o700)
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Versione Podman Compose non supportata" in result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman-compose " not in calls
+    assert "-unexpected" not in calls
+
+
+def test_podman_machine_override_must_match_attested_marker_before_any_runtime_io(
+    tmp_path: Path,
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_PODMAN_MACHINE"] = "other-machine"
+    env["CONTAINER_CONNECTION"] = "external-default"
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "override does not match" in result.stderr
+    assert not log.exists()
+
+
+@pytest.mark.parametrize("machine_name", ("", "invalid/name"))
+def test_podman_machine_marker_must_be_present_and_valid_before_any_runtime_io(
+    tmp_path: Path, machine_name: str
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    marker = Path(env["JHT_RUNTIME_DIR"]) / "podman-machine"
+    marker.write_text(f"{machine_name}\n", encoding="utf-8")
+    manifest = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-integrity"
+    manifest.write_text(
+        "\n".join(
+            f"podman-machine={_digest(marker)}"
+            if line.startswith("podman-machine=")
+            else line
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "runtime host non attendibile" in result.stderr
+    assert not log.exists()
 
 
 def test_only_explicit_up_can_wake_the_named_podman_machine(tmp_path: Path):

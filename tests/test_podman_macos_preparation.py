@@ -1,6 +1,10 @@
 """Non-runtime contracts for the opt-in macOS Podman preparation path."""
 
+import os
 from pathlib import Path
+import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -158,3 +162,101 @@ def test_installer_verifies_destination_before_publishing_runtime_selection():
     assert "[ ! -L" not in resolver
     assert 'DOCKER_CLI="$resolved"' in resolver
     assert 'if [ -z "$DOCKER_CLI" ]; then' in source
+
+
+def test_installer_and_wrapper_pin_the_supported_direct_podman_compose_pair():
+    installer = _source(INSTALLER)
+    wrapper = _source(WRAPPER)
+    install_block = installer[
+        installer.index("install_podman_macos()") : installer.index(
+            "install_docker_linux()"
+        )
+    ]
+    compose_block = wrapper[
+        wrapper.index("podman_compose_pair_supported()") : wrapper.index(
+            "container_up()"
+        )
+    ]
+
+    for source in (install_block, compose_block):
+        assert "podman version 6.1.3" in source
+        assert "podman-compose version 1.6.0" in source
+    assert 'CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME"' in install_block
+    assert install_block.index("unset CONTAINER_CONNECTION") < install_block.index(
+        "podman machine inspect"
+    )
+    assert install_block.index("podman version 6.1.3") < install_block.index(
+        "podman machine inspect"
+    )
+    assert install_block.index("podman-compose version 1.6.0") < install_block.index(
+        "podman machine inspect"
+    )
+    assert '"$compose_bin" --version' in install_block
+    assert 'podman --connection "$PODMAN_MACHINE_NAME" compose' not in installer
+    assert 'unset CONTAINER_CONNECTION' in wrapper
+    active_compose = "\n".join(
+        line for line in compose_block.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "--podman-args" not in active_compose
+    assert 'CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME"' in compose_block
+
+
+@pytest.mark.parametrize(
+    ("podman_version", "compose_version"),
+    (
+        ("podman version 6.2.0", "podman-compose version 1.6.0"),
+        ("podman version 6.1.3", "podman-compose version 1.7.0"),
+    ),
+)
+def test_installer_version_mismatch_stops_before_machine_lifecycle(
+    tmp_path: Path, podman_version: str, compose_version: str
+):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    log = tmp_path / "argv.log"
+    for name, version in (
+        ("podman", podman_version),
+        ("podman-compose", compose_version),
+    ):
+        executable = fake_bin / name
+        executable.write_text(
+            "#!/bin/sh\n"
+            f"printf '{name} env=%s argv=%s\\n' \"$CONTAINER_CONNECTION\" \"$*\" >> \"$JHT_TEST_ARGV_LOG\"\n"
+            f"if [ \"$1\" = --version ]; then printf '%s\\n' '{version}'; exit 0; fi\n"
+            "exit 99\n",
+            encoding="utf-8",
+        )
+        executable.chmod(0o700)
+    brew = fake_bin / "brew"
+    brew.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+    brew.chmod(0o700)
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path / "home"),
+        "PATH": f"{fake_bin}:/usr/bin:/bin",
+        "CONTAINER_CONNECTION": "external-default",
+        "JHT_INSTALLER_SOURCE_ONLY": "1",
+        "JHT_TEST_ARGV_LOG": str(log),
+    }
+    command = (
+        f"source {INSTALLER!s}; "
+        "OS=macos; DRY_RUN=0; PODMAN_MACHINE_NAME=jht-podman; "
+        "install_podman_macos"
+    )
+
+    result = subprocess.run(
+        ["/bin/bash", "-c", command],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    calls = log.read_text(encoding="utf-8")
+    assert "podman env= argv=--version" in calls
+    if podman_version == "podman version 6.1.3":
+        assert "podman-compose env=jht-podman argv=--version" in calls
+    assert "machine" not in calls
+    assert " info" not in calls

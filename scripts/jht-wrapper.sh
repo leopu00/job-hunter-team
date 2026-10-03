@@ -66,14 +66,21 @@ else
   CONTAINER_RUNTIME="docker"
 fi
 case "$CONTAINER_RUNTIME" in docker|podman) ;; *) err_runtime="unsupported container runtime: $CONTAINER_RUNTIME" ;; esac
-PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-}"
-if [ -z "$PODMAN_MACHINE_NAME" ] && [ -f "$PODMAN_MACHINE_FILE" ]; then
+PODMAN_MACHINE_OVERRIDE="${JHT_PODMAN_MACHINE:-}"
+PODMAN_MACHINE_NAME=""
+if [ -f "$PODMAN_MACHINE_FILE" ]; then
   PODMAN_MACHINE_NAME="$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")"
 fi
-PODMAN_MACHINE_NAME="${PODMAN_MACHINE_NAME:-jht-podman}"
 if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+  case "$PODMAN_MACHINE_NAME" in
+    ''|*[!A-Za-z0-9_.-]*) err_runtime="invalid attested Podman machine" ;;
+  esac
+  if [ -n "$PODMAN_MACHINE_OVERRIDE" ] \
+      && [ "$PODMAN_MACHINE_OVERRIDE" != "$PODMAN_MACHINE_NAME" ]; then
+    err_runtime="Podman machine override does not match the attested runtime"
+  fi
   export PATH="$PODMAN_ADAPTER_BIN:$PATH"
-  export CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME"
+  unset CONTAINER_CONNECTION
   export PODMAN_COMPOSE_WARNING_LOGS=false
   if command -v podman-compose >/dev/null 2>&1; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
@@ -471,6 +478,15 @@ podman_compose_binary() {
   return 1
 }
 
+podman_compose_pair_supported() {
+  local podman_bin="$1" compose_bin="$2" podman_version compose_version
+  podman_version="$("$podman_bin" --version 2>/dev/null)" || return 1
+  [ "$podman_version" = 'podman version 6.1.3' ] || return 1
+  compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+    "$compose_bin" --version 2>/dev/null)" || return 1
+  printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0'
+}
+
 require_compose_file() {
   require_trusted_runtime || exit 1
 }
@@ -481,21 +497,26 @@ compose_file() {
   if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     # `podman --connection NAME compose` delegates through the Docker socket
     # bridge. A named macOS machine created with --update-connection=false is
-    # reachable by `podman --connection`, but that bridge still targets the
-    # default socket and exits 125 before creating anything. Invoke the same
-    # installed compose provider directly and pass the authoritative named
-    # connection to every podman child instead. Running from RUNTIME_DIR keeps
-    # the Compose project identity identical to --project-directory.
+    # reachable by the native client, but that bridge still targets the
+    # default socket. podman-compose 1.6.0 also appends --podman-args after
+    # each subcommand (`podman ps --connection ...`), which Podman 6 rejects.
+    # CONTAINER_CONNECTION is Podman's supported global connection authority;
+    # the provider inherits it and therefore emits `podman ps`/`podman run`
+    # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
     compose_bin="$(podman_compose_binary)" \
       || { err "Provider Podman Compose non trovato: reinstalla il runtime JHT."; return 127; }
+    podman_compose_pair_supported "$podman_bin" "$compose_bin" \
+      || { err "Versione Podman Compose non supportata dal runtime JHT."; return 1; }
+    "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1 \
+      || { err "La connessione Podman JHT non supporta il dispatcher Compose."; return 1; }
     (
       cd "$RUNTIME_DIR" || return 1
+      CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" \
           --podman-path "$podman_bin" \
-          --podman-args "--connection $PODMAN_MACHINE_NAME" \
           -f "$file" "$@"
     )
     return $?
