@@ -55,6 +55,8 @@ describe("ExistingTeamConnectModal", () => {
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: /hai già un team attivo su vps/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /vps proietta l’ufficio/i }))
+      .toHaveAttribute("src", "/onboarding/environment-vps-v2.webp");
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("root");
     expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
     expect(native.probe).not.toHaveBeenCalled();

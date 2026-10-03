@@ -6,6 +6,11 @@ import type {
   OnboardingRuntimeStage,
   SubscriptionProvider,
 } from "../lib/onboarding";
+import {
+  collectionArtwork,
+  OnboardingArtwork,
+  runtimeArtwork,
+} from "./OnboardingArtwork";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -129,6 +134,7 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
     return (
       <main className="onboarding-shell onboarding-shell--complete">
         <section className="onboarding-complete" aria-live="polite">
+          <OnboardingArtwork name="assistantReady" />
           <span className="onboarding-complete__mark" aria-hidden="true">✓</span>
           <p className="onboarding-eyebrow">Configurazione completata</p>
           <h1>La squadra è pronta.</h1>
@@ -174,6 +180,7 @@ function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLog
         <section className={`onboarding-runtime-card${failed ? " onboarding-runtime-card--failed" : ""}`}>
           <p className="onboarding-eyebrow">{failed ? "Intervento richiesto" : actionRequired ? "Tocca a te" : "Configurazione in corso"}</p>
           <h2>{failed ? `Configura di nuovo: ${activeLabel}` : actionRequired ? activeLabel : `Prepariamo: ${activeLabel}`}</h2>
+          <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <div className="onboarding-runtime-status" aria-live="polite" role={failed ? "alert" : "status"}>
             <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
             <div><strong>{failed ? "Operazione interrotta in sicurezza" : actionRequired ? "È necessaria una tua azione" : "Non chiudere l’app"}</strong><small>{runtime.message}</small>{failed && runtime.code && <small>Codice diagnostico: {runtime.code}</small>}</div>
@@ -277,6 +284,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
         <section className="onboarding-card">
           <div className="onboarding-card__step">{String(step + 1).padStart(2, "0")} / {String(COLLECTION_STEPS.length).padStart(2, "0")}</div>
           {step === 0 && <form onSubmit={next} className="onboarding-panel">
+            <OnboardingArtwork name={collectionArtwork(step, host)} />
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
             <p className="onboarding-eyebrow">{account.identity === "local" ? "Profilo locale pronto" : "Accesso riuscito"}</p><h2 ref={headingRef} tabIndex={-1}>Ciao{account.displayName ? `, ${account.displayName}` : ""}.</h2>
             <p className="onboarding-lede">{account.identity === "local" ? "Il nome resta su questo dispositivo. Configuriamo ambiente e provider; poi avvieremo la squadra automaticamente." : "Il tuo account è collegato. Configuriamo ambiente e provider; poi avvieremo la squadra automaticamente."}</p>
@@ -285,6 +293,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
           </form>}
 
           {step === 1 && <form onSubmit={next} className="onboarding-panel">
+            <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">Dove lavorerà il team</p><h2 ref={headingRef} tabIndex={-1}>Scegli l’ambiente.</h2>
             {localRuntimeSupported
               ? <p className="onboarding-lede">Puoi eseguire tutto su questo computer oppure collegare una VPS già disponibile.</p>
@@ -303,6 +312,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
           </form>}
 
           {step === 2 && <form onSubmit={next} className="onboarding-panel">
+            <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">Il tuo abbonamento AI</p><h2 ref={headingRef} tabIndex={-1}>Scegli il provider.</h2><p className="onboarding-lede">Collegheremo il piano che usi già tramite il login ufficiale del provider.</p>
             <div className="onboarding-choice-grid onboarding-choice-grid--providers" role="radiogroup" aria-label="Provider in abbonamento">
               {PROVIDERS.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} onKeyDown={(event) => moveRadio(event, PROVIDERS.map(({ value }) => value), provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
@@ -312,6 +322,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
           </form>}
 
           {step === 3 && provider && <form onSubmit={finish} className="onboarding-panel">
+            <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">Ultimo controllo</p><h2 ref={headingRef} tabIndex={-1}>Tutto pronto per partire.</h2><p className="onboarding-lede">Dopo la conferma prepareremo runtime, container, login e agenti. Poi apriremo la chat con l’Assistente.</p>
             <dl className="onboarding-review">
               <div><dt>Ambiente</dt><dd>{hostName(host)}</dd></div><div><dt>Provider</dt><dd>{providerName(provider)}<small>Accesso tramite abbonamento</small></dd></div>

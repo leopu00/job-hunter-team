@@ -21,6 +21,7 @@ import {
   type LocalProfile,
 } from "../lib/local-profile";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
+import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
 import "./login-screen.css";
 
 const MESSAGES: Record<LoginErrorCode, string> = {
@@ -181,6 +182,7 @@ export function LoginScreen({
     <main className="page login-screen">
       <section className="login-card" aria-labelledby="login-title">
         <img src="/jht-mark.svg" alt="" className="login-card__mark" />
+        <OnboardingArtwork name="identity" className="login-card__artwork" />
         <p className="eyebrow">Pannello di controllo</p>
         <h1 id="login-title">Come vuoi iniziare?</h1>
         <p className="login-card__lede">
