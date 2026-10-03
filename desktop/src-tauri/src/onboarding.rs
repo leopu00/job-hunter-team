@@ -4,7 +4,6 @@ use crate::runtime_host::{
     ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     ffi::OsString,
@@ -32,14 +31,10 @@ const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
-const LOCAL_RUNTIME_TIMEOUT: Duration = Duration::from_secs(2 * 60);
-const LOCAL_RUNTIME_VERIFY_ATTEMPTS: usize = 8;
-const LOCAL_RUNTIME_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
 const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
-const PODMAN_MACHINE_NAME: &str = "jht-podman";
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -91,12 +86,49 @@ struct InteractiveSession {
     stdin: Mutex<Option<ChildStdin>>,
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SubscriptionProvider {
     Claude,
     Codex,
     Kimi,
+}
+
+impl SubscriptionProvider {
+    fn cli_id(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+            Self::Kimi => "kimi",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LocalCliOperation {
+    Up,
+    Status,
+    ProviderUse(SubscriptionProvider),
+    ProviderUpdate(SubscriptionProvider),
+    OauthLogin,
+    TeamStart,
+    Snapshot,
+    AssistantStart,
+}
+
+impl LocalCliOperation {
+    fn argv(self) -> Vec<&'static str> {
+        match self {
+            Self::Up => vec!["up"],
+            Self::Status => vec!["status"],
+            Self::ProviderUse(provider) => vec!["providers", "use", provider.cli_id()],
+            Self::ProviderUpdate(provider) => vec!["providers", "update", provider.cli_id()],
+            Self::OauthLogin => vec!["oauth-login"],
+            Self::TeamStart => vec!["team", "start"],
+            Self::Snapshot => vec!["onboarding-snapshot"],
+            Self::AssistantStart => vec!["team", "start", "assistente"],
+        }
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -521,6 +553,7 @@ fn valid_wrapper_file(path: &Path) -> bool {
     wrapper_source(path).is_some_and(|source| {
         wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
+            && wrapper_has_protocol(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     })
 }
 
@@ -540,6 +573,7 @@ fn publish_bundled_wrapper(home: &Path, runtime_dir: &Path) -> Result<PathBuf, O
         .map_err(|_| failure("runtime_wrapper_install_failed"))?;
     if !wrapper_has_protocol(source, "JHT_HOST_RUNTIME_PROTOCOL=1")
         || !wrapper_has_protocol(source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
+        || !wrapper_has_protocol(source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     {
         return Err(failure("runtime_wrapper_install_failed"));
     }
@@ -806,8 +840,9 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
             } else {
                 trace_local_runtime("runtime", "install_reused");
             }
-            let podman = podman_path().ok_or_else(|| failure("podman_missing"))?;
-            ensure_local_podman(&podman)?;
+            if podman_path().is_none() {
+                return Err(failure("podman_missing"));
+            }
             if !podman_runtime_selected(app) {
                 return Err(failure("podman_not_ready"));
             }
@@ -837,91 +872,6 @@ fn install_local(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
         }
         wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
     }
-}
-
-#[cfg(target_os = "macos")]
-fn ensure_local_podman(podman: &Path) -> Result<(), OnboardingError> {
-    let program = podman.to_str().ok_or_else(|| failure("podman_missing"))?;
-    ensure_local_podman_with(|args, timeout| run_program(program, args, None, timeout))
-}
-
-#[cfg(target_os = "macos")]
-fn ensure_local_podman_with(
-    run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
-) -> Result<(), OnboardingError> {
-    ensure_local_podman_with_retry(run, thread::sleep, LOCAL_RUNTIME_VERIFY_ATTEMPTS)
-}
-
-#[cfg(target_os = "macos")]
-fn ensure_local_podman_with_retry(
-    mut run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
-    mut pause: impl FnMut(Duration),
-    attempts: usize,
-) -> Result<(), OnboardingError> {
-    let info = ["--connection", PODMAN_MACHINE_NAME, "info"];
-    match run(&info, LOCAL_RUNTIME_TIMEOUT) {
-        Ok(result) if result.success() => {
-            trace_local_runtime("runtime", "podman_ready");
-            return Ok(());
-        }
-        Err("process_timeout") => return Err(failure("timeout")),
-        _ => {}
-    }
-
-    let inspect = ["machine", "inspect", PODMAN_MACHINE_NAME];
-    let exists = match run(&inspect, LOCAL_RUNTIME_TIMEOUT) {
-        Ok(result) => result.success(),
-        Err("process_timeout") => return Err(failure("timeout")),
-        Err(_) => false,
-    };
-    let action = if exists {
-        vec![
-            "machine",
-            "start",
-            "--update-connection=false",
-            PODMAN_MACHINE_NAME,
-        ]
-    } else {
-        vec![
-            "machine",
-            "init",
-            "--now",
-            "--update-connection=false",
-            PODMAN_MACHINE_NAME,
-        ]
-    };
-    match run(&action, LOCAL_RUNTIME_TIMEOUT) {
-        Ok(result) if result.success() => {}
-        Err("process_timeout") => return Err(failure("timeout")),
-        _ => {
-            // `machine start` can race another starter and report failure even
-            // though the requested effect is already true. Verify once before
-            // returning the sanitized start error.
-            return match run(&info, LOCAL_RUNTIME_TIMEOUT) {
-                Ok(result) if result.success() => Ok(()),
-                Err("process_timeout") => Err(failure("timeout")),
-                _ => {
-                    trace_local_runtime("runtime", "podman_start_failed");
-                    Err(failure("podman_start_failed"))
-                }
-            };
-        }
-    }
-    for attempt in 0..attempts.max(1) {
-        match run(&info, LOCAL_RUNTIME_TIMEOUT) {
-            Ok(result) if result.success() => {
-                trace_local_runtime("runtime", "podman_ready");
-                return Ok(());
-            }
-            Err("process_timeout") => return Err(failure("timeout")),
-            _ => {}
-        }
-        if attempt + 1 < attempts.max(1) {
-            pause(LOCAL_RUNTIME_VERIFY_INTERVAL);
-        }
-    }
-    trace_local_runtime("runtime", "podman_not_ready");
-    Err(failure("podman_not_ready"))
 }
 
 const REMOTE_INSTALL: &str = r#"set -eu
@@ -1059,11 +1009,12 @@ fn run_scoped_local(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     wrapper: &Path,
-    args: &[&str],
+    operation: LocalCliOperation,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
     crate::account_scope::validate_local_runtime(app, scope)?;
-    run_local(wrapper, args, timeout)
+    let args = operation.argv();
+    run_local(wrapper, &args, timeout)
 }
 
 pub(crate) fn run_verified_local_wrapper(
@@ -1097,25 +1048,28 @@ pub(crate) fn run_verified_local_wrapper(
 #[cfg(test)]
 fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingError> {
     start_and_verify_local_container_with(
-        |args, timeout| run_local(wrapper, args, timeout),
+        |operation, timeout| {
+            let args = operation.argv();
+            run_local(wrapper, &args, timeout)
+        },
         thread::sleep,
         LOCAL_CONTAINER_VERIFY_ATTEMPTS,
     )
 }
 
 fn start_and_verify_local_container_with(
-    mut run: impl FnMut(&[&str], Duration) -> Result<ProcessResult, &'static str>,
+    mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
     mut pause: impl FnMut(Duration),
     attempts: usize,
 ) -> Result<(), OnboardingError> {
-    let requested = match run(&["up"], PREPARE_TIMEOUT) {
+    let requested = match run(LocalCliOperation::Up, PREPARE_TIMEOUT) {
         Ok(result) if result.success() => Ok(()),
         Err("process_timeout") => Err("container_timeout"),
         _ => Err("container_start_failed"),
     };
 
     for attempt in 0..attempts.max(1) {
-        match run(&["status"], LOCAL_CONTAINER_VERIFY_TIMEOUT) {
+        match run(LocalCliOperation::Status, LOCAL_CONTAINER_VERIFY_TIMEOUT) {
             Ok(result) if result.success() => {
                 trace_local_runtime("container", "ready");
                 return Ok(());
@@ -1195,7 +1149,9 @@ fn prepare_impl(
             ValidatedHost::Local => {
                 let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
                 start_and_verify_local_container_with(
-                    |args, timeout| run_scoped_local(&app, &scope, wrapper, args, timeout),
+                    |operation, timeout| {
+                        run_scoped_local(&app, &scope, wrapper, operation, timeout)
+                    },
                     thread::sleep,
                     LOCAL_CONTAINER_VERIFY_ATTEMPTS,
                 )
@@ -1231,17 +1187,12 @@ fn prepare_impl(
             match &validated {
                 ValidatedHost::Local => {
                     let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
-                    let use_id = match submission.provider {
-                        SubscriptionProvider::Claude => "claude",
-                        SubscriptionProvider::Codex => "codex",
-                        SubscriptionProvider::Kimi => "kimi",
-                    };
                     ensure_success_with_timeout(
                         run_scoped_local(
                             &app,
                             &scope,
                             wrapper,
-                            &["providers", "use", use_id],
+                            LocalCliOperation::ProviderUse(submission.provider),
                             COMMAND_TIMEOUT,
                         ),
                         "provider_config_failed",
@@ -1252,7 +1203,7 @@ fn prepare_impl(
                             &app,
                             &scope,
                             wrapper,
-                            &["providers", "update", use_id],
+                            LocalCliOperation::ProviderUpdate(submission.provider),
                             PREPARE_TIMEOUT,
                         ),
                         "provider_install_failed",
@@ -1324,22 +1275,11 @@ pub(crate) async fn onboarding_prepare(
 
 const REMOTE_SNAPSHOT: &str = r#"set -u
 JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"
-[ -x "$JHT_BIN" ] && echo runtimeInstalled=1 || echo runtimeInstalled=0
-if "$JHT_BIN" status >/dev/null 2>&1; then echo containerRunning=1; else echo containerRunning=0; fi
-python3 - <<'PY'
-import json, os
-home=os.path.expanduser('~/.jht'); p=os.path.join(home,'jht.config.json')
-try: c=json.load(open(p)); provider=str(c.get('active_provider') or '').lower(); cfg=(c.get('providers') or {}).get(provider) or {}
-except Exception: provider=''; cfg={}
-configured=provider in ('claude','anthropic','codex','openai','kimi','moonshot') and cfg.get('auth_method','subscription')=='subscription'
-markers={'claude':'.claude/.credentials.json','anthropic':'.claude/.credentials.json','codex':'.codex/auth.json','openai':'.codex/auth.json','kimi':'.kimi/credentials/kimi-code.json','moonshot':'.kimi/credentials/kimi-code.json'}
-print('providerConfigured='+('1' if configured else '0'))
-print('providerAuthenticated='+('1' if provider in markers and os.path.isfile(os.path.join(home,markers[provider])) else '0'))
-print('assistantWelcomed='+('1' if os.path.isfile(os.path.join(home,'profile/welcomed.flag')) else '0'))
-PY
-if "$JHT_BIN" team status 2>/dev/null | grep -q 'ASSISTENTE'; then echo assistantRunning=1; else echo assistantRunning=0; fi
-if "$JHT_BIN" team status 2>/dev/null | grep -q 'CAPITANO'; then echo captainRunning=1; else echo captainRunning=0; fi
-if [ -f "$HOME/.jht/profile/ready.flag" ] || "$JHT_BIN" profile validate --strict --json >/dev/null 2>&1; then echo profileReady=1; else echo profileReady=0; fi"#;
+if [ ! -x "$JHT_BIN" ] || ! grep -Fqx 'JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1' "$JHT_BIN" 2>/dev/null; then
+  printf '%s\n' runtimeInstalled=0 containerRunning=0 providerConfigured=0 providerAuthenticated=0 assistantWelcomed=0 assistantRunning=0 captainRunning=0 profileReady=0
+  exit 0
+fi
+exec "$JHT_BIN" onboarding-snapshot"#;
 
 fn parse_snapshot(text: &str) -> OnboardingSnapshot {
     let has = |key: &str| text.lines().any(|line| line.trim() == format!("{key}=1"));
@@ -1354,44 +1294,6 @@ fn parse_snapshot(text: &str) -> OnboardingSnapshot {
         assistant_welcomed: has("assistantWelcomed"),
         direct_chat_ready: false,
     }
-}
-
-fn local_profile_ready(home: &Path) -> bool {
-    if home.join("profile/ready.flag").is_file() {
-        return true;
-    }
-    let Ok(raw) = fs::read(home.join("profile/candidate_profile.yml")) else {
-        return false;
-    };
-    let Ok(value) = serde_json::from_slice::<Value>(&raw) else {
-        return false;
-    };
-    let nonempty = |key: &str| {
-        value
-            .get(key)
-            .and_then(Value::as_str)
-            .is_some_and(|v| !v.trim().is_empty())
-    };
-    let skills = value
-        .get("skills")
-        .and_then(|v| v.get("primary"))
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    let languages = value
-        .get("languages")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    nonempty("name")
-        && nonempty("email")
-        && nonempty("target_role")
-        && nonempty("location")
-        && value
-            .get("experience_years")
-            .and_then(Value::as_i64)
-            .is_some_and(|v| v >= 0)
-        && nonempty("seniority_target")
-        && skills >= 2
-        && languages >= 1
 }
 
 fn snapshot_impl(
@@ -1409,55 +1311,21 @@ fn snapshot_impl(
             Ok(parse_snapshot(&result.stdout_text()))
         }
         ValidatedHost::Local => {
-            crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
             let Some(wrapper) = wrapper_path(app) else {
                 return Ok(OnboardingSnapshot::default());
             };
-            let container = run_scoped_local(app, scope, &wrapper, &["status"], SNAPSHOT_TIMEOUT)
-                .is_ok_and(|r| r.success());
-            let team = if container {
-                run_scoped_local(app, scope, &wrapper, &["team", "status"], SNAPSHOT_TIMEOUT)
-                    .ok()
-                    .map(|r| r.stdout_text())
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
-            let home = app
-                .path()
-                .home_dir()
-                .map_err(|_| failure("storage_failed"))?
-                .join(".jht");
-            let config: Value = fs::read(home.join("jht.config.json"))
-                .ok()
-                .and_then(|raw| serde_json::from_slice(&raw).ok())
-                .unwrap_or(Value::Null);
-            let provider = config
-                .get("active_provider")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_lowercase();
-            let configured = matches!(
-                provider.as_str(),
-                "claude" | "anthropic" | "codex" | "openai" | "kimi" | "moonshot"
-            );
-            let credential = match provider.as_str() {
-                "claude" | "anthropic" => home.join(".claude/.credentials.json"),
-                "codex" | "openai" => home.join(".codex/auth.json"),
-                "kimi" | "moonshot" => home.join(".kimi/credentials/kimi-code.json"),
-                _ => home.join(".no-provider"),
-            };
-            Ok(OnboardingSnapshot {
-                runtime_installed: true,
-                container_running: container,
-                provider_configured: configured,
-                provider_authenticated: credential.is_file(),
-                assistant_running: team.contains("ASSISTENTE"),
-                captain_running: team.contains("CAPITANO"),
-                profile_ready: local_profile_ready(&home),
-                assistant_welcomed: home.join("profile/welcomed.flag").is_file(),
-                direct_chat_ready: false,
-            })
+            let result = run_scoped_local(
+                app,
+                scope,
+                &wrapper,
+                LocalCliOperation::Snapshot,
+                SNAPSHOT_TIMEOUT,
+            )
+            .map_err(failure)?;
+            if !result.success() {
+                return Err(failure("snapshot_failed"));
+            }
+            Ok(parse_snapshot(&result.stdout_text()))
         }
     }
 }
@@ -1616,13 +1484,17 @@ enum SecretMarkerKind {
     KeyValue,
 }
 
-const SECRET_MARKERS: [(&str, SecretMarkerKind); 7] = [
+const SECRET_MARKERS: [(&str, SecretMarkerKind); 11] = [
     ("jht_sync_", SecretMarkerKind::Prefix),
     ("sk-", SecretMarkerKind::Prefix),
     ("access_token", SecretMarkerKind::KeyValue),
     ("refresh_token", SecretMarkerKind::KeyValue),
     ("id_token", SecretMarkerKind::KeyValue),
     ("code_verifier", SecretMarkerKind::KeyValue),
+    ("api_key", SecretMarkerKind::KeyValue),
+    ("client_secret", SecretMarkerKind::KeyValue),
+    ("password", SecretMarkerKind::KeyValue),
+    ("session_token", SecretMarkerKind::KeyValue),
     ("bearer", SecretMarkerKind::KeyValue),
 ];
 
@@ -1719,18 +1591,26 @@ impl StreamRedactor {
             }
         }
 
-        output
+        sanitize_interactive_text(output)
     }
 
     fn finish(&mut self) -> String {
         match self.state {
-            RedactionState::Scanning => std::mem::take(&mut self.pending),
+            RedactionState::Scanning => {
+                sanitize_interactive_text(std::mem::take(&mut self.pending))
+            }
             RedactionState::AwaitingValue | RedactionState::Redacting => {
                 self.pending.clear();
                 String::new()
             }
         }
     }
+}
+
+fn sanitize_interactive_text(text: String) -> String {
+    text.chars()
+        .filter(|character| matches!(character, '\n' | '\t') || !character.is_control())
+        .collect()
 }
 
 fn secret_terminator(character: char) -> bool {
@@ -1812,17 +1692,18 @@ pub(crate) fn onboarding_provider_login(
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
                 #[cfg(target_os = "macos")]
                 {
+                    let oauth_args = LocalCliOperation::OauthLogin.argv();
+                    let (program, invocation) =
+                        local_wrapper_command(&wrapper, &oauth_args, std::env::var_os("PATH"))
+                            .map_err(failure)?;
                     let mut cmd = Command::new("/usr/bin/script");
-                    cmd.arg("-q")
-                        .arg("/dev/null")
-                        .arg(wrapper)
-                        .arg("oauth-login");
+                    cmd.arg("-q").arg("/dev/null").arg(program).args(invocation);
                     cmd
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
                     let mut cmd = Command::new(wrapper);
-                    cmd.arg("oauth-login");
+                    cmd.args(LocalCliOperation::OauthLogin.argv());
                     cmd
                 }
             }
@@ -1964,7 +1845,7 @@ pub(crate) fn onboarding_provider_login_input(
     input: String,
 ) -> Result<(), OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
-    if input.len() > 4096 || input.contains('\0') {
+    if !valid_provider_login_input(&input) {
         return Err(failure("invalid_input"));
     }
     let mut input = Zeroizing::new(input);
@@ -1985,6 +1866,13 @@ pub(crate) fn onboarding_provider_login_input(
         .map_err(|_| failure("provider_input_failed"))?;
     input.zeroize();
     Ok(())
+}
+
+fn valid_provider_login_input(input: &str) -> bool {
+    input.len() <= 4096
+        && input.chars().all(|character| {
+            !character.is_control() && !matches!(character, '\u{2028}' | '\u{2029}')
+        })
 }
 
 #[tauri::command]
@@ -2036,7 +1924,13 @@ fn start_team_impl(
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
             ensure_success(
-                run_scoped_local(app, scope, &wrapper, &["team", "start"], PREPARE_TIMEOUT),
+                run_scoped_local(
+                    app,
+                    scope,
+                    &wrapper,
+                    LocalCliOperation::TeamStart,
+                    PREPARE_TIMEOUT,
+                ),
                 "team_start_failed",
             )
         }
@@ -2185,7 +2079,7 @@ pub(crate) async fn onboarding_assistant_open(
                                 &app,
                                 &worker_expected,
                                 &wrapper,
-                                &["team", "start", "assistente"],
+                                LocalCliOperation::AssistantStart,
                                 COMMAND_TIMEOUT,
                             ),
                             "assistant_start_failed",
@@ -2229,15 +2123,14 @@ mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
         parse_snapshot, redact, resume_team_prerequisite, start_and_verify_local_container_with,
-        valid_pairing_token, valid_wrapper_file, ExistingTeamConnectRequest, OnboardingProgress,
-        OnboardingProgressStage, OnboardingProgressStatus, OnboardingSubmission, ProgressReporter,
-        StreamRedactor, INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
+        valid_pairing_token, valid_provider_login_input, valid_wrapper_file,
+        ExistingTeamConnectRequest, LocalCliOperation, OnboardingProgress, OnboardingProgressStage,
+        OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StreamRedactor,
+        SubscriptionProvider, INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
+        REMOTE_SNAPSHOT,
     };
     #[cfg(target_os = "macos")]
-    use super::{
-        ensure_local_podman, ensure_local_podman_with_retry, local_podman_install_required,
-        local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS, PODMAN_MACHINE_NAME,
-    };
+    use super::{local_podman_install_required, local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS};
     use crate::runtime_host::ProcessResult;
     use sha2::{Digest, Sha256};
     use std::{
@@ -2522,99 +2415,14 @@ mod tests {
         fs::remove_dir_all(home).unwrap();
     }
 
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn local_runtime_prepare_podman_success_failure_and_retry() {
-        let mut ready_calls = Vec::new();
-        ensure_local_podman_with_retry(
-            |args, _| {
-                ready_calls.push(args.join(" "));
-                outcome(true)
-            },
-            |_| panic!("an already ready machine must not wait"),
-            3,
-        )
-        .unwrap();
-        assert_eq!(
-            ready_calls,
-            vec![format!("--connection {PODMAN_MACHINE_NAME} info")]
-        );
-
-        let mut stopped_results = VecDeque::from([false, true, true, false, true]);
-        let mut stopped_calls = Vec::new();
-        let mut stopped_pauses = 0;
-        ensure_local_podman_with_retry(
-            |args, _| {
-                stopped_calls.push(args.join(" "));
-                outcome(stopped_results.pop_front().unwrap())
-            },
-            |_| stopped_pauses += 1,
-            3,
-        )
-        .unwrap();
-        assert_eq!(
-            stopped_calls[1],
-            format!("machine inspect {PODMAN_MACHINE_NAME}")
-        );
-        assert_eq!(
-            stopped_calls[2],
-            format!("machine start --update-connection=false {PODMAN_MACHINE_NAME}")
-        );
-        assert_eq!(stopped_pauses, 1);
-
-        let mut absent_results = VecDeque::from([false, false, true, true]);
-        let mut absent_calls = Vec::new();
-        ensure_local_podman_with_retry(
-            |args, _| {
-                absent_calls.push(args.join(" "));
-                outcome(absent_results.pop_front().unwrap())
-            },
-            |_| panic!("a machine ready after init must not wait"),
-            3,
-        )
-        .unwrap();
-        assert_eq!(
-            absent_calls[2],
-            format!("machine init --now --update-connection=false {PODMAN_MACHINE_NAME}")
-        );
-
-        let mut raced_start = VecDeque::from([false, true, false, true]);
-        ensure_local_podman_with_retry(
-            |_, _| outcome(raced_start.pop_front().unwrap()),
-            |_| panic!("effect verification after a raced start must not wait"),
-            3,
-        )
-        .unwrap();
-
-        let mut start_failed = VecDeque::from([false, true, false, false]);
-        let error = ensure_local_podman_with_retry(
-            |_, _| outcome(start_failed.pop_front().unwrap()),
-            |_| {},
-            3,
-        )
-        .unwrap_err();
-        assert_eq!(error.code, "podman_start_failed");
-
-        let mut not_ready = VecDeque::from([false, false, true, false, false]);
-        let mut not_ready_pauses = 0;
-        let error = ensure_local_podman_with_retry(
-            |_, _| outcome(not_ready.pop_front().unwrap()),
-            |_| not_ready_pauses += 1,
-            2,
-        )
-        .unwrap_err();
-        assert_eq!(error.code, "podman_not_ready");
-        assert_eq!(not_ready_pauses, 1);
-    }
-
     #[test]
     fn local_runtime_prepare_container_success_failure_and_retry() {
         let mut results = VecDeque::from([true, false, true]);
         let mut calls = Vec::new();
         let mut pauses = 0;
         start_and_verify_local_container_with(
-            |args, _| {
-                calls.push(args.join(" "));
+            |operation, _| {
+                calls.push(operation.argv().join(" "));
                 outcome(results.pop_front().unwrap())
             },
             |_| pauses += 1,
@@ -2626,8 +2434,8 @@ mod tests {
 
         let mut active_calls = Vec::new();
         start_and_verify_local_container_with(
-            |args, _| {
-                active_calls.push(args.join(" "));
+            |operation, _| {
+                active_calls.push(operation.argv().join(" "));
                 outcome(true)
             },
             |_| panic!("an active container must not wait"),
@@ -2661,6 +2469,32 @@ mod tests {
         let start_failed =
             start_and_verify_local_container_with(|_, _| outcome(false), |_| {}, 1).unwrap_err();
         assert_eq!(start_failed.code, "container_start_failed");
+    }
+
+    #[test]
+    fn local_onboarding_uses_the_authoritative_cli_dispatcher_contract() {
+        let operations = [
+            (LocalCliOperation::Up, vec!["up"]),
+            (LocalCliOperation::Status, vec!["status"]),
+            (
+                LocalCliOperation::ProviderUse(SubscriptionProvider::Codex),
+                vec!["providers", "use", "codex"],
+            ),
+            (
+                LocalCliOperation::ProviderUpdate(SubscriptionProvider::Claude),
+                vec!["providers", "update", "claude"],
+            ),
+            (LocalCliOperation::OauthLogin, vec!["oauth-login"]),
+            (LocalCliOperation::TeamStart, vec!["team", "start"]),
+            (LocalCliOperation::Snapshot, vec!["onboarding-snapshot"]),
+            (
+                LocalCliOperation::AssistantStart,
+                vec!["team", "start", "assistente"],
+            ),
+        ];
+        for (operation, expected) in operations {
+            assert_eq!(operation.argv(), expected);
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -2702,7 +2536,7 @@ mod tests {
         let wrapper = dir.join("jht");
         fs::write(
             &wrapper,
-            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n",
         )
         .unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
@@ -2716,7 +2550,7 @@ mod tests {
 
         fs::write(
             &wrapper,
-            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n",
         )
         .unwrap();
         let link = dir.join("jht-link");
@@ -2829,7 +2663,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn fake_podman_and_wrapper_integration_has_no_real_runtime_side_effects() {
+    fn fake_wrapper_integration_has_no_real_runtime_side_effects() {
         use std::{
             fs,
             os::unix::fs::PermissionsExt,
@@ -2842,29 +2676,13 @@ mod tests {
             .as_nanos();
         let dir = std::env::temp_dir().join(format!("jht-local-runtime-test-{nonce}"));
         fs::create_dir_all(&dir).unwrap();
-        let podman = dir.join("podman");
-        fs::write(
-            &podman,
-            r#"#!/bin/sh
-state="$(dirname "$0")/podman-ready"
-case "$1:$2" in
-  --connection:jht-podman) [ -f "$state" ] ;;
-  machine:inspect) exit 0 ;;
-  machine:start) : > "$state" ;;
-  *) exit 9 ;;
-esac
-"#,
-        )
-        .unwrap();
-        fs::set_permissions(&podman, fs::Permissions::from_mode(0o700)).unwrap();
-        ensure_local_podman(&podman).unwrap();
-
         let wrapper = dir.join("jht");
         fs::write(
             &wrapper,
             r#"#!/bin/sh
 JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
+JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 state="$(dirname "$0")/container-ready"
 case "$1" in
   up) : > "$state" ;;
@@ -2876,7 +2694,6 @@ esac
         .unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
         super::start_and_verify_local_container(&wrapper).unwrap();
-        assert!(dir.join("podman-ready").is_file());
         assert!(dir.join("container-ready").is_file());
         fs::remove_dir_all(dir).unwrap();
     }
@@ -2892,6 +2709,63 @@ esac
         );
         assert!(!snapshot.provider_authenticated && !snapshot.captain_running);
         assert!(!snapshot.direct_chat_ready);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remote_snapshot_uses_only_the_capability_gated_read_only_command() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            process::Command,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-snapshot-probe-{nonce}"));
+        let bin = root.join("bin");
+        let home = root.join("home");
+        let marker = root.join("mutated");
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        let jht = bin.join("jht");
+        fs::write(
+            &jht,
+            r#"#!/bin/sh
+JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
+if [ "$1" = onboarding-snapshot ]; then
+  printf '%s\n' runtimeInstalled=1 containerRunning=0 providerConfigured=0 providerAuthenticated=0 assistantWelcomed=0 assistantRunning=0 captainRunning=0 profileReady=0
+  exit 0
+fi
+: > "$JHT_MUTATION_MARKER"
+exit 0
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&jht, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let result = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(REMOTE_SNAPSHOT)
+            .env("HOME", &home)
+            .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+            .env("JHT_MUTATION_MARKER", &marker)
+            .output()
+            .unwrap();
+
+        assert!(result.status.success());
+        assert!(!marker.exists());
+        let snapshot = parse_snapshot(&String::from_utf8(result.stdout).unwrap());
+        assert!(snapshot.runtime_installed);
+        assert!(!snapshot.container_running);
+        assert!(!snapshot.provider_configured);
+        assert!(!snapshot.provider_authenticated);
+        assert!(!snapshot.assistant_running);
+        assert!(!snapshot.captain_running);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -2991,6 +2865,50 @@ esac
         assert!(output.contains("next "));
         assert!(!output.contains("split-secret"));
         assert!(!output.contains("another-secret"));
+    }
+
+    #[test]
+    fn provider_credentials_and_terminal_controls_are_removed_across_chunks() {
+        let mut redactor = StreamRedactor::default();
+        let mut output = redactor.push("api_ke");
+        output.push_str(&redactor.push("y=synthetic-kimi-secret client_sec"));
+        output.push_str(&redactor.push("ret=synthetic-client password=synthetic-pass session_to"));
+        output.push_str(
+            &redactor.push("ken=synthetic-session\nvisible\ttext\r\u{8}\u{1b}[31m\u{85}"),
+        );
+        output.push_str(&redactor.finish());
+
+        for secret in [
+            "synthetic-kimi-secret",
+            "synthetic-client",
+            "synthetic-pass",
+            "synthetic-session",
+        ] {
+            assert!(!output.contains(secret));
+        }
+        assert!(output.contains("visible\ttext"));
+        assert!(!output
+            .chars()
+            .any(|character| { character.is_control() && !matches!(character, '\n' | '\t') }));
+    }
+
+    #[test]
+    fn provider_login_input_accepts_one_printable_line_only() {
+        assert!(valid_provider_login_input("ABCD-EFGH"));
+        assert!(valid_provider_login_input("yes please"));
+        assert!(valid_provider_login_input(""));
+        for invalid in [
+            "ok\n/second",
+            "ok\r/second",
+            "ok\tsecond",
+            "ok\u{1b}[31m",
+            "ok\u{8}second",
+            "ok\u{85}second",
+            "ok\u{2028}second",
+        ] {
+            assert!(!valid_provider_login_input(invalid), "accepted {invalid:?}");
+        }
+        assert!(!valid_provider_login_input(&"x".repeat(4097)));
     }
 
     #[test]
