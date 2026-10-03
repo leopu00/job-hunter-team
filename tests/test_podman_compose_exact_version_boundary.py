@@ -153,13 +153,47 @@ if args[0] == "ps":
     if Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"]).is_file():
         print("jht")
     raise SystemExit(0)
+case = os.environ.get("JHT_FIXTURE_CONTAINER_CASE", "valid")
+expected_id = (
+    os.environ["JHT_FIXTURE_FOREIGN_CONTAINER_ID"]
+    if case.startswith("wrong-")
+    else os.environ["JHT_FIXTURE_CONTAINER_ID"]
+)
+metadata_path = Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"])
 if args[0] == "exec":
-    if not Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"]).is_file():
+    target_index = 1
+    while target_index < len(args):
+        if args[target_index] in ("-i", "-t", "-it", "-ti"):
+            target_index += 1
+            continue
+        if args[target_index] in ("-e", "--env", "-u", "--user", "-w", "--workdir"):
+            target_index += 2
+            continue
+        break
+    if (
+        target_index >= len(args)
+        or args[target_index] != expected_id
+        or not metadata_path.is_file()
+    ):
         raise SystemExit(95)
     if args[-1] == "--version":
         print("0.4.0")
     elif "node" in args and "-e" in args:
         print("1 1 1", end="")
+    raise SystemExit(0)
+if args[0] == "logs":
+    if len(args) < 2 or args[-1] != expected_id or not metadata_path.is_file():
+        raise SystemExit(95)
+    print("fixture log")
+    raise SystemExit(0)
+if args[0] == "cp":
+    if (
+        len(args) != 3
+        or not args[1].startswith(expected_id + ":")
+        or not metadata_path.is_file()
+    ):
+        raise SystemExit(95)
+    Path(args[2]).write_bytes(b"attested fixture download\\n")
     raise SystemExit(0)
 if args[0:2] == ["image", "inspect"]:
     expected = "example.invalid/jht@sha256:" + os.environ["JHT_FIXTURE_IMAGE_DIGEST"]
@@ -174,25 +208,6 @@ try:
     target = args[target_index]
 except IndexError:
     raise SystemExit(92)
-if target == "jht":
-    metadata_path = Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"])
-    if not metadata_path.is_file():
-        raise SystemExit(91)
-    target_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if "--format" in args and args[args.index("--format") + 1] == "{{.Image}}":
-        print("sha256:" + target_metadata["image_digest"])
-        raise SystemExit(0)
-    if "--format" in args and args[args.index("--format") + 1] == "{{.State.Running}}":
-        print("true")
-        raise SystemExit(0)
-    raise SystemExit(94)
-
-case = os.environ.get("JHT_FIXTURE_CONTAINER_CASE", "valid")
-expected_id = (
-    os.environ["JHT_FIXTURE_FOREIGN_CONTAINER_ID"]
-    if case.startswith("wrong-")
-    else os.environ["JHT_FIXTURE_CONTAINER_ID"]
-)
 if target != expected_id or case == "inspect-failure":
     raise SystemExit(91)
 try:
@@ -213,7 +228,6 @@ metadata = {
     "systemd_unit": "podman-compose" + "@" + "jht.service",
     "config_hash": os.environ["JHT_FIXTURE_CONFIG_HASH"],
 }
-metadata_path = Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"])
 if metadata_path.is_file():
     metadata.update(json.loads(metadata_path.read_text(encoding="utf-8")))
 case_overrides = {
@@ -243,6 +257,10 @@ if case == "upgrade-stage-project":
 values = {
     "{{.Name}}": metadata["name"],
     "{{.State.Running}}": metadata["running"],
+    "{{.State.Status}}": "running" if metadata["running"] == "true" else "exited",
+    "{{.State.StartedAt}}": "2026-10-03T00:00:00Z",
+    "{{.Config.Image}}": "example.invalid/jht@sha256:" + metadata["image_digest"],
+    "{{.Image}}": "sha256:" + metadata["image_digest"],
     '{{index .Config.Labels "io.podman.compose.project"}}': metadata["io_project"],
     '{{index .Config.Labels "com.docker.compose.project"}}': metadata["com_project"],
     '{{index .Config.Labels "com.docker.compose.project.working_dir"}}': metadata["working_dir"],
@@ -674,6 +692,30 @@ def _docker_calls(env: dict[str, str]) -> list[tuple[str, list[str]]]:
         for event in _events(env)
         if event["tool"] == "docker"
     ]
+
+
+def _docker_runtime_target(args: list[str]) -> str | None:
+    if not args:
+        return None
+    if args[0] == "inspect":
+        index = 3 if args[1:3] == ["--type", "container"] else 1
+        return args[index] if index < len(args) else None
+    if args[0] == "logs":
+        return args[-1] if len(args) > 1 else None
+    if args[0] == "cp":
+        return args[1].split(":", 1)[0] if len(args) > 1 else None
+    if args[0] != "exec":
+        return None
+    index = 1
+    while index < len(args):
+        if args[index] in ("-i", "-t", "-it", "-ti"):
+            index += 1
+            continue
+        if args[index] in ("-e", "--env", "-u", "--user", "-w", "--workdir"):
+            index += 2
+            continue
+        return args[index]
+    return None
 
 
 def _events(env: dict[str, str]) -> list[dict[str, object]]:
@@ -1134,6 +1176,73 @@ def test_machine_start_never_inherits_the_provider_connection(tmp_path: Path):
     assert all(connection == "" for connection, _ in _docker_calls(env))
 
 
+@pytest.mark.parametrize(
+    "operation",
+    (
+        ("logs", "--tail", "1"),
+        ("status",),
+        ("shell",),
+        ("providers", "current"),
+    ),
+)
+def test_runtime_operations_use_only_the_attested_container_id(
+    tmp_path: Path, operation: tuple[str, ...]
+):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_CONTAINER_NAME"] = "same-name-decoy"
+
+    result = _run(wrapper, env, *operation)
+
+    assert result.returncode == 0, result.stderr
+    targets = [
+        target
+        for _, args in _docker_calls(env)
+        if (target := _docker_runtime_target(args)) is not None
+    ]
+    assert targets
+    assert set(targets) == {CONTAINER_ID}
+    assert all(
+        "same-name-decoy" not in args and "jht" not in args
+        for _, args in _docker_calls(env)
+    )
+
+
+def test_host_download_copies_from_and_cleans_up_only_the_attested_id(
+    tmp_path: Path,
+):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_CONTAINER_NAME"] = "same-name-decoy"
+    destination = tmp_path / "downloads" / "desktop.zip"
+
+    result = _run(
+        wrapper,
+        env,
+        "download",
+        "--os",
+        "macos",
+        "--output",
+        str(destination),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert destination.read_bytes() == b"attested fixture download\n"
+    docker_calls = _docker_calls(env)
+    targets = [
+        target
+        for _, args in docker_calls
+        if (target := _docker_runtime_target(args)) is not None
+    ]
+    assert targets
+    assert set(targets) == {CONTAINER_ID}
+    cp_calls = [args for _, args in docker_calls if args and args[0] == "cp"]
+    assert len(cp_calls) == 1
+    assert cp_calls[0][1].startswith(CONTAINER_ID + ":/tmp/jht-download-")
+    assert all(
+        "same-name-decoy" not in args and "jht" not in args
+        for _, args in docker_calls
+    )
+
+
 @pytest.mark.parametrize("inherited_connection", [None, "user-default-machine"])
 def test_upgrade_check_uses_the_same_exact_version_named_connection_contract(
     tmp_path: Path, inherited_connection: str | None
@@ -1156,6 +1265,10 @@ def test_upgrade_check_uses_the_same_exact_version_named_connection_contract(
     assert all(connection == MACHINE for connection, _ in _compose_calls(env))
     calls = _provider_podman_calls(podman_log)
     assert calls == [
+        (MACHINE, PS_Q_CHILD),
+        (MACHINE, HASH_PROBE_CHILD),
+        (MACHINE, PS_Q_CHILD),
+        (MACHINE, HASH_PROBE_CHILD),
         (MACHINE, PS_Q_CHILD),
         (MACHINE, HASH_PROBE_CHILD),
         (MACHINE, ["pull", "jht"]),
