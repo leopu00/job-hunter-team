@@ -39,12 +39,16 @@ describe("OAuthLoginTakeover", () => {
       ],
     })} />);
 
-    expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
-    expect(screen.getByText("Connesso").closest("[role=status]")).toHaveTextContent(/connesso.*01:02/i);
+    const heading = screen.getByRole("heading", { name: /completa l’accesso a codex/i });
+    expect(heading).toBeInTheDocument();
+    expect(heading).toHaveFocus();
+    expect(screen.getByText("Connesso").closest("[role=status]")).not.toHaveTextContent("01:02");
+    expect(screen.getByLabelText("Tempo trascorso 01:02")).toBeInTheDocument();
     expect(screen.getByText("https://example.com/device")).toBeInTheDocument();
     expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
 
     const log = screen.getByRole("log", { name: /attività del login provider/i });
+    expect(log).toHaveAttribute("aria-live", "off");
     expect(log).toHaveTextContent("Apri il browser");
     expect(log).toHaveTextContent("Bearer [redatto]");
     expect(log).toHaveTextContent("access_token=[redatto]");
@@ -89,6 +93,7 @@ describe("OAuthLoginTakeover", () => {
     const input = screen.getByRole("textbox", { name: /codice restituito/i });
     const submit = screen.getByRole("button", { name: "Continua" });
     expect(input).toHaveAttribute("aria-describedby");
+    expect(input).toHaveFocus();
     expect(submit).toBeDisabled();
     expect(onSubmitInput).not.toHaveBeenCalled();
 
