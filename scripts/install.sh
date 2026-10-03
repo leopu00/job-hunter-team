@@ -27,6 +27,14 @@
 # ║                            Except for explicit Podman, a running Docker  ║
 # ║                            is reused (detect-first). Linux ignores it.   ║
 # ║    --dry-run               Only show the actions that would be executed  ║
+# ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
+# ║                              wrapper, compose and host-setup transaction;║
+# ║                              no engine, GUI, account or container I/O.   ║
+# ║    --expected-installer-sha256 <hex> Required with the mode above.       ║
+# ║    --expected-wrapper-sha256 <hex>   Required with the mode above.       ║
+# ║    --expected-compose-sha256 <hex>   Required with the mode above.       ║
+# ║    --expected-host-setup-sha256 <hex> Required with the mode above.      ║
+# ║    --expected-runtime-version <ver>  Required with the mode above.       ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
 # ║                            production). Example to test dev-1:           ║
@@ -90,6 +98,14 @@ MIN_NODE_MAJOR=22
 USE_DOCKER=1
 DRY_RUN=0
 PAIRING_TOKEN=""
+PUBLISH_RUNTIME_BUNDLE=0
+EXPECTED_INSTALLER_SHA256=""
+EXPECTED_WRAPPER_SHA256=""
+EXPECTED_COMPOSE_SHA256=""
+EXPECTED_HOST_SETUP_SHA256=""
+EXPECTED_RUNTIME_VERSION=""
+RUNTIME_PUBLISH_FAILPOINT="${JHT_RUNTIME_PUBLISH_FAILPOINT:-}"
+RUNTIME_PUBLISH_FAILURE="${JHT_RUNTIME_PUBLISH_FAILURE:-error}"
 # macOS container runtime: '' (= colima default) | colima | podman |
 # docker-desktop. Podman is opt-in until its macOS lifecycle probe is green.
 # Non-interactive (curl | bash) → the choice is a flag, not a prompt; the
@@ -111,6 +127,37 @@ while [ $# -gt 0 ]; do
       ;;
     --runtime=*) RUNTIME_CHOICE="${1#*=}"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --publish-runtime-bundle) PUBLISH_RUNTIME_BUNDLE=1; shift ;;
+    --expected-installer-sha256)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXPECTED_INSTALLER_SHA256="$2"
+      shift 2
+      ;;
+    --expected-installer-sha256=*) EXPECTED_INSTALLER_SHA256="${1#*=}"; shift ;;
+    --expected-wrapper-sha256)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXPECTED_WRAPPER_SHA256="$2"
+      shift 2
+      ;;
+    --expected-wrapper-sha256=*) EXPECTED_WRAPPER_SHA256="${1#*=}"; shift ;;
+    --expected-compose-sha256)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXPECTED_COMPOSE_SHA256="$2"
+      shift 2
+      ;;
+    --expected-compose-sha256=*) EXPECTED_COMPOSE_SHA256="${1#*=}"; shift ;;
+    --expected-host-setup-sha256)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXPECTED_HOST_SETUP_SHA256="$2"
+      shift 2
+      ;;
+    --expected-host-setup-sha256=*) EXPECTED_HOST_SETUP_SHA256="${1#*=}"; shift ;;
+    --expected-runtime-version)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXPECTED_RUNTIME_VERSION="$2"
+      shift 2
+      ;;
+    --expected-runtime-version=*) EXPECTED_RUNTIME_VERSION="${1#*=}"; shift ;;
     --branch)
       # Explicit branch override, same as JHT_BRANCH=<name>.
       # Useful to test dev-N branches without setting the env var
@@ -148,6 +195,40 @@ case "$RUNTIME_CHOICE" in
   colima|podman|docker-desktop) ;;
   *) printf "Invalid --runtime value: %s (use colima|podman|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
 esac
+
+if [ "$PUBLISH_RUNTIME_BUNDLE" -eq 1 ]; then
+  for expected_digest_name in EXPECTED_INSTALLER_SHA256 EXPECTED_WRAPPER_SHA256 \
+      EXPECTED_COMPOSE_SHA256 EXPECTED_HOST_SETUP_SHA256; do
+    expected_digest="${!expected_digest_name}"
+    expected_digest="$(printf '%s' "$expected_digest" | tr '[:upper:]' '[:lower:]')"
+    printf -v "$expected_digest_name" '%s' "$expected_digest"
+    printf '%s' "$expected_digest" | grep -Eq '^[0-9a-f]{64}$' \
+      || { printf '%s\n' "--publish-runtime-bundle requires all expected SHA-256 digests" >&2; exit 2; }
+  done
+  case "$EXPECTED_RUNTIME_VERSION" in
+    ''|*[!0-9A-Za-z._-]*)
+      printf '%s\n' "--publish-runtime-bundle requires a bounded --expected-runtime-version" >&2
+      exit 2
+      ;;
+  esac
+  [ "${#EXPECTED_RUNTIME_VERSION}" -le 64 ] \
+    || { printf '%s\n' "--expected-runtime-version is too long" >&2; exit 2; }
+  [ "$USE_DOCKER" -eq 1 ] && [ "$DRY_RUN" -eq 0 ] \
+    && [ -z "$RUNTIME_CHOICE" ] && [ -z "$PAIRING_TOKEN" ] \
+    || { printf '%s\n' "--publish-runtime-bundle cannot combine with dry-run, runtime selection, pairing, or native mode" >&2; exit 2; }
+  if [ -n "$RUNTIME_PUBLISH_FAILPOINT" ]; then
+    [ "${JHT_RUNTIME_PUBLISH_TEST_MODE:-0}" = 1 ] \
+      || { printf '%s\n' "runtime publication failpoints require explicit test mode" >&2; exit 2; }
+    case "$RUNTIME_PUBLISH_FAILPOINT" in
+      before-manifest-replace|after-manifest-replace|after-compose-replace|before-wrapper-replace|after-wrapper-replace) ;;
+      *) printf '%s\n' "unknown runtime publication failpoint" >&2; exit 2 ;;
+    esac
+    case "$RUNTIME_PUBLISH_FAILURE" in
+      error|term) ;;
+      *) printf '%s\n' "unknown runtime publication failure mode" >&2; exit 2 ;;
+    esac
+  fi
+fi
 
 # An explicit raw base is a host-authorized private mirror/test seam. Normal
 # installs resolve the selected ref to an immutable commit just before the
@@ -1028,6 +1109,363 @@ link_bin_native() {
   esac
 }
 
+runtime_publish_stat() {
+  if [ "$(uname -s)" = Darwin ]; then
+    stat -f '%u %Lp' "$1" 2>/dev/null
+  else
+    stat -c '%u %a' "$1" 2>/dev/null
+  fi
+}
+
+runtime_publish_node_safe() {
+  local path="$1" kind="$2" metadata owner mode mode_num
+  [ ! -L "$path" ] || return 1
+  case "$kind" in
+    dir) [ -d "$path" ] ;;
+    file) [ -f "$path" ] ;;
+    *) return 1 ;;
+  esac || return 1
+  metadata="$(runtime_publish_stat "$path")" || return 1
+  owner="${metadata%% *}"
+  mode="${metadata#* }"
+  [ "$owner" = "$(id -u)" ] || return 1
+  mode_num=$((8#$mode))
+  [ $((mode_num & 0022)) -eq 0 ]
+}
+
+runtime_publish_bundle_valid() {
+  local manifest="$1" wrapper="$2" allow_missing_wrapper="$3"
+  local key value extra path actual wrapper_digest="" selection=""
+  local version_count=0 compose_count=0 setup_count=0 wrapper_count=0
+  local selection_count=0 machine_count=0 shim_count=0
+
+  runtime_publish_node_safe "$RUNTIME_DIR" dir || return 1
+  runtime_publish_node_safe "$BIN_DIR" dir || return 1
+  runtime_publish_node_safe "$manifest" file || return 1
+  [ "$(wc -c < "$manifest" | tr -d ' ')" -le 65536 ] || return 1
+
+  while IFS='=' read -r key value extra; do
+    [ -z "$extra" ] || return 1
+    case "$key" in
+      version)
+        version_count=$((version_count + 1))
+        [ "$value" = 1 ] || return 1
+        continue
+        ;;
+      docker-compose.yml)
+        compose_count=$((compose_count + 1))
+        path="$RUNTIME_DIR/docker-compose.yml"
+        ;;
+      host-setup.sh)
+        setup_count=$((setup_count + 1))
+        path="$RUNTIME_DIR/host-setup.sh"
+        ;;
+      jht-wrapper.sh)
+        wrapper_count=$((wrapper_count + 1))
+        wrapper_digest="$value"
+        continue
+        ;;
+      container-runtime)
+        selection_count=$((selection_count + 1))
+        path="$RUNTIME_DIR/container-runtime"
+        ;;
+      podman-machine)
+        machine_count=$((machine_count + 1))
+        path="$RUNTIME_DIR/podman-machine"
+        ;;
+      docker-shim)
+        shim_count=$((shim_count + 1))
+        path="$RUNTIME_DIR/bin/docker"
+        ;;
+      *) return 1 ;;
+    esac
+    [ "$value" != "" ] && printf '%s' "$value" | grep -Eq '^[0-9a-f]{64}$' \
+      || return 1
+    runtime_publish_node_safe "$path" file || return 1
+    actual="$(runtime_publish_sha256 "$path")" || return 1
+    [ "$actual" = "$value" ] || return 1
+    if [ "$key" = container-runtime ]; then
+      selection="$(tr -d '\r\n' < "$path" 2>/dev/null || true)"
+      case "$selection" in docker|podman) ;; *) return 1 ;; esac
+    fi
+  done < "$manifest"
+
+  [ "$version_count" -eq 1 ] && [ "$compose_count" -eq 1 ] \
+    && [ "$setup_count" -eq 1 ] && [ "$wrapper_count" -eq 1 ] \
+    && [ "$selection_count" -le 1 ] && [ "$machine_count" -le 1 ] \
+    && [ "$shim_count" -le 1 ] || return 1
+  printf '%s' "$wrapper_digest" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  if [ -e "$wrapper" ] || [ -L "$wrapper" ]; then
+    runtime_publish_node_safe "$wrapper" file || return 1
+    [ "$(runtime_publish_sha256 "$wrapper")" = "$wrapper_digest" ] || return 1
+  else
+    [ "$allow_missing_wrapper" -eq 1 ] || return 1
+  fi
+  if [ "$selection" = podman ]; then
+    [ "$machine_count" -eq 1 ] && [ "$shim_count" -eq 1 ] || return 1
+    grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$RUNTIME_DIR/bin/docker" || return 1
+    runtime_publish_podman_shim_valid || return 1
+  else
+    [ "$machine_count" -eq 0 ] && [ "$shim_count" -eq 0 ] || return 1
+  fi
+  grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$RUNTIME_DIR/host-setup.sh" || return 1
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' \
+    "$RUNTIME_DIR/docker-compose.yml" || return 1
+}
+
+runtime_publish_podman_shim_valid() {
+  local podman_bin machine expected actual
+  podman_bin="$(command -v podman 2>/dev/null)" || return 1
+  case "$podman_bin" in *"'"*|*$'\n'*) return 1 ;; esac
+  machine="$(tr -d '\r\n' < "$RUNTIME_DIR/podman-machine" 2>/dev/null)" || return 1
+  case "$machine" in ''|*[!A-Za-z0-9_.-]*) return 1 ;; esac
+  expected="$(printf '%s\n%s\n' '#!/bin/sh' '# JHT_PODMAN_DOCKER_SHIM=1'; \
+    printf "exec '%s' --connection '%s' \"\$@\"\n" "$podman_bin" "$machine")"
+  actual="$(cat "$RUNTIME_DIR/bin/docker" 2>/dev/null)" || return 1
+  [ "$actual" = "$expected" ]
+}
+
+# MIGRATION: pubblica installer, wrapper, compose e host-setup dalla stessa
+# fonte candidata in un bundle host gia' attestato. Non e' un fresh install.
+# Non rileva/avvia motori, non
+# esegue host-setup o jht e non legge/scrive account, configurazioni o
+# credenziali. Il manifest nuovo viene esposto per primo: ogni intervallo tra
+# rename fallisce chiuso. Errori e segnali ripristinano tutti i byte precedenti.
+publish_runtime_candidate_bundle() {
+  local manifest="$RUNTIME_DIR/.runtime-integrity"
+  local wrapper_dest="$BIN_DIR/jht"
+  local compose_dest="$RUNTIME_DIR/docker-compose.yml"
+  local setup_dest="$RUNTIME_DIR/host-setup.sh"
+  local release_base installer_candidate="" wrapper_candidate=""
+  local compose_candidate="" setup_candidate="" manifest_tmp=""
+  local manifest_backup="" wrapper_backup="" compose_backup="" setup_backup=""
+  local lock_dir="$RUNTIME_DIR/.publish-runtime.lock"
+  local candidate_sha installed_sha manifest_sha size value
+  local had_wrapper=0
+  local publication_phase="preparing" lock_acquired=0
+
+  [ -d "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] \
+    || fail "Attested host runtime is missing or unsafe. Run the full installer first."
+  local runtime_real home_real bind_real docs_real
+  runtime_real="$(cd -P "$RUNTIME_DIR" 2>/dev/null && pwd -P)" \
+    || fail "Cannot resolve the attested host runtime."
+  [ "$runtime_real" = "${RUNTIME_DIR%/}" ] \
+    || fail "Host runtime has a symlinked or non-canonical ancestor."
+  home_real="$(cd -P "$HOME" 2>/dev/null && pwd -P)" \
+    || fail "Cannot resolve the user home directory."
+  bind_real="$(cd -P "$HOME/.jht" 2>/dev/null && pwd -P)" \
+    || bind_real="$home_real/.jht"
+  docs_real="$(cd -P "$HOME/Documents/Job Hunter Team" 2>/dev/null && pwd -P)" \
+    || docs_real="$home_real/Documents/Job Hunter Team"
+  case "$runtime_real/" in
+    "$bind_real/"*|"$docs_real/"*)
+      fail "Host runtime must stay outside container-writable bind mounts."
+      ;;
+  esac
+  [ -d "$BIN_DIR" ] && [ ! -L "$BIN_DIR" ] \
+    || fail "Attested host wrapper directory is missing or unsafe. Run the full installer first."
+  local bin_real
+  bin_real="$(cd -P "$BIN_DIR" 2>/dev/null && pwd -P)" \
+    || fail "Cannot resolve the host wrapper directory."
+  [ "$bin_real" = "${BIN_DIR%/}" ] \
+    || fail "Host wrapper directory has a symlinked or non-canonical ancestor."
+  case "$bin_real/" in
+    "$bind_real/"*|"$docs_real/"*)
+      fail "Host wrapper must stay outside container-writable bind mounts."
+      ;;
+  esac
+  runtime_publish_node_safe "$RUNTIME_DIR" dir \
+    || fail "Attested host runtime ownership or permissions are unsafe."
+
+  mkdir "$lock_dir" 2>/dev/null \
+    || fail "Another runtime publication is already in progress."
+  lock_acquired=1
+  cleanup_runtime_publication() {
+    local temporary
+    for temporary in "$installer_candidate" "$wrapper_candidate" "$compose_candidate" \
+        "$setup_candidate" "$manifest_tmp" "$manifest_backup" "$wrapper_backup" \
+        "$compose_backup" "$setup_backup"; do
+      [ -z "$temporary" ] || rm -f -- "$temporary"
+    done
+    if [ "$lock_acquired" -eq 1 ]; then
+      rmdir "$lock_dir" 2>/dev/null || true
+      lock_acquired=0
+    fi
+  }
+  rollback_runtime_publication() {
+    trap '' HUP INT TERM
+    if [ "$publication_phase" = replacing ]; then
+      if [ "$had_wrapper" -eq 1 ]; then
+        [ -n "$wrapper_backup" ] && [ -f "$wrapper_backup" ] \
+          && mv -f "$wrapper_backup" "$wrapper_dest" 2>/dev/null || true
+      else
+        rm -f -- "$wrapper_dest"
+      fi
+      [ -n "$setup_backup" ] && [ -f "$setup_backup" ] \
+        && mv -f "$setup_backup" "$setup_dest" 2>/dev/null || true
+      [ -n "$compose_backup" ] && [ -f "$compose_backup" ] \
+        && mv -f "$compose_backup" "$compose_dest" 2>/dev/null || true
+    fi
+    case "$publication_phase" in
+      replacing)
+        [ -n "$manifest_backup" ] && [ -f "$manifest_backup" ] \
+          && mv -f "$manifest_backup" "$manifest" 2>/dev/null || true
+        ;;
+    esac
+    publication_phase="rolled_back"
+  }
+  finish_runtime_publication() {
+    local status=$?
+    trap - EXIT HUP INT TERM
+    [ "$publication_phase" = committed ] || rollback_runtime_publication
+    cleanup_runtime_publication
+    exit "$status"
+  }
+  inject_runtime_publication_failure() {
+    [ "$RUNTIME_PUBLISH_FAILPOINT" = "$1" ] || return 0
+    if [ "$RUNTIME_PUBLISH_FAILURE" = term ]; then
+      kill -TERM "$$"
+      fail "Injected termination was not delivered."
+    fi
+    fail "Injected runtime publication failure."
+  }
+  trap finish_runtime_publication EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  runtime_publish_bundle_valid "$manifest" "$wrapper_dest" 1 \
+    || fail "Existing runtime bundle integrity, ownership, or permissions are invalid."
+  if [ -e "$wrapper_dest" ] || [ -L "$wrapper_dest" ]; then
+    had_wrapper=1
+  fi
+  installer_candidate="$(mktemp "$RUNTIME_DIR/.installer-candidate.XXXXXX")"
+  wrapper_candidate="$(mktemp "$BIN_DIR/.jht-candidate.XXXXXX")"
+  compose_candidate="$(mktemp "$RUNTIME_DIR/.compose-candidate.XXXXXX")"
+  setup_candidate="$(mktemp "$RUNTIME_DIR/.host-setup-candidate.XXXXXX")"
+  manifest_tmp="$(mktemp "$RUNTIME_DIR/.integrity-candidate.XXXXXX")"
+  manifest_backup="$(mktemp "$RUNTIME_DIR/.integrity-rollback.XXXXXX")"
+  compose_backup="$(mktemp "$RUNTIME_DIR/.compose-rollback.XXXXXX")"
+  setup_backup="$(mktemp "$RUNTIME_DIR/.host-setup-rollback.XXXXXX")"
+  if [ "$had_wrapper" -eq 1 ]; then
+    wrapper_backup="$(mktemp "$BIN_DIR/.jht-rollback.XXXXXX")"
+  fi
+
+  release_base="$(attested_raw_base)" \
+    || fail "Cannot resolve the selected candidate source."
+  curl -fsSL "$release_base/scripts/install.sh" -o "$installer_candidate" \
+    || fail "Candidate installer download failed."
+  curl -fsSL "$release_base/scripts/jht-wrapper.sh" -o "$wrapper_candidate" \
+    || fail "Candidate wrapper download failed."
+  curl -fsSL "$release_base/docker-compose.yml" -o "$compose_candidate" \
+    || fail "Candidate compose download failed."
+  curl -fsSL "$release_base/scripts/host-setup.sh" -o "$setup_candidate" \
+    || fail "Candidate host setup download failed."
+
+  runtime_publish_node_safe "$0" file \
+    || fail "Running installer source is not an owner-controlled regular file."
+  [ "$(runtime_publish_sha256 "$0")" = "$EXPECTED_INSTALLER_SHA256" ] \
+    || fail "Running installer digest does not match the expected candidate."
+  [ "$(runtime_publish_sha256 "$installer_candidate")" = "$EXPECTED_INSTALLER_SHA256" ] \
+    && cmp -s "$0" "$installer_candidate" \
+    || fail "Candidate source does not contain this exact installer."
+  bash -n "$installer_candidate" \
+    || fail "Candidate installer has invalid shell syntax."
+
+  size="$(wc -c < "$wrapper_candidate" | tr -d ' ')"
+  [ "$size" -gt 0 ] && [ "$size" -le $((2 * 1024 * 1024)) ] \
+    || fail "Candidate wrapper payload is empty or too large."
+  bash -n "$wrapper_candidate" \
+    || fail "Candidate wrapper has invalid shell syntax."
+  for capability in \
+      JHT_UPGRADE_PROTOCOL=1 \
+      JHT_HOST_RUNTIME_PROTOCOL=1 \
+      JHT_DESKTOP_CHAT_PROTOCOL=1 \
+      JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1; do
+    grep -Fqx "$capability" "$wrapper_candidate" \
+      || fail "Candidate wrapper is missing a required protocol capability."
+  done
+  grep -Fqx "DEFAULT_RUNTIME_VERSION=\"$EXPECTED_RUNTIME_VERSION\"" "$wrapper_candidate" \
+    || fail "Candidate wrapper runtime version does not match the expected version."
+  candidate_sha="$(runtime_publish_sha256 "$wrapper_candidate")" \
+    || fail "Cannot hash the candidate wrapper."
+  [ "$candidate_sha" = "$EXPECTED_WRAPPER_SHA256" ] \
+    || fail "Candidate wrapper digest mismatch."
+  [ "$(runtime_publish_sha256 "$compose_candidate")" = "$EXPECTED_COMPOSE_SHA256" ] \
+    || fail "Candidate compose digest mismatch."
+  grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' \
+    "$compose_candidate" || fail "Candidate compose does not enforce the runtime boundary."
+  [ "$(runtime_publish_sha256 "$setup_candidate")" = "$EXPECTED_HOST_SETUP_SHA256" ] \
+    || fail "Candidate host setup digest mismatch."
+  bash -n "$setup_candidate" \
+    && grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$setup_candidate" \
+    || fail "Candidate host setup is invalid or missing its protocol capability."
+  chmod 700 "$wrapper_candidate" "$setup_candidate"
+  chmod 600 "$compose_candidate"
+
+  while IFS= read -r value || [ -n "$value" ]; do
+    case "$value" in
+      docker-compose.yml=*) printf 'docker-compose.yml=%s\n' "$EXPECTED_COMPOSE_SHA256" ;;
+      host-setup.sh=*) printf 'host-setup.sh=%s\n' "$EXPECTED_HOST_SETUP_SHA256" ;;
+      jht-wrapper.sh=*) printf 'jht-wrapper.sh=%s\n' "$candidate_sha" ;;
+      *) printf '%s\n' "$value" ;;
+    esac
+  done < "$manifest" > "$manifest_tmp"
+  chmod 600 "$manifest_tmp"
+  cp -p "$manifest" "$manifest_backup" \
+    || fail "Cannot stage the runtime manifest rollback."
+  cp -p "$compose_dest" "$compose_backup" \
+    || fail "Cannot stage the compose rollback."
+  cp -p "$setup_dest" "$setup_backup" \
+    || fail "Cannot stage the host setup rollback."
+  if [ "$had_wrapper" -eq 1 ]; then
+    cp -p "$wrapper_dest" "$wrapper_backup" \
+      || fail "Cannot stage the host wrapper rollback."
+  fi
+
+  inject_runtime_publication_failure before-manifest-replace
+  publication_phase="replacing"
+  mv -f "$manifest_tmp" "$manifest" \
+    || fail "Cannot publish the candidate runtime manifest."
+  inject_runtime_publication_failure after-manifest-replace
+  mv -f "$compose_candidate" "$compose_dest" \
+    || fail "Cannot publish the candidate compose."
+  inject_runtime_publication_failure after-compose-replace
+  mv -f "$setup_candidate" "$setup_dest" \
+    || fail "Cannot publish the candidate host setup."
+  inject_runtime_publication_failure before-wrapper-replace
+  mv -f "$wrapper_candidate" "$wrapper_dest" \
+    || fail "Cannot publish the candidate wrapper."
+  inject_runtime_publication_failure after-wrapper-replace
+
+  installed_sha="$(runtime_publish_sha256 "$wrapper_dest" 2>/dev/null || true)"
+  manifest_sha="$(sed -n 's/^jht-wrapper.sh=//p' "$manifest" | head -n 1)"
+  if [ "$installed_sha" != "$candidate_sha" ] \
+      || [ "$manifest_sha" != "$candidate_sha" ] \
+      || [ "$(runtime_publish_sha256 "$compose_dest" 2>/dev/null || true)" != "$EXPECTED_COMPOSE_SHA256" ] \
+      || [ "$(runtime_publish_sha256 "$setup_dest" 2>/dev/null || true)" != "$EXPECTED_HOST_SETUP_SHA256" ] \
+      || ! grep -Fqx 'JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1' "$wrapper_dest" \
+      || ! runtime_publish_bundle_valid "$manifest" "$wrapper_dest" 0; then
+    fail "Candidate publication verification failed."
+  fi
+
+  publication_phase="committed"
+  cleanup_runtime_publication
+  trap - EXIT HUP INT TERM
+  ok "Candidate runtime MIGRATION published and complete bundle verified"
+}
+
+runtime_publish_sha256() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  else
+    return 1
+  fi
+}
+
 # ── Final ─────────────────────────────────────────────────────────────────
 
 # True if maybe_onboard() can launch the wizard right away (TTY available
@@ -1252,6 +1690,10 @@ main_native() {
 }
 
 main() {
+  if [ "$PUBLISH_RUNTIME_BUNDLE" -eq 1 ]; then
+    publish_runtime_candidate_bundle
+    return 0
+  fi
   header
   if [ "$USE_DOCKER" -eq 1 ]; then
     main_docker
