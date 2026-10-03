@@ -32,6 +32,7 @@ set -euo pipefail
 JHT_UPGRADE_PROTOCOL=1
 JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
+JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 
 CONTAINER="${JHT_CONTAINER_NAME:-jht}"
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -402,54 +403,206 @@ require_docker() {
   fi
   if ! docker info >/dev/null 2>&1; then
     if [ "$CONTAINER_RUNTIME" = "podman" ]; then
-      local podman_bin=""
-      for candidate in "$(command -v podman 2>/dev/null || true)" \
-          /opt/podman/bin/podman /opt/homebrew/bin/podman /usr/local/bin/podman; do
-        if [ -n "$candidate" ] && [ -x "$candidate" ]; then podman_bin="$candidate"; break; fi
-      done
-      [ -n "$podman_bin" ] || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
-      info "Podman machine '$PODMAN_MACHINE_NAME' non attiva, la avvio..."
-      "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
-        || { err "Podman machine non avviabile; Colima non e' stato modificato."; exit 1; }
+      err "Podman machine JHT non attiva. Esegui 'jht up' per avviarla."
     elif [ "$(uname)" = "Darwin" ]; then
       err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
-      exit 1
     else
       err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
-      exit 1
     fi
-    docker info >/dev/null 2>&1 \
-      || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
+    exit 1
   fi
+}
+
+# Unico ingresso che puo' accendere la machine Podman. Deve restare chiamato
+# esclusivamente dall'arm esplicito `up`; tutti i probe e gli altri comandi
+# usano require_docker, che e' rigorosamente osservativo.
+wake_container_runtime_for_up() {
+  if [ -n "${err_runtime:-}" ]; then
+    err "$err_runtime"
+    exit 1
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    err "client container non trovato nel PATH. Ripara il runtime JHT."
+    exit 127
+  fi
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    local podman_bin
+    podman_bin="$(podman_binary)" || podman_bin=""
+    [ -n "$podman_bin" ] || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
+    info "Podman machine '$PODMAN_MACHINE_NAME' non attiva, la avvio..."
+    "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
+      || { err "Podman machine non avviabile; Colima non e' stato modificato."; exit 1; }
+  elif [ "$(uname)" = "Darwin" ]; then
+    err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
+    exit 1
+  else
+    err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
+    exit 1
+  fi
+  docker info >/dev/null 2>&1 \
+    || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
+}
+
+podman_binary() {
+  local candidate=""
+  for candidate in "$(command -v podman 2>/dev/null || true)" \
+      /opt/homebrew/bin/podman /usr/local/bin/podman /opt/podman/bin/podman; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+podman_compose_binary() {
+  local candidate=""
+  for candidate in "$(command -v podman-compose 2>/dev/null || true)" \
+      /opt/homebrew/bin/podman-compose /usr/local/bin/podman-compose \
+      /opt/podman/bin/podman-compose; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 require_compose_file() {
   require_trusted_runtime || exit 1
 }
 
+compose_file() {
+  local file="$1"
+  shift
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    # `podman --connection NAME compose` delegates through the Docker socket
+    # bridge. A named macOS machine created with --update-connection=false is
+    # reachable by `podman --connection`, but that bridge still targets the
+    # default socket and exits 125 before creating anything. Invoke the same
+    # installed compose provider directly and pass the authoritative named
+    # connection to every podman child instead. Running from RUNTIME_DIR keeps
+    # the Compose project identity identical to --project-directory.
+    local podman_bin compose_bin
+    podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
+    compose_bin="$(podman_compose_binary)" \
+      || { err "Provider Podman Compose non trovato: reinstalla il runtime JHT."; return 127; }
+    (
+      cd "$RUNTIME_DIR" || return 1
+      PODMAN_COMPOSE_WARNING_LOGS=false \
+        "$compose_bin" \
+          --podman-path "$podman_bin" \
+          --podman-args "--connection $PODMAN_MACHINE_NAME" \
+          -f "$file" "$@"
+    )
+    return $?
+  fi
+  # `docker compose` dell'host. MSYS_NO_PATHCONV protegge da git-bash su Windows.
+  MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@"
+}
+
 compose() {
   require_trusted_runtime || return 1
-  # `docker compose` dell'host. MSYS_NO_PATHCONV protegge da git-bash su Windows.
-  MSYS_NO_PATHCONV=1 docker compose -f "$COMPOSE_FILE" --project-directory "$RUNTIME_DIR" "$@"
+  compose_file "$COMPOSE_FILE" "$@"
 }
 
 container_up() {
   docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"
 }
 
-# Bridge interno del desktop. Usa solo il runtime host attestato e risolve il
-# container tramite l'esatto progetto Compose JHT: un container omonimo non e'
-# mai sufficiente. Non avvia runtime, container o team.
-desktop_chat_container_id() {
-  require_trusted_runtime || return 1
+# Risolve il container tramite l'esatto progetto Compose JHT senza bootstrap,
+# wake o auto-up. Un container omonimo non e' mai sufficiente.
+read_only_container_id() {
+  runtime_bundle_trusted || return 1
   docker_reachable || return 1
   local container_id details
-  container_id="$(compose ps -q jht 2>/dev/null)" || return 1
+  container_id="$(compose_file "$COMPOSE_FILE" ps -q jht 2>/dev/null)" || return 1
   printf '%s' "$container_id" | grep -Eq '^[0-9a-fA-F]{12,64}$' || return 1
   details="$(docker inspect "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
     || return 1
   [ "$details" = "true jht" ] || return 1
   printf '%s\n' "$container_id"
+}
+
+# Bridge interno del desktop. Non avvia runtime, container o team.
+desktop_chat_container_id() {
+  read_only_container_id
+}
+
+emit_inactive_onboarding_snapshot() {
+  local runtime_installed="$1"
+  printf '%s\n' \
+    "runtimeInstalled=$runtime_installed" \
+    containerRunning=0 \
+    providerConfigured=0 \
+    providerAuthenticated=0 \
+    assistantWelcomed=0 \
+    assistantRunning=0 \
+    captainRunning=0 \
+    profileReady=0
+}
+
+onboarding_snapshot() {
+  if ! runtime_bundle_trusted; then
+    emit_inactive_onboarding_snapshot 0
+    return 0
+  fi
+  local container_id metadata provider_configured provider_authenticated assistant_welcomed
+  local assistant_running captain_running profile_ready final_running
+  container_id="$(read_only_container_id)" || {
+    emit_inactive_onboarding_snapshot 1
+    return 0
+  }
+  metadata="$(docker exec "$container_id" node -e '
+const fs=require("fs"); let config={};
+try { config=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
+const provider=String(config.active_provider||"").toLowerCase();
+const providers=config.providers||{}; const entry=providers[provider]||{};
+const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
+  && (entry.auth_method||"subscription")==="subscription";
+const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
+process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+' 2>/dev/null)" || metadata=""
+  provider_configured=0
+  provider_authenticated=0
+  assistant_welcomed=0
+  read -r provider_configured provider_authenticated assistant_welcomed <<EOF
+$metadata
+EOF
+  case "$provider_configured:$provider_authenticated:$assistant_welcomed" in
+    [01]:[01]:[01]) ;;
+    *) provider_configured=0; provider_authenticated=0; assistant_welcomed=0 ;;
+  esac
+  assistant_running=0
+  if docker exec "$container_id" tmux has-session -t ASSISTENTE >/dev/null 2>&1; then
+    assistant_running=1
+  fi
+  captain_running=0
+  if docker exec "$container_id" tmux has-session -t CAPITANO >/dev/null 2>&1; then
+    captain_running=1
+  fi
+  profile_ready=0
+  if docker exec "$container_id" test -f /jht_home/profile/ready.flag >/dev/null 2>&1 \
+      || docker exec "$container_id" node "$NODE_ENTRY" profile validate --strict --json >/dev/null 2>&1; then
+    profile_ready=1
+  fi
+  final_running="$(docker inspect "$container_id" --format '{{.State.Running}}' 2>/dev/null || true)"
+  if [ "$final_running" != true ]; then
+    emit_inactive_onboarding_snapshot 1
+    return 0
+  fi
+  printf '%s\n' \
+    runtimeInstalled=1 \
+    containerRunning=1 \
+    "providerConfigured=$provider_configured" \
+    "providerAuthenticated=$provider_authenticated" \
+    "assistantWelcomed=$assistant_welcomed" \
+    "assistantRunning=$assistant_running" \
+    "captainRunning=$captain_running" \
+    "profileReady=$profile_ready"
 }
 
 desktop_chat() {
@@ -1142,7 +1295,7 @@ upgrade_compose_ready() {
 upgrade_compose() {
   local file="$1"
   shift
-  MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@"
+  compose_file "$file" "$@"
 }
 
 upgrade_image() {
@@ -1575,8 +1728,19 @@ case "$SUB" in
     desktop_chat "$@"
     ;;
 
+  onboarding-snapshot)
+    onboarding_snapshot
+    ;;
+
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
-  up|start-container)
+  up)
+    require_compose_file
+    wake_container_runtime_for_up
+    ensure_bind_owner
+    compose up -d
+    ;;
+
+  start-container)
     require_compose_file
     require_docker
     ensure_bind_owner
@@ -1615,7 +1779,12 @@ case "$SUB" in
     ;;
 
   status)
-    require_docker
+    # Probe pura: `status` non deve avviare la machine Podman, Docker Desktop
+    # o il container. Solo l'arm esplicito `up` puo' accendere la machine.
+    if ! docker_reachable; then
+      printf "container '%s' non attivo\n" "$CONTAINER"
+      exit 1
+    fi
     if container_up; then
       docker inspect "$CONTAINER" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
