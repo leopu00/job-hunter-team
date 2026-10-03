@@ -1136,26 +1136,51 @@ describe("DashboardApp onboarding router", () => {
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
     expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
     expect(await screen.findByText("provider-state:connecting")).toBeInTheDocument();
+    const safeUrl = provider === "codex"
+      ? "https://auth.openai.com/codex/device"
+      : "https://example.invalid/device";
 
     act(() => {
-      emit({
+      if (provider === "codex") emit({
         kind: "state",
         status: "needs_user_action",
         action: {
-          kind: "url",
-          instruction: "Completa l’accesso nel browser.",
-          safeUrl: "https://example.invalid/device",
+          kind: "device",
+          requestId: "codex-device-1",
+          actions: [
+            {
+              kind: "url",
+              instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+              safeUrl,
+            },
+            {
+              kind: "code",
+              instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+              userCode: "ABCD-EFGH",
+            },
+          ],
         },
       });
-      if (showsCode) emit({
-        kind: "state",
-        status: "needs_user_action",
-        action: {
-          kind: "code",
-          instruction: "Inserisci il codice mostrato.",
-          userCode: "ABCD-EFGH",
-        },
-      });
+      else {
+        emit({
+          kind: "state",
+          status: "needs_user_action",
+          action: {
+            kind: "url",
+            instruction: "Completa l’accesso nel browser.",
+            safeUrl,
+          },
+        });
+        if (showsCode) emit({
+          kind: "state",
+          status: "needs_user_action",
+          action: {
+            kind: "code",
+            instruction: "Inserisci il codice mostrato.",
+            userCode: "ABCD-EFGH",
+          },
+        });
+      }
       if (requestsInput) emit({
         kind: "state",
         status: "needs_user_action",
@@ -1168,7 +1193,7 @@ describe("DashboardApp onboarding router", () => {
     });
 
     expect(await screen.findByText("provider-state:needs_user_action")).toBeInTheDocument();
-    expect(screen.getByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
+    expect(screen.getByText(`provider-url:${safeUrl}`)).toBeInTheDocument();
     if (showsCode) expect(screen.getByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
     else expect(screen.queryByText("provider-code:ABCD-EFGH")).not.toBeInTheDocument();
     if (requestsInput) {
@@ -1180,7 +1205,7 @@ describe("DashboardApp onboarding router", () => {
       );
       expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
       expect(screen.getByText("provider-state:verifying")).toBeInTheDocument();
-      expect(screen.getByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
+      expect(screen.getByText(`provider-url:${safeUrl}`)).toBeInTheDocument();
       if (showsCode) expect(screen.getByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
     } else {
       expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();

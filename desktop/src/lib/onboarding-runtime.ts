@@ -1,10 +1,11 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
-import type {
-  ExecutionHost,
-  OnboardingProviderLoginAction,
-  OnboardingProviderLoginInputRequest,
-  OnboardingRuntimeSnapshot,
-  OnboardingSubmission,
+import {
+  canonicalProviderLoginUrl,
+  type OnboardingProviderLoginAction,
+  type ExecutionHost,
+  type OnboardingProviderLoginInputRequest,
+  type OnboardingRuntimeSnapshot,
+  type OnboardingSubmission,
 } from "./onboarding";
 
 export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
@@ -21,7 +22,18 @@ export interface OnboardingNativeProgress {
 }
 
 export type OnboardingInteractiveEvent =
-  | { kind: "state"; status: "needs_user_action"; action: OnboardingProviderLoginAction }
+  | {
+      kind: "state";
+      status: "needs_user_action";
+      action: OnboardingProviderLoginAction | {
+        kind: "device";
+        requestId: string;
+        actions: [
+          Extract<OnboardingProviderLoginAction, { kind: "url" }>,
+          Extract<OnboardingProviderLoginAction, { kind: "code" }>,
+        ];
+      };
+    }
   | { kind: "exit"; code: number | null };
 
 export interface SshHostKeyProbe {
@@ -38,6 +50,7 @@ const SAFE_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const SAFE_INTERACTIVE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const UNSAFE_ACTIVITY_TEXT = /[\r\n\0/\\]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b|@/i;
 const UNSAFE_INTERACTIVE_TEXT = /[\r\n\0]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|@/i;
+const UNSAFE_USER_CODE = /[\u0000-\u001f\u007f-\u009f]/;
 const FALLBACK_PROGRESS_MESSAGE: Record<OnboardingNativeProgressStage, string> = {
   engine: "Verifico l’ambiente di esecuzione.",
   runtime: "Preparo il runtime verificato.",
@@ -109,7 +122,7 @@ function parseInteractiveAction(value: unknown): OnboardingProviderLoginAction |
   }
   if (row.kind === "code" && Object.keys(row).every((key) => ["kind", "instruction", "userCode"].includes(key))) {
     return typeof row.userCode === "string" && row.userCode.length > 0 && row.userCode.length <= 128 &&
-      !/[\r\n\0]/.test(row.userCode)
+      !UNSAFE_USER_CODE.test(row.userCode)
       ? { kind: "code", instruction, userCode: row.userCode }
       : null;
   }
@@ -118,6 +131,30 @@ function parseInteractiveAction(value: unknown): OnboardingProviderLoginAction |
     return inputRequest ? { kind: "input", instruction, inputRequest } : null;
   }
   return null;
+}
+
+function parseDeviceAction(value: Record<string, unknown>): Extract<OnboardingInteractiveEvent, { kind: "state" }>["action"] | null {
+  if (!Object.keys(value).every((key) => ["kind", "instruction", "requestId", "safeUrl", "userCode"].includes(key))) {
+    return null;
+  }
+  const instruction = safeInteractiveText(value.instruction, 240);
+  const requestId = typeof value.requestId === "string" && SAFE_INTERACTIVE_ID.test(value.requestId)
+    ? value.requestId
+    : null;
+  const safeUrl = canonicalProviderLoginUrl("codex", value.safeUrl);
+  const userCode = typeof value.userCode === "string" && value.userCode.length > 0 &&
+    value.userCode.length <= 128 && !UNSAFE_USER_CODE.test(value.userCode)
+    ? value.userCode
+    : null;
+  if (!instruction || !requestId || !safeUrl || !userCode) return null;
+  return {
+    kind: "device",
+    requestId,
+    actions: [
+      { kind: "url", instruction, safeUrl },
+      { kind: "code", instruction, userCode },
+    ],
+  };
 }
 
 /** Validates the native interactive boundary without deriving actions from PTY text. */
@@ -130,7 +167,12 @@ export function parseOnboardingInteractiveEvent(value: unknown): OnboardingInter
       : null;
   }
   if (row.kind === "state" && row.status === "needs_user_action") {
-    const action = parseInteractiveAction(row.action);
+    const actionRow = row.action && typeof row.action === "object" && !Array.isArray(row.action)
+      ? row.action as Record<string, unknown>
+      : null;
+    const action = actionRow?.kind === "device"
+      ? parseDeviceAction(actionRow)
+      : parseInteractiveAction(row.action);
     return action ? { kind: "state", status: "needs_user_action", action } : null;
   }
   return null;
