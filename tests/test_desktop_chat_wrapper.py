@@ -45,21 +45,62 @@ def _runtime(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
     adapter.write_text(
         """#!/bin/sh
 # JHT_PODMAN_DOCKER_SHIM=1
-printf '%s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+printf 'docker %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$1" in
-  info) [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] ;;
-  compose)
-    case "$*" in *" ps -q jht") printf '%s\n' aaaaaaaaaaaa ;; *) exit 90 ;; esac ;;
+  info) [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] || [ -f "$JHT_TEST_RUNTIME_STATE" ] ;;
   inspect)
     [ "$2" = aaaaaaaaaaaa ] || exit 91
-    printf 'true jht\n' ;;
-  exec) [ "$2" = -i ] && [ "$3" = aaaaaaaaaaaa ] ;;
+    case "$*" in
+      *'.State.Running}} {{index'*)
+        printf 'true jht\n'
+        if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
+      *'.State.Running}}'*)
+        if [ -f "$JHT_TEST_CONTAINER_STOPPED" ]; then printf 'false\n'; else printf 'true\n'; fi ;;
+      *) exit 94 ;;
+    esac ;;
+  exec)
+    if [ "$2" = -i ]; then [ "$3" = aaaaaaaaaaaa ]; exit; fi
+    [ "$2" = aaaaaaaaaaaa ] || exit 95
+    [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
+    case "$3:$4" in
+      node:-e) printf '1 1 1' ;;
+      tmux:has-session) exit 0 ;;
+      test:-f) exit 0 ;;
+      node:*) exit 0 ;;
+      *) exit 97 ;;
+    esac ;;
   *) exit 92 ;;
 esac
 """,
         encoding="utf-8",
     )
     adapter.chmod(0o700)
+    podman = binary.parent / "podman"
+    podman.write_text(
+        """#!/bin/sh
+printf 'podman %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+if [ "$1:$2" = machine:start ] && [ "${JHT_TEST_WAKE_SUCCESS:-0}" = 1 ]; then
+  : > "$JHT_TEST_RUNTIME_STATE"
+  exit 0
+fi
+exit 93
+""",
+        encoding="utf-8",
+    )
+    podman.chmod(0o700)
+    provider = binary.parent / "podman-compose"
+    provider.write_text(
+        """#!/bin/sh
+printf 'podman-compose %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+case "$*" in
+  *" ps -q jht") printf '%s\n' aaaaaaaaaaaa ;;
+  *" up -d") exit 0 ;;
+  *) exit 90 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    provider.chmod(0o700)
     for path in (compose, selection, machine):
         path.chmod(0o600)
 
@@ -83,10 +124,12 @@ esac
     env = {
         **os.environ,
         "HOME": str(home),
-        "PATH": "/usr/bin:/bin",
+        "PATH": f"{binary.parent}:/usr/bin:/bin",
         "JHT_RUNTIME_DIR": str(runtime),
         "JHT_WRAPPER_PATH": str(binary),
         "JHT_TEST_DOCKER_LOG": str(log),
+        "JHT_TEST_RUNTIME_STATE": str(tmp_path / "runtime-ready"),
+        "JHT_TEST_CONTAINER_STOPPED": str(tmp_path / "container-stopped"),
         "JHT_CONTAINER_NAME": "same-name-decoy",
     }
     return binary, env, log
@@ -108,8 +151,10 @@ def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "true\n"
     calls = log.read_text(encoding="utf-8")
-    assert "compose -f " in calls and " ps -q jht" in calls
-    assert "inspect aaaaaaaaaaaa" in calls
+    assert "podman-compose --podman-path " in calls
+    assert "--podman-args --connection jht-podman" in calls
+    assert " ps -q jht" in calls
+    assert "docker inspect aaaaaaaaaaaa" in calls
     assert "inspect jht" not in calls
     assert "same-name-decoy" not in calls
     assert " up" not in calls and "machine start" not in calls
@@ -131,5 +176,128 @@ def test_desktop_chat_fails_closed_when_private_podman_is_not_ready(tmp_path: Pa
     assert result.returncode != 0
     assert "runtime o container JHT non disponibile" in result.stderr
     calls = log.read_text(encoding="utf-8")
-    assert calls.strip() == "info"
+    assert calls.strip() == "docker info"
     assert "machine" not in calls and "compose" not in calls and "inspect" not in calls
+
+
+def test_status_leaves_an_unreachable_podman_machine_stopped(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "0"
+
+    result = subprocess.run(
+        [str(wrapper), "status"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "non attivo" in result.stdout
+    calls = log.read_text(encoding="utf-8")
+    assert calls.strip() == "docker info"
+    assert "machine" not in calls and "podman-compose" not in calls
+
+
+def test_explicit_up_uses_the_same_named_podman_compose_adapter_idempotently(
+    tmp_path: Path,
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+
+    results = [
+        subprocess.run(
+            [str(wrapper), "up"],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        for _ in range(2)
+    ]
+
+    assert all(result.returncode == 0 for result in results), [
+        result.stderr for result in results
+    ]
+    calls = log.read_text(encoding="utf-8").splitlines()
+    compose_calls = [line for line in calls if line.startswith("podman-compose ")]
+    assert len(compose_calls) == 2
+    assert compose_calls[0] == compose_calls[1]
+    assert "--podman-args --connection jht-podman" in compose_calls[0]
+    assert compose_calls[0].endswith(" up -d")
+    assert not any("machine start" in line or "machine init" in line for line in calls)
+
+
+def test_only_explicit_up_can_wake_the_named_podman_machine(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "0"
+    env["JHT_TEST_WAKE_SUCCESS"] = "1"
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman machine start --update-connection=false jht-podman" in calls
+    assert calls.count("docker info") == 2
+    assert "podman-compose " in calls and " up -d" in calls
+
+    source = WRAPPER.read_text(encoding="utf-8")
+    assert source.count("wake_container_runtime_for_up") == 2
+    up_arm = source[source.index("  up)\n") : source.index("  start-container)\n")]
+    assert "wake_container_runtime_for_up" in up_arm
+
+
+def test_onboarding_snapshot_is_one_read_only_dispatcher_operation(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+
+    result = subprocess.run(
+        [str(wrapper), "onboarding-snapshot"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "containerRunning=1" in result.stdout
+    assert "providerConfigured=1" in result.stdout
+    assert "assistantRunning=1" in result.stdout
+    calls = log.read_text(encoding="utf-8")
+    assert "podman-compose " in calls and " ps -q jht" in calls
+    assert " up" not in calls and "machine start" not in calls
+
+
+def test_onboarding_snapshot_never_auto_ups_when_container_stops_mid_probe(
+    tmp_path: Path,
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_STOP_AFTER_INSPECT"] = "1"
+
+    result = subprocess.run(
+        [str(wrapper), "onboarding-snapshot"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "runtimeInstalled=1" in result.stdout
+    assert "containerRunning=0" in result.stdout
+    assert "assistantRunning=0" in result.stdout
+    calls = log.read_text(encoding="utf-8")
+    assert " up" not in calls
+    assert "machine start" not in calls and "machine init" not in calls
