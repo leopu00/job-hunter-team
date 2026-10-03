@@ -177,7 +177,7 @@ function makeSandbox({
       '    fi',
       '    target="$1"; shift || true',
       '    if [ -z "$image" ]; then exit 1; fi',
-      '    if [ "$target" = "jht" ]; then echo "$image"; else echo "$FAKE_CANDIDATE"; fi',
+      '    if [ "$target" = "jht" ] || [ "$target" = aaaaaaaaaaaa ]; then echo "$image"; else echo "$FAKE_CANDIDATE"; fi',
       "    exit 0 ;;",
       "  image)",
       "    # docker image inspect IMAGE --format {{.Id}}",

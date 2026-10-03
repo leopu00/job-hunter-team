@@ -69,14 +69,18 @@ case "$1" in
       *) exit 94 ;;
     esac ;;
   exec)
-    if [ "$2" = -i ]; then [ "$3" = aaaaaaaaaaaa ]; exit; fi
-    [ "$2" = aaaaaaaaaaaa ] || exit 95
+    shift
+    if [ "$1" = -i ] || [ "$1" = -it ]; then shift; fi
+    while [ "$1" = -e ]; do shift 2; done
+    [ "$1" = aaaaaaaaaaaa ] || exit 95
+    shift
     [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
-    case "$3:$4" in
+    case "$1:$2" in
       node:-e) printf '1 1 1' ;;
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;
+      python3:-c|sh:-c|bash:) exit 0 ;;
       *) exit 97 ;;
     esac ;;
   *) exit 92 ;;
@@ -190,6 +194,74 @@ def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: 
         " up " in line and "--dry-run" not in line for line in calls.splitlines()
     )
     assert "machine start" not in calls
+
+
+@pytest.mark.parametrize(
+    ("argv", "operation"),
+    (
+        (("logs", "--tail", "1"), "docker logs"),
+        (("status",), "docker inspect aaaaaaaaaaaa --format"),
+        (("shell",), "docker exec"),
+        (("oauth-login",), "docker exec"),
+        (("--version",), "docker exec"),
+        (("--help",), "docker exec"),
+        (("setup", "--non-interactive"), "docker exec"),
+        (("download", "--os", "macos"), "docker exec"),
+        (("providers", "current"), "docker exec"),
+    ),
+)
+def test_host_dispatcher_reuses_only_the_attested_container_id(
+    tmp_path: Path, argv: tuple[str, ...], operation: str
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+
+    subprocess.run(
+        [str(wrapper), *argv],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    calls = log.read_text(encoding="utf-8").splitlines()
+    ownership_index = next(
+        index
+        for index, line in enumerate(calls)
+        if line.startswith("docker inspect --type container aaaaaaaaaaaa ")
+    )
+    operation_index = next(
+        index
+        for index, line in enumerate(calls)
+        if index > ownership_index
+        and line.startswith(operation)
+        and "aaaaaaaaaaaa" in line
+    )
+    assert ownership_index < operation_index
+    assert all("same-name-decoy" not in line for line in calls)
+
+
+def test_attested_container_disappearing_never_falls_back_to_a_name(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_STOP_AFTER_INSPECT"] = "1"
+
+    result = subprocess.run(
+        [str(wrapper), "shell"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert any("docker exec -i aaaaaaaaaaaa bash" in line for line in calls)
+    assert all(
+        "same-name-decoy" not in line and " exec jht " not in line for line in calls
+    )
 
 
 def test_desktop_chat_fails_closed_when_private_podman_is_not_ready(tmp_path: Path):
