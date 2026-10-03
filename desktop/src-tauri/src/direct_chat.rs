@@ -226,6 +226,29 @@ fn connection_config_path_at(root: &Path, scope: &AccountScope) -> PathBuf {
         .join("direct-chat-host.json")
 }
 
+pub(crate) fn verify_optional_playground_local_host_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    let path = connection_config_path_at(root, scope);
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err("playground_reset_host_unavailable"),
+    };
+    if !metadata.file_type().is_file() || metadata.len() > 4096 {
+        return Err("playground_reset_host_invalid");
+    }
+    let raw = fs::read(path).map_err(|_| "playground_reset_host_unavailable")?;
+    let value: Value = serde_json::from_slice(&raw).map_err(|_| "playground_reset_host_invalid")?;
+    let object = value.as_object().ok_or("playground_reset_host_invalid")?;
+    match object.get("kind").and_then(Value::as_str) {
+        Some("local") if object.len() == 1 => Ok(()),
+        Some("vps") => Err("playground_reset_host_not_local"),
+        _ => Err("playground_reset_host_invalid"),
+    }
+}
+
 fn persist_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,

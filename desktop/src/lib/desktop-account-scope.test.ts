@@ -11,6 +11,8 @@ import {
   activateDesktopLocalScope,
   clearDesktopAccountScope,
   createDesktopLocalProfile,
+  recoverDesktopPlaygroundLocalOrphan,
+  resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 
 beforeEach(() => {
@@ -56,6 +58,19 @@ describe("desktop account scope boundary", () => {
       "runtime_account_scope_reset",
       "runtime_account_scope_set",
     ]);
+  });
+
+  it("exposes the DEV playground reset as one serialized native command", async () => {
+    await resetDesktopPlaygroundLocalScope("opaque-local-capability");
+    expect(invoke).toHaveBeenCalledWith("runtime_playground_local_reset", {
+      profileId: "opaque-local-capability",
+    });
+  });
+
+  it("recovers an orphaned playground owner without renderer identity payload", async () => {
+    await recoverDesktopPlaygroundLocalOrphan();
+    expect(invoke).toHaveBeenCalledWith("runtime_playground_local_orphan_recover");
+    expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
   });
 
   it("fails closed outside the desktop runtime", async () => {

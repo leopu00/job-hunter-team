@@ -89,6 +89,42 @@ describe("LoginScreen", () => {
     expect(onLocalReady).toHaveBeenCalledOnce();
   });
 
+  it("offers the atomic local reset only when the playground supplies it", async () => {
+    const user = userEvent.setup();
+    const onResetLocalPlayground = vi.fn(async () => undefined);
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        readLocal={() => ({ profileId: "opaque-local-profile", displayName: "Ada Locale" })}
+        onResetLocalPlayground={onResetLocalPlayground}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reimposta identità locale di test" }));
+    expect(onResetLocalPlayground).toHaveBeenCalledOnce();
+    expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
+  });
+
+  it("offers explicit orphan recovery when the renderer profile is already absent", async () => {
+    const user = userEvent.setup();
+    const onRecoverLocalPlayground = vi.fn(async () => undefined);
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        readLocal={() => null}
+        onRecoverLocalPlayground={onRecoverLocalPlayground}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Reimposta identità locale di test" }))
+      .not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Recupera reset locale di test" }));
+    expect(onRecoverLocalPlayground).toHaveBeenCalledOnce();
+    expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
+  });
+
   it("starts the Google sign-in and waits for the browser, with a way out", async () => {
     const user = userEvent.setup();
     const pending = deferred();

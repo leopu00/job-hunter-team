@@ -4,7 +4,11 @@ import {
   clearGoogleIdentitySelection,
   selectGoogleIdentity,
 } from "../lib/identity-choice";
-import { clearLocalIdentitySelection } from "../lib/local-profile";
+import {
+  clearLocalIdentitySelection,
+  resetPlaygroundLocalProfile,
+} from "../lib/local-profile";
+import { recoverDesktopPlaygroundLocalOrphan } from "../lib/desktop-account-scope";
 import { onboardingPlaygroundEnabled } from "../lib/onboarding-playground";
 import { useDeferredSession } from "../lib/supabase";
 import DashboardApp from "./DashboardApp";
@@ -27,11 +31,28 @@ function PlaygroundDashboardEntry() {
     setChoice("local");
   }, []);
 
+  const resetLocalPlayground = useCallback(async () => {
+    await resetPlaygroundLocalProfile();
+    setChoice(null);
+  }, []);
+
+  const recoverLocalPlayground = useCallback(async () => {
+    await recoverDesktopPlaygroundLocalOrphan();
+    setChoice(null);
+  }, []);
+
   if (choice === "local" || (choice === "google" && session)) {
     return <DashboardApp />;
   }
 
-  return <LoginScreen onChooseGoogle={chooseGoogle} onLocalReady={localReady} />;
+  return (
+    <LoginScreen
+      onChooseGoogle={chooseGoogle}
+      onLocalReady={localReady}
+      onResetLocalPlayground={resetLocalPlayground}
+      onRecoverLocalPlayground={recoverLocalPlayground}
+    />
+  );
 }
 
 /** The component mounted by dashboard.html, including its dev/test-only identity gate. */
