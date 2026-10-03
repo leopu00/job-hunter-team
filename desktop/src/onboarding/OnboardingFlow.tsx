@@ -12,6 +12,7 @@ import {
   runtimeArtwork,
 } from "./OnboardingArtwork";
 import { OAuthLoginTakeover } from "../oauth-login-takeover";
+import VpsProfileImport from "./VpsProfileImport";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -363,7 +364,8 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <button className="onboarding-primary" type="submit">Inizia la configurazione <span aria-hidden="true">→</span></button>
           </form>}
 
-          {step === 1 && <form onSubmit={next} className="onboarding-panel">
+          {step === 1 && <>
+          <form onSubmit={next} className="onboarding-panel">
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">Dove lavorerà il team</p><h2 ref={headingRef} tabIndex={-1}>Scegli l’ambiente.</h2>
             {localRuntimeSupported
@@ -380,7 +382,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               <div className="onboarding-field onboarding-field--full"><span>Chiave SSH</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /></div>
             </div>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>Indietro</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>Continua <span aria-hidden="true">→</span></button></div>
-          </form>}
+          </form>
+          {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
+          </>}
 
           {step === 2 && <form onSubmit={next} className="onboarding-panel">
             <OnboardingArtwork name={collectionArtwork(step, host)} />

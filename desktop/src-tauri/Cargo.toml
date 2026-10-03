@@ -26,6 +26,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "=2.7.3"
 zeroize = "1"
 
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

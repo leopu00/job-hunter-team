@@ -1996,6 +1996,7 @@ dependencies = [
  "libc",
  "open",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "serde_yaml",
