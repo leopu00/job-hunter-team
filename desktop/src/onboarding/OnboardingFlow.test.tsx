@@ -222,9 +222,9 @@ describe("OnboardingFlow technical setup", () => {
     expect(alert).not.toHaveTextContent("Versione del container non compatibile");
     expect(alert).not.toHaveTextContent("container_version_incompatible");
     expect(screen.getByText(/Trascorso/)).toHaveTextContent("00:04");
-    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
-    expect(screen.getByText("Passaggio 3 di 7")).toBeInTheDocument();
-    expect(screen.getByText("2 completati")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "1");
+    expect(screen.getByText("Passaggio 2 di 6")).toBeInTheDocument();
+    expect(screen.getByText("1 completati")).toBeInTheDocument();
 
     const technicalSummary = screen.getByText("Dettagli tecnici");
     const technicalDetails = technicalSummary.closest("details");
@@ -308,7 +308,7 @@ describe("OnboardingFlow technical setup", () => {
       status: "working", stage: "container", message: "Container verificato.",
     }} activity={retryActivity} />);
 
-    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "1");
     await user.click(screen.getByText(/Dettagli attività/));
     expect(screen.getAllByText("Completato")).toHaveLength(1);
     expect(screen.getAllByText("Container verificato.").length).toBeGreaterThanOrEqual(1);
@@ -334,6 +334,48 @@ describe("OnboardingFlow technical setup", () => {
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(document.body).not.toHaveTextContent("synthetic backend detail");
+  });
+
+  it("derives local progress from the six stages that can actually run", () => {
+    const result = renderFlow({
+      runtime: { status: "working", stage: "container", message: "Preparo il container." },
+    });
+    const track = result.container.querySelector(".onboarding-runtime-track");
+    expect(track).not.toBeNull();
+    const timeline = within(track as HTMLElement);
+
+    expect(timeline.queryByText("Identità server")).not.toBeInTheDocument();
+    expect(timeline.queryByText("Fingerprint SSH verificata")).not.toBeInTheDocument();
+    expect(timeline.getByText("Runtime").closest("li")).toHaveClass("is-complete");
+    expect(timeline.getByText("Container").closest("li")).toHaveClass("is-active");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "6");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "1");
+    expect(screen.getByText("Passaggio 2 di 6")).toBeInTheDocument();
+    expect(screen.getByText("1 completati")).toBeInTheDocument();
+  });
+
+  it("keeps SSH fingerprint first and counts it only for a selected VPS", async () => {
+    const user = userEvent.setup();
+    const result = renderFlow();
+    await begin(user);
+    await user.click(screen.getByRole("radio", { name: /server vps/i }));
+    result.rerender(<OnboardingFlow
+      {...result.props}
+      runtime={{ status: "working", stage: "container", message: "Preparo il container." }}
+    />);
+    const track = result.container.querySelector(".onboarding-runtime-track");
+    expect(track).not.toBeNull();
+    const timeline = within(track as HTMLElement);
+    const stages = timeline.getAllByRole("listitem");
+
+    expect(stages[0]).toHaveTextContent("Identità server");
+    expect(stages[0]).toHaveTextContent("Fingerprint SSH verificata");
+    expect(stages[0]).toHaveClass("is-complete");
+    expect(timeline.getByText("Container").closest("li")).toHaveClass("is-active");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "7");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    expect(screen.getByText("Passaggio 3 di 7")).toBeInTheDocument();
+    expect(screen.getByText("2 completati")).toBeInTheDocument();
   });
 
   it("shows verified step progress, elapsed time and a sanitized activity timeline", async () => {
@@ -404,8 +446,8 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getAllByText("Preparazione container")).toHaveLength(2);
     expect(screen.getAllByText("Verifico lo stato del container.")).toHaveLength(2);
     expect(screen.getByText(/Trascorso/)).toHaveTextContent(/00:0\d/);
-    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
-    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "7");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "1");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("max", "6");
     const activeProgress = screen.getByRole("progressbar", { name: "Avanzamento Preparazione container" });
     expect(activeProgress).toHaveAttribute("aria-valuetext", "Operazione in corso; percentuale non disponibile");
     expect(activeProgress).not.toHaveAttribute("aria-valuenow");
