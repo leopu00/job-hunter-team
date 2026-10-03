@@ -52,11 +52,40 @@ export interface AuthStorage {
   removeItem(key: string): Promise<void>;
 }
 
+export interface DeferredAuthStorage {
+  storage: AuthStorage;
+  unlock: () => void;
+}
+
+/**
+ * auth-js può costruire subito il client, ma nessuna operazione sullo storage
+ * raggiunge Tauri finché prepare non ha sbloccato il portachiavi. Le chiamate
+ * anticipate restano in attesa: non osservano mai un falso valore nullo.
+ */
+export function deferAuthStorage(storage: AuthStorage): DeferredAuthStorage {
+  let unlocked = false;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  const wait = () => unlocked ? Promise.resolve() : ready;
+  return {
+    storage: {
+      async getItem(key) { await wait(); return storage.getItem(key); },
+      async setItem(key, value) { await wait(); await storage.setItem(key, value); },
+      async removeItem(key) { await wait(); await storage.removeItem(key); },
+    },
+    unlock() {
+      if (unlocked) return;
+      unlocked = true;
+      release();
+    },
+  };
+}
+
 /**
  * Sessione e code verifier vanno nell'archivio cifrato del backend Rust
  * (chiave nel portachiavi del sistema), non nel localStorage della webview.
  */
-export const tauriAuthStorage: AuthStorage = {
+const rawTauriAuthStorage: AuthStorage = {
   async getItem(key) {
     return (await invoke<string | null>("auth_store_get", { name: key })) ?? null;
   },
@@ -67,6 +96,8 @@ export const tauriAuthStorage: AuthStorage = {
     await invoke("auth_store_remove", { name: key });
   },
 };
+const deferredTauriAuthStorage = deferAuthStorage(rawTauriAuthStorage);
+export const tauriAuthStorage: AuthStorage = deferredTauriAuthStorage.storage;
 
 /** Fuori da Tauri (vitest, `npm run dev` nel browser) la sessione vive in memoria. */
 export function memoryAuthStorage(): AuthStorage {
@@ -169,6 +200,7 @@ export interface LoginDeps {
   configured: boolean;
   desktop: boolean;
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  unlockStorage?: () => void;
 }
 
 const defaultDeps = (): LoginDeps => ({
@@ -176,7 +208,40 @@ const defaultDeps = (): LoginDeps => ({
   configured: supabaseConfigured,
   desktop: isTauri(),
   invoke,
+  unlockStorage: isTauri() ? deferredTauriAuthStorage.unlock : undefined,
 });
+
+const authInitializations = new WeakMap<SupabaseClient, Promise<void>>();
+
+/**
+ * Sblocca lo storage e inizializza auth-js una volta sola per client. Anche
+ * un fallimento resta memorizzato: nessun secondo mount o retry può causare
+ * un'altra richiesta al portachiavi nello stesso processo.
+ */
+export function initializeDesktopAuth(deps: LoginDeps = defaultDeps()): Promise<void> {
+  const current = authInitializations.get(deps.client);
+  if (current) return current;
+  const initialization = (async () => {
+    if (!deps.configured) return;
+    if (deps.desktop) {
+      try {
+        await deps.invoke("auth_store_prepare");
+      } catch (backendError) {
+        throw toLoginError(backendError);
+      }
+      deps.unlockStorage?.();
+    }
+    try {
+      const initialized = await deps.client.auth.initialize();
+      if (initialized.error) throw new LoginError("unknown");
+    } catch (error) {
+      if (error instanceof LoginError) throw error;
+      throw new LoginError("unknown");
+    }
+  })();
+  authInitializations.set(deps.client, initialization);
+  return initialization;
+}
 
 export interface SignInOptions {
   /**
@@ -201,26 +266,9 @@ export async function signInWithGoogle(
 ): Promise<void> {
   if (!deps.configured) throw new LoginError("not-configured");
   if (!deps.desktop) throw new LoginError("not-desktop");
-  // La chiave della sessione prima del browser: se il portachiavi la nega lo
-  // si dice subito, invece di aprire Google e fallire allo scambio del codice.
-  try {
-    await deps.invoke("auth_store_prepare");
-  } catch (backendError) {
-    throw toLoginError(backendError);
-  }
-  // Il client parte durante il mount, quando lo storage è intenzionalmente
-  // ancora chiuso. Se quella inizializzazione sta eliminando una sessione
-  // vecchia mentre creiamo il nuovo PKCE flow, può rimuovere anche il verifier
-  // appena scritto. Aspettarla dopo lo sblocco rende l'ordine deterministico:
-  // prima il cleanup iniziale, poi il nuovo verifier e il browser.
-  let initializeFailed = false;
-  try {
-    const initialized = await deps.client.auth.initialize();
-    initializeFailed = Boolean(initialized.error);
-  } catch {
-    initializeFailed = true;
-  }
-  if (initializeFailed) throw new LoginError("unknown");
+  // Prima si sblocca/rilegge la sessione cifrata; soltanto dopo auth-js può
+  // creare il verifier PKCE o aprire il browser.
+  await initializeDesktopAuth(deps);
   const redirectTo = await deps.invoke<string>("auth_callback_url");
   const { data, error } = await deps.client.auth.signInWithOAuth({
     provider: "google",
@@ -286,15 +334,25 @@ export function useSession(client: SupabaseClient = supabase): SessionState {
   const [state, setState] = useState<SessionState>({ session: null, loading: true });
   useEffect(() => {
     let active = true;
-    // Il primo evento è INITIAL_SESSION, a sessione salvata già riletta (e
-    // rinnovata se scaduta): basta lui, un getSession in parallelo potrebbe
-    // arrivare dopo un SIGNED_IN e riportare indietro lo stato.
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
-      if (active) setState({ session, loading: false });
+    let unsubscribe: (() => void) | null = null;
+    const initialization = client === supabase
+      ? initializeDesktopAuth()
+      : initializeDesktopAuth({ client, configured: true, desktop: false, invoke });
+    void initialization.then(() => {
+      if (!active) return;
+      // INITIAL_SESSION arriva soltanto dopo lo sblocco e la rilettura. Un
+      // getSession parallelo potrebbe invece arrivare dopo SIGNED_IN e
+      // riportare indietro lo stato.
+      const { data } = client.auth.onAuthStateChange((_event, session) => {
+        if (active) setState({ session, loading: false });
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+    }).catch(() => {
+      if (active) setState({ session: null, loading: false });
     });
     return () => {
       active = false;
-      data.subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, [client]);
   return state;

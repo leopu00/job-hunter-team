@@ -392,14 +392,16 @@ pub(crate) fn runtime_account_scope_set_local(
 }
 
 #[tauri::command]
-pub(crate) fn runtime_account_scope_set(
+pub(crate) async fn runtime_account_scope_set(
     app: tauri::AppHandle,
     keys: State<'_, auth_store::SystemKeyCache>,
     scopes: State<'_, AccountScopeState>,
     chat: State<'_, direct_chat::DirectChatState>,
     onboarding: State<'_, onboarding::OnboardingNativeState>,
 ) -> Result<(), AccountScopeError> {
-    let account_id = auth_store::authenticated_account_id(&app, &keys).map_err(failure)?;
+    let account_id = auth_store::authenticated_account_id(&app, &keys)
+        .await
+        .map_err(failure)?;
     let next = derive_scope(account_id.as_bytes());
     activate_scope(&app, &scopes, &chat, &onboarding, next)
 }
