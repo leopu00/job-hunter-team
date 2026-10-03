@@ -92,6 +92,12 @@ export async function resumeOnboardingSnapshot(): Promise<OnboardingRuntimeSnaps
   return invoke("onboarding_resume_snapshot");
 }
 
+/** Starts only missing team sessions from the account-scoped persisted host. */
+export async function resumeOnboardingTeamStart(): Promise<OnboardingRuntimeSnapshot> {
+  if (!isTauri()) desktopOnly();
+  return invoke("onboarding_resume_team_start");
+}
+
 export async function openOnboardingAssistant(host: ExecutionHost): Promise<OnboardingRuntimeSnapshot> {
   if (!isTauri()) desktopOnly();
   return invoke("onboarding_assistant_open", { host });

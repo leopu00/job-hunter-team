@@ -68,6 +68,7 @@ export interface OnboardingFlowProps {
   onProviderInput: (input: string) => Promise<void>;
   onProviderClose: () => Promise<void>;
   onRetry: () => Promise<void>;
+  onRestart: () => Promise<void>;
 }
 
 export type OnboardingGateState =
@@ -112,6 +113,7 @@ type ExistingTeamRow = { id?: string | null };
 const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
 const MARKER_STARTED = "subscription-v1-started";
+const MARKER_RESTARTED = "subscription-v1-restarted";
 const STATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 
 function markerKey(userId: string): string { return `${MARKER_PREFIX}${userId}`; }
@@ -166,12 +168,16 @@ function markerPresent(store: OnboardingMarkerStore, userId: string): boolean {
 function markerStarted(store: OnboardingMarkerStore, userId: string): boolean {
   try { return store.getItem(markerKey(userId)) === MARKER_STARTED; } catch { return false; }
 }
+function markerRestarted(store: OnboardingMarkerStore, userId: string): boolean {
+  try { return store.getItem(markerKey(userId)) === MARKER_RESTARTED; } catch { return false; }
+}
 
 export async function loadOnboardingGate(
   client: SupabaseClient, user: User, store: OnboardingMarkerStore = localStorage,
 ): Promise<OnboardingGateState> {
   if (markerPresent(store, user.id)) return { phase: "ready" };
   const started = markerStarted(store, user.id);
+  const restarted = markerRestarted(store, user.id);
   const [milestonesResult, profileResult, teamResult] = await Promise.all([
     client.from("user_onboarding_state")
       .select("vps_setup_completed_at, profile_configured_at, first_team_run_at")
@@ -192,7 +198,7 @@ export async function loadOnboardingGate(
   const profile = profileResult.data as ProfileRow | null;
   const team = teamResult.data as ExistingTeamRow | null;
   const profileReady = isOnboardingProfileReady(profile);
-  if (!started && profileReady && milestones?.first_team_run_at) return { phase: "ready" };
+  if (!started && !restarted && profileReady && milestones?.first_team_run_at) return { phase: "ready" };
   return {
     phase: "required", account: { displayName: displayName(user), identity: "google" },
     resumeAvailable: started,
@@ -278,4 +284,17 @@ export function markOnboardingStarted(
     store.setItem(markerKey(userId), MARKER_STARTED);
     if (!markerStarted(store, userId)) throw new Error("marker was not persisted");
   } catch { throw new OnboardingSaveError("marker-failed"); }
+}
+
+/** Clears only the renderer's onboarding checkpoint; native runtime and credentials are untouched. */
+export function resetOnboardingMarker(
+  userId: string,
+  store: OnboardingMarkerStore = localStorage,
+): void {
+  try {
+    store.setItem(markerKey(userId), MARKER_RESTARTED);
+    if (!markerRestarted(store, userId)) throw new Error("marker was not reset");
+  } catch {
+    throw new OnboardingSaveError("marker-failed");
+  }
 }

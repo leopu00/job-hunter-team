@@ -116,7 +116,7 @@ function ProviderLoginConsole({
   );
 }
 
-function RuntimeView({ runtime, onRetry, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "onRetry" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose">) {
+function RuntimeView({ runtime, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose">) {
   const [pending, setPending] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
 
@@ -200,21 +200,26 @@ function RuntimeView({ runtime, onRetry, onRuntimeAction, providerLogin, sshHost
           )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
           {failed && runtime.retryable === false && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
-          {((failed && runtime.retryable !== false) || actionRequired) && (
-            <div className="onboarding-runtime-actions">
+          <div className="onboarding-runtime-actions">
+            <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
+              Riparti da capo
+            </button>
+            {((failed && runtime.retryable !== false) || actionRequired) && (
+              <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>Annulla</button>}
               <button className="onboarding-primary" type="button" onClick={() => invoke(action)} disabled={pending}>
                 {pending ? "Attendi…" : failed ? "Riprova questo passaggio" : actionLabel}<span aria-hidden="true">→</span>
               </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </section>
       </div>
     </main>
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: OnboardingFlowProps) {
   const localRuntimeSupported = platform === "macos" || platform === "linux";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
@@ -233,7 +238,7 @@ export function OnboardingFlow({ account, platform, runtime, onSubmit, onRetry, 
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
+  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));

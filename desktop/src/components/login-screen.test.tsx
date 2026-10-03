@@ -106,6 +106,26 @@ describe("LoginScreen", () => {
     expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeEnabled();
   });
 
+  it("uses an explicitly chosen restored Google session without opening OAuth again", async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn(async () => undefined);
+    const onChooseGoogle = vi.fn(async () => true);
+    render(
+      <LoginScreen
+        signIn={signIn}
+        onChooseGoogle={onChooseGoogle}
+        loadBrowsers={noBrowsers}
+        configured
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
+
+    expect(onChooseGoogle).toHaveBeenCalledOnce();
+    expect(signIn).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("lists the detected browsers and remembers the last choice", async () => {
     const user = userEvent.setup();
     const signIn = vi.fn(async (_options: SignInOptions) => undefined);

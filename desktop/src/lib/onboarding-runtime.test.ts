@@ -5,6 +5,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   resumeOnboardingSnapshot,
+  resumeOnboardingTeamStart,
   type SshHostKeyProbe,
 } from "./onboarding-runtime";
 
@@ -94,5 +95,12 @@ describe("SSH host-key consent contract", () => {
     vi.mocked(invoke).mockResolvedValue({});
     await resumeOnboardingSnapshot();
     expect(invoke).toHaveBeenCalledWith("onboarding_resume_snapshot");
+  });
+
+  it("starts missing resumed team sessions without exposing host or account data", async () => {
+    vi.mocked(invoke).mockResolvedValue({});
+    await resumeOnboardingTeamStart();
+    expect(invoke).toHaveBeenCalledWith("onboarding_resume_team_start");
+    expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
   });
 });

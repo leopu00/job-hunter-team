@@ -25,11 +25,13 @@ import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
+  resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingGateState,
   type OnboardingProviderLoginState,
   type OnboardingRuntimeStage,
   type OnboardingRuntimeState,
+  type OnboardingRuntimeSnapshot,
   type OnboardingSshHostKeyConfirmation,
   type OnboardingSubmission,
 } from "../lib/onboarding";
@@ -41,6 +43,7 @@ import {
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
   resumeOnboardingSnapshot,
+  resumeOnboardingTeamStart,
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
@@ -140,6 +143,61 @@ function pairingToken(session: Session | null, submission: OnboardingSubmission)
   }));
 }
 
+function resumedPrerequisiteFailure(
+  snapshot: OnboardingRuntimeSnapshot,
+): OnboardingRuntimeState | null {
+  if (!snapshot.runtimeInstalled) return {
+    status: "failed", stage: "runtime", retryable: false,
+    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+  };
+  if (!snapshot.containerRunning) return {
+    status: "failed", stage: "container", retryable: false,
+    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+  };
+  if (!snapshot.providerConfigured) return {
+    status: "failed", stage: "provider", retryable: false,
+    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+  };
+  if (!snapshot.providerAuthenticated) return {
+    status: "failed", stage: "provider-login", retryable: false,
+    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+  };
+  return null;
+}
+
+function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collecting-host" | null {
+  const code = nativeErrorCode(error);
+  if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
+  if (code === "resume_runtime_not_ready") return {
+    status: "failed", stage: "runtime", code, retryable: false,
+    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+  };
+  if (code === "resume_container_not_ready") return {
+    status: "failed", stage: "container", code, retryable: false,
+    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+  };
+  if (code === "resume_provider_not_configured") return {
+    status: "failed", stage: "provider", code, retryable: false,
+    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+  };
+  if (code === "resume_provider_not_authenticated") return {
+    status: "failed", stage: "provider-login", code, retryable: false,
+    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+  };
+  if (code === "team_start_failed" || code === "team_verify_failed") return {
+    status: "failed", stage: "team-start", code, retryable: true,
+    message: "Le sessioni del team non risultano ancora operative. Riprova.",
+  };
+  return null;
+}
+
+function nativeErrorCode(error: unknown): string | null {
+  return typeof error === "object" && error !== null &&
+    typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : null;
+}
+
 /**
  * The real first-login router. The dashboard mounts only after durable account
  * evidence or after every native runtime fact, the conversational profile and
@@ -158,6 +216,7 @@ export default function DashboardApp() {
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
+  const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
     phase: "pending" | "ready" | "error";
@@ -215,6 +274,7 @@ export default function DashboardApp() {
     setExistingTeamDismissedIdentityKey(null);
     setAccountScope(null);
     setSshHostKey(null);
+    setOnboardingUiVersion(0);
     resumeAttemptedIdentityRef.current = null;
     submissionRef.current = null;
     if (!identityKey) {
@@ -411,9 +471,8 @@ export default function DashboardApp() {
         await closeOnboardingProviderLogin(sessionId).catch(() => undefined);
         providerSessionRef.current = null;
       }
-      if (providerAttemptRef.current === attempt) {
-        setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
-      }
+      if (providerAttemptRef.current !== attempt) throw error;
+      setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
       return fail("provider-login", error);
     }
     await startTeam(submission);
@@ -435,6 +494,30 @@ export default function DashboardApp() {
     setProviderLogin((current) => current ? { ...current, status: "exited", exitCode: null } : current);
   }, []);
 
+  const restartOnboarding = useCallback(async () => {
+    if (!identityKey || !markerId) throw new Error("identity-missing");
+    const providerSession = providerSessionRef.current;
+    providerAttemptRef.current += 1;
+    providerSessionRef.current = null;
+    providerExitRejectRef.current?.(new Error("onboarding-restarted"));
+    providerExitRejectRef.current = null;
+    if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
+    resetOnboardingMarker(markerId);
+    submissionRef.current = null;
+    resumeAttemptedIdentityRef.current = identityKey;
+    setProviderLogin(null);
+    setSshHostKey(null);
+    setAssistantChatIdentityKey(null);
+    setExistingTeamDismissedIdentityKey(identityKey);
+    setOnboardingUiVersion((current) => current + 1);
+    setGate((current) => current.phase === "required" ? {
+      phase: "required",
+      account: current.account,
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    } : current);
+  }, [identityKey, markerId]);
+
   const finishAssistant = useCallback(async () => {
     const submission = submissionRef.current;
     if (!submission || !identityKey) return fail("assistant", new Error("submission-missing"));
@@ -455,12 +538,28 @@ export default function DashboardApp() {
 
   const resumeAssistant = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
+    let phase: "runtime" | "team-start" | "assistant" = "runtime";
     try {
-      setRuntime({ status: "working", stage: "assistant", message: "Ripristino la chat verificata con l’Assistente." });
-      const [nativeSnapshot, chat] = await Promise.all([
-        resumeOnboardingSnapshot(),
-        reconnectDirectChat(),
-      ]);
+      setRuntime({ status: "working", stage: "runtime", message: "Verifico lo stato reale della configurazione." });
+      let nativeSnapshot = await resumeOnboardingSnapshot();
+      if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
+      if (prerequisiteFailure) {
+        setRuntime(prerequisiteFailure);
+        return;
+      }
+      if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
+        phase = "team-start";
+        setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
+        nativeSnapshot = await resumeOnboardingTeamStart();
+        if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+        if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
+          throw new Error("team-start-unverified");
+        }
+      }
+      phase = "assistant";
+      setRuntime({ status: "working", stage: "assistant", message: "Ricollego la chat verificata con l’Assistente." });
+      const chat = await reconnectDirectChat();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
       if (!isOnboardingAssistantReachable(snapshot)) throw new Error("assistant-unverified");
@@ -468,9 +567,18 @@ export default function DashboardApp() {
       navigate("/messages?agent=assistente", { replace: true });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
-      fail("assistant", error);
+      const backendFailure = resumedBackendFailure(error);
+      if (backendFailure === "collecting-host") {
+        await restartOnboarding();
+        return;
+      }
+      if (backendFailure) {
+        setRuntime(backendFailure);
+        throw error;
+      }
+      fail(phase, error);
     }
-  }, [fail, identityKey, setRuntime]);
+  }, [fail, identityKey, restartOnboarding, setRuntime]);
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
@@ -504,7 +612,7 @@ export default function DashboardApp() {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
     const submission = submissionRef.current;
-    if (stage === "assistant" && gate.resumeAvailable && !submission) return resumeAssistant();
+    if (gate.resumeAvailable && !submission) return resumeAssistant();
     if (!submission) return fail(stage, new Error("submission-missing"));
     if (stage === "provider-login") return loginProvider();
     if (stage === "team-start") return startTeam(submission);
@@ -553,6 +661,7 @@ export default function DashboardApp() {
     }
     return (
       <OnboardingFlow
+        key={`${identityKey}:${onboardingUiVersion}`}
         account={gate.account}
         platform={platform ?? "other"}
         runtime={gate.runtime}
@@ -565,6 +674,7 @@ export default function DashboardApp() {
         onProviderInput={sendProviderInput}
         onProviderClose={closeProviderLogin}
         onRetry={retry}
+        onRestart={restartOnboarding}
       />
     );
   }
