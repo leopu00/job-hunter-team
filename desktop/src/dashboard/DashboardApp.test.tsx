@@ -109,6 +109,8 @@ vi.mock("../onboarding", () => ({
         <p>platform:{props.platform}</p>
         <p>{props.runtime.status}{stage}</p>
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
+        {props.activity?.current && <p data-testid="activity-current">{props.activity.current.name}:{props.activity.current.description}</p>}
+        {props.activity && <p data-testid="activity-count">activity:{props.activity.events.length}</p>}
         {props.runtime.status === "failed" && props.runtime.code && <p>code:{props.runtime.code}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
@@ -498,11 +500,20 @@ describe("DashboardApp onboarding router", () => {
     const user = userEvent.setup();
     render(<DashboardApp />);
     await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
-    act(() => emit({ stage: "preparing", message: "Preparo il runtime locale." }));
+    act(() => emit({
+      stage: "engine", status: "start", message: "Preparo il runtime locale.",
+      sequence: 1, elapsedMs: 0, code: null, retryable: null,
+    }));
     expect(screen.getByTestId("onboarding")).toHaveTextContent("working:runtime");
-    act(() => emit({ stage: "container", message: "Verifico il container." }));
+    act(() => emit({
+      stage: "container", status: "progress", message: "Verifico il container.",
+      sequence: 2, elapsedMs: 2_000, code: null, retryable: null,
+    }));
     expect(screen.getByTestId("onboarding")).toHaveTextContent("working:container");
-    act(() => emit({ stage: "provider", message: "Preparo il provider." }));
+    act(() => emit({
+      stage: "provider", status: "progress", message: "Preparo il provider.",
+      sequence: 3, elapsedMs: 1_000, code: null, retryable: null,
+    }));
     expect(screen.getByTestId("onboarding")).toHaveTextContent("working:provider");
     expect(screen.queryByRole("button", { name: "continue-runtime" })).not.toBeInTheDocument();
 
@@ -656,6 +667,40 @@ describe("DashboardApp onboarding router", () => {
     ), { timeout: 3_500 });
     expect(screen.getByTestId("shell")).toBeInTheDocument();
     expect(markOnboardingStarted).toHaveBeenCalledWith("conversation-account");
+    expect(openOnboardingAssistant).toHaveBeenCalledWith(SUBMISSION.host, expect.any(Function));
+  });
+
+  it("projects native progress into the current operation and activity timeline", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("progress-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockImplementation(async (_submission, _pairingToken, onProgress) => {
+      onProgress({
+        stage: "engine", status: "start", message: "Verifico il motore.",
+        sequence: 1, elapsedMs: 0, code: null, retryable: null,
+      });
+      onProgress({
+        stage: "engine", status: "done", message: "Motore verificato.",
+        sequence: 2, elapsedMs: 200, code: null, retryable: null,
+      });
+      onProgress({
+        stage: "container", status: "progress", message: "Verifico il container.",
+        sequence: 3, elapsedMs: 2_000, code: null, retryable: null,
+      });
+      return PREPARED;
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByTestId("activity-current")).toHaveTextContent(
+      "Preparazione container:Verifico il container.",
+    );
+    expect(screen.getByTestId("activity-count")).toHaveTextContent("activity:2");
+    expect(prepareOnboardingRuntime).toHaveBeenCalledWith(
+      SUBMISSION,
+      null,
+      expect.any(Function),
+    );
   });
 
   it("keeps account-scoped chat state out of a switched account", async () => {
@@ -840,6 +885,11 @@ describe("DashboardApp onboarding router", () => {
     await user.click(await screen.findByRole("button", { name: "submit-claude" }));
     await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    expect(startOnboardingProviderLogin).toHaveBeenCalledWith(
+      SUBMISSION.host,
+      expect.any(Function),
+      expect.any(Function),
+    );
 
     await user.click(screen.getByRole("button", { name: "restart-onboarding" }));
 

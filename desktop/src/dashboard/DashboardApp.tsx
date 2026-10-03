@@ -28,6 +28,7 @@ import {
   markOnboardingStarted,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
+  type OnboardingActivityState,
   type OnboardingGateState,
   type OnboardingProviderLoginState,
   type OnboardingRuntimeStage,
@@ -48,7 +49,14 @@ import {
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
+  type OnboardingNativeProgress,
 } from "../lib/onboarding-runtime";
+import {
+  activityRuntimeStage,
+  applyOnboardingProgress,
+  beginOnboardingActivityInvocation,
+  createOnboardingActivity,
+} from "../lib/onboarding-activity";
 import { goTo, LOGIN_PAGE } from "../lib/pages";
 import { supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
@@ -92,13 +100,6 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     code: value.code,
     retryable: value.retryable,
   };
-}
-
-function progressStage(stage: "preparing" | "runtime" | "container" | "provider" | "team"): "runtime" | "container" | "provider" | "team-start" {
-  if (stage === "container") return "container";
-  if (stage === "provider") return "provider";
-  if (stage === "team") return "team-start";
-  return "runtime";
 }
 
 function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
@@ -218,6 +219,7 @@ export default function DashboardApp() {
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
+  const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
@@ -278,6 +280,7 @@ export default function DashboardApp() {
     setExistingTeamDismissedIdentityKey(null);
     setAccountScope(null);
     setSshHostKey(null);
+    setActivity(null);
     setOnboardingUiVersion(0);
     resumeAttemptedIdentityRef.current = null;
     submissionRef.current = null;
@@ -325,6 +328,22 @@ export default function DashboardApp() {
     setGate((current) => current.phase === "required" ? { ...current, runtime } : current);
   }, []);
 
+  const beginActivityInvocation = useCallback(() => {
+    setActivity((current) => beginOnboardingActivityInvocation(current));
+  }, []);
+
+  const recordActivityProgress = useCallback((progress: OnboardingNativeProgress) => {
+    if (activeIdentityKeyRef.current !== identityKey) return;
+    setActivity((current) => applyOnboardingProgress(current, progress));
+    if (progress.status === "start" || progress.status === "progress") {
+      setRuntime({
+        status: "working",
+        stage: activityRuntimeStage(progress.stage),
+        message: progress.message,
+      });
+    }
+  }, [identityKey, setRuntime]);
+
   const fail = useCallback((stage: OnboardingRuntimeStage, error: unknown): never => {
     setRuntime({ status: "failed", stage, message: failureMessage(stage), retryable: true });
     throw error;
@@ -343,37 +362,34 @@ export default function DashboardApp() {
   const startTeam = useCallback(async (submission: OnboardingSubmission) => {
     try {
       setRuntime({ status: "working", stage: "team-start", message: "Avvio container e agenti." });
-      const snapshot = await startOnboardingTeam(submission.host, (progress) => {
-        setRuntime({ status: "working", stage: "team-start", message: progress.message });
-      });
+      beginActivityInvocation();
+      const snapshot = await startOnboardingTeam(submission.host, recordActivityProgress);
       setRuntime(runtimeStateFromSnapshot(snapshot));
     } catch (error) {
       fail("team-start", error);
     }
-  }, [fail, setRuntime]);
+  }, [beginActivityInvocation, fail, recordActivityProgress, setRuntime]);
 
   const prepareTechnicalSetup = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey) throw new Error("identity-missing");
     setRuntime({ status: "working", stage: "runtime", message: "Preparo il runtime production." });
+    beginActivityInvocation();
     const snapshot = await prepareOnboardingRuntime(
       submission,
       pairingToken(localProfile ? null : session, submission),
-      (progress) => setRuntime({
-        status: "working",
-        stage: progressStage(progress.stage),
-        message: progress.message,
-      }),
+      recordActivityProgress,
     ).catch(failLocalRuntime);
     if (!snapshot.providerAuthenticated) {
       setRuntime(runtimeStateFromSnapshot(snapshot));
       return;
     }
     await startTeam(submission);
-  }, [failLocalRuntime, identityKey, localProfile?.profileId, session, setRuntime, startTeam]);
+  }, [beginActivityInvocation, failLocalRuntime, identityKey, localProfile?.profileId, recordActivityProgress, session, setRuntime, startTeam]);
 
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
+    setActivity(createOnboardingActivity());
     try {
       markOnboardingStarted(markerId);
     } catch (error) {
@@ -429,6 +445,7 @@ export default function DashboardApp() {
     try {
       setProviderLogin({ provider: submission.provider, status: "starting", output: "" });
       setRuntime({ status: "working", stage: "provider-login", message: "Attendo il login ufficiale del provider." });
+      beginActivityInvocation();
       let resolveExit!: () => void;
       let rejectExit!: (error: Error) => void;
       const exit = new Promise<void>((resolve, reject) => {
@@ -456,7 +473,7 @@ export default function DashboardApp() {
           if (event.code === 0) resolveExit();
           else rejectExit(new Error("provider-login-failed"));
         }
-      });
+      }, recordActivityProgress);
       providerSessionRef.current = sessionId;
       setProviderLogin((current) => current?.status === "starting" ? { ...current, status: "active" } : current);
       if (!exited && (submission.provider === "claude" || submission.provider === "kimi")) {
@@ -480,7 +497,7 @@ export default function DashboardApp() {
       return fail("provider-login", error);
     }
     await startTeam(submission);
-  }, [fail, setRuntime, startTeam]);
+  }, [beginActivityInvocation, fail, recordActivityProgress, setRuntime, startTeam]);
 
   const sendProviderInput = useCallback(async (input: string) => {
     const sessionId = providerSessionRef.current;
@@ -511,6 +528,7 @@ export default function DashboardApp() {
     resumeAttemptedIdentityRef.current = identityKey;
     setProviderLogin(null);
     setSshHostKey(null);
+    setActivity(null);
     setAssistantChatIdentityKey(null);
     setExistingTeamDismissedIdentityKey(identityKey);
     setOnboardingUiVersion((current) => current + 1);
@@ -527,7 +545,8 @@ export default function DashboardApp() {
     if (!submission || !identityKey) return fail("assistant", new Error("submission-missing"));
     try {
       setRuntime({ status: "working", stage: "assistant", message: "Apro la chat diretta con l’Assistente." });
-      const nativeSnapshot = await openOnboardingAssistant(submission.host);
+      beginActivityInvocation();
+      const nativeSnapshot = await openOnboardingAssistant(submission.host, recordActivityProgress);
       const chat = await connectDirectChat(submission.host);
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -538,12 +557,13 @@ export default function DashboardApp() {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
       fail("assistant", error);
     }
-  }, [fail, identityKey, setRuntime]);
+  }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
 
   const resumeAssistant = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
     let phase: "runtime" | "team-start" | "assistant" = "runtime";
     try {
+      setActivity(createOnboardingActivity());
       setRuntime({ status: "working", stage: "runtime", message: "Verifico lo stato reale della configurazione." });
       let nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
@@ -555,7 +575,8 @@ export default function DashboardApp() {
       if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
         phase = "team-start";
         setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
-        nativeSnapshot = await resumeOnboardingTeamStart();
+        beginActivityInvocation();
+        nativeSnapshot = await resumeOnboardingTeamStart(recordActivityProgress);
         if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
         if (!nativeSnapshot.assistantRunning || !nativeSnapshot.captainRunning) {
           throw new Error("team-start-unverified");
@@ -582,7 +603,7 @@ export default function DashboardApp() {
       }
       fail(phase, error);
     }
-  }, [fail, identityKey, restartOnboarding, setRuntime]);
+  }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, restartOnboarding, setRuntime]);
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
@@ -669,6 +690,7 @@ export default function DashboardApp() {
         account={gate.account}
         platform={platform ?? "other"}
         runtime={gate.runtime}
+        activity={activity}
         onSubmit={submit}
         onRuntimeAction={runtimeAction}
         providerLogin={providerLogin}

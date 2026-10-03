@@ -57,6 +57,14 @@ describe("OnboardingFlow JHT palette", () => {
     expect(onboardingStyles).toMatch(/@media \(max-width: 580px\) \{[\s\S]*?\.onboarding-primary,[\s\S]*?\.onboarding-secondary \{ width: 100%; \}/);
   });
 
+  it("keeps activity progress readable, responsive and still when reduced motion is requested", () => {
+    expect(onboardingStyles).toMatch(/\.onboarding-runtime-progress progress \{[\s\S]*?width: 100%;/);
+    expect(onboardingStyles).toMatch(/\.onboarding-activity-details ol \{[\s\S]*?overflow: auto;/);
+    expect(onboardingStyles).toMatch(/@media \(max-width: 580px\) \{[\s\S]*?\.onboarding-runtime-progress__heading \{[\s\S]*?flex-direction: column;/);
+    expect(onboardingStyles).toMatch(/@media \(max-width: 580px\) \{[\s\S]*?\.onboarding-activity-details li \{ grid-template-columns: 38px minmax\(0, 1fr\);/);
+    expect(onboardingStyles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.onboarding-runtime-progress__indeterminate i,[\s\S]*?animation: none;/);
+  });
+
   it.each(THEMES)("defines every onboarding token in the $label theme", ({ value }) => {
     const palette = themeTokens(value);
     const usedTokens = new Set(
