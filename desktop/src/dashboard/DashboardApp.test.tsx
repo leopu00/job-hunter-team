@@ -1,38 +1,47 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { connectDirectChat, directChatStatus, sendDirectChat } from "../lib/direct-chat";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
+import {
+  activateDesktopAccountScope,
+  activateDesktopLocalScope,
+  clearDesktopAccountScope,
+} from "../lib/desktop-account-scope";
+import {
+  clearLocalIdentitySelection,
+  localIdentitySelected,
+  readLocalProfile,
+} from "../lib/local-profile";
 import { readDesktopPlatform } from "../lib/desktop-platform";
+import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
-  saveOnboardingProfile,
   type OnboardingFlowProps,
   type OnboardingRuntimeSnapshot,
   type OnboardingSubmission,
 } from "../lib/onboarding";
 import {
   closeOnboardingProviderLogin,
+  confirmOnboardingSshHostKey,
   openOnboardingAssistant,
   prepareOnboardingRuntime,
+  probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  resumeOnboardingSnapshot,
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
-  type OnboardingInteractiveEvent,
 } from "../lib/onboarding-runtime";
 import { goTo, LOGIN_PAGE } from "../lib/pages";
-import type { AssistantOnboardingProps } from "../pages/assistant-onboarding";
-import { fixtureData } from "../pages/dashboard/dashboard-fixture";
-import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
 import DashboardApp from "./DashboardApp";
 
 vi.mock("../lib/supabase", () => ({
   supabase: { from: vi.fn() },
-  supabaseConfig: { configured: false, reason: "missing-url" },
+  supabaseConfig: { configured: true, url: "https://example.invalid" },
   supabaseConfigured: true,
   useSession: vi.fn(),
   signOut: vi.fn(),
@@ -44,45 +53,69 @@ vi.mock("../lib/pages", async (importOriginal) => ({
 vi.mock("../lib/onboarding", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/onboarding")>()),
   loadOnboardingGate: vi.fn(),
-  saveOnboardingProfile: vi.fn(),
   markOnboardingReady: vi.fn(),
   markOnboardingStarted: vi.fn(),
 }));
 vi.mock("../lib/onboarding-runtime", () => ({
   closeOnboardingProviderLogin: vi.fn(),
+  confirmOnboardingSshHostKey: vi.fn(),
   openOnboardingAssistant: vi.fn(),
   prepareOnboardingRuntime: vi.fn(),
+  probeOnboardingSshHostKey: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
+  resumeOnboardingSnapshot: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
 }));
-vi.mock("../lib/direct-chat", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../lib/direct-chat")>()),
+vi.mock("../lib/direct-chat", () => ({
   connectDirectChat: vi.fn(),
   directChatStatus: vi.fn(),
-  sendDirectChat: vi.fn(),
+  reconnectDirectChat: vi.fn(),
 }));
-vi.mock("../shell/router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shell/router")>()),
-  navigate: vi.fn(),
+vi.mock("../lib/desktop-account-scope", () => ({
+  activateDesktopAccountScope: vi.fn(),
+  activateDesktopLocalScope: vi.fn(),
+  clearDesktopAccountScope: vi.fn(),
 }));
+vi.mock("../lib/local-profile", () => ({
+  clearLocalIdentitySelection: vi.fn(),
+  localIdentitySelected: vi.fn(),
+  readLocalProfile: vi.fn(),
+}));
+vi.mock("../shell/router", () => ({ navigate: vi.fn() }));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
+vi.mock("../shell/Shell", () => ({
+  default: ({ onLogout }: { onLogout?: () => Promise<void> }) => (
+    <main data-testid="shell">
+      Shell
+      {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
+    </main>
+  ),
+}));
+vi.mock("../pages/messages", () => ({ default: () => <section data-testid="assistant-chat">Assistente</section> }));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
     const stage = props.runtime.status === "ready" ? "" : `:${props.runtime.stage}`;
-    const actionStage = props.runtime.status === "action-required" ? props.runtime.stage : null;
+    const action = props.runtime.status === "action-required" ? props.runtime.stage : null;
     return (
       <section data-testid="onboarding">
         <p>platform:{props.platform}</p>
         <p>{props.runtime.status}{stage}</p>
-        <button type="button" onClick={() => void props.onSubmit(SUBMISSION)}>submit-onboarding</button>
+        {"message" in props.runtime && <p>{props.runtime.message}</p>}
+        {props.runtime.status === "failed" && props.runtime.code && <p>code:{props.runtime.code}</p>}
+        <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
+        <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
         {(["claude", "codex", "kimi"] as const).map((provider) => (
-          <button key={provider} type="button" onClick={() => void props.onSubmit({ ...SUBMISSION, provider })}>submit-{provider}</button>
+          <button key={provider} type="button" onClick={() => void props.onSubmit({ ...SUBMISSION, provider }).catch(() => undefined)}>submit-{provider}</button>
         ))}
-        <button type="button" onClick={() => void props.onSubmit({ ...SUBMISSION, provider: "unexpected" as OnboardingSubmission["provider"] })}>submit-unexpected</button>
-        {actionStage && (
-          <button type="button" onClick={() => void props.onRuntimeAction(actionStage).catch(() => undefined)}>continue-runtime</button>
+        {action && action !== "ssh-host-key" && <button type="button" onClick={() => void props.onRuntimeAction(action).catch(() => undefined)}>continue-runtime</button>}
+        {action === "ssh-host-key" && props.sshHostKey && (
+          <>
+            <p>{props.sshHostKey.algorithm}</p><p>{props.sshHostKey.fingerprint}</p>
+            <button type="button" onClick={() => void props.onConfirmHostKey().catch(() => undefined)}>confirm-host-key</button>
+            <button type="button" onClick={props.onCancelHostKey}>cancel-host-key</button>
+          </>
         )}
         {props.providerLogin && <pre aria-label="provider-output">{props.providerLogin.output}</pre>}
         {props.providerLogin?.status === "active" && (
@@ -91,435 +124,606 @@ vi.mock("../onboarding", () => ({
             <button type="button" onClick={() => void props.onProviderClose().catch(() => undefined)}>close-provider-login</button>
           </>
         )}
-        {props.runtime.status === "failed" && (
+        {props.runtime.status === "failed" && props.runtime.retryable !== false && (
           <button type="button" onClick={() => void props.onRetry().catch(() => undefined)}>retry-runtime</button>
         )}
       </section>
     );
   },
 }));
-vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
-  loadDashboard: vi.fn(),
-}));
-vi.mock("../pages/assistant-onboarding", () => ({
-  AssistantOnboarding: (props: AssistantOnboardingProps) => (
-    <section data-testid="assistant-guide" data-initial={JSON.stringify(props.initialState)}>
-      <button type="button" onClick={() => props.onStateChange?.({ path: "tour", step: 2 })}>
-        save-assistant-progress
-      </button>
-      <button
-        type="button"
-        onClick={() => void props.onComplete(
-          { path: "tour", step: 4 },
-          "Prima domanda confermata",
-        ).catch(() => undefined)}
-      >
-        complete-assistant-guide
-      </button>
-    </section>
-  ),
+vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
+  default: (props: ExistingTeamConnectModalProps) => {
+    const result = (profileReady: boolean): OnboardingRuntimeSnapshot => ({
+      runtimeInstalled: true,
+      containerRunning: true,
+      providerConfigured: true,
+      providerAuthenticated: true,
+      assistantRunning: true,
+      captainRunning: true,
+      profileReady,
+      assistantWelcomed: false,
+      directChatReady: false,
+    });
+    return (
+      <section data-testid="existing-team-modal">
+        <p>team:{props.teamId}</p>
+        <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
+        <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
+        <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+      </section>
+    );
+  },
 }));
 
-const SUBMISSION: OnboardingSubmission = {
-  profile: {
-    fullName: "Synthetic Person",
-    targetRole: "Engineer",
-    location: "Example City",
-    experienceYears: 3,
-    skills: ["Rust", "Testing"],
-    languages: ["Italian"],
-    workMode: "hybrid",
-    notes: "",
-  },
-  host: { kind: "local" },
+const SUBMISSION: OnboardingSubmission = { host: { kind: "local" }, provider: "claude" };
+const SUBMISSION_VPS: OnboardingSubmission = {
+  host: { kind: "vps", address: "host.example.invalid", user: "root", port: 22, keyPath: "/synthetic/key" },
   provider: "claude",
 };
-
-const SNAPSHOT: OnboardingRuntimeSnapshot = {
+const PREPARED: OnboardingRuntimeSnapshot = {
   runtimeInstalled: true,
   containerRunning: true,
   providerConfigured: true,
   providerAuthenticated: false,
   assistantRunning: false,
   captainRunning: false,
-  profileReady: true,
+  profileReady: false,
   assistantWelcomed: false,
   directChatReady: false,
 };
-
 const TEAM_READY: OnboardingRuntimeSnapshot = {
-  ...SNAPSHOT,
+  ...PREPARED,
   providerAuthenticated: true,
   assistantRunning: true,
   captainRunning: true,
 };
 
-const ASSISTANT_READY: OnboardingRuntimeSnapshot = {
-  ...TEAM_READY,
-  assistantWelcomed: true,
-};
-
 type SessionState = ReturnType<typeof useSession>;
-const signedIn = {
-  session: {
-    user: { id: "synthetic-user", email: "person@example.invalid" },
-    refresh_token: "synthetic-refresh-token",
-  },
-  loading: false,
-} as unknown as SessionState;
-
 function signedInAs(userId: string): SessionState {
   return {
     session: {
-      user: { id: userId, email: `${userId}@example.invalid` },
+      user: { id: userId, email: `${userId}@example.invalid`, user_metadata: {} },
       refresh_token: `synthetic-${userId}`,
     },
     loading: false,
   } as unknown as SessionState;
 }
 
-function arrangeAssistantGuide() {
+function requireOnboarding() {
   vi.mocked(loadOnboardingGate).mockResolvedValue({
     phase: "required",
     account: { displayName: "Synthetic Person" },
-    runtime: { status: "collecting", stage: "profile" },
+    resumeAvailable: false,
+    runtime: { status: "collecting", stage: "host" },
   });
-  vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...SNAPSHOT, providerAuthenticated: true });
-  vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
-  vi.mocked(openOnboardingAssistant).mockResolvedValue(ASSISTANT_READY);
-  vi.mocked(readOnboardingSnapshot).mockResolvedValue(ASSISTANT_READY);
-  vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
 }
 
-async function reachAssistantGuide(user: ReturnType<typeof userEvent.setup>) {
+async function reachAssistant(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
-  expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "continue-runtime" }));
-  expect(await screen.findByTestId("assistant-guide")).toBeInTheDocument();
+  await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
 }
 
 describe("DashboardApp onboarding router", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     localStorage.clear();
-    window.location.hash = "#/dashboard";
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-    vi.mocked(loadDashboard).mockResolvedValue(fixtureData());
-    vi.mocked(saveOnboardingProfile).mockResolvedValue(SUBMISSION.profile);
-    vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
-    vi.mocked(sendOnboardingProviderInput).mockResolvedValue();
-    vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
-    vi.mocked(sendDirectChat).mockImplementation(async (_agent, _text, clientMessageId) => ({
-      clientMessageId,
-      accepted: true,
-      messageId: "synthetic-message",
-      at: 1,
-    }));
     vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
+    vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
+    vi.mocked(confirmOnboardingSshHostKey).mockResolvedValue();
+    vi.mocked(sendOnboardingProviderInput).mockResolvedValue();
+    vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
+    vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
+    vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+    vi.mocked(activateDesktopAccountScope).mockResolvedValue();
+    vi.mocked(activateDesktopLocalScope).mockResolvedValue();
+    vi.mocked(clearDesktopAccountScope).mockResolvedValue();
+    vi.mocked(localIdentitySelected).mockReturnValue(false);
+    vi.mocked(readLocalProfile).mockReturnValue(null);
+    vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({
+      status: "pinned", algorithm: "ssh-ed25519", fingerprint: "SHA256:synthetic",
+    });
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it("sends whoever has no session to Google sign-in", () => {
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     render(<DashboardApp />);
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
     expect(loadOnboardingGate).not.toHaveBeenCalled();
-    expect(loadDashboard).not.toHaveBeenCalled();
   });
 
-  it("shows onboarding for a brand-new Google account", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(loadOnboardingGate).mockResolvedValue({
-      phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
+  it("activates a saved local scope before mounting onboarding without a Supabase session", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Ada Locale",
     });
+
     render(<DashboardApp />);
-    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:profile");
-    expect(loadDashboard).not.toHaveBeenCalled();
+
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-profile");
+    expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+    expect(loadOnboardingGate).not.toHaveBeenCalled();
   });
 
-  it("passes the native Windows target to onboarding before rendering it", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(readDesktopPlatform).mockResolvedValue("windows");
+  it("fails closed when a saved local profile is not owned by the backend", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "unowned-local-profile",
+      displayName: "Profilo non valido",
+    });
+    vi.mocked(activateDesktopLocalScope).mockRejectedValue({ code: "account_scope_mismatch" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/isolamento dell.account/i);
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
+  it.each(["claude", "codex", "kimi"] as const)(
+    "keeps local identity independent while choosing the %s provider",
+    async (provider) => {
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      vi.mocked(localIdentitySelected).mockReturnValue(true);
+      vi.mocked(readLocalProfile).mockReturnValue({
+        profileId: "opaque-local-provider-profile",
+        displayName: "Ada Locale",
+      });
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+
+      render(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: `submit-${provider}` }));
+
+      expect(prepareOnboardingRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({ provider }),
+        null,
+        expect.any(Function),
+      );
+    },
+  );
+
+  it("never pairs a local VPS to a dormant Google session", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("dormant-google-account"));
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-vps-profile",
+      displayName: "Ada Locale",
+    });
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-vps" }));
+
+    expect(prepareOnboardingRuntime).toHaveBeenCalledWith(
+      SUBMISSION_VPS,
+      null,
+      expect.any(Function),
+    );
+  });
+
+  it("awaits local scope teardown before leaving Shell and preserves the saved profile", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-ready-local-profile",
+      displayName: "Ada Locale",
+    });
+    localStorage.setItem(
+      "jht.desktop.onboarding.local:opaque-ready-local-profile",
+      "subscription-v1",
+    );
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "local-logout" }));
+
+    expect(clearDesktopAccountScope).toHaveBeenCalledOnce();
+    expect(clearLocalIdentitySelection).toHaveBeenCalledOnce();
+    expect(vi.mocked(clearDesktopAccountScope).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(clearLocalIdentitySelection).mock.invocationCallOrder[0]);
+    expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
+  });
+
+  it("routes a new account to technical host setup and a complete account to Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("new-account"));
+    requireOnboarding();
+    const view = render(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(useSession).mockReturnValue(signedInAs("complete-account"));
+    view.rerender(<DashboardApp />);
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+  });
+
+  it("mounts no onboarding, Shell or chat before backend account scope is confirmed", async () => {
+    let confirmScope!: () => void;
+    vi.mocked(activateDesktopAccountScope).mockReturnValue(new Promise<void>((resolve) => {
+      confirmScope = resolve;
+    }));
+    vi.mocked(useSession).mockReturnValue(signedInAs("scope-pending"));
+    requireOnboarding();
+
+    render(<DashboardApp />);
+    expect(await screen.findByLabelText("Caricamento dashboard")).toBeInTheDocument();
+    expect(loadOnboardingGate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+
+    confirmScope();
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(activateDesktopAccountScope).toHaveBeenCalledWith();
+  });
+
+  it("fails closed on account-scope mismatch without mounting runtime surfaces", async () => {
+    vi.mocked(activateDesktopAccountScope).mockRejectedValue({ code: "account_scope_mismatch" });
+    vi.mocked(useSession).mockReturnValue(signedInAs("scope-mismatch"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/isolamento dell.account/i);
+    expect(loadOnboardingGate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
+  it("removes account A surfaces synchronously while account B scope is pending", async () => {
+    let current = signedInAs("account-a");
+    let confirmB!: () => void;
+    vi.mocked(useSession).mockImplementation(() => current);
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    let activation = 0;
+    vi.mocked(activateDesktopAccountScope).mockImplementation(() => {
+      activation += 1;
+      if (activation === 2) {
+        return new Promise<void>((resolve) => { confirmB = resolve; });
+      }
+      return Promise.resolve();
+    });
+
+    const view = render(<DashboardApp />);
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+
+    current = signedInAs("account-b");
+    view.rerender(<DashboardApp />);
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Caricamento dashboard")).toBeInTheDocument();
+
+    confirmB();
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(activateDesktopAccountScope).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers the account-scoped existing team before new setup and cancel returns to setup", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
       phase: "required",
-      account: { displayName: "Synthetic Person" },
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0001", status: "available" },
       runtime: { status: "collecting", stage: "host" },
     });
 
+    const user = userEvent.setup();
     render(<DashboardApp />);
-    expect(await screen.findByTestId("onboarding")).toHaveTextContent("platform:windows");
-    expect(readDesktopPlatform).toHaveBeenCalledOnce();
+    expect(await screen.findByTestId("existing-team-modal")).toHaveTextContent("team:team-opaque-0001");
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "cancel-existing-team" }));
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(markOnboardingStarted).not.toHaveBeenCalled();
   });
 
-  it("opens the dashboard for an account with complete durable evidence", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
-    render(<DashboardApp />);
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Team locale" })).not.toBeInTheDocument();
-  });
-
-  it("opens messages only after provider, team, guided Assistant, receipt and re-read facts are verified", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
+  it("keeps an attached existing team in confined Assistant chat until its profile is ready", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-incomplete"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
       phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0002", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
     });
-    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
-    vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
-      queueMicrotask(() => onEvent({ kind: "exit", code: 0 }));
-      return "synthetic-session";
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, profileReady: false });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-incomplete" }));
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(markOnboardingStarted).toHaveBeenCalledWith("existing-incomplete");
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith("/messages?agent=assistente", { replace: true });
+  });
+
+  it("admits an attached existing team directly to Shell only when readiness is verified", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-ready"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Ready Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0003", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
     });
-    vi.mocked(readOnboardingSnapshot).mockResolvedValue({
-      ...SNAPSHOT,
-      providerAuthenticated: true,
-      assistantRunning: true,
-      captainRunning: true,
-      assistantWelcomed: true,
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-ready" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(markOnboardingReady).toHaveBeenCalledWith(
+      "existing-ready",
+      expect.objectContaining({ profileReady: true, directChatReady: true }),
+    );
+    expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+  });
+
+  it("maps preparing, Podman, container and provider progress without optimistic completion", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("progress-account"));
+    requireOnboarding();
+    let emit!: Parameters<Parameters<typeof prepareOnboardingRuntime>[2]>[0] extends never ? never : Parameters<typeof prepareOnboardingRuntime>[2];
+    let resolve!: (snapshot: OnboardingRuntimeSnapshot) => void;
+    vi.mocked(prepareOnboardingRuntime).mockImplementation((_submission, _token, onProgress) => {
+      emit = onProgress;
+      return new Promise((done) => { resolve = done; });
     });
-    vi.mocked(startOnboardingTeam).mockResolvedValue({
-      ...SNAPSHOT,
-      providerAuthenticated: true,
-      assistantRunning: true,
-      captainRunning: true,
-    });
-    vi.mocked(openOnboardingAssistant).mockResolvedValue({
-      ...SNAPSHOT,
-      providerAuthenticated: true,
-      assistantRunning: true,
-      captainRunning: true,
-      assistantWelcomed: true,
-    });
-    vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
 
     const user = userEvent.setup();
     render(<DashboardApp />);
     await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    act(() => emit({ stage: "preparing", message: "Preparo il runtime locale." }));
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("working:runtime");
+    act(() => emit({ stage: "container", message: "Verifico il container." }));
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("working:container");
+    act(() => emit({ stage: "provider", message: "Preparo il provider." }));
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("working:provider");
+    expect(screen.queryByRole("button", { name: "continue-runtime" })).not.toBeInTheDocument();
+
+    await act(async () => resolve(PREPARED));
     expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
-    expect(loadDashboard).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
-    expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
-    expect(loadDashboard).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
-    expect(await screen.findByTestId("assistant-guide")).toBeInTheDocument();
     expect(markOnboardingReady).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(connectDirectChat).toHaveBeenCalledWith({ kind: "local" });
-    expect(sendDirectChat).toHaveBeenCalledWith(
-      "assistente",
-      "Prima domanda confermata",
-      expect.stringMatching(/^assistant-onboarding-[a-f0-9]{64}$/),
-    );
-    expect(directChatStatus).toHaveBeenCalled();
-    expect(markOnboardingReady).toHaveBeenCalledWith(
-      "synthetic-user",
-      expect.objectContaining({ directChatReady: true }),
-    );
-    expect(navigate).toHaveBeenCalledWith("/messages", { replace: true });
-    expect(markOnboardingStarted).toHaveBeenCalledWith("synthetic-user");
-    await waitFor(() => expect(loadDashboard).toHaveBeenCalled());
   });
 
-  it.each(["claude", "codex", "kimi"] as const)("streams and controls the %s login session", async (provider) => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
+  it("preserves a structured local error and retries only when the backend permits it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("retry-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "podman_not_ready",
+        message: "Podman è installato ma non risponde ancora.",
+        retryable: true,
+      })
+      .mockResolvedValueOnce(PREPARED);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText("code:podman_not_ready")).toBeInTheDocument();
+    expect(screen.getByText(/Podman è installato ma non risponde/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "retry-runtime" }));
+    await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+  });
+
+  it("uses a generic retryable failure only for a malformed backend payload", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("malformed-error-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "podman_not_ready",
+      message: "",
+      retryable: "yes",
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.queryByText("code:podman_not_ready")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("does not offer retry when the structured local failure is non-retryable", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("attestation-error-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "installer_digest_mismatch",
+      message: "Il pacchetto runtime non supera la verifica di integrità.",
+      retryable: false,
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Il pacchetto runtime non supera la verifica di integrità.")).toBeInTheDocument();
+    expect(screen.getByText("code:installer_digest_mismatch")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
+  });
+
+  it("keeps container failures at the container stage and never marks ready", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("container-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "container_not_ready",
+      message: "ignored raw output",
+      retryable: true,
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    expect(await screen.findByText("failed:container")).toBeInTheDocument();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit fingerprint consent before VPS pairing and cancel performs no prepare", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("fingerprint-account"));
+    requireOnboarding();
+    vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({
+      status: "confirmation_required",
+      algorithm: "ssh-ed25519",
+      fingerprint: "SHA256:synthetic-fingerprint",
+    });
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-vps" }));
+    expect(await screen.findByText("SHA256:synthetic-fingerprint")).toBeInTheDocument();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(confirmOnboardingSshHostKey).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "cancel-host-key" }));
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "submit-vps" }));
+    await user.click(await screen.findByRole("button", { name: "confirm-host-key" }));
+    await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledOnce());
+    expect(confirmOnboardingSshHostKey).toHaveBeenCalledWith(
+      SUBMISSION_VPS.host,
+      { algorithm: "ssh-ed25519", fingerprint: "SHA256:synthetic-fingerprint" },
+    );
+    expect(vi.mocked(confirmOnboardingSshHostKey).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(prepareOnboardingRuntime).mock.invocationCallOrder[0]);
+    expect(connectDirectChat).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("stops on fingerprint mismatch without prepare or Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("mismatch-account"));
+    requireOnboarding();
+    vi.mocked(probeOnboardingSshHostKey).mockRejectedValue({ code: "host_key_mismatch" });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-vps" }));
+
+    expect(await screen.findByText("failed:ssh-host-key")).toBeInTheDocument();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("opens confined Assistant chat from a clean state, then marks ready only after profile reread", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("conversation-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+    vi.mocked(openOnboardingAssistant).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+    vi.mocked(readOnboardingSnapshot)
+      .mockResolvedValueOnce({ ...TEAM_READY, assistantWelcomed: false, profileReady: false })
+      .mockResolvedValueOnce({ ...TEAM_READY, assistantWelcomed: true, profileReady: true });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await reachAssistant(user);
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith("/messages?agent=assistente", { replace: true });
+    await act(async () => { await Promise.resolve(); });
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(markOnboardingReady).toHaveBeenCalledWith(
+      "conversation-account",
+      expect.objectContaining({ profileReady: true, directChatReady: true }),
+    ), { timeout: 3_500 });
+    expect(screen.getByTestId("shell")).toBeInTheDocument();
+    expect(markOnboardingStarted).toHaveBeenCalledWith("conversation-account");
+  });
+
+  it("keeps account-scoped chat state out of a switched account", async () => {
+    let current = signedInAs("account-a");
+    vi.mocked(useSession).mockImplementation(() => current);
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+    vi.mocked(openOnboardingAssistant).mockResolvedValue(TEAM_READY);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, profileReady: false });
+
+    const user = userEvent.setup();
+    const view = render(<DashboardApp />);
+    await reachAssistant(user);
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+
+    current = signedInAs("account-b");
+    view.rerender(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+  });
+
+  it("resumes the privately persisted host at Assistant chat without repeating technical setup", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("resume-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
       phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
+      account: { displayName: "Resume Person" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
     });
-    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
-    let emit!: (event: OnboardingInteractiveEvent) => void;
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(reconnectDirectChat).toHaveBeenCalledOnce();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it.each(["claude", "codex", "kimi"] as const)("streams, closes and retries %s authentication without false team start", async (provider) => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("provider-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    let emit!: Parameters<Parameters<typeof startOnboardingProviderLogin>[1]>[0] extends never
+      ? never
+      : Parameters<typeof startOnboardingProviderLogin>[1];
     vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
       emit = onEvent;
-      return `session-${provider}`;
+      return `provider-session-${provider}`;
     });
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue(PREPARED);
 
     const user = userEvent.setup();
     render(<DashboardApp />);
     await user.click(await screen.findByRole("button", { name: `submit-${provider}` }));
     await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
 
-    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalled());
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
     if (provider === "codex") {
       expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
     } else {
-      expect(sendOnboardingProviderInput).toHaveBeenCalledWith(`session-${provider}`, "/login");
+      expect(sendOnboardingProviderInput).toHaveBeenCalledWith(`provider-session-${provider}`, "/login");
     }
 
-    emit({ kind: "output", text: `Use https://login.example.invalid/${provider} with CODE-${provider}` });
-    expect(await screen.findByLabelText("provider-output")).toHaveTextContent(`CODE-${provider}`);
-
+    act(() => emit({ kind: "output", text: `synthetic-${provider}-output` }));
+    expect(await screen.findByLabelText("provider-output")).toHaveTextContent(`synthetic-${provider}-output`);
     await user.click(screen.getByRole("button", { name: "send-provider-input" }));
-    expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(`session-${provider}`, "verification response");
-
+    expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(
+      `provider-session-${provider}`,
+      "verification response",
+    );
     await user.click(screen.getByRole("button", { name: "close-provider-login" }));
-    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith(`session-${provider}`);
+    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith(`provider-session-${provider}`);
     expect(await screen.findByText("failed:provider-login")).toBeInTheDocument();
-    expect(closeOnboardingProviderLogin).toHaveBeenCalledTimes(1);
-    expect(startOnboardingTeam).not.toHaveBeenCalled();
-  });
-
-  it("does not start the team when provider authentication remains unverified", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(loadOnboardingGate).mockResolvedValue({
-      phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
-    });
-    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
-    vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
-      queueMicrotask(() => onEvent({ kind: "exit", code: 0 }));
-      return "unverified-session";
-    });
-    vi.mocked(readOnboardingSnapshot).mockResolvedValue(SNAPSHOT);
-
-    const user = userEvent.setup();
-    render(<DashboardApp />);
-    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
-    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
-
-    expect(await screen.findByText("failed:provider-login")).toBeInTheDocument();
-    expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("unverified-session");
-    expect(startOnboardingTeam).not.toHaveBeenCalled();
-  });
-
-  it("awaits failed-session cleanup before enabling a retry", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(loadOnboardingGate).mockResolvedValue({
-      phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
-    });
-    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
-    let emit!: (event: OnboardingInteractiveEvent) => void;
-    let resolveClose!: () => void;
-    vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
-      emit = onEvent;
-      return "failed-session";
-    });
-    vi.mocked(closeOnboardingProviderLogin).mockImplementation(() => new Promise<void>((resolve) => {
-      resolveClose = resolve;
-    }));
-
-    const user = userEvent.setup();
-    render(<DashboardApp />);
-    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
-    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
-    await screen.findByRole("button", { name: "close-provider-login" });
-
-    act(() => emit({ kind: "exit", code: 1 }));
-    await waitFor(() => expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("failed-session"));
-    expect(screen.getByText("working:provider-login")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
 
-    resolveClose();
-    await user.click(await screen.findByRole("button", { name: "retry-runtime" }));
+    await user.click(screen.getByRole("button", { name: "retry-runtime" }));
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledTimes(2));
     expect(startOnboardingTeam).not.toHaveBeenCalled();
-  });
-
-  it("does not send bootstrap input for an unexpected provider value", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    vi.mocked(loadOnboardingGate).mockResolvedValue({
-      phase: "required",
-      account: { displayName: "Synthetic Person" },
-      runtime: { status: "collecting", stage: "profile" },
-    });
-    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(SNAPSHOT);
-    vi.mocked(startOnboardingProviderLogin).mockResolvedValue("unexpected-session");
-
-    const user = userEvent.setup();
-    render(<DashboardApp />);
-    await user.click(await screen.findByRole("button", { name: "submit-unexpected" }));
-    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
-
-    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalled());
-    expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
-    expect(startOnboardingTeam).not.toHaveBeenCalled();
-  });
-
-  it("keeps the final marker closed when the native snapshot cannot prove readiness", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    arrangeAssistantGuide();
-    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...ASSISTANT_READY, captainRunning: false });
-
-    const user = userEvent.setup();
-    render(<DashboardApp />);
-    await reachAssistantGuide(user);
-    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
-
-    await waitFor(() => expect(readOnboardingSnapshot).toHaveBeenCalled());
-    expect(sendDirectChat).not.toHaveBeenCalled();
-    expect(markOnboardingReady).not.toHaveBeenCalled();
-    expect(screen.getByTestId("assistant-guide")).toBeInTheDocument();
-  });
-
-  it("retries a post-send chat verification with the same de-duplication id", async () => {
-    vi.mocked(useSession).mockReturnValue(signedIn);
-    arrangeAssistantGuide();
-    vi.mocked(directChatStatus)
-      .mockResolvedValueOnce({ state: "error", code: "synthetic-disconnect" })
-      .mockResolvedValueOnce({ state: "ready" });
-
-    const user = userEvent.setup();
-    render(<DashboardApp />);
-    await reachAssistantGuide(user);
-    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
-    await waitFor(() => expect(directChatStatus).toHaveBeenCalledTimes(1));
-    expect(markOnboardingReady).not.toHaveBeenCalled();
-    expect(screen.getByTestId("assistant-guide")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "complete-assistant-guide" }));
-    await waitFor(() => expect(markOnboardingReady).toHaveBeenCalledTimes(1));
-    expect(sendDirectChat).toHaveBeenCalledTimes(2);
-    const firstId = vi.mocked(sendDirectChat).mock.calls[0][2];
-    const retryId = vi.mocked(sendDirectChat).mock.calls[1][2];
-    expect(retryId).toBe(firstId);
-  });
-
-  it("does not reuse guided state across logout or an account switch", async () => {
-    arrangeAssistantGuide();
-    localStorage.setItem("jht.desktop.assistant-onboarding.account-a", JSON.stringify({ path: "tour", step: 3 }));
-    localStorage.setItem("jht.desktop.assistant-onboarding.account-b", JSON.stringify({ path: "explore", step: 1 }));
-    let currentSession = signedInAs("account-a");
-    vi.mocked(useSession).mockImplementation(() => currentSession);
-
-    const user = userEvent.setup();
-    const view = render(<DashboardApp />);
-    await reachAssistantGuide(user);
-    expect(screen.getByTestId("assistant-guide")).toHaveAttribute(
-      "data-initial",
-      JSON.stringify({ path: "tour", step: 3 }),
-    );
-    await user.click(screen.getByRole("button", { name: "save-assistant-progress" }));
-    expect(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-a") ?? "null"))
-      .toEqual({ path: "tour", step: 2 });
-
-    currentSession = { session: null, loading: false };
-    view.rerender(<DashboardApp />);
-    await waitFor(() => expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE));
-    expect(screen.queryByTestId("assistant-guide")).not.toBeInTheDocument();
-
-    currentSession = signedInAs("account-b");
-    view.rerender(<DashboardApp />);
-    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
-    expect(screen.queryByTestId("assistant-guide")).not.toBeInTheDocument();
-    await reachAssistantGuide(user);
-    expect(screen.getByTestId("assistant-guide")).toHaveAttribute(
-      "data-initial",
-      JSON.stringify({ path: "explore", step: 1 }),
-    );
-    expect(Object.keys(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-a") ?? "{}")))
-      .toEqual(["path", "step"]);
-    expect(Object.keys(JSON.parse(localStorage.getItem("jht.desktop.assistant-onboarding.account-b") ?? "{}")))
-      .toEqual(["path", "step"]);
   });
 });

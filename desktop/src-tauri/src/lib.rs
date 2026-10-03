@@ -1,3 +1,4 @@
+mod account_scope;
 mod auth_login;
 mod auth_store;
 mod browsers;
@@ -15,6 +16,7 @@ mod voice_input;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(account_scope::AccountScopeState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(onboarding::OnboardingNativeState::default())
         .manage(voice_input::VoiceInputState::default())
@@ -24,6 +26,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            account_scope::runtime_account_scope_reset,
+            account_scope::runtime_account_scope_set,
+            account_scope::runtime_account_scope_set_local,
+            account_scope::runtime_local_profile_create,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
@@ -43,11 +49,14 @@ pub fn run() {
             live_screen::live_screen_session,
             live_screen::open_live_screen,
             onboarding::onboarding_assistant_open,
+            onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
             onboarding::onboarding_provider_login_input,
             onboarding::onboarding_resume_snapshot,
+            runtime_host::onboarding_ssh_host_key_confirm,
+            runtime_host::onboarding_ssh_host_key_probe,
             onboarding::onboarding_snapshot,
             onboarding::onboarding_team_start,
             podman::check_podman,

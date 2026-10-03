@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { LoginScreen } from "./components/login-screen";
 import { DASHBOARD_PAGE, goTo } from "./lib/pages";
+import { localIdentitySelected } from "./lib/local-profile";
 import { useSession } from "./lib/supabase";
 
 /**
@@ -10,10 +11,11 @@ import { useSession } from "./lib/supabase";
  */
 export default function App() {
   const { session } = useSession();
+  const localSelected = localIdentitySelected();
 
   useEffect(() => {
-    if (session) goTo(DASHBOARD_PAGE);
-  }, [session]);
+    if (session || localSelected) goTo(DASHBOARD_PAGE);
+  }, [localSelected, session]);
 
   return <LoginScreen />;
 }
