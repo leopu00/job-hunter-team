@@ -189,6 +189,22 @@ fn failure(code: &'static str) -> OnboardingError {
             "Il runtime locale non è supportato su questo sistema.",
             false,
         ),
+        "local_account_owner_missing" => (
+            "La cartella runtime locale contiene dati che non risultano creati da Job Hunter Team. Seleziona il profilo locale originale e riprova.",
+            false,
+        ),
+        "local_account_owner_mismatch" => (
+            "Il runtime locale appartiene a un altro profilo. Torna al profilo che lo ha configurato.",
+            false,
+        ),
+        "local_account_owner_invalid" => (
+            "La verifica del proprietario del runtime locale è danneggiata. Non è stato usato alcun dato locale.",
+            false,
+        ),
+        "local_account_owner_unavailable" => (
+            "Non riesco a verificare o registrare il proprietario del runtime locale. Controlla i permessi e riprova.",
+            true,
+        ),
         "installer_digest_missing"
         | "installer_digest_invalid"
         | "installer_digest_mismatch"
@@ -1837,6 +1853,7 @@ mod tests {
             "runtime_download_failed",
             "runtime_install_failed",
             "runtime_missing",
+            "local_account_owner_unavailable",
             "container_start_failed",
             "container_not_ready",
             "container_timeout",
@@ -1856,6 +1873,9 @@ mod tests {
 
         for code in [
             "runtime_install_unsupported",
+            "local_account_owner_missing",
+            "local_account_owner_mismatch",
+            "local_account_owner_invalid",
             "installer_digest_missing",
             "installer_digest_invalid",
             "installer_digest_mismatch",
