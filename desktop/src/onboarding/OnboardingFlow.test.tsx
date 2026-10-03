@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
@@ -29,6 +29,7 @@ function renderFlow(overrides: Partial<OnboardingFlowProps> = {}) {
     onProviderRestart: vi.fn().mockResolvedValue(undefined),
     onRetry: vi.fn().mockResolvedValue(undefined),
     onRestart: vi.fn().mockResolvedValue(undefined),
+    onExitFailure: vi.fn(),
     ...overrides,
   };
   return { ...render(<OnboardingFlow {...props} />), props };
@@ -173,8 +174,166 @@ describe("OnboardingFlow technical setup", () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Podman è attivo ma il container non risponde.");
     expect(screen.getAllByText("Container")).not.toHaveLength(0);
-    await userEvent.click(screen.getByRole("button", { name: /riprova questo passaggio/i }));
+    await userEvent.click(screen.getByRole("button", { name: /riprova la preparazione/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("presents a version mismatch once, keeps diagnostics closed and focuses each new failure once", async () => {
+    let result!: ReturnType<typeof renderFlow>;
+    const onExitFailure = vi.fn(() => {
+      result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "collecting", stage: "host" }} />);
+    });
+    const startedAt = Date.now() - 4_200;
+    const failure = {
+      status: "failed" as const,
+      stage: "container" as const,
+      title: "Versione del container non compatibile",
+      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      code: "container_version_incompatible",
+      retryable: false,
+    };
+    result = renderFlow({
+      runtime: failure,
+      activity: {
+        startedAt,
+        invocation: 1,
+        lastSequence: 3,
+        current: {
+          id: "1:container:3", invocation: 1, nativeStage: "container", sequence: 3,
+          stage: "container", name: "Preparazione container",
+          description: "Verifica del container interrotta.", elapsedMs: 4_000,
+          stageElapsedMs: 2_400, updatedAt: Date.now(), status: "failed",
+        },
+        events: [{
+          id: "1:container:3", invocation: 1, nativeStage: "container", sequence: 3,
+          stage: "container", name: "Preparazione container",
+          description: "Verifica del container interrotta.", elapsedMs: 4_000,
+          stageElapsedMs: 2_400, updatedAt: Date.now(), status: "failed",
+        }],
+      },
+      onExitFailure,
+    });
+
+    const heading = screen.getByRole("heading", { name: "Versione del container non compatibile" });
+    expect(heading).toHaveFocus();
+    const alert = screen.getByRole("alert");
+    expect(alert).not.toHaveAttribute("aria-labelledby");
+    expect(alert).toHaveTextContent(failure.message);
+    expect(alert).not.toHaveTextContent("Versione del container non compatibile");
+    expect(alert).not.toHaveTextContent("container_version_incompatible");
+    expect(screen.getByText(/Trascorso/)).toHaveTextContent("00:04");
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    expect(screen.getByText("Passaggio 3 di 7")).toBeInTheDocument();
+    expect(screen.getByText("2 completati")).toBeInTheDocument();
+
+    const technicalSummary = screen.getByText("Dettagli tecnici");
+    const technicalDetails = technicalSummary.closest("details");
+    expect(technicalDetails).not.toHaveAttribute("open");
+    technicalSummary.focus();
+    expect(technicalSummary).toHaveFocus();
+    expect(technicalSummary.tagName).toBe("SUMMARY");
+    await userEvent.click(technicalSummary);
+    expect(technicalDetails).toHaveAttribute("open");
+    expect(screen.getByText("container_version_incompatible")).toBeInTheDocument();
+
+    result.rerender(<OnboardingFlow {...result.props} />);
+    expect(technicalSummary).toHaveFocus();
+    expect(document.body).not.toHaveTextContent(/raw|rm\s|delete|remove|reset|docker\s+rm/i);
+    expect(document.body).not.toHaveTextContent("Correggi i dati indicati");
+    expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Torna alla scelta ambiente" }));
+    expect(onExitFailure).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("heading", { name: "Scegli l’ambiente." })).toHaveFocus();
+  });
+
+  it("blocks duplicate retry clicks and renders the verified container progress after the click", async () => {
+    let resolveRetry!: () => void;
+    const onRetry = vi.fn(() => new Promise<void>((resolve) => { resolveRetry = resolve; }));
+    const startedAt = Date.now() - 3_000;
+    const failedActivity = {
+      startedAt,
+      invocation: 1,
+      lastSequence: 3,
+      current: {
+        id: "1:container:3", invocation: 1, nativeStage: "container" as const, sequence: 3,
+        stage: "container" as const, name: "Preparazione container",
+        description: "Il container non si è avviato.", elapsedMs: 2_900,
+        stageElapsedMs: 2_400, updatedAt: Date.now(), status: "failed" as const,
+      },
+      events: [{
+        id: "1:container:3", invocation: 1, nativeStage: "container" as const, sequence: 3,
+        stage: "container" as const, name: "Preparazione container",
+        description: "Il container non si è avviato.", elapsedMs: 2_900,
+        stageElapsedMs: 2_400, updatedAt: Date.now(), status: "failed" as const,
+      }],
+    };
+    const result = renderFlow({
+      runtime: {
+        status: "failed", stage: "container", title: "Avvio del container non riuscito",
+        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        code: "container_start_failed", retryable: true,
+      },
+      activity: failedActivity,
+      onRetry,
+    });
+    const user = userEvent.setup();
+
+    await user.dblClick(screen.getByRole("button", { name: "Riprova la preparazione" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Verifica in corso…" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: /avanzamento configurazione/i }).closest(".onboarding-runtime-card")).toHaveAttribute("aria-busy", "true");
+
+    await act(async () => resolveRetry());
+    const retryActivity = {
+      ...failedActivity,
+      invocation: 2,
+      lastSequence: 3,
+      current: {
+        id: "2:container:3", invocation: 2, nativeStage: "container" as const, sequence: 3,
+        stage: "container" as const, name: "Preparazione container",
+        description: "Container verificato.", elapsedMs: 5_600,
+        stageElapsedMs: 2_600, updatedAt: Date.now(), status: "completed" as const,
+      },
+      events: [
+        ...failedActivity.events,
+        {
+          id: "2:container:3", invocation: 2, nativeStage: "container" as const, sequence: 3,
+          stage: "container" as const, name: "Preparazione container",
+          description: "Container verificato.", elapsedMs: 5_600,
+          stageElapsedMs: 2_600, updatedAt: Date.now(), status: "completed" as const,
+        },
+      ],
+    };
+    result.rerender(<OnboardingFlow {...result.props} runtime={{
+      status: "working", stage: "container", message: "Container verificato.",
+    }} activity={retryActivity} />);
+
+    expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
+    await user.click(screen.getByText(/Dettagli attività/));
+    expect(screen.getAllByText("Completato")).toHaveLength(1);
+    expect(screen.getAllByText("Container verificato.").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps a failed retry repeatable without adding a second alert", async () => {
+    const onRetry = vi.fn().mockRejectedValue(new Error("synthetic backend detail"));
+    renderFlow({
+      runtime: {
+        status: "failed", stage: "container", title: "Avvio del container non riuscito",
+        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        code: "container_start_failed", retryable: true,
+      },
+      onRetry,
+    });
+    const user = userEvent.setup();
+    const retry = screen.getByRole("button", { name: "Riprova la preparazione" });
+
+    await user.click(retry);
+    await waitFor(() => expect(retry).toBeEnabled());
+    await user.click(retry);
+
+    expect(onRetry).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(document.body).not.toHaveTextContent("synthetic backend detail");
   });
 
   it("shows verified step progress, elapsed time and a sanitized activity timeline", async () => {
@@ -258,8 +417,9 @@ describe("OnboardingFlow technical setup", () => {
     expect(document.body).not.toHaveTextContent(/\bETA\b|tempo stimato/i);
   });
 
-  it("offers a non-destructive restart even when the current failure cannot be retried", async () => {
+  it("offers only safe UI navigation when the current failure cannot be retried", async () => {
     const onRestart = vi.fn().mockResolvedValue(undefined);
+    const onExitFailure = vi.fn();
     renderFlow({
       runtime: {
         status: "failed",
@@ -268,11 +428,14 @@ describe("OnboardingFlow technical setup", () => {
         retryable: false,
       },
       onRestart,
+      onExitFailure,
     });
 
-    expect(screen.queryByRole("button", { name: /riprova questo passaggio/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Riparti da capo" }));
-    expect(onRestart).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Riparti da capo" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Torna alla scelta ambiente" }));
+    expect(onExitFailure).toHaveBeenCalledOnce();
+    expect(onRestart).not.toHaveBeenCalled();
   });
 
   it("shows provider progress and invokes only the required interactive action", async () => {

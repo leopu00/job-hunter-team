@@ -111,7 +111,15 @@ vi.mock("../onboarding", () => ({
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
         {props.activity?.current && <p data-testid="activity-current">{props.activity.current.name}:{props.activity.current.description}</p>}
         {props.activity && <p data-testid="activity-count">activity:{props.activity.events.length}</p>}
+        {props.activity && (
+          <ol data-testid="activity-events">
+            {props.activity.events.map((event) => (
+              <li key={event.id}>{event.invocation}:{event.nativeStage}:{event.status}:{event.stageElapsedMs}:{event.description}</li>
+            ))}
+          </ol>
+        )}
         {props.runtime.status === "failed" && props.runtime.code && <p>code:{props.runtime.code}</p>}
+        {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
         {(["claude", "codex", "kimi"] as const).map((provider) => (
@@ -140,6 +148,9 @@ vi.mock("../onboarding", () => ({
         )}
         {props.runtime.status === "failed" && props.runtime.retryable !== false && (
           <button type="button" onClick={() => void props.onRetry().catch(() => undefined)}>retry-runtime</button>
+        )}
+        {props.runtime.status === "failed" && props.runtime.retryable === false && (
+          <button type="button" onClick={props.onExitFailure}>exit-failure</button>
         )}
         {props.runtime.status !== "collecting" && (
           <button type="button" onClick={() => void props.onRestart().catch(() => undefined)}>restart-onboarding</button>
@@ -528,6 +539,83 @@ describe("DashboardApp onboarding router", () => {
     expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
+  it("replays a container failure and invokes exactly one retry only after the explicit click", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("container-replay-account"));
+    requireOnboarding();
+    let invocation = 0;
+    vi.mocked(prepareOnboardingRuntime).mockImplementation(async (_submission, _token, onProgress) => {
+      invocation += 1;
+      if (invocation === 1) {
+        onProgress({
+          stage: "engine", status: "done", message: "Ambiente verificato.",
+          sequence: 1, elapsedMs: 300, code: null, retryable: null,
+        });
+        onProgress({
+          stage: "runtime", status: "start", message: "Verifico il runtime.",
+          sequence: 2, elapsedMs: 0, code: null, retryable: null,
+        });
+        onProgress({
+          stage: "runtime", status: "done", message: "Runtime verificato.",
+          sequence: 3, elapsedMs: 700, code: null, retryable: null,
+        });
+        onProgress({
+          stage: "container", status: "start", message: "Avvio il container del team.",
+          sequence: 4, elapsedMs: 0, code: null, retryable: null,
+        });
+        onProgress({
+          stage: "container", status: "error", message: "Il container non si è avviato.",
+          sequence: 5, elapsedMs: 2_400, code: "container_start_failed", retryable: true,
+        });
+        throw {
+          code: "container_start_failed",
+          message: "Il container non si è avviato.",
+          retryable: true,
+        };
+      }
+      onProgress({
+        stage: "container", status: "start", message: "Riprovo l’avvio del container.",
+        sequence: 1, elapsedMs: 0, code: null, retryable: null,
+      });
+      onProgress({
+        stage: "container", status: "progress", message: "Verifico il container avviato.",
+        sequence: 2, elapsedMs: 2_000, code: null, retryable: null,
+      });
+      onProgress({
+        stage: "container", status: "done", message: "Container verificato.",
+        sequence: 3, elapsedMs: 2_600, code: null, retryable: null,
+      });
+      return PREPARED;
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:container")).toBeInTheDocument();
+    expect(screen.getByText("code:container_start_failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+    expect(screen.getByTestId("activity-events")).toHaveTextContent(
+      "1:container:failed:2400:Il container non si è avviato.",
+    );
+    expect(screen.getByTestId("activity-events")).not.toHaveTextContent(/token|password|secret|https?:\/\//i);
+
+    await act(async () => { await Promise.resolve(); });
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole("button", { name: "retry-runtime" }));
+
+    await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+    expect(screen.getByTestId("activity-events")).toHaveTextContent(
+      "2:container:completed:2600:Container verificato.",
+    );
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+  });
+
   it("preserves a structured local error and retries only when the backend permits it", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("retry-account"));
     requireOnboarding();
@@ -559,8 +647,9 @@ describe("DashboardApp onboarding router", () => {
       retryable: "yes",
     });
 
+    const user = userEvent.setup();
     render(<DashboardApp />);
-    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
 
     expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
     expect(screen.queryByText("code:podman_not_ready")).not.toBeInTheDocument();
@@ -595,8 +684,38 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
     await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
     expect(await screen.findByText("failed:container")).toBeInTheDocument();
+    expect(screen.getByText("title:Avvio del container non riuscito")).toBeInTheDocument();
+    expect(screen.getByText("Il container del team non risulta pronto. Il team non è stato avviato.")).toBeInTheDocument();
+    expect(screen.queryByText("ignored raw output")).not.toBeInTheDocument();
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("maps an explicit version mismatch to fixed copy without exposing backend text", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("container-version-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "container_version_incompatible",
+      message: "raw version probe output",
+      retryable: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:container")).toBeInTheDocument();
+    expect(screen.getByText("title:Versione del container non compatibile")).toBeInTheDocument();
+    expect(screen.getByText("La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.")).toBeInTheDocument();
+    expect(screen.queryByText("raw version probe output")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "exit-failure" }));
+    expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+    expect(resetOnboardingMarker).not.toHaveBeenCalled();
+    expect(closeOnboardingProviderLogin).not.toHaveBeenCalled();
+    expect(clearDesktopAccountScope).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
   });
 
   it("requires explicit fingerprint consent before VPS pairing and cancel performs no prepare", async () => {

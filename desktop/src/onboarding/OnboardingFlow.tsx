@@ -63,10 +63,14 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart">) {
+function RuntimeView({ runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart">) {
   const [pending, setPending] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const pendingRef = useRef(false);
+  const failureHeadingRef = useRef<HTMLHeadingElement>(null);
+  const focusedFailureKeyRef = useRef<string | null>(null);
+  const failureKey = runtime.status === "failed" ? `${runtime.stage}:${runtime.code ?? "unknown"}` : null;
 
   useEffect(() => {
     setPending(false);
@@ -79,6 +83,16 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [activity?.startedAt, runtime.status]);
+
+  useEffect(() => {
+    if (!failureKey) {
+      focusedFailureKeyRef.current = null;
+      return;
+    }
+    if (focusedFailureKeyRef.current === failureKey) return;
+    focusedFailureKeyRef.current = failureKey;
+    failureHeadingRef.current?.focus();
+  }, [failureKey]);
 
   if (runtime.status === "ready") {
     return (
@@ -102,8 +116,9 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
   const actionRequired = runtime.status === "action-required";
   const activeIndex = RUNTIME_STAGES.findIndex((stage) => stage.value === runtime.stage);
   const activeLabel = RUNTIME_STAGES[activeIndex]?.label ?? "Configurazione";
+  const failureTitle = failed && runtime.title ? runtime.title : `Configura di nuovo: ${activeLabel}`;
   const completedSteps = Math.max(0, activeIndex);
-  const currentActivity = activity?.current?.stage === runtime.stage ? activity.current : undefined;
+  const currentActivity = !failed && activity?.current?.stage === runtime.stage ? activity.current : undefined;
   const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
 
   if (runtime.stage === "provider-login" && providerLogin) {
@@ -136,10 +151,14 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
     );
   }
 
-  async function invoke(action: () => Promise<void>) {
-    if (pending) return;
+  async function invoke(action: () => Promise<void>, reportFailure = true) {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true); setActionFailed(false);
-    try { await action(); } catch { setActionFailed(true); } finally { setPending(false); }
+    try { await action(); } catch { if (reportFailure) setActionFailed(true); } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
   }
 
   const actionLabel = runtime.stage === "assistant"
@@ -162,13 +181,19 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
           <p className="onboarding-progress__intro">Prepariamo l’ambiente scelto, colleghiamo il tuo abbonamento e avviamo gli agenti.</p>
           <p className="onboarding-progress__privacy">Nessuna chiave API richiesta</p>
         </aside>
-        <section className={`onboarding-runtime-card${failed ? " onboarding-runtime-card--failed" : ""}`}>
+        <section className={`onboarding-runtime-card${failed ? " onboarding-runtime-card--failed" : ""}`} aria-busy={pending}>
           <p className="onboarding-eyebrow">{failed ? "Intervento richiesto" : actionRequired ? "Tocca a te" : "Configurazione in corso"}</p>
-          <h2>{failed ? `Configura di nuovo: ${activeLabel}` : actionRequired ? activeLabel : `Prepariamo: ${activeLabel}`}</h2>
+          <h2
+            ref={failureHeadingRef}
+            tabIndex={failed ? -1 : undefined}
+          >{failed ? failureTitle : actionRequired ? activeLabel : `Prepariamo: ${activeLabel}`}</h2>
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label="Avanzamento configurazione">
             <div className="onboarding-runtime-progress__heading">
-              <div><strong>{currentActivity?.name ?? activeLabel}</strong><small>{currentActivity?.description ?? runtime.message}</small></div>
+              <div>
+                <strong>{currentActivity?.name ?? activeLabel}</strong>
+                <small>{failed ? "Passaggio interrotto. Controlla il messaggio e scegli come proseguire." : currentActivity?.description ?? runtime.message}</small>
+              </div>
               <span>Trascorso <time>{elapsed}</time></span>
             </div>
             <progress aria-label="Passaggi completati" max={RUNTIME_STAGES.length} value={completedSteps} />
@@ -182,9 +207,16 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
               ><i /></div>
             )}
           </section>
-          <div className="onboarding-runtime-status" aria-live="polite" role={failed ? "alert" : "status"}>
+          <div
+            className="onboarding-runtime-status"
+            aria-live={failed ? undefined : "polite"}
+            role={failed ? "alert" : "status"}
+          >
             <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
-            <div><strong>{failed ? "Operazione interrotta in sicurezza" : actionRequired ? "È necessaria una tua azione" : "Non chiudere l’app"}</strong><small>{runtime.message}</small>{failed && runtime.code && <small>Codice diagnostico: {runtime.code}</small>}</div>
+            <div>
+              {!failed && <strong>{actionRequired ? "È necessaria una tua azione" : "Non chiudere l’app"}</strong>}
+              <small>{runtime.message}</small>
+            </div>
           </div>
           <ol className="onboarding-runtime-track">
             {RUNTIME_STAGES.map((stage, index) => (
@@ -208,6 +240,14 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
               </ol>
             ) : <p>In attesa del primo aggiornamento verificato.</p>}
           </details>
+          {failed && runtime.code && (
+            <details className="onboarding-activity-details onboarding-technical-details">
+              <summary>Dettagli tecnici</summary>
+              <dl>
+                <div><dt>Codice</dt><dd><code>{runtime.code}</code></dd></div>
+              </dl>
+            </details>
+          )}
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label="Verifica identità server">
               <div className="onboarding-provider-console__heading"><div><strong>Controlla il fingerprint SSH</strong><small>Confrontalo con quello mostrato dal tuo provider VPS. Non contiene indirizzo o chiave privata.</small></div></div>
@@ -218,16 +258,21 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
             </section>
           )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
-          {failed && runtime.retryable === false && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
+          {failed && runtime.retryable === false && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
           <div className="onboarding-runtime-actions">
-            <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
+            {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               Riparti da capo
-            </button>
+            </button>}
+            {failed && runtime.retryable === false && (
+              <button className="onboarding-secondary" type="button" onClick={onExitFailure} disabled={pending}>
+                Torna alla scelta ambiente
+              </button>
+            )}
             {((failed && runtime.retryable !== false) || actionRequired) && (
               <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>Annulla</button>}
-              <button className="onboarding-primary" type="button" onClick={() => invoke(action)} disabled={pending}>
-                {pending ? "Attendi…" : failed ? "Riprova questo passaggio" : actionLabel}<span aria-hidden="true">→</span>
+              <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending}>
+                {pending ? failed ? "Verifica in corso…" : "Attendi…" : failed ? "Riprova la preparazione" : actionLabel}<span aria-hidden="true">→</span>
               </button>
               </>
             )}
@@ -238,7 +283,7 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: OnboardingFlowProps) {
   const localRuntimeSupported = platform === "macos" || platform === "linux";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
@@ -257,7 +302,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} />;
+  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
@@ -275,6 +320,12 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
         provider,
       });
     } catch { setSubmitError(true); } finally { setSubmitting(false); }
+  }
+
+  function exitFailure() {
+    setStep(1);
+    setSubmitError(false);
+    onExitFailure();
   }
 
   return (
