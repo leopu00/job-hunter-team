@@ -136,10 +136,9 @@ vi.mock("../onboarding", () => ({
         {props.providerLogin && (
           <>
             <p>provider-state:{props.providerLogin.status}</p>
-            <pre aria-label="provider-output">{props.providerLogin.sanitizedOutput.join("")}</pre>
-            {props.providerLogin.action.safeUrl && <p>provider-url:{props.providerLogin.action.safeUrl}</p>}
-            {props.providerLogin.action.userCode && <p>provider-code:{props.providerLogin.action.userCode}</p>}
-            {props.providerLogin.action.inputRequest && (
+            {props.providerLogin.action?.kind === "url" && <p>provider-url:{props.providerLogin.action.safeUrl}</p>}
+            {props.providerLogin.action?.kind === "code" && <p>provider-code:{props.providerLogin.action.userCode}</p>}
+            {props.providerLogin.action?.kind === "input" && (
               <button type="button" onClick={() => void props.onProviderInput("verification response").catch(() => undefined)}>send-provider-input</button>
             )}
             <button type="button" onClick={() => void props.onProviderClose().catch(() => undefined)}>cancel-provider-login</button>
@@ -935,6 +934,32 @@ describe("DashboardApp onboarding router", () => {
     expect(openOnboardingAssistant).not.toHaveBeenCalled();
   });
 
+  it("fails closed on a Podman snapshot error without exposing backend text or auto-starting", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("podman-snapshot-error"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Snapshot Error" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockRejectedValue({
+      code: "snapshot_failed",
+      message: "raw host path and runtime output",
+      retryable: true,
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText("La preparazione del runtime non è stata verificata. Riprova.")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("raw host path and runtime output");
+    expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
   it("starts missing team sessions before reconnecting the resumed Assistant chat", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("assistant-missing-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
@@ -1103,33 +1128,51 @@ describe("DashboardApp onboarding router", () => {
     await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
 
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
-    if (provider === "codex") {
-      expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
-    } else {
-      expect(sendOnboardingProviderInput).toHaveBeenCalledWith(`provider-session-${provider}`, "/login");
-    }
+    expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
+    expect(await screen.findByText("provider-state:connecting")).toBeInTheDocument();
 
-    act(() => emit({ kind: "output", text: `synthetic-${provider}-output` }));
-    expect(await screen.findByLabelText("provider-output")).toHaveTextContent(`synthetic-${provider}-output`);
+    expect(screen.queryByText(/provider-url:/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
     act(() => emit({
       kind: "state",
       status: "needs_user_action",
       action: {
+        kind: "url",
         instruction: "Completa l’accesso nel browser.",
         safeUrl: "https://example.invalid/device",
+      },
+    }));
+    expect(await screen.findByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+    act(() => emit({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "code",
+        instruction: "Inserisci il codice mostrato.",
         userCode: "ABCD-EFGH",
+      },
+    }));
+    expect(await screen.findByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
+    expect(screen.queryByText(/provider-url:/i)).not.toBeInTheDocument();
+    act(() => emit({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input",
+        instruction: "Invia la risposta richiesta.",
         inputRequest: { id: `request-${provider}`, label: "Risposta" },
       },
     }));
     expect(await screen.findByText("provider-state:needs_user_action")).toBeInTheDocument();
-    expect(screen.getByText("provider-url:https://example.invalid/device")).toBeInTheDocument();
-    expect(screen.getByText("provider-code:ABCD-EFGH")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "send-provider-input" }));
     expect(sendOnboardingProviderInput).toHaveBeenLastCalledWith(
       `provider-session-${provider}`,
+      `request-${provider}`,
       "verification response",
     );
+    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+    expect(screen.getByText("provider-state:connecting")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "cancel-provider-login" }));
     expect(closeOnboardingProviderLogin).toHaveBeenCalledWith(`provider-session-${provider}`);
     expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
@@ -1162,6 +1205,90 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
+  it("ignores stale State and a late session while the next account scope is pending", async () => {
+    let current = signedInAs("provider-account-a");
+    let emit!: Parameters<typeof startOnboardingProviderLogin>[1];
+    let resolveStart!: (sessionId: string) => void;
+    let resolveScopeB!: () => void;
+    let scopeAttempt = 0;
+    vi.mocked(useSession).mockImplementation(() => current);
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(activateDesktopAccountScope).mockImplementation(() => {
+      scopeAttempt += 1;
+      return scopeAttempt === 1
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => { resolveScopeB = resolve; });
+    });
+    vi.mocked(startOnboardingProviderLogin).mockImplementation((_host, onEvent) => {
+      emit = onEvent;
+      return new Promise<string>((resolve) => { resolveStart = resolve; });
+    });
+
+    const user = userEvent.setup();
+    const view = render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+
+    current = signedInAs("provider-account-b");
+    view.rerender(<DashboardApp />);
+    expect(await screen.findByLabelText("Caricamento dashboard")).toBeInTheDocument();
+    act(() => emit({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input",
+        instruction: "Risposta per la sessione precedente.",
+        inputRequest: { id: "stale-request", label: "Risposta" },
+      },
+    }));
+    await act(async () => resolveStart("stale-provider-session"));
+
+    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+    expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+
+    await act(async () => resolveScopeB());
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+  });
+
+  it.each([7, null] as const)("keeps Exit %s terminal, safe and explicitly restartable", async (exitCode) => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("provider-exit-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    let emit!: Parameters<typeof startOnboardingProviderLogin>[1];
+    vi.mocked(startOnboardingProviderLogin).mockImplementation(async (_host, onEvent) => {
+      emit = onEvent;
+      return "provider-session-exit";
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    act(() => emit({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        kind: "input",
+        instruction: "Invia una risposta.",
+        inputRequest: { id: "exit-request", label: "Risposta" },
+      },
+    }));
+    expect(screen.getByRole("button", { name: "send-provider-input" })).toBeInTheDocument();
+
+    act(() => emit({ kind: "exit", code: exitCode }));
+
+    expect(await screen.findByText("provider-state:error")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
+    expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
+    expect(readOnboardingSnapshot).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "restart-provider-login" })).toBeInTheDocument();
+  });
+
   it("unmounts the takeover and advances once only after the verified snapshot", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("provider-success-account"));
     requireOnboarding();
@@ -1179,6 +1306,13 @@ describe("DashboardApp onboarding router", () => {
     await user.click(await screen.findByRole("button", { name: "submit-codex" }));
     await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
     await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    expect(screen.getByText("provider-state:connecting")).toBeInTheDocument();
+
+    act(() => emit({
+      kind: "state",
+      status: "needs_user_action",
+      action: { kind: "code", instruction: "Inserisci il codice.", userCode: "ABCD-EFGH" },
+    }));
     expect(screen.getByText("provider-state:needs_user_action")).toBeInTheDocument();
 
     act(() => emit({ kind: "exit", code: 0 }));

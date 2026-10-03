@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import "./oauth-login-takeover.css";
 
 export type OAuthLoginConnectionState = "connecting" | "connected" | "disconnected";
@@ -7,27 +7,19 @@ export interface OAuthLoginInputRequest {
   id: string;
   label: string;
   description?: string;
-  placeholder?: string;
   submitLabel?: string;
   secret?: boolean;
   inputMode?: "text" | "numeric";
 }
 
-export interface OAuthLoginUserAction {
-  instruction: string;
-  /** URL already selected by the native boundary for the human to open. */
-  safeUrl?: string;
-  /** Short-lived device/user code, kept separate from terminal output. */
-  userCode?: string;
-  /** Omit this field unless the PTY is explicitly waiting for stdin. */
-  inputRequest?: OAuthLoginInputRequest;
-}
+export type OAuthLoginUserAction =
+  | { kind: "url"; instruction: string; safeUrl: string }
+  | { kind: "code"; instruction: string; userCode: string }
+  | { kind: "input"; instruction: string; inputRequest: OAuthLoginInputRequest };
 
 export interface OAuthLoginTakeoverProps {
   providerName: string;
-  /** Redacted PTY lines. The component applies a second defensive pass. */
-  sanitizedOutput: readonly string[];
-  action: OAuthLoginUserAction;
+  action: OAuthLoginUserAction | null;
   connectionState: OAuthLoginConnectionState;
   elapsedMs: number;
   safeErrorMessage?: string | null;
@@ -37,35 +29,11 @@ export interface OAuthLoginTakeoverProps {
   onCopy?: (value: string) => void | Promise<void>;
 }
 
-const MAX_OUTPUT_LINES = 80;
-const MAX_LINE_LENGTH = 800;
-
 const CONNECTION_COPY: Record<OAuthLoginConnectionState, string> = {
   connecting: "Connessione in corso",
   connected: "Connesso",
   disconnected: "Connessione interrotta",
 };
-
-function sanitizePtyLine(value: string) {
-  return value
-    .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g, "")
-    .replace(/\u001B(?:\[[0-?]*[ -/]*[@-~]|[@-_])/g, "")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redatto]")
-    .replace(/([?&](?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|device[_-]?code|authorization[_-]?code|session[_-]?token|state)=)[^&#\s]+/gi, "$1[redatto]")
-    .replace(/(["']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|session[_-]?token)["']?\s*[:=]\s*)["']?[^\s,"';]+/gi, "$1[redatto]")
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|(?:ghp|gho|sbp)_[A-Za-z0-9_-]{16,})\b/g, "[segreto redatto]")
-    .slice(0, MAX_LINE_LENGTH);
-}
-
-export function sanitizePtyOutput(output: readonly string[]) {
-  const lines = output.flatMap((entry) => entry.split(/\r\n|\n|\r/)).map(sanitizePtyLine);
-  const visible = lines.slice(-MAX_OUTPUT_LINES);
-  return {
-    omitted: Math.max(0, lines.length - visible.length),
-    lines: visible,
-  };
-}
 
 export function formatOAuthLoginElapsed(milliseconds: number) {
   const seconds = Math.max(0, Math.floor(Number.isFinite(milliseconds) ? milliseconds / 1_000 : 0));
@@ -79,7 +47,6 @@ export function formatOAuthLoginElapsed(milliseconds: number) {
 
 export function OAuthLoginTakeover({
   providerName,
-  sanitizedOutput,
   action,
   connectionState,
   elapsedMs,
@@ -94,19 +61,20 @@ export function OAuthLoginTakeover({
   const inputId = useId();
   const inputDescriptionId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const initialFocusHandledRef = useRef(false);
   const [input, setInput] = useState("");
   const [pendingAction, setPendingAction] = useState<"input" | "cancel" | "restart" | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const output = useMemo(() => sanitizePtyOutput(sanitizedOutput), [sanitizedOutput]);
-  const inputRequest = action.inputRequest;
+  const inputRequest = action?.kind === "input" ? action.inputRequest : undefined;
   const connected = connectionState === "connected";
   const pending = pendingAction !== null;
 
   useEffect(() => {
     setInput("");
     setOperationError(null);
+    if (inputRequest) inputRef.current?.focus();
   }, [inputRequest?.id]);
 
   useEffect(() => {
@@ -177,18 +145,20 @@ export function OAuthLoginTakeover({
         </div>
       </header>
 
-      <p id={instructionId} className="oauth-login-takeover__instruction">{action.instruction}</p>
+      <p id={instructionId} className="oauth-login-takeover__instruction">
+        {action?.instruction ?? "Attendo una richiesta verificata dal provider."}
+      </p>
 
-      {(action.safeUrl || action.userCode) && (
+      {(action?.kind === "url" || action?.kind === "code") && (
         <dl className="oauth-login-takeover__copy-grid">
-          {action.safeUrl && (
+          {action.kind === "url" && (
             <div>
               <dt>URL di accesso</dt>
               <dd><code>{action.safeUrl}</code></dd>
               <button type="button" onClick={() => void copy(action.safeUrl!, "URL")}>Copia URL</button>
             </div>
           )}
-          {action.userCode && (
+          {action.kind === "code" && (
             <div>
               <dt>Codice temporaneo</dt>
               <dd><code>{action.userCode}</code></dd>
@@ -198,25 +168,13 @@ export function OAuthLoginTakeover({
         </dl>
       )}
 
-      <div className="oauth-login-takeover__terminal">
-        <div className="oauth-login-takeover__terminal-heading">
-          <strong>Attività del provider</strong>
-          <span>Output temporaneo e redatto</span>
-        </div>
-        <pre role="log" aria-live="off" aria-label="Attività del login provider">
-          {output.omitted > 0 && <span>… {output.omitted} righe precedenti omesse.</span>}
-          {output.lines.length > 0
-            ? output.lines.map((line, index) => <span key={`${index}-${line.slice(0, 24)}`}>{line || " "}</span>)
-            : <span>Attendo istruzioni dal provider…</span>}
-        </pre>
-      </div>
-
       {inputRequest && (
         <form className="oauth-login-takeover__input" onSubmit={(event) => void submit(event)}>
           <label htmlFor={inputId}>{inputRequest.label}</label>
           {inputRequest.description && <p id={inputDescriptionId}>{inputRequest.description}</p>}
           <div>
             <input
+              ref={inputRef}
               id={inputId}
               type={inputRequest.secret ? "password" : "text"}
               inputMode={inputRequest.inputMode}
@@ -224,7 +182,6 @@ export function OAuthLoginTakeover({
               spellCheck={false}
               value={input}
               onChange={(event) => { setOperationError(null); setInput(event.target.value); }}
-              placeholder={inputRequest.placeholder}
               aria-describedby={inputRequest.description ? inputDescriptionId : undefined}
               disabled={!connected || pending}
               autoFocus

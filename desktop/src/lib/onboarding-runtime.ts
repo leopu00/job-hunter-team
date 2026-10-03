@@ -21,7 +21,6 @@ export interface OnboardingNativeProgress {
 }
 
 export type OnboardingInteractiveEvent =
-  | { kind: "output"; text: string }
   | { kind: "state"; status: "needs_user_action"; action: OnboardingProviderLoginAction }
   | { kind: "exit"; code: number | null };
 
@@ -82,15 +81,15 @@ function parseInputRequest(value: unknown): OnboardingProviderLoginInputRequest 
   const id = typeof row.id === "string" && SAFE_INTERACTIVE_ID.test(row.id) ? row.id : null;
   const label = safeInteractiveText(row.label, 120);
   const description = row.description === undefined ? undefined : safeInteractiveText(row.description, 240);
-  const placeholder = row.placeholder === undefined ? undefined : safeInteractiveText(row.placeholder, 120);
   const submitLabel = row.submitLabel === undefined ? undefined : safeInteractiveText(row.submitLabel, 80);
   const secret = row.secret === undefined ? undefined : typeof row.secret === "boolean" ? row.secret : null;
   const inputMode = row.inputMode === undefined
     ? undefined
     : row.inputMode === "text" || row.inputMode === "numeric" ? row.inputMode : null;
-  if (!id || !label || description === null || placeholder === null || submitLabel === null ||
+  if (!Object.keys(row).every((key) => ["id", "label", "description", "submitLabel", "secret", "inputMode"].includes(key)) ||
+      !id || !label || description === null || submitLabel === null ||
       secret === null || inputMode === null) return null;
-  return { id, label, description, placeholder, submitLabel, secret, inputMode };
+  return { id, label, description, submitLabel, secret, inputMode };
 }
 
 function parseInteractiveAction(value: unknown): OnboardingProviderLoginAction | null {
@@ -98,35 +97,33 @@ function parseInteractiveAction(value: unknown): OnboardingProviderLoginAction |
   const row = value as Record<string, unknown>;
   const instruction = safeInteractiveText(row.instruction, 240);
   if (!instruction) return null;
-  let safeUrl: string | undefined;
-  if (row.safeUrl !== undefined) {
+  if (row.kind === "url" && Object.keys(row).every((key) => ["kind", "instruction", "safeUrl"].includes(key))) {
     if (typeof row.safeUrl !== "string" || row.safeUrl.length > 2_048) return null;
     try {
       const parsed = new URL(row.safeUrl);
       if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
-      safeUrl = parsed.toString();
+      return { kind: "url", instruction, safeUrl: parsed.toString() };
     } catch {
       return null;
     }
   }
-  const userCode = row.userCode === undefined
-    ? undefined
-    : typeof row.userCode === "string" && row.userCode.length > 0 && row.userCode.length <= 128 &&
-      !/[\r\n\0]/.test(row.userCode) ? row.userCode : null;
-  const inputRequest = parseInputRequest(row.inputRequest);
-  if (userCode === null || inputRequest === null) return null;
-  return { instruction, safeUrl, userCode, inputRequest };
+  if (row.kind === "code" && Object.keys(row).every((key) => ["kind", "instruction", "userCode"].includes(key))) {
+    return typeof row.userCode === "string" && row.userCode.length > 0 && row.userCode.length <= 128 &&
+      !/[\r\n\0]/.test(row.userCode)
+      ? { kind: "code", instruction, userCode: row.userCode }
+      : null;
+  }
+  if (row.kind === "input" && Object.keys(row).every((key) => ["kind", "instruction", "inputRequest"].includes(key))) {
+    const inputRequest = parseInputRequest(row.inputRequest);
+    return inputRequest ? { kind: "input", instruction, inputRequest } : null;
+  }
+  return null;
 }
 
 /** Validates the native interactive boundary without deriving actions from PTY text. */
 export function parseOnboardingInteractiveEvent(value: unknown): OnboardingInteractiveEvent | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  if (row.kind === "output") {
-    return typeof row.text === "string" && row.text.length <= 32_768
-      ? { kind: "output", text: row.text }
-      : null;
-  }
   if (row.kind === "exit") {
     return row.code === null || (Number.isSafeInteger(row.code) && (row.code as number) >= -1)
       ? { kind: "exit", code: row.code as number | null }
@@ -194,9 +191,13 @@ export async function startOnboardingProviderLogin(
   return result.sessionId;
 }
 
-export async function sendOnboardingProviderInput(sessionId: string, input: string): Promise<void> {
+export async function sendOnboardingProviderInput(
+  sessionId: string,
+  requestId: string,
+  input: string,
+): Promise<void> {
   if (!isTauri()) desktopOnly();
-  await invoke("onboarding_provider_login_input", { sessionId, input });
+  await invoke("onboarding_provider_login_input", { sessionId, requestId, input });
 }
 
 export async function closeOnboardingProviderLogin(sessionId: string): Promise<void> {

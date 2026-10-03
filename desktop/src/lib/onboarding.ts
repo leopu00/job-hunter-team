@@ -40,24 +40,20 @@ export interface OnboardingProviderLoginInputRequest {
   id: string;
   label: string;
   description?: string;
-  placeholder?: string;
   submitLabel?: string;
   secret?: boolean;
   inputMode?: "text" | "numeric";
 }
 
-export interface OnboardingProviderLoginAction {
-  instruction: string;
-  safeUrl?: string;
-  userCode?: string;
-  inputRequest?: OnboardingProviderLoginInputRequest;
-}
+export type OnboardingProviderLoginAction =
+  | { kind: "url"; instruction: string; safeUrl: string }
+  | { kind: "code"; instruction: string; userCode: string }
+  | { kind: "input"; instruction: string; inputRequest: OnboardingProviderLoginInputRequest };
 
 export interface OnboardingProviderLoginState {
   provider: SubscriptionProvider;
   status: "connecting" | "needs_user_action" | "error";
-  sanitizedOutput: string[];
-  action: OnboardingProviderLoginAction;
+  action: OnboardingProviderLoginAction | null;
   connectionState: "connecting" | "connected" | "disconnected";
   startedAt: number;
   safeErrorMessage?: string;

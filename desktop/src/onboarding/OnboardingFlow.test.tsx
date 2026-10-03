@@ -520,11 +520,10 @@ describe("OnboardingFlow technical setup", () => {
       providerLogin: {
         provider: "codex",
         status: "needs_user_action",
-        sanitizedOutput: ["Authorization: Bearer synthetic-secret"],
         action: {
+          kind: "url",
           instruction: "Apri il browser e inserisci il codice temporaneo.",
           safeUrl: "https://example.invalid/device",
-          userCode: "ABCD-EFGH",
         },
         connectionState: "connected",
         startedAt: Date.now() - 2_000,
@@ -533,8 +532,7 @@ describe("OnboardingFlow technical setup", () => {
 
     expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
     expect(screen.getByText("https://example.invalid/device")).toBeInTheDocument();
-    expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
-    expect(screen.getByRole("log")).toHaveTextContent("Bearer [redatto]");
+    expect(screen.queryByRole("log")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("synthetic-secret");
   });
@@ -548,8 +546,8 @@ describe("OnboardingFlow technical setup", () => {
       providerLogin: {
         provider: "claude",
         status: "needs_user_action",
-        sanitizedOutput: ["Open browser"],
         action: {
+          kind: "input",
           instruction: "Conferma la richiesta del provider.",
           inputRequest: { id: "confirmation", label: "Risposta richiesta" },
         },

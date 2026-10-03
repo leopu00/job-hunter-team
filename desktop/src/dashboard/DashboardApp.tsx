@@ -67,7 +67,6 @@ import { navigate } from "../shell/router";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
-const MAX_PROVIDER_OUTPUT = 32_768;
 const PROFILE_RECHECK_MS = 2_000;
 const SAFE_RUNTIME_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const CONTAINER_RUNTIME_ERRORS = new Set([
@@ -82,16 +81,6 @@ const PROVIDER_RUNTIME_ERRORS = new Set([
   "provider_install_failed",
   "provider_timeout",
 ]);
-
-function providerLoginInstruction(provider: OnboardingSubmission["provider"]): string {
-  if (provider === "codex") return "Completa l’accesso nel browser quando il provider mostra la richiesta verificata.";
-  return "Segui la richiesta verificata del provider per completare l’accesso al tuo abbonamento.";
-}
-
-function appendProviderOutput(current: string[], text: string): string[] {
-  const bounded = `${current.join("")}${text}`.slice(-MAX_PROVIDER_OUTPUT);
-  return bounded ? [bounded] : [];
-}
 
 function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
@@ -259,8 +248,11 @@ export default function DashboardApp() {
     identityKey: string;
     phase: "pending" | "ready" | "error";
   } | null>(null);
+  const accountScopeRef = useRef(accountScope);
+  accountScopeRef.current = accountScope;
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
+  const providerSessionIdentityRef = useRef<string | null>(null);
   const providerInputRequestRef = useRef<string | null>(null);
   const providerExitRejectRef = useRef<{ attempt: number; reject: (error: Error) => void } | null>(null);
   const providerStoppingAttemptRef = useRef<number | null>(null);
@@ -320,6 +312,7 @@ export default function DashboardApp() {
     submissionRef.current = null;
     providerAttemptRef.current += 1;
     providerSessionRef.current = null;
+    providerSessionIdentityRef.current = null;
     providerInputRequestRef.current = null;
     providerStoppingAttemptRef.current = null;
     providerExitRejectRef.current?.reject(new Error("account-changed"));
@@ -488,16 +481,26 @@ export default function DashboardApp() {
   const loginProvider = useCallback(async () => {
     const submission = submissionRef.current;
     if (!submission) return fail("provider-login", new Error("submission-missing"));
+    const loginIdentityKey = identityKey;
+    const scope = accountScopeRef.current;
+    if (!loginIdentityKey || scope?.phase !== "ready" || scope.identityKey !== loginIdentityKey) {
+      return fail("provider-login", new Error("account-scope-not-ready"));
+    }
     const attempt = ++providerAttemptRef.current;
+    const attemptIsCurrent = () => {
+      const currentScope = accountScopeRef.current;
+      return providerAttemptRef.current === attempt &&
+        activeIdentityKeyRef.current === loginIdentityKey &&
+        currentScope?.phase === "ready" && currentScope.identityKey === loginIdentityKey;
+    };
+    providerSessionIdentityRef.current = loginIdentityKey;
     let sessionId: string | null = null;
-    let exited = false;
     try {
       providerInputRequestRef.current = null;
       setProviderLogin({
         provider: submission.provider,
         status: "connecting",
-        sanitizedOutput: [],
-        action: { instruction: providerLoginInstruction(submission.provider) },
+        action: null,
         connectionState: "connecting",
         startedAt: Date.now(),
       });
@@ -509,18 +512,14 @@ export default function DashboardApp() {
         resolveExit = resolve;
         rejectExit = reject;
       });
+      void exit.catch(() => undefined);
       providerExitRejectRef.current = { attempt, reject: rejectExit };
       sessionId = await startOnboardingProviderLogin(submission.host, (event) => {
-        if (providerAttemptRef.current !== attempt) return;
-        if (event.kind === "output") {
-          setProviderLogin((current) => {
-            if (!current || current.provider !== submission.provider) return current;
-            return { ...current, sanitizedOutput: appendProviderOutput(current.sanitizedOutput, event.text) };
-          });
-          return;
-        }
+        if (!attemptIsCurrent()) return;
         if (event.kind === "state") {
-          providerInputRequestRef.current = event.action.inputRequest?.id ?? null;
+          providerInputRequestRef.current = event.action.kind === "input"
+            ? event.action.inputRequest.id
+            : null;
           setProviderLogin((current) => current ? {
             ...current,
             status: "needs_user_action",
@@ -529,30 +528,28 @@ export default function DashboardApp() {
           } : current);
           return;
         }
-        exited = true;
         providerInputRequestRef.current = null;
         setProviderLogin((current) => current ? {
           ...current,
           status: event.code === 0 ? "needs_user_action" : "error",
           connectionState: "disconnected",
+          action: null,
           safeErrorMessage: event.code === 0 ? undefined : failureMessage("provider-login"),
           exitCode: event.code,
         } : current);
         if (event.code === 0) resolveExit();
         else rejectExit(new Error("provider-login-failed"));
       }, recordActivityProgress);
+      if (!attemptIsCurrent()) return;
       providerSessionRef.current = sessionId;
       setProviderLogin((current) => current?.status === "connecting" ? {
         ...current,
-        status: "needs_user_action",
         connectionState: "connected",
       } : current);
-      if (!exited && (submission.provider === "claude" || submission.provider === "kimi")) {
-        await sendOnboardingProviderInput(sessionId, "/login");
-      }
       await exit;
       await closeOnboardingProviderLogin(sessionId);
       providerSessionRef.current = null;
+      providerSessionIdentityRef.current = null;
       if (providerExitRejectRef.current?.attempt === attempt) providerExitRejectRef.current = null;
       sessionId = null;
       const snapshot = await readOnboardingSnapshot(submission.host);
@@ -574,6 +571,7 @@ export default function DashboardApp() {
         ...current,
         status: "error",
         connectionState: "disconnected",
+        action: null,
         safeErrorMessage: failureMessage("provider-login"),
         exitCode: null,
       } : current);
@@ -582,16 +580,31 @@ export default function DashboardApp() {
     providerInputRequestRef.current = null;
     setProviderLogin(null);
     await startTeam(submission);
-  }, [beginActivityInvocation, fail, recordActivityProgress, setRuntime, startTeam]);
+  }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime, startTeam]);
 
   const sendProviderInput = useCallback(async (input: string) => {
     const sessionId = providerSessionRef.current;
-    if (!sessionId || !providerInputRequestRef.current) throw new Error("provider-input-not-requested");
-    await sendOnboardingProviderInput(sessionId, input);
+    const requestId = providerInputRequestRef.current;
+    const owner = providerSessionIdentityRef.current;
+    const attempt = providerAttemptRef.current;
+    const scope = accountScopeRef.current;
+    if (!sessionId || !requestId || !owner || activeIdentityKeyRef.current !== owner ||
+        scope?.phase !== "ready" || scope.identityKey !== owner) {
+      throw new Error("provider-input-not-requested");
+    }
+    await sendOnboardingProviderInput(sessionId, requestId, input);
+    if (providerAttemptRef.current !== attempt || providerSessionRef.current !== sessionId ||
+        providerInputRequestRef.current !== requestId ||
+        providerSessionIdentityRef.current !== owner || activeIdentityKeyRef.current !== owner) return;
     providerInputRequestRef.current = null;
     setProviderLogin((current) => current ? {
       ...current,
-      action: { instruction: "Risposta inviata. Attendo la verifica del provider." },
+      status: current.action?.kind === "input" && current.action.inputRequest.id === requestId
+        ? "connecting"
+        : current.status,
+      action: current.action?.kind === "input" && current.action.inputRequest.id === requestId
+        ? null
+        : current.action,
     } : current);
   }, []);
 
@@ -607,6 +620,7 @@ export default function DashboardApp() {
     }
     providerAttemptRef.current = attempt + 1;
     if (sessionId && providerSessionRef.current === sessionId) providerSessionRef.current = null;
+    providerSessionIdentityRef.current = null;
     providerInputRequestRef.current = null;
     const pendingExit = providerExitRejectRef.current;
     if (pendingExit?.attempt === attempt) {
@@ -632,6 +646,7 @@ export default function DashboardApp() {
     const providerSession = providerSessionRef.current;
     providerAttemptRef.current += 1;
     providerSessionRef.current = null;
+    providerSessionIdentityRef.current = null;
     providerInputRequestRef.current = null;
     providerStoppingAttemptRef.current = null;
     providerExitRejectRef.current?.reject(new Error("onboarding-restarted"));

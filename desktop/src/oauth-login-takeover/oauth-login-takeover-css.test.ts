@@ -68,9 +68,8 @@ describe("OAuthLoginTakeover CSS", () => {
     }
   });
 
-  it("keeps terminal, copy fields and actions bounded at desktop and compact widths", () => {
+  it("keeps structured copy fields and actions bounded at desktop and compact widths", () => {
     expect(styles).toMatch(/\.oauth-login-takeover \{[\s\S]*?width: min\(760px, 100%\);[\s\S]*?min-width: 0;[\s\S]*?overflow: hidden;/);
-    expect(styles).toMatch(/\.oauth-login-takeover__terminal pre \{[\s\S]*?max-width: 100%;[\s\S]*?overflow: auto;[\s\S]*?overflow-wrap: anywhere;/);
     expect(styles).toMatch(/\.oauth-login-takeover__copy-grid code \{[\s\S]*?overflow-wrap: anywhere;/);
     expect(styles).toMatch(/@media \(max-width: 720px\) \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
     expect(styles).toMatch(/@media \(max-width: 520px\) \{[\s\S]*?\.oauth-login-takeover__controls button \{ width: 100%; \}/);

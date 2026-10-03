@@ -137,7 +137,6 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onExitFailure, onR
           </aside>
           <OAuthLoginTakeover
             providerName={providerName(providerLogin.provider)}
-            sanitizedOutput={providerLogin.sanitizedOutput}
             action={providerLogin.action}
             connectionState={providerLogin.connectionState}
             elapsedMs={Math.max(0, now - providerLogin.startedAt)}
