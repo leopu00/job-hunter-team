@@ -421,6 +421,7 @@ install_podman_macos() {
   # Preview non distruttiva: non ferma e non rimuove Colima. La macchina e la
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
   # sempre quella connessione senza cambiare il default Podman dell'utente.
+  unset CONTAINER_CONNECTION
   install_brew_if_missing
   if ! command -v podman &>/dev/null; then
     info "Installing Podman CLI (macOS preview)..."
@@ -442,6 +443,18 @@ install_podman_macos() {
   case "$PODMAN_MACHINE_NAME" in
     ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
   esac
+  local podman_bin compose_bin compose_version
+  podman_bin="$(command -v podman)" \
+    || fail "Podman CLI disappeared after installation."
+  compose_bin="$(command -v podman-compose)" \
+    || fail "Podman Compose provider disappeared after installation."
+  [ "$("$podman_bin" --version 2>/dev/null)" = 'podman version 6.1.3' ] \
+    || fail "JHT requires Podman 6.1.3 for this runtime release."
+  compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+    "$compose_bin" --version 2>/dev/null)" \
+    || fail "Podman Compose provider version probe failed."
+  printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0' \
+    || fail "JHT requires podman-compose 1.6.0 for this runtime release."
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
@@ -455,11 +468,7 @@ install_podman_macos() {
     podman machine init --now --update-connection=false "$PODMAN_MACHINE_NAME" \
       || fail "Podman machine initialization failed; Colima was not changed."
   fi
-  PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)" \
-    PODMAN_COMPOSE_WARNING_LOGS=false \
-    podman --connection "$PODMAN_MACHINE_NAME" compose version &>/dev/null \
-    || fail "Podman Compose provider is not reachable."
-  podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
   ok "Podman ready (Colima retained)"
 }
@@ -604,16 +613,14 @@ verify_docker_works() {
   if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
       printf "  ${DIM}[dry-run]${RESET} would execute: podman --connection %s info\n" "$PODMAN_MACHINE_NAME"
-      printf "  ${DIM}[dry-run]${RESET} would verify: podman compose provider\n"
+      printf "  ${DIM}[dry-run]${RESET} would verify: Podman 6.1.3 + podman-compose 1.6.0\n"
     else
       printf "  ${DIM}[dry-run]${RESET} would execute: docker info\n"
     fi
     return 0
   fi
   if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
-    PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)" \
-      PODMAN_COMPOSE_WARNING_LOGS=false \
-      podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
+    podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
       || fail "The JHT Podman machine is not responding."
     ok "Podman machine reachable"
     return 0

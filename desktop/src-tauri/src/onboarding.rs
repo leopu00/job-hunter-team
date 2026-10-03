@@ -84,6 +84,8 @@ struct InteractiveSession {
     id: String,
     child: Arc<Mutex<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
+    detector: Arc<Mutex<InteractiveStateDetector>>,
+    pending_input: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -102,6 +104,15 @@ impl SubscriptionProvider {
             Self::Kimi => "kimi",
         }
     }
+
+    fn from_cli_id(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "claude" | "anthropic" => Some(Self::Claude),
+            "codex" | "openai" => Some(Self::Codex),
+            "kimi" | "moonshot" => Some(Self::Kimi),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +121,7 @@ enum LocalCliOperation {
     Status,
     ProviderUse(SubscriptionProvider),
     ProviderUpdate(SubscriptionProvider),
+    ProviderCurrent,
     OauthLogin,
     TeamStart,
     Snapshot,
@@ -123,6 +135,7 @@ impl LocalCliOperation {
             Self::Status => vec!["status"],
             Self::ProviderUse(provider) => vec!["providers", "use", provider.cli_id()],
             Self::ProviderUpdate(provider) => vec!["providers", "update", provider.cli_id()],
+            Self::ProviderCurrent => vec!["providers", "current"],
             Self::OauthLogin => vec!["oauth-login"],
             Self::TeamStart => vec!["team", "start"],
             Self::Snapshot => vec!["onboarding-snapshot"],
@@ -209,8 +222,59 @@ pub(crate) struct InteractiveStart {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum InteractiveEvent {
-    Output { text: String },
-    Exit { code: Option<i32> },
+    Output {
+        text: String,
+    },
+    State {
+        status: InteractiveStateStatus,
+        action: InteractiveAction,
+    },
+    Exit {
+        code: Option<i32>,
+    },
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum InteractiveStateStatus {
+    NeedsUserAction,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub(crate) enum InteractiveAction {
+    Url {
+        instruction: &'static str,
+        #[serde(rename = "safeUrl")]
+        safe_url: String,
+    },
+    Code {
+        instruction: &'static str,
+        #[serde(rename = "userCode")]
+        user_code: String,
+    },
+    Input {
+        instruction: &'static str,
+        #[serde(rename = "inputRequest")]
+        input_request: InteractiveInputRequest,
+    },
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct InteractiveInputRequest {
+    id: String,
+    label: &'static str,
+    description: &'static str,
+    submit_label: &'static str,
+    secret: bool,
+    input_mode: InteractiveInputMode,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum InteractiveInputMode {
+    Text,
 }
 
 fn failure(code: &'static str) -> OnboardingError {
@@ -329,6 +393,10 @@ fn failure(code: &'static str) -> OnboardingError {
         "provider_login_failed" => (
             "L’accesso al provider non è stato completato. Riprova.",
             true,
+        ),
+        "provider_input_not_requested" => (
+            "Il provider non sta attendendo questa risposta.",
+            false,
         ),
         "assistant_start_failed" => ("L’assistente non si è avviato. Riprova.", true),
         "assistant_verify_timeout" => (
@@ -942,6 +1010,7 @@ const REMOTE_USE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null 
 const REMOTE_UPDATE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers update claude"#;
 const REMOTE_UPDATE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers update codex"#;
 const REMOTE_UPDATE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers update kimi"#;
+const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers current"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
 const REMOTE_OAUTH_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login"#;
@@ -1625,7 +1694,209 @@ fn redact(text: String) -> String {
     output
 }
 
-fn stream_reader(mut reader: impl Read + Send + 'static, channel: Channel<InteractiveEvent>) {
+struct InteractiveStateDetector {
+    provider: SubscriptionProvider,
+    pending: String,
+    last_url: Option<String>,
+    last_code: Option<String>,
+    input_pending: bool,
+    request_sequence: u64,
+}
+
+impl InteractiveStateDetector {
+    fn new(provider: SubscriptionProvider) -> Self {
+        Self {
+            provider,
+            pending: String::new(),
+            last_url: None,
+            last_code: None,
+            input_pending: false,
+            request_sequence: 0,
+        }
+    }
+
+    fn push(&mut self, text: &str) -> Vec<InteractiveEvent> {
+        self.pending.push_str(text);
+        if self.pending.len() > 16 * 1024 {
+            self.pending = self
+                .pending
+                .chars()
+                .rev()
+                .take(8 * 1024)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+        }
+        let safe_url = extract_provider_url(self.provider, &self.pending);
+        let user_code = extract_provider_user_code(&self.pending);
+        let needs_input =
+            self.provider != SubscriptionProvider::Codex && provider_input_prompt(&self.pending);
+        let mut events = Vec::new();
+        if let Some(safe_url) = safe_url {
+            if self.last_url.as_ref() != Some(&safe_url) {
+                self.last_url = Some(safe_url.clone());
+                events.push(InteractiveEvent::State {
+                    status: InteractiveStateStatus::NeedsUserAction,
+                    action: InteractiveAction::Url {
+                        instruction: "Completa l’accesso nel browser.",
+                        safe_url,
+                    },
+                });
+            }
+        }
+        if let Some(user_code) = user_code {
+            if self.last_code.as_ref() != Some(&user_code) {
+                self.last_code = Some(user_code.clone());
+                events.push(InteractiveEvent::State {
+                    status: InteractiveStateStatus::NeedsUserAction,
+                    action: InteractiveAction::Code {
+                        instruction: "Inserisci nel browser il codice mostrato.",
+                        user_code,
+                    },
+                });
+            }
+        }
+        if needs_input && !self.input_pending {
+            self.input_pending = true;
+            self.request_sequence += 1;
+            events.push(InteractiveEvent::State {
+                status: InteractiveStateStatus::NeedsUserAction,
+                action: InteractiveAction::Input {
+                    instruction:
+                        "Completa l’accesso nel browser e inserisci la risposta richiesta.",
+                    input_request: InteractiveInputRequest {
+                        id: format!(
+                            "{}-response-{}",
+                            self.provider.cli_id(),
+                            self.request_sequence
+                        ),
+                        label: "Risposta richiesta dal provider",
+                        description: "Inserisci la risposta mostrata dal provider nel browser.",
+                        submit_label: "Invia risposta",
+                        secret: false,
+                        input_mode: InteractiveInputMode::Text,
+                    },
+                },
+            });
+        }
+        events
+    }
+
+    fn request_consumed(&mut self) {
+        self.pending.clear();
+        self.input_pending = false;
+    }
+}
+
+fn extract_provider_url(provider: SubscriptionProvider, text: &str) -> Option<String> {
+    text.split_whitespace().find_map(|token| {
+        let start = token.find("https://")?;
+        let candidate = token[start..].trim_end_matches(|character: char| {
+            matches!(
+                character,
+                '.' | ',' | ';' | ':' | ')' | ']' | '}' | '"' | '\''
+            )
+        });
+        if candidate.is_empty() || candidate.len() > 2048 || candidate.chars().any(char::is_control)
+        {
+            return None;
+        }
+        let authority = candidate
+            .strip_prefix("https://")?
+            .split(['/', '?', '#'])
+            .next()?;
+        if authority.is_empty()
+            || authority.contains('@')
+            || authority.contains(':')
+            || !authority
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        {
+            return None;
+        }
+        let host = authority.to_ascii_lowercase();
+        let allowed = match provider {
+            SubscriptionProvider::Claude => {
+                provider_domain(&host, "anthropic.com") || provider_domain(&host, "claude.ai")
+            }
+            SubscriptionProvider::Codex => {
+                provider_domain(&host, "openai.com") || provider_domain(&host, "chatgpt.com")
+            }
+            SubscriptionProvider::Kimi => {
+                provider_domain(&host, "kimi.com")
+                    || provider_domain(&host, "kimi.ai")
+                    || provider_domain(&host, "moonshot.cn")
+                    || provider_domain(&host, "moonshot.ai")
+            }
+        };
+        if !allowed {
+            return None;
+        }
+        let lowercase = candidate.to_ascii_lowercase();
+        for forbidden in [
+            "access_token=",
+            "refresh_token=",
+            "id_token=",
+            "client_secret=",
+            "device_code=",
+            "authorization_code=",
+            "session_token=",
+            "password=",
+        ] {
+            if lowercase.contains(forbidden) {
+                return None;
+            }
+        }
+        Some(candidate.to_owned())
+    })
+}
+
+fn provider_domain(host: &str, expected: &str) -> bool {
+    host == expected
+        || host
+            .strip_suffix(expected)
+            .is_some_and(|prefix| prefix.ends_with('.'))
+}
+
+fn extract_provider_user_code(text: &str) -> Option<String> {
+    if !text.to_ascii_lowercase().contains("code") {
+        return None;
+    }
+    text.split_whitespace().find_map(|token| {
+        let candidate = token.trim_matches(|character: char| {
+            matches!(
+                character,
+                '.' | ',' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}'
+            )
+        });
+        let valid = (4..=128).contains(&candidate.len())
+            && candidate
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-')
+            && candidate
+                .bytes()
+                .any(|byte| byte.is_ascii_digit() || byte == b'-');
+        valid.then(|| candidate.to_owned())
+    })
+}
+
+fn provider_input_prompt(text: &str) -> bool {
+    let lowercase = text.to_ascii_lowercase();
+    (lowercase.contains("paste") || lowercase.contains("incolla"))
+        && (lowercase.contains("code")
+            || lowercase.contains("codice")
+            || lowercase.contains("callback"))
+        || lowercase.contains("enter authorization code")
+        || lowercase.contains("enter the code from your browser")
+}
+
+fn stream_reader(
+    mut reader: impl Read + Send + 'static,
+    channel: Channel<InteractiveEvent>,
+    detector: Arc<Mutex<InteractiveStateDetector>>,
+    pending_input: Arc<Mutex<Option<String>>>,
+) {
     thread::spawn(move || {
         let mut buffer = [0u8; 4096];
         let mut redactor = StreamRedactor::default();
@@ -1634,6 +1905,7 @@ fn stream_reader(mut reader: impl Read + Send + 'static, channel: Channel<Intera
                 Ok(0) | Err(_) => {
                     let text = redactor.finish();
                     if !text.is_empty() {
+                        emit_interactive_states(&channel, &detector, &pending_input, &text);
                         let _ = channel.send(InteractiveEvent::Output { text });
                     }
                     break;
@@ -1641,12 +1913,77 @@ fn stream_reader(mut reader: impl Read + Send + 'static, channel: Channel<Intera
                 Ok(count) => {
                     let text = redactor.push(&String::from_utf8_lossy(&buffer[..count]));
                     if !text.is_empty() {
+                        emit_interactive_states(&channel, &detector, &pending_input, &text);
                         let _ = channel.send(InteractiveEvent::Output { text });
                     }
                 }
             }
         }
     });
+}
+
+fn emit_interactive_states(
+    channel: &Channel<InteractiveEvent>,
+    detector: &Mutex<InteractiveStateDetector>,
+    pending_input: &Mutex<Option<String>>,
+    text: &str,
+) {
+    let events = detector
+        .lock()
+        .map(|mut detector| detector.push(text))
+        .unwrap_or_default();
+    for event in events {
+        let request_id = match &event {
+            InteractiveEvent::State {
+                action: InteractiveAction::Input { input_request, .. },
+                ..
+            } => Some(input_request.id.clone()),
+            InteractiveEvent::State { .. } => None,
+            InteractiveEvent::Output { .. } | InteractiveEvent::Exit { .. } => continue,
+        };
+        if let Ok(mut pending) = pending_input.lock() {
+            *pending = request_id;
+        } else {
+            continue;
+        }
+        let _ = channel.send(event);
+    }
+}
+
+fn configured_subscription_provider(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+) -> Result<SubscriptionProvider, OnboardingError> {
+    let result = match host {
+        ValidatedHost::Local => {
+            let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+            run_scoped_local(
+                app,
+                scope,
+                &wrapper,
+                LocalCliOperation::ProviderCurrent,
+                SNAPSHOT_TIMEOUT,
+            )
+            .map_err(|_| failure("provider_login_start_failed"))?
+        }
+        ValidatedHost::Vps { .. } => {
+            run_ssh(host, REMOTE_PROVIDER_CURRENT, None, SNAPSHOT_TIMEOUT, None)
+                .map_err(|_| failure("provider_login_start_failed"))?
+        }
+    };
+    if !result.success() {
+        return Err(failure("provider_login_start_failed"));
+    }
+    SubscriptionProvider::from_cli_id(&result.stdout_text())
+        .ok_or_else(|| failure("provider_login_start_failed"))
+}
+
+fn provider_bootstrap_input(provider: SubscriptionProvider) -> Option<&'static [u8]> {
+    match provider {
+        SubscriptionProvider::Claude | SubscriptionProvider::Kimi => Some(b"/login\n"),
+        SubscriptionProvider::Codex => None,
+    }
 }
 
 #[tauri::command]
@@ -1687,6 +2024,7 @@ pub(crate) fn onboarding_provider_login(
     );
     let setup = (|| {
         let validated = validate_host(&app, &host).map_err(failure)?;
+        let provider = configured_subscription_provider(&app, scope.scope(), &validated)?;
         let mut command = match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
@@ -1725,10 +2063,16 @@ pub(crate) fn onboarding_provider_login(
         let mut child = command
             .spawn()
             .map_err(|_| failure("provider_login_start_failed"))?;
-        let stdin = child
+        let mut stdin = child
             .stdin
             .take()
             .ok_or_else(|| failure("provider_login_pipe_failed"))?;
+        if let Some(bootstrap) = provider_bootstrap_input(provider) {
+            stdin
+                .write_all(bootstrap)
+                .and_then(|_| stdin.flush())
+                .map_err(|_| failure("provider_login_pipe_failed"))?;
+        }
         let stdout = child
             .stdout
             .take()
@@ -1745,9 +2089,9 @@ pub(crate) fn onboarding_provider_login(
                 .as_millis(),
             SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         );
-        Ok::<_, OnboardingError>((child, stdin, stdout, stderr, id))
+        Ok::<_, OnboardingError>((child, stdin, stdout, stderr, id, provider))
     })();
-    let (child, stdin, stdout, stderr, id) = match setup {
+    let (child, stdin, stdout, stderr, id, provider) = match setup {
         Ok(value) => value,
         Err(error) => {
             reporter.send(
@@ -1761,10 +2105,23 @@ pub(crate) fn onboarding_provider_login(
         }
     };
     let child = Arc::new(Mutex::new(child));
-    stream_reader(stdout, on_event.clone());
-    stream_reader(stderr, on_event.clone());
+    let detector = Arc::new(Mutex::new(InteractiveStateDetector::new(provider)));
+    let pending_input = Arc::new(Mutex::new(None));
+    stream_reader(
+        stdout,
+        on_event.clone(),
+        Arc::clone(&detector),
+        Arc::clone(&pending_input),
+    );
+    stream_reader(
+        stderr,
+        on_event.clone(),
+        Arc::clone(&detector),
+        Arc::clone(&pending_input),
+    );
     let waiter = Arc::clone(&child);
     let exit_channel = on_event.clone();
+    let exit_pending_input = Arc::clone(&pending_input);
     thread::spawn(move || {
         let mut next_heartbeat = PROGRESS_HEARTBEAT_INTERVAL;
         loop {
@@ -1779,6 +2136,9 @@ pub(crate) fn onboarding_provider_login(
                     });
             match result {
                 Ok(Some(status)) => {
+                    if let Ok(mut pending) = exit_pending_input.lock() {
+                        *pending = None;
+                    }
                     let _ = exit_channel.send(InteractiveEvent::Exit {
                         code: status.code(),
                     });
@@ -1803,6 +2163,9 @@ pub(crate) fn onboarding_provider_login(
                     break;
                 }
                 Err(error) => {
+                    if let Ok(mut pending) = exit_pending_input.lock() {
+                        *pending = None;
+                    }
                     let _ = exit_channel.send(InteractiveEvent::Exit { code: None });
                     reporter.send(
                         OnboardingProgressStage::Login,
@@ -1833,6 +2196,8 @@ pub(crate) fn onboarding_provider_login(
         id: id.clone(),
         child,
         stdin: Mutex::new(Some(stdin)),
+        detector,
+        pending_input,
     });
     Ok(InteractiveStart { session_id: id })
 }
@@ -1842,12 +2207,10 @@ pub(crate) fn onboarding_provider_login_input(
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     session_id: String,
+    request_id: String,
     input: String,
 ) -> Result<(), OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
-    if !valid_provider_login_input(&input) {
-        return Err(failure("invalid_input"));
-    }
     let mut input = Zeroizing::new(input);
     let slot = state
         .interactive
@@ -1859,13 +2222,42 @@ pub(crate) fn onboarding_provider_login_input(
         .ok_or_else(|| failure("session_not_found"))?;
     let mut stdin = session.stdin.lock().map_err(|_| failure("state_failed"))?;
     let writer = stdin.as_mut().ok_or_else(|| failure("session_closed"))?;
+    write_provider_input(&session.pending_input, writer, &request_id, input.as_str())?;
+    session
+        .detector
+        .lock()
+        .map_err(|_| failure("state_failed"))?
+        .request_consumed();
+    input.zeroize();
+    Ok(())
+}
+
+fn write_provider_input(
+    pending_input: &Mutex<Option<String>>,
+    writer: &mut impl Write,
+    request_id: &str,
+    input: &str,
+) -> Result<(), OnboardingError> {
+    if !valid_interactive_request_id(request_id) || !valid_provider_login_input(input) {
+        return Err(failure("invalid_input"));
+    }
+    let mut pending = pending_input.lock().map_err(|_| failure("state_failed"))?;
+    if pending.as_deref() != Some(request_id) {
+        return Err(failure("provider_input_not_requested"));
+    }
+    pending.take();
     writer
         .write_all(input.as_bytes())
         .and_then(|_| writer.write_all(b"\n"))
         .and_then(|_| writer.flush())
-        .map_err(|_| failure("provider_input_failed"))?;
-    input.zeroize();
-    Ok(())
+        .map_err(|_| failure("provider_input_failed"))
+}
+
+fn valid_interactive_request_id(request_id: &str) -> bool {
+    (1..=128).contains(&request_id.len())
+        && request_id.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'.' | b'_' | b'-'))
+        })
 }
 
 fn valid_provider_login_input(input: &str) -> bool {
@@ -2122,12 +2514,13 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
-        parse_snapshot, redact, resume_team_prerequisite, start_and_verify_local_container_with,
-        valid_pairing_token, valid_provider_login_input, valid_wrapper_file,
-        ExistingTeamConnectRequest, LocalCliOperation, OnboardingProgress, OnboardingProgressStage,
-        OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StreamRedactor,
-        SubscriptionProvider, INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL,
-        REMOTE_SNAPSHOT,
+        parse_snapshot, provider_bootstrap_input, redact, resume_team_prerequisite,
+        start_and_verify_local_container_with, valid_interactive_request_id, valid_pairing_token,
+        valid_provider_login_input, valid_wrapper_file, write_provider_input,
+        ExistingTeamConnectRequest, InteractiveStateDetector, LocalCliOperation,
+        OnboardingProgress, OnboardingProgressStage, OnboardingProgressStatus,
+        OnboardingSubmission, ProgressReporter, StreamRedactor, SubscriptionProvider,
+        INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     #[cfg(target_os = "macos")]
     use super::{local_podman_install_required, local_wrapper_command, LOCAL_PODMAN_INSTALL_ARGS};
@@ -2483,6 +2876,10 @@ mod tests {
             (
                 LocalCliOperation::ProviderUpdate(SubscriptionProvider::Claude),
                 vec!["providers", "update", "claude"],
+            ),
+            (
+                LocalCliOperation::ProviderCurrent,
+                vec!["providers", "current"],
             ),
             (LocalCliOperation::OauthLogin, vec!["oauth-login"]),
             (LocalCliOperation::TeamStart, vec!["team", "start"]),
@@ -2909,6 +3306,165 @@ exit 0
             assert!(!valid_provider_login_input(invalid), "accepted {invalid:?}");
         }
         assert!(!valid_provider_login_input(&"x".repeat(4097)));
+    }
+
+    #[test]
+    fn provider_takeover_states_are_discriminated_and_provider_scoped() {
+        let cases = [
+            (
+                SubscriptionProvider::Claude,
+                "Open https://console.anthropic.com/oauth and paste code ABCD-1234",
+                vec!["url", "code", "input"],
+            ),
+            (
+                SubscriptionProvider::Codex,
+                "Open https://auth.openai.com/codex/device and enter code WXYZ-9876",
+                vec!["url", "code"],
+            ),
+            (
+                SubscriptionProvider::Kimi,
+                "Open https://auth.kimi.com/device and paste authorization code",
+                vec!["url", "input"],
+            ),
+        ];
+
+        for (provider, text, expected_kinds) in cases {
+            let events = InteractiveStateDetector::new(provider).push(text);
+            let values = events
+                .iter()
+                .map(|event| serde_json::to_value(event).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                values
+                    .iter()
+                    .map(|value| value["action"]["kind"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                expected_kinds
+            );
+            for value in values {
+                assert_eq!(value["kind"], "state");
+                assert_eq!(value["status"], "needs_user_action");
+                match value["action"]["kind"].as_str().unwrap() {
+                    "url" => {
+                        assert!(value["action"]["safeUrl"]
+                            .as_str()
+                            .unwrap()
+                            .starts_with("https://"));
+                        assert!(value["action"].get("userCode").is_none());
+                        assert!(value["action"].get("inputRequest").is_none());
+                    }
+                    "code" => {
+                        assert!(value["action"]["userCode"].is_string());
+                        assert!(value["action"].get("safeUrl").is_none());
+                        assert!(value["action"].get("inputRequest").is_none());
+                    }
+                    "input" => {
+                        assert!(value["action"]["inputRequest"]["id"].is_string());
+                        assert!(value["action"].get("safeUrl").is_none());
+                        assert!(value["action"].get("userCode").is_none());
+                    }
+                    kind => panic!("unexpected action kind {kind}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn provider_takeover_rejects_untrusted_urls_and_secret_bearing_state() {
+        for provider in [
+            SubscriptionProvider::Claude,
+            SubscriptionProvider::Codex,
+            SubscriptionProvider::Kimi,
+        ] {
+            for text in [
+                "Open http://auth.openai.com/device",
+                "Open https://evil.invalid/device",
+                "Open https://auth.openai.com/device?access_token=synthetic-secret",
+                "Open https://console.anthropic.com/device?client_secret=synthetic-secret",
+                "Open https://auth.kimi.com/device?session_token=synthetic-secret",
+            ] {
+                assert!(
+                    InteractiveStateDetector::new(provider)
+                        .push(text)
+                        .is_empty(),
+                    "provider {provider:?} accepted {text:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn provider_input_requires_one_matching_pending_request_and_consumes_it() {
+        let pending = Mutex::new(None);
+        let mut written = Vec::new();
+        assert_eq!(
+            write_provider_input(&pending, &mut written, "claude-response-1", "answer")
+                .unwrap_err()
+                .code,
+            "provider_input_not_requested"
+        );
+        assert!(written.is_empty());
+
+        *pending.lock().unwrap() = Some("claude-response-1".into());
+        assert_eq!(
+            write_provider_input(&pending, &mut written, "stale-response-1", "answer")
+                .unwrap_err()
+                .code,
+            "provider_input_not_requested"
+        );
+        assert!(written.is_empty());
+        assert_eq!(
+            pending.lock().unwrap().as_deref(),
+            Some("claude-response-1")
+        );
+
+        write_provider_input(&pending, &mut written, "claude-response-1", "answer").unwrap();
+        assert_eq!(written, b"answer\n");
+        assert!(pending.lock().unwrap().is_none());
+
+        assert_eq!(
+            write_provider_input(&pending, &mut written, "claude-response-1", "second")
+                .unwrap_err()
+                .code,
+            "provider_input_not_requested"
+        );
+        assert_eq!(written, b"answer\n");
+    }
+
+    #[test]
+    fn provider_input_rejects_invalid_request_or_control_text_without_writing() {
+        for (request_id, input) in [
+            ("", "answer"),
+            ("bad/request", "answer"),
+            ("kimi-response-1", "first\nsecond"),
+            ("kimi-response-1", "escape\u{1b}"),
+        ] {
+            let pending = Mutex::new(Some("kimi-response-1".into()));
+            let mut written = Vec::new();
+            assert_eq!(
+                write_provider_input(&pending, &mut written, request_id, input)
+                    .unwrap_err()
+                    .code,
+                "invalid_input"
+            );
+            assert!(written.is_empty());
+            assert_eq!(pending.lock().unwrap().as_deref(), Some("kimi-response-1"));
+        }
+        assert!(valid_interactive_request_id("codex-response_1.next"));
+        assert!(!valid_interactive_request_id("-leading"));
+    }
+
+    #[test]
+    fn provider_login_bootstrap_is_backend_owned() {
+        assert_eq!(
+            provider_bootstrap_input(SubscriptionProvider::Claude),
+            Some(b"/login\n".as_slice())
+        );
+        assert_eq!(
+            provider_bootstrap_input(SubscriptionProvider::Kimi),
+            Some(b"/login\n".as_slice())
+        );
+        assert_eq!(provider_bootstrap_input(SubscriptionProvider::Codex), None);
     }
 
     #[test]
