@@ -29,10 +29,31 @@ export type OnboardingRuntimeState =
   | { status: "failed"; stage: OnboardingRuntimeStage; message: string; code?: string; retryable?: boolean }
   | { status: "ready" };
 
+export interface OnboardingProviderLoginInputRequest {
+  id: string;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  submitLabel?: string;
+  secret?: boolean;
+  inputMode?: "text" | "numeric";
+}
+
+export interface OnboardingProviderLoginAction {
+  instruction: string;
+  safeUrl?: string;
+  userCode?: string;
+  inputRequest?: OnboardingProviderLoginInputRequest;
+}
+
 export interface OnboardingProviderLoginState {
   provider: SubscriptionProvider;
-  status: "starting" | "active" | "exited";
-  output: string;
+  status: "connecting" | "needs_user_action" | "error";
+  sanitizedOutput: string[];
+  action: OnboardingProviderLoginAction;
+  connectionState: "connecting" | "connected" | "disconnected";
+  startedAt: number;
+  safeErrorMessage?: string;
   exitCode?: number | null;
 }
 
@@ -90,6 +111,7 @@ export interface OnboardingFlowProps {
   onCancelHostKey: () => void;
   onProviderInput: (input: string) => Promise<void>;
   onProviderClose: () => Promise<void>;
+  onProviderRestart: () => Promise<void>;
   onRetry: () => Promise<void>;
   onRestart: () => Promise<void>;
 }

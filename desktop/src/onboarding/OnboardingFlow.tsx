@@ -11,6 +11,7 @@ import {
   OnboardingArtwork,
   runtimeArtwork,
 } from "./OnboardingArtwork";
+import { OAuthLoginTakeover } from "../oauth-login-takeover";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -56,78 +57,13 @@ function moveRadio<T extends string>(
   group?.querySelector<HTMLButtonElement>(`[data-radio-value="${next}"]`)?.focus();
 }
 
-function ProviderLoginConsole({
-  providerLogin,
-  onProviderInput,
-  onProviderClose,
-}: Pick<OnboardingFlowProps, "providerLogin" | "onProviderInput" | "onProviderClose">) {
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [inputFailed, setInputFailed] = useState(false);
-  const [closeFailed, setCloseFailed] = useState(false);
-  const active = providerLogin?.status === "active";
-
-  if (!providerLogin) return null;
-
-  async function send(event: FormEvent) {
-    event.preventDefault();
-    if (!active || sending || !input.trim()) return;
-    const value = input;
-    setSending(true);
-    setInputFailed(false);
-    try { await onProviderInput(value); setInput(""); } catch { setInputFailed(true); } finally { setSending(false); }
-  }
-
-  async function close() {
-    if (!active || closing) return;
-    setClosing(true);
-    setCloseFailed(false);
-    try { await onProviderClose(); } catch { setCloseFailed(true); } finally { setClosing(false); }
-  }
-
-  return (
-    <section className="onboarding-provider-console" aria-label={`Accesso ${providerName(providerLogin.provider)}`}>
-      <div className="onboarding-provider-console__heading">
-        <div><strong>Sessione {providerName(providerLogin.provider)}</strong><small>Output temporaneo e redatto · non viene salvato</small></div>
-        <span>{providerLogin.status === "starting" ? "Apertura…" : providerLogin.status === "active" ? "Attiva" : "Chiusa"}</span>
-      </div>
-      <pre className="onboarding-provider-console__output" role="log" aria-live="polite" aria-label="Output accesso provider">
-        {/* Keep provider-supplied URLs as inert text: never inject terminal output as HTML. */}
-        {providerLogin.output || "Attendo le istruzioni del provider…"}
-      </pre>
-      {providerLogin.provider === "codex" && active && (
-        <p className="onboarding-provider-console__help">Apri nel browser l’URL mostrato sopra e inserisci il codice dispositivo.</p>
-      )}
-      <form className="onboarding-provider-console__input" onSubmit={send}>
-        <label htmlFor="provider-login-input">Risposta alla sessione</label>
-        <div>
-          <input
-            id="provider-login-input"
-            autoComplete="off"
-            spellCheck={false}
-            value={input}
-            onChange={(event) => { setInputFailed(false); setInput(event.target.value); }}
-            disabled={!active || sending}
-            placeholder={active ? "Scrivi una risposta e premi Invio" : "Sessione non attiva"}
-          />
-          <button className="onboarding-secondary" type="submit" disabled={!active || sending || !input.trim()}>{sending ? "Invio…" : "Invia"}</button>
-          <button className="onboarding-secondary" type="button" onClick={() => void close()} disabled={!active || closing}>{closing ? "Chiusura…" : "Chiudi"}</button>
-        </div>
-      </form>
-      {inputFailed && <p className="onboarding-error" role="alert">Invio non riuscito. La sessione resta aperta: riprova.</p>}
-      {closeFailed && <p className="onboarding-error" role="alert">Chiusura non riuscita. Riprova prima di continuare.</p>}
-    </section>
-  );
-}
-
 function formatElapsed(milliseconds: number): string {
   const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
   const minutes = Math.floor(seconds / 60);
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose">) {
+function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart">) {
   const [pending, setPending] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -169,6 +105,36 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
   const completedSteps = Math.max(0, activeIndex);
   const currentActivity = activity?.current?.stage === runtime.stage ? activity.current : undefined;
   const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
+
+  if (runtime.stage === "provider-login" && providerLogin) {
+    return (
+      <main className="onboarding-shell">
+        <header className="onboarding-header">
+          <div className="onboarding-brand" aria-label="Job Hunter Team"><span className="onboarding-brand__mark" aria-hidden="true">J</span><span>Job Hunter Team</span></div>
+          <span className="onboarding-session">Setup protetto</span>
+        </header>
+        <div className="onboarding-layout">
+          <aside className="onboarding-progress">
+            <p className="onboarding-eyebrow">Accesso provider</p>
+            <h1>Collega il tuo abbonamento.</h1>
+            <p className="onboarding-progress__intro">La sessione resta confinata al runtime scelto. Segui soltanto le richieste strutturate mostrate a destra.</p>
+            <p className="onboarding-progress__privacy">Nessuna chiave API richiesta</p>
+          </aside>
+          <OAuthLoginTakeover
+            providerName={providerName(providerLogin.provider)}
+            sanitizedOutput={providerLogin.sanitizedOutput}
+            action={providerLogin.action}
+            connectionState={providerLogin.connectionState}
+            elapsedMs={Math.max(0, now - providerLogin.startedAt)}
+            safeErrorMessage={providerLogin.safeErrorMessage ?? (failed ? runtime.message : null)}
+            onSubmitInput={onProviderInput}
+            onCancel={onProviderClose}
+            onRestart={onProviderRestart}
+          />
+        </div>
+      </main>
+    );
+  }
 
   async function invoke(action: () => Promise<void>) {
     if (pending) return;
@@ -242,9 +208,6 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
               </ol>
             ) : <p>In attesa del primo aggiornamento verificato.</p>}
           </details>
-          {runtime.stage === "provider-login" && (
-            <ProviderLoginConsole providerLogin={providerLogin} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />
-          )}
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label="Verifica identità server">
               <div className="onboarding-provider-console__heading"><div><strong>Controlla il fingerprint SSH</strong><small>Confrontalo con quello mostrato dal tuo provider VPS. Non contiene indirizzo o chiave privata.</small></div></div>
@@ -275,7 +238,7 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: OnboardingFlowProps) {
   const localRuntimeSupported = platform === "macos" || platform === "linux";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
@@ -294,7 +257,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} />;
+  if (runtime.status !== "collecting") return <RuntimeView runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));

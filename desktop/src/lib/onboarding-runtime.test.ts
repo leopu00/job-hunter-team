@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   confirmOnboardingSshHostKey,
   openOnboardingAssistant,
+  parseOnboardingInteractiveEvent,
   parseOnboardingNativeProgress,
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
@@ -185,5 +186,62 @@ describe("SSH host-key consent contract", () => {
       host,
       onProgress: expect.anything(),
     });
+  });
+
+  it("accepts structured user actions without parsing PTY output", async () => {
+    vi.mocked(invoke).mockResolvedValue({ sessionId: "synthetic-session" });
+    const onEvent = vi.fn();
+
+    await startOnboardingProviderLogin(host, onEvent, vi.fn());
+    channels[0].onmessage?.({ kind: "output", text: "redacted terminal line" });
+    channels[0].onmessage?.({
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        instruction: "Completa l’accesso nel browser.",
+        safeUrl: "https://example.invalid/device",
+        userCode: "ABCD-EFGH",
+        inputRequest: {
+          id: "browser-confirmation",
+          label: "Codice restituito",
+          description: "Invialo dopo aver completato il browser.",
+        },
+      },
+    });
+
+    expect(onEvent).toHaveBeenNthCalledWith(1, { kind: "output", text: "redacted terminal line" });
+    expect(onEvent).toHaveBeenNthCalledWith(2, {
+      kind: "state",
+      status: "needs_user_action",
+      action: {
+        instruction: "Completa l’accesso nel browser.",
+        safeUrl: "https://example.invalid/device",
+        userCode: "ABCD-EFGH",
+        inputRequest: {
+          id: "browser-confirmation",
+          label: "Codice restituito",
+          description: "Invialo dopo aver completato il browser.",
+          placeholder: undefined,
+          submitLabel: undefined,
+          secret: undefined,
+          inputMode: undefined,
+        },
+      },
+    });
+  });
+
+  it("drops malformed or unsafe interactive actions at the IPC boundary", () => {
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: { instruction: "Copy token from https://unsafe.invalid" },
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({
+      kind: "state",
+      status: "needs_user_action",
+      action: { instruction: "Apri il browser.", safeUrl: "http://unsafe.invalid" },
+    })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({ kind: "exit", code: "0" })).toBeNull();
+    expect(parseOnboardingInteractiveEvent({ kind: "unknown", text: "raw" })).toBeNull();
   });
 });
