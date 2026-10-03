@@ -1,12 +1,14 @@
 import {
   activateDesktopLocalScope,
   createDesktopLocalProfile,
+  recoverDesktopPlaygroundLocalOrphan,
   resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 
 const PROFILE_KEY = "jht.desktop.local-profile.v1";
 const ACTIVE_KEY = "jht.desktop.identity.v1";
 const ACTIVE_LOCAL = "local";
+let playgroundCreation: Promise<LocalProfile> | null = null;
 
 export interface LocalProfile {
   profileId: string;
@@ -88,6 +90,25 @@ export async function createAndActivateLocalProfile(
   await activateDesktopLocalScope(profile.profileId);
   selectLocalIdentity(store);
   return profile;
+}
+
+/** DEV playground creation boundary: recover an attested orphan before B exists. */
+export function createAndActivatePlaygroundLocalProfile(
+  displayName: string,
+  store: LocalProfileStore = localStorage,
+): Promise<LocalProfile> {
+  if (playgroundCreation) return playgroundCreation;
+  let current!: Promise<LocalProfile>;
+  current = (async () => {
+    try {
+      await recoverDesktopPlaygroundLocalOrphan();
+      return await createAndActivateLocalProfile(displayName, store);
+    } finally {
+      if (playgroundCreation === current) playgroundCreation = null;
+    }
+  })();
+  playgroundCreation = current;
+  return current;
 }
 
 export async function activateSavedLocalProfile(

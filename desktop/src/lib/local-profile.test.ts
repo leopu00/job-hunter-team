@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateDesktopLocalScope,
   createDesktopLocalProfile,
+  recoverDesktopPlaygroundLocalOrphan,
   resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
 import {
   activateSavedLocalProfile,
   clearLocalIdentitySelection,
   createAndActivateLocalProfile,
+  createAndActivatePlaygroundLocalProfile,
   localIdentitySelected,
   readLocalProfile,
   resetPlaygroundLocalProfile,
@@ -16,6 +18,7 @@ import {
 vi.mock("./desktop-account-scope", () => ({
   activateDesktopLocalScope: vi.fn(),
   createDesktopLocalProfile: vi.fn(),
+  recoverDesktopPlaygroundLocalOrphan: vi.fn(),
   resetDesktopPlaygroundLocalScope: vi.fn(),
 }));
 
@@ -23,6 +26,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.resetAllMocks();
   vi.mocked(activateDesktopLocalScope).mockResolvedValue();
+  vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockResolvedValue(false);
   vi.mocked(resetDesktopPlaygroundLocalScope).mockResolvedValue();
 });
 
@@ -53,6 +57,50 @@ describe("local identity persistence", () => {
 
     expect(createDesktopLocalProfile).not.toHaveBeenCalled();
     expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-profile-a");
+  });
+
+  it("awaits orphan recovery before creating playground profile B", async () => {
+    let releaseRecovery!: () => void;
+    vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        releaseRecovery = () => resolve(true);
+      }),
+    );
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-b" });
+
+    const creating = createAndActivatePlaygroundLocalProfile("Bea Locale");
+    await vi.waitFor(() => expect(recoverDesktopPlaygroundLocalOrphan).toHaveBeenCalledOnce());
+    expect(createDesktopLocalProfile).not.toHaveBeenCalled();
+    expect(activateDesktopLocalScope).not.toHaveBeenCalled();
+
+    releaseRecovery();
+    await expect(creating).resolves.toEqual({
+      profileId: "opaque-profile-b",
+      displayName: "Bea Locale",
+    });
+    expect(createDesktopLocalProfile).toHaveBeenCalledOnce();
+    expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-profile-b");
+  });
+
+  it("blocks B and coalesces concurrent creation when orphan recovery fails", async () => {
+    let rejectRecovery!: (error: unknown) => void;
+    vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockReturnValue(
+      new Promise<boolean>((_resolve, reject) => {
+        rejectRecovery = reject;
+      }),
+    );
+
+    const first = createAndActivatePlaygroundLocalProfile("Bea Locale");
+    const second = createAndActivatePlaygroundLocalProfile("Bea duplicata");
+    expect(second).toBe(first);
+    await vi.waitFor(() => expect(recoverDesktopPlaygroundLocalOrphan).toHaveBeenCalledOnce());
+    rejectRecovery({ code: "playground_reset_owner_unattested" });
+
+    await expect(first).rejects.toEqual({ code: "playground_reset_owner_unattested" });
+    await expect(second).rejects.toEqual({ code: "playground_reset_owner_unattested" });
+    expect(createDesktopLocalProfile).not.toHaveBeenCalled();
+    expect(activateDesktopLocalScope).not.toHaveBeenCalled();
+    expect(readLocalProfile()).toBeNull();
   });
 
   it("does not select a local identity when the backend rejects its scope", async () => {

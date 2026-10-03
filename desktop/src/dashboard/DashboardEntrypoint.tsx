@@ -6,6 +6,7 @@ import {
 } from "../lib/identity-choice";
 import {
   clearLocalIdentitySelection,
+  createAndActivatePlaygroundLocalProfile,
   resetPlaygroundLocalProfile,
 } from "../lib/local-profile";
 import { recoverDesktopPlaygroundLocalOrphan } from "../lib/desktop-account-scope";
@@ -48,6 +49,7 @@ function PlaygroundDashboardEntry() {
   return (
     <LoginScreen
       onChooseGoogle={chooseGoogle}
+      createLocal={createAndActivatePlaygroundLocalProfile}
       onLocalReady={localReady}
       onResetLocalPlayground={resetLocalPlayground}
       onRecoverLocalPlayground={recoverLocalPlayground}

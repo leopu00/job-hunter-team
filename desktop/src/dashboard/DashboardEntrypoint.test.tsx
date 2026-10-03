@@ -7,6 +7,7 @@ import {
 } from "../lib/identity-choice";
 import {
   clearLocalIdentitySelection,
+  createAndActivatePlaygroundLocalProfile,
   resetPlaygroundLocalProfile,
 } from "../lib/local-profile";
 import { onboardingPlaygroundEnabled } from "../lib/onboarding-playground";
@@ -17,6 +18,7 @@ import { DashboardEntrypoint } from "./DashboardEntrypoint";
 vi.mock("../lib/onboarding-playground", () => ({ onboardingPlaygroundEnabled: vi.fn() }));
 vi.mock("../lib/local-profile", () => ({
   clearLocalIdentitySelection: vi.fn(),
+  createAndActivatePlaygroundLocalProfile: vi.fn(),
   resetPlaygroundLocalProfile: vi.fn(),
 }));
 vi.mock("../lib/identity-choice", () => ({
@@ -31,19 +33,26 @@ vi.mock("./DashboardApp", () => ({ default: () => <p>dashboard-app</p> }));
 vi.mock("../components/login-screen", () => ({
   LoginScreen: ({
     onChooseGoogle,
-      onLocalReady,
-      onResetLocalPlayground,
-      onRecoverLocalPlayground,
-    }: {
-      onChooseGoogle: () => boolean | Promise<boolean>;
-      onLocalReady: () => void;
-      onResetLocalPlayground?: () => Promise<void>;
-      onRecoverLocalPlayground?: () => Promise<void>;
+    createLocal,
+    onLocalReady,
+    onResetLocalPlayground,
+    onRecoverLocalPlayground,
+  }: {
+    onChooseGoogle: () => boolean | Promise<boolean>;
+    createLocal?: (displayName: string) => Promise<unknown>;
+    onLocalReady: () => void;
+    onResetLocalPlayground?: () => Promise<void>;
+    onRecoverLocalPlayground?: () => Promise<void>;
   }) => (
     <section>
       <p>identity-choice</p>
       <button type="button" onClick={() => void onChooseGoogle()}>choose-google</button>
       <button type="button" onClick={onLocalReady}>choose-local</button>
+      {createLocal && (
+        <button type="button" onClick={() => void createLocal("Bea Locale").then(onLocalReady)}>
+          create-local
+        </button>
+      )}
       {onResetLocalPlayground && (
         <button type="button" onClick={() => void onResetLocalPlayground()}>reset-local</button>
       )}
@@ -63,7 +72,11 @@ describe("dashboard.html entrypoint", () => {
     vi.mocked(clearGoogleIdentitySelection).mockReset();
     vi.mocked(selectGoogleIdentity).mockReset();
     vi.mocked(resetPlaygroundLocalProfile).mockReset().mockResolvedValue();
-    vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockReset().mockResolvedValue();
+    vi.mocked(recoverDesktopPlaygroundLocalOrphan).mockReset().mockResolvedValue(false);
+    vi.mocked(createAndActivatePlaygroundLocalProfile).mockReset().mockResolvedValue({
+      profileId: "opaque-profile-b",
+      displayName: "Bea Locale",
+    });
     restore.mockReset().mockResolvedValue(null);
     vi.mocked(useDeferredSession).mockReturnValue({ session: null, loading: false, restore });
   });
@@ -119,6 +132,23 @@ describe("dashboard.html entrypoint", () => {
     expect(clearGoogleIdentitySelection).toHaveBeenCalledOnce();
     expect(restore).not.toHaveBeenCalled();
     expect(screen.getByText("dashboard-app")).toBeInTheDocument();
+  });
+
+  it("routes first-frame playground creation through recovery before dashboard", async () => {
+    vi.mocked(onboardingPlaygroundEnabled).mockReturnValue(true);
+    let finishCreation!: () => void;
+    vi.mocked(createAndActivatePlaygroundLocalProfile).mockReturnValue(
+      new Promise((resolve) => {
+        finishCreation = () => resolve({ profileId: "opaque-profile-b", displayName: "Bea Locale" });
+      }),
+    );
+    render(<DashboardEntrypoint />);
+
+    await userEvent.click(screen.getByRole("button", { name: "create-local" }));
+    expect(createAndActivatePlaygroundLocalProfile).toHaveBeenCalledWith("Bea Locale");
+    expect(screen.queryByText("dashboard-app")).not.toBeInTheDocument();
+    finishCreation();
+    expect(await screen.findByText("dashboard-app")).toBeInTheDocument();
   });
 
   it("exposes the atomic local reset only through the DEV playground entrypoint", async () => {
