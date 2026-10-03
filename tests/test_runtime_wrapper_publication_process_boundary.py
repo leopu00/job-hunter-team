@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import subprocess
 from urllib.parse import unquote, urlparse
 
 import pytest
@@ -33,6 +34,23 @@ FAILPOINTS = (
     "before-wrapper-replace",
     "after-wrapper-replace",
 )
+STALE_VALID_WRAPPER = r"""#!/usr/bin/env bash
+set -euo pipefail
+JHT_UPGRADE_PROTOCOL=1
+JHT_HOST_RUNTIME_PROTOCOL=1
+JHT_DESKTOP_CHAT_PROTOCOL=1
+JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
+DEFAULT_RUNTIME_VERSION="0.3.9"
+case "${1:-}" in
+  status) printf '%s\n' 'stale wrapper status' ;;
+  onboarding-snapshot)
+    printf '%s\n' runtimeInstalled=1 containerRunning=0 providerConfigured=0
+    ;;
+  *) exit 2 ;;
+esac
+"""
+CONTAINER_ID = "a" * 64
+CONFIG_HASH = "c" * 64
 
 
 def _target_bytes(sandbox: dict[str, object]) -> dict[str, bytes]:
@@ -102,6 +120,181 @@ def _manifest_values(sandbox: dict[str, object]) -> dict[str, str]:
     )
 
 
+def _install_stale_valid_wrapper(sandbox: dict[str, object]) -> bytes:
+    wrapper = sandbox["wrapper"]
+    manifest = sandbox["manifest"]
+    assert isinstance(wrapper, Path) and isinstance(manifest, Path)
+    wrapper.write_text(STALE_VALID_WRAPPER, encoding="utf-8")
+    wrapper.chmod(0o700)
+    stale_digest = publication._digest(wrapper)
+    manifest.write_text(
+        "\n".join(
+            f"jht-wrapper.sh={stale_digest}"
+            if line.startswith("jht-wrapper.sh=")
+            else line
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manifest.chmod(0o600)
+    return wrapper.read_bytes()
+
+
+def _install_read_only_runtime_spies(sandbox: dict[str, object], log: Path) -> None:
+    runtime = sandbox["runtime"]
+    env = sandbox["env"]
+    assert isinstance(runtime, Path) and isinstance(env, dict)
+    podman = _spy_bin(sandbox) / "podman"
+    podman.write_text(
+        """#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import sys
+
+args = sys.argv[1:]
+with open(os.environ["JHT_EXECUTED_WRAPPER_LOG"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps({"tool": "podman", "args": args}) + "\\n")
+if args == ["--version"]:
+    print("podman version 6.1.3")
+    raise SystemExit(0)
+if args[:2] != ["--connection", "jht-podman"]:
+    raise SystemExit(91)
+args = args[2:]
+if args == ["info"]:
+    raise SystemExit(0)
+if args and args[0] == "inspect":
+    if "--format" not in args:
+        raise SystemExit(92)
+    template = args[args.index("--format") + 1]
+    target = args[3] if args[1:3] == ["--type", "container"] else args[1]
+    if target != os.environ["JHT_EXECUTED_CONTAINER_ID"]:
+        raise SystemExit(93)
+    if args[1:3] == ["--type", "container"]:
+        print(
+            "jht|true|jht|jht|jht|jht|1|"
+            + os.environ["JHT_RUNTIME_DIR"]
+            + "|"
+            + os.environ["JHT_COMPOSE_FILE"]
+            + "|1.6.0|podman-compose"
+            + "@"
+            + "jht.service|"
+            + os.environ["JHT_EXECUTED_CONFIG_HASH"]
+        )
+    elif template == "{{.State.Running}}":
+        print("true")
+    else:
+        print("name=jht status=running started=fixture image=fixture")
+    raise SystemExit(0)
+if args and args[0] == "exec":
+    index = 1
+    while args[index] in ("-i", "-t", "-it", "-ti"):
+        index += 1
+    while args[index] in ("-e", "--env"):
+        index += 2
+    if args[index] != os.environ["JHT_EXECUTED_CONTAINER_ID"]:
+        raise SystemExit(93)
+    if "node" in args and "-e" in args:
+        print("1 1 1", end="")
+    raise SystemExit(0)
+Path(os.environ["JHT_RUNTIME_SIDE_EFFECT"]).touch()
+raise SystemExit(98)
+""",
+        encoding="utf-8",
+    )
+    podman.chmod(0o700)
+
+    compose = _spy_bin(sandbox) / "podman-compose"
+    compose.write_text(
+        """#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import sys
+
+args = sys.argv[1:]
+with open(os.environ["JHT_EXECUTED_WRAPPER_LOG"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps({"tool": "podman-compose", "args": args}) + "\\n")
+if args == ["--version"]:
+    print("podman-compose version 1.6.0")
+    raise SystemExit(0)
+dry_run = "--dry-run" in args
+index = 0
+while index < len(args):
+    if args[index] in ("--verbose", "--dry-run"):
+        index += 1
+    elif args[index] in ("--podman-path", "-p", "--project-name", "-f"):
+        index += 2
+    else:
+        break
+command = args[index] if index < len(args) else ""
+rest = args[index + 1:]
+if command == "ps" and rest == ["-q"]:
+    print(os.environ["JHT_EXECUTED_CONTAINER_ID"])
+    raise SystemExit(0)
+if command == "up" and dry_run:
+    print(
+        "INFO podman create --label io.podman.compose.config-hash="
+        + os.environ["JHT_EXECUTED_CONFIG_HASH"],
+        file=sys.stderr,
+    )
+    raise SystemExit(0)
+Path(os.environ["JHT_RUNTIME_SIDE_EFFECT"]).touch()
+raise SystemExit(98)
+""",
+        encoding="utf-8",
+    )
+    compose.chmod(0o700)
+    env.update(
+        {
+            "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
+            "JHT_EXECUTED_CONTAINER_ID": CONTAINER_ID,
+            "JHT_EXECUTED_CONFIG_HASH": CONFIG_HASH,
+            "JHT_EXECUTED_WRAPPER_LOG": str(log),
+            "JHT_RUNTIME_SIDE_EFFECT": str(sandbox["side_effect"]),
+        }
+    )
+
+
+def _run_published_wrapper(
+    sandbox: dict[str, object], command: str
+) -> subprocess.CompletedProcess[str]:
+    wrapper = sandbox["wrapper"]
+    env = sandbox["env"]
+    assert isinstance(wrapper, Path) and isinstance(env, dict)
+    return subprocess.run(
+        [str(wrapper), command],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
+
+
+def _published_owner_mode(capable_bash: str, wrapper: Path) -> tuple[str, str]:
+    result = subprocess.run(
+        [
+            capable_bash,
+            "-c",
+            "if [ \"$(uname -s)\" = Darwin ]; then "
+            "stat -f '%u %Lp' \"$1\"; else stat -c '%u %a' \"$1\"; fi; id -u",
+            "jht-owner-mode",
+            str(wrapper),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    metadata, current_owner = result.stdout.splitlines()
+    owner, mode = metadata.split()
+    assert owner == current_owner
+    return owner, mode
+
+
 def test_real_entrypoint_fetches_one_candidate_and_atomically_publishes_exact_bytes(
     tmp_path: Path, capable_bash: str
 ):
@@ -167,6 +360,112 @@ def test_real_entrypoint_fetches_one_candidate_and_atomically_publishes_exact_by
         sandbox["wrapper"],
     ):
         assert str(destination) in move_calls
+    _assert_no_transaction_debris(sandbox)
+    assert not sandbox["side_effect"].exists()
+
+
+def test_stale_valid_wrapper_is_replaced_and_final_destination_executes(
+    tmp_path: Path, capable_bash: str
+):
+    sandbox = publication._sandbox(tmp_path)
+    stale_bytes = _install_stale_valid_wrapper(sandbox)
+    wrapper = sandbox["wrapper"]
+    manifest = sandbox["manifest"]
+    assert isinstance(wrapper, Path) and isinstance(manifest, Path)
+    assert stale_bytes != publication.CANDIDATE_WRAPPER.read_bytes()
+
+    result = publication._publish(capable_bash, sandbox)
+
+    assert result.returncode == 0, result.stderr
+    assert wrapper.read_bytes() == publication.CANDIDATE_WRAPPER.read_bytes()
+    assert wrapper.read_bytes().splitlines()[0] == b"#!/usr/bin/env bash"
+    _, mode = _published_owner_mode(capable_bash, wrapper)
+    assert mode == "700"
+    values = _manifest_values(sandbox)
+    assert values["jht-wrapper.sh"] == publication._digest(wrapper)
+
+    process_log = tmp_path / "published-wrapper-processes.jsonl"
+    _install_read_only_runtime_spies(sandbox, process_log)
+    status = _run_published_wrapper(sandbox, "status")
+    snapshot = _run_published_wrapper(sandbox, "onboarding-snapshot")
+
+    assert status.returncode == 0, status.stderr
+    assert "name=jht status=running" in status.stdout
+    assert snapshot.returncode == 0, snapshot.stderr
+    assert "runtimeInstalled=1" in snapshot.stdout
+    assert "containerRunning=1" in snapshot.stdout
+    assert process_log.is_file()
+    assert not sandbox["side_effect"].exists()
+
+
+@pytest.mark.parametrize("failure_mode", ("error", "term"))
+def test_stale_valid_wrapper_is_restored_executable_after_final_rename_failure(
+    tmp_path: Path, capable_bash: str, failure_mode: str
+):
+    sandbox = publication._sandbox(tmp_path)
+    stale_bytes = _install_stale_valid_wrapper(sandbox)
+    before = _bundle_bytes(sandbox)
+    sandbox["env"] = {
+        **sandbox["env"],
+        "JHT_RUNTIME_PUBLISH_TEST_MODE": "1",
+        "JHT_RUNTIME_PUBLISH_FAILPOINT": "after-wrapper-replace",
+        "JHT_RUNTIME_PUBLISH_FAILURE": failure_mode,
+    }
+
+    result = publication._publish(capable_bash, sandbox)
+
+    assert result.returncode != 0
+    assert _bundle_bytes(sandbox) == before
+    wrapper = sandbox["wrapper"]
+    assert isinstance(wrapper, Path)
+    assert wrapper.read_bytes() == stale_bytes
+    _, mode = _published_owner_mode(capable_bash, wrapper)
+    assert mode == "700"
+    assert _run_published_wrapper(sandbox, "status").returncode == 0
+    assert _run_published_wrapper(sandbox, "onboarding-snapshot").returncode == 0
+    _assert_no_transaction_debris(sandbox)
+    assert not sandbox["side_effect"].exists()
+
+
+@pytest.mark.parametrize("mismatch", ("wrapper-bytes", "manifest-digest"))
+def test_exact_candidate_is_idempotent_only_while_bytes_and_manifest_agree(
+    tmp_path: Path, capable_bash: str, mismatch: str
+):
+    sandbox = publication._sandbox(tmp_path)
+    _install_stale_valid_wrapper(sandbox)
+    first = publication._publish(capable_bash, sandbox)
+    assert first.returncode == 0, first.stderr
+    exact = _bundle_bytes(sandbox)
+
+    second = publication._publish(capable_bash, sandbox)
+
+    assert second.returncode == 0, second.stderr
+    assert _bundle_bytes(sandbox) == exact
+
+    wrapper = sandbox["wrapper"]
+    manifest = sandbox["manifest"]
+    assert isinstance(wrapper, Path) and isinstance(manifest, Path)
+    if mismatch == "wrapper-bytes":
+        wrapper.write_text(STALE_VALID_WRAPPER, encoding="utf-8")
+        wrapper.chmod(0o700)
+    else:
+        stale_digest = publication._digest(publication.INSTALLER)
+        manifest.write_text(
+            "\n".join(
+                f"jht-wrapper.sh={stale_digest}"
+                if line.startswith("jht-wrapper.sh=")
+                else line
+                for line in manifest.read_text(encoding="utf-8").splitlines()
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    mismatched = _bundle_bytes(sandbox)
+
+    rejected = publication._publish(capable_bash, sandbox)
+
+    assert rejected.returncode != 0
+    assert _bundle_bytes(sandbox) == mismatched
     _assert_no_transaction_debris(sandbox)
     assert not sandbox["side_effect"].exists()
 
