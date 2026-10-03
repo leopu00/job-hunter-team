@@ -77,6 +77,7 @@ function viewport(width: number, height: number, zoom = "1.15") {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   document.documentElement.style.removeProperty("--zoom");
   vi.restoreAllMocks();
 });
@@ -182,11 +183,44 @@ describe("DirectChatScreen", () => {
     render(<DirectChatScreen client={mock} />);
 
     const status = await screen.findByTestId("direct-chat-status");
-    expect(status).toHaveTextContent("Tunnel VPS non disponibile.");
+    expect(status).toHaveTextContent("Team non disponibile.");
     expect(status).not.toHaveTextContent("/private/key");
     await user.click(within(status).getByRole("button", { name: "Riprova" }));
     expect(mock.reconnect).toHaveBeenCalledOnce();
-    await waitFor(() => expect(status).toHaveTextContent("Tunnel VPS collegato"));
+    await waitFor(() => expect(status).toHaveTextContent("Team collegato"));
+  });
+
+  it("polls the bounded history and reveals an asynchronous agent reply without switching", async () => {
+    vi.useFakeTimers();
+    const { mock } = client();
+    vi.mocked(mock.read)
+      .mockResolvedValueOnce({
+        messages: [{ id: "initial", role: "user", text: "Prima domanda", at: 1 }],
+        cursor: "cursor-after-initial",
+      })
+      .mockResolvedValueOnce({
+        messages: [
+          { id: "initial", role: "user", text: "Prima domanda", at: 1 },
+          { id: "reply", role: "agent", text: "Risposta asincrona", at: 2 },
+        ],
+        cursor: "cursor-after-reply",
+      });
+
+    render(<DirectChatScreen client={mock} initialAgentId="assistente" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("Prima domanda")).toBeInTheDocument();
+    expect(mock.read).toHaveBeenCalledWith({ agentId: "assistente" });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("Risposta asincrona")).toBeInTheDocument();
+    expect(mock.read).toHaveBeenLastCalledWith({ agentId: "assistente" });
   });
 
   it("closes the direct channel when the page unmounts", async () => {

@@ -7,7 +7,7 @@ import {
   subscribeDirectChat,
 } from "../../lib/direct-chat";
 import type { PageProps } from "../types";
-import DirectChatScreen from "./DirectChatScreen";
+import DirectChatScreen, { isDirectChatAgentId } from "./DirectChatScreen";
 import type { DirectChatClient } from "./direct-chat-contract";
 
 const directChatClient: DirectChatClient = {
@@ -21,6 +21,8 @@ const directChatClient: DirectChatClient = {
 };
 
 /** The desktop Messages route talks only through the direct VPS bridge. */
-export default function MessagesPage(_props: PageProps) {
-  return <DirectChatScreen client={directChatClient} />;
+export default function MessagesPage({ search }: PageProps) {
+  const requestedAgent = search.get("agent");
+  const initialAgentId = isDirectChatAgentId(requestedAgent) ? requestedAgent : "capitano";
+  return <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} />;
 }

@@ -307,6 +307,15 @@ pub(crate) struct SystemKeychain;
 
 impl SystemKeychain {
     fn entry() -> Result<keyring::Entry, ()> {
+        if !matches!(
+            keyring::default::default_credential_builder().persistence(),
+            keyring::credential::CredentialPersistence::UntilDelete
+        ) {
+            // A reboot-volatile store would make existing encrypted sessions
+            // permanently undecipherable. Fail before reading or generating a
+            // key instead of presenting a false successful login.
+            return Err(());
+        }
         keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).map_err(|_| ())
     }
 }
@@ -824,6 +833,40 @@ mod tests {
         let config: serde_json::Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         assert_eq!(config["identifier"], KEYRING_SERVICE);
+    }
+
+    #[test]
+    fn platform_key_store_is_declared_persistent_across_reboots() {
+        assert!(matches!(
+            keyring::default::default_credential_builder().persistence(),
+            keyring::credential::CredentialPersistence::UntilDelete
+        ));
+    }
+
+    #[test]
+    fn a_persisted_key_restores_the_encrypted_session_after_process_restart() {
+        let dir = scratch_dir("process-restart");
+        let keychain = Arc::new(CountingKeychain::default());
+
+        {
+            let first_process = KeyCache::new(keychain.clone());
+            first_process.prepare().unwrap();
+            set_value(&dir, &first_process, NAME, "persisted-session").unwrap();
+        }
+
+        // A fresh cache has no process memory. Only the persistent key source
+        // and encrypted file survive, matching an app restart/reboot boundary.
+        let restarted_process = KeyCache::new(keychain.clone());
+        assert_eq!(get_value(&dir, &restarted_process, NAME).unwrap(), None);
+        restarted_process.prepare().unwrap();
+        assert_eq!(
+            get_value(&dir, &restarted_process, NAME)
+                .unwrap()
+                .as_deref(),
+            Some("persisted-session")
+        );
+        assert_eq!(keychain.asked(), (2, 1));
+        fs::remove_dir_all(dir).unwrap();
     }
 
     fn scratch_dir(name: &str) -> PathBuf {

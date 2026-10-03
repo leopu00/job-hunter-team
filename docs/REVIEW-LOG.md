@@ -396,6 +396,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione | — | 2026-09-01 | ✅ |
 | [docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md](./internal/ops/2026-09-13-spawn-observability-live-test-plan.md) | Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log. | — | 2026-09-14 | ✅ |
 | [docs/internal/architecture/tauri-onboarding-contract.md](./internal/architecture/tauri-onboarding-contract.md) | Contratto Tauri 0.4 door-to-door: gate account-scoped, runtime subscription, onboarding verificato, chat diretta e confini di sicurezza | — | 2026-09-30 | ✅ |
+| [docs/internal/architecture/desktop-local-runtime-parity.md](./internal/architecture/desktop-local-runtime-parity.md) | Parità del percorso runtime locale Electron-Tauri: identità, Podman, container, provider, team e adozione legacy | — | 2026-10-03 | ✅ |
 
 
 ## 🔒 docs/security
@@ -471,6 +472,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agent-harness/runtime/docs/launcher.md](../agent-harness/runtime/docs/launcher.md) | Lanciatore: come il CAPITANO chiede un agente, come l'host lo avvia e quali limiti decide il lanciatore. | — | 2026-09-28 | ✅ |
 | [agent-harness/runtime/docs/parity.md](../agent-harness/runtime/docs/parity.md) | Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce. | — | 2026-09-28 | ✅ |
 | [scripts/parity/README.md](../scripts/parity/README.md) | Riferimento degli strumenti del giro di parita': jobsdb_parity.py (il metro) e parity_round.py (il giro intero da un comando). | — | 2026-09-28 | ✅ |
+| [desktop/public/onboarding/PROMPTS.md](../desktop/public/onboarding/PROMPTS.md) | Prompt, provenienza e mapping degli asset illustrati approvati per l'onboarding Tauri | — | 2026-10-03 | ✅ |
 
 
 ---
