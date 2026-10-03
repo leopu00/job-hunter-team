@@ -678,11 +678,23 @@ fn receipt_matches(
     artifacts: &[MigrationArtifact],
     manifest: &str,
 ) -> bool {
+    receipt_identity_matches(receipt, source, target)
+        && receipt.artifacts == artifacts
+        && constant_time_eq(&receipt.manifest_sha256, manifest)
+}
+
+fn receipt_identity_matches(
+    receipt: &MigrationReceipt,
+    source: &AccountScope,
+    target: &AccountScope,
+) -> bool {
+    let before = marker_bytes(source);
+    let after = marker_bytes(target);
     receipt.migration_id == migration_id(source, target)
         && receipt.source_scope_digest == source.digest()
         && receipt.target_scope_digest == target.digest()
-        && receipt.artifacts == artifacts
-        && constant_time_eq(&receipt.manifest_sha256, manifest)
+        && constant_time_eq(&receipt.owner_before_sha256, &marker_hash(&before))
+        && constant_time_eq(&receipt.owner_after_sha256, &marker_hash(&after))
 }
 
 fn validate_available_capability(
@@ -737,8 +749,6 @@ pub(crate) fn probe(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         _ => return Err("local_migration_target_exists"),
     }
-    let artifacts = profile_manifest(&paths.profile())?;
-    let manifest = manifest_hash(&artifacts)?;
     let receipt = receipt_path(paths, &migration_id(source, target));
     match fs::symlink_metadata(&receipt) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -751,22 +761,26 @@ pub(crate) fn probe(
         Err(_) => Err("local_migration_receipt_invalid"),
         Ok(_) => {
             let (receipt, _) = read_receipt(&receipt)?;
-            if !receipt_matches(&receipt, source, target, &artifacts, &manifest) {
+            if !receipt_identity_matches(&receipt, source, target) {
                 Err("local_migration_recovery_required")
-            } else if matches!(
-                receipt.state,
-                MigrationState::Prepared | MigrationState::Committed
-            ) && owner_bytes == target_owner
-            {
-                Ok(true)
-            } else if matches!(
-                receipt.state,
-                MigrationState::Prepared | MigrationState::RolledBack
-            ) && owner_bytes == source_owner
-            {
+            } else if receipt.state == MigrationState::Committed && owner_bytes == target_owner {
                 Ok(true)
             } else {
-                Err("local_migration_recovery_required")
+                let artifacts = profile_manifest(&paths.profile())?;
+                let manifest = manifest_hash(&artifacts)?;
+                if !receipt_matches(&receipt, source, target, &artifacts, &manifest) {
+                    Err("local_migration_recovery_required")
+                } else if receipt.state == MigrationState::Prepared && owner_bytes == target_owner {
+                    Ok(true)
+                } else if matches!(
+                    receipt.state,
+                    MigrationState::Prepared | MigrationState::RolledBack
+                ) && owner_bytes == source_owner
+                {
+                    Ok(true)
+                } else {
+                    Err("local_migration_recovery_required")
+                }
             }
         }
     }
@@ -930,8 +944,6 @@ pub(crate) fn migrate(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         _ => return Err("local_migration_target_exists"),
     }
-    let artifacts = profile_manifest(&paths.profile())?;
-    let manifest = manifest_hash(&artifacts)?;
     let migration_id = migration_id(source, target);
     let receipt_path = receipt_path(paths, &migration_id);
 
@@ -940,21 +952,31 @@ pub(crate) fn migrate(
         Ok(_) => Some(read_receipt(&receipt_path)?),
         Err(_) => return Err("local_migration_receipt_invalid"),
     };
-    if let Some((existing, bytes)) = existing_receipt {
-        if !receipt_matches(&existing, source, target, &artifacts, &manifest) {
+    if let Some((existing, bytes)) = &existing_receipt {
+        if !receipt_identity_matches(existing, source, target) {
             return Err("local_migration_recovery_required");
         }
-        if existing.state == MigrationState::Committed
-            && read_owner(&owner)? == after
-            && !paths.source_capability.exists()
-            && paths
-                .retired()
-                .join(format!("{migration_id}.json"))
-                .is_file()
-        {
-            return Ok(MigrationCommitted {
-                receipt_hash: sha256(b"jht-profile-migration-receipt-v1\0", &[&bytes]),
-            });
+        if existing.state == MigrationState::Committed {
+            if read_owner(&owner)? == after
+                && !paths.source_capability.exists()
+                && paths
+                    .retired()
+                    .join(format!("{migration_id}.json"))
+                    .is_file()
+            {
+                return Ok(MigrationCommitted {
+                    receipt_hash: sha256(b"jht-profile-migration-receipt-v1\0", &[bytes]),
+                });
+            }
+            return Err("local_migration_recovery_required");
+        }
+    }
+
+    let artifacts = profile_manifest(&paths.profile())?;
+    let manifest = manifest_hash(&artifacts)?;
+    if let Some((existing, _)) = existing_receipt {
+        if !receipt_matches(&existing, source, target, &artifacts, &manifest) {
+            return Err("local_migration_recovery_required");
         }
         let current_owner = read_owner(&owner)?;
         if existing.state == MigrationState::Prepared && current_owner == after {
@@ -1264,6 +1286,42 @@ languages:
             format!("{}\n", fixture.target.digest()).as_bytes()
         );
         assert!(!fixture.paths.source_capability.exists());
+    }
+
+    #[test]
+    fn committed_receipt_remains_idempotent_after_a_later_profile_update() {
+        let fixture = Fixture::new();
+        let first = migrate(
+            &fixture.paths,
+            &fixture.source,
+            &fixture.target,
+            || Ok(()),
+            || Ok(()),
+        )
+        .unwrap();
+        fs::write(
+            fixture
+                .paths
+                .runtime_home
+                .join("profile/candidate_profile.yml"),
+            b"later account-owned profile bytes\n",
+        )
+        .unwrap();
+
+        let second = migrate(
+            &fixture.paths,
+            &fixture.source,
+            &fixture.target,
+            || Ok(()),
+            || panic!("a committed retry must not cross the commit hook"),
+        )
+        .unwrap();
+
+        assert_eq!(second.receipt_hash, first.receipt_hash);
+        assert_eq!(
+            fixture.owner(),
+            format!("{}\n", fixture.target.digest()).as_bytes()
+        );
     }
 
     #[test]
