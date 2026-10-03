@@ -137,7 +137,8 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onExitFailure, onR
           </aside>
           <OAuthLoginTakeover
             providerName={providerName(providerLogin.provider)}
-            action={providerLogin.action}
+            actions={providerLogin.actions}
+            verifying={providerLogin.status === "verifying"}
             connectionState={providerLogin.connectionState}
             elapsedMs={Math.max(0, now - providerLogin.startedAt)}
             safeErrorMessage={providerLogin.safeErrorMessage ?? (failed ? runtime.message : null)}

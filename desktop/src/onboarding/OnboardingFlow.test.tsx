@@ -520,11 +520,11 @@ describe("OnboardingFlow technical setup", () => {
       providerLogin: {
         provider: "codex",
         status: "needs_user_action",
-        action: {
+        actions: [{
           kind: "url",
           instruction: "Apri il browser e inserisci il codice temporaneo.",
           safeUrl: "https://example.invalid/device",
-        },
+        }],
         connectionState: "connected",
         startedAt: Date.now() - 2_000,
       },
@@ -546,11 +546,11 @@ describe("OnboardingFlow technical setup", () => {
       providerLogin: {
         provider: "claude",
         status: "needs_user_action",
-        action: {
+        actions: [{
           kind: "input",
           instruction: "Conferma la richiesta del provider.",
           inputRequest: { id: "confirmation", label: "Risposta richiesta" },
-        },
+        }],
         connectionState: "connected",
         startedAt: Date.now(),
       },

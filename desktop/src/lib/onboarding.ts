@@ -52,8 +52,8 @@ export type OnboardingProviderLoginAction =
 
 export interface OnboardingProviderLoginState {
   provider: SubscriptionProvider;
-  status: "connecting" | "needs_user_action" | "error";
-  action: OnboardingProviderLoginAction | null;
+  status: "connecting" | "needs_user_action" | "verifying" | "error";
+  actions: OnboardingProviderLoginAction[];
   connectionState: "connecting" | "connected" | "disconnected";
   startedAt: number;
   safeErrorMessage?: string;

@@ -30,6 +30,7 @@ import {
   runtimeStateFromSnapshot,
   type OnboardingActivityState,
   type OnboardingGateState,
+  type OnboardingProviderLoginAction,
   type OnboardingProviderLoginState,
   type OnboardingRuntimeStage,
   type OnboardingRuntimeState,
@@ -221,6 +222,13 @@ function nativeErrorCode(error: unknown): string | null {
     : null;
 }
 
+function mergeProviderLoginAction(
+  actions: OnboardingProviderLoginAction[],
+  action: OnboardingProviderLoginAction,
+): OnboardingProviderLoginAction[] {
+  return [...actions.filter((current) => current.kind !== action.kind), action];
+}
+
 /**
  * The real first-login router. The dashboard mounts only after durable account
  * evidence or after every native runtime fact, the conversational profile and
@@ -302,6 +310,10 @@ export default function DashboardApp() {
   }, []);
 
   useEffect(() => {
+    const staleProviderSession = providerSessionRef.current;
+    const providerTeardown = staleProviderSession
+      ? closeOnboardingProviderLogin(staleProviderSession).catch(() => undefined)
+      : Promise.resolve();
     setAssistantChatIdentityKey(null);
     setExistingTeamDismissedIdentityKey(null);
     setAccountScope(null);
@@ -320,9 +332,12 @@ export default function DashboardApp() {
     setProviderLogin(null);
     if (!identityKey) {
       setGate({ phase: "loading" });
+      void providerTeardown;
       return;
     }
-    void initializeAccount();
+    void providerTeardown.then(() => {
+      if (activeIdentityKeyRef.current === identityKey) void initializeAccount();
+    });
   }, [identityKey, initializeAccount]);
 
   useEffect(() => {
@@ -500,7 +515,7 @@ export default function DashboardApp() {
       setProviderLogin({
         provider: submission.provider,
         status: "connecting",
-        action: null,
+        actions: [],
         connectionState: "connecting",
         startedAt: Date.now(),
       });
@@ -524,23 +539,29 @@ export default function DashboardApp() {
             ...current,
             status: "needs_user_action",
             connectionState: "connected",
-            action: event.action,
+            actions: mergeProviderLoginAction(current.actions, event.action),
           } : current);
           return;
         }
         providerInputRequestRef.current = null;
         setProviderLogin((current) => current ? {
           ...current,
-          status: event.code === 0 ? "needs_user_action" : "error",
-          connectionState: "disconnected",
-          action: null,
+          status: event.code === 0 ? "verifying" : "error",
+          connectionState: event.code === 0 ? "connected" : "disconnected",
+          actions: event.code === 0
+            ? current.actions.filter((action) => action.kind !== "input")
+            : [],
           safeErrorMessage: event.code === 0 ? undefined : failureMessage("provider-login"),
           exitCode: event.code,
         } : current);
         if (event.code === 0) resolveExit();
         else rejectExit(new Error("provider-login-failed"));
       }, recordActivityProgress);
-      if (!attemptIsCurrent()) return;
+      if (!attemptIsCurrent()) {
+        await closeOnboardingProviderLogin(sessionId).catch(() => undefined);
+        sessionId = null;
+        return;
+      }
       providerSessionRef.current = sessionId;
       setProviderLogin((current) => current?.status === "connecting" ? {
         ...current,
@@ -571,7 +592,7 @@ export default function DashboardApp() {
         ...current,
         status: "error",
         connectionState: "disconnected",
-        action: null,
+        actions: [],
         safeErrorMessage: failureMessage("provider-login"),
         exitCode: null,
       } : current);
@@ -599,12 +620,10 @@ export default function DashboardApp() {
     providerInputRequestRef.current = null;
     setProviderLogin((current) => current ? {
       ...current,
-      status: current.action?.kind === "input" && current.action.inputRequest.id === requestId
-        ? "connecting"
+      status: current.actions.some((action) => action.kind === "input" && action.inputRequest.id === requestId)
+        ? "verifying"
         : current.status,
-      action: current.action?.kind === "input" && current.action.inputRequest.id === requestId
-        ? null
-        : current.action,
+      actions: current.actions.filter((action) => action.kind !== "input" || action.inputRequest.id !== requestId),
     } : current);
   }, []);
 
