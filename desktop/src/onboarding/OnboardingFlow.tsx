@@ -178,10 +178,12 @@ function RuntimeView({ runtime, activity, onRetry, onRestart, onRuntimeAction, p
 
   const actionLabel = runtime.stage === "assistant"
     ? "Apri l’Assistente"
-    : runtime.stage === "ssh-host-key" ? "Conferma fingerprint" : "Accedi al provider";
+    : runtime.stage === "team-start"
+      ? "Avvia la squadra"
+      : runtime.stage === "ssh-host-key" ? "Conferma fingerprint" : "Accedi al provider";
   const action = failed
     ? onRetry
-    : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "assistant");
+    : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
   return (
     <main className="onboarding-shell">
       <header className="onboarding-header">

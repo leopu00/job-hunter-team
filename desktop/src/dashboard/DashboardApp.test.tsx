@@ -725,7 +725,7 @@ describe("DashboardApp onboarding router", () => {
     expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
-  it("resumes the privately persisted host at Assistant chat without repeating technical setup", async () => {
+  it("keeps a ready resumed host probe-only until the Assistant click", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("resume-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
       phase: "required",
@@ -735,11 +735,26 @@ describe("DashboardApp onboarding router", () => {
     });
     vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
 
+    const user = userEvent.setup();
     render(<DashboardApp />);
 
-    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
-    expect(reconnectDirectChat).toHaveBeenCalledOnce();
+    expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+    expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(openOnboardingAssistant).not.toHaveBeenCalled();
     expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(vi.mocked(resumeOnboardingSnapshot).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(reconnectDirectChat).toHaveBeenCalledOnce();
+    expect(vi.mocked(resumeOnboardingSnapshot).mock.invocationCallOrder[1])
+      .toBeLessThan(vi.mocked(reconnectDirectChat).mock.invocationCallOrder[0]);
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
   });
@@ -766,6 +781,35 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
+  it("keeps a local-profile resume probe-only until an explicit team action", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-resume",
+      displayName: "Ada Locale",
+    });
+    localStorage.setItem(
+      "jht.desktop.onboarding.local:opaque-local-resume",
+      "subscription-v1-started",
+    );
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      captainRunning: false,
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-resume");
+    expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(openOnboardingAssistant).not.toHaveBeenCalled();
+  });
+
   it("starts missing team sessions before reconnecting the resumed Assistant chat", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("assistant-missing-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
@@ -774,17 +818,28 @@ describe("DashboardApp onboarding router", () => {
       resumeAvailable: true,
       runtime: { status: "collecting", stage: "host" },
     });
-    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
-      ...TEAM_READY,
-      assistantRunning: false,
-    });
+    vi.mocked(resumeOnboardingSnapshot)
+      .mockResolvedValueOnce({ ...TEAM_READY, assistantRunning: false })
+      .mockResolvedValue(TEAM_READY);
     vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
 
+    const user = userEvent.setup();
     render(<DashboardApp />);
 
-    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
     expect(resumeOnboardingSnapshot).toHaveBeenCalled();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+
+    expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
     expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+
+    expect(await screen.findByTestId("assistant-chat")).toBeInTheDocument();
     expect(reconnectDirectChat).toHaveBeenCalledOnce();
     expect(vi.mocked(resumeOnboardingSnapshot).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(resumeOnboardingTeamStart).mock.invocationCallOrder[0]);
@@ -806,7 +861,12 @@ describe("DashboardApp onboarding router", () => {
     });
     vi.mocked(resumeOnboardingTeamStart).mockRejectedValue({ code: "team_start_failed" });
 
+    const user = userEvent.setup();
     render(<DashboardApp />);
+
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
 
     expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
     expect(screen.getByText("code:team_start_failed")).toBeInTheDocument();
@@ -827,7 +887,7 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
 
     expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
-    expect(resetOnboardingMarker).toHaveBeenCalledWith("host-missing-account");
+    expect(resetOnboardingMarker).not.toHaveBeenCalled();
     expect(reconnectDirectChat).not.toHaveBeenCalled();
   });
 
