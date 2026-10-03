@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "family": "JHT Tauri onboarding 0.4",
+  "generated_at": "2026-10-03",
+  "generation": {
+    "tool": "OpenAI built-in image generation",
+    "mode": "built-in",
+    "reference_assets": [
+      "web/public/landing-setup.png",
+      "web/public/run-local.png",
+      "web/public/run-vps.png",
+      "web/public/run-dedicated.png",
+      "web/public/pricing-brain.png",
+      "web/public/landing-team.png",
+      "web/public/agents-assistant.png",
+      "web/public/the-box.png"
+    ],
+    "provider_mark_sources": [
+      {
+        "provider": "Claude",
+        "source": "https://claude.com/",
+        "asset": "orange asterisk path from the official inline Claude wordmark SVG",
+        "sha256": "2eb39426be6b8d14967f240c7f2ccf9485910308adc952f05c97747da4c2ad93"
+      },
+      {
+        "provider": "OpenAI",
+        "source": "https://cdn.openai.com/pdf/6a2631dc-783e-479b-b1a4-af0cfbd38630/how-openai-uses-codex.pdf",
+        "asset": "Blossom vector path extracted unchanged from page 13 of the official OpenAI PDF",
+        "sha256": "f9ebba57b25d4b3f8235904ed6becac152fbe8b4b237419198b94bec408e41e4"
+      },
+      {
+        "provider": "Moonshot AI / Kimi",
+        "source": "https://www.kimi.com/en/resources/kimi-brand",
+        "asset": "KIMI-logos/Logomark/SVG/Logomark_Light.svg",
+        "sha256": "a543446e0c6827bae262ec45e6bbc67cc0c9e9f446ebc86be916c082459aed25"
+      }
+    ],
+    "prompt_document": "PROMPTS.md"
+  },
+  "output": {
+    "format": "webp",
+    "width": 1600,
+    "height": 1200,
+    "color_space": "sRGB",
+    "alpha": true,
+    "render_slot_css_px": "560x420",
+    "safe_area": {
+      "subject_max_width_percent": 70,
+      "subject_max_height_percent": 70,
+      "minimum_clear_left_right_percent": 12,
+      "minimum_clear_top_bottom_percent": 10
+    }
+  },
+  "steps": [
+    {
+      "step": "identity",
+      "states": ["google", "local"],
+      "asset": "identity.webp",
+      "alt_it": "Due percorsi di identità convergono nello stesso ingresso sicuro"
+    },
+    {
+      "step": "environment",
+      "states": ["computer", "vps", "existing-vps"],
+      "asset": "environment.webp",
+      "alt_it": "Un ufficio digitale può vivere sul computer o su una VPS"
+    },
+    {
+      "step": "provider",
+      "states": ["provider-choice"],
+      "asset": "provider.webp",
+      "alt_it": "Tre moduli provider equivalenti alimentano lo stesso ufficio"
+    },
+    {
+      "step": "provider-auth",
+      "states": ["claude-auth", "codex-auth", "kimi-auth"],
+      "asset": "provider-auth.webp",
+      "alt_it": "Un accesso sicuro collega il dispositivo al provider"
+    },
+    {
+      "step": "runtime",
+      "states": ["runtime", "container", "fingerprint", "retry", "error"],
+      "asset": "runtime.webp",
+      "alt_it": "Il runtime prepara e verifica un container"
+    },
+    {
+      "step": "team-start",
+      "states": ["team-start"],
+      "asset": "team-start.webp",
+      "alt_it": "Gli agenti entrano nell'ufficio mentre il team si avvia"
+    },
+    {
+      "step": "assistant-ready",
+      "states": ["assistant", "ready"],
+      "asset": "assistant-ready.webp",
+      "alt_it": "L'Assistente accoglie l'utente davanti all'ufficio pronto"
+    }
+  ],
+  "review_candidates": [
+    {
+      "step": "environment",
+      "version": 2,
+      "previous_asset": "environment.webp",
+      "state_assets": {
+        "local": "environment-computer-v2.webp",
+        "vps": "environment-vps-v2.webp"
+      },
+      "alt_it": {
+        "local": "Il computer proietta l'ufficio del team in una box luminosa",
+        "vps": "La VPS proietta l'ufficio del team in una box luminosa"
+      }
+    },
+    {
+      "step": "provider",
+      "version": 2,
+      "previous_asset": "provider.webp",
+      "asset": "provider-v2.webp",
+      "alt_it": "Una rete neurale collega in modo paritario Claude, Codex e Kimi"
+    }
+  ]
+}
