@@ -1,15 +1,86 @@
-# gitleaks: the default rules, plus one narrow allowlist.
+# gitleaks: the default rules, plus narrow exclusions verified by hand.
 #
-# .gitleaksignore holds the fingerprints verified by hand; this file exists
-# because one more had to be added, and a file without an allowed extension
-# cannot be committed here. Keep the allowlist as narrow as the finding:
-# one commit AND one path, never a rule or a regex that would hide others.
+# Written for gitleaks 8.24.3, the version gitleaks-action@v3 installs:
+# it silently ignores a top-level [[allowlists]] array (that arrived in
+# 8.25), so the global table is the singular [allowlist]. 8.30 reads both
+# forms. Single findings in real code are pinned below to their rule,
+# commit AND path, as narrow as a .gitleaksignore fingerprint: new
+# commits are never covered. Never a whole rule, a regex or a glob like
+# **/*.test.ts: they would hide the next real leak.
 
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Fake PKCE auth_code of the desktop's Supabase test mock (a made-up uuid, no credential), verified by hand 29/09/2026"
+# Files whose whole job is to hold fake secrets.
+[allowlist]
+description = "Fixtures with fake secrets and the detect-secrets baseline, verified by hand 05/10/2026"
+paths = [
+  # detect-secrets baseline: hashed fingerprints of its own findings
+  '''^\.secrets\.baseline$''',
+  # tests that mask or write made-up tokens, JWTs and secret files
+  '''^tests/js/validators/redact\.test\.ts$''',
+  '''^shared/logger/redact\.smoke\.ts$''',
+  '''^game/tools/redactor_selftest\.gd$''',
+  '''^game/tools/embedded_terminal_selftest\.gd$''',
+  '''^agent-harness/runtime/tests/render-pdf\.test\.ts$''',
+  # config schema test: placeholder api_key values
+  '''^tests/js/config/schema\.test\.ts$''',
+  # vitest task list: test titles, not values
+  '''^tests/js/\.vitest-tasks\.json$''',
+]
+
+# The Supabase anon key: role=anon, public by design, shipped to every
+# client. Each occurrence decoded and checked 05/10/2026, no service_role.
+[[rules]]
+id = "jwt"
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["0034c621ffad586a4057a9419d4e88b8ce292840", "ae46cb654fb93cbeb623d9229dc4c7872031ddfc"]
+paths = ['''^web/lib/supabase/config\.ts$''']
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["2001b60cfebea4cdc15e6ef27277228529a0b987", "3f396f2efa434879888794fe751a70ee041dc6b2"]
+paths = ['''^desktop/auth/supabase-client\.js$''']
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["2c99901289ee63988c513eecf856cd508c41e99e"]
+paths = ['''^archive/electron-desktop/auth/supabase-client\.js$''']
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["2e2359ef4ec31bd50647ce4dba5cf0d283d82e2f"]
+paths = ['''^cli/src/lib/cloud-direct\.js$''']
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["73e2ca6ac7c78b84bd379342af6594fd92fe9cbb"]
+paths = ['''^cli/src/lib/cloud-realtime\.js$''']
+
+[[rules.allowlists]]
+description = "Supabase anon key"
+condition = "AND"
+commits = ["87ac37066d56b0cab74057e1516086e08ec302f0", "8d6d93e9b6f01a1e50c5bd9d66c6144f96e259e9"]
+paths = ['''^cli/src/lib/realtime-subscriber\.js$''']
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "localStorage key name, not a credential"
+condition = "AND"
+commits = ["657f1e8a1cc5757615dcaefcad39d15d11c16d1e"]
+paths = ['''^web/lib/seen-positions\.ts$''']
+
+[[rules.allowlists]]
+description = "Fake PKCE auth_code of the desktop's Supabase test mock (a made-up uuid), verified 29/09/2026"
 condition = "AND"
 commits = ["ddc16b560aa3fac0db4b11214aa0e75d113b7ca1"]
 paths = ['''^desktop/src/lib/supabase\.test\.ts$''']
