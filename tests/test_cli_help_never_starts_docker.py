@@ -74,6 +74,13 @@ case "$1" in
     for arg in "$@"; do
       if [ "$arg" = up ]; then : > {state!s}; fi
     done
+    case " $* " in
+      *" ps -q jht "*) if [ -e {state!s} ]; then printf 'aaaaaaaaaaaa\\n'; fi ;;
+    esac
+    ;;
+  inspect)
+    [ "$2:$3:$4" = --type:container:aaaaaaaaaaaa ] && [ -e {state!s} ] || exit 1
+    printf 'true jht\\n'
     ;;
   *) true ;;
 esac
@@ -214,7 +221,9 @@ def test_a_real_command_still_starts_the_container(tmp_path):
         "un comando vero deve avviare il container: " f"{observed}"
     )
     assert any(
-        call.startswith("exec ") and call.endswith("positions list")
+        call.startswith("exec ")
+        and " aaaaaaaaaaaa node " in call
+        and call.endswith("positions list")
         for call in observed
     ), "dopo l'avvio il comando deve ancora raggiungere il CLI: " f"{observed}"
 

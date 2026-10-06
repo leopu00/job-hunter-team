@@ -757,7 +757,36 @@ fn atomic_publish(stage: &Path, target: &Path) -> Result<(), &'static str> {
     })
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+// MoveFileExW without MOVEFILE_REPLACE_EXISTING is the Windows no-replace
+// rename: an existing target fails with ERROR_ALREADY_EXISTS or
+// ERROR_FILE_EXISTS and is left untouched, like renameat NOREPLACE.
+#[cfg(windows)]
+fn atomic_publish(stage: &Path, target: &Path) -> Result<(), &'static str> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::{
+        Foundation::{ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS},
+        Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH},
+    };
+    let wide = |path: &Path| {
+        path.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let (stage, target) = (wide(stage), wide(target));
+    // SAFETY: both buffers are NUL-terminated UTF-16 paths that outlive the call.
+    if unsafe { MoveFileExW(stage.as_ptr(), target.as_ptr(), MOVEFILE_WRITE_THROUGH) } != 0 {
+        return Ok(());
+    }
+    match std::io::Error::last_os_error().raw_os_error() {
+        Some(code) if code == ERROR_ALREADY_EXISTS as i32 || code == ERROR_FILE_EXISTS as i32 => {
+            Err("target_profile_exists")
+        }
+        _ => Err("profile_import_storage_failed"),
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 fn atomic_publish(_stage: &Path, _target: &Path) -> Result<(), &'static str> {
     Err("profile_import_unsupported")
 }
@@ -1090,6 +1119,35 @@ blocks: []
         );
         assert_eq!(fs::read(&target).unwrap(), b"existing-private-profile\n");
         assert!(!receipt.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    // The race that preflight cannot see: a target created after it ran must
+    // still win at publish time, on every supported platform.
+    #[test]
+    fn atomic_publish_never_replaces_an_existing_target() {
+        let root = temp_root("publish-no-replace");
+        fs::create_dir_all(&root).unwrap();
+        let stage = root.join(".candidate_profile.stage");
+        let target = root.join("candidate_profile.yml");
+        fs::write(&stage, VALID_PROFILE).unwrap();
+        fs::write(&target, b"existing-private-profile\n").unwrap();
+
+        assert_eq!(
+            atomic_publish(&stage, &target),
+            Err("target_profile_exists")
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"existing-private-profile\n");
+        assert_eq!(fs::read(&stage).unwrap(), VALID_PROFILE);
+
+        fs::remove_file(&target).unwrap();
+        atomic_publish(&stage, &target).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), VALID_PROFILE);
+        assert!(!stage.exists());
+        assert_eq!(
+            atomic_publish(&stage, &root.join("other.yml")),
+            Err("profile_import_storage_failed")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
