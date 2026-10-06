@@ -173,7 +173,10 @@ fn create_private_dir(path: &Path, code: &'static str) -> Result<(), &'static st
             .map_err(|_| code)?;
     }
     #[cfg(not(unix))]
-    fs::create_dir(path).map_err(|_| code)?;
+    {
+        fs::create_dir(path).map_err(|_| code)?;
+        crate::runtime_host::set_private_dir_permissions(path).map_err(|_| code)?;
+    }
     private_dir(path, code)
 }
 
