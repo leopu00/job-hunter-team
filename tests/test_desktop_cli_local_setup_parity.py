@@ -230,7 +230,7 @@ def test_wrapper_keeps_host_and_node_cli_responsibilities_separate():
         default,
         "*)",
         "ensure_up",
-        'docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$CONTAINER" node "$NODE_ENTRY" "$@"',
+        'docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"',
     )
 
 

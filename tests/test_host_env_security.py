@@ -59,7 +59,10 @@ def make_fake_docker(fake_bin: Path, log: Path) -> None:
         "#!/usr/bin/env bash\n"
         "set -eu\n"
         'printf \'%s\\n\' "$*" >> "$JHT_TEST_DOCKER_LOG"\n'
-        'if [ "${1:-}" = ps ]; then printf \'jht\\n\'; fi\n',
+        'case " $* " in\n'
+        '  *" ps -q jht "*) printf \'aaaaaaaaaaaa\\n\' ;;\n'
+        '  " inspect --type container aaaaaaaaaaaa "*) printf \'true jht\\n\' ;;\n'
+        'esac\n',
         encoding="utf-8",
     )
     docker.chmod(0o755)
@@ -156,7 +159,8 @@ def test_wrapper_setup_reload_does_not_execute_new_host_env(tmp_path):
         "set -eu\n"
         "case \"$1\" in\n"
         "  info) exit 0 ;;\n"
-        "  ps) printf 'jht\\n' ;;\n"
+        "  compose) case \" $* \" in *\" ps -q jht \"*) printf 'aaaaaaaaaaaa\\n' ;; esac ;;\n"
+        "  inspect) [ \"$2:$3:$4\" = --type:container:aaaaaaaaaaaa ] && printf 'true jht\\n' ;;\n"
         "  exec) printf '%s\\n' \"$*\" > \"$JHT_TEST_DOCKER_LOG\" ;;\n"
         "  *) exit 0 ;;\n"
         "esac\n",
