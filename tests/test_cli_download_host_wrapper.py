@@ -26,10 +26,16 @@ set -eu
 cmd="$1"; shift
 case "$cmd" in
   info) exit 0 ;;
-  ps) printf 'jht\\n' ;;
+  compose)
+    case " $* " in *" ps -q jht "*) printf 'aaaaaaaaaaaa\\n' ;; esac
+    ;;
+  inspect)
+    [ "$1:$2:$3" = --type:container:aaaaaaaaaaaa ] || exit 91
+    printf 'true jht\\n'
+    ;;
   exec)
     while [ "$#" -gt 0 ]; do
-      case "$1" in -i|-it) shift ;; -e) shift 2 ;; jht) shift; break ;; *) shift ;; esac
+      case "$1" in -i|-it) shift ;; -e) shift 2 ;; aaaaaaaaaaaa) shift; break ;; *) shift ;; esac
     done
     if [ "${1:-}" = "rm" ]; then
       rm -f "$FAKE_CONTAINER_ROOT${3:-}"
