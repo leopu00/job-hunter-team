@@ -3398,7 +3398,7 @@ mod tests {
         collections::VecDeque,
         sync::{Arc, Mutex},
         thread,
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     #[test]
@@ -3515,6 +3515,10 @@ mod tests {
         let reporter = ProgressReporter::with_emitter(move |event| {
             captured.lock().unwrap().push(event);
         });
+        // The operation lasts until the first heartbeat is out, not a fixed
+        // sleep: Windows rounds park_timeout up to its ~15.6 ms timer tick,
+        // so an 8 ms operation finished before any heartbeat could fire.
+        let observed = Arc::clone(&events);
         reporter
             .run_with_interval(
                 OnboardingProgressStage::Runtime,
@@ -3522,8 +3526,17 @@ mod tests {
                 "Avvio del runtime in corso",
                 "Runtime Job Hunter Team avviato",
                 Duration::from_millis(2),
-                || {
-                    thread::sleep(Duration::from_millis(8));
+                move || {
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    while Instant::now() < deadline
+                        && !observed
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .any(|event| event.status == OnboardingProgressStatus::Progress)
+                    {
+                        thread::sleep(Duration::from_millis(1));
+                    }
                     Ok::<_, super::OnboardingError>(())
                 },
             )
