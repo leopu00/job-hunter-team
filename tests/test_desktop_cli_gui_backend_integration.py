@@ -95,11 +95,12 @@ def inner_exec():
     if index >= len(argv) or argv[index] not in ("jht", "aaaaaaaaaaaa"):
         record("exec-invalid")
         return 92
-    container = argv[index]
     command = argv[index + 1:]
     tty = "-it" in flags
 
-    if container == "aaaaaaaaaaaa" and command[:2] == ["node", "-e"]:
+    # Every exec targets the id attested by compose (`docker exec <id>`), so
+    # the operation is told apart by its command, never by the container name.
+    if command[:2] == ["node", "-e"] and "welcomed.flag" in command[2]:
         record("snapshot-metadata", tty=tty)
         configured = int(bool(state["provider"]) and state["provider_updated"])
         authenticated = int(state["provider_authenticated"])
@@ -107,24 +108,24 @@ def inner_exec():
         print(configured, authenticated, welcomed, end="")
         return 0
 
-    if container == "aaaaaaaaaaaa" and command[:3] == ["tmux", "has-session", "-t"]:
+    if command[:3] == ["tmux", "has-session", "-t"]:
         record("snapshot-team", command[3:], tty)
         return 0 if command[3] in state["team"] else 1
 
-    if container == "aaaaaaaaaaaa" and command[:2] == ["test", "-f"]:
+    if command[:2] == ["test", "-f"]:
         record("snapshot-profile", command[2:], tty)
         return 0 if state["profile_ready"] else 1
 
-    if container == "aaaaaaaaaaaa" and command[:2] == ["node", "/app/cli/bin/jht.js"]:
+    if command[:5] == ["node", "/app/cli/bin/jht.js", "profile", "validate", "--strict"]:
         record("snapshot-profile-fallback", command[2:], tty)
         return 0 if state["profile_ready"] else 1
 
-    if container == "jht" and command[:2] == ["node", "-e"]:
+    if command[:2] == ["node", "-e"]:
         record("provider-probe", tty=tty)
         print(state["provider"], end="")
         return 0
 
-    if container == "jht" and command[:2] == ["node", "/app/cli/bin/jht.js"]:
+    if command[:2] == ["node", "/app/cli/bin/jht.js"]:
         logical = command[2:]
         record("cli", logical, tty)
         key = " ".join(logical)
@@ -148,7 +149,7 @@ def inner_exec():
             print("\n".join(state["team"]))
         return 0
 
-    if container == "jht" and command == ["codex", "login", "--device-auth"]:
+    if command == ["codex", "login", "--device-auth"]:
         record("login", command, tty)
         if not tty:
             print("PTY required", file=sys.stderr)
@@ -173,10 +174,17 @@ if argv[0] == "ps":
     sys.exit(0)
 if argv[0] == "inspect":
     record("container-snapshot")
-    if argv[1] == "jht" and state["container_running"]:
+    # The wrapper pins the object type when it attests a compose container id.
+    if argv[1:3] == ["--type", "container"]:
+        target = argv[3]
+    elif argv[1] == "--type":
+        sys.exit(1)
+    else:
+        target = argv[1]
+    if target == "jht" and state["container_running"]:
         print("name=jht status=running started=fixture image=fixture@sha256:0000")
         sys.exit(0)
-    if argv[1] == "aaaaaaaaaaaa" and state["container_running"]:
+    if target == "aaaaaaaaaaaa" and state["container_running"]:
         if ".State.Running}} {{index" in " ".join(argv):
             print("true jht")
         else:
@@ -518,9 +526,16 @@ def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
         for row in cli.command_plan
     ) == 2
 
+    # Every exec reaches the container through the id attested by compose,
+    # never through the service name another container could be renamed to.
+    exec_rows = [row for row in cli.command_plan if row["argv"][0] == "exec"]
+    assert exec_rows
+    assert all("jht" not in row["argv"][1:] for row in exec_rows)
+    assert all("aaaaaaaaaaaa" in row["argv"] for row in exec_rows)
+
     login = [row for row in cli.command_plan if row["kind"] == "login"]
     assert login == [{
-        "argv": ["exec", "-it", "jht", "codex", "login", "--device-auth"],
+        "argv": ["exec", "-it", "aaaaaaaaaaaa", "codex", "login", "--device-auth"],
         "kind": "login",
         "logical": ["codex", "login", "--device-auth"],
         "tty": True,
