@@ -164,6 +164,12 @@ jobs:
           app="$(find "$bundle_root/macos" -type d -name '*.app' -print -quit)"
           test -n "$source"
           test -n "$app"
+          # Universal 2 = entrambe le fette nell'eseguibile spedito: un oggetto
+          # nativo compilato per l'host verrebbe scartato dal link dell'altra.
+          for binary in "$app"/Contents/MacOS/*; do
+            lipo -info "$binary"
+            lipo "$binary" -verify_arch x86_64 arm64
+          done
           codesign --verify --deep --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=2 "$app"
           xcrun stapler validate "$source"
