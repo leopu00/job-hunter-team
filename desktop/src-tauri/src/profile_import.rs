@@ -544,10 +544,22 @@ fn private_dir(path: &Path) -> Result<(), &'static str> {
         .map_err(|_| "profile_import_storage_failed")
 }
 
+#[cfg(unix)]
 fn sync_dir(path: &Path) -> Result<(), &'static str> {
     fs::File::open(path)
         .and_then(|dir| dir.sync_all())
         .map_err(|_| "profile_import_storage_failed")
+}
+
+// Windows cannot fsync a directory: File::open on one is refused, and
+// FlushFileBuffers needs a writable handle that a directory does not give.
+// NTFS journals the rename itself, so there is nothing to flush.
+#[cfg(not(unix))]
+fn sync_dir(path: &Path) -> Result<(), &'static str> {
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        _ => Err("profile_import_storage_failed"),
+    }
 }
 
 fn atomic_private_write(path: &Path, bytes: &[u8]) -> Result<(), &'static str> {
