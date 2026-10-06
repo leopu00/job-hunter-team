@@ -44,10 +44,20 @@ fn build_macos_voice_input() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR missing"));
     let object = out.join("VoiceInput.o");
     let archive = out.join("libjht_voice_input.a");
+    // clang defaults to the host architecture. A universal build runs this
+    // script once per slice on the same host, so the object must follow the
+    // Cargo target or the linker drops it from the other slice.
+    let arch = match env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+        Ok("aarch64") => "arm64",
+        Ok("x86_64") => "x86_64",
+        other => panic!("unsupported macOS target architecture for voice input: {other:?}"),
+    };
 
     let compiled = Command::new("xcrun")
         .args([
             "clang",
+            "-arch",
+            arch,
             "-fobjc-arc",
             "-fmodules",
             "-fblocks",
