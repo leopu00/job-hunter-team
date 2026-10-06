@@ -102,6 +102,20 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run tauri:build -- ${{ matrix.args }}
 
+      # Il bundle Universal 2 deve contenere entrambe le fette: un oggetto
+      # nativo compilato per l'architettura dell'host viene scartato dal link
+      # dell'altra fetta, e qui si vede invece che dentro un .dmg.
+      - name: Verify macOS universal binary slices
+        if: runner.os == 'macOS'
+        run: |
+          binaries="$(find desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos \
+            -path '*.app/Contents/MacOS/*' -type f)"
+          test -n "$binaries"
+          while IFS= read -r binary; do
+            lipo -info "$binary"
+            lipo "$binary" -verify_arch x86_64 arm64
+          done <<< "$binaries"
+
       - name: Gate bundled Google login configuration
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
