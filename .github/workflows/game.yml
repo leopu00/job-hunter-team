@@ -104,17 +104,15 @@ jobs:
 
       # Il bundle Universal 2 deve contenere entrambe le fette: un oggetto
       # nativo compilato per l'architettura dell'host viene scartato dal link
-      # dell'altra fetta, e qui si vede invece che dentro un .dmg.
+      # dell'altra fetta. Con `--bundles dmg` Tauri cancella la .app dopo aver
+      # fatto il dmg, quindi si guarda il binario universale da cui la .app e'
+      # stata costruita (Tauri lo stampa come «Built application at»).
       - name: Verify macOS universal binary slices
         if: runner.os == 'macOS'
         run: |
-          binaries="$(find desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos \
-            -path '*.app/Contents/MacOS/*' -type f)"
-          test -n "$binaries"
-          while IFS= read -r binary; do
-            lipo -info "$binary"
-            lipo "$binary" -verify_arch x86_64 arm64
-          done <<< "$binaries"
+          binary=desktop/src-tauri/target/universal-apple-darwin/release/jht-desktop
+          lipo -info "$binary"
+          lipo "$binary" -verify_arch x86_64 arm64
 
       - name: Gate bundled Google login configuration
         env:
