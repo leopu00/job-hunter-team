@@ -41,6 +41,8 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`tauri-onboarding-contract.md`](architecture/tauri-onboarding-contract.md) | 🚪 Onboarding Tauri 0.4 porta a porta: gate unico per account dopo il login Google (profilo → host → provider in abbonamento → runtime → login provider → Capitano/Assistente → chat diretta → marker `subscription-v1`), porte e proprietà dei moduli, backend `jht` riusato, sicurezza nativa; niente `api-worker` né upload CV |
+| [`desktop-local-runtime-parity.md`](architecture/desktop-local-runtime-parity.md) | 🖥️ Parità del runtime locale Electron → Tauri passo per passo (identità, dati `~/.jht`, runtime Podman, container, provider, team): profilo locale opaco del backend, claim una tantum dell'`~/.jht` legacy con marker `.desktop-account-scope`, migrazione a senso unico e non distruttiva |
 | [`2026-08-24-desktop-setup-modes.md`](architecture/2026-08-24-desktop-setup-modes.md) | 🖥️ Matrice setup desktop: host gestito/VPS/PC × credenziali gestite/subscription/API; slice attivo PC + Podman + OpenAI API + agenti headless |
 | [`2026-08-12-execution-host-vocabulary-contract.md`](architecture/2026-08-12-execution-host-vocabulary-contract.md) | 🖥️ Contratto del luogo di esecuzione: PC locale e VPS come host supportati, cloud opzionale separato dal runtime e capacità da non promettere |
 | [`2026-08-12-dialogue-i18n-contract.md`](architecture/2026-08-12-dialogue-i18n-contract.md) | 🌍 Contratto eseguibile dei dialoghi authored EN+6: parità degli ID, resolver runtime, contesto LLM canonico e gate contro residui inglesi |
