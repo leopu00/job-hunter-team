@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::{Mapping, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
 };
@@ -260,10 +260,22 @@ fn write_private_new(path: &Path, bytes: &[u8], code: &'static str) -> Result<()
     file.sync_all().map_err(|_| code)
 }
 
+#[cfg(unix)]
 fn sync_dir(path: &Path, code: &'static str) -> Result<(), &'static str> {
-    File::open(path)
+    fs::File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(|_| code)
+}
+
+// Windows cannot fsync a directory: File::open on one is refused, and
+// FlushFileBuffers needs a writable handle that a directory does not give.
+// NTFS journals the rename itself, so there is nothing to flush.
+#[cfg(not(unix))]
+fn sync_dir(path: &Path, code: &'static str) -> Result<(), &'static str> {
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        _ => Err(code),
+    }
 }
 
 fn marker_bytes(scope: &AccountScope) -> Vec<u8> {
