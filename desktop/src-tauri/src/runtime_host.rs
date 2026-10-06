@@ -421,7 +421,14 @@ pub(crate) fn set_private_permissions(path: &Path) -> Result<(), &'static str> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|_| "permissions_failed")
 }
 
-#[cfg(not(unix))]
+// Windows has no mode bits: the equivalent is a protected owner-only ACL,
+// read back after it is written. A failure stops the caller (fail-closed).
+#[cfg(windows)]
+pub(crate) fn set_private_permissions(path: &Path) -> Result<(), &'static str> {
+    crate::private_acl::protect_file(path).map_err(|_| "permissions_failed")
+}
+
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn set_private_permissions(_path: &Path) -> Result<(), &'static str> {
     Ok(())
 }
@@ -432,7 +439,12 @@ pub(crate) fn set_private_dir_permissions(path: &Path) -> Result<(), &'static st
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| "permissions_failed")
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+pub(crate) fn set_private_dir_permissions(path: &Path) -> Result<(), &'static str> {
+    crate::private_acl::protect_dir(path).map_err(|_| "permissions_failed")
+}
+
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn set_private_dir_permissions(_path: &Path) -> Result<(), &'static str> {
     Ok(())
 }
