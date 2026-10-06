@@ -81,7 +81,13 @@ def test_il_workflow_dichiara_almeno_i_due_perimetri_noti():
     assert {"web", "shared"} <= roots, roots
 
 
-@pytest.mark.parametrize("root,covered", PERIMETERS, ids=lambda v: str(v))
+# Ordinate, non str(set): un set si stampa nell'ordine dell'hash, che cambia da
+# un processo all'altro, e pytest-xdist rifiuta i worker con id diversi.
+@pytest.mark.parametrize(
+    "root,covered",
+    PERIMETERS,
+    ids=lambda v: v if isinstance(v, str) else "{" + ", ".join(sorted(v)) + "}",
+)
 def test_il_glob_copre_ogni_estensione_che_esiste_sotto_la_cartella(root, covered):
     files = _tracked_sources(root)
     assert files, f"nessun sorgente tracciato sotto {root}/: il glob non prova niente"
