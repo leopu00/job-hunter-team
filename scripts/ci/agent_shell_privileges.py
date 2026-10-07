@@ -36,29 +36,43 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "docker-compose.yml"
 
-# Runs inside the container. Busybox images expose `id` as an applet of one
-# binary: the setuid copy is then called with the applet name first.
+# Runs inside the container. Every FAIL line starts with a stable tag in
+# brackets: the tests assert on the tags, so a reworded message does not turn
+# a working check into a red test, or a broken one into a green test.
+#
+# Busybox images expose `id` as an applet of one binary, picked from argv[0]
+# or, when argv[0] is `busybox`, from argv[1]. The setuid copy therefore keeps
+# the name `busybox`: under any other name it answers "applet not found", the
+# probe prints nothing, and the check would pass without having run.
 INSIDE = r"""
 set -u
 fails=0
-fail() { echo "FAIL $*"; fails=$((fails + 1)); }
-if sudo -n true 2>/dev/null; then fail "sudo -n true succeeded"; fi
+fail() { echo "FAIL [$1] $2"; fails=$((fails + 1)); }
+if sudo -n true 2>/dev/null; then fail sudo "sudo -n true succeeded"; fi
 uid="$(id -u)"
-[ "$uid" = 1001 ] || fail "id -u is $uid, not 1001"
+[ "$uid" = 1001 ] || fail uid "id -u is $uid, not 1001"
 capeff="$(awk '/^CapEff:/ {print $2}' /proc/self/status)"
-[ "$capeff" = 0000000000000000 ] || fail "CapEff is $capeff"
+[ "$capeff" = 0000000000000000 ] || fail capeff "CapEff is $capeff"
 nnp="$(awk '/^NoNewPrivs:/ {print $2}' /proc/self/status)"
-[ "$nnp" = 1 ] || fail "NoNewPrivs is $nnp"
-touch /jht_home/probe || fail "cannot write in /jht_home"
-if chown 0:0 /jht_home/probe 2>/dev/null; then fail "chown 0 succeeded"; fi
+[ "$nnp" = 1 ] || fail nnp "NoNewPrivs is $nnp"
+touch /jht_home/probe || fail write "cannot write in /jht_home"
+if chown 0:0 /jht_home/probe 2>/dev/null; then fail chown "chown 0 succeeded"; fi
 idbin="$(command -v id)"
 real="$(readlink -f "$idbin" 2>/dev/null || echo "$idbin")"
-cp "$real" /jht_home/suid-id && chmod u+s /jht_home/suid-id || fail "cannot prepare the setuid probe"
+mkdir -p /jht_home/suid
 case "$real" in
-  *busybox*) euid="$(/jht_home/suid-id id -u)" ;;
-  *) euid="$(/jht_home/suid-id -u)" ;;
+  *busybox*) probe=/jht_home/suid/busybox ;;
+  *) probe=/jht_home/suid/id ;;
 esac
-[ "$euid" != 0 ] || fail "a setuid file in /jht_home ran as uid 0"
+cp "$real" "$probe" && chmod u+s "$probe" || fail setuid-prepare "cannot prepare the setuid probe"
+case "$probe" in
+  */busybox) euid="$("$probe" id -u 2>/dev/null)" ;;
+  *) euid="$("$probe" -u 2>/dev/null)" ;;
+esac
+case "$euid" in
+  '') fail setuid-probe "the setuid probe did not run" ;;
+  0) fail setuid "a setuid file in /jht_home ran as uid 0" ;;
+esac
 echo "checks done: $fails failed"
 [ "$fails" = 0 ]
 """
@@ -102,7 +116,7 @@ def run(image: str, user: str | None, unsafe_control: bool) -> int:
         for path in mount.rglob("*"):
             info = path.lstat()
             if info.st_uid == 0:
-                print(f"FAIL host sees {path.name} owned by root")
+                print(f"FAIL [host-root] host sees {path.name} owned by root")
                 code = 1
         # The probes are removed with the folder; a setuid copy owned by root
         # cannot outlive the temporary directory either.
