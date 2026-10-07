@@ -198,7 +198,20 @@ def test_watchdog_does_not_respawn_a_contained_core(tmp_path):
     assert not node_calls.exists(), "contained core was respawned"
 
 
-def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_path):
+# ── Il target di capture-pane ────────────────────────────────────────────────
+# Origine: trovato in produzione il 2026-09-04. `capture_for_containment` usava
+# `tmux capture-pane -t "=$session"`, ma `=` e' un prefisso valido solo per i
+# target SESSIONE/FINESTRA: su un target PANE tmux esce con "can't find pane".
+# Con lo stderr scartato, il chiamante leggeva solo "cattura fallita" e per
+# contratto NON uccideva la sessione — quindi il ri-contenimento non e' mai
+# avvenuto. Evidenza: 24.340 righe "capture failed — NOT killing" nel log del
+# watchdog e una sessione viva per 15 giorni contro un keep-down esplicito.
+# Fino all'08/10 due test lo cercavano nel sorgente; ora lo prova il
+# comportamento: il tmux finto qui sotto rifiuta capture-pane su un target
+# che non e' un pane id, come il tmux vero.
+
+def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
+    """Run maybe_enforce_containments against a fake tmux whose pane shows `pane_text`."""
     logs = tmp_path / "logs"
     logs.mkdir()
     (logs / "team-roster.json").write_text(json.dumps({"version": 1, "agents": {
@@ -232,7 +245,7 @@ def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_pat
             # piu' permissivo del tmux reale — ed e' il motivo per cui il bug del
             # prefisso `=` e' sopravvissuto a questo test ed e' finito in produzione.
             '''    list-panes) case "$3" in "=SCRITTORE-1:"|"=SCRITTORE-1"|SCRITTORE-1) echo "%7" ;; *) return 1 ;; esac ;;''',
-            '''    capture-pane) case "$3" in %[0-9]*) echo "preserved pane before enforcement" ;; *) return 1 ;; esac ;;''',
+            f'''    capture-pane) case "$3" in %[0-9]*) printf '%s' '{pane_text}' ;; *) return 1 ;; esac ;;''',
             '    kill-session) return 0 ;;',
             '  esac',
             "}",
@@ -253,58 +266,30 @@ def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_pat
     )
     assert result.returncode == 0, result.stderr
     assert tmux_calls.exists(), f"stdout={result.stdout!r} stderr={result.stderr!r}"
-    assert "kill-session -t =SCRITTORE-1" in tmux_calls.read_text(encoding="utf-8")
+    return tmux_calls.read_text(encoding="utf-8"), sender_calls, logs
+
+
+def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_path):
+    calls, sender_calls, logs = _reenforce(tmp_path)
+    assert "kill-session -t =SCRITTORE-1" in calls
     evidence = list((logs / "containment").glob("*-SCRITTORE-1-reenforced.txt"))
     assert len(evidence) == 1
     assert "preserved pane" in evidence[0].read_text(encoding="utf-8")
     notice = sender_calls.read_text(encoding="utf-8")
     assert "CAPITANO [CONTAINMENT] SCRITTORE-1 was started despite" in notice
+    # The pane was captured by its id: `=` is valid only on session and window
+    # targets, and `capture-pane -t "=NAME"` fails every time (the fake refuses
+    # it like real tmux does, see below).
+    assert "capture-pane -t %7" in calls
 
 
-# ── Il target di capture-pane ────────────────────────────────────────────────
-# Origine: trovato in produzione il 2026-09-04. `capture_for_containment` usava
-# `tmux capture-pane -t "=$session"`, ma `=` e' un prefisso valido solo per i
-# target SESSIONE/FINESTRA: su un target PANE tmux esce con "can't find pane".
-# Con lo stderr scartato, il chiamante leggeva solo "cattura fallita" e per
-# contratto NON uccideva la sessione — quindi il ri-contenimento non e' mai
-# avvenuto. Evidenza: 24.340 righe "capture failed — NOT killing" nel log del
-# watchdog e una sessione viva per 15 giorni contro un keep-down esplicito.
-
-def test_capture_pane_is_never_targeted_with_the_session_prefix():
-    """`=` su un target pane fa fallire capture-pane a ogni invocazione."""
-    src = WATCHDOG_PATH.read_text(encoding="utf-8")
-    offenders = [
-        line.strip()
-        for line in src.splitlines()
-        if "capture-pane" in line
-        and not line.strip().startswith("#")
-        and re.search(r'-t\s+"=', line)
-    ]
-    assert not offenders, offenders
-
-
-def test_the_containment_capture_resolves_an_exact_pane_id():
-    """L'esattezza non va persa tornando al nome nudo: si risolve il pane_id
-    con list-panes (target `=NOME:`, dove `=` e' valido) e si cattura quello,
-    che e' univoco su tutto il server tmux."""
-    src = WATCHDOG_PATH.read_text(encoding="utf-8")
-    body = src[src.index("capture_for_containment()") :]
-    body = body[: body.index("\n}\n") + 3]
-    # `=NOME:` e non `=NOME`: il target di list-panes e' una finestra, e senza
-    # i due punti un NOME assente risolve sui pane di una sessione sorella
-    # (tests/test_launcher_tmux_targets_anchored.py).
-    assert "list-panes -t \"=$session:\"" in body, body
-    assert "#{pane_id}" in body, body
-    assert 'capture-pane -t "$pane_id"' in body, body
-    # e una cattura vuota non deve passare per evidenza
-    assert '[ ! -s "$evidence" ]' in body, body
-
-
-# ── A hold because of a team mode ends with the mode ─────────────────────────
-# leone, 21/08-28/09: the CAPITANO contained the SENTINELLA for «Saving mode
-# ... until mode changes». The mode ended, the file went back to `search`, and
-# the hold stayed: the condition was prose, and every restart woke the
-# SENTINELLA only for the watchdog to put it down again.
+def test_an_empty_capture_is_not_evidence_and_the_session_is_not_killed(tmp_path):
+    """A zero-byte file is not the scene: better retry at the next tick than
+    archive nothing and kill the only evidence left."""
+    calls, _, logs = _reenforce(tmp_path, pane_text="")
+    assert "capture-pane -t %7" in calls
+    assert "kill-session" not in calls
+    assert list((logs / "containment").glob("*-SCRITTORE-1-reenforced.txt")) == []
 
 
 def _saving_hold(path: Path, session: str = "SENTINELLA", while_mode: str | None = "saving"):
