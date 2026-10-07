@@ -104,13 +104,8 @@ def greenhouse_form(
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        current = browser.new_page()
-        yield current
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 @pytest.fixture

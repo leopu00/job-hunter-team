@@ -143,12 +143,8 @@ def test_the_company_recipe_still_refuses_an_unknown_site():
 
 
 @pytest.fixture
-def browser():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        launched = runtime.chromium.launch(headless=True)
-        yield launched
-        launched.close()
+def browser(chromium):
+    return chromium
 
 
 def test_the_company_apply_to_an_ats_without_a_recipe_stops_naming_it(browser, tmp_path, monkeypatch):

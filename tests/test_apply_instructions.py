@@ -96,13 +96,8 @@ def test_mailto_href():
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        current = browser.new_page()
-        yield current
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 def test_the_address_inside_a_collapsed_block_is_read(page):

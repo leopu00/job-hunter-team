@@ -503,13 +503,11 @@ jobs:
       # crashed while running '<test>'» ne porta il nome, e la run prosegue con
       # un worker nuovo.
       #
-      # xdist non stampa i deselezionati nella riga finale: la raccolta qui
-      # sotto li conta prima della run (4614 raccolti, 38 deselezionati il
-      # 06/10), e la somma degli esiti della run deve tornare uguale ai
-      # selezionati.
-      - name: Count pytest selection
-        run: python -m pytest tests/ -q --collect-only -m "not production" | tail -1
-
+      # xdist da solo toglie «N deselected» dalla riga finale: lo rimette
+      # tests/conftest.py, cosi' la riga resta confrontabile con quella di un
+      # processo solo (06/10: 4499 passed, 66 skipped, 38 deselected,
+      # 11 xfailed). Fino al 07/10 lo stampava un passo di sola raccolta, che
+      # costava 22 s di job.
       - name: Run pytest
         run: python -m pytest tests/ -v -n auto --dist loadfile -m "not production" --timeout=300 --timeout-method=thread
 

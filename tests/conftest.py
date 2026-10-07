@@ -15,6 +15,39 @@ def pytest_configure(config):
     )
 
 
+# ── I deselezionati nella riga finale anche con pytest-xdist ─────────────
+#
+# Con xdist la raccolta la fanno i worker, e la riga finale del controller
+# perde «38 deselected»: il conto che il job pytest della CI deve stampare
+# uguale a quello in un processo solo. Ogni worker raccoglie tutta la suite e
+# deseleziona gli stessi test; il primo che chiude passa il suo numero al
+# controller, che lo rimette fra le statistiche del riepilogo.
+_deselected_here = 0
+
+
+def pytest_deselected(items):
+    global _deselected_here
+    _deselected_here += len(items)
+
+
+def pytest_sessionfinish(session):
+    workeroutput = getattr(session.config, "workeroutput", None)
+    if workeroutput is not None:
+        workeroutput["jht_deselected"] = _deselected_here
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error):
+    config = node.config
+    count = getattr(node, "workeroutput", {}).get("jht_deselected")
+    if not count or getattr(config, "_jht_deselected_reported", False):
+        return
+    config._jht_deselected_reported = True
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.stats.setdefault("deselected", []).extend([None] * count)
+
+
 # ── Un bash che ESEGUE davvero, non solo che esiste ─────────────────────
 #
 # Perché serve: su un host Windows con WSL installato, il primo `bash` del PATH
@@ -214,6 +247,68 @@ def placeholder_pdfs_pass_the_layout_check(request, monkeypatch):
 
     monkeypatch.setattr(pdf_layout_check, "analyze", lambda _path, **_kw: {"ok": True, "reasons": []})
     yield
+
+
+@pytest.fixture(autouse=True)
+def company_pages_wait_three_seconds_for_a_form(monkeypatch):
+    """The CLOSER gives a company page 10 s to build its form; tests give it 3.
+
+    Both waits are paid in full exactly when nothing ever renders, which is
+    the outcome many tests assert: a dozen of them spent 10 s each on it in
+    CI. The longest late render a test builds is 1.5 s
+    (test_generic_flow_hook.py, which already used 3 s for its flows), so
+    3 s still proves that a late form is waited for.
+    """
+    import sys
+
+    skills = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shared", "skills")
+    if skills not in sys.path:
+        sys.path.insert(0, skills)
+    import apply_flow
+    import apply_generic
+
+    monkeypatch.setattr(apply_flow.ApplicationFlow, "GENERIC_RENDER_WAIT_MS", 3_000)
+    monkeypatch.setattr(apply_generic.GenericRecipe, "FORM_WAIT_MS", 3_000)
+    yield
+
+
+@pytest.fixture(scope="module")
+def module_chromium():
+    """One headless Chromium per test module.
+
+    Every CLOSER test used to start Playwright and launch a browser of its
+    own: a few hundred launches per run, the largest single cost of the job.
+    The isolation that matters is per test and comes from the browser context
+    (cookies, storage, routes), which `chromium` below closes after each one.
+
+    The runtime stays up until the module ends, so a test in the same module
+    cannot start a second `sync_playwright()`: such a module keeps a browser
+    of its own instead of using this.
+    """
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as runtime:
+        launched = runtime.chromium.launch(headless=True)
+        yield launched
+        launched.close()
+
+
+@pytest.fixture
+def chromium(module_chromium):
+    """The module's browser, with every context the test opened closed after it."""
+    yield module_chromium
+    for context in list(module_chromium.contexts):
+        context.close()
+
+
+@pytest.fixture
+def chromium_per_test():
+    """A browser of the test's own, for modules that also run `sync_playwright()`
+    inside their tests. Such a module overrides `chromium` with this one."""
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as runtime:
+        launched = runtime.chromium.launch(headless=True)
+        yield launched
+        launched.close()
 
 
 @pytest.fixture(scope="session", autouse=True)

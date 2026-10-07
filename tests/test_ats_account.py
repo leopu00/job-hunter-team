@@ -132,12 +132,8 @@ def test_consent_record_keeps_only_the_terms():
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        yield browser.new_page()
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 def test_password_fields_are_hidden_during_a_screenshot_and_shown_after(page):
