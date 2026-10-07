@@ -9,6 +9,8 @@ mod onboarding;
 #[cfg(test)]
 mod onboarding_attestation_tests;
 mod podman;
+#[cfg(windows)]
+mod private_acl;
 mod profile_import;
 mod profile_migration;
 mod runtime_host;

@@ -138,6 +138,10 @@ fn private_dir(path: &Path, code: &'static str) -> Result<(), &'static str> {
             return Err(code);
         }
     }
+    // Windows has no mode to compare: an existing directory gets the same
+    // owner-only ACL as a new one, read back, or the operation stops.
+    #[cfg(not(unix))]
+    crate::runtime_host::set_private_dir_permissions(path).map_err(|_| code)?;
     Ok(())
 }
 
@@ -1613,5 +1617,49 @@ blocks:
             format!("{}\n", fixture.source.digest()).as_bytes()
         );
         assert!(!fixture.paths.migrations().exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_existing_private_dir_gets_the_owner_only_acl_on_windows() {
+        use crate::private_acl::{
+            assert_owner_only, current_user_sid, grants_only_owner, open_to_everyone_and_users,
+            read_acl,
+        };
+        let user = current_user_sid().unwrap();
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "jht-profile-migration-acl-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        open_to_everyone_and_users(&root, false);
+        // Directories that already exist, open, as an older build or another
+        // program may have left them; one holds a file with explicit entries.
+        let migrations = root.join("account-migrations");
+        let retired = root.join("local-profiles-retired");
+        fs::create_dir(&migrations).unwrap();
+        fs::create_dir(&retired).unwrap();
+        let receipt = migrations.join("receipt.json");
+        fs::write(&receipt, b"{}").unwrap();
+        open_to_everyone_and_users(&receipt, false);
+        for node in [&migrations, &retired, &receipt] {
+            assert!(
+                !grants_only_owner(&read_acl(node).unwrap(), &user),
+                "{node:?}"
+            );
+        }
+
+        assert_eq!(super::private_dir(&migrations, "code"), Ok(()));
+        assert_eq!(super::create_private_dir(&retired, "code"), Ok(()));
+
+        assert_owner_only(&migrations);
+        assert_owner_only(&retired);
+        let receipt = read_acl(&receipt).unwrap();
+        assert!(grants_only_owner(&receipt, &user), "{receipt:?}");
+        fs::remove_dir_all(&root).unwrap();
     }
 }
