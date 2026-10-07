@@ -5,6 +5,12 @@ on:
     branches:
       - master
       - hq-master
+      # Il ramo di integrazione della squadra. Fino al 07/10 qui Tests partiva
+      # solo da un dispatch fatto a mano dopo ogni merge; tolto il cargo test
+      # da game.yml, era l'unico posto in cui girano i test Rust del desktop.
+      # Una difesa che aspetta un dispatch ricordato a mano prima o poi non
+      # gira.
+      - master-arthur
   pull_request:
     branches:
       - master
@@ -37,6 +43,15 @@ on:
 
 permissions:
   contents: read
+
+# Un solo run per commit: il push di master-arthur e un dispatch sullo stesso
+# SHA farebbero lo stesso lavoro due volte, e resta il piu' recente. Commit
+# diversi stanno in gruppi diversi: ognuno ha il suo verdetto, nessuno viene
+# cancellato da un push successivo. Il cron (solo il job `smoke`) ha un gruppo
+# suo, per non cancellare il run del codice sullo stesso SHA di master.
+concurrency:
+  group: tests-${{ github.ref }}-${{ github.event_name == 'schedule' && 'schedule' || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   api-worker:
