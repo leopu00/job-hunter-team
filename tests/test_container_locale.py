@@ -13,12 +13,12 @@ Perché un test e non solo la riga nel compose:
    «JHT_LANG» e conclude che la locale c'è. Qui le due variabili sono asserite
    separatamente: cancellare `LANG` lasciando `JHT_LANG` fa fallire il test.
 
-2. **I compose sono DUE.** Quello del repo (scaricato da `install.sh` e
-   riscaricato da `jht upgrade`, quindi vale per la flotta VPS e per le
-   installazioni CLI) e il payload che il GIOCO scrive sul disco dell'utente
-   desktop (`game/scripts/backend/payloads/runtime_compose.yml`, copia
-   funzionale del primo). Correggerne uno solo lascia metà utenti col difetto:
-   il test li tiene allineati sullo STESSO valore.
+2. **Il compose è quello del repo**, scaricato da `install.sh` e riscaricato
+   da `jht upgrade`: vale per la flotta VPS e per le installazioni CLI. Fino
+   all'08/10 il test teneva allineato anche il payload che il gioco Godot
+   scriveva sul disco dell'utente desktop
+   (`game/scripts/backend/payloads/runtime_compose.yml`); Godot è abbandonato,
+   e il confronto fra i due è stato tolto con lui.
 
 Eseguire:
     pytest tests/test_container_locale.py -v
@@ -31,8 +31,6 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 COMPOSES = {
     'docker-compose.yml': os.path.join(REPO_ROOT, 'docker-compose.yml'),
-    'runtime_compose.yml (payload del gioco)': os.path.join(
-        REPO_ROOT, 'game', 'scripts', 'backend', 'payloads', 'runtime_compose.yml'),
 }
 
 # `- LANG=...` nella lista environment. Il `-\s*` e il confine iniziale sono ciò
@@ -71,11 +69,3 @@ def test_lang_e_jht_lang_restano_due_variabili_distinte():
         text = _read(path)
         assert JHT_LANG_RE.search(text), f"{name}: sparita JHT_LANG (lingua del prodotto)"
         assert LANG_RE.search(text), f"{name}: sparita LANG (locale di sistema)"
-
-
-def test_i_due_compose_dichiarano_la_stessa_locale():
-    """Il payload del gioco è una copia funzionale del compose del repo: una locale
-    diversa fra i due significherebbe desktop e VPS che rendono i pane in modo
-    diverso, cioè il difetto risolto per metà degli utenti."""
-    valori = {name: LANG_RE.findall(_read(path))[0] for name, path in COMPOSES.items()}
-    assert len(set(valori.values())) == 1, f"locale divergenti fra i compose: {valori}"

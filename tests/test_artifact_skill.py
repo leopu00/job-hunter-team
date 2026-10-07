@@ -5,37 +5,22 @@ agenti riempiono partendo da roba raccolta in rete: è una stringa non fidata
 che nomina un file. La skill è il punto in cui quella stringa viene giudicata,
 quindi qui si prova il rifiuto, non il caso felice.
 
-**Perché una parte di questo file confronta DUE implementazioni.** Le stesse
-regole vivono già in ``game/scripts/backend/payloads/artifact.py``, il payload
-che il client desktop inietta nel container. Il BACKLOG segnala già lo stesso
-problema per ``user_exclude.py`` e la sua route TS: *«due implementazioni delle
-stesse regole — un test confronta gli insiemi di motivi, niente confronta il
-comportamento»*. Qui il comportamento si confronta: per ogni input ostile
-girano entrambe, e la skill non può MAI accettare ciò che il desktop rifiuta.
-
-Non è un'uguaglianza, ed è voluto: la skill è più severa (rifiuta backslash e
-NUL, che su POSIX sarebbero nomi di file legali) perché quel filtro nel client
-sta un livello sopra, in ``ArtifactPolicy.is_allowed_request``, che è GDScript
-e non si può eseguire da pytest. La direzione che conta per la sicurezza è una
-sola: mai più permissiva.
+Fino all'08/10 una parte di questo file confrontava la skill col payload del
+gioco Godot (``game/scripts/backend/payloads/artifact.py``), su ogni input
+ostile: la skill non poteva mai accettare ciò che il client rifiutava. Godot è
+abbandonato: quei test sono stati tolti con lui, e la skill resta l'unico
+giudice.
 """
 
 import base64
 import importlib.util
-import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "shared" / "skills" / "artifact.py"
-PAYLOAD = ROOT / "game" / "scripts" / "backend" / "payloads" / "artifact.py"
-PRODUCTION_ROOTS = ("/jht_user/cv", "/jht_user/allegati", "/jht_user/output",
-                    "/jht_user/critiche")
-ROOT_LINE = "ROOTS = " + repr(PRODUCTION_ROOTS)
 PDF = b"%PDF-1.4\n1 0 obj <<>> endobj\nstartxref\n0\n%%EOF\n"
 
 
@@ -256,52 +241,3 @@ def test_upload_non_segue_la_directory_allegati_symlink(area, tmp_path):
 
     assert not out["ok"]
     assert not (outside / "boundary.pdf").exists()
-
-
-# ── la skill non può essere più permissiva del client desktop ──────────────
-
-def run_payload(roots, path, kind):
-    """Esegue il payload VERO del client desktop con root sintetiche, come fa
-    `game/tools/artifact_fetch_selftest.py`."""
-    source = PAYLOAD.read_text(encoding="utf-8")
-    test_roots = tuple(str(r) for r in roots)
-    source = source.replace(ROOT_LINE, "ROOTS = " + repr(test_roots))
-    assert "ROOTS = " + repr(test_roots) in source, \
-        "root del payload non sostituite: il confronto non sarebbe fedele"
-    rendered = source % (
-        artifact.MAX_BYTES,
-        base64.b64encode(str(path).encode()).decode(),
-        base64.b64encode(kind.encode()).decode(),
-    )
-    proc = subprocess.run([sys.executable, "-c", rendered], check=False,
-                          capture_output=True, text=True, timeout=10)
-    assert proc.returncode == 0, f"payload rc={proc.returncode}: {proc.stderr}"
-    lines = [line for line in proc.stdout.splitlines() if line.startswith("{")]
-    assert len(lines) == 1, f"risposta payload ambigua: {proc.stdout!r}"
-    return json.loads(lines[0])
-
-
-@pytest.mark.skipif(not PAYLOAD.exists(), reason="game/ assente in questo checkout")
-@pytest.mark.parametrize("label,path,kind", DENIED, ids=[d[0] for d in DENIED])
-def test_la_skill_non_accetta_cio_che_il_desktop_rifiuta(area, label, path, kind):
-    payload_roots = tuple(str(area / name) for name in artifact.SUBDIRS)
-    # Il payload ragiona su path già assoluti nella root sintetica; la skill
-    # riceve la forma container e la rimappa da sola. Stesso file, due modi di
-    # nominarlo, stessa domanda.
-    payload_path = str(path).replace("/jht_user", str(area)) if str(path).startswith("/jht_user") else path
-    desktop = run_payload(payload_roots, payload_path, kind)
-    skill = artifact.fetch(path, kind)
-    assert not (skill.get("ok") and not desktop.get("ok")), (
-        f"{label}: la skill accetta un input che il client desktop rifiuta"
-    )
-
-
-@pytest.mark.skipif(not PAYLOAD.exists(), reason="game/ assente in questo checkout")
-def test_le_due_implementazioni_concordano_sul_caso_valido(area):
-    """L'altro verso: una skill che rifiuta tutto passerebbe il test sopra e
-    sarebbe inutile."""
-    payload_roots = tuple(str(area / name) for name in artifact.SUBDIRS)
-    desktop = run_payload(payload_roots, str(area / "cv" / "cv_42.pdf"), "pdf")
-    skill = artifact.fetch("/jht_user/cv/cv_42.pdf", "pdf")
-    assert desktop["ok"] and skill["ok"]
-    assert base64.b64decode(desktop["b64"]) == base64.b64decode(skill["b64"])

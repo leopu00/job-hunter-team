@@ -1,4 +1,9 @@
-"""Causal regression tests for issue #131's CV profile review flow."""
+"""Causal regression tests for issue #131's CV profile review flow.
+
+Until 08/10 three more tests drove the Godot side (game/: the profile_status.py
+and profile_save.py payloads, the review rows in wizard.gd). Godot is abandoned
+and they went with it.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +20,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "shared" / "skills" / "profile_review.py"
-STATUS_PAYLOAD = ROOT / "game" / "scripts" / "backend" / "payloads" / "profile_status.py"
-SAVE_PAYLOAD = ROOT / "game" / "scripts" / "backend" / "payloads" / "profile_save.py"
 PROFILE_SKILLS = sorted((ROOT / "agents" / "_skills" / "profile-yaml").glob("SKILL*.md"))
 ONBOARDING_SKILLS = sorted((ROOT / "agents" / "_skills" / "onboarding-flow").glob("SKILL*.md"))
 ASSISTANT_PROMPTS = sorted((ROOT / "agents" / "assistente").glob("assistente*.md"))
@@ -54,37 +57,6 @@ def _write_patch(agent: Path, value: dict) -> None:
     agent.mkdir(parents=True, exist_ok=True)
     (agent / "profile-review.yml").write_text(
         yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
-
-
-def _status(home: Path) -> dict:
-    source = STATUS_PAYLOAD.read_text(encoding="utf-8")
-    source = source.replace("/jht_home", str(home))
-    source = source.replace("/app/shared/skills", str(HELPER.parent))
-    result = subprocess.run(
-        [sys.executable, "-c", source],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**os.environ, "JHT_HOME": str(home)},
-    )
-    assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
-
-
-def _save_from_desktop(home: Path, fields: dict):
-    import base64
-
-    encoded = base64.b64encode(json.dumps(fields).encode()).decode()
-    source = SAVE_PAYLOAD.read_text(encoding="utf-8") % encoded
-    source = source.replace("/app/shared/skills", str(HELPER.parent))
-    env = {**os.environ, "JHT_HOME": str(home)}
-    return subprocess.run(
-        [sys.executable, "-c", source],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
     )
 
 
@@ -135,27 +107,6 @@ def test_empty_profile_stays_empty_until_exact_review_is_confirmed(tmp_path: Pat
     assert stat.S_IMODE((home / "profile" / "candidate_profile.yml").stat().st_mode) == 0o600
 
 
-def test_desktop_status_badge_changes_only_after_persisted_receipt(tmp_path: Path):
-    home = tmp_path / "home"
-    agent = home / "agents" / "assistente"
-    _write_patch(agent, _complete_patch())
-    _, staged = _run(home, agent, "stage")
-
-    before = _status(home)
-    assert before["ready"] is False
-    assert sum(before["required"].values()) == 0
-    assert before["review"]["review_id"] == staged["review"]["review_id"]
-
-    confirmed, receipt = _run(home, agent, "confirm", staged["review"]["review_id"])
-    assert confirmed.returncode == 0
-    assert receipt["receipt"]["profile_hash"]
-
-    after = _status(home)
-    assert after["ready"] is True
-    assert all(after["required"].values())
-    assert after["review"] is None
-
-
 def test_all_localized_agent_contracts_stage_cv_review_without_chat_reminder():
     assert len(PROFILE_SKILLS) == 7
     assert len(ONBOARDING_SKILLS) == 7
@@ -187,31 +138,6 @@ def test_all_localized_agent_contracts_stage_cv_review_without_chat_reminder():
             prohibition in candidate_route.lower()
             for prohibition in ("never", "mai", "nunca", "jamais", "niemals", "soha")
         ), path
-
-
-def test_desktop_form_uses_same_atomic_writer_and_fails_closed_on_invalid_base(
-    tmp_path: Path,
-):
-    home = tmp_path / "home"
-    profile_dir = home / "profile"
-    profile_dir.mkdir(parents=True)
-    profile_path = profile_dir / "candidate_profile.yml"
-    profile_path.write_text("name: [broken\n", encoding="utf-8")
-
-    failed = _save_from_desktop(home, {"name": "Replacement"})
-    assert failed.returncode == 1
-    assert json.loads(failed.stdout) == {"ok": False, "error": "profile_invalid"}
-    assert profile_path.read_text(encoding="utf-8") == "name: [broken\n"
-
-    profile_path.write_text("name: Initial\n", encoding="utf-8")
-    saved = _save_from_desktop(home, {"name": "Replacement"})
-    assert saved.returncode == 0, saved.stderr
-    payload = json.loads(saved.stdout)
-    assert payload["ok"] is True
-    assert len(payload["profile_hash"]) == 64
-    assert yaml.safe_load(profile_path.read_text(encoding="utf-8")) == {
-        "name": "Replacement"
-    }
 
 
 def test_confirm_failure_keeps_canonical_profile_and_review_unchanged(tmp_path: Path):
@@ -330,17 +256,6 @@ def test_nested_and_boolean_cv_values_are_visible_and_bound_to_confirmation(
         )
         == patch
     )
-
-
-def test_wizard_accepts_every_bound_review_row_instead_of_eight_field_subset():
-    source = (ROOT / "game" / "scripts" / "wizard.gd").read_text(encoding="utf-8")
-    review_source = source[
-        source.index("func _redraw_review") : source.index("func _review_note")
-    ]
-    assert "not FIELDS.has(item_field)" not in review_source
-    assert 'item.has("value")' in review_source
-    assert "seen_fields.has(item_field)" in review_source
-    assert '_review_value(item.get("value"))' in review_source
 
 
 def test_stage_rejects_symlink_patch(tmp_path: Path):

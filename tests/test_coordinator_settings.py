@@ -9,16 +9,13 @@ una feature devi aprire la dashboard, è un bug» — e per un agente LLM, che �
 pubblico dichiarato di AI-AGENT-INTEGRATION.md, quella decisione era
 irraggiungibile.
 
-Il rischio di questo lavoro non è la scrittura in sé: è la DIVERGENZA. Ora due
-scrittori producono lo stesso file, e finché `game/` resta congelato non si
-possono unificare. Il test più importante qui sotto è quindi l'ultimo: dato lo
-stesso input, il payload del gioco e la skill del CLI devono lasciare su disco
-lo stesso JSON.
+Fino all'08/10 un ultimo test provava che il payload della Console del gioco
+Godot (game/) e la skill del CLI lasciassero su disco lo stesso JSON. Godot è
+abbandonato: il CLI resta l'unico scrittore, e quel test è stato tolto.
 
 Eseguire con: pytest tests/test_coordinator_settings.py -v
 """
 
-import base64
 import json
 import os
 import subprocess
@@ -29,8 +26,6 @@ import pytest
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SKILLS_DIR = os.path.join(REPO_ROOT, 'shared', 'skills')
 SKILL = os.path.join(SKILLS_DIR, 'coordinator_settings.py')
-GAME_SAVE = os.path.join(REPO_ROOT, 'game', 'scripts', 'backend', 'payloads',
-                         'coordinator_save.py')
 
 
 @pytest.fixture
@@ -135,42 +130,3 @@ def test_clear_until_removes_only_the_deadline(home, env):
     data = _mode_file(home)
     assert 'mode_until' not in data
     assert data['mode'] == 'care'
-
-
-# ── Il test che conta: CLI e Console scrivono lo stesso file ────────────
-
-@pytest.mark.parametrize('settings,expected_mode', [
-    ({'maintenance': {'mode': 'care'}}, 'care'),
-    ({'maintenance': {'mode': 'saving'}}, 'saving'),
-    ({'maintenance': {'mode': 'harvest'}}, 'harvest'),
-])
-def test_the_game_payload_and_the_cli_agree(tmp_path, settings, expected_mode):
-    """Due scrittori, un file. Finché `game/` è congelato non si possono
-    unificare, quindi almeno si prova che non divergono: stesso input →
-    stesso JSON su disco.
-    """
-    def write_with_game(home):
-        src = open(GAME_SAVE, encoding='utf-8').read()
-        payload = base64.b64encode(
-            json.dumps(settings).encode('utf-8')).decode('ascii')
-        # Il payload è un template con `%s` (vedi F04 in CLAUDE.md).
-        code = src % (payload,)
-        r = subprocess.run([sys.executable, '-c', code],
-                           capture_output=True, text=True,
-                           env={**os.environ, 'JHT_HOME': str(home),
-                                'JHT_DB': str(home / 'jobs.db'),
-                                'PYTHONPATH': SKILLS_DIR})
-        assert r.returncode == 0, r.stderr
-        return r
-
-    game_home = tmp_path / 'game_home'
-    (game_home / 'profile').mkdir(parents=True)
-    write_with_game(game_home)
-
-    cli_home = tmp_path / 'cli_home'
-    (cli_home / 'profile').mkdir(parents=True)
-    cli_env = {**os.environ, 'JHT_HOME': str(cli_home),
-               'JHT_DB': str(cli_home / 'jobs.db')}
-    assert _run(cli_env, 'set-mode', expected_mode).returncode == 0
-
-    assert _mode_file(cli_home) == _mode_file(game_home)

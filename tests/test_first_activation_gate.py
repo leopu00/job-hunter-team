@@ -19,7 +19,6 @@ ROOT = Path(__file__).resolve().parent.parent
 PID1 = ROOT / "cli/src/commands/pid1.js"
 STOP = ROOT / "cli/src/commands/team/stop.js"
 START = ROOT / "cli/src/commands/team/start.js"
-SETUP = ROOT / "game/scripts/setup/setup_service.gd"
 AGENT_WATCHDOG = ROOT / ".launcher/agent-watchdog.sh"
 DOCTOR_WATCHDOG = ROOT / ".launcher/doctor-watchdog.sh"
 
@@ -43,8 +42,6 @@ def test_assistant_onboarding_does_not_remove_the_halt_gate():
     branch = src[src.index("if (!agentArg)") : src.index("// Container mode:")]
     assert "clearGlobalHaltGate(containerMode)" in branch
     assert "unlinkSync(haltedFlag)" in src
-    setup = _src(SETUP)
-    assert "BackendBus.ensure_assistant()" in setup
 
 
 def test_stop_all_is_persistent_and_stops_background_llm_sessions():
@@ -61,14 +58,6 @@ def test_both_watchdogs_honor_the_same_persistent_halt():
         src = _src(path)
         assert 'TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"' in src
         assert '[ -e "$TEAM_HALTED_FLAG" ]' in src
-
-
-def test_ui_requires_an_operational_coordinator_not_any_tmux_session():
-    src = _src(SETUP)
-    assert "_tmux_has_operational_team(str(tmux[\"out\"]))" in src
-    assert 'strip_edges() == "CAPITANO"' in src
-    assert "_agents_have_operational_team(BackendBus.agents)" in src
-    assert 'role in ["capitano", "coordinatore"]' in src
 
 
 def test_stop_all_live_contract_sets_gate_and_kills_background_llms(tmp_path):

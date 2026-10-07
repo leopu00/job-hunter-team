@@ -14,8 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
 PS = ROOT / "scripts" / "jht-wrapper.ps1"
 BASH = ROOT / "scripts" / "jht-wrapper.sh"
-CLIENT_CONTROL = ROOT / "game" / "scripts" / "client_control.gd"
-WINDOWS_GUARD = ROOT / "game" / "scripts" / "support" / "windows_instance_guard.gd"
 
 
 def _terminate(pid: int, timeout: float = 5.0) -> None:
@@ -143,26 +141,13 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
         assert command not in lifecycle
 
 
-def test_windows_state_binds_live_desktop_to_attested_guard() -> None:
-    state = CLIENT_CONTROL.read_text(encoding="utf-8")
-    guard = WINDOWS_GUARD.read_text(encoding="utf-8")
+def test_windows_wrapper_rejects_a_guard_that_does_not_match_the_state() -> None:
+    # Until 08/10 this test also read the Godot side (client_control.gd and
+    # windows_instance_guard.gd: the state's fields, the guard's SHA pinned in
+    # the wrapper). Godot is abandoned; `jht game` stays until game/ is decided,
+    # so the wrapper's half stays here.
     wrapper = PS.read_text(encoding="utf-8")
 
-    assert 'state["schema"] = 2' in state
-    for field in (
-        "desktop_executable",
-        "desktop_started",
-        "executable",
-        "instance_id",
-        "mode",
-        "mutex_fingerprint",
-        "pid",
-        "source_sha256",
-        "started",
-    ):
-        assert f'"{field}"' in state
-    digest = re.search(r'SOURCE_SHA256 := "([0-9a-f]{64})"', guard).group(1)
-    assert f"$WindowsInstanceGuardSha256 = '{digest}'" in wrapper
     for rejection in (
         "$guardPid -eq $statePid",
         "$guard.SessionId -ne $process.SessionId",
