@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync } from
 import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
 import { refreshModelPin } from './model-pin.js';
@@ -843,6 +844,68 @@ async function handleCurrent() {
   }
 }
 
+// ── limits: quanto resta delle finestre 5h e settimanale, prima di partire ──
+// Il desktop lo chiede prima di accendere il team. Il dato e' quello che legge
+// sentinel-bridge.py, in una lettura una tantum (`--probe-limits`) che non
+// tocca il ritmo del team acceso. Qui passa SOLO lo stato, l'orario in cui si
+// libera e le due percentuali: qualunque altra cosa, o un errore, e' "unknown".
+const SENTINEL_BRIDGE = fileURLToPath(new URL('../../../.launcher/sentinel-bridge.py', import.meta.url));
+const LIMITS_STATUSES = new Set(['ok', 'exhausted', 'unknown']);
+const LIMITS_UNKNOWN = Object.freeze({ status: 'unknown', resets_at: null, five_hour: null, weekly: null });
+
+function limitsWindow(value) {
+  if (!value || typeof value !== 'object') return null;
+  const { used_pct: used, resets_at: resets } = value;
+  if (!Number.isInteger(used) || !Number.isInteger(resets)) return null;
+  return { used_pct: used, resets_at: resets };
+}
+
+export function sanitizeLimits(raw) {
+  if (!raw || typeof raw !== 'object' || !LIMITS_STATUSES.has(raw.status)) return { ...LIMITS_UNKNOWN };
+  const resets = Number.isInteger(raw.resets_at) ? raw.resets_at : null;
+  const fiveHour = limitsWindow(raw.five_hour);
+  if (raw.status === 'exhausted' && resets === null) return { ...LIMITS_UNKNOWN };
+  if (raw.status === 'ok' && fiveHour === null) return { ...LIMITS_UNKNOWN };
+  return {
+    status: raw.status,
+    resets_at: raw.status === 'exhausted' ? resets : null,
+    five_hour: fiveHour,
+    weekly: limitsWindow(raw.weekly),
+  };
+}
+
+export function readLimits({ bridge = SENTINEL_BRIDGE, run = spawnSync } = {}) {
+  if (!existsSync(bridge)) return { ...LIMITS_UNKNOWN };
+  const r = run('python3', [bridge, '--probe-limits'], {
+    encoding: 'utf-8',
+    timeout: 30_000,
+    env: process.env,
+  });
+  if (r.error || r.status !== 0) return { ...LIMITS_UNKNOWN };
+  try {
+    return sanitizeLimits(JSON.parse(String(r.stdout || '').trim()));
+  } catch {
+    return { ...LIMITS_UNKNOWN };
+  }
+}
+
+function handleLimits(opts = {}) {
+  const limits = readLimits();
+  if (opts.json) {
+    console.log(JSON.stringify(limits));
+    return;
+  }
+  const at = (unix) => new Date(unix * 1000).toLocaleString();
+  if (limits.status === 'exhausted') {
+    console.log(`${c.yellow('Limits exhausted')} — free again at ${at(limits.resets_at)}`);
+  } else if (limits.status === 'ok') {
+    console.log(`${c.green('Limits ok')} — 5h ${limits.five_hour.used_pct}%` +
+      (limits.weekly ? `, weekly ${limits.weekly.used_pct}%` : ''));
+  } else {
+    console.log(`${c.dim('Limits not verified')}`);
+  }
+}
+
 export function registerProvidersCommand(program) {
   const cmd = new Command('providers').description('Provider LLM — list / current / use');
 
@@ -886,6 +949,12 @@ export function registerProvidersCommand(program) {
     .description('Review the model pinned by the provider CLI at login: choose a wider-window alias already listed in the config, probe it, then write it. JHT_MODEL_PIN=<x> disables changes.')
     .option('--dry-run', 'report what would be done without writing anything')
     .action((opts) => handleModelPin(opts));
+
+  cmd
+    .command('limits')
+    .description('Remaining 5h and weekly window of the active provider, read once (as the usage bridge does). Never prints credentials.')
+    .option('--json', 'machine-readable output')
+    .action((opts) => handleLimits(opts));
 
   cmd
     .command('check')
