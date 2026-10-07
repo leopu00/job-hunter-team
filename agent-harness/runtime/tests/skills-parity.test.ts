@@ -283,6 +283,19 @@ describe("email_monitor", () => {
     }
   });
 
+  it.skipIf(!HAS_PYTHON)("answers send exactly as the script does with no mailbox", async () => {
+    const py = python("email_monitor.py", ["send", "--to", "someone@example.com", "--subject", "s", "--body", "b"], {});
+    const ts = await native(createEmailMonitorTool({ jhtHome }), {
+      command: "send",
+      to: ["someone@example.com"],
+      subject: "s",
+      body: "b",
+    });
+    expect(py.status).toBe(1);
+    expect(ts.content).toBe(py.stdout);
+    expect(ts.ok).toBe(false);
+  });
+
   it("never opens the credentials file, and says the mailbox is unavailable here rather than not set up", async () => {
     mkdirSync(join(jhtHome, "credentials"));
     const creds = join(jhtHome, "credentials", "email_monitor.json");

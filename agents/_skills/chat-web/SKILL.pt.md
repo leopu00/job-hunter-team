@@ -39,21 +39,19 @@ mesmo com código** em vez de devolver o trabalho ao utilizador. Tu és a equipa
 utilizador é o cliente. Desenrasca-te.
 
 ### Exemplo: enviar um email — NÃO precisas de uma ferramenta MCP/Gmail
-A equipa já tem as credenciais de email em
-`$JHT_HOME/credentials/email_monitor.json` (uma app-password do Gmail — válida
-também para SMTP). Escreve um pequeno script Python e envia:
+A equipa já tem uma caixa configurada. Envia com o script: lê a conta sozinho e
+só imprime `{"ok": true, ...}` ou um código de motivo.
 
-```python
-import os, json, smtplib, ssl
-from email.message import EmailMessage
-c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
-m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<destinatario>", "<assunto>"
-m.set_content("<corpo>")
-# Gmail: smtp.gmail.com:465. Para outro fornecedor deriva smtp.<dominio> ou mapeia-o.
-with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-    s.login(c["user"], c["password"]); s.send_message(m)
+```bash
+printf '%s\n' "<body>" > /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
 ```
+
+**Nunca abras, faças `cat` ou `json.load` nem imprimas nada em `$JHT_HOME/credentials/`**,
+e nunca ponhas uma palavra-passe num script, num chat ou num log: o script é o
+único que toca na conta. `"reason": "not_configured"` significa que ainda não há
+caixa configurada: diz ao utilizador que se configura nas definições da app de
+desktop.
 
 Depois responde "Feito, enviado ✅" — nunca "vai autorizar o Gmail".
 

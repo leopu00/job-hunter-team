@@ -39,21 +39,19 @@ hast, **löse sie selbst mit Code**, statt die Arbeit an den Nutzer zurückzugeb
 bist das Team; der Nutzer ist der Kunde. Finde einen Weg.
 
 ### Beispiel: eine E-Mail senden — du brauchst KEIN MCP/Gmail-Tool
-Das Team hat die E-Mail-Zugangsdaten bereits in
-`$JHT_HOME/credentials/email_monitor.json` (ein Gmail-App-Passwort — auch für SMTP
-gültig). Schreibe ein kleines Python-Skript und sende:
+Das Team hat bereits ein eingerichtetes Postfach. Sende über das Skript: Es liest
+das Konto selbst und gibt nur `{"ok": true, ...}` oder einen Grund-Code aus.
 
-```python
-import os, json, smtplib, ssl
-from email.message import EmailMessage
-c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
-m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<empfaenger>", "<betreff>"
-m.set_content("<inhalt>")
-# Gmail: smtp.gmail.com:465. Für einen anderen Anbieter leite smtp.<domain> ab oder mappe es.
-with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-    s.login(c["user"], c["password"]); s.send_message(m)
+```bash
+printf '%s\n' "<body>" > /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
 ```
+
+**Öffne, `cat`e, `json.load`e oder drucke niemals etwas unter `$JHT_HOME/credentials/`**,
+und schreib nie ein Passwort in ein Skript, einen Chat oder ein Log: Das Skript
+ist das Einzige, das das Konto berührt. `"reason": "not_configured"` heißt, dass
+noch kein Postfach eingerichtet ist: Sag dem Nutzer, dass es in den
+Einstellungen der Desktop-App konfiguriert wird.
 
 Dann antworte „Erledigt, gesendet ✅" — niemals „geh und autorisiere Gmail".
 

@@ -43,20 +43,37 @@ CLI:
 
     python3 /app/shared/skills/email_monitor.py status
     → show configuration and the processed-message count
+
+    python3 /app/shared/skills/email_monitor.py send --to <addr> --subject <s> --body-file <f>
+    → send one email from the configured account over SMTP (TLS). The body
+      can also come from --body or stdin. stdout is one JSON line with ok,
+      the recipients and the subject; it never contains the password, and a
+      failure reports a fixed reason code, never the server's text.
+
+The credentials file is read only if it is a regular file (no symlink)
+owned by this uid; group/other permission bits are removed. Agents never
+open it themselves: they call this script (P1 portal secrets, phase 0 —
+this reduces the exposure, it does not close it: the agents still share
+the uid that owns the file).
 """
 from __future__ import annotations
 
 import argparse
 import email
+import errno
 import email.policy
 import imaplib
 import json
 import os
 import re
+import smtplib
+import ssl
+import stat
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime, parseaddr
+from email.message import EmailMessage
+from email.utils import make_msgid, parsedate_to_datetime, parseaddr
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -72,14 +89,44 @@ STATE_PATH = JHT_HOME / "state" / "email_monitor_seen.json"
 MAX_LINKS_PER_EMAIL = 25
 
 
-def _load_creds() -> dict:
-    if not CREDS_PATH.exists():
-        return {}
+def _read_creds() -> tuple[dict, str | None]:
+    """(credentials, problem). problem is None when the file is absent or
+    usable; otherwise a fixed code. Never raises, never echoes the content.
+
+    The file is opened with O_NOFOLLOW and checked on the open descriptor, so
+    a symlink or a file swapped in by another uid is refused. A file of this
+    uid with group/other bits is tightened to 0600 rather than refused: the
+    owner is the one that matters, and refusing would silently stop an inbox
+    that worked before."""
     try:
-        with CREDS_PATH.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {}
+        fd = os.open(CREDS_PATH, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return {}, None
+    except OSError as exc:
+        return {}, "credentials_symlink" if exc.errno == errno.ELOOP else "credentials_unreadable"
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return {}, "credentials_not_a_file"
+        if info.st_uid != os.getuid():
+            return {}, "credentials_foreign_owner"
+        if info.st_mode & 0o077:
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "r", encoding="utf-8") as f:
+            fd = -1
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return {}, "credentials_unreadable"
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    if not isinstance(data, dict):
+        return {}, "credentials_unreadable"
+    return data, None
+
+
+def _load_creds() -> dict:
+    return _read_creds()[0]
 
 
 def _load_state() -> dict:
@@ -382,10 +429,11 @@ def count(since_days: int = 1) -> dict:
 
 
 def status() -> dict:
-    creds = _load_creds()
+    creds, problem = _read_creds()
     state = _load_state()
     return {
         "configured": bool(creds.get("user")),
+        "credentials_problem": problem,
         "user": creds.get("user", ""),
         "host": creds.get("imap_host", ""),
         "from_filters": creds.get("from_filters", []),
@@ -395,6 +443,63 @@ def status() -> dict:
         "creds_path": str(CREDS_PATH),
         "creds_exists": CREDS_PATH.exists(),
     }
+
+
+_ADDRESS = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
+MAX_BODY_BYTES = 200_000
+
+
+def _smtp_endpoint(creds: dict) -> tuple[str, int]:
+    """SMTP host/port of the configured account: explicit smtp_host/smtp_port,
+    otherwise derived from the IMAP host (imap.<domain> → smtp.<domain>, 465)."""
+    host = str(creds.get("smtp_host") or "").strip()
+    if not host:
+        imap_host = str(creds.get("imap_host") or "imap.gmail.com").strip()
+        host = "smtp." + imap_host[5:] if imap_host.startswith("imap.") else imap_host
+    return host, int(creds.get("smtp_port") or 465)
+
+
+def send(to: list[str], subject: str, body: str) -> dict:
+    """Send one plain-text email from the configured account. The result is
+    safe to print: no password, no server text, only a fixed reason code."""
+    creds, problem = _read_creds()
+    if problem:
+        return {"ok": False, "reason": problem}
+    if not creds.get("user") or not creds.get("password"):
+        return {"ok": False, "reason": "not_configured"}
+    if not to or any(not _ADDRESS.match(addr) for addr in to):
+        return {"ok": False, "reason": "invalid_recipient"}
+    if "\r" in subject or "\n" in subject:
+        return {"ok": False, "reason": "invalid_subject"}
+    if len(body.encode("utf-8")) > MAX_BODY_BYTES:
+        return {"ok": False, "reason": "body_too_large"}
+
+    msg = EmailMessage()
+    msg["From"] = creds["user"]
+    msg["To"] = ", ".join(to)
+    msg["Subject"] = subject
+    msg["Message-ID"] = make_msgid()
+    msg.set_content(body)
+
+    host, port = _smtp_endpoint(creds)
+    context = ssl.create_default_context()
+    try:
+        if port == 587:
+            with smtplib.SMTP(host, port, timeout=30) as smtp:
+                smtp.starttls(context=context)
+                smtp.login(creds["user"], creds["password"])
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(host, port, context=context, timeout=30) as smtp:
+                smtp.login(creds["user"], creds["password"])
+                smtp.send_message(msg)
+    except smtplib.SMTPAuthenticationError:
+        return {"ok": False, "reason": "auth_failed"}
+    except smtplib.SMTPRecipientsRefused:
+        return {"ok": False, "reason": "recipient_refused"}
+    except (smtplib.SMTPException, OSError):
+        return {"ok": False, "reason": "smtp_unavailable"}
+    return {"ok": True, "to": to, "subject": subject, "message_id": msg["Message-ID"]}
 
 
 def main(argv):
@@ -408,6 +513,13 @@ def main(argv):
     cp.add_argument("--since-days", type=int, default=1)
 
     sub.add_parser("status")
+
+    sp = sub.add_parser("send")
+    sp.add_argument("--to", action="append", required=True)
+    sp.add_argument("--subject", required=True)
+    body = sp.add_mutually_exclusive_group()
+    body.add_argument("--body")
+    body.add_argument("--body-file")
 
     args = p.parse_args(argv)
 
@@ -424,6 +536,21 @@ def main(argv):
     if args.cmd == "status":
         print(json.dumps(status(), indent=2))
         return 0
+
+    if args.cmd == "send":
+        if args.body is not None:
+            text = args.body
+        elif args.body_file:
+            try:
+                text = Path(args.body_file).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                print(json.dumps({"ok": False, "reason": "body_unreadable"}))
+                return 1
+        else:
+            text = sys.stdin.read()
+        result = send(args.to, args.subject, text)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result["ok"] else 1
 
 
 if __name__ == "__main__":

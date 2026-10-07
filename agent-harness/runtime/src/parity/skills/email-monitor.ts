@@ -12,6 +12,9 @@
  *
  * When the credentials file does exist, `status` says so and adds a `note`, so
  * nobody mistakes "not available here" for "not set up".
+ *
+ * `send` (the chat skills' way to email someone) answers like the script with
+ * no mailbox: `{"ok": false, "reason": "not_configured"}`. No SMTP here either.
  */
 
 import { readFileSync, statSync } from "node:fs";
@@ -32,8 +35,11 @@ export interface EmailMonitorOptions {
 
 const schema = z
   .object({
-    command: z.enum(["status", "count", "poll"]),
+    command: z.enum(["status", "count", "poll", "send"]),
     since_days: z.number().int().min(0).max(365).optional().describe("count, poll: how many days back"),
+    to: z.array(z.string()).optional().describe("send: recipients"),
+    subject: z.string().optional().describe("send: subject"),
+    body: z.string().optional().describe("send: plain-text body"),
   })
   .strict();
 
@@ -48,6 +54,7 @@ export function createEmailMonitorTool(options: EmailMonitorOptions = {}): ToolH
       description:
         "The team mailbox of forwarded job alerts (replaces `python3 …/email_monitor.py`). " +
         "status: is it configured. count: new messages by sender. poll: one JSON lead per line. " +
+        "send: email someone from the team mailbox. " +
         "In this runtime the mailbox is never configured: when status says configured=false, source from the web.",
       schema,
     },
@@ -59,6 +66,7 @@ export function createEmailMonitorTool(options: EmailMonitorOptions = {}): ToolH
     async execute(args) {
       const { command } = args as z.infer<typeof schema>;
       if (command === "poll") return { ok: true, content: printed([]) };
+      if (command === "send") return { ok: false, content: pyJson({ ok: false, reason: "not_configured" }) };
       if (command === "count") {
         return { ok: true, content: pyJson({ configured: false, new_total: 0, by_sender: {} }, { indent: 2 }) };
       }
@@ -69,6 +77,9 @@ export function createEmailMonitorTool(options: EmailMonitorOptions = {}): ToolH
         content: pyJson(
           {
             configured: false,
+            // The script reports why a credentials file was refused; this
+            // runtime never opens it, so there is nothing to refuse.
+            credentials_problem: null,
             user: "",
             host: "",
             from_filters: [],

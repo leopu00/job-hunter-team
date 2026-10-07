@@ -39,21 +39,19 @@ Azt mondani egy asztali felhasználónak, hogy „írd be a `/mcp`-t a terminál
 vagy a csapat; a felhasználó az ügyfél. Találd ki.
 
 ### Példa: email küldése — NEM kell MCP/Gmail eszköz
-A csapatnak már megvannak az email-hitelesítő adatai itt:
-`$JHT_HOME/credentials/email_monitor.json` (egy Gmail app-jelszó — SMTP-hez is
-érvényes). Írj egy kis Python szkriptet és küldd el:
+A csapatnak már van beállított postafiókja. Küldj a szkripttel: maga olvassa a
+fiókot, és csak `{"ok": true, ...}` vagy egy okkódot ír ki.
 
-```python
-import os, json, smtplib, ssl
-from email.message import EmailMessage
-c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
-m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<cimzett>", "<targy>"
-m.set_content("<torzs>")
-# Gmail: smtp.gmail.com:465. Más szolgáltatóhoz vezesd le az smtp.<domain>-t vagy képezd le.
-with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-    s.login(c["user"], c["password"]); s.send_message(m)
+```bash
+printf '%s\n' "<body>" > /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
 ```
+
+**Soha ne nyiss meg, ne `cat`-elj, ne `json.load`-olj és ne írj ki semmit a `$JHT_HOME/credentials/` alól**,
+és soha ne tegyél jelszót szkriptbe, chatbe vagy logba: egyedül a szkript nyúl a
+fiókhoz. A `"reason": "not_configured"` azt jelenti, hogy még nincs beállított
+postafiók: mondd meg a felhasználónak, hogy az asztali alkalmazás
+beállításaiban lehet megadni.
 
 Aztán válaszolj: „Kész, elküldve ✅" — soha ne „menj és engedélyezd a Gmailt".
 

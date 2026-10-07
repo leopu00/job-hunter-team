@@ -746,6 +746,10 @@ class EmailApplication:
             raise _blocked("transport_missing", "the email transport secret file does not exist") from exc
         if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
             raise _blocked("transport_missing", "the email transport secret file must be a regular file with mode 0600")
+        # Owned by this uid: a file another uid placed or swapped in is not ours
+        # to send with (P1 portal secrets, phase 0 — reduces, does not close).
+        if info.st_uid != os.getuid():
+            raise _blocked("transport_missing", "the email transport secret file must be owned by this user")
         try:
             password = json.loads(secret_path.read_text(encoding="utf-8"))["password"]
         except (OSError, ValueError, KeyError, TypeError) as exc:

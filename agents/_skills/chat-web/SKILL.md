@@ -38,21 +38,18 @@ code** instead of bouncing the work back to the user. You are the team; the user
 is the client. Figure it out.
 
 ### Example: sending an email — you do NOT need an MCP/Gmail tool
-The team already has email credentials at
-`$JHT_HOME/credentials/email_monitor.json` (a Gmail app-password — valid for SMTP
-too). Write a tiny Python script and send it:
+The team already has a configured mailbox. Send through the script: it reads
+the account by itself and prints only `{"ok": true, ...}` or a reason code.
 
-```python
-import os, json, smtplib, ssl
-from email.message import EmailMessage
-c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
-m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<recipient>", "<subject>"
-m.set_content("<body>")
-# Gmail: smtp.gmail.com:465. For another provider derive smtp.<domain> or map it.
-with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-    s.login(c["user"], c["password"]); s.send_message(m)
+```bash
+printf '%s\n' "<body>" > /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
 ```
+
+**Never open, `cat`, `json.load` or print anything under `$JHT_HOME/credentials/`**,
+and never put a password in a script, a chat or a log: the script is the only
+thing that touches the account. `"reason": "not_configured"` means no mailbox is
+set up yet: tell the user it is configured in the desktop app's settings.
 
 Then reply "Done, sent ✅" — never "go authorize Gmail".
 

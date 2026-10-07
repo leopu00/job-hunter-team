@@ -17,6 +17,7 @@ import { PermissionPolicy, type PermissionAsker } from "../core/permissions.ts";
 import type { ProviderPort } from "../core/provider/port.ts";
 import { createBashTool } from "./bash.ts";
 import { connectMcpFromFile, type McpServerStatus } from "./mcp.ts";
+import { portalSecretPaths } from "./paths.ts";
 import type { ToolHandler } from "./registry.ts";
 import { createSandbox, type SandboxKind } from "./sandbox.ts";
 import { createWebFetchTool, type WebFetchOptions } from "./web-fetch.ts";
@@ -89,7 +90,11 @@ export async function buildToolkit(
   const mcp = config.mcpConfig ? await connectMcpFromFile(config.mcpConfig) : undefined;
   // The shell's boundary: writes in the role's working folder and a temporary one
   // only, the MCP config (its servers' Bearer headers) unreadable like a .env.
-  const sandbox = createSandbox({ workdir, protectedPaths: config.mcpConfig ? [config.mcpConfig] : [] });
+  // The JHT home's portal secrets too (P1, phase 0: reduces, does not close).
+  const sandbox = createSandbox({
+    workdir,
+    protectedPaths: [...(config.mcpConfig ? [config.mcpConfig] : []), ...portalSecretPaths(process.env["JHT_HOME"])],
+  });
 
   return {
     platform: PLATFORM_NAMES[platform()] ?? platform(),

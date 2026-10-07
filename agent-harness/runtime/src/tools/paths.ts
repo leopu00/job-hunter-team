@@ -47,9 +47,23 @@ export function displayPath(path: string, home: string = homedir()): string {
   return path.startsWith(home + sep) ? `~${sep}${path.slice(home.length + 1)}` : path;
 }
 
-const SECRET_DIRS = new Set([".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gcloud", ".config/gh"]);
+// `credentials` and `.cache/linkedin`: the JHT home's portal secrets — LinkedIn
+// and ATS passwords, the mailbox login, the LinkedIn session (P1 portal secrets,
+// phase 0). A folder of that name is a secret wherever it sits.
+const SECRET_DIRS = new Set([
+  ".ssh",
+  ".aws",
+  ".gnupg",
+  ".kube",
+  ".docker",
+  ".azure",
+  ".config/gcloud",
+  ".config/gh",
+  "credentials",
+  ".cache/linkedin",
+]);
 const SECRET_FILE =
-  /^(\.env(\..+)?|\.netrc|\.npmrc|\.pypirc|\.pgpass|\.git-credentials|credentials(\.json)?|.*token.*|.*-key\.txt|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|.*\.(pem|key|p12|pfx|keychain-db))$/i;
+  /^(\.env(\..+)?|\.netrc|\.npmrc|\.pypirc|\.pgpass|\.git-credentials|credentials(\.json)?|.*token.*|.*-key\.txt|storage-state\.json|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|.*\.(pem|key|p12|pfx|keychain-db))$/i;
 
 /**
  * True for files that commonly hold credentials: `.env` files, SSH and cloud
@@ -64,6 +78,19 @@ export function isSensitivePath(path: string): boolean {
   if (SECRET_FILE.test(name)) return true;
   const segments = path.split(sep);
   return segments.some((segment, i) => SECRET_DIRS.has(segment) || SECRET_DIRS.has(`${segment}/${segments[i + 1]}`));
+}
+
+/**
+ * The JHT home's portal-secret folders, as concrete paths for the sandbox,
+ * which masks what exists rather than matching names (bubblewrap). `jhtHome`
+ * as the runtime reads it: `JHT_HOME`, `~/.jht` when unset.
+ *
+ * This reduces, it does not close: the CLI agents run without this sandbox
+ * and with the same uid that owns these files.
+ */
+export function portalSecretPaths(jhtHome: string | undefined, home: string = homedir()): string[] {
+  const root = resolveUserPath(jhtHome?.trim() || "~/.jht", home, home);
+  return [join(root, "credentials"), join(root, ".cache", "linkedin")];
 }
 
 /** A folder with this name holds the runtime's state wherever it is mounted. */
