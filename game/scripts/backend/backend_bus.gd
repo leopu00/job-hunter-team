@@ -134,7 +134,7 @@ var positions_are_demo := false
 var transitions: Array = []  # ultime ~80 transizioni di stato (registro team)
 ## Config team + usage reali (solo campi safe), per sezione della
 ## sidebar: {provider|hours|email|advanced: [[etichetta, valore], …],
-## usage: {window_h, per_agent_kt, generated_at}}.
+## usage: {window_h, per_agent_kt, generated_at, per_role}}.
 var live_settings: Dictionary = {}
 var telemetry: Dictionary = {}
 var telemetry_history: Array = []

@@ -727,6 +727,7 @@ const S := {
 	"agents.back": "◀ AGENTES",
 	"agents.not_active": "não ativo agora",
 	"agents.consumption": "CONSUMO (ÚLTIMAS %s HORAS)",
+	"agents.role_share": "PARTE DO PAPEL (JANELA DE 5 HORAS)",
 	"agents.registry_actions": "AÇÕES NO REGISTRO",
 	"agents.no_transitions": "nenhuma transição recente em seu nome",
 	"agents.active_count": "%d agentes ATIVOS na VPS neste momento",

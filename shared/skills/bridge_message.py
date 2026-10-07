@@ -176,6 +176,27 @@ def derive_advice(v):
     return out
 
 
+def role_usage_lines(windows):
+    """`ROLE-USAGE[5h] scout=31% analista=22% … unattributed=3%`, una riga per
+    finestra (5h, poi week). Ruoli in ordine di consumo; una finestra senza
+    token non produce riga."""
+    if not isinstance(windows, dict):
+        return []
+    out = []
+    for name in ("5h", "week"):
+        w = windows.get(name)
+        if not isinstance(w, dict) or not (w.get("total_kt") or 0) > 0:
+            continue
+        roles = w.get("roles") or {}
+        parts = [f"{role}={r.get('share_pct', 0):g}%"
+                 for role, r in roles.items() if isinstance(r, dict)]
+        unattributed = w.get("unattributed_pct") or 0
+        if unattributed:
+            parts.append(f"unattributed={unattributed:g}%")
+        out.append(f"ROLE-USAGE[{name}] " + " ".join(parts) + f" ({w.get('total_kt'):g} kT)")
+    return out
+
+
 def render(v):
     """Dict di valori → testo del tick (3 sezioni + consiglio). Funzione pura."""
     ts = v.get("ts_now", "?")
@@ -235,6 +256,13 @@ def render(v):
             tail.append(f"lockout ~{wk['early_lockout']:.0f}h")
         if tail:
             lines.append("   " + "   ·   ".join(tail))
+        lines.append("")
+
+    # ── 👥 CONSUMO PER RUOLO (solo misura) ──
+    ru_lines = role_usage_lines((v.get("extras") or {}).get("role_usage"))
+    if ru_lines:
+        lines.append("👥  ROLE USAGE  (share of the team's tokens)")
+        lines.extend(f"   {line}" for line in ru_lines)
         lines.append("")
 
     # ── 🧭 CONSIGLIO ──

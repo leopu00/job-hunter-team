@@ -160,4 +160,12 @@ try:
                     'generated_at': str(u.get('generated_at', ''))}
 except Exception:
     pass
+try:
+    ru = json.load(open('/jht_home/logs/role-usage.json'))
+    w5 = (ru.get('windows') or {}).get('5h') or {}
+    shares = {str(k): float(v.get('share_pct') or 0)
+              for k, v in (w5.get('roles') or {}).items() if isinstance(v, dict)}
+    out.setdefault('usage', {})['per_role'] = shares
+except Exception:
+    pass
 print(json.dumps(out, ensure_ascii=False))
