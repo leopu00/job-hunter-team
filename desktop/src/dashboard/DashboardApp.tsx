@@ -49,6 +49,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
   sendOnboardingProviderInput,
@@ -116,6 +117,18 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const stage = CONTAINER_RUNTIME_ERRORS.has(value.code)
     ? "container"
     : PROVIDER_RUNTIME_ERRORS.has(value.code) ? "provider" : "runtime";
+  if (value.code === "podman_machine_mounts_home") {
+    const described = describeError(value.code);
+    return {
+      status: "failed",
+      stage: "runtime",
+      title: "Macchina Podman da ricreare",
+      message: described.text,
+      action: described.action,
+      code: value.code,
+      retryable: false,
+    };
+  }
   if (value.code === "container_version_incompatible") {
     return {
       status: "failed",
@@ -1004,6 +1017,20 @@ export default function DashboardApp() {
     return finishAssistant();
   }, [connectResumedAssistant, finishAssistant, gate, loginProvider, resumeTeam]);
 
+  // Only from the confirmation on the podman_machine_mounts_home error: the
+  // machine is deleted and created again, then the setup starts over.
+  const recreatePodmanMachine = useCallback(async () => {
+    setRuntime({ status: "working", stage: "runtime", message: "Ricreo la macchina Podman con le sole cartelle di Job Hunter Team." });
+    try {
+      await recreateOnboardingPodmanMachine();
+    } catch (error) {
+      failLocalRuntime(error);
+    }
+    const submission = submissionRef.current;
+    if (submission) return prepareTechnicalSetup(submission);
+    return resumeAssistant();
+  }, [failLocalRuntime, prepareTechnicalSetup, resumeAssistant, setRuntime]);
+
   const retry = useCallback(async () => {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
@@ -1128,6 +1155,7 @@ export default function DashboardApp() {
         onProviderClose={closeProviderLogin}
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
+        onRecreatePodmanMachine={recreatePodmanMachine}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
       />

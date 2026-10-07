@@ -70,8 +70,9 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart"> & { host: ExecutionHost }) {
+function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine"> & { host: ExecutionHost }) {
   const [pending, setPending] = useState(false);
+  const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
@@ -82,6 +83,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
   useEffect(() => {
     setPending(false);
     setActionFailed(false);
+    setConfirmingRecreate(false);
   }, [runtime.status, "stage" in runtime ? runtime.stage : "ready"]);
 
   useEffect(() => {
@@ -175,6 +177,10 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
     : runtime.stage === "team-start"
       ? "Avvia la squadra"
       : runtime.stage === "ssh-host-key" ? "Conferma fingerprint" : "Accedi al provider";
+  // Deleting the machine is never one click: the first button only asks.
+  const recreatePodmanMachine = failed && runtime.code === "podman_machine_mounts_home" && host.kind === "local"
+    ? onRecreatePodmanMachine
+    : undefined;
   const action = failed
     ? onRetry
     : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
@@ -267,6 +273,11 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
               </dl>
             </section>
           )}
+          {recreatePodmanMachine && confirmingRecreate && (
+            <section className="onboarding-provider-console" aria-label="Conferma ricreazione macchina Podman">
+              <div className="onboarding-provider-console__heading"><div><strong>Cancellare e ricreare la macchina Podman di JHT?</strong><small>La macchina viene cancellata e creata di nuovo con le sole cartelle ~/.jht e Documenti › Job Hunter Team. I tuoi dati in queste due cartelle restano; l’immagine del team viene scaricata di nuovo. Le altre macchine Podman non vengono toccate.</small></div></div>
+            </section>
+          )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
           <div className="onboarding-runtime-actions">
@@ -277,6 +288,19 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
               <button className="onboarding-secondary" type="button" onClick={onExitFailure} disabled={pending}>
                 Torna alla scelta ambiente
               </button>
+            )}
+            {recreatePodmanMachine && !confirmingRecreate && (
+              <button className="onboarding-primary" type="button" onClick={() => setConfirmingRecreate(true)} disabled={pending}>
+                Ricrea la macchina Podman<span aria-hidden="true">→</span>
+              </button>
+            )}
+            {recreatePodmanMachine && confirmingRecreate && (
+              <>
+              <button className="onboarding-secondary" type="button" onClick={() => setConfirmingRecreate(false)} disabled={pending}>Annulla</button>
+              <button className="onboarding-primary" type="button" onClick={() => invoke(recreatePodmanMachine, false)} disabled={pending}>
+                {pending ? "Ricreazione in corso…" : "Sì, cancella e ricrea"}<span aria-hidden="true">→</span>
+              </button>
+              </>
             )}
             {((failed && runtime.retryable !== false) || actionRequired) && (
               <>
@@ -293,7 +317,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine }: OnboardingFlowProps) {
   const localRuntimeSupported = platform === "macos" || platform === "linux";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
@@ -312,7 +336,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));

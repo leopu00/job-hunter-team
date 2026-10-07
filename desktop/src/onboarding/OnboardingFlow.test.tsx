@@ -203,6 +203,52 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Cosa fare: Riprova l’avvio.");
   });
 
+  it("recreates the Podman machine only after a second, explicit confirmation", async () => {
+    const user = userEvent.setup();
+    // Still running: a double click must not start a second recreation.
+    const onRecreatePodmanMachine = vi.fn(() => new Promise<void>(() => undefined));
+    const mountsFailure = {
+      status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false,
+      title: "Macchina Podman da ricreare",
+      message: "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono a Job Hunter Team.",
+      action: "Ricrea la macchina Podman.",
+    } as const;
+    const { props } = renderFlow({ runtime: mountsFailure, onRecreatePodmanMachine });
+
+    expect(screen.queryByRole("button", { name: "Riprova la preparazione" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/correggi i dati indicati/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^ricrea la macchina podman/i }));
+    expect(onRecreatePodmanMachine).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Conferma ricreazione macchina Podman" }))
+      .toHaveTextContent("I tuoi dati in queste due cartelle restano");
+
+    await user.click(screen.getByRole("button", { name: "Annulla" }));
+    expect(screen.queryByRole("region", { name: "Conferma ricreazione macchina Podman" })).not.toBeInTheDocument();
+    expect(onRecreatePodmanMachine).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^ricrea la macchina podman/i }));
+    await user.dblClick(screen.getByRole("button", { name: /sì, cancella e ricrea/i }));
+    expect(onRecreatePodmanMachine).toHaveBeenCalledOnce();
+    expect(props.onRetry).not.toHaveBeenCalled();
+  });
+
+  it("offers no Podman machine recreation for another error or a server setup", () => {
+    const onRecreatePodmanMachine = vi.fn().mockResolvedValue(undefined);
+    const { unmount } = renderFlow({
+      runtime: { status: "failed", stage: "runtime", code: "runtime_missing", retryable: false, message: "Runtime mancante." },
+      onRecreatePodmanMachine,
+    });
+    expect(screen.queryByRole("button", { name: /ricrea la macchina podman/i })).not.toBeInTheDocument();
+    unmount();
+
+    renderFlow({
+      platform: "windows",
+      runtime: { status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false, message: "Macchina." },
+      onRecreatePodmanMachine,
+    });
+    expect(screen.queryByRole("button", { name: /ricrea la macchina podman/i })).not.toBeInTheDocument();
+  });
+
   it("presents a version mismatch once, keeps diagnostics closed and focuses each new failure once", async () => {
     let result!: ReturnType<typeof renderFlow>;
     const onExitFailure = vi.fn(() => {

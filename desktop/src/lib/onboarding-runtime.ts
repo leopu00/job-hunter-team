@@ -215,6 +215,15 @@ export async function confirmOnboardingSshHostKey(
   });
 }
 
+/**
+ * Deletes the JHT Podman machine and creates it again with only the two JHT
+ * folders. Called only after the person confirmed it.
+ */
+export async function recreateOnboardingPodmanMachine(): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_podman_machine_recreate");
+}
+
 export async function prepareOnboardingRuntime(
   submission: OnboardingSubmission,
   pairingToken: string | null,

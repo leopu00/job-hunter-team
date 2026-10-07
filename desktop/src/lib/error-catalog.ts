@@ -333,6 +333,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The container engine did not start.",
     "Try again. If it happens again, restart the computer.",
   ),
+  podman_machine_mounts_home: copy(
+    "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono a Job Hunter Team.",
+    "Ricrea la macchina Podman: i tuoi dati in ~/.jht e in Documenti › Job Hunter Team restano dove sono.",
+    "The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs.",
+    "Recreate the Podman machine: your data in ~/.jht and in Documents › Job Hunter Team stays where it is.",
+  ),
+  podman_machine_recreate_failed: copy(
+    "La macchina Podman di JHT non è stata ricreata.",
+    "Riprova. Se si ripete, riavvia il computer.",
+    "The JHT Podman machine was not recreated.",
+    "Try again. If it happens again, restart the computer.",
+  ),
   runtime_download_failed: RUNTIME_PREPARE,
   runtime_install_failed: RUNTIME_PREPARE,
   runtime_failed: RUNTIME_PREPARE,
