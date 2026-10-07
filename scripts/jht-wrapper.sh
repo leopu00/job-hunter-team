@@ -1444,11 +1444,17 @@ upgrade_verify_running() {
   # 20 osservazioni prima di dichiarare rotto il candidato. JHT_UPGRADE_VERIFY_TRIES
   # serve ai test del ripristino: con un candidato che non passa mai, ogni giro
   # costa una decina di processi e i 20 giri sfioravano il timeout di vitest.
-  # Un valore che non e' un intero positivo vale 20.
+  # Un valore che non e' un intero positivo da 1 a 9999 vale 20 (piu' cifre
+  # andrebbero in overflow e la verifica non finirebbe). `10#`: le cifre sono
+  # in base dieci anche con uno zero davanti; altrimenti Bash legge `010` come 8
+  # e `08` come un errore, che con `set -e` chiude il wrapper a meta' verifica,
+  # dopo l'apply e prima del ripristino.
   local tries="${JHT_UPGRADE_VERIFY_TRIES:-20}"
   case "$tries" in
-    ''|*[!0-9]*|0) tries=20 ;;
+    ''|*[!0-9]*|?????*) tries=20 ;;
   esac
+  tries=$((10#$tries))
+  [ "$tries" -gt 0 ] || tries=20
   while [ "$tries" -gt 0 ]; do
     if container_up && [ -n "$(upgrade_version)" ]; then
       # Un PID 1 che muore appena dopo il primo exec e' un deploy rotto anche

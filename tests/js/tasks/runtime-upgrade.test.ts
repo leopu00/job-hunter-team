@@ -534,6 +534,33 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.journal()).toBe(false);
   });
 
+  // JHT_UPGRADE_VERIFY_TRIES arriva come testo: `08` passa il controllo delle
+  // cifre, ma l'aritmetica di Bash lo leggerebbe in ottale e con `set -e` il
+  // wrapper uscirebbe a meta' verifica, dopo l'apply e prima del ripristino
+  // (e `010` varrebbe 8). Qui gira la funzione vera, estratta dal wrapper, con
+  // il candidato che non passa mai: si contano le osservazioni.
+  it("JHT_UPGRADE_VERIFY_TRIES si legge in base dieci: 08 sono otto osservazioni", () => {
+    const fn = readFileSync(WRAPPER, "utf8").match(/^upgrade_verify_running\(\) \{\n[\s\S]*?\n\}\n/m)?.[0];
+    expect(fn).toBeTruthy();
+    for (const [value, rounds] of [["08", 8], ["010", 10]] as const) {
+      const log = path.join(mkdtempSync(path.join(tmpdir(), "jht-verify-tries-")), "observations");
+      const script = [
+        "set -euo pipefail",
+        'container_up() { echo up >> "$OBSERVATIONS"; }',
+        "upgrade_version() { :; }",
+        "sleep() { :; }",
+        fn,
+        "upgrade_verify_running",
+      ].join("\n");
+      const result = spawnSync("bash", ["-c", script], {
+        encoding: "utf8",
+        env: { ...process.env, OBSERVATIONS: log, JHT_UPGRADE_VERIFY_TRIES: value },
+      });
+      expect(result.status, `${value}: ${result.stderr}`).toBe(1);
+      expect(readFileSync(log, "utf8").trim().split("\n"), value).toHaveLength(rounds);
+    }
+  });
+
   it("--check --json da un runtime vecchio trova l'immagine nuova senza modificare il deploy", () => {
     const sb = makeSandbox();
     const result = run(sb, {}, ["upgrade", "--check", "--json"]);
