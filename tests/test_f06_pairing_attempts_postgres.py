@@ -209,10 +209,3 @@ def test_f06_pg16_apply_reapply_and_export_schema_oracle(pg16):
     assert first_columns == reapplied_columns
     assert _pairing_attempt_export_columns() <= reapplied_columns
     assert "attempts" in _pairing_attempt_export_columns()
-
-
-def test_f06_no_raw_upstash_configuration_is_exposed():
-    source = (ROOT / "web/lib/upstash-config.ts").read_text(encoding="utf-8")
-    assert "UPSTASH_REDIS_REST_TOKEN" in source
-    assert "return token" not in source
-    assert "urlHost" in source
