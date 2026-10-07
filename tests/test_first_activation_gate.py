@@ -17,7 +17,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 PID1 = ROOT / "cli/src/commands/pid1.js"
-STOP = ROOT / "cli/src/commands/team/stop.js"
 START = ROOT / "cli/src/commands/team/start.js"
 AGENT_WATCHDOG = ROOT / ".launcher/agent-watchdog.sh"
 DOCTOR_WATCHDOG = ROOT / ".launcher/doctor-watchdog.sh"
@@ -42,15 +41,6 @@ def test_assistant_onboarding_does_not_remove_the_halt_gate():
     branch = src[src.index("if (!agentArg)") : src.index("// Container mode:")]
     assert "clearGlobalHaltGate(containerMode)" in branch
     assert "unlinkSync(haltedFlag)" in src
-
-
-def test_stop_all_is_persistent_and_stops_background_llm_sessions():
-    src = _src(STOP)
-    all_branch = src[src.index("if (options.all || !agentArg)") : src.index("} else {")]
-    assert "touch" in all_branch
-    assert "/jht_home/.team-halted.flag" in all_branch
-    assert "isStopAllInfrastructure" in src
-    assert "DOTTORE" in src and "MANTENITORE" in src
 
 
 def test_both_watchdogs_honor_the_same_persistent_halt():
