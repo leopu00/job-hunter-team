@@ -928,6 +928,7 @@ describe("DashboardApp onboarding router", () => {
   });
 
   it("says when exhausted provider limits free again instead of starting", async () => {
+    vi.setSystemTime(new Date(2026, 9, 8, 12, 0));
     vi.mocked(useSession).mockReturnValue(signedInAs("limits-exhausted-account"));
     requireOnboarding();
     vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
@@ -951,6 +952,34 @@ describe("DashboardApp onboarding router", () => {
     expect(document.body).not.toHaveTextContent("native text that must not show");
     expect(document.body).not.toHaveTextContent("{time}");
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("names the next day when exhausted provider limits free after midnight", async () => {
+    vi.setSystemTime(new Date(2026, 9, 8, 23, 30));
+    vi.mocked(useSession).mockReturnValue(signedInAs("limits-exhausted-overnight-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600;
+    vi.mocked(startOnboardingTeam).mockRejectedValue({
+      code: "provider_limits_exhausted",
+      message: "native text that must not show",
+      retryable: true,
+      resetsAt,
+    });
+    const resetDate = new Date(resetsAt * 1000);
+    const time = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" })
+      .format(resetDate);
+    const day = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" })
+      .format(resetDate);
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(`esauriti fino alle ${time} di ${day}`);
+    expect(document.body).toHaveTextContent(`Cosa fare: Riprova dopo le ${time} di ${day}.`);
+    expect(document.body).not.toHaveTextContent("native text that must not show");
+    expect(document.body).not.toHaveTextContent("{time}");
   });
 
   it("starts anyway and warns when the provider limits could not be verified", async () => {
