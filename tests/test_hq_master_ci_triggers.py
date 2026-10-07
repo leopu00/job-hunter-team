@@ -9,6 +9,10 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 HQ_GATES = ("ci.yml", "lint.yml", "test.yml", "security.yml")
+# Rami in piu' voluti, gate per gate. Tests gira anche sul push di
+# master-arthur (07/10): senza, i test Rust del desktop non partivano da soli
+# su quel ramo. Un ramo che compare senza stare qui resta un rosso.
+EXTRA_PUSH_BRANCHES = {"test.yml": {"master-arthur"}}
 
 
 def _workflow(name: str):
@@ -23,7 +27,7 @@ def _workflow(name: str):
 def test_hq_master_receives_the_same_push_gates_as_master():
     for name in HQ_GATES:
         branches = _workflow(name)["on"]["push"]["branches"]
-        assert set(branches) == {"master", "hq-master"}, name
+        assert set(branches) == {"master", "hq-master"} | EXTRA_PUSH_BRANCHES.get(name, set()), name
 
 
 def test_deploy_remains_production_only():
