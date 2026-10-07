@@ -329,6 +329,8 @@ def test_with_the_compose_flags_nothing_leads_to_root(probe_image):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "checks done: 0 failed" in result.stdout
     assert "FAIL" not in result.stdout
+    # The setuid probe ran (it answers with a uid, so no `setuid-probe`).
+    assert "applet not found" not in result.stderr, result.stderr
 
 
 @LIVE
@@ -340,5 +342,22 @@ def test_the_check_catches_a_container_that_can_reach_root(probe_image):
         capture_output=True, text=True, timeout=300,
     )
     assert result.returncode == 1
-    for broken in ("id -u is 0", "CapEff is", "chown 0 succeeded", "ran as uid 0", "owned by root"):
-        assert broken in result.stdout, (broken, result.stdout)
+    # Every check that must break as root, by its tag: the messages may change,
+    # the set may not. `setuid` proves the probe really ran (an empty answer
+    # would be `setuid-probe`); `host-root` is the host's view of the folder.
+    assert fail_tags(result.stdout) == {"uid", "capeff", "nnp", "chown", "setuid", "host-root"}, result.stdout
+
+
+def fail_tags(stdout: str) -> set[str]:
+    return set(re.findall(r"^FAIL \[([a-z-]+)\]", stdout, flags=re.MULTILINE))
+
+
+def test_every_fail_line_of_the_check_carries_a_tag():
+    """A FAIL without a tag would be invisible to the assertion above."""
+    source = CHECK.read_text(encoding="utf-8")
+    # Inside the container every failure goes through fail(), which takes the
+    # tag first; on the host every print of a FAIL line opens with a tag.
+    assert re.findall(r"^fail\(\) \{.*$", source, flags=re.MULTILINE) == ['fail() { echo "FAIL [$1] $2"; fails=$((fails + 1)); }']
+    assert not re.search(r'\bfail "', source)
+    emitted = re.findall(r'(?:echo|print\(f?)\s*"FAIL[^"]*', source)
+    assert emitted and all(line.split("FAIL ", 1)[1].startswith("[") for line in emitted), emitted
