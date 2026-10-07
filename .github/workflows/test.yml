@@ -437,7 +437,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-timeout
+          pip install pytest pytest-timeout pytest-xdist
           pip install -r requirements.txt
 
       # `tests/test_apply_flow.py` ([JHT-CLOSER]) lancia un Chromium vero: sono
@@ -477,8 +477,36 @@ jobs:
       # che blocca il test successivo. Nelle run del 26/09 il blocco di 72 test
       # più lento ha impiegato 3 minuti e 13 secondi: nessun test sano arriva
       # a cinque.
+      #
+      # `-n auto` (pytest-xdist): un worker per processore del runner. In un
+      # solo processo il job durava 23 minuti (06/10: 4576 test, 1377 s) ed era
+      # da solo il collo di bottiglia del run. Ogni worker ha la sua sessione,
+      # quindi il suo JHT_HOME temporaneo (tests/conftest.py); i test su
+      # PostgreSQL creano ciascuno un database a nome casuale.
+      # `--dist loadfile`: un file intero su un solo worker, nel suo ordine.
+      # test_tg_bridge_spawn_race.py uccide i bridge per marker su tutto `ps`:
+      # due suoi test su due worker si ucciderebbero i processi a vicenda. E le
+      # fixture di modulo (un container o un database PostgreSQL per file)
+      # partono una volta sola invece che una per worker. Con le durate del
+      # 06/10 il file piu' lento (128 s) sta sotto la quota di un worker
+      # (~350 s su 4).
+      # Fra file, invece, l'ordine non e' piu' quello alfabetico: un file che
+      # lascia stato in giro colpisce quelli che prima giravano prima di lui.
+      # Il 07/10 la suite e' stata confrontata test per test in sequenza, con
+      # i file in ordine inverso e con 4 worker: stessi 4576 test, stessi esiti.
+      # Con xdist il test appeso fa cadere il suo worker: la riga «worker 'gwN'
+      # crashed while running '<test>'» ne porta il nome, e la run prosegue con
+      # un worker nuovo.
+      #
+      # xdist non stampa i deselezionati nella riga finale: la raccolta qui
+      # sotto li conta prima della run (4614 raccolti, 38 deselezionati il
+      # 06/10), e la somma degli esiti della run deve tornare uguale ai
+      # selezionati.
+      - name: Count pytest selection
+        run: python -m pytest tests/ -q --collect-only -m "not production" | tail -1
+
       - name: Run pytest
-        run: python -m pytest tests/ -v -m "not production" --timeout=300 --timeout-method=thread
+        run: python -m pytest tests/ -v -n auto --dist loadfile -m "not production" --timeout=300 --timeout-method=thread
 
   # Spec end-to-end. Gira TUTTO ciò che non è in quarantena: le 75 spec
   # storiche testavano un sito che non esiste più (pagine rimosse, plane locale

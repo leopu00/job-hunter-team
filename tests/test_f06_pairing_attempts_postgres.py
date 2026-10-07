@@ -164,11 +164,17 @@ def test_f06_migration_is_collision_gated_and_tenant_bound():
 
 
 def test_f06_pg16_apply_reapply_and_export_schema_oracle(pg16):
+    # Roles belong to the cluster, not to the throwaway database: in CI every
+    # PostgreSQL test shares one server, and under pytest-xdist another file may
+    # have created them first. Same guard as test_manual_application_rpc_pg16.py.
     pg16(
         """
-        CREATE ROLE anon NOLOGIN;
-        CREATE ROLE authenticated NOLOGIN;
-        CREATE ROLE service_role NOLOGIN;
+        DO $$ BEGIN CREATE ROLE anon NOLOGIN;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+        DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+        DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$;
         CREATE SCHEMA auth;
         CREATE TABLE auth.users (id uuid PRIMARY KEY);
         """

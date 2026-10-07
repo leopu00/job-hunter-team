@@ -151,17 +151,20 @@ def test_interactive_login_never_opens_a_second_browser_on_a_held_profile(tmp_pa
     assert not record.exists()
 
 
+# The expiry is an offset from the moment the test runs, not a timestamp taken
+# at collection: under pytest-xdist every worker collects on its own, and an
+# absolute time in the test id makes the workers disagree on the test list.
 @pytest.mark.parametrize(
-    "expires, host, name, state",
+    "expires_in, host, name, state",
     (
-        (time.time() + 3600, ".www.linkedin.com", "li_at", "valid"),
-        (time.time() - 3600, ".www.linkedin.com", "li_at", "expired"),
-        (time.time() + 3600, ".linkedin.com.example.invalid", "li_at", "absent"),
-        (time.time() + 3600, ".www.linkedin.com", "JSESSIONID", "absent"),
+        (3600, ".www.linkedin.com", "li_at", "valid"),
+        (-3600, ".www.linkedin.com", "li_at", "expired"),
+        (3600, ".linkedin.com.example.invalid", "li_at", "absent"),
+        (3600, ".www.linkedin.com", "JSESSIONID", "absent"),
     ),
 )
-def test_the_session_cookie_is_judged_by_host_name_and_expiry_only(tmp_path: Path, expires, host, name, state):
-    write_cookie_db(tmp_path, expires=expires, host=host, name=name)
+def test_the_session_cookie_is_judged_by_host_name_and_expiry_only(tmp_path: Path, expires_in, host, name, state):
+    write_cookie_db(tmp_path, expires=time.time() + expires_in, host=host, name=name)
     assert linkedin_apply.session_cookie_state(tmp_path) == state
 
 
