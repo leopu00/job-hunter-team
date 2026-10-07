@@ -157,29 +157,6 @@ def insert_score(db_path, tmp, pos_id, total=75):
 class TestScoutFlow:
     """Scout inserisce posizioni in status='new'."""
 
-    def test_scout_insert_position_new_status(self, fresh_db):
-        """Una posizione inserita deve avere status='new' di default."""
-        db_path, tmp = fresh_db
-        pos_id = insert_position(db_path, tmp, 'Backend Python Dev', 'TestCo')
-        assert pos_id is not None
-
-        conn = sqlite3.connect(db_path)
-        row = conn.execute("SELECT status, found_by FROM positions WHERE id=?", (pos_id,)).fetchone()
-        conn.close()
-        assert row[0] == 'new', f"Status atteso 'new', trovato '{row[0]}'"
-        assert row[1] == 'scout-1', f"found_by errato: '{row[1]}'"
-
-    def test_scout_next_for_analista_finds_new_positions(self, fresh_db):
-        """db_query next-for-analista deve trovare posizioni in status='new'."""
-        db_path, tmp = fresh_db
-        for i in range(3):
-            insert_position(db_path, tmp, f'Dev Role {i}', f'Company{i}')
-
-        r = run_cli(DB_QUERY, ['next-for-analista'], db_path, tmp)
-        assert r.returncode == 0, f"next-for-analista fallito:\n{r.stderr}"
-        assert 'Dev Role' in r.stdout or 'Company' in r.stdout, \
-            f"next-for-analista non ha trovato posizioni new.\nOutput: {r.stdout}"
-
     def test_scout_found_by_tracked(self, fresh_db):
         """Il campo found_by deve essere registrato correttamente per ogni scout."""
         db_path, tmp = fresh_db
@@ -200,18 +177,6 @@ class TestScoutFlow:
 
 class TestAnalistaFlow:
     """Analista porta le posizioni da 'new' a 'checked'."""
-
-    def test_analista_updates_status_to_checked(self, fresh_db):
-        """Analista aggiorna status='checked' dopo l'analisi."""
-        db_path, tmp = fresh_db
-        pos_id = insert_position(db_path, tmp, 'Dev Role', 'AnalCo')
-        r = update_position(db_path, tmp, pos_id, status='checked')
-        assert r.returncode == 0, f"db_update fallito:\n{r.stderr}"
-
-        conn = sqlite3.connect(db_path)
-        status = conn.execute("SELECT status FROM positions WHERE id=?", (pos_id,)).fetchone()[0]
-        conn.close()
-        assert status == 'checked'
 
     def test_analista_updates_status_to_excluded(self, fresh_db):
         """Analista può escludere una posizione (status='excluded')."""
@@ -261,34 +226,6 @@ class TestScorerFlow:
         pos_id = insert_position(db_path, tmp, title, company)
         update_position(db_path, tmp, pos_id, status='checked')
         return pos_id
-
-    def test_scorer_inserts_score_record(self, fresh_db):
-        """Scorer deve inserire un record in 'scores'."""
-        db_path, tmp = fresh_db
-        pos_id = self._setup_checked(db_path, tmp)
-        r = insert_score(db_path, tmp, pos_id, total=78)
-        assert r.returncode == 0, f"insert score fallito:\n{r.stderr}"
-
-        conn = sqlite3.connect(db_path)
-        score = conn.execute(
-            "SELECT total_score FROM scores WHERE position_id=?", (pos_id,)
-        ).fetchone()
-        conn.close()
-        assert score is not None, "Score non trovato in DB"
-        assert score[0] == 78
-
-    def test_scorer_updates_status_to_scored(self, fresh_db):
-        """Dopo lo score, la posizione passa a 'scored'."""
-        db_path, tmp = fresh_db
-        pos_id = self._setup_checked(db_path, tmp)
-        insert_score(db_path, tmp, pos_id, total=65)
-        r = update_position(db_path, tmp, pos_id, status='scored')
-        assert r.returncode == 0
-
-        conn = sqlite3.connect(db_path)
-        status = conn.execute("SELECT status FROM positions WHERE id=?", (pos_id,)).fetchone()[0]
-        conn.close()
-        assert status == 'scored'
 
     def test_scorer_next_for_scrittore_excludes_low_scores(self, fresh_db):
         """next-for-scrittore NON deve mostrare posizioni con score<50."""

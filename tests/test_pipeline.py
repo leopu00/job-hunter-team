@@ -300,9 +300,10 @@ class TestDbUpdatePosition:
         """db_update.py deve aggiornare lo status a 'scored'."""
         pos_id = self._setup(tmp_db, tmp_path)
 
-        run_cli(DB_UPDATE, [
+        result = run_cli(DB_UPDATE, [
             'position', str(pos_id), '--status', 'scored'
         ], tmp_db, tmp_path)
+        assert result.returncode == 0, f"Update fallito:\n{result.stderr}"
 
         conn = sqlite3.connect(tmp_db)
         row = conn.execute(
