@@ -182,8 +182,12 @@ def test_desktop_delegates_podman_machine_orchestration_to_host_entrypoints():
         'podman machine inspect "$PODMAN_MACHINE_NAME"',
         'podman machine start --update-connection=false "$PODMAN_MACHINE_NAME"',
     )
+    # Only the two folders the compose binds are mounted into the machine.
     assert (
-        'podman machine init --now --update-connection=false "$PODMAN_MACHINE_NAME"'
+        "podman machine init --now --update-connection=false \\\n"
+        '      --volume "$jht_home_dir:$jht_home_dir" \\\n'
+        '      --volume "$jht_docs_dir:$jht_docs_dir" \\\n'
+        '      "$PODMAN_MACHINE_NAME"'
         in podman_install
     )
     assert 'podman --connection "$PODMAN_MACHINE_NAME" info' in podman_install

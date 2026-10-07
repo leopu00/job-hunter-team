@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 import pytest
+from podman_machine_fixture import write_machine_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -101,6 +102,7 @@ def _sandbox(tmp_path: Path, *, wrapper_exists: bool = True) -> dict[str, object
         "JHT_RAW_BASE": source.as_uri(),
         "PATH": f"{spy_bin}:{os.environ.get('PATH', '')}",
     }
+    write_machine_config(home, env)
     return {
         "home": home,
         "runtime": runtime,

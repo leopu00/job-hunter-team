@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 import pytest
+from podman_machine_fixture import write_machine_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,6 +164,7 @@ esac
         "JHT_TEST_CONFIG_HASH": "a" * 64,
         "JHT_CONTAINER_NAME": "same-name-decoy",
     }
+    write_machine_config(home, env)
     return binary, env, log
 
 

@@ -455,6 +455,18 @@ install_podman_macos() {
     || fail "Podman Compose provider version probe failed."
   printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0' \
     || fail "JHT requires podman-compose 1.6.0 for this runtime release."
+  # The only Mac folders the JHT machine may see are the two the compose
+  # file binds. Without --volume, `podman machine init` on macOS mounts
+  # /Users (every user's home), /private, /var/folders and
+  # ~/.config/containers (measured on 08/10/2026). A declared folder that
+  # does not exist stops the machine from booting, so both are created
+  # before init and before every start.
+  local jht_home_dir="$HOME/.jht" jht_docs_dir="$HOME/Documents/Job Hunter Team"
+  if [ ! -d "$jht_home_dir" ]; then
+    mkdir -p "$jht_home_dir" && chmod 700 "$jht_home_dir" \
+      || fail "Cannot create $jht_home_dir for the Podman machine."
+  fi
+  mkdir -p "$jht_docs_dir" || fail "Cannot create $jht_docs_dir for the Podman machine."
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
@@ -465,7 +477,10 @@ install_podman_macos() {
     fi
   else
     info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
-    podman machine init --now --update-connection=false "$PODMAN_MACHINE_NAME" \
+    podman machine init --now --update-connection=false \
+      --volume "$jht_home_dir:$jht_home_dir" \
+      --volume "$jht_docs_dir:$jht_docs_dir" \
+      "$PODMAN_MACHINE_NAME" \
       || fail "Podman machine initialization failed; Colima was not changed."
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \

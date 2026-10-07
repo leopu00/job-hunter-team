@@ -349,8 +349,18 @@ function enableExactPodmanHarness(sb: Sandbox): PodmanHarness {
   );
   writeFileSync(manifest, lines.join("\n"), "utf8");
 
+  // The wrapper refuses a Podman machine that mounts more of the Mac than the
+  // two JHT folders, reading the machine's own config (as Podman 6.1 writes it).
+  const configHome = path.join(sb.root, ".config");
+  const machineConfig = path.join(configHome, "containers", "podman", "machine", "applehv", "jht-podman.json");
+  mkdirSync(path.dirname(machineConfig), { recursive: true });
+  const mounts = [path.join(sb.root, ".jht"), path.join(sb.root, "Documents", "Job Hunter Team")]
+    .map((source) => ({ Source: source, Target: source, Type: "virtiofs" }));
+  writeFileSync(machineConfig, JSON.stringify({ Mounts: mounts, Name: "jht-podman" }), "utf8");
+
   return {
     env: {
+      XDG_CONFIG_HOME: configHome,
       FAKE_LABEL_HASH: labelHash,
       FAKE_LABEL_CONFIG: labelConfig,
       FAKE_LABEL_WORKING: labelWorking,

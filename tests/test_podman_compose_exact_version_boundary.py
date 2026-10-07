@@ -16,6 +16,7 @@ import shutil
 import subprocess
 
 import pytest
+from podman_machine_fixture import write_machine_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -589,6 +590,7 @@ esac
         "JHT_INSTALLER_SOURCE_ONLY": "1",
     }
     env.pop("CONTAINER_CONNECTION", None)
+    write_machine_config(home, env, machine=MACHINE)
     return wrapper, env, podman_log, create_marker
 
 
