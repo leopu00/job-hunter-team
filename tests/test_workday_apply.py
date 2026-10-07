@@ -58,13 +58,8 @@ CLOSED = (
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        current = browser.new_context().new_page()
-        yield current
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 def run(page, tmp_path: Path, html: str, monkeypatch, profile: dict | None = None):
@@ -256,7 +251,7 @@ def test_a_closed_posting_is_a_closed_vacancy(page, tmp_path: Path, monkeypatch)
 
 def test_a_posting_that_never_renders_is_unavailable_not_unsupported(page, tmp_path: Path, monkeypatch):
     monkeypatch.setattr(workday_apply, "RENDER_WAIT_MS", 800)
-    monkeypatch.setattr(workday_apply.stop_for, "__defaults__", (800,), raising=False)
+    monkeypatch.setattr(workday_apply.stop_for, "__kwdefaults__", {"wait_ms": 800})
 
     _flow, result = run(page, tmp_path, "<html><body><div id='root'></div></body></html>", monkeypatch)
 

@@ -70,12 +70,8 @@ def code_page(box_name: str = "") -> str:
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        yield browser.new_page()
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 @pytest.fixture

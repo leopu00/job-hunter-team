@@ -37,6 +37,14 @@ GONE = "<html><body><h1>This job is no longer available</h1></body></html>"
 
 
 @pytest.fixture
+def chromium(chromium_per_test):
+    """A browser per test here, not one per module: tests of this file start
+    `sync_playwright()` themselves, which cannot run while the module's
+    runtime (tests/conftest.py) is up."""
+    return chromium_per_test
+
+
+@pytest.fixture
 def summary(monkeypatch) -> list:
     """Site stops the flow queues for the round's summary (closer_notices)."""
     import closer_notices

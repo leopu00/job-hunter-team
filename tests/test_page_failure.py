@@ -248,13 +248,8 @@ def test_headed_screen_available_follows_the_live_screen_rule():
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        current = browser.new_page()
-        yield current
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 def _answer(page, status: int, body: str) -> None:

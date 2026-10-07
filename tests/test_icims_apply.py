@@ -135,12 +135,8 @@ class GateVerdict:
 
 
 @pytest.fixture
-def browser():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        launched = runtime.chromium.launch(headless=True)
-        yield launched
-        launched.close()
+def browser(chromium):
+    return chromium
 
 
 @pytest.fixture

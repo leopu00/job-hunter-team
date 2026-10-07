@@ -249,14 +249,8 @@ class Site:
 
 
 @pytest.fixture
-def page():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        context = browser.new_context()
-        current = context.new_page()
-        yield current
-        browser.close()
+def page(chromium):
+    return chromium.new_page()
 
 
 @pytest.fixture

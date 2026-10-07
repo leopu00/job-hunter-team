@@ -46,6 +46,14 @@ SECRET = "synthetic-li-at-value-never-printed"
 _EPOCH_OFFSET_S = 11_644_473_600
 
 
+@pytest.fixture
+def chromium(chromium_per_test):
+    """A browser per test here, not one per module: tests of this file start
+    `sync_playwright()` themselves, which cannot run while the module's
+    runtime (tests/conftest.py) is up."""
+    return chromium_per_test
+
+
 def chromium_time(unix_seconds: float) -> int:
     return int((unix_seconds + _EPOCH_OFFSET_S) * 1_000_000)
 

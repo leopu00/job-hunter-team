@@ -45,12 +45,8 @@ def page_with(browser, body: str, url: str = f"{BASE}/jobs/24335"):
 
 
 @pytest.fixture
-def browser():
-    playwright = pytest.importorskip("playwright.sync_api")
-    with playwright.sync_playwright() as runtime:
-        launched = runtime.chromium.launch(headless=True)
-        yield launched
-        launched.close()
+def browser(chromium):
+    return chromium
 
 
 # ── cookie banners ───────────────────────────────────────────────────────────
