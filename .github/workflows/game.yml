@@ -87,10 +87,13 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      # Il vitest della desktop su Windows e macOS gira solo qui (test.yml lo
+      # gira su Linux). `cargo test` invece non c'e' piu' (07/10): lo stesso
+      # crate, sugli stessi tre sistemi, lo prova il job `desktop-rust` di
+      # test.yml; qui costava 20-94 s per sistema (run 37553157589).
+      # release.yml lo tiene: il rilascio non dipende da un altro workflow.
       - name: Run canonical desktop gates
-        run: |
-          npm --prefix desktop test
-          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
+        run: npm --prefix desktop test
 
       # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
       # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.
