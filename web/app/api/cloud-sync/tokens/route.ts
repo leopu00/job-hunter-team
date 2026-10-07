@@ -53,7 +53,9 @@ export async function GET() {
   // Le colonne client_* sono la telemetria tecnica che il box dichiara
   // ([CLIENT-VERSION-INVISIBLE]): tornano qui perché chi la produce deve
   // poterla rileggere, e questa GET passa dalla RLS del suo proprietario.
-  const BASE_COLUMNS = "id, name, token_prefix, last_used_at, created_at";
+  // expires_at: la lista avvisa prima che il token scolleghi il box.
+  const BASE_COLUMNS =
+    "id, name, token_prefix, last_used_at, created_at, expires_at";
   const list = (columns: string) =>
     supabase
       .from("cloud_sync_tokens")
@@ -103,20 +105,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Scadenza token (audit #1): default 90 giorni per i token creati da UI
-  // (l'utente puo' rigenerarli facilmente). `expires_in_days: null` o `0`
-  // = nessuna scadenza (riservato ai device headless; sconsigliato da UI).
-  // Campo assente → default sicuro 90gg.
-  const DEFAULT_TTL_DAYS = 90;
-  let expiresAt: string | null;
-  if (body.expires_in_days === null || body.expires_in_days === 0) {
-    expiresAt = null;
-  } else {
-    const days =
-      typeof body.expires_in_days === "number" && body.expires_in_days > 0
-        ? body.expires_in_days
-        : DEFAULT_TTL_DAYS;
-    expiresAt = new Date(Date.now() + days * 86_400_000).toISOString();
+  // Scadenza token: nessuna, salvo richiesta esplicita. Fino al 07/10 i token
+  // creati da UI scadevano a 90 giorni (audit #1); per decisione
+  // dell'operatore il default e' tolto, perche' un box il cui token scade
+  // si scollega in silenzio e va ri-pairato a mano. La difesa resta la
+  // revoca dal web (DELETE qui sotto), che verifyBearerToken rispetta subito.
+  // `expires_in_days` > 0 continua a fissare una scadenza; assente, `null` o
+  // `0` = nessuna scadenza. Un valore non valido e' rifiutato: con il default
+  // a "nessuna scadenza", ignorarlo trasformerebbe una scadenza chiesta in un
+  // token perpetuo.
+  const MAX_TTL_DAYS = 3650;
+  const requested = body.expires_in_days;
+  let expiresAt: string | null = null;
+  if (requested !== undefined && requested !== null && requested !== 0) {
+    if (
+      typeof requested !== "number" ||
+      !Number.isFinite(requested) ||
+      requested < 0 ||
+      requested > MAX_TTL_DAYS
+    ) {
+      return NextResponse.json(
+        { error: `expires_in_days non valido (0-${MAX_TTL_DAYS})` },
+        { status: 400 },
+      );
+    }
+    expiresAt = new Date(Date.now() + requested * 86_400_000).toISOString();
   }
 
   const { token, prefix, hash } = generateSyncToken();

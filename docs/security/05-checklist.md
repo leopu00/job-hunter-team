@@ -269,6 +269,7 @@ Second-pass adversarial audit (cloud-sync tokens, agent prompt-injection, route 
   - `cloud_sync_tokens` had no `expires_at`; `lib/cloud-sync/auth.ts` checked only `revoked_at`. Tokens bypass RLS (service_role) and lived forever; web logout didn't revoke them.
   - Fix: migration `036` (`expires_at` nullable — NULL = no-expiry for headless VPS without auto-refresh) + 401 enforcement in `auth.ts` + per-source TTL (UI default 90d, VPS NULL explicit).
   - Merged: dev2 21ce208d0 + c37468827 (in master; pre-rewrite ids)
+  - 2026-10-07, operator decision: the UI default of 90d is removed. A box whose web token expired disconnected silently and had to be re-paired by hand. Tokens created from the web now have no expiry unless `expires_in_days` is passed explicitly (still enforced; invalid values are rejected, not turned into "no expiry"). The defence is revocation from the web, which `auth.ts` honours on the next call. Tokens that already carry an expiry are flagged in the token list from 14 days before, and `jht cloud status` shows the box's own expiry.
 
 - [x] **RT2** — Prompt injection: external content treated as instructions
   - JD / Telegram messages / CVs reach agent LLMs with no "data ≠ instructions" boundary. Mitigation for threat-model §"Prompt injection".
