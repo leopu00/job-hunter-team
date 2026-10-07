@@ -33,6 +33,13 @@ JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 
+# Sistema e utente non cambiano durante una run: si leggono una volta sola. I
+# controlli d'integrita' del runtime (runtime_stat, runtime_node_safe) li
+# chiedevano per ogni file: un `uname` e un `id` a ogni stat, centinaia di
+# processi in un solo `jht upgrade`.
+HOST_KERNEL="$(uname -s)"
+HOST_UID="$(id -u)"
+
 CONTAINER_SERVICE="jht"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -215,7 +222,7 @@ attested_raw_base() {
 }
 
 runtime_stat() {
-  if [ "$(uname -s)" = "Darwin" ]; then
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
     stat -f '%u %Lp' "$1" 2>/dev/null
   else
     stat -c '%u %a' "$1" 2>/dev/null
@@ -229,7 +236,7 @@ runtime_node_safe() {
   metadata="$(runtime_stat "$path")" || return 1
   owner="${metadata%% *}"
   mode="${metadata#* }"
-  [ "$owner" = "$(id -u)" ] || return 1
+  [ "$owner" = "$HOST_UID" ] || return 1
   mode_num=$((8#$mode))
   [ $((mode_num & 0022)) -eq 0 ]
 }
@@ -1434,7 +1441,14 @@ upgrade_version() {
 }
 
 upgrade_verify_running() {
-  local tries=20
+  # 20 osservazioni prima di dichiarare rotto il candidato. JHT_UPGRADE_VERIFY_TRIES
+  # serve ai test del ripristino: con un candidato che non passa mai, ogni giro
+  # costa una decina di processi e i 20 giri sfioravano il timeout di vitest.
+  # Un valore che non e' un intero positivo vale 20.
+  local tries="${JHT_UPGRADE_VERIFY_TRIES:-20}"
+  case "$tries" in
+    ''|*[!0-9]*|0) tries=20 ;;
+  esac
   while [ "$tries" -gt 0 ]; do
     if container_up && [ -n "$(upgrade_version)" ]; then
       # Un PID 1 che muore appena dopo il primo exec e' un deploy rotto anche

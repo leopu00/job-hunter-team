@@ -510,7 +510,10 @@ posixOnly("jht upgrade — runtime image atomico", () => {
 
   it("se il candidato non supera la verifica ripristina immagine e compose precedenti", () => {
     const sb = makeSandbox({ verifyFails: true });
-    const result = run(sb, { FAKE_VERIFY_FAIL: "1" });
+    // Il candidato non passa mai: con le 20 osservazioni di produzione il
+    // wrapper le fa tutte, una decina di processi a giro, 4,3 s su 5 di
+    // timeout. Ne bastano due per provare lo stesso esito.
+    const result = run(sb, { FAKE_VERIFY_FAIL: "1", JHT_UPGRADE_VERIFY_TRIES: "2" });
 
     expect(result.code).toBe(1);
     const payload = JSON.parse(result.stdout);
