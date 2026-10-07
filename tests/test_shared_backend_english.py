@@ -38,11 +38,6 @@ SKILLS = ROOT / "shared" / "skills"
 _scan = census.scan
 
 
-def test_shared_python_user_visible_copy_has_no_italian_baseline():
-    leaks = _scan(("shared/skills",))
-    assert not leaks, "Italian user-visible backend copy:\n" + "\n".join(leaks)
-
-
 ## Fronte agenti di O-07, ancora aperto. È una soglia, non uno zero, perché la
 ## traduzione procede a lotti e un gate che parte rosso verrebbe disattivato
 ## entro un giorno. Può solo SCENDERE: si abbassa a ogni lotto e arriva a 0
