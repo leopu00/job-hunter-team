@@ -1484,6 +1484,8 @@ def test_missing_essential_facts_are_listed_for_the_closer_without_asking(page, 
     assert notifications == []
     # Recognised, not filled: the facts come before the first field.
     assert page.locator("#_systemfield_name").input_value() == ""
+    # Waiting for the facts holds nothing: no checkpoint for this position.
+    assert not (tmp_path / "checkpoint.json").exists()
 
 
 @pytest.mark.parametrize(
