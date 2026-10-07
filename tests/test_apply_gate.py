@@ -414,17 +414,8 @@ def test_cli_position_senza_id_esce_2(tmp_path):
 # accorgerebbe mai che qualcuno ha tolto la chiamata da start-agent.sh.
 
 
-def test_il_launcher_non_spawna_closer_senza_consenso(tmp_path):
-    src = START_AGENT.read_text()
-    assert 'if [ "$ROLE" = "closer" ]' in src, (
-        "start-agent.sh non ha piu' il cancello del CLOSER: il consenso "
-        "dell'utente non e' piu' una condizione dello spawn"
-    )
-    assert "apply_gate.py" in src
-    assert 'python3 "$APPLY_GATE" consent' in src, (
-        "il launcher non invoca piu' il gate: un vincolo non invocato non e' "
-        "un vincolo"
-    )
+# Che il launcher rifiuti davvero il CLOSER senza consenso lo prova, eseguendo
+# start-agent.sh, test_closer_wiring.py::test_il_launcher_rifiuta_senza_consenso_prima_di_tutto.
 
 
 def test_il_cancello_del_launcher_precede_il_case_dei_ruoli(tmp_path):
