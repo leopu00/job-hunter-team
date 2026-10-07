@@ -76,6 +76,8 @@ export type OnboardingRuntimeState =
       stage: OnboardingRuntimeStage;
       title?: string;
       message: string;
+      /** What to do now, from the error catalog. */
+      action?: string;
       code?: string;
       retryable?: boolean;
     }
@@ -143,6 +145,8 @@ export interface OnboardingRuntimeSnapshot {
   profileReady: boolean;
   assistantWelcomed: boolean;
   directChatReady: boolean;
+  /** Only after a team start: false when the provider limits could not be read first. */
+  limitsVerified?: boolean;
 }
 
 /** UI boundary: no Supabase, IPC, secrets or routing enter the component. */

@@ -2546,6 +2546,82 @@ def _try_claude_tui_parser():
     return tui_result
 
 
+# ── Lettura una tantum dei limiti, prima di avviare il team ─────────────
+# Il desktop la chiede (`jht providers limits --json`) PRIMA di accendere il
+# team, quando questo bridge non gira ancora: senza, un team partito con la
+# finestra 5h o quella settimanale esaurita si ferma subito dopo. Riusa le
+# stesse sorgenti del tick ma solo quelle senza TUI (HTTP Claude/Kimi, rollout
+# Codex): niente worker tmux, niente lock singleton, niente scritture in
+# sentinel-data.jsonl, niente tick alla Sentinella. Restituisce SOLO
+# percentuali e orari di reset; qualunque errore di lettura e' "unknown".
+LIMITS_START_BLOCK_PCT = 95
+
+
+def _probe_fetch(provider):
+    if provider in ("kimi", "moonshot"):
+        return fetch_kimi_api()
+    if provider in ("anthropic", "claude"):
+        # Un 429 lascia il cooldown condiviso col bridge acceso: e' cio' che
+        # gli evita di insistere, non un dato del team.
+        return fetch_claude_api()
+    if provider in ("openai", "codex"):
+        return fetch_codex_rollout()
+    return None
+
+
+def _probe_window(parsed, usage_key, reset_key, now):
+    """(used_pct, resets_at) di una finestra, o None se il dato non vale."""
+    usage = parsed.get(usage_key)
+    reset = parsed.get(reset_key)
+    if isinstance(usage, bool) or not isinstance(usage, (int, float)):
+        return None
+    if isinstance(reset, bool) or not isinstance(reset, (int, float)):
+        return None
+    # Un reset gia' passato vuol dire un dato di una finestra chiusa: quanto
+    # si e' consumato da allora non lo sappiamo.
+    if reset <= now:
+        return None
+    return int(round(float(usage))), int(reset)
+
+
+def limits_verdict(parsed, now):
+    """Decide se i limiti bastano per avviare il team.
+
+    status: "ok" (la finestra 5h e' nota e sotto soglia, la settimanale se
+    nota pure), "exhausted" (una finestra nota e' oltre soglia: `resets_at`
+    e' quando si libera l'ultima delle due) o "unknown" (dato assente o non
+    valido: il desktop parte comunque, con l'avviso).
+    """
+    unknown = {"status": "unknown", "resets_at": None,
+               "five_hour": None, "weekly": None}
+    if not isinstance(parsed, dict):
+        return unknown
+    five_hour = _probe_window(parsed, "usage", "reset_at_unix", now)
+    weekly = _probe_window(parsed, "weekly_usage", "weekly_reset_at_unix", now)
+    windows = {
+        "five_hour": {"used_pct": five_hour[0], "resets_at": five_hour[1]} if five_hour else None,
+        "weekly": {"used_pct": weekly[0], "resets_at": weekly[1]} if weekly else None,
+    }
+    exhausted = [w for w in (five_hour, weekly) if w and w[0] >= LIMITS_START_BLOCK_PCT]
+    if exhausted:
+        return {"status": "exhausted",
+                "resets_at": max(reset for _, reset in exhausted), **windows}
+    if five_hour is None:
+        return {**unknown, **windows}
+    return {"status": "ok", "resets_at": None, **windows}
+
+
+def probe_limits(provider=None, now=None):
+    """Lettura una tantum per il desktop. Non solleva mai eccezioni."""
+    try:
+        if provider is None:
+            _, provider = read_config()
+        parsed = _probe_fetch(str(provider).lower())
+        return limits_verdict(parsed, time.time() if now is None else now)
+    except Exception:  # noqa: BLE001 — un errore di lettura e' "unknown", mai dettagli
+        return limits_verdict(None, 0)
+
+
 # ── Main loop V5 ────────────────────────────────────────────────────────
 
 def _do_fetch(provider):
@@ -3046,6 +3122,9 @@ if __name__ == "__main__":
     # (b) l'agent-watchdog (maybe_respawn_bridges) respawna il processo se muore
     # del tutto (OOM/kill); (c) il Mantenitore fa il canary completo 1×/dì.
     # Vedi docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md.
+    if sys.argv[1:] == ["--probe-limits"]:
+        print(json.dumps(probe_limits(), sort_keys=True))
+        sys.exit(0)
     import time as _time
     import traceback as _tb
     while True:

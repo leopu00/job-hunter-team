@@ -208,6 +208,7 @@ def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: 
         (("setup", "--non-interactive"), "docker exec"),
         (("download", "--os", "macos"), "docker exec"),
         (("providers", "current"), "docker exec"),
+        (("providers", "limits", "--json"), "docker exec"),
     ),
 )
 def test_host_dispatcher_reuses_only_the_attested_container_id(

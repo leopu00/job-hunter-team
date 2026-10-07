@@ -13,6 +13,7 @@
     {"id": "provider-health", "concern": "runtime provider health checks", "path": "cli/src/commands/doctor.js", "anchors": ["active_provider", "providers"]},
     {"id": "usage-fetch", "concern": "provider-specific usage collection", "path": "shared/skills/check_usage.py", "anchors": ["provider", "claude"]},
     {"id": "usage-record", "concern": "normalize provider usage samples", "path": "shared/skills/usage_record.py", "anchors": ["provider", "usage"]},
+    {"id": "usage-start-probe", "concern": "one-shot 5h/weekly limits read before the desktop starts the team", "path": ".launcher/sentinel-bridge.py", "anchors": ["_probe_fetch", "limits_verdict", "--probe-limits"]},
     {"id": "capacity-policy", "concern": "provider capacity and pacing", "path": "shared/skills/provider_capacity.py", "anchors": ["read_active_provider", "provider"]},
     {"id": "plan-registry", "concern": "subscription plan semantics", "path": "shared/skills/plan_registry.py", "anchors": ["normalize_provider", "active_provider"]},
     {"id": "web-provider-data", "concern": "cloud UI provider metadata", "path": "web/lib/providers.ts", "anchors": ["Provider", "claude"]},

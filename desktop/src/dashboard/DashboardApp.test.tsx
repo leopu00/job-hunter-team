@@ -18,6 +18,7 @@ import {
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -120,6 +121,7 @@ vi.mock("../onboarding", () => ({
         <p>platform:{props.platform}</p>
         <p>{props.runtime.status}{stage}</p>
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
+        {props.runtime.status === "failed" && props.runtime.action && <p>Cosa fare: {props.runtime.action}</p>}
         {props.activity?.current && <p data-testid="activity-current">{props.activity.current.name}:{props.activity.current.description}</p>}
         {props.activity && <p data-testid="activity-count">activity:{props.activity.events.length}</p>}
         {props.activity && (
@@ -690,7 +692,7 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
     expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
     expect(screen.getByTestId("activity-events")).toHaveTextContent(
-      "1:container:failed:2400:Il container non si è avviato.",
+      `1:container:failed:2400:${ERROR_CATALOG.container_start_failed.text.it}`,
     );
     expect(screen.getByTestId("activity-events")).not.toHaveTextContent(/token|password|secret|https?:\/\//i);
 
@@ -724,7 +726,10 @@ describe("DashboardApp onboarding router", () => {
     await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
     expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
     expect(screen.getByText("code:podman_not_ready")).toBeInTheDocument();
-    expect(screen.getByText(/Podman è installato ma non risponde/i)).toBeInTheDocument();
+    // The sentence is the app's, from the catalog; the native one never shows.
+    expect(screen.getByText(ERROR_CATALOG.podman_not_ready.text.it)).toBeInTheDocument();
+    expect(screen.getByText(`Cosa fare: ${ERROR_CATALOG.podman_not_ready.action.it}`)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Podman è installato ma non risponde ancora.");
     await user.click(screen.getByRole("button", { name: "retry-runtime" }));
     await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
@@ -760,7 +765,7 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
     await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
 
-    expect(await screen.findByText("Il pacchetto runtime non supera la verifica di integrità.")).toBeInTheDocument();
+    expect(await screen.findByText(ERROR_CATALOG.installer_digest_mismatch.text.it)).toBeInTheDocument();
     expect(screen.getByText("code:installer_digest_mismatch")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
   });
@@ -856,6 +861,59 @@ describe("DashboardApp onboarding router", () => {
     expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("starts the team quietly when the provider limits were verified", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("limits-ok-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue({ ...TEAM_READY, limitsVerified: true });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(ERROR_CATALOG.provider_limits_unverified.text.it);
+  });
+
+  it("says when exhausted provider limits free again instead of starting", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("limits-exhausted-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600;
+    vi.mocked(startOnboardingTeam).mockRejectedValue({
+      code: "provider_limits_exhausted",
+      message: "native text that must not show",
+      retryable: true,
+      resetsAt,
+    });
+    const time = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" })
+      .format(new Date(resetsAt * 1000));
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(screen.getByText("code:provider_limits_exhausted")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(`esauriti fino alle ${time}`);
+    expect(document.body).toHaveTextContent(`Cosa fare: Riprova dopo le ${time}.`);
+    expect(document.body).not.toHaveTextContent("native text that must not show");
+    expect(document.body).not.toHaveTextContent("{time}");
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("starts anyway and warns when the provider limits could not be verified", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("limits-unverified-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue({ ...TEAM_READY, limitsVerified: false });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(ERROR_CATALOG.provider_limits_unverified.text.it);
+    expect(document.body).toHaveTextContent(ERROR_CATALOG.provider_limits_unverified.action.it);
   });
 
   it("opens confined Assistant chat from a clean state, then marks ready only after profile reread", async () => {
@@ -1044,7 +1102,7 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
 
     expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
-    expect(screen.getByText("La preparazione del runtime non è stata verificata. Riprova.")).toBeInTheDocument();
+    expect(screen.getByText(ERROR_CATALOG.snapshot_failed.text.it)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("raw host path and runtime output");
     expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
     expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();

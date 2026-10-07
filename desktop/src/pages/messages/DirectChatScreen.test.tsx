@@ -14,6 +14,7 @@ import type {
   DirectChatReceipt,
   DirectChatStatus,
 } from "./direct-chat-contract";
+import { ERROR_CATALOG } from "../../lib/error-catalog";
 
 const VOICE_IDLE: VoiceInputSnapshot = {
   available: true,
@@ -188,6 +189,18 @@ describe("DirectChatScreen", () => {
     await user.click(within(status).getByRole("button", { name: "Riprova" }));
     expect(mock.reconnect).toHaveBeenCalledOnce();
     await waitFor(() => expect(status).toHaveTextContent("Team collegato"));
+  });
+
+  it("tells a known error with the app's sentence and action, never the raw code", async () => {
+    viewport(1000, 500);
+    const { mock } = client({ state: "error", code: "tunnel_unavailable" });
+    render(<DirectChatScreen client={mock} />);
+
+    const status = await screen.findByTestId("direct-chat-status");
+    expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.text.it);
+    expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.action.it);
+    expect(status).not.toHaveTextContent("tunnel_unavailable");
+    expect(status).not.toHaveTextContent("Codice");
   });
 
   it("polls the bounded history and reveals an asynchronous agent reply without switching", async () => {

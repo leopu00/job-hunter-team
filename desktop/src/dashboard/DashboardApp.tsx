@@ -69,6 +69,7 @@ import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import MessagesPage from "../pages/messages";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
+import { describeError, errorCodeOf, errorResetsAt } from "../lib/error-catalog";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
@@ -121,6 +122,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       stage: "container",
       title: "Versione del container non compatibile",
       message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      action: describeError(value.code).action,
       code: value.code,
       retryable: false,
     };
@@ -131,17 +133,44 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       stage,
       title: "Avvio del container non riuscito",
       message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+      action: describeError(value.code).action,
       code: value.code,
       retryable: value.retryable,
     };
   }
+  // The sentence comes from the app's catalog, never from the native message.
+  const described = describeError(value.code);
   return {
     status: "failed",
     stage,
-    message: value.message,
+    message: described.text,
+    action: described.action,
     code: value.code,
     retryable: value.retryable,
   };
+}
+
+/** A failure told by the catalog when the error carries a code it knows. */
+function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
+  const code = errorCodeOf(error);
+  if (!code) return null;
+  const described = describeError(code, { resetsAt: errorResetsAt(error) });
+  if (!described.known) return null;
+  const retryable = typeof error === "object" && error !== null &&
+    typeof (error as { retryable?: unknown }).retryable === "boolean"
+    ? (error as { retryable: boolean }).retryable
+    : true;
+  return { status: "failed", stage, message: described.text, action: described.action, code, retryable };
+}
+
+/** Adds the "limits not verified" notice to the state shown after a team start. */
+function withLimitsNotice(
+  state: OnboardingRuntimeState,
+  snapshot: OnboardingRuntimeSnapshot,
+): OnboardingRuntimeState {
+  if (snapshot.limitsVerified !== false || !("message" in state)) return state;
+  const notice = describeError("provider_limits_unverified");
+  return { ...state, message: `${state.message} ${notice.text} ${notice.action}` };
 }
 
 function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
@@ -213,23 +242,23 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   const code = nativeErrorCode(error);
   if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
   if (code === "resume_runtime_not_ready") return {
-    status: "failed", stage: "runtime", code, retryable: false,
+    status: "failed", stage: "runtime", code, action: describeError(code).action, retryable: false,
     message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
   };
   if (code === "resume_container_not_ready") return {
-    status: "failed", stage: "container", code, retryable: false,
+    status: "failed", stage: "container", code, action: describeError(code).action, retryable: false,
     message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
   };
   if (code === "resume_provider_not_configured") return {
-    status: "failed", stage: "provider", code, retryable: false,
+    status: "failed", stage: "provider", code, action: describeError(code).action, retryable: false,
     message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
   };
   if (code === "resume_provider_not_authenticated") return {
-    status: "failed", stage: "provider-login", code, retryable: false,
+    status: "failed", stage: "provider-login", code, action: describeError(code).action, retryable: false,
     message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
   };
   if (code === "team_start_failed" || code === "team_verify_failed") return {
-    status: "failed", stage: "team-start", code, retryable: true,
+    status: "failed", stage: "team-start", code, action: describeError(code).action, retryable: true,
     message: "Le sessioni del team non risultano ancora operative. Riprova.",
   };
   return null;
@@ -496,7 +525,8 @@ export default function DashboardApp() {
   }, [identityKey, setRuntime]);
 
   const fail = useCallback((stage: OnboardingRuntimeStage, error: unknown): never => {
-    setRuntime({ status: "failed", stage, message: failureMessage(stage), retryable: true });
+    setRuntime(catalogFailure(stage, error) ??
+      { status: "failed", stage, message: failureMessage(stage), retryable: true });
     throw error;
   }, [setRuntime]);
 
@@ -515,7 +545,7 @@ export default function DashboardApp() {
       setRuntime({ status: "working", stage: "team-start", message: "Avvio container e agenti." });
       beginActivityInvocation();
       const snapshot = await startOnboardingTeam(submission.host, recordActivityProgress);
-      setRuntime(runtimeStateFromSnapshot(snapshot));
+      setRuntime(withLimitsNotice(runtimeStateFromSnapshot(snapshot), snapshot));
     } catch (error) {
       fail("team-start", error);
     }
@@ -885,11 +915,11 @@ export default function DashboardApp() {
       if (!snapshot.assistantRunning || !snapshot.captainRunning) {
         throw new Error("team-start-unverified");
       }
-      setRuntime({
+      setRuntime(withLimitsNotice({
         status: "action-required",
         stage: "assistant",
         message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
-      });
+      }, snapshot));
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
       const backendFailure = resumedBackendFailure(error);
