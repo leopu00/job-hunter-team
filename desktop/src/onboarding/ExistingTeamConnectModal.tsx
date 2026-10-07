@@ -1,5 +1,6 @@
 import { KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import SshKeyPicker from "../components/SshKeyPicker";
+import { describeError } from "../lib/error-catalog";
 import {
   existingTeamBridge,
   existingTeamErrorCode,
@@ -23,34 +24,10 @@ export interface ExistingTeamConnectModalProps {
   bridge?: ExistingTeamBridge;
 }
 
-const ERROR_COPY: Record<string, string> = {
-  host_key_unavailable: "Non riesco a leggere l’identità SSH della VPS. Controlla host e porta e riprova.",
-  host_key_missing: "L’identità SSH della VPS deve essere verificata prima del collegamento.",
-  host_key_changed: "L’identità SSH della VPS è cambiata. Per sicurezza il collegamento è stato bloccato.",
-  host_key_mismatch: "L’identità SSH non corrisponde a quella già confermata. Il collegamento è bloccato.",
-  host_key_confirmation_invalid: "La conferma dell’identità SSH non è valida. Torna ai dati della VPS e riprova.",
-  host_key_unwritable: "Non riesco a salvare localmente l’identità SSH confermata.",
-  permissions_failed: "Non riesco a proteggere localmente l’identità SSH confermata.",
-  not_vps: "Per questo collegamento serve una VPS.",
-  invalid_host: "L’host VPS non è valido.",
-  invalid_user: "L’utente SSH non è valido.",
-  invalid_key_path: "Il percorso della chiave SSH non è valido.",
-  key_unavailable: "Il file chiave SSH selezionato non è disponibile.",
-  invalid_key: "Il file chiave SSH selezionato non è valido.",
-  invalid_port: "La porta SSH non è valida.",
-  invalid_team_id: "Il riferimento del team non è valido.",
-  existing_team_vps_required: "Per collegare il team esistente serve una configurazione VPS valida.",
-  existing_team_identity_mismatch: "Il team trovato sulla VPS non corrisponde al team registrato per questo account.",
-  existing_team_not_active: "Il team registrato non risulta attivo sulla VPS.",
-  existing_team_unavailable: "La VPS o il runtime Job Hunter Team non sono raggiungibili.",
-  account_team_mismatch: "Il team trovato non appartiene a questo account Google.",
-  ssh_unavailable: "La VPS non è raggiungibile tramite SSH. Controlla la connessione e riprova.",
-  ssh_auth_failed: "L’accesso SSH non è riuscito. Controlla utente e chiave e riprova.",
-  snapshot_failed: "Il team risponde, ma il suo stato non può essere verificato.",
-  container_unavailable: "Il team registrato non risulta attivo sulla VPS.",
-  operation_in_progress: "È già in corso una verifica. Attendi e riprova.",
-  unknown: "Il collegamento non è riuscito. Nessun dato sensibile è stato salvato: riprova.",
-};
+/** The failure, told by the error catalog: what happened and what to do. */
+function errorCopy(code: string): { text: string; action: string } {
+  return describeError(code, { fallback: "existing_team_connect_failed" });
+}
 
 function cleanHost(host: ExistingTeamVpsHost): ExistingTeamVpsHost {
   return {
@@ -262,7 +239,8 @@ export default function ExistingTeamConnectModal({
         {stage === "failed" && errorCode && (
           <section className={`existing-team-modal__failure${terminal ? " is-terminal" : ""}`} role="alert">
             <strong>{terminal ? "Collegamento bloccato" : "Verifica non riuscita"}</strong>
-            <p>{ERROR_COPY[errorCode] ?? ERROR_COPY.unknown}</p>
+            <p>{errorCopy(errorCode).text}</p>
+            <p>{errorCopy(errorCode).action}</p>
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={terminal ? onCancel : backToFields}>{terminal ? "Torna al setup" : "Modifica dati"}</button>
               {!terminal && <button type="button" className="existing-team-modal__primary" onClick={() => void retry()}>Riprova</button>}

@@ -50,6 +50,10 @@ pub(crate) struct LiveScreenSession {
 /// Apre la finestra dello schermo live, o la riporta in primo piano se c'è già.
 /// `async` è obbligatorio: su Windows creare una finestra da un comando
 /// sincrono blocca il thread che dovrebbe disegnarla.
+///
+/// Oggi nessuna schermata la chiama (`openLiveScreen` in lib/live-screen.ts
+/// non ha chiamanti): resta registrata di proposito, servirà alla vista
+/// interattiva del broker (decisione del 08/10/2026). Non è codice morto.
 #[tauri::command]
 pub(crate) async fn open_live_screen(
     app: tauri::AppHandle,

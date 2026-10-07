@@ -45,7 +45,8 @@ export const existingTeamBridge: ExistingTeamBridge = {
   },
 };
 
-const ERROR_CODES = new Set([
+/** Codes the existing-team flow shows; error-catalog.test.ts checks each has a catalog entry. */
+export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "host_key_unavailable",
   "host_key_missing",
   "host_key_changed",
@@ -74,10 +75,10 @@ const ERROR_CODES = new Set([
 ]);
 
 export function existingTeamErrorCode(error: unknown): string {
-  if (typeof error === "string") return ERROR_CODES.has(error) ? error : "unknown";
+  if (typeof error === "string") return EXISTING_TEAM_ERROR_CODES.has(error) ? error : "unknown";
   if (!error || typeof error !== "object") return "unknown";
   const code = (error as { code?: unknown }).code;
-  return typeof code === "string" && ERROR_CODES.has(code) ? code : "unknown";
+  return typeof code === "string" && EXISTING_TEAM_ERROR_CODES.has(code) ? code : "unknown";
 }
 
 export function isTerminalExistingTeamError(code: string): boolean {

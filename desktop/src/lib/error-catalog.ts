@@ -611,6 +611,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The screen key is damaged.",
     "Restart the team: the key is generated again.",
   ),
+  live_screen_invalid_port: copy(
+    "La porta configurata per lo schermo del CLOSER non è valida.",
+    "Riavvia Job Hunter Team. Se si ripete, contatta l’assistenza.",
+    "The port set for the CLOSER’s screen is not valid.",
+    "Restart Job Hunter Team. If it happens again, contact support.",
+  ),
+  live_screen_failed: copy(
+    "Non riesco a collegarmi allo schermo del CLOSER.",
+    "Controlla che il team sia acceso, poi riapri la finestra.",
+    "I cannot connect to the CLOSER’s screen.",
+    "Check that the team is running, then reopen the window.",
+  ),
   screen_not_running: copy(
     "Lo schermo del CLOSER non è acceso.",
     "Accendi il team: la finestra si collega da sola.",
@@ -665,6 +677,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Riprova l’importazione.",
     "The profile could not be imported. No existing data was changed.",
     "Try the import again.",
+  ),
+  existing_team_connect_failed: copy(
+    "Il collegamento al team non è riuscito. Nessun dato sensibile è stato salvato.",
+    "Controlla i dati della VPS e riprova.",
+    "Connecting to the team did not succeed. No sensitive data was saved.",
+    "Check the VPS details and try again.",
   ),
   receipt_unverified: copy(
     "Non riesco a confermare che l’importazione sia completa.",
@@ -785,6 +803,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The browser did not answer within five minutes.",
     "Try signing in again.",
   ),
+  login_failed: LOGIN_FAILED,
+  login_exchange_failed: copy(
+    "Google ha risposto, ma la sessione non si è aperta.",
+    "Riprova l’accesso con Google.",
+    "Google answered, but the session did not open.",
+    "Try signing in with Google again.",
+  ),
   listener_failed: LOGIN_FAILED,
   invalid_authorize_url: LOGIN_FAILED,
   invalid_supabase_origin: LOGIN_FAILED,
@@ -850,6 +875,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   native_failed: VOICE_FAILED,
 };
 
+/**
+ * Codes with a sentence that nothing emits today. They stay, so the copy is
+ * ready the day one starts, but they do not count as covered:
+ * error-catalog.test.ts fails if one of them shows up at an emission site,
+ * and then it leaves this list on purpose.
+ */
+export const NOT_EMITTED: ReadonlySet<string> = new Set([
+  // Rust: only in the message table of onboarding::failure().
+  "podman_start_failed",
+  "runtime_wrapper_install_failed",
+  "command_timeout",
+  // TS: handled by the UI, produced by no backend.
+  "container_version_incompatible",
+  "account_team_mismatch",
+  "ssh_unavailable",
+  "ssh_auth_failed",
+]);
+
 function localeOf(locale: string | null | undefined): ErrorLocale {
   return locale === "it" ? "it" : locale ? "en" : "it";
 }
@@ -871,12 +914,20 @@ function formatTime(resetsAt: number, locale: ErrorLocale, now: number): string 
  */
 export function describeError(
   code: string | null | undefined,
-  options: { locale?: string | null; resetsAt?: number | null; now?: number } = {},
+  options: {
+    locale?: string | null;
+    resetsAt?: number | null;
+    now?: number;
+    /** Catalog code whose copy replaces the generic one for an unknown code. */
+    fallback?: string;
+  } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
   const key = typeof code === "string" ? code : "unknown";
-  const entry = Object.prototype.hasOwnProperty.call(ERROR_CATALOG, key) ? ERROR_CATALOG[key] : undefined;
-  let chosen = entry ?? UNKNOWN_ERROR;
+  const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
+  const entry = key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
+  const fallback = options.fallback && has(options.fallback) ? ERROR_CATALOG[options.fallback] : UNKNOWN_ERROR;
+  let chosen = entry ?? fallback;
   let known = entry !== undefined;
   const needsTime = chosen.text[locale].includes("{time}") || chosen.action[locale].includes("{time}");
   const resetsAt = options.resetsAt;

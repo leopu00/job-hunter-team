@@ -7,6 +7,7 @@ import {
   type ConnectionFactory,
   type ScreenConnection,
 } from "./LiveScreenViewer";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 
 class FakeConnection extends EventTarget implements ScreenConnection {
   viewOnly = false;
@@ -115,7 +116,8 @@ it("stops on a configuration error and retries only when asked", async () => {
   const { connect } = setup(loadSession);
   await flush();
 
-  expect(screen.getByText(/JHT_LIVE_SCREEN_PORT/)).toBeInTheDocument();
+  expect(screen.getByText(ERROR_CATALOG.live_screen_invalid_port.text.it, { exact: false })).toBeInTheDocument();
+  expect(screen.getByText(ERROR_CATALOG.live_screen_invalid_port.action.it, { exact: false })).toBeInTheDocument();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS * 3);
   });

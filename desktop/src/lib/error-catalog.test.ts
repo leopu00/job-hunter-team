@@ -15,7 +15,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, describeError, errorCodeOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, NOT_EMITTED, describeError, errorCodeOf, errorResetsAt } from "./error-catalog";
+import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
+import { liveScreenErrorCode } from "./live-screen";
+import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
@@ -127,12 +130,12 @@ function tsSources(dir: string): string[] {
   });
 }
 
-const TS_CODE = /code:\s*"([a-z][a-z0-9_]*)"|\?\?\s*"([a-z][a-z0-9]*_[a-z0-9_]+)"/g;
+const TS_CODE = /code:\s*"([a-z][a-z0-9_]*)"|\?\?\s*"([a-z][a-z0-9]*_[a-z0-9_]+)"|fallback:\s*"([a-z][a-z0-9_]*)"/g;
 
 function tsCodes(): Set<string> {
   const codes = new Set<string>();
   for (const file of tsSources(SRC)) {
-    for (const match of readFileSync(file, "utf8").matchAll(TS_CODE)) codes.add(match[1] ?? match[2]);
+    for (const match of readFileSync(file, "utf8").matchAll(TS_CODE)) codes.add(match[1] ?? match[2] ?? match[3]);
   }
   return codes;
 }
@@ -157,6 +160,36 @@ describe("error catalog", () => {
   it("has a sentence and an action for every code the TS layer creates", () => {
     const missing = [...ts].filter((code) => !(code in ERROR_CATALOG)).sort();
     expect(missing).toEqual([]);
+  });
+
+  it("covers the codes of the screens that used to keep their own map", () => {
+    const login = Object.values(LOGIN_ERROR_CATALOG_CODE).filter((code) => !(code in ERROR_CATALOG));
+    expect(login, "login codes without a catalog entry").toEqual([]);
+    const existingTeam = [...EXISTING_TEAM_ERROR_CODES].filter((code) => !(code in ERROR_CATALOG));
+    expect(existingTeam, "existing-team codes without a catalog entry").toEqual([]);
+    for (const native of ["screen_not_running", "invalid_password", "invalid_port", "home_missing", "window_failed", "brand_new"]) {
+      const code = liveScreenErrorCode({ code: native });
+      expect(code in ERROR_CATALOG, `${native} -> ${code}`).toBe(true);
+    }
+    expect(liveScreenErrorCode({ code: "invalid_port" })).toBe("live_screen_invalid_port");
+    expect(liveScreenErrorCode(new Error("boom"))).toBe("live_screen_failed");
+  });
+
+  it("does not count codes nothing emits as covered: they are marked, and a marked one may not be emitted", () => {
+    for (const code of NOT_EMITTED) expect(code in ERROR_CATALOG, code).toBe(true);
+    const rustSources = compiledRustModules()
+      .map((module) => withoutTests(readFileSync(join(RUST, `${module}.rs`), "utf8")))
+      .join("\n");
+    const tsSourceText = tsSources(SRC).map((file) => readFileSync(file, "utf8")).join("\n");
+    for (const code of NOT_EMITTED) {
+      // Rust: the only place allowed is the message table of failure().
+      const anywhere = rustSources.split(`"${code}"`).length - 1;
+      const inTable = rustSources.split(`"${code}" =>`).length - 1;
+      expect(anywhere - inTable, `${code} is emitted by Rust: take it out of NOT_EMITTED`).toBe(0);
+      // TS: never produced as a code.
+      const produced = new RegExp(`(?:code:|\\?\\?|return)\\s*"${code}"`);
+      expect(produced.test(tsSourceText), `${code} is produced by TS: take it out of NOT_EMITTED`).toBe(false);
+    }
   });
 
   it("keeps NOT_ERRORS honest: each entry still exists and is not also a catalog code", () => {
@@ -196,6 +229,18 @@ describe("describeError", () => {
     expect(`${described.text} ${described.action}`).not.toContain("brand_new_backend_code");
     expect(describeError(null).text).toBe(ERROR_CATALOG.unknown.text.it);
     expect(describeError("__proto__").known).toBe(false);
+    expect(describeError("unknown").known).toBe(false);
+  });
+
+  it("uses the screen's own fallback for an unknown code, never the code", () => {
+    const described = describeError("brand_new_backend_code", { fallback: "profile_import_failed" });
+    expect(described.known).toBe(false);
+    expect(described.text).toBe(ERROR_CATALOG.profile_import_failed.text.it);
+    expect(describeError("unknown", { fallback: "profile_import_failed" }).text)
+      .toBe(ERROR_CATALOG.profile_import_failed.text.it);
+    // A known code wins over the fallback.
+    expect(describeError("host_key_changed", { fallback: "profile_import_failed" }).text)
+      .toBe(ERROR_CATALOG.host_key_changed.text.it);
   });
 
   it("speaks English for every non-Italian locale", () => {

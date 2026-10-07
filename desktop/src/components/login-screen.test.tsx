@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstalledBrowser } from "../lib/browsers";
 import { LoginError, type SignInOptions } from "../lib/supabase";
 import { LoginScreen } from "./login-screen";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 
 const CANARY: InstalledBrowser = { id: "chrome-canary", name: "Google Chrome Canary" };
 const AUTHORIZE = "https://example-ref.supabase.co/auth/v1/authorize?provider=google";
@@ -139,7 +140,7 @@ describe("LoginScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Annulla" }));
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("Accesso annullato.")).toBeInTheDocument();
+    expect(await screen.findByText(ERROR_CATALOG.cancelled.text.it)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeEnabled();
   });
@@ -220,7 +221,7 @@ describe("LoginScreen", () => {
     render(<LoginScreen signIn={signIn} loadBrowsers={noBrowsers} configured />);
 
     await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Accesso non concesso. (User denied)");
+    expect(await screen.findByRole("alert")).toHaveTextContent(`${ERROR_CATALOG.denied.text.it} (User denied) ${ERROR_CATALOG.denied.action.it}`);
 
     await user.click(screen.getByRole("button", { name: /Continua con Google/ }));
     expect(signIn).toHaveBeenCalledTimes(2);
@@ -244,7 +245,8 @@ describe("LoginScreen", () => {
     render(<LoginScreen configured={false} loadBrowsers={noBrowsers} />);
     expect(screen.getByRole("button", { name: /Continua con Google/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Usa in locale" })).toBeEnabled();
-    expect(screen.getByRole("alert")).toHaveTextContent("VITE_SUPABASE_URL");
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.auth_not_configured.text.it);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.auth_not_configured.action.it);
     await user.click(screen.getByRole("button", { name: "Usa in locale" }));
     expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

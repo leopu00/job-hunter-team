@@ -4,6 +4,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VoiceInputBridge, VoiceInputSnapshot, VoiceTranscriptEvent } from "../lib/voice-input";
 import { VoiceInputControl } from "./VoiceInputControl";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 
 const IDLE: VoiceInputSnapshot = {
   available: true,
@@ -150,7 +151,8 @@ describe("VoiceInputControl", () => {
       error: "microphone_permission_denied",
     }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/permesso del microfono è negato/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.microphone_permission_denied.text.it);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.microphone_permission_denied.action.it);
     expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
   });
 
@@ -160,7 +162,7 @@ describe("VoiceInputControl", () => {
     await flush();
     act(() => bridge.state({ ...IDLE, available: false, phase: "error", error: "on_device_unsupported" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/riconoscimento sul dispositivo non è disponibile/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.on_device_unsupported.text.it);
     expect(screen.queryByRole("button", { name: /detta un messaggio/i })).not.toBeInTheDocument();
     expect(bridge.start).not.toHaveBeenCalled();
   });

@@ -1,3 +1,4 @@
+import { describeError } from "../lib/error-catalog";
 import type { VoiceInputBridge } from "../lib/voice-input";
 import { useVoiceInput } from "./useVoiceInput";
 import "./voice-input.css";
@@ -11,16 +12,11 @@ export interface VoiceInputControlProps {
   className?: string;
 }
 
-const ERROR_COPY: Record<string, string> = {
-  unsupported: "Il dettato nativo non è disponibile su questo sistema.",
-  on_device_unsupported: "Il riconoscimento sul dispositivo non è disponibile per questa lingua o su questo Mac.",
-  microphone_permission_denied: "Il permesso del microfono è negato. Abilitalo nelle Impostazioni di Sistema.",
-  speech_permission_denied: "Il permesso di riconoscimento vocale è negato. Abilitalo nelle Impostazioni di Sistema.",
-  microphone_unavailable: "Il microfono non è disponibile.",
-  recognition_failed: "La trascrizione non è riuscita. Puoi riprovare.",
-  busy: "È già in corso una registrazione.",
-  native_failed: "Il dettato non è partito.",
-};
+/** The dictation error, told by the error catalog: what happened and what to do. */
+function voiceErrorCopy(code: string | null | undefined): string {
+  const described = describeError(code ?? "unsupported", { fallback: "native_failed" });
+  return `${described.text} ${described.action}`;
+}
 
 function timer(seconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -76,7 +72,7 @@ export function VoiceInputControl(props: VoiceInputControlProps) {
 
       {(state.phase === "error" || unavailable) && (
         <div className="voice-input__error" role="alert">
-          <span>{ERROR_COPY[state.error ?? "unsupported"] ?? ERROR_COPY.native_failed}</span>
+          <span>{voiceErrorCopy(state.error)}</span>
           {!unavailable && !permissionDenied && <button type="button" onClick={() => void voice.start()} disabled={props.disabled}>Riprova</button>}
         </div>
       )}

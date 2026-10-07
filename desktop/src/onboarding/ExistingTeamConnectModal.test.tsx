@@ -7,6 +7,7 @@ import type {
   SshHostKeyProbe,
 } from "../lib/existing-team";
 import ExistingTeamConnectModal from "./ExistingTeamConnectModal";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange, disabled }: { value: string; onChange: (path: string) => void; disabled?: boolean }) => (
@@ -130,7 +131,8 @@ describe("ExistingTeamConnectModal", () => {
     await user.click(screen.getByRole("button", { name: /verifica vps/i }));
     await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/identità ssh della vps è cambiata/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.host_key_changed.text.it);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.host_key_changed.action.it);
     expect(screen.queryByText(/raw secret/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
     expect(native.connect).not.toHaveBeenCalled();

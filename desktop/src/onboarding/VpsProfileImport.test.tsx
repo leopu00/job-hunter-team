@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProfileImportBridge, ProfileImportSnapshot } from "../lib/profile-import";
 import type { SshHostKeyProbe } from "../lib/onboarding-runtime";
 import VpsProfileImport from "./VpsProfileImport";
+import { ERROR_CATALOG } from "../lib/error-catalog";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange, disabled }: { value: string; onChange: (path: string) => void; disabled?: boolean }) => (
@@ -66,7 +67,8 @@ describe("VpsProfileImport", () => {
     await openAndFill(user);
     await user.click(screen.getByRole("button", { name: /verifica e importa/i }));
 
-    expect(await screen.findByText(/non coincide con quella già confermata/i)).toBeInTheDocument();
+    expect(await screen.findByText(ERROR_CATALOG.host_key_mismatch.text.it)).toBeInTheDocument();
+    expect(screen.getByText(ERROR_CATALOG.host_key_mismatch.action.it)).toBeInTheDocument();
     expect(screen.queryByText(/Non è stato possibile importare il profilo/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /modifica e riprova/i })).not.toBeInTheDocument();
     expect(native.confirm).not.toHaveBeenCalled();
@@ -119,7 +121,7 @@ describe("VpsProfileImport", () => {
     await openAndFill(user);
     await user.click(screen.getByRole("button", { name: /verifica e importa/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/contiene già un profilo/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.target_profile_exists.text.it);
     expect(screen.queryByText(/raw private path/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /modifica e riprova/i })).not.toBeInTheDocument();
   });
@@ -134,7 +136,7 @@ describe("VpsProfileImport", () => {
     await openAndFill(user);
     await user.click(screen.getByRole("button", { name: /verifica e importa/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/non è stato possibile importare/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.receipt_unverified.text.it);
     expect(screen.queryByText("Profilo importato.")).not.toBeInTheDocument();
   });
 
