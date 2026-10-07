@@ -299,11 +299,27 @@ def _extract_jobs(body: str, sender: str) -> list[dict]:
     return jobs[:MAX_LINKS_PER_EMAIL]
 
 
+class CredentialsEncodingError(Exception):
+    """The stored login has characters the protocol cannot send. Raised with
+    a fixed message and no chained exception: a UnicodeEncodeError names the
+    character and its position, i.e. a piece of the password."""
+
+    def __init__(self) -> None:
+        super().__init__("credentials_unsupported_characters")
+
+
 def _imap_connect(creds: dict):
     host = creds.get("imap_host", "imap.gmail.com")
     port = int(creds.get("imap_port", 993))
     M = imaplib.IMAP4_SSL(host, port)
-    M.login(creds["user"], creds.get("password", ""))
+    try:
+        M.login(creds["user"], creds.get("password", ""))
+    except UnicodeError:
+        try:
+            M.logout()
+        except Exception:
+            pass
+        raise CredentialsEncodingError() from None
     return M
 
 
@@ -445,6 +461,7 @@ def status() -> dict:
     }
 
 
+MAX_RECIPIENTS = 10
 _ADDRESS = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
 MAX_BODY_BYTES = 200_000
 
@@ -469,6 +486,8 @@ def send(to: list[str], subject: str, body: str) -> dict:
         return {"ok": False, "reason": "not_configured"}
     if not to or any(not _ADDRESS.match(addr) for addr in to):
         return {"ok": False, "reason": "invalid_recipient"}
+    if len(to) > MAX_RECIPIENTS:
+        return {"ok": False, "reason": "too_many_recipients"}
     if "\r" in subject or "\n" in subject:
         return {"ok": False, "reason": "invalid_subject"}
     if len(body.encode("utf-8")) > MAX_BODY_BYTES:
@@ -493,6 +512,10 @@ def send(to: list[str], subject: str, body: str) -> dict:
             with smtplib.SMTP_SSL(host, port, context=context, timeout=30) as smtp:
                 smtp.login(creds["user"], creds["password"])
                 smtp.send_message(msg)
+    except UnicodeError:
+        # A non-ASCII password (or address) the server cannot take. The
+        # exception names the character and its position: never shown.
+        return {"ok": False, "reason": "encoding_unsupported"}
     except smtplib.SMTPAuthenticationError:
         return {"ok": False, "reason": "auth_failed"}
     except smtplib.SMTPRecipientsRefused:
@@ -500,6 +523,17 @@ def send(to: list[str], subject: str, body: str) -> dict:
     except (smtplib.SMTPException, OSError):
         return {"ok": False, "reason": "smtp_unavailable"}
     return {"ok": True, "to": to, "subject": subject, "message_id": msg["Message-ID"]}
+
+
+def _is_secret_path(path: str) -> bool:
+    """A body file inside the portal secrets: credentials/ or .cache/linkedin/,
+    anywhere, after resolving links — sending one would mail the secret out."""
+    parts = Path(path).resolve().parts
+    return (
+        "credentials" in parts
+        or (bool(parts) and parts[-1] == "storage-state.json")
+        or any(a == ".cache" and b == "linkedin" for a, b in zip(parts, parts[1:]))
+    )
 
 
 def main(argv):
@@ -524,13 +558,21 @@ def main(argv):
     args = p.parse_args(argv)
 
     if args.cmd == "poll":
-        jobs = poll(args.since_days)
+        try:
+            jobs = poll(args.since_days)
+        except CredentialsEncodingError as exc:
+            print(json.dumps({"ok": False, "reason": str(exc)}), file=sys.stderr)
+            return 1
         for j in jobs:
             print(json.dumps(j))
         return 0
 
     if args.cmd == "count":
-        print(json.dumps(count(args.since_days), indent=2))
+        try:
+            print(json.dumps(count(args.since_days), indent=2))
+        except CredentialsEncodingError as exc:
+            print(json.dumps({"ok": False, "reason": str(exc)}), file=sys.stderr)
+            return 1
         return 0
 
     if args.cmd == "status":
@@ -541,6 +583,9 @@ def main(argv):
         if args.body is not None:
             text = args.body
         elif args.body_file:
+            if _is_secret_path(args.body_file):
+                print(json.dumps({"ok": False, "reason": "body_file_forbidden"}))
+                return 1
             try:
                 text = Path(args.body_file).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):

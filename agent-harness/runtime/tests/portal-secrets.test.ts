@@ -95,6 +95,43 @@ const probe = (() => {
   return box;
 })();
 
+/**
+ * The commands an injected agent would run. Each reads a secret, and each
+ * would print the canary without a sandbox (the control below proves it).
+ */
+const READS = (home: string) => [
+  `cat ${home}/credentials/linkedin.json`,
+  `cat ${home}/credentials/email_monitor.json`,
+  `cat ${home}/credentials/ats-accounts/workday_acme.json`,
+  `cat ${home}/.cache/linkedin/storage-state.json`,
+  `cat ${home}/.cache/linkedin/profile/Cookies`,
+  `grep -r ${CANARY} ${home}`,
+  `find ${home} -name '*.json' -exec cat {} +`,
+  `python3 -c 'print(open("${home}/credentials/linkedin.json").read())'`,
+];
+
+/**
+ * A JHT home with canaries, OUTSIDE /tmp: bubblewrap puts an empty tmpfs over
+ * /tmp (where tmux keeps its socket), so a home there is invisible as a whole
+ * and every "cannot read the secret" passes for the wrong reason — the bug
+ * this file shipped with. /var/tmp is neither masked nor a protected path.
+ */
+async function canaryHome(): Promise<{ jhtHome: string; workdir: string }> {
+  const jhtHome = await realpath(await mkdtemp(join("/var/tmp", "jht-portal-home-")));
+  const workdir = join(jhtHome, "agents", "scout");
+  await mkdir(workdir, { recursive: true });
+  await mkdir(join(jhtHome, "credentials", "ats-accounts"), { recursive: true });
+  await mkdir(join(jhtHome, ".cache", "linkedin", "profile"), { recursive: true });
+  const canary = (field: string) => JSON.stringify({ email: "canary@example.invalid", [field]: CANARY });
+  await writeFile(join(jhtHome, "credentials", "linkedin.json"), canary("password"), { mode: 0o600 });
+  await writeFile(join(jhtHome, "credentials", "email_monitor.json"), canary("password"), { mode: 0o600 });
+  await writeFile(join(jhtHome, "credentials", "ats-accounts", "workday_acme.json"), canary("password"), { mode: 0o600 });
+  await writeFile(join(jhtHome, ".cache", "linkedin", "storage-state.json"), canary("li_at"), { mode: 0o600 });
+  await writeFile(join(jhtHome, ".cache", "linkedin", "profile", "Cookies"), CANARY, { mode: 0o600 });
+  await writeFile(join(jhtHome, "notes.txt"), "readable\n");
+  return { jhtHome, workdir };
+}
+
 describe.runIf(probe.kind !== "none")(`portal secrets in ${probe.kind}`, () => {
   let workdir: string;
   let jhtHome: string;
@@ -102,18 +139,7 @@ describe.runIf(probe.kind !== "none")(`portal secrets in ${probe.kind}`, () => {
   const run = (command: string) => createBashTool({ workdir, sandbox }).execute({ command }, CONTEXT);
 
   beforeAll(async () => {
-    jhtHome = await realpath(await mkdtemp(join(tmpdir(), "jht-portal-home-")));
-    workdir = join(jhtHome, "agents", "scout");
-    await mkdir(workdir, { recursive: true });
-    await mkdir(join(jhtHome, "credentials", "ats-accounts"), { recursive: true });
-    await mkdir(join(jhtHome, ".cache", "linkedin", "profile"), { recursive: true });
-    const canary = (field: string) => JSON.stringify({ email: "canary@example.invalid", [field]: CANARY });
-    await writeFile(join(jhtHome, "credentials", "linkedin.json"), canary("password"), { mode: 0o600 });
-    await writeFile(join(jhtHome, "credentials", "email_monitor.json"), canary("password"), { mode: 0o600 });
-    await writeFile(join(jhtHome, "credentials", "ats-accounts", "workday_acme.json"), canary("password"), { mode: 0o600 });
-    await writeFile(join(jhtHome, ".cache", "linkedin", "storage-state.json"), canary("li_at"), { mode: 0o600 });
-    await writeFile(join(jhtHome, ".cache", "linkedin", "profile", "Cookies"), CANARY, { mode: 0o600 });
-    await writeFile(join(jhtHome, "notes.txt"), "readable\n");
+    ({ jhtHome, workdir } = await canaryHome());
     sandbox = createSandbox({ workdir, protectedPaths: portalSecretPaths(jhtHome), homeDir: jhtHome });
   });
 
@@ -122,24 +148,34 @@ describe.runIf(probe.kind !== "none")(`portal secrets in ${probe.kind}`, () => {
     await rm(jhtHome, { recursive: true, force: true });
   });
 
-  it("cat, ls, find and grep from the agent's shell never reach a canary", async () => {
-    for (const command of [
-      `cat ${jhtHome}/credentials/linkedin.json`,
-      `cat ${jhtHome}/credentials/email_monitor.json`,
-      `cat ${jhtHome}/credentials/ats-accounts/workday_acme.json`,
-      `cat ${jhtHome}/.cache/linkedin/storage-state.json`,
-      `cat ${jhtHome}/.cache/linkedin/profile/Cookies`,
-      `ls -la ${jhtHome}/credentials ${jhtHome}/credentials/ats-accounts ${jhtHome}/.cache/linkedin`,
-      `grep -r ${CANARY} ${jhtHome}`,
-      `find ${jhtHome} -name '*.json' -exec cat {} +`,
-      `python3 -c 'print(open("${jhtHome}/credentials/linkedin.json").read())'`,
-    ]) {
-      const result = await run(command);
+  it("the rest of the JHT home stays readable", async () => {
+    expect(await run(`cat ${jhtHome}/notes.txt`)).toMatchObject({ ok: true, content: expect.stringContaining("readable") });
+  });
+
+  it("cat, ls, find, grep and python never reach a canary, while the home itself stays visible", async () => {
+    // The same command first proves the home is there: a negative that passes
+    // because nothing at all is visible is not a negative.
+    for (const command of [...READS(jhtHome), `ls -la ${jhtHome}/credentials ${jhtHome}/credentials/ats-accounts ${jhtHome}/.cache/linkedin`]) {
+      const result = await run(`cat ${jhtHome}/notes.txt; ${command}`);
+      expect(result.content, command).toContain("readable");
       expect(result.content, command).not.toContain(CANARY);
     }
   });
+});
 
-  it("the rest of the JHT home stays readable", async () => {
-    expect(await run(`cat ${jhtHome}/notes.txt`)).toMatchObject({ ok: true, content: expect.stringContaining("readable") });
+describe("control: the same commands without a sandbox", () => {
+  it("read every canary, so the negatives above can fail", async () => {
+    const { jhtHome, workdir } = await canaryHome();
+    const sandbox = createSandbox({ workdir, platform: "sunos" });
+    try {
+      expect(sandbox.kind).toBe("none");
+      for (const command of READS(jhtHome)) {
+        const result = await createBashTool({ workdir, sandbox }).execute({ command }, CONTEXT);
+        expect(result.content, command).toContain(CANARY);
+      }
+    } finally {
+      sandbox.dispose();
+      await rm(jhtHome, { recursive: true, force: true });
+    }
   });
 });

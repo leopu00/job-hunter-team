@@ -18,6 +18,7 @@ import json
 import os
 import smtplib
 import sys
+import traceback
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,9 @@ class FakeSmtp:
     def login(self, user, password):
         if FakeSmtp.fail_with is not None:
             raise FakeSmtp.fail_with
+        # smtplib encodes the AUTH string as ASCII: a non-ASCII password raises
+        # UnicodeEncodeError here, naming the character and its position.
+        ("\0%s\0%s" % (user, password)).encode("ascii")
         FakeSmtp.logins.append((user, password))
 
     def send_message(self, msg):
@@ -174,3 +178,91 @@ def test_no_agent_prompt_tells_the_model_to_open_a_credentials_file():
     # The translated "never open" lines name json.load on purpose: they forbid it.
     offenders = [o for o in offenders if not any(w in o for w in ("Non aprire", "Nunca", "N'ouvre", "Soha", "Öffne"))]
     assert offenders == []
+
+
+# ── hosea R1 and R2 (08/10) ───────────────────────────────────────────────
+
+NON_ASCII_CANARY = "CANARY-pässwörd-è-7c2d"
+
+
+def pieces_of(secret: str) -> list[str]:
+    """What a leak can look like: the whole canary, each non-ASCII character
+    and its escapes, and the position a UnicodeEncodeError reports."""
+    out = [secret, secret[:8]]
+    for ch in secret:
+        if ord(ch) > 127:
+            out += [ch, repr(ch)[1:-1], ch.encode("unicode_escape").decode(), f"\\x{ord(ch):02x}"]
+    return out + ["position", "codec can't encode"]
+
+
+def write_password(home: Path, password: str) -> None:
+    creds = home / "credentials" / "email_monitor.json"
+    data = json.loads(creds.read_text())
+    data["password"] = password
+    creds.write_text(json.dumps(data, ensure_ascii=False))
+
+
+def test_a_non_ascii_password_never_leaks_through_an_encoding_error(mailbox):
+    home, em = mailbox
+    write_password(home, NON_ASCII_CANARY)
+    code, out, err = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body", "x"])
+    assert code == 1
+    assert json.loads(out) == {"ok": False, "reason": "encoding_unsupported"}
+    for piece in pieces_of(NON_ASCII_CANARY):
+        assert piece not in out and piece not in err, piece
+    assert FakeSmtp.sent == []
+
+
+class FakeImap:
+    def __init__(self, host, port):
+        pass
+
+    def login(self, user, password):
+        # imaplib sends LOGIN as ASCII: same failure as smtplib.
+        password.encode("ascii")
+
+    def logout(self):
+        pass
+
+
+def test_imap_login_with_a_non_ascii_password_raises_a_clean_error(mailbox, monkeypatch):
+    home, em = mailbox
+    write_password(home, NON_ASCII_CANARY)
+    monkeypatch.setattr(em.imaplib, "IMAP4_SSL", FakeImap)
+    with pytest.raises(em.CredentialsEncodingError) as caught:
+        em._imap_connect(em._load_creds())
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    for piece in pieces_of(NON_ASCII_CANARY):
+        assert piece not in rendered, piece
+    code, out, err = run_cli(em, ["poll"])
+    assert code == 1 and out == ""
+    assert json.loads(err) == {"ok": False, "reason": "credentials_unsupported_characters"}
+
+
+@pytest.mark.parametrize("where", ["credentials/email_monitor.json", ".cache/linkedin/storage-state.json", "credentials/ats-accounts/x.json"])
+def test_a_body_file_inside_the_portal_secrets_is_refused(mailbox, where):
+    home, em = mailbox
+    target = home / where
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        target.write_text(CANARY)
+    code, out, err = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body-file", str(target)])
+    assert code == 1 and json.loads(out) == {"ok": False, "reason": "body_file_forbidden"}
+    assert FakeSmtp.logins == [] and CANARY not in out + err
+
+
+def test_a_symlink_to_a_secret_is_refused_too(mailbox, tmp_path):
+    home, em = mailbox
+    link = tmp_path / "innocent.txt"
+    link.symlink_to(home / "credentials" / "email_monitor.json")
+    code, out, _ = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body-file", str(link)])
+    assert code == 1 and json.loads(out)["reason"] == "body_file_forbidden"
+    assert FakeSmtp.sent == []
+
+
+def test_recipients_are_capped(mailbox):
+    _, em = mailbox
+    many = [f"r{i}@example.com" for i in range(em.MAX_RECIPIENTS + 1)]
+    assert em.send(many, "Hi", "x") == {"ok": False, "reason": "too_many_recipients"}
+    assert em.send(many[: em.MAX_RECIPIENTS], "Hi", "x")["ok"] is True
