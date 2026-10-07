@@ -121,7 +121,11 @@ def ancestors():
 
 def targets():
     skip = ancestors() | {os.getpid()}
-    rows = subprocess.run(["ps", "-ax", "-o", "pid=,command="],
+    # `ww` come in `_alive`: senza, GNU ps taglia la riga e il marker in fondo
+    # sparisce. Sul runner GitHub il path seriale ci stava per poco; con
+    # pytest-xdist la tmp_path ha `popen-gwN/` in piu', il kill non trovava
+    # piu' niente e restavano i doppioni (run 37553471842).
+    rows = subprocess.run(["ps", "-axww", "-o", "pid=,command="],
                           capture_output=True, text=True).stdout.splitlines()
     found = []
     for row in rows:
