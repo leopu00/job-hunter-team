@@ -15,9 +15,12 @@
 # with <dispatch> exactly:
 #   if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi
 #
-# Root, but only CAP_CHOWN, no network, and only these two folders. Callers:
-# scripts/jht-wrapper.ps1 (Repair-MountOwnership) and the desktop app
-# (setup_service.gd, _repair_mount_ownership): one contract, read below.
+# Root, but only CAP_CHOWN, no network, and only these two folders. Caller:
+# scripts/jht-wrapper.ps1 (Repair-MountOwnership), before every `up`. It is
+# the only path that starts a local container on Windows: the Tauri desktop
+# refuses a local runtime there (onboarding.rs install_local,
+# runtime_install_unsupported) and would go through `jht up` if it ever
+# gets one. Any other caller must keep the contract below.
 #
 # Contract — one line per folder on stdout, then the exit code:
 #   mount_ok <dir>              already 1001 throughout

@@ -60,7 +60,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --no-start jht
 # compile di Turbopack. Risolto con un one-shot --volumes-from.
 # MSYS_NO_PATHCONV=1 evita che git-bash converta /bin/sh in C:/... su Windows.
 log "Fixo ownership di /app/web/.next (uid 1001)"
-MSYS_NO_PATHCONV=1 docker run --rm --user root --entrypoint /bin/sh \
+# Root solo per il chown: nessun'altra capability, niente rete, niente
+# privilegi da guadagnare (come gli altri run una tantum, P1 del 08/10).
+MSYS_NO_PATHCONV=1 docker run --rm --user root --cap-drop ALL --cap-add CHOWN \
+  --network none --security-opt no-new-privileges --entrypoint /bin/sh \
   --volumes-from jht "$IMAGE" \
   -c "chown -R 1001:1001 /app/web/.next" >/dev/null
 

@@ -135,6 +135,33 @@ def test_the_one_shot_root_containers_keep_only_chown():
         assert flag in call, flag
 
 
+def test_the_dev_one_shot_root_container_keeps_only_chown():
+    text = (ROOT / "scripts" / "dev-up.sh").read_text(encoding="utf-8")
+    run = text[text.index("docker run --rm --user root"):]
+    run = run[: run.index("chown -R 1001:1001")]
+    for flag in ("--cap-drop ALL", "--cap-add CHOWN", "--network none", "--security-opt no-new-privileges"):
+        assert flag in run, flag
+
+
+def test_the_compose_tells_the_truth_about_nosuid():
+    # Docker cannot put nosuid,nodev on a bind: the compose must not claim an
+    # override that does it, and must name the residue.
+    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "override generato" not in text
+    assert "NON sono" in text and "nosuid,nodev" in text
+    assert "mounter_linux.go" in text and "setuid dall'uid 1001" in text
+
+
+def test_the_repair_names_only_callers_that_exist():
+    text = REPAIR.read_text(encoding="utf-8")
+    assert "setup_service.gd" not in text and "_repair_mount_ownership" not in text
+    assert "jht-wrapper.ps1 (Repair-MountOwnership)" in text
+    # The Tauri desktop starts no local runtime off Unix: it never needs the repair.
+    onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
+    install = onboarding[onboarding.index("fn install_local("):]
+    assert '#[cfg(not(unix))]\n    return Err(failure("runtime_install_unsupported"));' in install[:400]
+
+
 # ── What used sudo ───────────────────────────────────────────────────────
 
 
