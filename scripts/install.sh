@@ -1581,6 +1581,30 @@ save_pairing_token() {
   ok "Pairing token saved to $token_file (mode 0600)"
 }
 
+# The container runs as uid 1001 (`jht`), and ~/.jht plus the documents
+# folder are aligned to it. On the HOST that uid must belong to nobody, or to
+# the person installing or starting JHT: another account with that uid would
+# own all of ~/.jht (data and portal credentials) and could run a file the
+# container made setuid there (P2 of the security review, 08/10). Prints the
+# account name and succeeds when there is such a conflict.
+bind_uid_conflict() {
+  local uid="$1" self="${SUDO_UID:-$(id -u)}" name=""
+  if command -v getent >/dev/null 2>&1; then
+    name="$(getent passwd "$uid" 2>/dev/null | cut -d: -f1)"
+  else
+    name="$(id -un "$uid" 2>/dev/null || true)"
+  fi
+  [ -n "$name" ] || return 1
+  [ "$self" = "$uid" ] && return 1
+  printf '%s\n' "$name"
+}
+
+refuse_foreign_bind_uid() {
+  local name
+  name="$(bind_uid_conflict 1001)" || return 0
+  fail "uid 1001 on this computer is the account '$name'. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '$name', or give '$name' another uid, then try again."
+}
+
 run_host_setup() {
   # host-setup.sh writes ~/.jht/host.env with JHT_HOST_TYPE (+ JHT_LANG + swap).
   # WITHOUT this file the container boots in mode=local (compose backwards-compat
@@ -1707,6 +1731,7 @@ main() {
   else
     main_native
   fi
+  refuse_foreign_bind_uid
   save_pairing_token
   run_host_setup
   final_message
