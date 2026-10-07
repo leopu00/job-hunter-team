@@ -243,9 +243,9 @@ describe("describeError", () => {
       .toBe(ERROR_CATALOG.host_key_changed.text.it);
   });
 
-  it("speaks English for every non-Italian locale", () => {
+  it("uses English only for unsupported locales", () => {
     expect(describeError("agent_busy", { locale: "en" }).text).toBe(ERROR_CATALOG.agent_busy.text.en);
-    expect(describeError("agent_busy", { locale: "de" }).text).toBe(ERROR_CATALOG.agent_busy.text.en);
+    expect(describeError("agent_busy", { locale: "nl" }).text).toBe(ERROR_CATALOG.agent_busy.text.en);
     expect(describeError("agent_busy").text).toBe(ERROR_CATALOG.agent_busy.text.it);
   });
 

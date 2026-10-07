@@ -8,17 +8,26 @@
  * Rust backend and the TS layer can produce), so a new code cannot ship
  * without its sentence and its action.
  *
- * Languages: Italian and English for every entry. The other UI languages fall
- * back to English, like the web dictionaries (lib/i18n-dict.ts).
+ * Languages: Italian and English are the source copy here; the five other
+ * product languages live in error-catalog.locales.ts, keyed by error code.
  */
 
-export type ErrorLocale = "it" | "en";
+import {
+  ERROR_CATALOG_LOCALES,
+  ERROR_TRANSLATION_LOCALES,
+  type ErrorTranslationLocale,
+  type ErrorTranslationPair,
+} from "./error-catalog.locales";
+
+export const ERROR_LOCALES = ["it", "en", ...ERROR_TRANSLATION_LOCALES] as const;
+export type ErrorLocale = (typeof ERROR_LOCALES)[number];
+type ErrorSourceLocale = "it" | "en";
 
 export interface ErrorCopy {
   /** What happened, in plain words. */
-  text: Record<ErrorLocale, string>;
+  text: Record<ErrorSourceLocale, string>;
   /** What to do now. */
-  action: Record<ErrorLocale, string>;
+  action: Record<ErrorSourceLocale, string>;
 }
 
 export interface DescribedError {
@@ -894,16 +903,35 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
 ]);
 
 function localeOf(locale: string | null | undefined): ErrorLocale {
-  return locale === "it" ? "it" : locale ? "en" : "it";
+  if (!locale) return "it";
+  return (ERROR_LOCALES as readonly string[]).includes(locale) ? locale as ErrorLocale : "en";
 }
 
 function formatTime(resetsAt: number, locale: ErrorLocale, now: number): string {
   const date = new Date(resetsAt * 1000);
-  const tag = locale === "it" ? "it-IT" : "en-GB";
+  const tags: Record<ErrorLocale, string> = {
+    it: "it-IT", en: "en-GB", de: "de-DE", es: "es-ES", fr: "fr-FR", hu: "hu-HU", pt: "pt-PT",
+  };
+  const tag = tags[locale];
   const time = new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(date);
   if (new Date(now).toDateString() === date.toDateString()) return time;
   const day = new Intl.DateTimeFormat(tag, { weekday: "long", day: "numeric", month: "long" }).format(date);
-  return locale === "it" ? `${time} di ${day}` : `${time} on ${day}`;
+  const joined: Record<ErrorLocale, string> = {
+    it: `${time} di ${day}`,
+    en: `${time} on ${day}`,
+    de: `${time} am ${day}`,
+    es: `${time} del ${day}`,
+    fr: `${time} le ${day}`,
+    hu: `${day}, ${time}`,
+    pt: `${time} de ${day}`,
+  };
+  return joined[locale];
+}
+
+function localizedCopy(code: string, copy: ErrorCopy, locale: ErrorLocale): ErrorTranslationPair {
+  if (locale === "it" || locale === "en") return [copy.text[locale], copy.action[locale]];
+  return ERROR_CATALOG_LOCALES[code]?.[locale as ErrorTranslationLocale]
+    ?? ERROR_CATALOG_LOCALES.unknown[locale as ErrorTranslationLocale];
 }
 
 /**
@@ -926,21 +954,26 @@ export function describeError(
   const key = typeof code === "string" ? code : "unknown";
   const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
   const entry = key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
-  const fallback = options.fallback && has(options.fallback) ? ERROR_CATALOG[options.fallback] : UNKNOWN_ERROR;
+  const fallbackCode = options.fallback && has(options.fallback) ? options.fallback : "unknown";
+  const fallback = ERROR_CATALOG[fallbackCode];
   let chosen = entry ?? fallback;
+  let chosenCode = entry ? key : fallbackCode;
   let known = entry !== undefined;
-  const needsTime = chosen.text[locale].includes("{time}") || chosen.action[locale].includes("{time}");
+  let [text, action] = localizedCopy(chosenCode, chosen, locale);
+  const needsTime = text.includes("{time}") || action.includes("{time}");
   const resetsAt = options.resetsAt;
   const hasTime = typeof resetsAt === "number" && Number.isFinite(resetsAt) && resetsAt > 0;
   if (needsTime && !hasTime) {
     chosen = UNKNOWN_ERROR;
+    chosenCode = "unknown";
+    [text, action] = localizedCopy(chosenCode, chosen, locale);
     known = false;
   }
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
   return {
     code: key,
-    text: chosen.text[locale].replaceAll("{time}", time),
-    action: chosen.action[locale].replaceAll("{time}", time),
+    text: text.replaceAll("{time}", time),
+    action: action.replaceAll("{time}", time),
     known,
   };
 }
