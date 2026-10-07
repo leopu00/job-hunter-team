@@ -325,6 +325,15 @@ def test_preflight_blocks_before_anything_is_sent(box, mutate, reason):
     assert FakeTransport.sends == []
 
 
+def test_a_transport_secret_owned_by_another_user_is_refused(box, monkeypatch):
+    # P1 portal secrets, phase 0: the file must be this uid's, not only 0600.
+    real_uid = os.getuid()
+    monkeypatch.setattr(ea.os, "getuid", lambda: real_uid + 1)
+    out = flow(box).send()
+    assert (out.state, out.reason) == ("blocked_human", "transport_missing")
+    assert FakeTransport.sends == []
+
+
 def _edit_transport(home, **changes):
     cfg = json.loads((home / "jht.config.json").read_text())
     cfg["applications"]["email_transport"].update(changes)

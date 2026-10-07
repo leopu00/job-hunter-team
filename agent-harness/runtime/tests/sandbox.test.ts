@@ -39,7 +39,9 @@ describe("seatbeltProfile", () => {
     expect(profile).toContain('(subpath "/Users/me/.config/gcloud")');
     expect(profile).toContain('(subpath "/Users/me/.config/gh")');
     expect(profile).toContain('(literal "/Users/me/.codex/auth.json")');
-    expect(profile).toContain('(literal "/etc/jht/mcp.json")');
+    // `subpath`, not `literal`: a protected path can be a folder (the portal
+    // secrets), and `subpath` on a file still matches that file alone.
+    expect(profile).toContain('(subpath "/etc/jht/mcp.json")');
     expect(profile).toContain(String.raw`(regex #"/\.env(\.[^/]+)?$")`);
     expect(profile).toContain(String.raw`(regex #"/credentials(\.json)?$")`);
     expect(profile).toContain(String.raw`(regex #"-key\.txt$")`);

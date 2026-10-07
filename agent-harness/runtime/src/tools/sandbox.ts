@@ -82,7 +82,18 @@ export interface SandboxOptions {
 }
 
 /** Credential folders under the home, as `SECRET_DIRS` in `paths.ts`. */
-const SECRET_HOME_DIRS = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".config/gcloud", ".config/gh"];
+const SECRET_HOME_DIRS = [
+  ".ssh",
+  ".aws",
+  ".gnupg",
+  ".kube",
+  ".docker",
+  ".azure",
+  ".config/gcloud",
+  ".config/gh",
+  "credentials",
+  ".cache/linkedin",
+];
 /** Credential files under the home, as in `paths.ts`. */
 const SECRET_HOME_FILES = [
   ".git-credentials",
@@ -104,6 +115,11 @@ const SECRET_NAME_REGEXES = [
   String.raw`/\.(git-credentials|netrc|npmrc|pypirc|pgpass)$`,
   String.raw`/id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$`,
   String.raw`/credentials(\.json)?$`,
+  // A credentials folder anywhere, and what is inside it: the regex above only
+  // matches the folder's own node, not the files under it.
+  String.raw`/credentials/`,
+  String.raw`/\.cache/linkedin(/|$)`,
+  String.raw`/storage-state\.json$`,
   String.raw`-key\.txt$`,
 ];
 /**
@@ -196,9 +212,12 @@ export function seatbeltProfile(options: { writableRoots: string[]; home: string
   // A regex literal is written as is: SBPL reads `\.` in `#"..."` as a regex escape.
   const re = (pattern: string) => `(regex #"${pattern}")`;
   const secretDirs = SECRET_HOME_DIRS.flatMap((dir) => bothSpellings(join(options.home, dir))).map((dir) => `(subpath ${q(dir)})`);
-  const secretFiles = [...SECRET_HOME_FILES.map((file) => join(options.home, file)), ...options.protectedPaths]
+  const secretFiles = SECRET_HOME_FILES.map((file) => join(options.home, file))
     .flatMap(bothSpellings)
     .map((file) => `(literal ${q(file)})`);
+  // A protected path can be a folder (the portal secrets): `subpath` shuts it and
+  // everything below, and on a file it matches the file alone, as `literal` did.
+  const protectedRules = options.protectedPaths.flatMap(bothSpellings).map((path) => `(subpath ${q(path)})`);
   const secretNames = [...SECRET_NAME_REGEXES, `^${escapeRegex(options.home)}/.*${SECRET_KEY_EXTENSIONS}`].map(re);
   return [
     "(version 1)",
@@ -210,7 +229,7 @@ export function seatbeltProfile(options: { writableRoots: string[]; home: string
     `  ${re("^/dev/fd/")}`,
     `  ${re("^/dev/ttys[0-9]+$")})`,
     "(deny file-read* file-write*",
-    ...[...secretDirs, ...secretFiles, ...secretNames].map((rule) => `  ${rule}`),
+    ...[...secretDirs, ...secretFiles, ...protectedRules, ...secretNames].map((rule) => `  ${rule}`),
     ")",
     `(allow file-read* ${re(READABLE_EXCEPTION)})`,
     // tmux, the Docker daemon, an SSH agent: servers that run outside the sandbox.

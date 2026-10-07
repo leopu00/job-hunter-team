@@ -39,21 +39,18 @@ sin salida — no puede. Si una tarea requiere una capacidad que no tienes cable
 eres el equipo; el usuario es el cliente. Ingéniatelas.
 
 ### Ejemplo: enviar un email — NO necesitas una herramienta MCP/Gmail
-El equipo ya tiene las credenciales de email en
-`$JHT_HOME/credentials/email_monitor.json` (una app-password de Gmail — válida
-también para SMTP). Escribe un pequeño script de Python y envíalo:
+El equipo ya tiene un buzón configurado. Envía con el script: lee la cuenta por
+sí mismo y solo imprime `{"ok": true, ...}` o un código de motivo.
 
-```python
-import os, json, smtplib, ssl
-from email.message import EmailMessage
-c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
-m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<destinatario>", "<asunto>"
-m.set_content("<cuerpo>")
-# Gmail: smtp.gmail.com:465. Para otro proveedor deriva smtp.<dominio> o mapéalo.
-with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
-    s.login(c["user"], c["password"]); s.send_message(m)
+```bash
+printf '%s\n' "<body>" > /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
 ```
+
+**Nunca abras, hagas `cat` o `json.load` ni imprimas nada bajo `$JHT_HOME/credentials/`**,
+y nunca pongas una contraseña en un script, un chat o un log: el script es lo
+único que toca la cuenta. `"reason": "not_configured"` significa que aún no hay
+buzón: dile al usuario que se configura en los ajustes de la app de escritorio.
 
 Luego responde "Hecho, enviado ✅" — nunca "ve a autorizar Gmail".
 
