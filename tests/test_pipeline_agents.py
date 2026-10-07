@@ -304,8 +304,21 @@ class TestScorerFlow:
         insert_score(db_path, tmp, id_low, total=30)
         update_position(db_path, tmp, id_low, status='scored')
 
+        # Writer-on-demand: la coda mostra solo i CV richiesti. Senza la
+        # richiesta su ENTRAMBE il test passava sempre: LowCo restava fuori
+        # per la richiesta mancante, non per lo score.
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE positions SET write_requested = 1, "
+            "write_requested_at = datetime('now') WHERE id IN (?, ?)", (id_high, id_low)
+        )
+        conn.commit()
+        conn.close()
+
         r = run_cli(DB_QUERY, ['next-for-scrittore'], db_path, tmp)
         assert r.returncode == 0
+        assert 'HighCo' in r.stdout, \
+            f"next-for-scrittore non mostra la posizione richiesta con score>=50.\nOutput: {r.stdout}"
         assert 'LowCo' not in r.stdout, \
             f"next-for-scrittore mostra posizioni con score<50.\nOutput: {r.stdout}"
 

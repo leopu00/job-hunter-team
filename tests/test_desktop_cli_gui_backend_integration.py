@@ -1,12 +1,17 @@
-"""Dynamic parity harness for the CLI and the desktop backend adapter.
+"""The onboarding sequence the desktop drives, run through the real host wrapper.
 
-Both runners cross the attested production host wrapper.  Only its external
-container dependency is replaced by a deterministic stateful fixture; the
-wrapper itself is copied byte-for-byte from ``scripts/jht-wrapper.sh``.
+The wrapper is copied byte-for-byte from ``scripts/jht-wrapper.sh``; only its
+external container dependency is replaced by a deterministic stateful fixture.
+This file owns execution: command plan, exit/status pairs, PTY hand-off,
+snapshots, and sanitized events.
 
-The static binding from desktop operation identifiers to wrapper argv belongs
-to the companion contract test.  This file owns execution parity: command
-plan, exit/status pairs, PTY hand-off, snapshots, and sanitized events.
+Until 08/10 it ran the sequence twice, as "CLI" and as "GUI", and required the
+two runs to match. Both sides executed the same file (the same path, the same
+runner body), so the match held whatever the wrapper did. The desktop's own
+part is the operation -> argv binding in ``desktop/src-tauri/src/onboarding.rs``
+(``LocalCliOperation::argv``), proven by its Rust tests and by the source
+contract in ``tests/test_desktop_cli_local_setup_parity.py``; what it executes
+is this wrapper, proven here once.
 """
 
 from __future__ import annotations
@@ -23,8 +28,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI_ENTRYPOINT = ROOT / "scripts" / "jht-wrapper.sh"
-GUI_BACKEND_ENTRYPOINT = ROOT / "scripts" / "jht-wrapper.sh"
+WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
 # Kept local on purpose: this is the executable integration contract, not a
 # second production dispatcher.  The companion static gate binds these stable
@@ -452,42 +456,21 @@ def _run_process(
             os.close(slave)
 
 
-class CliRunner(BackendRunner):
+class WrapperRunner(BackendRunner):
     def _invoke(
         self, argv: list[str], env: dict[str, str], needs_pty: bool
     ) -> subprocess.CompletedProcess[str]:
         return _run_process([str(self.fixture.wrapper), *argv], env, needs_pty)
 
 
-class GuiAdapterRunner(BackendRunner):
-    """Exercise the native adapter's verified-wrapper process boundary."""
-
-    def _invoke(
-        self, argv: list[str], env: dict[str, str], needs_pty: bool
-    ) -> subprocess.CompletedProcess[str]:
-        # The GUI backend resolves and attests this same installed wrapper.  A
-        # separate fixture/process prevents shared state from hiding drift.
-        return _run_process([str(self.fixture.wrapper), *argv], env, needs_pty)
+def _run(tmp_path: Path, *, fail_operation: str | None = None) -> HarnessResult:
+    fixture = RuntimeFixture.create(tmp_path / "wrapper", WRAPPER)
+    return WrapperRunner(fixture).run(fail_operation=fail_operation)
 
 
-def _run_pair(
-    tmp_path: Path, *, fail_operation: str | None = None
-) -> tuple[HarnessResult, HarnessResult]:
-    cli_fixture = RuntimeFixture.create(tmp_path / "cli", CLI_ENTRYPOINT)
-    gui_fixture = RuntimeFixture.create(tmp_path / "gui", GUI_BACKEND_ENTRYPOINT)
-    return (
-        CliRunner(cli_fixture).run(fail_operation=fail_operation),
-        GuiAdapterRunner(gui_fixture).run(fail_operation=fail_operation),
-    )
+def test_the_wrapper_runs_the_onboarding_sequence_on_a_stateful_runtime(tmp_path: Path):
+    cli = _run(tmp_path)
 
-
-def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
-    cli, gui = _run_pair(tmp_path)
-
-    assert cli.command_plan == gui.command_plan
-    assert cli.completed == gui.completed
-    assert cli.events == gui.events
-    assert cli.snapshots == gui.snapshots
     assert cli.completed == [
         CompletedOperation("probe", 1, "done"),
         CompletedOperation("up", 0, "done"),
@@ -500,7 +483,7 @@ def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
         CompletedOperation("assistant_start", 0, "done"),
         CompletedOperation("snapshot_after_team", 0, "done"),
     ]
-    assert cli.state == gui.state == {
+    assert cli.state == {
         "container_running": True,
         "container_starts": 1,
         "provider": "codex",
@@ -581,13 +564,10 @@ def test_cli_and_gui_execute_the_same_backend_sequence(tmp_path: Path):
     assert "login.example.invalid" not in serialized_events
 
 
-def test_cli_and_gui_match_fail_closed_status_and_never_emit_external_output(tmp_path: Path):
-    cli, gui = _run_pair(tmp_path, fail_operation="provider_update")
+def test_a_failed_step_closes_with_its_status_and_never_emits_external_output(tmp_path: Path):
+    cli = _run(tmp_path, fail_operation="provider_update")
 
-    assert cli.command_plan == gui.command_plan
-    assert cli.completed == gui.completed
-    assert cli.events == gui.events
-    assert cli.snapshots == gui.snapshots == []
+    assert cli.snapshots == []
     assert cli.completed[-1] == CompletedOperation("provider_update", 41, "error")
     assert cli.events[-1] == {
         "stage": "provider",

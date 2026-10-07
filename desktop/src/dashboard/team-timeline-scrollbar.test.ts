@@ -17,7 +17,18 @@ function portableRepoPath(path: string): string {
   return path.replace(/\\/g, "/");
 }
 
-const css = normalizedText(readFileSync(fileURLToPath(new URL("./dashboard.css", import.meta.url)), "utf-8"));
+const cssSource = readFileSync(fileURLToPath(new URL("./dashboard.css", import.meta.url)), "utf-8");
+
+/** The two rules, as found in a stylesheet read from any checkout. */
+function rulesIn(source: string): string[] {
+  const css = normalizedText(source);
+  return [WEBKIT_RULE, FIREFOX_RULE].filter((rule) => css.includes(rule));
+}
+
+/** A file under the repo, named the same way on every system. */
+function repoRelative(file: string): string {
+  return portableRepoPath(file.slice(repo.length));
+}
 
 function webSources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -25,6 +36,11 @@ function webSources(dir: string): string[] {
     if (statSync(path).isDirectory()) return webSources(path);
     return /\.tsx?$/.test(name) ? [path] : [];
   });
+}
+
+/** The web files that hold the plane's class. */
+function planeFiles(): string[] {
+  return webSources(join(repo, "web/app")).filter((file) => readFileSync(file, "utf-8").split(PLANE).length > 1);
 }
 
 /**
@@ -35,24 +51,22 @@ function webSources(dir: string): string[] {
  */
 describe("the team timeline's scrollbar", () => {
   it("is hidden in the desktop, and only for that plane", () => {
-    expect(css).toContain(WEBKIT_RULE);
-    expect(css).toContain(FIREFOX_RULE);
+    expect(rulesIn(cssSource)).toEqual([WEBKIT_RULE, FIREFOX_RULE]);
   });
 
-  it("checks the same selector contract with Windows checkout formatting", () => {
-    const windowsCss = `${WEBKIT_RULE}\n${FIREFOX_RULE}`.replace(/\n/g, "\r\n");
-    expect(normalizedText(windowsCss)).toContain(WEBKIT_RULE);
-    expect(normalizedText(windowsCss)).toContain(FIREFOX_RULE);
-    expect(portableRepoPath("web\\app\\(protected)\\team\\ActivityCharts.tsx")).toBe(
-      "web/app/(protected)/team/ActivityCharts.tsx",
-    );
+  // The suite runs on Windows only in game.yml. This keeps a Windows checkout
+  // honest on Linux too: the REAL stylesheet with CRLF line ends, and the REAL
+  // plane file named with backslashes, through the same readers the two other
+  // tests use. (Until 08/10 it checked the helpers on constants of its own.)
+  it("holds on a Windows checkout: the real stylesheet with CRLF, the real plane file with backslashes", () => {
+    expect(rulesIn(cssSource.replace(/\r?\n/g, "\r\n"))).toEqual([WEBKIT_RULE, FIREFOX_RULE]);
+    const [plane] = planeFiles();
+    expect(repoRelative(plane!.replace(/\//g, "\\"))).toBe("web/app/(protected)/team/ActivityCharts.tsx");
   });
 
   it("still finds its plane in the web: one flex-1 overflow-x-auto, the timeline's", () => {
-    const hitFiles = webSources(join(repo, "web/app")).filter(
-      (file) => readFileSync(file, "utf-8").split(PLANE).length > 1,
-    );
-    const hits = hitFiles.map((file) => portableRepoPath(file.slice(repo.length)));
+    const hitFiles = planeFiles();
+    const hits = hitFiles.map(repoRelative);
     expect(hits).toEqual(["web/app/(protected)/team/ActivityCharts.tsx"]);
     const source = readFileSync(hitFiles[0]!, "utf-8");
     expect(source.split(PLANE)).toHaveLength(2);
