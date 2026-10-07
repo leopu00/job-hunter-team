@@ -16,6 +16,8 @@ export interface VerifiedToken {
   userId: string;
   tokenId: string;
   name: string;
+  /** Scadenza del token; null = nessuna scadenza. */
+  expiresAt: string | null;
   admin: ReturnType<typeof createAdminClient>;
 }
 
@@ -181,6 +183,12 @@ export async function verifyBearerToken(
 
   return {
     ok: true,
-    data: { userId: data.user_id, tokenId: data.id, name: data.name, admin },
+    data: {
+      userId: data.user_id,
+      tokenId: data.id,
+      name: data.name,
+      expiresAt: data.expires_at,
+      admin,
+    },
   };
 }

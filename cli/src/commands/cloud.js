@@ -18,6 +18,7 @@ import {
   timeoutFailure,
 } from '../lib/sync-rendezvous.js';
 import { clientIdentity, clientHeaderValue, cloudSyncHeaders } from '../lib/client-identity.js';
+import { describeTokenExpiry, probeTokenExpiry } from '../lib/token-expiry.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { coalescingGuardedLane, createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import { applyAppliedBackflow } from '../lib/applied-backflow.js';
@@ -1026,6 +1027,12 @@ async function handleStatus() {
   console.log(pc.dim('Token name: ') + (config.token_name ?? 'unnamed'));
   console.log(pc.dim('User ID:    ') + config.user_id);
   console.log(pc.dim('Enabled at: ') + config.enabled_at);
+
+  // Un token con scadenza, scaduto, scollega il box senza altri segnali:
+  // la scadenza la sa solo il cloud, quindi si chiede a ping.
+  const expiry = describeTokenExpiry(await probeTokenExpiry(config));
+  const paint = { none: pc.green, active: pc.green, warning: pc.yellow, expired: pc.red, unknown: pc.dim };
+  console.log(pc.dim('Token expiry: ') + paint[expiry.state](expiry.text));
 
   // Telemetria che questo box dichiara a ogni chiamata cloud-sync. È qui
   // perché chi la produce deve poterla rileggere: raccogliere un dato che il

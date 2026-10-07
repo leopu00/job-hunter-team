@@ -12,6 +12,7 @@ export interface VerifiedToken {
   userId: string;
   tokenId: string;
   name: string;
+  expiresAt: string | null;
   admin: never;
 }
 

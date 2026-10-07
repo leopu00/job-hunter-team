@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { TokenExpiryNotice } from "./TokenExpiryNotice";
 
 // Breadcrumb: senza, dalla pagina token non si tornava alle Impostazioni
 // (feedback utente 21/07).
@@ -30,6 +31,9 @@ interface TokenRow {
   token_prefix: string;
   last_used_at: string | null;
   created_at: string;
+  // NULL = nessuna scadenza. Un token scaduto scollega il box in silenzio:
+  // la riga lo dice in anticipo (TokenExpiryNotice).
+  expires_at: string | null;
   // Telemetria tecnica dichiarata dal box a ogni chiamata cloud-sync
   // ([CLIENT-VERSION-INVISIBLE]). NULL finché un client abbastanza recente
   // non si fa vivo: i token pairati prima non mandano l'header.
@@ -538,6 +542,10 @@ export default function CloudTokensClient() {
                         </>
                       )}
                   </div>
+                  <TokenExpiryNotice
+                    locale={locale}
+                    expiresAt={tok.expires_at}
+                  />
                 </div>
                 <button
                   onClick={() => handleRevoke(tok.id)}

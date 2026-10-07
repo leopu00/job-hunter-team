@@ -37,6 +37,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     user_id: result.data.userId,
-    token: { id: result.data.tokenId, name: result.data.name },
+    // expires_at: il box legge la scadenza del SUO token (`jht cloud status`).
+    // Non e' un segreto: lo riceve solo chi presenta gia' quel token.
+    token: {
+      id: result.data.tokenId,
+      name: result.data.name,
+      expires_at: result.data.expiresAt,
+    },
   });
 }
