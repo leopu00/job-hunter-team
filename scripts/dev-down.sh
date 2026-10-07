@@ -15,8 +15,14 @@ log()  { printf "%s▶%s %s\n" "$COLOR_GREEN" "$COLOR_RESET" "$*"; }
 info() { printf "%s  %s%s\n" "$COLOR_DIM" "$*" "$COLOR_RESET"; }
 warn() { printf "%s⚠%s %s\n" "$COLOR_YELLOW" "$COLOR_RESET" "$*"; }
 
+# Solo i processi di QUESTA worktree: il loro cmdline contiene il path di
+# web/ (npm mette web/node_modules/.bin nel PATH col path assoluto). Un
+# `pgrep -f "next dev -p N"` nudo prendeva anche il Next di un'altra worktree
+# o di un altro team sulla stessa macchina.
+worktree_re() { printf '%s' "$REPO_ROOT" | sed 's/[][\.*^$+?(){}|]/\\&/g'; }
+
 # ── Host Next ─────────────────────────────────────────────────────────────
-HOST_PIDS=$(pgrep -f "next dev -p 3001" 2>/dev/null || true)
+HOST_PIDS=$(pgrep -f "$(worktree_re)/web/node_modules/.*next dev -p 3001" 2>/dev/null || true)
 if [ -n "${HOST_PIDS}" ]; then
   log "Termino Next host (pids: ${HOST_PIDS})"
   # shellcheck disable=SC2086
@@ -26,7 +32,7 @@ fi
 
 # Pulizia postcss worker orfani (vedi memory: feedback_web_dev_host_mode).
 # Turbopack su bind-mount Windows li spawna ma non li chiude, saturando la RAM.
-POSTCSS_PIDS=$(pgrep -f "postcss.js" 2>/dev/null || true)
+POSTCSS_PIDS=$(pgrep -f "$(worktree_re)/web/.*postcss\.js" 2>/dev/null || true)
 if [ -n "${POSTCSS_PIDS}" ]; then
   COUNT=$(printf "%s\n" "${POSTCSS_PIDS}" | wc -l | tr -d ' ')
   info "Termino $COUNT postcss worker orfani"

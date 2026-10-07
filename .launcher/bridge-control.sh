@@ -23,7 +23,7 @@ BRIDGE_PY="/app/.launcher/sentinel-bridge.py"
 LOG_FILE="$(jht_daemon_log sentinel-bridge.log)"
 
 kill_all_bridges() {
-  jht_kill_by_marker sentinel-bridge.py 1 0.5
+  jht_kill_by_marker "$BRIDGE_PY" 1 0.5
 }
 
 case "$ACTION" in

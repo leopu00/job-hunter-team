@@ -79,7 +79,12 @@ cd "$REPO_ROOT/web"
 
 # Kill eventuale Next host precedente per non intasare la memoria
 # con postcss worker (vedi memory: feedback_web_dev_host_mode).
-HOST_NEXT_PIDS=$(pgrep -f "next dev -p ${HOST_PORT}" 2>/dev/null || true)
+# Solo i processi di QUESTA worktree: il loro cmdline contiene il path di
+# web/ (npm mette web/node_modules/.bin nel PATH col path assoluto). Un
+# `pgrep -f "next dev -p N"` nudo prendeva anche il Next di un'altra worktree
+# o di un altro team sulla stessa macchina.
+worktree_re() { printf '%s' "$REPO_ROOT" | sed 's/[][\.*^$+?(){}|]/\\&/g'; }
+HOST_NEXT_PIDS=$(pgrep -f "$(worktree_re)/web/node_modules/.*next dev -p ${HOST_PORT}" 2>/dev/null || true)
 if [ -n "${HOST_NEXT_PIDS}" ]; then
   info "Termino Next host precedenti: ${HOST_NEXT_PIDS}"
   # shellcheck disable=SC2086

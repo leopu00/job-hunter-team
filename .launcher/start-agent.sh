@@ -375,7 +375,8 @@ if [ "$ROLE" = "bridge" ]; then
     exit 1
   fi
   # Kill bridge preesistenti (pkill non è installato nell'immagine slim).
-  # Matching su 'sentinel-bridge.py' copre setsid wrapper + python + figli.
+  # Matching sul path completo di sentinel-bridge.py: copre setsid wrapper +
+  # python, e soltanto quelli di questa installazione (vedi daemon-lib.sh).
   # Bug 2026-05-17 20:42: dopo recreate restavano 2 coppie process vive
   # perché SIGTERM + sleep 1 era troppo permissivo. Doppio kill TERM→KILL.
   # La scansione passa da proc-kill.py (Python): il vecchio
@@ -383,7 +384,7 @@ if [ "$ROLE" = "bridge" ]; then
   # qualunque processo innocente che nominasse il marker.
   # NB: il singleton VERO è il flock dentro sentinel-bridge.py (copre anche
   # l'entry point bridge-control.sh); questo kill serve al restart pulito.
-  jht_kill_by_marker sentinel-bridge.py 1 0.5
+  jht_kill_by_marker "$BRIDGE_SCRIPT" 1 0.5
   BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
   setsid sh -c "
     JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
@@ -401,7 +402,7 @@ if [ "$ROLE" = "bridge" ]; then
   # manda un [BRIDGE PACING] alla Sentinella allineato a :00,:15,:30,:45 UTC.
   PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
   if [ -f "$PACING_SCRIPT" ]; then
-    jht_kill_by_marker pacing-bridge.py 1 0.5
+    jht_kill_by_marker "$PACING_SCRIPT" 1 0.5
     PACING_LOG="$(jht_daemon_log pacing-bridge.log)"
     # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
     # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
@@ -422,7 +423,7 @@ if [ "$ROLE" = "bridge" ]; then
   # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
   HEARTBEAT_SCRIPT="/app/.launcher/heartbeat-bridge.py"
   if [ -f "$HEARTBEAT_SCRIPT" ]; then
-    jht_kill_by_marker heartbeat-bridge.py 0.5 0.5
+    jht_kill_by_marker "$HEARTBEAT_SCRIPT" 0.5 0.5
     HEARTBEAT_LOG="$(jht_daemon_log heartbeat-bridge.log)"
     setsid sh -c "
       JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
@@ -440,7 +441,7 @@ if [ "$ROLE" = "bridge" ]; then
   # comunque ma update_ratio scarta tutti i sample senza weekly_usage.
   WRM_SCRIPT="/app/shared/skills/window_ratio_meter.py"
   if [ -f "$WRM_SCRIPT" ]; then
-    jht_kill_by_marker window_ratio_meter.py 0.5 0
+    jht_kill_by_marker "$WRM_SCRIPT" 0.5 0
     WRM_LOG="$(jht_daemon_log window-ratio-meter.log)"
     setsid sh -c "
       python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
@@ -455,7 +456,7 @@ if [ "$ROLE" = "bridge" ]; then
   # rimasto giù 6 giorni. Ora vive e muore con la bridge-suite.
   METER_SCRIPT="/app/shared/skills/token-meter.py"
   if [ -f "$METER_SCRIPT" ]; then
-    jht_kill_by_marker token-meter.py 0 0.5
+    jht_kill_by_marker "$METER_SCRIPT" 0 0.5
     METER_LOG="$(jht_daemon_log token-meter.log)"
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' \
@@ -472,7 +473,7 @@ if [ "$ROLE" = "bridge" ]; then
   # la scheda agente del gioco. Stesso pattern: setsid + singleton.
   AV_SCRIPT="/app/shared/skills/agent_vitals.py"
   if [ -f "$AV_SCRIPT" ]; then
-    jht_kill_by_marker agent_vitals.py 0 0.5
+    jht_kill_by_marker "$AV_SCRIPT" 0 0.5
     AV_LOG="$(jht_daemon_log agent-vitals.log)"
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' \
@@ -490,7 +491,7 @@ if [ "$ROLE" = "bridge" ]; then
   # Stesso pattern: setsid + singleton via marker cmdline + cooldown anti-storm.
   HEALER_SCRIPT="/app/.launcher/codex-auth-healer.sh"
   if [ -f "$HEALER_SCRIPT" ]; then
-    jht_kill_by_marker codex-auth-healer.sh 0 0.5
+    jht_kill_by_marker "$HEALER_SCRIPT" 0 0.5
     HEALER_LOG="$(jht_daemon_log codex-auth-healer.log)"
     setsid sh -c "
       JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
@@ -564,9 +565,11 @@ if [ "$ROLE" = "tg-bridge" ]; then
   # Kill MIRATO: il marker include il ruolo, che compare nel cmdline grazie a
   # `--role` (vedi tg-bridge.py). Prima si uccideva per marker `tg-bridge.py`,
   # cioè tutti e tre, anche quando ne serviva uno solo — ed è così che la
-  # morte del mentor si portava dietro assistente e capitano.
+  # morte del mentor si portava dietro assistente e capitano. E il marker parte
+  # dal path di QUESTO tg-bridge.py: un bridge con lo stesso nome lanciato da
+  # un'altra installazione non è nostro e non si tocca (vedi daemon-lib.sh).
   for _role in $TG_ROLES; do
-    jht_kill_by_marker "tg-bridge.py --role $_role" 0 0
+    jht_kill_by_marker "$TG_SCRIPT --role $_role" 0 0
   done
   # UN solo settle per l'intera raffica, come quando il kill era uno solo:
   # tre attese da un secondo allungherebbero ogni boot senza motivo.
@@ -611,7 +614,7 @@ if [ "$ROLE" = "token-meter" ]; then
     exit 1
   fi
   # Kill istanze preesistenti.
-  jht_kill_by_marker token-meter.py 0 1
+  jht_kill_by_marker "$METER_SCRIPT" 0 1
   METER_LOG="$(jht_daemon_log token-meter.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \
@@ -631,7 +634,7 @@ if [ "$ROLE" = "agent-vitals" ]; then
     echo "✗ $AV_SCRIPT not found — agent-vitals did NOT start"
     exit 1
   fi
-  jht_kill_by_marker agent_vitals.py 0 1
+  jht_kill_by_marker "$AV_SCRIPT" 0 1
   AV_LOG="$(jht_daemon_log agent-vitals.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \
