@@ -456,6 +456,13 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  // Cinque esecuzioni del wrapper vero (upgrade, poi chat e snapshot prima e
+  // dopo un config-hash cambiato): ognuna riverifica proprietario, permessi e
+  // hash del runtime, centinaia di processi. Misurato sul Mac di sviluppo, suite
+  // completa dal turno: 6996 ms a cache fredda il 07/10 (rosso, col timeout di
+  // 5000 ms), 3919 ms a freddo e 2590-2669 ms a caldo l'08/10 dopo che il
+  // wrapper ha smesso di rileggere uname e id a ogni file. 20 s: circa tre volte
+  // il peggiore misurato.
   it("Podman 6.1.3 applica dal compose canonico e verifica ownership e config-hash", () => {
     const sb = makeSandbox();
     const podman = enableExactPodmanHarness(sb);
@@ -506,11 +513,14 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(staleChat.code).toBe(1);
     expect(staleSnapshot.code).toBe(0);
     expect(staleSnapshot.stdout).toContain("containerRunning=0");
-  });
+  }, 20_000);
 
   it("se il candidato non supera la verifica ripristina immagine e compose precedenti", () => {
     const sb = makeSandbox({ verifyFails: true });
-    const result = run(sb, { FAKE_VERIFY_FAIL: "1" });
+    // Il candidato non passa mai: con le 20 osservazioni di produzione il
+    // wrapper le fa tutte, una decina di processi a giro, 4,3 s su 5 di
+    // timeout. Ne bastano due per provare lo stesso esito.
+    const result = run(sb, { FAKE_VERIFY_FAIL: "1", JHT_UPGRADE_VERIFY_TRIES: "2" });
 
     expect(result.code).toBe(1);
     const payload = JSON.parse(result.stdout);
