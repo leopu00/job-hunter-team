@@ -79,6 +79,25 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Prima di pubblicare: dalla shell dell'agente niente porta a root (P1
+      # del 08/10). Build amd64 caricata in locale (stessa cache del push),
+      # avviata con i security_opt e cap_drop del compose: sudo -n true fallisce,
+      # uid 1001, CapEff 0, NoNewPrivs 1, chown 0 fallisce, un setuid in
+      # /jht_home non gira come root. Se torna sudo, l'immagine non esce.
+      - name: Build for the agent-shell check (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:agent-shell-check
+          cache-from: type=gha
+
+      - name: Agent shell cannot reach root
+        run: python3 scripts/ci/agent_shell_privileges.py jht:agent-shell-check
+
       - name: Build & push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

@@ -136,6 +136,15 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    # Niente privilegi da guadagnare (P1 del 08/10). Il processo e' `jht` e
+    # l'immagine non ha sudo; no-new-privileges spegne anche ogni setuid che
+    # un pacchetto si porti dietro, e cap_drop ALL toglie le capability che
+    # resterebbero a un root nel container. Su Linux con Docker rootful i bind
+    # dell'host sono anche nosuid,nodev (override generato dall'installatore).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   jht-deps:
