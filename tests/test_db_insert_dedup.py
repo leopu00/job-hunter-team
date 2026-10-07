@@ -372,6 +372,39 @@ class TestLivelli1e3RestanoIntatti:
         assert 'city-norm' in (match_type or ''), match_type
 
 
+
+class TestUnaPosizioneEsclusaRestaUnDuplicato:
+    """Una posizione `excluded` blocca ancora il suo reinserimento, a ogni livello.
+
+    Ri-inserirla farebbe ripartire da zero verifica e dedup: token dello Scout
+    spesi su un'offerta già scartata (docstring di check_duplicate). Fino
+    all'08/10 l'unico test sul caso stava in test_scoring_logic.py, su una
+    COPIA della funzione scritta nel test, e provava il contrario: che una
+    posizione esclusa non bloccasse niente.
+    """
+
+    @pytest.mark.parametrize('stored_url,new_url,new_company,new_title,expected', [
+        ('https://www.linkedin.com/jobs/view/4381470286',
+         'https://it.linkedin.com/jobs/view/4381470286?refId=x', 'Altro', 'Altro', 'LinkedIn job ID'),
+        ('https://jobs.lever.co/acme/abc-123',
+         'https://jobs.lever.co/acme/abc-123', 'Altro', 'Altro', 'URL esatto'),
+        ('https://test.example/1',
+         'https://other.example/2', 'Acme Corp', 'Senior Data Engineer', 'azienda+titolo+city-norm'),
+        ('https://test.example/1',
+         'https://other.example/2', 'Acme Corp', 'Senior Data Engineer II', 'azienda+titolo simile'),
+    ], ids=['livello-0', 'livello-1', 'livello-2', 'livello-3'])
+    def test_esclusa_e_ancora_vista(self, in_memory_db, stored_url, new_url, new_company, new_title, expected):
+        conn = in_memory_db
+        _insert_test_row(conn, 'Senior Data Engineer', 'Acme Corp', 'Milan, Italy', url=stored_url)
+        conn.execute("UPDATE positions SET status = 'excluded'")
+        conn.commit()
+
+        existing, match_type = db_insert.check_duplicate(
+            conn, url=new_url, company=new_company, title=new_title, location='Milano, IT')
+        assert existing is not None, f"una posizione esclusa non blocca il reinserimento ({expected})"
+        assert (match_type or '').startswith(expected), match_type
+
+
 # ---------------------------------------------------------------------------
 # positions.url UNIQUE — il vincolo, e la politica sui duplicati già in casa
 # ---------------------------------------------------------------------------
