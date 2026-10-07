@@ -49,9 +49,9 @@ jobs:
     if: github.event_name != 'schedule'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -84,9 +84,9 @@ jobs:
     if: github.event_name != 'schedule'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -149,9 +149,9 @@ jobs:
     if: github.event_name != 'schedule'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -189,7 +189,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Le librerie di sistema che Tauri 2 linka su Linux (WebKitGTK 4.1 e
       # compagnia); macOS e Windows usano la webview del sistema.
@@ -205,7 +205,7 @@ jobs:
           rustc --version
           cargo --version
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry/index
@@ -246,11 +246,11 @@ jobs:
     if: github.event_name != 'schedule'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -331,13 +331,13 @@ jobs:
       JHT_TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Tree/blob comparisons and all active remote refs require complete
           # history. The gate itself performs a fresh, quiet read-only fetch.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
 
@@ -409,8 +409,8 @@ jobs:
           python-version: "3.12"
           cache: "pip"
           cache-dependency-path: |
-            requirements.txt
             tests/requirements-ci.txt
+            tests/requirements-app-ci.txt
 
       # tests/test_cli_{config,status_team}.py lanciano `node cli/bin/jht.js`:
       # senza le dipendenze del CLI (commander) sono 21 fallimenti secchi che
@@ -440,12 +440,18 @@ jobs:
         working-directory: shared/cron
         run: npm ci
 
+      # Tutto con versioni e hash, niente scaricato senza: il runner dei test
+      # (tests/requirements-ci.txt) e le dipendenze del prodotto con le
+      # transitive (tests/requirements-app-ci.txt). Poi requirements.txt, la
+      # fonte che usa il Dockerfile, SENZA indice: se chiede una versione che
+      # il lock non ha installato, pip non puo' scaricarla e il passo fallisce.
+      # Niente `pip install --upgrade pip`: era l'unico download senza hash;
+      # resta il pip del Python di setup-python.
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          # Il runner dei test con versioni e hash: tests/requirements-ci.txt.
           pip install --require-hashes -r tests/requirements-ci.txt
-          pip install -r requirements.txt
+          pip install --require-hashes -r tests/requirements-app-ci.txt
+          pip install --no-index -r requirements.txt
 
       # `tests/test_apply_flow.py` ([JHT-CLOSER]) lancia un Chromium vero: sono
       # i test degli invarianti della candidatura — ricevuta obbligatoria,
@@ -536,9 +542,9 @@ jobs:
     if: github.repository == 'leopu00/job-hunter-team' && github.event_name != 'schedule'
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -709,7 +715,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           # Report HTML, trace e video possono incorporare header/cookie e non
           # sono sanificabili con ::add-mask::. Sul repo pubblico conserviamo
@@ -739,9 +745,9 @@ jobs:
       E2E_EMAIL: e2e@example.com
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: "npm"
@@ -753,7 +759,7 @@ jobs:
       # DA FISSARE: il resto del file pinna le action per tag di major
       # (checkout@v7, setup-node@v7), non per SHA; la versione della CLI va
       # fissata a una release precisa prima di rendere il job un gate.
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
         with:
           version: latest
 
@@ -893,7 +899,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           # Solo screenshot: account e dati sono sintetici, ma la regola del
           # repo pubblico resta la stessa del job `e2e`.
@@ -926,16 +932,15 @@ jobs:
        (github.event_name == 'workflow_dispatch' && inputs.smoke))
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
+      # Lo stesso runner, con versioni e hash, del job `pytest`.
       - name: Install pytest
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest
+        run: pip install --require-hashes -r tests/requirements-ci.txt
 
       # `-p no:randomly` non serve: questi test non condividono stato. Serve
       # invece `-rs`: le URLError diventano `pytest.skip`, e uno smoke tutto
@@ -959,7 +964,7 @@ jobs:
       # La spec sta in e2e/canary/, fuori da e2e/tests/: il job `e2e` non la
       # raccoglie mai. Gira anche se lo smoke pytest sopra è rosso: sono due
       # domande diverse.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.prod_canary }}
         with:
           node-version: "24"
