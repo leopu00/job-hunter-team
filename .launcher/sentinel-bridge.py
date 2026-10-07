@@ -1587,6 +1587,9 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             weekly_pace if isinstance(weekly_pace, dict) else {},
             entry.get("weekly_remaining_pct"),
             harvest_backlog=harvest_backlog) or "").strip() or None
+    ru = _read_role_usage(now_ts)
+    if ru and ru.get("windows"):
+        extras["role_usage"] = ru["windows"]
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
     if isinstance(mrp, (int, float)):
         extras["monthly_rem"] = mrp
@@ -1720,6 +1723,45 @@ def load_recent_samples(n=30, source=None):
 def write_jsonl(entry):
     with DATA_JSONL.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+ROLE_USAGE_FILE = LOGS_DIR / "role-usage.json"
+ROLE_USAGE_MAX_AGE_SEC = 15 * 60
+_TBA_MOD = None
+
+
+def _write_role_usage(entry, now_ts):
+    """logs/role-usage.json: token pesati per ruolo nella finestra 5h e nella
+    settimana del provider (token-by-agent-series: group_by_role). Solo
+    misura: nessun freno lo legge. Non deve mai fermare il bridge."""
+    global _TBA_MOD
+    try:
+        if _TBA_MOD is None:
+            _TBA_MOD = _load_skill_module("token_by_agent_series",
+                                          "token-by-agent-series.py")
+        if _TBA_MOD is None:
+            return None
+        windows = _TBA_MOD.provider_windows(entry, now_ts)
+        data = _TBA_MOD.role_usage(windows, now_ts, provider=entry.get("provider"))
+        tmp = ROLE_USAGE_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, ROLE_USAGE_FILE)
+        return data
+    except Exception as e:  # noqa: BLE001 — la misura non ferma il sensore
+        print(f"[bridge] role-usage skipped: {type(e).__name__}: {e}", flush=True)
+        return None
+
+
+def _read_role_usage(now_ts):
+    """role-usage.json se fresco (≤15 min), altrimenti None."""
+    try:
+        data = json.loads(ROLE_USAGE_FILE.read_text(encoding="utf-8"))
+        gen = datetime.fromisoformat(str(data.get("generated_at"))).timestamp()
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if now_ts - gen > ROLE_USAGE_MAX_AGE_SEC:
+        return None
+    return data
 
 
 def _load_skill_module(name, filename):
@@ -2676,6 +2718,9 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
+            # Consumo per RUOLO sulle finestre del provider: a ogni lettura,
+            # anche fuori orario (il pacing-bridge salta i tick off-hours).
+            _write_role_usage(entry, time.time())
             # Il gate orario calcolato in testa al tick vale anche qui: il
             # consiglio di pacing sveglia il Capitano come qualunque altro
             # messaggio, e fuori finestra nessuna LLM va svegliata.

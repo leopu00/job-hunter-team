@@ -3097,6 +3097,12 @@ func _build_agent_page() -> void:
 			kt += float(per_agent[key])
 	_kpi_row(UIStrings.t("agents.consumption") % str(usage.get("window_h", "?")),
 			"%.1f kt" % kt, Palette.MINT)
+	# quota del ruolo sui token del team nella finestra 5h del provider
+	# (role-usage.json del sentinel-bridge): solo misura, nessun freno
+	var per_role: Dictionary = usage.get("per_role", {})
+	if per_role.has(real):
+		_kpi_row(UIStrings.t("agents.role_share"),
+				"%.1f%%" % float(per_role[real]), Palette.MINT)
 
 	# le sue transizioni recenti (tutte le istanze del ruolo)
 	var mine: Array = []

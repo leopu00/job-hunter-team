@@ -251,6 +251,11 @@ def _collect_kimi(by_agent: dict, since_ts: float) -> None:
             state = sd / "state.json"
             if not wire.exists():
                 continue
+            try:
+                if wire.stat().st_mtime < since_ts - 3600:
+                    continue
+            except OSError:
+                continue
             agent = session_to_agent(state, wire) or "?unknown"
             try:
                 with wire.open() as f:
@@ -294,6 +299,8 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
         agent = name[len(CLAUDE_AGENT_PREFIX):]
         for jsonl_file in proj_dir.glob("*.jsonl"):
             try:
+                if jsonl_file.stat().st_mtime < since_ts - 3600:
+                    continue
                 with jsonl_file.open() as f:
                     for line in f:
                         line = line.strip()
@@ -444,18 +451,122 @@ def build_series(by_agent, since_ts: float, now_ts: float, bucket_sec: int):
     return agents, series
 
 
+_ROLE_SUFFIX_RE = re.compile(r"-s?\d+$")
+
+
+def agent_role(agent) -> str | None:
+    """Ruolo canonico di un agente: `analista-3` → analista, `critico-S2` →
+    critico. None se il nome non è un ruolo (sessioni senza agente,
+    `?unknown`): quei token vanno in `unattributed`, non si scartano."""
+    if not isinstance(agent, str):
+        return None
+    base = _ROLE_SUFFIX_RE.sub("", agent.strip().lower())
+    return base if base in VALID_AGENT_ROLES else None
+
+
+def group_by_role(by_agent, since_ts: float, now_ts: float) -> dict:
+    """Somma i token pesati per ruolo dentro [since_ts, now_ts].
+
+    Ritorna {"total_kt", "unattributed_kt", "roles": {ruolo: {"kt",
+    "share_pct", "agents", "events"}}}; share_pct è la quota del ruolo sul
+    totale della finestra, unattributed compreso."""
+    roles: dict = {}
+    unattributed = 0.0
+    for agent, evs in by_agent.items():
+        w = sum(v for ts, v in evs if since_ts <= ts <= now_ts)
+        n = sum(1 for ts, _ in evs if since_ts <= ts <= now_ts)
+        if n == 0:
+            continue
+        role = agent_role(agent)
+        if role is None:
+            unattributed += w
+            continue
+        r = roles.setdefault(role, {"kt": 0.0, "agents": [], "events": 0})
+        r["kt"] += w
+        r["events"] += n
+        r["agents"].append(str(agent).lower())
+    total = sum(r["kt"] for r in roles.values()) + unattributed
+    out_roles = {}
+    for role in sorted(roles, key=lambda k: -roles[k]["kt"]):
+        r = roles[role]
+        out_roles[role] = {
+            "kt": round(r["kt"] / 1000.0, 2),
+            "share_pct": round(r["kt"] / total * 100.0, 1) if total > 0 else 0.0,
+            "agents": sorted(set(r["agents"])),
+            "events": r["events"],
+        }
+    return {
+        "total_kt": round(total / 1000.0, 2),
+        "unattributed_kt": round(unattributed / 1000.0, 2),
+        "unattributed_pct": round(unattributed / total * 100.0, 1) if total > 0 else 0.0,
+        "roles": out_roles,
+    }
+
+
+def provider_windows(sample, now_ts: float) -> dict:
+    """Inizio delle finestre del provider dall'ultimo sample del bridge
+    (sentinel-data.jsonl): 5h = reset_at_unix - 5h, settimana =
+    weekly_reset_at_unix - 7gg. Una finestra senza reset noto, o il cui
+    inizio cade nel futuro, non c'è (meglio niente che un numero inventato)."""
+    out = {}
+    if not isinstance(sample, dict):
+        return out
+    r5 = sample.get("reset_at_unix")
+    if isinstance(r5, (int, float)):
+        since = float(r5) - 5 * 3600
+        if since <= now_ts:
+            out["5h"] = since
+    rw = sample.get("weekly_reset_at_unix")
+    if isinstance(rw, (int, float)) and rw != r5:
+        since = float(rw) - 7 * 86400
+        if since <= now_ts:
+            out["week"] = since
+    return out
+
+
+def role_usage(windows: dict, now_ts: float, provider=None) -> dict:
+    """Consumo per ruolo per ogni finestra: una sola lettura dei log, dal
+    più vecchio inizio, poi filtro per finestra."""
+    now_iso = datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat()
+    out = {"generated_at": now_iso, "provider": provider, "windows": {}}
+    if not windows:
+        return out
+    by_agent = collect_events(min(windows.values()))
+    for name, since_ts in windows.items():
+        g = group_by_role(by_agent, since_ts, now_ts)
+        g["since"] = datetime.fromtimestamp(since_ts, tz=timezone.utc).isoformat()
+        out["windows"][name] = g
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since-min", type=float, default=180.0,
                     help="window in minutes (default: 180 = 3h)")
     ap.add_argument("--bucket-sec", type=int, default=60,
                     help="bucket size in seconds (default: 60)")
+    ap.add_argument("--since-unix", type=float, default=None,
+                    help="window start as unix time (overrides --since-min), "
+                         "e.g. the provider reset minus 5h")
+    ap.add_argument("--group", choices=("agent", "role"), default="agent",
+                    help="agent (default, series per agent) or role (totals per role)")
     args = ap.parse_args()
 
     now = datetime.now(timezone.utc)
-    since = now - timedelta(minutes=args.since_min)
     now_ts = now.timestamp()
-    since_ts = since.timestamp()
+    if args.since_unix is not None:
+        since_ts = min(float(args.since_unix), now_ts)
+        since = datetime.fromtimestamp(since_ts, tz=timezone.utc)
+    else:
+        since = now - timedelta(minutes=args.since_min)
+        since_ts = since.timestamp()
+
+    if args.group == "role":
+        out = group_by_role(collect_events(since_ts), since_ts, now_ts)
+        out.update({"ok": True, "now": now.isoformat(),
+                    "since": since.isoformat(), "group": "role"})
+        json.dump(out, sys.stdout, separators=(",", ":"))
+        return
 
     by_agent = collect_events(since_ts)
     agents, series = build_series(by_agent, since_ts, now_ts, args.bucket_sec)

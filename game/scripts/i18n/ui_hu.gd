@@ -727,6 +727,7 @@ const S := {
 	"agents.back": "◀ ÜGYNÖKÖK",
 	"agents.not_active": "most nem aktív",
 	"agents.consumption": "FOGYASZTÁS (UTOLSÓ %s ÓRA)",
+	"agents.role_share": "SZEREP RÉSZESEDÉSE (5 ÓRÁS ABLAK)",
 	"agents.registry_actions": "MŰVELETEK A NAPLÓBAN",
 	"agents.no_transitions": "nincs friss átmenet a nevén",
 	"agents.active_count": "%d ügynök AKTÍV most a VPS-en",
