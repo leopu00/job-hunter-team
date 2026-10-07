@@ -44,20 +44,61 @@ pub(crate) struct AclReport {
 }
 
 pub(crate) fn protect_dir(path: &Path) -> Result<(), &'static str> {
+    let user = current_user_sid()?;
+    // The walk below must stay inside JHT's tree: a link is never followed.
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        _ => return Err("permissions_failed"),
+    }
     // OICI: files and directories created later inside inherit the same two
     // entries, and SetNamedSecurityInfoW re-propagates them to what is
     // already there, dropping entries those children inherited before.
-    protect(path, "OICI")
+    protect(path, "OICI", &user)?;
+    // Propagation does not reach an entry a child holds explicitly, nor a
+    // child whose own inheritance is already disabled: check every node.
+    secure_descendants(path, &user)
 }
 
 pub(crate) fn protect_file(path: &Path) -> Result<(), &'static str> {
-    protect(path, "")
+    protect(path, "", &current_user_sid()?)
 }
 
-fn protect(path: &Path, inheritance: &str) -> Result<(), &'static str> {
-    let user = current_user_sid()?;
+fn secure_descendants(dir: &Path, user: &str) -> Result<(), &'static str> {
+    for entry in std::fs::read_dir(dir).map_err(|_| "permissions_failed")? {
+        let path = entry.map_err(|_| "permissions_failed")?.path();
+        let kind = std::fs::symlink_metadata(&path)
+            .map_err(|_| "permissions_failed")?
+            .file_type();
+        // A symlink or junction inside a private directory could point
+        // anywhere: neither follow it nor leave it unexplained.
+        if kind.is_symlink() {
+            return Err("permissions_failed");
+        }
+        if !grants_only_owner(&read_acl(&path)?, user) {
+            protect(&path, if kind.is_dir() { "OICI" } else { "" }, user)?;
+        }
+        if kind.is_dir() {
+            secure_descendants(&path, user)?;
+        }
+    }
+    Ok(())
+}
+
+fn protect(path: &Path, inheritance: &str, user: &str) -> Result<(), &'static str> {
     let sddl = format!("D:P(A;{inheritance};FA;;;{user})(A;{inheritance};FA;;;SY)");
-    let sddl = wide(OsStr::new(&sddl))?;
+    apply_dacl(path, &sddl, true)?;
+    // A successful call is not the effect: read the ACL that is really there.
+    if is_owner_only(&read_acl(path)?, user) {
+        Ok(())
+    } else {
+        Err("permissions_failed")
+    }
+}
+
+/// Writes the DACL of an SDDL string; `protected` also disables inheritance
+/// from the parent.
+fn apply_dacl(path: &Path, sddl: &str, protected: bool) -> Result<(), &'static str> {
+    let sddl = wide(OsStr::new(sddl))?;
     let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
     // SAFETY: `sddl` is NUL-terminated UTF-16; the descriptor is allocated by
     // the call and released with LocalFree below.
@@ -86,13 +127,18 @@ fn protect(path: &Path, inheritance: &str) -> Result<(), &'static str> {
             return Err("permissions_failed");
         }
         let target = wide(path.as_os_str())?;
+        let information = if protected {
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION
+        } else {
+            DACL_SECURITY_INFORMATION
+        };
         // SAFETY: `target` is a NUL-terminated UTF-16 path and `dacl` a valid
         // ACL; owner, group and SACL are left untouched.
         let status = unsafe {
             SetNamedSecurityInfoW(
                 target.as_ptr(),
                 SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                information,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 dacl,
@@ -106,25 +152,54 @@ fn protect(path: &Path, inheritance: &str) -> Result<(), &'static str> {
     })();
     // SAFETY: allocated by ConvertStringSecurityDescriptorToSecurityDescriptorW.
     unsafe { LocalFree(descriptor) };
-    result?;
-
-    // A successful call is not the effect: read the ACL that is really there.
-    if is_owner_only(&read_acl(path)?, &user) {
-        Ok(())
-    } else {
-        Err("permissions_failed")
-    }
+    result
 }
 
 /// Inheritance is disabled, the current user is allowed, and nobody else is
 /// allowed except SYSTEM.
 pub(crate) fn is_owner_only(report: &AclReport, user_sid: &str) -> bool {
-    report.inheritance_disabled
-        && report.allowed_sids.iter().any(|sid| sid == user_sid)
+    report.inheritance_disabled && grants_only_owner(report, user_sid)
+}
+
+/// The current user is allowed and nobody else is allowed except SYSTEM,
+/// whether the entries are explicit or inherited.
+pub(crate) fn grants_only_owner(report: &AclReport, user_sid: &str) -> bool {
+    report.allowed_sids.iter().any(|sid| sid == user_sid)
         && report
             .allowed_sids
             .iter()
             .all(|sid| sid == user_sid || sid == LOCAL_SYSTEM_SID)
+}
+
+/// Test fixture: a DACL that opens `path` to Everyone, Users and
+/// Authenticated Users, inherited by what is created inside. `protected`
+/// also cuts the entries inherited from the parent.
+#[cfg(test)]
+pub(crate) fn open_to_everyone_and_users(path: &Path, protected: bool) {
+    let user = current_user_sid().unwrap();
+    let inheritance = if path.is_dir() { "OICI" } else { "" };
+    let sddl = format!(
+        "D:(A;{inheritance};FA;;;{user})(A;{inheritance};FA;;;WD)\
+         (A;{inheritance};FA;;;BU)(A;{inheritance};FA;;;AU)"
+    );
+    apply_dacl(path, &sddl, protected).unwrap();
+}
+
+/// Test assertion: `path` is protected, the current user is allowed, and
+/// Everyone, Users and Authenticated Users are not.
+#[cfg(test)]
+pub(crate) fn assert_owner_only(path: &Path) {
+    let user = current_user_sid().unwrap();
+    let report = read_acl(path).unwrap();
+    assert!(report.inheritance_disabled, "{path:?}: {report:?}");
+    assert!(report.allowed_sids.contains(&user), "{path:?}: {report:?}");
+    for broad in ["S-1-1-0", "S-1-5-32-545", "S-1-5-11"] {
+        assert!(
+            !report.allowed_sids.iter().any(|sid| sid == broad),
+            "{path:?}: {report:?}"
+        );
+    }
+    assert!(is_owner_only(&report, &user), "{path:?}: {report:?}");
 }
 
 pub(crate) fn read_acl(path: &Path) -> Result<AclReport, &'static str> {
@@ -293,66 +368,10 @@ mod tests {
         root
     }
 
-    /// An open parent ACL that its children inherit: the situation a private
-    /// directory must not be left in.
-    fn open_to_everyone_and_users(path: &Path) {
-        let user = current_user_sid().unwrap();
-        let sddl =
-            format!("D:(A;OICI;FA;;;{user})(A;OICI;FA;;;WD)(A;OICI;FA;;;BU)(A;OICI;FA;;;AU)");
-        let sddl = wide(OsStr::new(&sddl)).unwrap();
-        let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
-        let mut present = 0;
-        let mut defaulted = 0;
-        let mut dacl: *mut ACL = ptr::null_mut();
-        let target = wide(path.as_os_str()).unwrap();
-        unsafe {
-            assert_ne!(
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    sddl.as_ptr(),
-                    SDDL_REVISION_1,
-                    &mut descriptor,
-                    ptr::null_mut(),
-                ),
-                0
-            );
-            assert_ne!(
-                GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted),
-                0
-            );
-            assert_eq!(
-                SetNamedSecurityInfoW(
-                    target.as_ptr(),
-                    SE_FILE_OBJECT,
-                    DACL_SECURITY_INFORMATION,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    dacl,
-                    ptr::null(),
-                ),
-                ERROR_SUCCESS
-            );
-            LocalFree(descriptor);
-        }
-    }
-
-    fn assert_owner_only(path: &Path) {
-        let user = current_user_sid().unwrap();
-        let report = read_acl(path).unwrap();
-        assert!(report.inheritance_disabled, "{path:?}: {report:?}");
-        assert!(report.allowed_sids.contains(&user), "{path:?}: {report:?}");
-        for broad in [EVERYONE, USERS, AUTHENTICATED_USERS] {
-            assert!(
-                !report.allowed_sids.iter().any(|sid| sid == broad),
-                "{path:?}: {report:?}"
-            );
-        }
-        assert!(is_owner_only(&report, &user), "{path:?}: {report:?}");
-    }
-
     #[test]
     fn private_dir_gets_a_protected_owner_only_acl_also_for_existing_children() {
         let root = scratch("dir");
-        open_to_everyone_and_users(&root);
+        open_to_everyone_and_users(&root, false);
         let private = root.join("profile");
         fs::create_dir(&private).unwrap();
         let existing = private.join("candidate_profile.yml");
@@ -389,9 +408,53 @@ mod tests {
     }
 
     #[test]
+    fn private_dir_closes_children_that_hold_their_own_open_entries() {
+        let root = scratch("explicit");
+        let private = root.join("profile");
+        fs::create_dir(&private).unwrap();
+        // A file with explicit Everyone/Users entries next to the inherited ones.
+        let explicit = private.join("candidate_profile.yml");
+        fs::write(&explicit, b"name: fixture\n").unwrap();
+        open_to_everyone_and_users(&explicit, false);
+        // A directory that no longer inherits and is open on its own, with a
+        // file inside that inherits from it.
+        let detached = private.join("summaries");
+        fs::create_dir(&detached).unwrap();
+        open_to_everyone_and_users(&detached, true);
+        let nested = detached.join("about.md");
+        fs::write(&nested, b"summary\n").unwrap();
+        // Precondition: propagation from `private` alone would reach none of
+        // these entries.
+        assert!(read_acl(&detached).unwrap().inheritance_disabled);
+        for node in [&explicit, &detached, &nested] {
+            let report = read_acl(node).unwrap();
+            assert!(
+                report.allowed_sids.iter().any(|sid| sid == EVERYONE),
+                "{node:?}: {report:?}"
+            );
+        }
+
+        crate::runtime_host::set_private_dir_permissions(&private).unwrap();
+
+        assert_owner_only(&private);
+        let user = current_user_sid().unwrap();
+        for node in [&explicit, &detached, &nested] {
+            let report = read_acl(node).unwrap();
+            assert!(grants_only_owner(&report, &user), "{node:?}: {report:?}");
+            for broad in [EVERYONE, USERS, AUTHENTICATED_USERS] {
+                assert!(
+                    !report.allowed_sids.iter().any(|sid| sid == broad),
+                    "{node:?}: {report:?}"
+                );
+            }
+        }
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn private_file_gets_a_protected_owner_only_acl() {
         let root = scratch("file");
-        open_to_everyone_and_users(&root);
+        open_to_everyone_and_users(&root, false);
         let file = root.join("known_hosts");
         fs::write(&file, b"fixture\n").unwrap();
         assert!(read_acl(&file)
