@@ -3,6 +3,9 @@
 L'utente decide se e quando candidarsi. Questo gate protegge le superfici che
 in passato trasformavano l'assenza di candidature in un invito ad agire:
 prompt dei ruoli, stati vuoti dell'interfaccia e avvisi di scadenza.
+
+Fino all'08/10 un test guardava anche gli stati vuoti del gioco Godot (game/):
+Godot e' abbandonato, e quel test e' stato tolto con lui.
 """
 
 import re
@@ -48,32 +51,6 @@ def test_all_role_prompts_inherit_the_user_initiated_application_rule():
             assert int(match.group(1)) >= 18, (
                 f"{path} non eredita RULE-T18 sull'autonomia delle candidature"
             )
-
-
-def test_empty_application_states_are_neutral_in_every_game_locale():
-    """Nessun registro vuoto deve chiamare lo Scout o suggerire che manca qualcosa."""
-    paths = [
-        REPO_ROOT / "game" / "scripts" / "ui_strings.gd",
-        *(REPO_ROOT / "game" / "scripts" / "i18n" / f"ui_{locale}.gd"
-          for locale in ("en", "es", "fr", "de", "pt", "hu")),
-    ]
-    forbidden = (
-        "talk to the Scout", "parla col reparto Ricerca", "habla con el Scout",
-        "parle au Scout", "sprich mit dem Scout", "fale com o Scout",
-        "beszélj a Scouttal", "no applications yet", "nessuna candidatura ancora",
-        "aún no hay candidaturas", "aucune candidature pour l'instant",
-        "noch keine Bewerbungen", "nenhuma candidatura ainda", "még nincs jelentkezés",
-    )
-    for path in paths:
-        text = _read(path)
-        assert '"registry.streak"' not in text, f"streak candidature ancora esposto: {path}"
-        assert '"kpi.streak"' not in text, f"KPI streak candidature ancora esposto: {path}"
-        assert all(term not in text for term in forbidden), f"stato vuoto pressante: {path}"
-
-    kpi_panel = _read(REPO_ROOT / "game" / "scripts" / "ui" / "section_panel.gd")
-    registry_panel = _read(REPO_ROOT / "game" / "scripts" / "ui" / "registry_panel.gd")
-    assert "TeamData.streak(" not in kpi_panel
-    assert "TeamData.streak(" not in registry_panel
 
 
 def test_web_copy_does_not_frame_zero_applications_as_a_deficit():

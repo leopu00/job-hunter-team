@@ -1,22 +1,15 @@
-"""The agents' status has ONE rule: the Godot game's pane reader.
+"""The agents' status rule: shared/skills/agent_activity.py, run by the daemon.
 
-The game pipes game/scripts/backend/payloads/agent_activity.py into the
-container; the cloud daemon cannot, because game/ stays out of the image
-(.dockerignore), so it runs shared/skills/agent_activity.py
-(cli/src/lib/agents-status.js). The two must be the same file, byte for
-byte: a change to one without the other would give the desktop office and
-the game two different ideas of who is working.
+The cloud daemon runs shared/skills/agent_activity.py
+(cli/src/lib/agents-status.js). Until 08/10 a test also held it byte for byte
+equal to the Godot game's copy (game/scripts/backend/payloads/agent_activity.py);
+Godot is abandoned and that test went with it.
 """
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GAME = ROOT / "game/scripts/backend/payloads/agent_activity.py"
 SHARED = ROOT / "shared/skills/agent_activity.py"
-
-
-def test_the_shared_rule_is_the_games_byte_for_byte():
-    assert SHARED.read_bytes() == GAME.read_bytes()
 
 
 def test_the_daemon_runs_the_shared_copy():

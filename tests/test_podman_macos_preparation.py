@@ -1,4 +1,9 @@
-"""Non-runtime contracts for the opt-in macOS Podman preparation path."""
+"""Non-runtime contracts for the opt-in macOS Podman preparation path.
+
+Until 08/10 one more test read the Godot setup (game/: setup_service.gd and
+section_panel.gd choosing the Podman runtime). Godot is abandoned and it went
+with it.
+"""
 
 import os
 from pathlib import Path
@@ -10,8 +15,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install.sh"
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
-SETUP = ROOT / "game" / "scripts" / "setup" / "setup_service.gd"
-PANEL = ROOT / "game" / "scripts" / "ui" / "section_panel.gd"
 QUICKSTART = ROOT / "docs" / "guides" / "QUICKSTART.md"
 
 
@@ -116,32 +119,6 @@ def test_transition_prevalidates_selection_and_private_adapter_paths():
     assert '[ ! -L "$adapter_bin" ]' in source
     assert '[ "$(cd -P "$adapter_bin" && pwd -P)" = "$adapter_bin" ]' in source
     assert "Refusing to overwrite an unsafe or non-JHT executable" in source
-
-
-def test_desktop_can_detect_select_and_start_the_preview_runtime():
-    setup = _source(SETUP)
-    panel = _source(PANEL)
-
-    assert 'const RUNTIME_PODMAN := "podman"' in setup
-    assert "_podman_adapter_ready()" in setup
-    assert "_podman_adapter_ready_at" in setup
-    assert "runtime_switch_requires_installer" in setup
-    assert "_which_docker_without_jht_shim" in setup
-    assert '"machine", "start", "--update-connection=false"' in setup
-    assert "_podman_machine_name()" in setup
-    assert 'path_join("podman-machine")' in setup
-    assert 'var user_home := OS.get_environment("HOME").rstrip("/")' in setup
-    assert "SetupService.RUNTIME_PODMAN" in panel
-    assert "SetupService.runtime_switch_requires_installer" in panel
-    assert 'UIStrings.t("setup.runtime_podman")' in panel
-
-    runtime_block = setup[
-        setup.index("const RUNTIME_COLIMA") : setup.index(
-            "static func _container_is_running()"
-        )
-    ]
-    assert "FileAccess.WRITE" not in runtime_block
-    assert "remove_absolute" not in runtime_block
 
 
 def test_installer_verifies_destination_before_publishing_runtime_selection():

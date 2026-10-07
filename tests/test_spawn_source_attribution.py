@@ -1,4 +1,8 @@
-"""Every operational launcher caller identifies itself in the spawn trace."""
+"""Every operational launcher caller identifies itself in the spawn trace.
+
+Until 08/10 one more test held the Godot backend (game/: vps_backend.gd) to the
+`desktop-assistant-recovery` source. Godot is abandoned and it went with it.
+"""
 
 import json
 import os
@@ -64,8 +68,3 @@ def test_worker_fallbacks_and_pid1_launches_declare_their_source():
     # Two direct bridge launches plus the per-role CLI autostart.
     assert pid1.count("JHT_SPAWN_SRC: 'pid1'") == 2
     assert pid1.count("JHT_SPAWN_SRC: 'pid1-autostart'") == 1
-
-
-def test_desktop_assistant_recovery_names_the_desktop_as_source():
-    backend = _source("game/scripts/backend/vps_backend.gd")
-    assert "JHT_SPAWN_SRC=desktop-assistant-recovery" in backend

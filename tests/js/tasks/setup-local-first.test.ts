@@ -34,8 +34,6 @@ const LOCALES = ["en", "it", "hu", "es", "de", "fr", "pt"] as const;
 
 const hostSetup = read("scripts/host-setup.sh");
 const cliSetup = read("cli/wizard/setup.js");
-const gameTour = read("game/scripts/dialogue/dialogues.gd");
-const scriptedOnboarding = read("game/scripts/setup/scripted_onboarding.gd");
 const landing = [
   read("web/app/components/landing/LandingI18n.tsx"),
   ...["de", "es", "fr", "pt"].map((locale) =>
@@ -233,47 +231,9 @@ describe("CLI host wizard — local e VPS sono host reali", () => {
   });
 });
 
-describe("gioco — PC locale first-class, VPS esplicita", () => {
-  it("l'onboarding scriptato presenta locale prima di VPS", () => {
-    const local = scriptedOnboarding.indexOf(
-      '["local", UIStrings.t("onb.c.intro.local")]',
-    );
-    const vps = scriptedOnboarding.indexOf(
-      '["vps", UIStrings.t("onb.c.intro.vps")]',
-    );
-    expect(local).toBeGreaterThan(0);
-    expect(local).toBeLessThan(vps);
-  });
-
-  it("il tour non offre come guidato il PC dedicato non validato", () => {
-    const coordinator = gameTour.match(
-      /"tour_coordinatore":\s*\{([\s\S]*?)\n\t\},\n\n\t##/,
-    )?.[1];
-    expect(coordinator).toBeTruthy();
-    expect(coordinator).toContain("On this computer.");
-    expect(coordinator).toContain("On a VPS");
-    expect(coordinator).not.toContain("pick_dedicated");
-    expect(coordinator).not.toContain("runtime:dedicated");
-    expect(coordinator).not.toContain("always-on online computer");
-  });
-
-  it("i sette cataloghi nominano VPS e separano lo stato account", () => {
-    for (const locale of LOCALES) {
-      const file =
-        locale === "it"
-          ? "game/scripts/ui_strings.gd"
-          : `game/scripts/i18n/ui_${locale}.gd`;
-      const catalog = read(file);
-      expect(catalog, locale).toContain('"onb.c.intro.vps"');
-      expect(
-        catalog.match(/"onb\.c\.intro\.vps":\s*"([^"]+)"/)?.[1],
-        locale,
-      ).toContain("VPS");
-      expect(catalog, locale).toContain('"account.not_connected"');
-      expect(catalog, locale).not.toContain('"account.local_mode"');
-    }
-  });
-});
+// Until 08/10 a block here held the Godot game (game/: the scripted onboarding,
+// the tour, the seven UI catalogues) to "local PC first, VPS explicit". Godot
+// is abandoned and those three tests went with it.
 
 describe("route pubbliche — il locale non e' una demo e il cloud non e' un host", () => {
   it("la landing nomina il PC locale prima delle opzioni remote", () => {

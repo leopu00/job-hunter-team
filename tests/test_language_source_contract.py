@@ -4,6 +4,10 @@ The historical divergence was concrete: Godot wrote ``user://lang.cfg`` while
 agent startup consumed ``$JHT_HOME/i18n-prefs.json`` (and, in practice, a
 stale ``JHT_LANG`` from host.env won even over that file). These tests exercise
 the resolution order and pin both sides to the frozen v1 contract.
+
+Until 08/10 two more tests pinned the Godot side (game/: ui_strings.gd,
+jht_fs.gd, vps_backend.gd, the language_save.py payload). Godot is abandoned
+and they went with it.
 """
 
 from __future__ import annotations
@@ -17,17 +21,10 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 SPAWN_LIB = ROOT / ".launcher" / "spawn-lib.sh"
-UI_STRINGS = ROOT / "game" / "scripts" / "ui_strings.gd"
-VPS_BACKEND = ROOT / "game" / "scripts" / "backend" / "vps_backend.gd"
-LANGUAGE_PAYLOAD = (
-    ROOT / "game" / "scripts" / "backend" / "payloads" / "language_save.py"
-)
 SHARED_I18N = ROOT / "shared" / "i18n.py"
 SHARED_I18N_SH = ROOT / "shared" / "i18n.sh"
 WIZARD_I18N = ROOT / "cli" / "wizard" / "i18n.js"
 HOST_SETUP = ROOT / "scripts" / "host-setup.sh"
-SETUP_SERVICE = ROOT / "game" / "scripts" / "setup" / "setup_service.gd"
-JHT_FS = ROOT / "game" / "scripts" / "setup" / "jht_fs.gd"
 
 
 def _fake_jq(bin_dir: Path) -> None:
@@ -215,35 +212,6 @@ def test_node_copy_resolver_prefers_the_canonical_file(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "fr"
-
-
-def test_game_reads_and_writes_only_the_canonical_language_artifact():
-    source = UI_STRINGS.read_text(encoding="utf-8")
-
-    assert 'const LANGUAGE_PREFS := "i18n-prefs.json"' in source
-    assert 'JhtFs.read_json(LANGUAGE_PREFS)' in source
-    assert 'JhtFs.write_json(LANGUAGE_PREFS, {"locale": l})' in source
-    assert 'user://lang.cfg' not in source
-    assert "LANG_CFG" not in source
-    storage = JHT_FS.read_text(encoding="utf-8")
-    assert 'temporary := rel + ".game-tmp"' in storage
-    assert 'mv -f %s %s' in storage
-    assert "[System.IO.File]::Replace" in storage
-    assert "if FileAccess.file_exists(path):\n\t\tDirAccess.remove_absolute(path)" not in storage
-
-
-def test_remote_runtime_receives_the_same_validated_language_artifact():
-    backend = VPS_BACKEND.read_text(encoding="utf-8")
-
-    assert LANGUAGE_PAYLOAD.exists()
-    payload = LANGUAGE_PAYLOAD.read_text(encoding="utf-8")
-    assert "SUPPORTED_LOCALES" in payload
-    assert "os.replace" in payload
-    assert "'/jht_home/i18n-prefs.json'" in payload
-    assert 'payload("language_save.py")' in backend
-    assert "func save_ui_language(" in backend
-    setup = SETUP_SERVICE.read_text(encoding="utf-8")
-    assert "BackendBus.save_ui_language(UIStrings.lang)" in setup
 
 
 def test_host_preflight_only_bootstraps_the_canonical_preference():

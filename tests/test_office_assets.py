@@ -1,34 +1,26 @@
-"""scripts/office_assets/build_office_assets.py: the desktop office's layout comes from game/.
+"""The desktop office (desktop/public/office): layout, images and their shape.
 
-The layout is rebuilt from the GDScript constants and compared with the
-committed desktop/public/office/layout.json: when the Godot office moves a desk
-and nobody runs the script, this goes red. Needs no image library.
+Until 08/10 two more tests rebuilt layout.json from the Godot office's
+GDScript constants with scripts/office_assets/build_office_assets.py (and
+tested its GDScript reader), failing when the two drifted. Godot (game/) is
+abandoned: layout.json is now the source, and these tests guard what the
+desktop ships.
 """
 
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts" / "office_assets"))
-
-import build_office_assets as assets  # noqa: E402
-
 OFFICE = ROOT / "desktop" / "public" / "office"
 
 
 @pytest.fixture(scope="module")
 def committed() -> dict:
     return json.loads((OFFICE / "layout.json").read_text(encoding="utf-8"))
-
-
-def test_the_committed_layout_is_what_game_says_today(committed):
-    layout, _ = assets.build_layout(assets.ArtPlan())
-    assert layout == committed, "game/ changed: run python3 scripts/office_assets/build_office_assets.py"
 
 
 def test_every_image_the_layout_and_the_manifest_name_is_shipped(committed):
@@ -100,33 +92,6 @@ def test_art_is_placed_by_godots_rule_and_mirrored_where_godot_mirrors_it(commit
     occluded = {k: v["frontOcclusion"] for k, v in desks.items() if "frontOcclusion" in v}
     assert sorted(occluded.values()) == [0.62, 0.72, 0.72, 0.78, 0.8]
     assert all(k.endswith("_3") for k in occluded)
-
-
-def test_gdscript_literals_are_read_and_expressions_are_skipped(tmp_path: Path):
-    source = tmp_path / "defs.gd"
-    source.write_text(
-        "\n".join(
-            [
-                "class_name Defs",
-                'const DIR := "res://x"  # a comment with Rect2(0, 0, 0, 0)',
-                "const R := Rect2(1, 2.5, 3, 4)",
-                "const ITEMS := [",
-                '\t{"id": "a#1", "at": Vector2(5, 6),  # the id keeps its #',
-                '\t\t"c": Color("#00e87a"), "on": true, "path": DIR + "/y.png"},',
-                "]",
-                "const NODE := preload(\"res://n.gd\")",
-                "const TYPED: float = 32.0",
-                "const CONTINUED := \\",
-                '\t\t"res://on/the/next/line.png"',
-            ]
-        )
-    )
-    values = assets.gd_constants(source)
-    assert values["R"] == {"x": 1.0, "y": 2.5, "w": 3.0, "h": 4.0}
-    assert values["ITEMS"] == [{"id": "a#1", "at": {"x": 5.0, "y": 6.0}, "c": "#00e87a", "on": True, "path": "res://x/y.png"}]
-    assert values["TYPED"] == 32.0
-    assert values["CONTINUED"] == "res://on/the/next/line.png"
-    assert "NODE" not in values
 
 
 def test_every_sheet_a_role_wears_is_in_the_manifest_at_half_size(committed):

@@ -43,12 +43,10 @@ def test_shared_python_user_visible_copy_has_no_italian_baseline():
     assert not leaks, "Italian user-visible backend copy:\n" + "\n".join(leaks)
 
 
-## Fronte Godot di O-07, ancora aperto al 2026-08-10. È una soglia, non un
-## zero, perché la traduzione procede a lotti e un gate che parte rosso
-## verrebbe disattivato entro un giorno. Può solo SCENDERE: si abbassa a ogni
-## lotto e arriva a 0 quando il fronte è chiuso. Se sale, qualcuno ha aggiunto
-## copy italiana nuova — che è esattamente ciò che va fermato subito.
-GAME_COPY_BUDGET = 85
+## Fronte agenti di O-07, ancora aperto. È una soglia, non uno zero, perché la
+## traduzione procede a lotti e un gate che parte rosso verrebbe disattivato
+## entro un giorno. Può solo SCENDERE: si abbassa a ogni lotto e arriva a 0
+## quando il fronte è chiuso.
 AGENT_COPY_BUDGET = 1005
 
 
@@ -59,29 +57,13 @@ def test_backend_perimeter_user_visible_copy_is_english():
     container's own messages: leaving them out of the gate is what let the
     English pass ship half-done.
     """
+    # `game`: the Godot front (game/, abandoned). Until 08/10 a budget that
+    # could only go down held its Italian copy; it went with Godot.
     open_fronts = {"agents", "game"}
     leaks = [leak for area, dirs in census.AREAS.items() if area not in open_fronts
              for leak in _scan(dirs)]
     assert not leaks, (
         f"Italian user-visible backend copy ({len(leaks)}):\n" + "\n".join(leaks)
-    )
-
-
-def test_game_copy_budget_only_goes_down():
-    """The open half: the Godot front, held to a budget that only shrinks.
-
-    A count that grows means new Italian copy landed while the translation was
-    in progress — the one thing that would make this front endless.
-    """
-    leaks = _scan(census.AREAS["game"])
-    assert len(leaks) <= GAME_COPY_BUDGET, (
-        f"Italian copy in the game grew: {len(leaks)} > {GAME_COPY_BUDGET}.\n"
-        + "\n".join(leaks[:40])
-    )
-    assert len(leaks) >= GAME_COPY_BUDGET - 20, (
-        f"the budget is stale: {len(leaks)} left but it still says "
-        f"{GAME_COPY_BUDGET}. Lower GAME_COPY_BUDGET to {len(leaks)} so the "
-        "next regression is caught where the work actually stopped."
     )
 
 

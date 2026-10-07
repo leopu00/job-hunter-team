@@ -20,7 +20,6 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 HOST_SETUP = ROOT / "scripts" / "host-setup.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 COMPOSE = ROOT / "docker-compose.yml"
-GAME_SETUP = ROOT / "game" / "scripts" / "setup" / "setup_service.gd"
 SAFE_COMPOSE = (
     "services:\n  jht:\n    image: example.invalid/jht\n"
     "    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n"
@@ -225,12 +224,12 @@ def test_host_runtime_is_outside_bind_and_legacy_path_is_masked():
     bash = WRAPPER.read_text(encoding="utf-8")
     powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     compose = COMPOSE.read_text(encoding="utf-8")
-    game = GAME_SETUP.read_text(encoding="utf-8")
 
     assert 'RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"' not in bash
     assert "Join-Path $env:USERPROFILE '.jht\\runtime'" not in powershell
     assert "jht-runtime-mask:/jht_home/runtime" in compose
-    assert '_jht_home().path_join("runtime/docker-compose.yml")' not in game
+    # Until 08/10 also: the Godot setup (game/, abandoned) never wrote the
+    # runtime compose under the bind-mounted home.
 
 
 def test_host_setup_never_imports_shell_i18n_from_disk():
