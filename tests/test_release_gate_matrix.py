@@ -24,6 +24,7 @@ def test_release_builds_tauri_bundles_on_three_operating_systems() -> None:
     for bundle in ("nsis", "dmg", "appimage", "deb"):
         assert bundle in args
     source = RELEASE.read_text(encoding="utf-8")
+    assert "npm run tauri:build" in source
     assert "npm --prefix desktop test" in source
     assert "cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked" in source
     assert "game/tools/run" not in source
