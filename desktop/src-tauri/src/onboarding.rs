@@ -127,6 +127,7 @@ enum LocalCliOperation {
     TeamStart,
     Snapshot,
     AssistantStart,
+    ProviderLimits,
 }
 
 impl LocalCliOperation {
@@ -141,6 +142,7 @@ impl LocalCliOperation {
             Self::TeamStart => vec!["team", "start"],
             Self::Snapshot => vec!["onboarding-snapshot"],
             Self::AssistantStart => vec!["team", "start", "assistente"],
+            Self::ProviderLimits => vec!["providers", "limits", "--json"],
         }
     }
 
@@ -155,6 +157,7 @@ impl LocalCliOperation {
             Self::TeamStart => "team-start",
             Self::Snapshot => "snapshot",
             Self::AssistantStart => "assistant-start",
+            Self::ProviderLimits => "provider-limits",
         }
     }
 }
@@ -609,6 +612,10 @@ pub(crate) struct OnboardingSnapshot {
     profile_ready: bool,
     assistant_welcomed: bool,
     direct_chat_ready: bool,
+    /// Set only by the team start: false when the provider limits could not
+    /// be read before starting, so the app says the start was unverified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    limits_verified: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -617,6 +624,10 @@ pub(crate) struct OnboardingError {
     pub(crate) code: &'static str,
     message: &'static str,
     retryable: bool,
+    /// Unix seconds at which a provider limit frees again, only for
+    /// `provider_limits_exhausted`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resets_at: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -845,6 +856,10 @@ fn failure(code: &'static str) -> OnboardingError {
             true,
         ),
         "operation_in_progress" => ("Un’altra operazione è già in corso.", true),
+        "provider_limits_exhausted" => (
+            "I limiti del provider sono esauriti: la squadra partirà quando si liberano.",
+            true,
+        ),
         code if code.starts_with("invalid_") => ("I dati ricevuti non sono validi.", false),
         _ => ("L’operazione non è riuscita. Riprova.", true),
     };
@@ -852,6 +867,7 @@ fn failure(code: &'static str) -> OnboardingError {
         code,
         message,
         retryable,
+        resets_at: None,
     }
 }
 
@@ -1622,6 +1638,7 @@ const REMOTE_UPDATE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/
 const REMOTE_UPDATE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers update codex"#;
 const REMOTE_UPDATE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers update kimi"#;
 const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers current"#;
+const REMOTE_PROVIDER_LIMITS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers limits --json"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
 const REMOTE_OAUTH_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login"#;
@@ -2009,6 +2026,7 @@ fn parse_snapshot(text: &str) -> OnboardingSnapshot {
         profile_ready: has("profileReady"),
         assistant_welcomed: has("assistantWelcomed"),
         direct_chat_ready: false,
+        limits_verified: None,
     }
 }
 
@@ -2043,6 +2061,7 @@ fn parse_verified_snapshot(text: &str) -> Option<OnboardingSnapshot> {
         profile_ready: values["profileReady"],
         assistant_welcomed: values["assistantWelcomed"],
         direct_chat_ready: false,
+        limits_verified: None,
     })
 }
 
@@ -3195,6 +3214,91 @@ fn start_team_impl(
     }
 }
 
+/// What the provider says about its 5h and weekly windows before the team is
+/// started. Read once through `jht providers limits --json` (the same data
+/// the usage bridge reads once the team runs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StartLimits {
+    Sufficient,
+    /// A window is exhausted; it frees again at `resets_at` (unix seconds).
+    Exhausted {
+        resets_at: i64,
+    },
+    /// No usable answer: the team starts anyway and the user is told the
+    /// limits were not verified. Never a silent block.
+    Unverified,
+}
+
+#[derive(Deserialize)]
+struct LimitsVerdict {
+    status: String,
+    resets_at: Option<i64>,
+}
+
+fn parse_start_limits(stdout: &str, now: i64) -> StartLimits {
+    let Ok(verdict) = serde_json::from_str::<LimitsVerdict>(stdout.trim()) else {
+        return StartLimits::Unverified;
+    };
+    match (verdict.status.as_str(), verdict.resets_at) {
+        ("ok", _) => StartLimits::Sufficient,
+        // A reset already in the past means the window has turned over since
+        // the reading: unknown, not blocked.
+        ("exhausted", Some(resets_at)) if resets_at > now => StartLimits::Exhausted { resets_at },
+        _ => StartLimits::Unverified,
+    }
+}
+
+fn read_start_limits(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+) -> StartLimits {
+    let result = match validated {
+        ValidatedHost::Local => match wrapper_path(app) {
+            Some(wrapper) => run_scoped_local(
+                app,
+                scope,
+                &wrapper,
+                LocalCliOperation::ProviderLimits,
+                SNAPSHOT_TIMEOUT,
+            ),
+            None => return StartLimits::Unverified,
+        },
+        ValidatedHost::Vps { .. } => run_ssh(
+            validated,
+            REMOTE_PROVIDER_LIMITS,
+            None,
+            SNAPSHOT_TIMEOUT,
+            None,
+        ),
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0);
+    match result {
+        Ok(output) if output.success() => parse_start_limits(&output.stdout_text(), now),
+        _ => StartLimits::Unverified,
+    }
+}
+
+/// Exhausted limits stop the start before anything runs, with the time they
+/// free again; any other answer lets the start go on.
+fn start_limits_gate(limits: StartLimits) -> Result<StartLimits, OnboardingError> {
+    match limits {
+        StartLimits::Exhausted { resets_at } => Err(OnboardingError {
+            resets_at: Some(resets_at),
+            ..failure("provider_limits_exhausted")
+        }),
+        other => Ok(other),
+    }
+}
+
+fn with_start_limits(mut snapshot: OnboardingSnapshot, limits: StartLimits) -> OnboardingSnapshot {
+    snapshot.limits_verified = Some(limits == StartLimits::Sufficient);
+    snapshot
+}
+
 fn verified_team_snapshot(
     app: &tauri::AppHandle,
     scope: &AccountScope,
@@ -3237,8 +3341,11 @@ pub(crate) async fn onboarding_team_start(
             "Squadra avviata e verificata",
             || {
                 let validated = validate_host(&app, &host).map_err(failure)?;
+                let limits =
+                    start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
                 start_team_impl(&app, &worker_expected, &validated)?;
-                verified_team_snapshot(&app, &worker_expected, &validated)
+                let snapshot = verified_team_snapshot(&app, &worker_expected, &validated)?;
+                Ok(with_start_limits(snapshot, limits))
             },
         )
     })
@@ -3282,8 +3389,11 @@ pub(crate) async fn onboarding_resume_team_start(
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let before = snapshot_impl(&app, &worker_expected, &validated)?;
                 resume_team_prerequisite(&before)?;
+                let limits =
+                    start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
                 start_team_impl(&app, &worker_expected, &validated)?;
-                verified_team_snapshot(&app, &worker_expected, &validated)
+                let snapshot = verified_team_snapshot(&app, &worker_expected, &validated)?;
+                Ok(with_start_limits(snapshot, limits))
             },
         )
     })
@@ -3376,15 +3486,15 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
-        parse_snapshot, parse_verified_snapshot, provider_bootstrap_input, redact,
-        resume_team_prerequisite, start_and_verify_local_container_with,
+        parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
+        redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
-        valid_wrapper_file, write_provider_input, ExistingTeamConnectRequest,
+        valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
         OnboardingDiagnosticSink, OnboardingProgress, OnboardingProgressStage,
-        OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StreamRedactor,
-        SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS, INSTALL_SHA256,
-        REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
+        OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StartLimits,
+        StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
+        INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     #[cfg(target_os = "macos")]
     use super::{
@@ -4117,10 +4227,100 @@ mod tests {
                 LocalCliOperation::AssistantStart,
                 vec!["team", "start", "assistente"],
             ),
+            (
+                LocalCliOperation::ProviderLimits,
+                vec!["providers", "limits", "--json"],
+            ),
         ];
         for (operation, expected) in operations {
             assert_eq!(operation.argv(), expected);
         }
+    }
+
+    #[test]
+    fn start_limits_read_the_provider_verdict_and_never_block_on_doubt() {
+        let now = 1_900_000_000;
+        assert_eq!(
+            parse_start_limits(
+                r#"{"status":"ok","resets_at":null,"five_hour":{"used_pct":40,"resets_at":1900003600},"weekly":null}"#,
+                now,
+            ),
+            StartLimits::Sufficient
+        );
+        assert_eq!(
+            parse_start_limits(
+                &format!(
+                    r#"{{"status":"exhausted","resets_at":{},"five_hour":null,"weekly":null}}"#,
+                    now + 1800
+                ),
+                now,
+            ),
+            StartLimits::Exhausted {
+                resets_at: now + 1800
+            }
+        );
+        for doubtful in [
+            r#"{"status":"unknown","resets_at":null,"five_hour":null,"weekly":null}"#.to_string(),
+            // Exhausted without a time, or with a time already gone.
+            r#"{"status":"exhausted","resets_at":null}"#.to_string(),
+            format!(r#"{{"status":"exhausted","resets_at":{}}}"#, now - 1),
+            r#"{"status":"maybe","resets_at":null}"#.to_string(),
+            "not json".to_string(),
+            String::new(),
+        ] {
+            assert_eq!(
+                parse_start_limits(&doubtful, now),
+                StartLimits::Unverified,
+                "{doubtful}"
+            );
+        }
+    }
+
+    #[test]
+    fn exhausted_limits_stop_the_start_with_the_time_they_free() {
+        let blocked = start_limits_gate(StartLimits::Exhausted {
+            resets_at: 1_900_001_800,
+        })
+        .unwrap_err();
+        assert_eq!(blocked.code, "provider_limits_exhausted");
+        assert!(blocked.retryable);
+        let json = serde_json::to_value(&blocked).unwrap();
+        assert_eq!(json["resetsAt"], 1_900_001_800);
+
+        assert_eq!(
+            start_limits_gate(StartLimits::Sufficient).unwrap(),
+            StartLimits::Sufficient
+        );
+        assert_eq!(
+            start_limits_gate(StartLimits::Unverified).unwrap(),
+            StartLimits::Unverified
+        );
+        // Any other error keeps its old shape: no resetsAt key at all.
+        let other = serde_json::to_value(failure("team_start_failed")).unwrap();
+        assert!(other.get("resetsAt").is_none());
+    }
+
+    #[test]
+    fn a_started_team_says_whether_its_limits_were_verified() {
+        let verified = with_start_limits(
+            super::OnboardingSnapshot::default(),
+            StartLimits::Sufficient,
+        );
+        assert_eq!(
+            serde_json::to_value(&verified).unwrap()["limitsVerified"],
+            true
+        );
+        let unverified = with_start_limits(
+            super::OnboardingSnapshot::default(),
+            StartLimits::Unverified,
+        );
+        assert_eq!(
+            serde_json::to_value(&unverified).unwrap()["limitsVerified"],
+            false
+        );
+        // Every other snapshot keeps its old shape.
+        let plain = serde_json::to_value(super::OnboardingSnapshot::default()).unwrap();
+        assert!(plain.get("limitsVerified").is_none());
     }
 
     #[cfg(target_os = "macos")]
@@ -4406,6 +4606,7 @@ exit 0
             profile_ready: false,
             assistant_welcomed: false,
             direct_chat_ready: false,
+            limits_verified: None,
         };
         assert!(resume_team_prerequisite(&snapshot).is_ok());
 

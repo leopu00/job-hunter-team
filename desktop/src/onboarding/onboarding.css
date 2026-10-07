@@ -696,6 +696,11 @@
   line-height: 1.45;
 }
 
+/* What to do now, under the failure sentence: the line the person acts on. */
+.onboarding-runtime-status .onboarding-runtime-status__action {
+  color: var(--color-bright);
+}
+
 .onboarding-runtime-track {
   margin: 0;
   padding: 0;

@@ -192,6 +192,17 @@ describe("OnboardingFlow technical setup", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it("shows what to do next under a failure that carries an action", () => {
+    renderFlow({
+      runtime: {
+        status: "failed", stage: "team-start", code: "team_start_failed", retryable: true,
+        message: "La squadra non è partita.", action: "Riprova l’avvio.",
+      },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("La squadra non è partita.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Cosa fare: Riprova l’avvio.");
+  });
+
   it("presents a version mismatch once, keeps diagnostics closed and focuses each new failure once", async () => {
     let result!: ReturnType<typeof renderFlow>;
     const onExitFailure = vi.fn(() => {

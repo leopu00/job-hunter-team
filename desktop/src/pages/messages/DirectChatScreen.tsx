@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { describeError } from "../../lib/error-catalog";
 import type { VoiceInputBridge } from "../../lib/voice-input";
 import { VoiceInputControl } from "../../voice-input";
 import type {
@@ -71,6 +72,11 @@ function StatusBar({
   if (status.state === "ready") text = "Team collegato";
   if (status.state === "disconnected") text = "Team non collegato.";
   if (status.state === "error") text = "Team non disponibile.";
+  if (operationError) text = "Operazione non riuscita.";
+  // A code the catalog knows is told with its sentence and action; the raw
+  // code is never shown.
+  const described = (failed || operationError) && code ? describeError(code) : null;
+  if (described?.known) text = `${described.text} ${described.action}`;
 
   return (
     <div
@@ -80,8 +86,7 @@ function StatusBar({
       style={{ color: failed || operationError ? "var(--color-red)" : "var(--color-muted)" }}
     >
       <span>
-        {operationError ? "Operazione non riuscita." : text}
-        {code ? ` Codice: ${code}.` : ""}
+        {text}
       </span>
       {(failed || operationError) && (
         <button

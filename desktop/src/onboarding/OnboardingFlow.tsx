@@ -225,6 +225,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
             <div>
               {!failed && <strong>{actionRequired ? "È necessaria una tua azione" : "Non chiudere l’app"}</strong>}
               <small>{runtime.message}</small>
+              {failed && runtime.action && <small className="onboarding-runtime-status__action">Cosa fare: {runtime.action}</small>}
             </div>
           </div>
           <ol className="onboarding-runtime-track">
