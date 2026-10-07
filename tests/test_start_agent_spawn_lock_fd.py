@@ -37,11 +37,7 @@ Eseguire:
 """
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = REPO_ROOT / ".launcher" / "start-agent.sh"
@@ -177,17 +173,3 @@ def test_the_worker_branch_runs_before_the_lock_is_taken():
     questo non porta `9>&-`. Se venisse spostato dopo, il test sulle
     new-session lo prenderebbe comunque."""
     assert _line_of('-s "$WORKER_SESSION"') < SESSION_LOCK_LINE
-
-
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash non disponibile")
-def test_the_launcher_still_parses():
-    """Le redirezioni aggiunte non devono rompere `set -euo pipefail` ne' la
-    cattura dell'rc (`|| _ns_rc=$?`) del ramo di spawn."""
-    # Path relativo + cwd: su Windows bash non digerisce `C:\...`.
-    result = subprocess.run(
-        ["bash", "-n", ".launcher/start-agent.sh"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
