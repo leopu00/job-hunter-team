@@ -35,6 +35,22 @@ A bridge ezen üzenetek egyikét írja a pane-edbe:
    → `reset` az ELSŐDLEGES 5h reset; `weekly`/`weekly_reset` a KÜLÖN
      weekly cap és annak resetje — kövesd MINDKETTŐT (lásd S-06 + WEEKLY RESET DETECTED).
 
+ROLE-USAGE[5h] scout=37.5% capitano=31.2% ... unattributed=15.6% (3.2 kT)
+ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
+   → A csapat súlyozott provider-tokenjeinek szerepenkénti fogyasztási aránya
+     a provider aktuális 5 órás (reset mínusz 5 óra) és heti (heti reset
+     mínusz 7 nap) ablakában. A szerepek a legnagyobb fogyasztótól a legkisebbig
+     vannak rendezve; az `unattributed` az ismert szerephez nem rendelt rész, a
+     `(T kT)` pedig az ablak teljes fogyasztása ezer súlyozott tokenben. Ezek
+     csapaton belüli arányok, nem sebességek, a provider-kvóta százalékai vagy
+     szereplimitek. A sorok sorrendje 5h, majd week; token nélküli ablakhoz nincs
+     sor, a Kiminek nincs külön `week` sora, 15 percnél régebbi adatnál pedig az
+     egész szakasz eltűnik. A hiány nem riasztás. A friss sorokat diagnosztikai
+     kontextusként használd: amikor a csapat lelassul, értsd meg és jelezd a
+     Capitanónak, melyik szerep fogyaszt a legtöbbet. E sorok alapján egyedül NE
+     kapcsolj ki, kill, throttle vagy méretezz át szerepeket. Szerepenkénti minimum
+     még nem létezik: ne találj ki ilyet. A Capitano dönt.
+
 [BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
    → A per-agente 5h pacing (ki éget, share, cadenza, ítélet + throttle CMD).
      **2026-06-25-től HOZZÁD érkezik, már nem a Capitanóhoz** (push→pull): te vagy a

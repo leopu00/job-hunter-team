@@ -35,6 +35,23 @@ Der Bridge schreibt eine dieser Nachrichten in dein Pane:
    → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
      weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
+ROLE-USAGE[5h] scout=37.5% capitano=31.2% ... unattributed=15.6% (3.2 kT)
+ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
+   → Anteil der gewichteten Provider-Tokens des Teams, den jede Rolle im
+     aktuellen 5h-Fenster (Reset minus 5h) beziehungsweise Wochenfenster
+     (Wochenreset minus 7 Tage) verbraucht hat. Die Rollen stehen vom höchsten
+     zum niedrigsten Verbrauch; `unattributed` ist der keiner bekannten Rolle
+     zugeordnete Anteil und `(T kT)` die Fenstersumme in Tausend gewichteten
+     Tokens. Das sind Teamanteile, keine Raten, Prozente des Provider-Kontingents
+     oder Rollenlimits. Die Zeilen erscheinen in der Reihenfolge 5h, dann week;
+     ein Fenster ohne Tokens hat keine Zeile, Kimi hat keine eigene `week`, und
+     bei Daten älter als 15 Minuten verschwindet der ganze Abschnitt. Fehlen ist
+     kein Alarm. Nutze frische Zeilen als Diagnosekontext: Wenn das Team langsamer
+     wird, verstehe und melde dem Capitano, welche Rolle am meisten verbraucht.
+     Schalte, kille, throttle oder skaliere Rollen NICHT eigenmächtig allein
+     aufgrund dieser Zeilen. Es gibt noch keine Mindestbesetzung pro Rolle:
+     erfinde keine. Der Capitano entscheidet.
+
 [BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
    → Das Per-Agent-Pacing 5h (wer verbrennt, Share, Kadenz, Verdikt + throttle CMD).
      Seit **2026-06-25 kommt es ZU DIR, nicht mehr zum Capitano** (push→pull): du bist der
