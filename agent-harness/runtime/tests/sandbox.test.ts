@@ -276,6 +276,67 @@ describe("the toolkit", () => {
   });
 });
 
+const VISIBLE = {
+  home: "home-readable",
+  outside: "outside-readable",
+  workdir: "workdir-readable",
+} as const;
+
+/**
+ * Every secret read is paired below with a normal file in the same area. The
+ * positive read and the negative happen in one shell, so a hidden fixture
+ * cannot make the negative pass vacuously.
+ */
+const SECRET_READS: Array<[keyof typeof VISIBLE, string]> = [
+  ["home", "cat ~/.ssh/id_ed25519"],
+  ["home", "cat ~/.ssh/config"],
+  ["workdir", "cat .env"],
+  ["outside", "cat $SECRET"],
+];
+
+/**
+ * Keep the escape targets outside /tmp: bubblewrap covers /tmp with an empty
+ * tmpfs and binds back only writable roots. A home or outside folder there is
+ * otherwise invisible as a whole, making read and write negatives vacuous.
+ * /var/tmp is neither masked nor writable in the sandbox.
+ */
+async function escapeFixture(): Promise<{ workdir: string; outside: string; home: string; secret: string }> {
+  // The role's folder sits inside a parent it must not write to: `cd ..` has somewhere to go.
+  const parent = await realpath(await mkdtemp(join("/var/tmp", "jht-api-parent-")));
+  const workdir = join(parent, "agent");
+  await mkdir(workdir);
+  const outside = await realpath(await mkdtemp(join("/var/tmp", "jht-api-outside-")));
+  const home = await realpath(await mkdtemp(join("/var/tmp", "jht-api-home-")));
+  const secret = join(outside, "mcp.json");
+  await mkdir(join(home, ".ssh"));
+  await writeFile(join(home, ".ssh", "id_ed25519"), "PRIVATE hunter2\n");
+  await writeFile(join(home, ".ssh", "config"), "Host hunter2\n");
+  await writeFile(join(home, "notes.txt"), `${VISIBLE.home}\n`);
+  await writeFile(join(parent, "notes.txt"), "parent-readable\n");
+  await writeFile(join(workdir, ".env"), "API_KEY=hunter2\n");
+  await writeFile(join(workdir, ".env.example"), `API_KEY=\n${VISIBLE.workdir}\n`);
+  await writeFile(join(outside, "notes.txt"), `${VISIBLE.outside}\n`);
+  await writeFile(secret, '{"token":"hunter2"}');
+  return { workdir, outside, home, secret };
+}
+
+describe("the escapes, without a sandbox (the control)", () => {
+  it("reads every secret, so the sandbox negatives can fail", async () => {
+    const { workdir, outside, home, secret } = await escapeFixture();
+    try {
+      const bare = createBashTool({ workdir });
+      for (const [, command] of SECRET_READS) {
+        const result = await bare.execute({ command: command.replace("~", home).replace("$SECRET", secret) }, CONTEXT);
+        expect(result.content, command).toContain("hunter2");
+      }
+    } finally {
+      await rm(join(workdir, ".."), { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+});
+
 // The real boundary, on the machine that has one. Every escape below must fail;
 // what the work needs — DNS, HTTPS, python and node inside the folder — must not.
 const probe = createProbe();
@@ -288,22 +349,12 @@ describe.runIf(probe.kind !== "none")(`bash in ${probe.kind}`, () => {
   let sandbox: Sandbox;
   const run = (command: string) => createBashTool({ workdir, sandbox }).execute({ command }, CONTEXT);
   const has = (bin: string) => spawnSync("/bin/sh", ["-c", `command -v ${bin}`], { stdio: "ignore" }).status === 0;
+  const read = (command: string) => command.replace("~", home).replace("$SECRET", secret);
+  const see = (where: keyof typeof VISIBLE) =>
+    where === "home" ? `cat ${home}/notes.txt` : where === "outside" ? `cat ${outside}/notes.txt` : "cat .env.example";
 
   beforeAll(async () => {
-    // The role's folder sits inside a parent it must not write to: `cd ..` has somewhere to go.
-    const parent = await realpath(await mkdtemp(join(tmpdir(), "jht-api-parent-")));
-    workdir = join(parent, "agent");
-    await mkdir(workdir);
-    outside = await realpath(await mkdtemp(join(tmpdir(), "jht-api-outside-")));
-    home = await realpath(await mkdtemp(join(tmpdir(), "jht-api-home-")));
-    secret = join(outside, "mcp.json");
-    await mkdir(join(home, ".ssh"));
-    await writeFile(join(home, ".ssh", "id_ed25519"), "PRIVATE hunter2\n");
-    await writeFile(join(home, ".ssh", "config"), "Host hunter2\n");
-    await writeFile(join(workdir, ".env"), "API_KEY=hunter2\n");
-    await writeFile(join(workdir, ".env.example"), "API_KEY=\n");
-    await writeFile(join(outside, "notes.txt"), "original\n");
-    await writeFile(secret, '{"token":"hunter2"}');
+    ({ workdir, outside, home, secret } = await escapeFixture());
     sandbox = createSandbox({ workdir, protectedPaths: [secret], homeDir: home });
   });
 
@@ -321,36 +372,50 @@ describe.runIf(probe.kind !== "none")(`bash in ${probe.kind}`, () => {
   });
 
   it("cannot write anywhere else: an absolute path, or cd ..", async () => {
-    for (const command of [`echo x > ${outside}/escaped.txt`, "cd .. && echo x > escaped.txt"]) {
-      const result = await run(command);
-      // bubblewrap puts an empty tmpfs over /tmp, where these folders are: a write
-      // there can land in it and vanish with the command. What counts is the disk.
-      if (probe.kind === "seatbelt") {
-        expect(result.ok, command).toBe(false);
-        expect(result.content, command).toContain("Operation not permitted");
-      }
+    for (const [visible, marker, command] of [
+      [`cat ${outside}/notes.txt`, VISIBLE.outside, `echo x > ${outside}/escaped.txt`],
+      ["cat ../notes.txt", "parent-readable", "cd .. && echo x > escaped.txt"],
+    ] as const) {
+      const result = await run(`${visible}; ${command}`);
+      expect(result.content, command).toContain(marker);
+      expect(result.ok, command).toBe(false);
+      expect(result.content, command).toMatch(/Operation not permitted|Read-only file system/);
     }
     expect(existsSync(join(outside, "escaped.txt"))).toBe(false);
     expect(existsSync(join(workdir, "..", "escaped.txt"))).toBe(false);
   });
 
   it("cannot write through a symlink or a hard link to a file outside", async () => {
-    await run(`ln -s ${outside} out-link; echo pwned > out-link/notes.txt`);
-    await run(`ln ${outside}/notes.txt hard-notes.txt; echo pwned >> hard-notes.txt`);
-    expect(await readFile(join(outside, "notes.txt"), "utf8")).toBe("original\n");
+    const soft = await run(`ln -s ${outside} out-link; cat out-link/notes.txt; echo pwned > out-link/notes.txt`);
+    const hard = await run(`cat ${outside}/notes.txt; ln ${outside}/notes.txt hard-notes.txt && echo pwned >> hard-notes.txt`);
+    expect(soft.content).toContain(VISIBLE.outside);
+    expect(hard.content).toContain(VISIBLE.outside);
+    expect(soft.ok).toBe(false);
+    expect(hard.ok).toBe(false);
+    expect(await readFile(join(outside, "notes.txt"), "utf8")).toBe(`${VISIBLE.outside}\n`);
   });
 
   it("cannot read a secret through a symlink or a hard link either", async () => {
-    const soft = await run(`ln -s ${secret} soft.json; cat soft.json`);
-    const hard = await run(`ln ${secret} hard.json; cat hard.json`);
-    expect(soft.content).not.toContain("hunter2");
-    expect(hard.content).not.toContain("hunter2");
+    const soft = await run(`ln -s ${secret} soft.json; cat ${outside}/notes.txt; cat soft.json`);
+    const hard = await run(`cat ${outside}/notes.txt; ln ${secret} hard.json && cat hard.json`);
+    for (const result of [soft, hard]) {
+      expect(result.content).toContain(VISIBLE.outside);
+      expect(result.content).not.toContain("hunter2");
+    }
   });
 
   it("python and node cannot write outside either", async () => {
     const target = join(outside, "from-script.txt");
-    if (has("python3")) await run(`python3 -c 'open("${target}", "w").write("pwned")'`);
-    if (has("node")) await run(`node -e 'require("fs").writeFileSync("${target}", "pwned")'`);
+    const commands = [
+      ...(has("python3") ? [`python3 -c 'open("${target}", "w").write("pwned")'`] : []),
+      ...(has("node") ? [`node -e 'require("fs").writeFileSync("${target}", "pwned")'`] : []),
+    ];
+    for (const command of commands) {
+      const result = await run(`cat ${outside}/notes.txt; ${command}`);
+      expect(result.content, command).toContain(VISIBLE.outside);
+      expect(result.ok, command).toBe(false);
+      expect(result.content, command).toMatch(/[Oo]peration not permitted|Read-only file system|EROFS|EPERM/);
+    }
     expect(existsSync(target)).toBe(false);
   });
 
@@ -364,12 +429,11 @@ describe.runIf(probe.kind !== "none")(`bash in ${probe.kind}`, () => {
   });
 
   it("cannot read ~/.ssh, the credential files, or the run's own secrets, but reads a template", async () => {
-    for (const command of ["cat ~/.ssh/id_ed25519", "cat ~/.ssh/config", "cat .env", `cat ${secret}`]) {
-      const result = await run(command.replace("~", home));
-      expect(result.ok, command).toBe(false);
+    for (const [where, command] of SECRET_READS) {
+      const result = await run(`${see(where)}; ${read(command)}`);
+      expect(result.content, command).toContain(VISIBLE[where]);
       expect(result.content, command).not.toContain("hunter2");
     }
-    expect(await run("cat .env.example")).toMatchObject({ ok: true, content: expect.stringContaining("API_KEY=") });
   });
 
   it.runIf(probe.kind === "seatbelt")(
