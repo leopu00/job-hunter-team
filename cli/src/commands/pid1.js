@@ -42,6 +42,9 @@ const JHT_CONFIG_PATH = `${JHT_HOME}/jht.config.json`;
 const TEAM_HALTED_FLAG = `${JHT_HOME}/.team-halted.flag`;
 const PAIRING_TOKEN_PATH = `${JHT_HOME}/.pairing-token`;
 const TG_BRIDGE_LAUNCHER = '/app/.launcher/start-agent.sh';
+// Lo script che start-agent.sh lancia per ogni ruolo (TG_SCRIPT, dalla sua
+// stessa cartella): il bersaglio di stopTgBridge.
+const TG_BRIDGE_SCRIPT = '/app/.launcher/tg-bridge.py';
 const AGENT_WATCHDOG_SCRIPT = '/app/.launcher/agent-watchdog.sh';
 const DOCTOR_WATCHDOG_SCRIPT = '/app/.launcher/doctor-watchdog.sh';
 const STEPCAP_WATCHDOG_SCRIPT = '/app/.launcher/stepcap-watchdog.py';
@@ -350,12 +353,16 @@ async function startUserFacingAgents() {
 }
 
 function stopTgBridge() {
-  // I tg-bridge.py sono detached: kill via pgrep+kill in spawn separato.
+  // I tg-bridge.py sono detached: kill via /proc + kill in spawn separato.
   // Su SIGTERM del container abbiamo ~10s grace, basta abbondantemente.
+  // Il bersaglio e' il path di NOSTRO tg-bridge.py, non il nome: questo e' il
+  // PID 1 del container, quindi /proc vede gia' soltanto il container, e il
+  // path lo tiene comunque sui bridge lanciati da questo launcher (stessa
+  // regola di jht_kill_by_marker in .launcher/daemon-lib.sh).
   try {
     const killer = spawn('/bin/sh', [
       '-c',
-      "for pid in $(grep -l tg-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do kill -TERM \"$pid\" 2>/dev/null || true; done",
+      `for pid in $(grep -lF '${TG_BRIDGE_SCRIPT}' /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do kill -TERM "$pid" 2>/dev/null || true; done`,
     ], { stdio: 'ignore' });
     killer.unref();
   } catch { /* best-effort cleanup */ }

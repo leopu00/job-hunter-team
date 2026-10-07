@@ -18,14 +18,22 @@ if [ "$PORT" = "3001" ]; then
   exit 2
 fi
 
-# Kill `next dev -p <port>` + figlio `next-server` + postcss workers.
-HOST_PIDS=$(pgrep -f "next dev -p $PORT" 2>/dev/null || true)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Solo i processi di QUESTA worktree: il loro cmdline contiene il path di
+# web/ (npm mette web/node_modules/.bin nel PATH col path assoluto). Un
+# `pgrep -f "next dev -p N"` nudo prendeva anche il Next di un'altra worktree
+# o di un altro team sulla stessa macchina.
+worktree_re() { printf '%s' "$REPO_ROOT" | sed 's/[][\.*^$+?(){}|]/\\&/g'; }
+
+# Kill `next dev -p <port>` di questa worktree (il figlio `next-server` e i
+# postcss worker seguono il padre).
+HOST_PIDS=$(pgrep -f "$(worktree_re)/web/node_modules/.*next dev -p $PORT" 2>/dev/null || true)
 if [ -n "${HOST_PIDS}" ]; then
   # shellcheck disable=SC2086
   kill -TERM ${HOST_PIDS} 2>/dev/null || true
   sleep 1
   # SIGKILL su quelli ancora vivi
-  STILL_ALIVE=$(pgrep -f "next dev -p $PORT" 2>/dev/null || true)
+  STILL_ALIVE=$(pgrep -f "$(worktree_re)/web/node_modules/.*next dev -p $PORT" 2>/dev/null || true)
   if [ -n "${STILL_ALIVE}" ]; then
     # shellcheck disable=SC2086
     kill -KILL ${STILL_ALIVE} 2>/dev/null || true
