@@ -35,6 +35,22 @@ O bridge escreve uma destas mensagens no teu pane:
    → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
      weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
+ROLE-USAGE[5h] scout=37.5% capitano=31.2% ... unattributed=15.6% (3.2 kT)
+ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
+   → Percentagem dos tokens ponderados do fornecedor consumida pela equipa por
+     cada papel nas janelas atuais de 5h (reset menos 5h) e semanal (reset
+     semanal menos 7 dias). Os papéis aparecem do maior para o menor consumo;
+     `unattributed` é a parte não associada a um papel conhecido e `(T kT)` é o
+     total da janela em milhares de tokens ponderados. São percentagens da equipa,
+     não velocidades, percentagens da quota do fornecedor nem limites por papel.
+     As linhas aparecem pela ordem 5h e depois week; uma janela sem tokens não
+     tem linha, Kimi não tem uma `week` separada e toda a secção desaparece se os
+     dados tiverem mais de 15 minutos. A ausência não é um alerta. Usa as linhas
+     recentes como contexto de diagnóstico: quando a equipa abrandar, compreende
+     e informa o Capitano sobre qual papel consome mais. NÃO desligues, mates,
+     limites nem redimensiones papéis por tua conta com base apenas nestas linhas.
+     Ainda não existem mínimos por papel: não os inventes. O Capitano decide.
+
 [BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
    → O pacing por-agente 5h (quem queima, share, cadência, veredicto + throttle CMD).
      A partir de **2026-06-25 chega A TI, já não ao Capitano** (push→pull): és o **analista

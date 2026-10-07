@@ -35,6 +35,23 @@ Le bridge écrit un de ces messages dans ton pane :
    → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
      weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
+ROLE-USAGE[5h] scout=37.5% capitano=31.2% ... unattributed=15.6% (3.2 kT)
+ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
+   → Part des tokens pondérés du fournisseur consommée par l'équipe pour
+     chaque rôle dans les fenêtres courantes de 5h (reset moins 5h) et
+     hebdomadaire (reset hebdomadaire moins 7 jours). Les rôles sont classés du
+     plus au moins consommateur ; `unattributed` est la part non associée à un
+     rôle connu et `(T kT)` est le total de la fenêtre en milliers de tokens
+     pondérés. Ce sont des parts de l'équipe, pas des vitesses, pourcentages du
+     quota fournisseur ou limites par rôle. Les lignes arrivent dans l'ordre 5h
+     puis week ; une fenêtre sans tokens n'a pas de ligne, Kimi n'a pas de `week`
+     distincte et toute la section disparaît si les données ont plus de 15 minutes.
+     L'absence n'est pas une alerte. Utilise les lignes fraîches comme contexte
+     diagnostique : lorsque l'équipe ralentit, comprends et signale au Capitano
+     quel rôle consomme le plus. N'éteins, ne kill, ne throttle et ne redimensionne
+     PAS des rôles de ta propre initiative sur ces seules lignes. Les planchers
+     par rôle n'existent pas encore : ne les invente jamais. Le Capitano décide.
+
 [BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
    → Le pacing par-agent 5h (qui brûle, share, cadence, verdict + throttle CMD).
      Depuis **2026-06-25 il arrive À TOI, plus au Capitano** (push→pull) : tu es l'**analyste

@@ -35,6 +35,22 @@ El bridge escribe uno de estos mensajes en tu pane:
    → `reset` es el reset PRIMARY 5h; `weekly`/`weekly_reset` son el weekly cap
      SEPARADO y su reset — rastrea AMBOS (ver S-06 + WEEKLY RESET DETECTED).
 
+ROLE-USAGE[5h] scout=37.5% capitano=31.2% ... unattributed=15.6% (3.2 kT)
+ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
+   → Porcentaje de los tokens ponderados del proveedor consumidos por el equipo
+     para cada rol en las ventanas actuales de 5h (reset menos 5h) y semanal
+     (reset semanal menos 7 días). Los roles están ordenados de mayor a menor
+     consumo; `unattributed` es la parte no asociada a un rol conocido y `(T kT)`
+     es el total de la ventana en miles de tokens ponderados. Son porcentajes del
+     equipo, no velocidades, porcentajes del límite del proveedor ni límites por
+     rol. Las líneas aparecen en el orden 5h y luego week; una ventana sin tokens
+     no tiene línea, Kimi no tiene una `week` separada y toda la sección desaparece
+     si los datos superan 15 minutos. La ausencia no es una alerta. Usa las líneas
+     recientes como contexto diagnóstico: cuando el equipo se ralentice, entiende
+     e informa al Capitano de qué rol consume más. NO apagues, mates, limites ni
+     redimensiones roles por tu cuenta basándote solo en estas líneas. Los mínimos
+     por rol aún no existen: no los inventes. Decide el Capitano.
+
 [BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
    → El pacing per-agente 5h (quién quema, share, cadencia, veredicto + throttle CMD).
      Desde **2026-06-25 llega A TI, ya no al Capitano** (push→pull): eres la **analista
