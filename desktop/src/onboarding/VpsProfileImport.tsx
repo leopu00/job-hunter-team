@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import SshKeyPicker from "../components/SshKeyPicker";
+import { describeError } from "../lib/error-catalog";
 import {
   profileImportBridge,
   profileImportErrorCode,
@@ -12,29 +13,10 @@ import "./vps-profile-import.css";
 
 type Stage = "closed" | "fields" | "probing" | "confirm" | "importing" | "done" | "failed";
 
-const ERROR_COPY: Record<string, string> = {
-  source_profile_missing: "Sulla VPS non risulta un profilo da importare.",
-  source_profile_invalid: "Il profilo sulla VPS non supera la verifica richiesta.",
-  source_review_pending: "Sulla VPS c’è una revisione del profilo ancora da confermare.",
-  source_review_unavailable: "Non riesco a verificare lo stato di revisione sulla VPS.",
-  source_unavailable: "La VPS o il team non sono raggiungibili. Controlla i dati e riprova.",
-  profile_import_timeout: "La VPS non ha risposto in tempo. Riprova.",
-  target_profile_exists: "Questo computer contiene già un profilo. Non è stato sovrascritto.",
-  profile_import_recovery_required: "Un’importazione precedente richiede un controllo prima di riprovare.",
-  local_profile_required: "Questa funzione è disponibile soltanto nel profilo locale.",
-  host_key_unavailable: "Non riesco a leggere l’identità SSH della VPS.",
-  host_key_missing: "Conferma prima l’identità SSH della VPS.",
-  host_key_changed: "L’identità SSH della VPS è cambiata. L’importazione è stata bloccata.",
-  host_key_mismatch: "L’identità SSH non coincide con quella già confermata.",
-  invalid_host: "L’host VPS non è valido.",
-  invalid_user: "L’utente SSH non è valido.",
-  invalid_port: "La porta SSH non è valida.",
-  invalid_key_path: "Seleziona una chiave SSH valida.",
-  key_unavailable: "La chiave SSH selezionata non è disponibile.",
-  invalid_key: "La chiave SSH selezionata non è valida.",
-  operation_in_progress: "Un’importazione è già in corso.",
-  unknown: "Non è stato possibile importare il profilo. Nessun dato esistente è stato modificato.",
-};
+/** The failure, told by the error catalog: what happened and what to do. */
+function errorCopy(code: string): { text: string; action: string } {
+  return describeError(code, { fallback: "profile_import_failed" });
+}
 
 const TERMINAL_ERRORS = new Set([
   "source_profile_missing",
@@ -195,7 +177,7 @@ export default function VpsProfileImport({ bridge = profileImportBridge }: VpsPr
 
       {stage === "failed" && errorCode && (
         <section className="vps-profile-import__failure" role="alert">
-          <h3 ref={headingRef} tabIndex={-1}>Importazione non completata</h3><p>{ERROR_COPY[errorCode] ?? ERROR_COPY.unknown}</p>
+          <h3 ref={headingRef} tabIndex={-1}>Importazione non completata</h3><p>{errorCopy(errorCode).text}</p><p>{errorCopy(errorCode).action}</p>
           <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={close}>Chiudi</button>{!TERMINAL_ERRORS.has(errorCode) && <button type="button" className="onboarding-primary" onClick={edit}>Modifica e riprova</button>}</div>
         </section>
       )}

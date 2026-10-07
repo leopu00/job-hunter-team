@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RfbOptions } from "@novnc/novnc";
+import { describeError } from "../lib/error-catalog";
 import {
   isLiveScreenError,
+  liveScreenErrorCode,
   liveScreenSession,
   type LiveScreenSession,
 } from "../lib/live-screen";
@@ -44,19 +46,8 @@ const WAITING_COPY: Record<"not_running" | "disconnected" | "rejected", string> 
 };
 
 function errorMessage(error: unknown): string {
-  if (isLiveScreenError(error)) {
-    switch (error.code) {
-      case "invalid_port":
-        return "JHT_LIVE_SCREEN_PORT non è una porta valida (1024-65535).";
-      case "invalid_password":
-        return "Il file della chiave dello schermo è danneggiato o non è un file regolare.";
-      case "home_missing":
-        return "Non trovo la cartella ~/.jht di questo utente.";
-      default:
-        return "Impossibile collegarsi allo schermo del CLOSER.";
-    }
-  }
-  return "Impossibile collegarsi allo schermo del CLOSER.";
+  const described = describeError(liveScreenErrorCode(error), { fallback: "live_screen_failed" });
+  return `${described.text} ${described.action}`;
 }
 
 export function LiveScreenViewer({

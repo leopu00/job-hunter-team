@@ -20,27 +20,16 @@ import {
   readLocalProfile,
   type LocalProfile,
 } from "../lib/local-profile";
+import { describeError } from "../lib/error-catalog";
+import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
 import "./login-screen.css";
 
-const MESSAGES: Record<LoginErrorCode, string> = {
-  "not-configured":
-    "Questa build non sa a quale account collegarsi: mancano VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.",
-  "not-desktop": "L'accesso funziona solo dentro l'app desktop.",
-  "port-busy":
-    "Un altro programma occupa la porta del ritorno dal browser. Chiudi l'altro accesso in corso e riprova.",
-  "browser-failed": "Non riesco ad aprire il browser scelto. Scegline un altro o copia il link.",
-  "browser-not-found": "Il browser scelto non c'è più. Scegline un altro.",
-  "keychain-failed":
-    "Il Portachiavi non ha concesso la chiave della sessione. Chiudi completamente Job Hunter Team e riaprila se vuoi riprovare.",
-  denied: "Accesso non concesso.",
-  "timed-out": "Il browser non ha risposto entro cinque minuti. Riprova.",
-  cancelled: "Accesso annullato.",
-  "in-progress": "Un accesso è già in corso nel browser.",
-  "exchange-failed": "Google ha risposto, ma la sessione non si è aperta. Riprova.",
-  unknown: "Accesso non riuscito. Riprova.",
-};
+/** The sentence and the action for a login error, from the error catalog. */
+function loginErrorCopy(code: LoginErrorCode): { text: string; action: string } {
+  return describeError(LOGIN_ERROR_CATALOG_CODE[code], { fallback: "login_failed" });
+}
 
 export interface LoginScreenProps {
   /** Sostituibili nei test; di norma il login vero. */
@@ -333,11 +322,12 @@ export function LoginScreen({
 
         {error && !showCancelled && (
           <p className="login-card__error" role="alert">
-            {MESSAGES[error.code]}
+            {loginErrorCopy(error.code).text}
             {error.code === "denied" && error.detail ? ` (${error.detail})` : null}
+            {` ${loginErrorCopy(error.code).action}`}
           </p>
         )}
-        {showCancelled && <p className="login-card__note">{MESSAGES.cancelled}</p>}
+        {showCancelled && <p className="login-card__note">{loginErrorCopy("cancelled").text}</p>}
         {localError && (
           <p className="login-card__error" role="alert">
             Non riesco ad attivare il profilo locale. Nessun runtime è stato aperto.

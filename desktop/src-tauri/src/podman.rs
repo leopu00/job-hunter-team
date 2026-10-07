@@ -285,6 +285,10 @@ pub(crate) struct PodmanError {
     code: &'static str,
 }
 
+/// Oggi nessuna schermata la chiama (`checkPodman` in lib/podman.ts non ha
+/// chiamanti): l'onboarding verifica Podman dentro `onboarding_prepare`.
+/// Resta registrata di proposito (decisione del 08/10/2026); i suoi codici
+/// hanno comunque una frase nel catalogo degli errori.
 #[tauri::command]
 pub(crate) async fn check_podman(
     app: tauri::AppHandle,

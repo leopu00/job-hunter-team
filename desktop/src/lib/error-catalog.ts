@@ -8,17 +8,26 @@
  * Rust backend and the TS layer can produce), so a new code cannot ship
  * without its sentence and its action.
  *
- * Languages: Italian and English for every entry. The other UI languages fall
- * back to English, like the web dictionaries (lib/i18n-dict.ts).
+ * Languages: Italian and English are the source copy here; the five other
+ * product languages live in error-catalog.locales.ts, keyed by error code.
  */
 
-export type ErrorLocale = "it" | "en";
+import {
+  ERROR_CATALOG_LOCALES,
+  ERROR_TRANSLATION_LOCALES,
+  type ErrorTranslationLocale,
+  type ErrorTranslationPair,
+} from "./error-catalog.locales";
+
+export const ERROR_LOCALES = ["it", "en", ...ERROR_TRANSLATION_LOCALES] as const;
+export type ErrorLocale = (typeof ERROR_LOCALES)[number];
+type ErrorSourceLocale = "it" | "en";
 
 export interface ErrorCopy {
   /** What happened, in plain words. */
-  text: Record<ErrorLocale, string>;
+  text: Record<ErrorSourceLocale, string>;
   /** What to do now. */
-  action: Record<ErrorLocale, string>;
+  action: Record<ErrorSourceLocale, string>;
 }
 
 export interface DescribedError {
@@ -162,10 +171,10 @@ const SSH_KEY_FILE = copy(
   "Choose the right private key file and try again.",
 );
 const HOST_KEY_CHANGED = copy(
-  "L’identità SSH della VPS non coincide con quella già confermata. Per sicurezza il collegamento è bloccato.",
-  "Verifica con chi gestisce la VPS che il server sia lo stesso prima di continuare.",
-  "The VPS SSH identity does not match the one already confirmed. The connection is blocked for safety.",
-  "Check with whoever runs the VPS that it is the same server before going on.",
+  "La chiave SSH del server è CAMBIATA rispetto a quella che avevi confermato: potrebbe essere un server diverso. Il collegamento è bloccato.",
+  "Non procedere. Chiedi a chi gestisce la VPS se la chiave è stata cambiata davvero, e riprova solo dopo la sua conferma.",
+  "The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked.",
+  "Do not proceed. Ask whoever runs the VPS whether the key was really changed, and try again only after they confirm it.",
 );
 const HOST_KEY_STORE = copy(
   "Non riesco a salvare sul computer l’identità SSH confermata.",
@@ -611,6 +620,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The screen key is damaged.",
     "Restart the team: the key is generated again.",
   ),
+  live_screen_invalid_port: copy(
+    "La porta configurata per lo schermo del CLOSER non è valida.",
+    "Riavvia Job Hunter Team. Se si ripete, contatta l’assistenza.",
+    "The port set for the CLOSER’s screen is not valid.",
+    "Restart Job Hunter Team. If it happens again, contact support.",
+  ),
+  live_screen_failed: copy(
+    "Non riesco a collegarmi allo schermo del CLOSER.",
+    "Controlla che il team sia acceso, poi riapri la finestra.",
+    "I cannot connect to the CLOSER’s screen.",
+    "Check that the team is running, then reopen the window.",
+  ),
   screen_not_running: copy(
     "Lo schermo del CLOSER non è acceso.",
     "Accendi il team: la finestra si collega da sola.",
@@ -665,6 +686,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Riprova l’importazione.",
     "The profile could not be imported. No existing data was changed.",
     "Try the import again.",
+  ),
+  existing_team_connect_failed: copy(
+    "Il collegamento al team non è riuscito. Nessun dato sensibile è stato salvato.",
+    "Controlla i dati della VPS e riprova.",
+    "Connecting to the team did not succeed. No sensitive data was saved.",
+    "Check the VPS details and try again.",
   ),
   receipt_unverified: copy(
     "Non riesco a confermare che l’importazione sia completa.",
@@ -785,6 +812,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The browser did not answer within five minutes.",
     "Try signing in again.",
   ),
+  login_failed: LOGIN_FAILED,
+  login_exchange_failed: copy(
+    "Google ha risposto, ma la sessione non si è aperta.",
+    "Riprova l’accesso con Google.",
+    "Google answered, but the session did not open.",
+    "Try signing in with Google again.",
+  ),
   listener_failed: LOGIN_FAILED,
   invalid_authorize_url: LOGIN_FAILED,
   invalid_supabase_origin: LOGIN_FAILED,
@@ -850,17 +884,54 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   native_failed: VOICE_FAILED,
 };
 
+/**
+ * Codes with a sentence that nothing emits today. They stay, so the copy is
+ * ready the day one starts, but they do not count as covered:
+ * error-catalog.test.ts fails if one of them shows up at an emission site,
+ * and then it leaves this list on purpose.
+ */
+export const NOT_EMITTED: ReadonlySet<string> = new Set([
+  // Rust: only in the message table of onboarding::failure().
+  "podman_start_failed",
+  "runtime_wrapper_install_failed",
+  "command_timeout",
+  // TS: handled by the UI, produced by no backend.
+  "container_version_incompatible",
+  "account_team_mismatch",
+  "ssh_unavailable",
+  "ssh_auth_failed",
+]);
+
 function localeOf(locale: string | null | undefined): ErrorLocale {
-  return locale === "it" ? "it" : locale ? "en" : "it";
+  if (!locale) return "it";
+  return (ERROR_LOCALES as readonly string[]).includes(locale) ? locale as ErrorLocale : "en";
 }
 
 function formatTime(resetsAt: number, locale: ErrorLocale, now: number): string {
   const date = new Date(resetsAt * 1000);
-  const tag = locale === "it" ? "it-IT" : "en-GB";
+  const tags: Record<ErrorLocale, string> = {
+    it: "it-IT", en: "en-GB", de: "de-DE", es: "es-ES", fr: "fr-FR", hu: "hu-HU", pt: "pt-PT",
+  };
+  const tag = tags[locale];
   const time = new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(date);
   if (new Date(now).toDateString() === date.toDateString()) return time;
   const day = new Intl.DateTimeFormat(tag, { weekday: "long", day: "numeric", month: "long" }).format(date);
-  return locale === "it" ? `${time} di ${day}` : `${time} on ${day}`;
+  const joined: Record<ErrorLocale, string> = {
+    it: `${time} di ${day}`,
+    en: `${time} on ${day}`,
+    de: `${time} am ${day}`,
+    es: `${time} del ${day}`,
+    fr: `${time} le ${day}`,
+    hu: `${day}, ${time}`,
+    pt: `${time} de ${day}`,
+  };
+  return joined[locale];
+}
+
+function localizedCopy(code: string, copy: ErrorCopy, locale: ErrorLocale): ErrorTranslationPair {
+  if (locale === "it" || locale === "en") return [copy.text[locale], copy.action[locale]];
+  return ERROR_CATALOG_LOCALES[code]?.[locale as ErrorTranslationLocale]
+    ?? ERROR_CATALOG_LOCALES.unknown[locale as ErrorTranslationLocale];
 }
 
 /**
@@ -871,25 +942,38 @@ function formatTime(resetsAt: number, locale: ErrorLocale, now: number): string 
  */
 export function describeError(
   code: string | null | undefined,
-  options: { locale?: string | null; resetsAt?: number | null; now?: number } = {},
+  options: {
+    locale?: string | null;
+    resetsAt?: number | null;
+    now?: number;
+    /** Catalog code whose copy replaces the generic one for an unknown code. */
+    fallback?: string;
+  } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
   const key = typeof code === "string" ? code : "unknown";
-  const entry = Object.prototype.hasOwnProperty.call(ERROR_CATALOG, key) ? ERROR_CATALOG[key] : undefined;
-  let chosen = entry ?? UNKNOWN_ERROR;
+  const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
+  const entry = key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
+  const fallbackCode = options.fallback && has(options.fallback) ? options.fallback : "unknown";
+  const fallback = ERROR_CATALOG[fallbackCode];
+  let chosen = entry ?? fallback;
+  let chosenCode = entry ? key : fallbackCode;
   let known = entry !== undefined;
-  const needsTime = chosen.text[locale].includes("{time}") || chosen.action[locale].includes("{time}");
+  let [text, action] = localizedCopy(chosenCode, chosen, locale);
+  const needsTime = text.includes("{time}") || action.includes("{time}");
   const resetsAt = options.resetsAt;
   const hasTime = typeof resetsAt === "number" && Number.isFinite(resetsAt) && resetsAt > 0;
   if (needsTime && !hasTime) {
     chosen = UNKNOWN_ERROR;
+    chosenCode = "unknown";
+    [text, action] = localizedCopy(chosenCode, chosen, locale);
     known = false;
   }
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
   return {
     code: key,
-    text: chosen.text[locale].replaceAll("{time}", time),
-    action: chosen.action[locale].replaceAll("{time}", time),
+    text: text.replaceAll("{time}", time),
+    action: action.replaceAll("{time}", time),
     known,
   };
 }
