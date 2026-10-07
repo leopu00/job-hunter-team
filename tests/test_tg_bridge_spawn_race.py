@@ -36,6 +36,7 @@ Eseguire:
 
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -189,9 +190,34 @@ def env(tmp_path):
     )
     yield {"launcher": launcher, "home": home, "environ": environ, "bin": bin_dir}
 
-    # Nessun processo di prova sopravvive alla fine del test.
-    subprocess.run(["pkill", "-f", str(launcher / "tg-bridge.py")],
-                   capture_output=True)
+    # Nessun processo di prova sopravvive alla fine del test, e si fermano
+    # soltanto quelli lanciati dalla copia di .launcher di QUESTO test, per pid:
+    # niente pkill per nome, che su un Mac con bridge veri accesi li ucciderebbe.
+    _stop_own_processes(launcher)
+
+
+def _own_pids(launcher: Path) -> list[int]:
+    """I pid dei processi (wrapper e python) del tg-bridge di questa copia di .launcher."""
+    script = str(launcher / "tg-bridge.py")
+    rows = subprocess.run(["ps", "-axww", "-o", "pid=,command="],
+                          capture_output=True, text=True).stdout.splitlines()
+    pids = []
+    for row in rows:
+        pid_s, _, cmd = row.strip().partition(" ")
+        if script in cmd and pid_s.isdigit() and int(pid_s) != os.getpid():
+            pids.append(int(pid_s))
+    return pids
+
+
+def _stop_own_processes(launcher: Path) -> None:
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for pid in _own_pids(launcher):
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
+        if sig is signal.SIGTERM:
+            time.sleep(0.2)
 
 
 def _spawn(env, *args, background=False):
@@ -343,3 +369,32 @@ def test_an_unknown_role_is_refused(env):
     assert res.returncode != 0
     assert "unknown tg-bridge role" in res.stderr
     assert _alive(env) == {r: 0 for r in ROLES}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="ps POSIX")
+def test_a_bridge_this_launcher_did_not_start_survives_the_spawn(env, tmp_path):
+    """Lo spawn ferma i SUOI bridge, non chiunque si chiami tg-bridge.py.
+
+    Un processo con lo stesso nome e lo stesso ruolo, lanciato da un'altra
+    cartella (un'altra installazione, un altro team sulla stessa macchina),
+    deve restare vivo dopo un boot completo: il kill di start-agent.sh ha per
+    bersaglio il tg-bridge.py di questa installazione, non un nome.
+    """
+    elsewhere = tmp_path / "another-install"
+    elsewhere.mkdir()
+    _write_exec(elsewhere / "tg-bridge.py", FAKE_BRIDGE)
+    decoy = subprocess.Popen(
+        [sys.executable, str(elsewhere / "tg-bridge.py"), "--role", "capitano"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        time.sleep(0.3)
+        assert decoy.poll() is None
+        boot = _spawn(env)
+        assert boot.returncode == 0, boot.stderr
+        time.sleep(0.5)
+        assert _alive(env) == {r: 1 for r in ROLES}
+        assert decoy.poll() is None, "il kill di start-agent.sh ha fermato un bridge che non aveva lanciato"
+    finally:
+        decoy.kill()
+        decoy.wait(timeout=10)

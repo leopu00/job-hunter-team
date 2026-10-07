@@ -11,6 +11,13 @@
 #       SIGTERM attende e manda SIGKILL ai sopravvissuti; settle>0 → attesa
 #       finale di quiescenza. Delega a proc-kill.py (scansione /proc in Python,
 #       NIENTE self-match — vedi il docstring lì e process_health.py).
+#       Il marker è il PATH ASSOLUTO dello script che questa installazione
+#       lancia (es. "$BRIDGE_SCRIPT", "$TG_SCRIPT --role $_role"), mai il solo
+#       nome: un nome nudo prende anche i processi omonimi di un'altra
+#       installazione o di un altro utente sulla stessa macchina. Nel container
+#       i path sono quelli dell'immagine (/app/...), quindi gli orfani di un run
+#       precedente dello stesso container restano presi. tests/
+#       test_process_kill_scope.py rifiuta un marker che non parte da `"$`.
 #
 #   jht_daemon_log <nome-file>
 #       Stampa il path del log del daemon sotto $JHT_HOME/logs (bind-mount,
