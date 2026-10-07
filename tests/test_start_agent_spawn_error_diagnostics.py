@@ -119,7 +119,9 @@ def test_the_cleanup_is_itself_time_bounded():
     block = _spawn_block()
     for command in ("tmux has-session", "tmux kill-session"):
         line = next(ln for ln in block.splitlines() if command in ln)
-        assert line.strip().startswith("jht_timeout "), line.strip()
+        # The probe's own ceiling, not the spawn's: a cleanup client must give up
+        # as fast as any other question to a server suspected of hanging.
+        assert line.strip().startswith('jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux '), line.strip()
         assert "9>&-" in line, f"il client di pulizia non chiude il fd del lock: {line.strip()}"
 
 
