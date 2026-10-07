@@ -818,10 +818,33 @@ host_command_uses_local_help() {
 #
 # Override via JHT_BIND_OWNER (default 1001:1001). Best-effort: ignora
 # fallimenti chown su Mac/Colima dove userns mapping gestisce diversamente.
+# The container runs as uid 1001 (or JHT_BIND_OWNER) (`jht`), and ~/.jht plus the documents
+# folder are aligned to it. On the HOST that uid must belong to nobody, or to
+# the person installing or starting JHT: another account with that uid would
+# own all of ~/.jht (data and portal credentials) and could run a file the
+# container made setuid there (P2 of the security review, 08/10). Prints the
+# account name and succeeds when there is such a conflict.
+bind_uid_conflict() {
+  local uid="$1" self="${SUDO_UID:-$(id -u)}" name=""
+  if command -v getent >/dev/null 2>&1; then
+    name="$(getent passwd "$uid" 2>/dev/null | cut -d: -f1)"
+  else
+    name="$(id -un "$uid" 2>/dev/null || true)"
+  fi
+  [ -n "$name" ] || return 1
+  [ "$self" = "$uid" ] && return 1
+  printf '%s\n' "$name"
+}
+
 ensure_bind_owner() {
   [ "$(uname -s)" = "Linux" ] || return 0
   local target="${JHT_BIND_OWNER:-1001:1001}"
   local target_uid="${target%%:*}"
+  local name
+  if name="$(bind_uid_conflict "$target_uid")"; then
+    err "bind_uid_conflict: uid $target_uid on this computer is the account '$name'. The Job Hunter Team container runs as uid $target_uid, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '$name', or give '$name' another uid, then try again."
+    exit 1
+  fi
   local home_dir="${JHT_HOME_HOST:-$HOME/.jht}"
   local user_dir="${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"
   mkdir -p "$home_dir" "$user_dir" 2>/dev/null || true

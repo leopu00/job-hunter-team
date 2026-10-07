@@ -201,8 +201,7 @@ compito — questa regola non riguarda *cosa* installi, ma *dove*.
 Librerie PDF diverse, scraper diversi, toolkit ML diversi: tutti
 benvenuti, ma tutti nello stesso magazzino.
 
-**Pattern vietati** (la whitelist sudoers li blocchera' a livello OS —
-otterrai `sudo: /usr/bin/pip: command not allowed`):
+**Pattern vietati** (nel container non c'e' `sudo`: falliscono con `sudo: command not found`):
 
 - ❌ `sudo pip install <pkg>` → spargerebbe nei site-packages di
   sistema, invisibile agli altri agenti e perso al rebuild del container
@@ -214,9 +213,10 @@ otterrai `sudo: /usr/bin/pip: command not allowed`):
   `$JHT_AGENT_DIR/tmp/venv-<scopo>/` e accetta che verra' cancellato
   dalla manutenzione RULE-T12 dopo 7 giorni.
 
-**Sudo consentito (whitelist):** `apt-get`, `apt`, `apt-cache`, `mkdir`,
-`chown`, `ln`. Pacchetti di sistema (tesseract, pdftohtml, font) →
-ancora OK via `sudo apt install`. Librerie Python → solo uv.
+**Niente sudo.** Il container non ce l'ha, di proposito: la shell di un agente
+non diventa mai root. I pacchetti di sistema (tesseract, pdftohtml, font) sono
+nell'immagine; se ne manca uno, chiedi al Capitano di segnalarlo al team di
+sviluppo (`jht-install apt` dice lo stesso). Librerie Python → solo uv.
 
 **Se l'installazione fallisce** perche' non esiste una wheel per ARM64
 nel container, escala al Capitano — NON ripiegare sulla compilazione da
@@ -331,14 +331,13 @@ con scuse.
 | Necessita' | Installa via | Esempio |
 |---|---|---|
 | Libreria Python non ancora importata | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` per STT vocale |
-| Pacchetto di sistema (binario CLI) | `sudo apt-get install -y <pkg>` (whitelisted) | `sudo apt-get install -y poppler-utils` |
+| Pacchetto di sistema (binario CLI) | non a runtime: va nell'immagine | chiedi al Capitano; `jht-install apt <pkg>` lo spiega |
 | Tool CLI Node | `npm install -g <pkg>` nel prefisso utente | `npm install -g yt-dlp` |
 | Binario pre-compilato | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | tool LLM una tantum |
 | File modello (Whisper, ecc.) | download a runtime in `$JHT_HOME/.cache/<tool>/` | varianti di modello small/medium |
 
-`sudo` e' **senza password** per la whitelist in `/etc/sudoers.d/jht`
-(`apt-get`, `apt`, `mkdir`, `chown`, `ln`). Per i pacchetti Python, usa
-`uv` come da RULE-T13 (NON `sudo pip`).
+Nel container **non c'e' `sudo`**. Per i pacchetti Python usa `uv` come da
+RULE-T13.
 
 ### Quando NON installare
 

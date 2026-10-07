@@ -1,17 +1,14 @@
 #!/bin/bash
-# Container entrypoint — runs as `jht` (never root).
+# Container entrypoint — runs as `jht` (never root), with no way to become root:
+# the image has no sudo and the compose sets no-new-privileges (P1, 08/10).
 #
-# Windows fix: on Docker Desktop (WSL2 backend) the bind mounts /jht_home and
-# /jht_user can arrive owned by root — the build-time `chown jht:jht` is
-# overlaid by the mount, so `jht` gets EACCES on the very first mkdir
-# ([watchdog] mkdir /jht_home/logs: Permission denied). On macOS/Linux the
-# mounts map to the caller and are already writable.
-#
-# Strategy: real write-probe on each mount; only when it fails, repair
-# ownership through the passwordless-sudo whitelist that the image already
-# grants to `jht` (/bin/mkdir and /bin/chown — see /etc/sudoers.d/jht in the
-# Dockerfile). No gosu, no root entrypoint: agents keep running as `jht`.
-# Idempotent (chown preserves data) and a no-op where the probe succeeds.
+# Windows: on Docker Desktop (WSL2) the bind mounts /jht_home and /jht_user
+# can arrive owned by root — the build-time `chown jht:jht` is overlaid by the
+# mount — and `jht` gets EACCES on its first mkdir. This entrypoint used to
+# repair that with a passwordless `sudo chown`, which made every agent root.
+# The repair now runs on the HOST before `up` (jht-wrapper.ps1 and the desktop
+# app, one contract: a one-shot root container with only CAP_CHOWN, no
+# network, only these two folders). Here we only check, and say so.
 set -u
 
 for d in /jht_home /jht_user; do
@@ -20,15 +17,8 @@ for d in /jht_home /jht_user; do
     rmdir "$probe" 2>/dev/null || true
     continue
   fi
-  echo "[entrypoint] $d not writable by $(whoami) — repairing ownership (Windows bind mount)" >&2
-  sudo /bin/mkdir -p "$d"
-  sudo /bin/chown -R jht:jht "$d"
-  if mkdir -p "$probe" 2>/dev/null; then
-    rmdir "$probe" 2>/dev/null || true
-    echo "[entrypoint] $d writable now" >&2
-  else
-    echo "[entrypoint] WARNING: $d still not writable after chown — check the Docker Desktop file-sharing settings for this path" >&2
-  fi
+  # Fixed code first: the host and the desktop match it, the sentence is for people.
+  echo "[entrypoint] mount_not_writable $d: $d is not writable by $(whoami). The runtime repairs this before starting; restart it with 'jht up' (or from the desktop app). If it persists, check the Docker Desktop file-sharing settings for this folder." >&2
 done
 
 # Test hook: lets CI/sanity checks run the repair logic without starting the CLI.

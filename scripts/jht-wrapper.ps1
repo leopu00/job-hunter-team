@@ -20,8 +20,9 @@
 # ║    JHT_COMPOSE_FILE=$JHT_RUNTIME_DIR\docker-compose.yml                  ║
 # ║                                                                          ║
 # ║  Differenze vs jht-wrapper.sh (per design Windows-native):               ║
-# ║    - NO ensure_bind_owner: Docker Desktop su Windows gestisce volume     ║
-# ║      permissions via Hyper-V/WSL2 namespace, non c'e' chown da fare.     ║
+# ║    - Al posto di ensure_bind_owner: Repair-MountOwnership, prima di up,  ║
+# ║      un container una tantum (root, solo CAP_CHOWN, senza rete) che      ║
+# ║      sistema i mount arrivati di root su Docker Desktop (WSL2).          ║
 # ║    - NO host-setup.sh invocation: swap config e' Linux-only, lang/tz     ║
 # ║      picker resta gestito dal wizard Node dentro al container.           ║
 # ║                                                                          ║
@@ -387,9 +388,55 @@ function Test-ContainerUp {
   return ($running -split "`n") -contains $Container
 }
 
+# Docker Desktop per Windows (WSL2): i bind mount di ~/.jht e della cartella
+# dei documenti possono arrivare di root, e l'utente jht (1001) del container
+# non ci scrive. Il container non ha piu' sudo (P1 del 08/10): la riparazione
+# la fa l'host PRIMA di `up`, con un container una tantum della STESSA
+# immagine — root, solo CAP_CHOWN, senza rete, con montate soltanto le due
+# cartelle — che esegue /app/.launcher/repair-mounts.sh. Stesso contratto
+# dell'app desktop (setup_service.gd, _repair_mount_ownership): stessi
+# argomenti, stesso dispatch, stessi codici sullo stdout.
+$MountRepairDispatch = 'if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi'
+
+function Get-ComposeImage {
+  param([string]$File)
+  $files = @('-f', $File)
+  if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
+  $ref = ((& docker compose @files --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string])
+  if ($ref) { $ref = $ref.Trim() }
+  if (-not $ref) { $ref = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
+  return $ref
+}
+
+function Repair-MountOwnership {
+  param([string]$Image)
+  # Podman con keep-id mappa gia' i mount sull'utente: niente da riparare.
+  if ($ContainerRuntime -ne 'docker') { return $true }
+  if (-not $Image) { $Image = Get-ComposeImage $ComposeFile }
+  # Le stesse cartelle del compose (${HOME}/.jht e ${HOME}/Documents/...),
+  # create qui prima che le crei il daemon, che le farebbe di root.
+  $homeMount = Join-Path $env:HOME '.jht'
+  $userMount = Join-Path $env:HOME 'Documents\Job Hunter Team'
+  foreach ($dir in @($homeMount, $userMount)) {
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  }
+  $out = @(& docker run --rm --user '0:0' --cap-drop ALL --cap-add CHOWN --network none `
+      --security-opt no-new-privileges `
+      -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
+      --entrypoint /bin/sh $Image -c $MountRepairDispatch 2>$null)
+  $code = $LASTEXITCODE
+  $failed = @($out | Where-Object { "$_" -like 'mount_repair_failed*' })
+  if ($code -eq 0 -and $failed.Count -eq 0) { return $true }
+  # Codice, frase, azione: mai un avvio che si ferma in silenzio.
+  Write-Err "mount_repair_failed: le cartelle di Job Hunter Team ($homeMount, $userMount) non sono scrivibili dal container e non si sono potute sistemare."
+  Write-Info "  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell'utente sia condivisa, poi rilancia 'jht up'."
+  return $false
+}
+
 function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     Write-Info "Container '$Container' non attivo, lo avvio..."
+    if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
     # Attendi che il container sia in stato running.
     $tries = 20
@@ -1239,6 +1286,7 @@ function Invoke-RuntimeUpgrade {
     if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }
     if ($checkOnly) { Remove-UpgradeTransaction; $changed = ($candidateImage -ne $oldImage) -or $metadataChanged; Write-UpgradeResult $true $changed 'check' $oldVersion $oldImage $oldVersion $candidateImage $changed 'Controllo completato; nessuna modifica al runtime' $false; return 0 }
     Write-UpgradeNote 'Attivo il nuovo runtime...'
+    if (-not (Repair-MountOwnership $candidateRef)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'mounts' $oldVersion $oldImage $oldVersion $oldImage $false 'Cartelle di Job Hunter Team non scrivibili dal container (mount_repair_failed)' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'up' '-d' '--force-recreate' $Container) -or -not (Write-UpgradeJournal 'candidate_started' $oldImage $wasRunning) -or -not (Test-UpgradeRunning)) {
       $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'verify' $oldVersion $oldImage $oldVersion $oldImage $false 'Il nuovo runtime non ha superato la verifica' $rolledBack; return 1
     }
@@ -1335,6 +1383,7 @@ switch ($Sub) {
   { $_ -in @('up', 'start-container') } {
     Require-ComposeFile
     Require-Docker
+    if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
     break
   }
@@ -1357,6 +1406,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Invoke-Compose down
+    if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
     break
   }

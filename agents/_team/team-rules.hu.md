@@ -200,8 +200,7 @@ feladatnak — ez a szabaly nem arrol szol, *mit* telepitesz, hanem
 *hova*. Kulonbozo PDF-konyvtarak, kulonbozo scraperek, kulonbozo
 ML-toolkitek: mind szivesen latottak, de mind ugyanabba a raktarba.
 
-**Tiltott mintak** (a sudoers whitelist OS-szinten blokkoja oket —
-`sudo: /usr/bin/pip: command not allowed` hibaüzenetet kapsz):
+**Tiltott mintak** (a kontenerben nincs `sudo`: `sudo: command not found` hibaval elbuknak):
 
 - ❌ `sudo pip install <pkg>` → a rendszer site-packages-be szorna,
   lathatatlan mas agensek szamara es elvesz a container ujraepitesekor
@@ -213,10 +212,10 @@ ML-toolkitek: mind szivesen latottak, de mind ugyanabba a raktarba.
   `$JHT_AGENT_DIR/tmp/venv-<cel>/` ala es fogadd el, hogy a RULE-T12
   karbantartas 7 nap utan torli.
 
-**Engedelyezett sudo (whitelist):** `apt-get`, `apt`, `apt-cache`,
-`mkdir`, `chown`, `ln`. Rendszercsomagok (tesseract, pdftohtml,
-betutipusok) → tovabbra is OK `sudo apt install`-lal.
-Python-konyvtarak → csak uv.
+**Nincs sudo.** A kontenerben szandekosan nincs: egy agens shellje soha nem lesz
+root. A rendszercsomagok (tesseract, pdftohtml, betutipusok) az image-ben vannak;
+ha egy hianyzik, kerd meg a Kapitanyt, hogy jelezze a fejlesztocsapatnak
+(`jht-install apt` ugyanezt mondja). Python-konyvtarak → csak uv.
 
 **Ha a telepites sikertelen**, mert ARM64-es wheel nem letezik a
 containerben, eszkalald a Kapitanyhoz — NE terj vissza a forrasbol
@@ -338,14 +337,13 @@ vissza.
 | Igeny | Telepites | Pelda |
 |---|---|---|
 | Meg nem importalt Python-konyvtar | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` hang STT-hez |
-| Rendszercsomag (CLI binarisa) | `sudo apt-get install -y <pkg>` (whitelisted) | `sudo apt-get install -y poppler-utils` |
+| Rendszercsomag (CLI binarisa) | nem futasidoben: az image-be kerul | kerdezd a Kapitanyt; `jht-install apt <pkg>` elmagyarazza |
 | Node CLI eszkoz | `npm install -g <pkg>` felhasznaloi prefixbe | `npm install -g yt-dlp` |
 | Elofordaitott binaris | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | egyszeri LLM eszkozok |
 | Modellfajl (Whisper, stb.) | futasideju letoltes a `$JHT_HOME/.cache/<tool>/`-ba | small/medium modell-valtozatok |
 
-A `sudo` **jelszomentes** a `/etc/sudoers.d/jht` whitelisthez
-(`apt-get`, `apt`, `mkdir`, `chown`, `ln`). Python-csomagokhoz hasznald
-a `uv`-t a RULE-T13 szerint (NEM `sudo pip`).
+A kontenerben **nincs `sudo`**. Python-csomagokhoz hasznald a `uv`-t a
+RULE-T13 szerint.
 
 ### Mikor NE telepits
 

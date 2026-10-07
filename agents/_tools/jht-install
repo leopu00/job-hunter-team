@@ -5,15 +5,18 @@
 #
 # Le 4 lane usano i meccanismi GIÀ esistenti nell'immagine (non ne aggiunge
 # di nuovi):
-#   apt      → sudo apt-get (sudoers NOPASSWD, /etc/sudoers.d/jht) — lib/tool di SISTEMA
+#   apt      → NON disponibile: il container non ha sudo (P1 del 08/10). I
+#              pacchetti di SISTEMA stanno nell'immagine; uno che manca si
+#              chiede al Capitano, che lo segnala al team di sviluppo.
 #   py       → uv pip install --user  → $JHT_HOME/.local (un solo magazzino)
 #   node     → npm install -g         → $NPM_CONFIG_PREFIX (/jht_home/.npm-global)
-#   browser  → playwright browser + system-deps (ripara il caso libatk)
+#   browser  → il binario del browser di Playwright (le sue .so di sistema
+#              sono già nell'immagine: `playwright install --with-deps` al build)
 # Tutto il resto (binari/lib scaricati a mano) va sotto $JHT_DEPS_PREFIX
 # (/opt/jht-deps, già in PATH+LD_LIBRARY_PATH) — vedi `jht-install prefix`.
 #
 # Uso:
-#   jht-install apt <pkg...>            # es: jht-install apt libatk1.0-0 libnss3
+#   jht-install apt <pkg...>            # rifiutato: spiega dove va il pacchetto
 #   jht-install py  <pkg...>            # es: jht-install py faster-whisper
 #   jht-install node <pkg...>           # es: jht-install node @playwright/test
 #   jht-install browser [chromium]      # ripara/installa il browser + le sue .so
@@ -38,12 +41,12 @@ shift || true
 
 case "$lane" in
   apt)
-    [ "$#" -gt 0 ] || die "uso: jht-install apt <pkg...>"
-    # apt-get è nella whitelist sudoers; update prima (le liste sono pulite
-    # nell'immagine per snellezza) poi install. -n = non-interattivo.
-    sudo -n apt-get update \
-      && sudo -n apt-get install -y --no-install-recommends "$@" \
-      || die "apt install fallito per: $*"
+    # Niente sudo nel container: la shell di un agente non diventa root.
+    # Exit 3 = «non si fa a runtime», distinto da un install fallito (1).
+    echo "jht-install: system packages are not installed at runtime (no sudo in the container)." >&2
+    echo "  Needed: ${*:-<pkg>}. Ask the Captain to report it to the development team: it goes into the image." >&2
+    echo "  A Python library: jht-install py <pkg>. A standalone binary: build or unpack it under \$(jht-install prefix)." >&2
+    exit 3
     ;;
   py|python)
     [ "$#" -gt 0 ] || die "uso: jht-install py <pkg...>"
@@ -62,20 +65,10 @@ case "$lane" in
     ;;
   browser|playwright)
     target="${1:-chromium}"
-    # Binario nel prefisso baked (jht-owned, no root). Le system-lib (.so)
-    # invece richiedono root → via sudo. È la riparazione del caso libatk.
+    # Binario nel prefisso baked (jht-owned, no root). Le .so di sistema
+    # (il caso libatk) sono nell'immagine dal build (`--with-deps` e la lista
+    # esplicita nel Dockerfile): qui non c'è root per installarle.
     playwright install --only-shell "$target" || die "playwright install (binario) fallito"
-    if sudo -n env "PATH=$PATH" playwright install-deps "$target" 2>/dev/null; then
-      :
-    else
-      # Fallback esplicito sul set noto di .so del browser headless.
-      echo "jht-install: playwright install-deps non disponibile, fallback apt sulle .so note" >&2
-      sudo -n apt-get update \
-        && sudo -n apt-get install -y --no-install-recommends \
-             libatk1.0-0 libatk-bridge2.0-0 libnss3 libnspr4 libgbm1 \
-             libasound2 libcups2 libxkbcommon0 libpango-1.0-0 \
-        || die "fallback apt sulle .so del browser fallito"
-    fi
     ;;
   prefix)
     echo "$PREFIX"

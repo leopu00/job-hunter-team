@@ -136,6 +136,18 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    # Niente privilegi da guadagnare (P1 del 08/10). Il processo e' `jht` e
+    # l'immagine non ha sudo; no-new-privileges spegne anche ogni setuid che
+    # un pacchetto si porti dietro, e cap_drop ALL toglie le capability che
+    # resterebbero a un root nel container. I bind dell'host NON sono
+    # nosuid,nodev: con Docker non si puo' (un bind non accetta l'opzione, e il
+    # driver local fa il remount solo per ro: moby/sys mount/mounter_linux.go).
+    # Il residuo e' un file reso setuid dall'uid 1001 in /jht_home, che gira
+    # come 1001, gia' proprietario di ~/.jht. nosuid,nodev arrivano con Podman.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   jht-deps:

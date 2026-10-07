@@ -25,9 +25,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # Agents run `uv pip install --user <pkg>` which honours
     # PYTHONUSERBASE → packages land in $JHT_HOME/.local/lib/python3.X/
     # site-packages, shared across every Scout/Writer/Critic instance.
-    # No more per-agent .venv duplication, no more `sudo pip install`
-    # into the system site-packages (sudo on pip is now blocked, see
-    # the sudoers whitelist further down).
+    # No more per-agent .venv duplication, and no `sudo pip install`
+    # into the system site-packages: the image has no sudo at all
+    # (see further down).
     PYTHONUSERBASE=/jht_home/.local \
     # Don't write .pyc / __pycache__ at all. Without this, every import in
     # an agent shell creates bytecode side-by-side with the .py file —
@@ -97,9 +97,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # Toolbox "agent-friendly": gli agenti Codex/Kimi/Claude vedono
       # spesso PDF (CV, lettere), pagine web, JSON complessi. Senza questi
       # tool scrivevano parser PDF in Python puro impiegando minuti invece
-      # di secondi. File/jq/unzip coprono il 90% dei casi. Sudo + passwordless
-      # (più sotto) permette di installare il resto on-demand.
-      poppler-utils ripgrep file jq unzip sudo \
+      # di secondi. File/jq/unzip coprono il 90% dei casi. Niente sudo: un
+      # pacchetto di sistema che serve agli agenti si aggiunge QUI (RULE-T13).
+      poppler-utils ripgrep file jq unzip \
       # Multimodal user input: l'utente puo' mandare voice notes (ogg/mp3)
       # e foto/scansioni di documenti (CV cartacei, certificati). ffmpeg per
       # decodificare audio in formato Whisper-compatibile, tesseract-ocr per
@@ -320,19 +320,20 @@ RUN useradd --create-home --shell /bin/bash jht \
     # del workspace runtime. Le skill private restano sotto
     # `agents/<role>/_skills/` e vengono copiate sempre, senza manifest.
     # Niente farm globale qui: ogni agente vede solo ciò che gli serve.
-    # Passwordless sudo ristretto (RULE-T13): gli agenti girano con
-    # --yolo in container disposable e fino al 2026-05-02 avevano sudo
-    # ALL. Conseguenza: ogni Scrittore/Critico installava pacchetti
-    # python via `sudo pip install` direttamente nel system site-packages
-    # (e ognuno dove gli pareva), accumulando 5 librerie PDF doppie e
-    # ~400M di drift in $JHT_HOME/.local. Whitelist stretta: apt-get/apt
-    # per system tools (pdftohtml, tesseract...) restano permessi; pip e
-    # venv NO via sudo. Le install Python passano per `uv pip install
-    # --user` che scrive in $PYTHONUSERBASE = $JHT_HOME/.local — un
-    # solo magazzino, cache wheel condivisa via $JHT_HOME/.cache/uv,
-    # niente duplicati cross-agente.
-    && echo 'jht ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/apt-cache, /bin/mkdir, /bin/chown, /bin/ln' > /etc/sudoers.d/jht \
-    && chmod 0440 /etc/sudoers.d/jht \
+    # NIENTE sudo agli agenti (P1 del 08/10). La whitelist che c'era qui
+    # (apt-get, apt, chown, mkdir, ln senza password) era root: `apt-get -o
+    # APT::Update::Pre-Invoke::=<cmd>` e `chown` bastano a prendersi il
+    # container, e con Docker rootful su Linux un file di root nel bind
+    # di ~/.jht arriva sull'host. Gli agenti girano con --yolo e leggono
+    # testo esterno: la shell di un agente non deve diventare root.
+    # I pacchetti di sistema stanno nell'immagine (sopra); le librerie
+    # Python passano per `uv pip install --user` in $JHT_HOME/.local
+    # (RULE-T13), che non ha mai avuto bisogno di root. La riparazione dei
+    # mount di Docker Desktop per Windows la fa l'host prima di `up`.
+    && rm -f /etc/sudoers.d/jht \
+    && if command -v sudo >/dev/null 2>&1 || [ -e /etc/sudoers.d/jht ]; then \
+         echo "GATE: sudo must not be in the image" >&2; exit 1; \
+       fi \
     # Pre-crea /app/web/.next vuota ma con ownership jht. Serve per il
     # compose dev dove mascheriamo .next con anonymous volume: Docker
     # copia le perms della dir "sorgente" nel volume, quindi se qui fosse
@@ -343,12 +344,17 @@ RUN useradd --create-home --shell /bin/bash jht \
 
 USER jht
 
+# GATE, come l'utente degli agenti: `sudo -n true` deve fallire. I setuid di
+# sistema che restano (su, passwd, mount) li spegne no-new-privileges nel compose.
+RUN if sudo -n true 2>/dev/null; then echo "GATE: jht can sudo" >&2; exit 1; fi
+
 # Nessuna porta esposta: la dashboard web locale e' stata ritirata
 # (2026-07-23) — l'interazione passa dall'app desktop via docker exec.
 
 VOLUME ["/jht_home", "/jht_user"]
 
-# Il wrapper (sempre utente jht) ripara l'ownership dei bind-mount quando il
-# host non la mappa (Docker Desktop su Windows/WSL2) e poi exec-a la CLI.
+# Il wrapper (sempre utente jht) controlla che i bind-mount siano scrivibili e
+# poi exec-a la CLI. La riparazione di Docker Desktop su Windows la fa l'host
+# prima di `up`: qui non c'e' modo di diventare root.
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/app/.launcher/entrypoint.sh"]
 CMD ["--help"]

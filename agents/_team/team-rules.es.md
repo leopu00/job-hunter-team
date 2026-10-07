@@ -205,8 +205,7 @@ tarea — esta regla no trata sobre *que* instalas, sino sobre *donde*.
 Diferentes bibliotecas PDF, diferentes scrapers, diferentes toolkits
 ML: todos bienvenidos, pero todos en el mismo almacen.
 
-**Patrones prohibidos** (la whitelist de sudoers los bloqueara a nivel
-de SO — obtendras `sudo: /usr/bin/pip: command not allowed`):
+**Patrones prohibidos** (en el contenedor no hay `sudo`: fallan con `sudo: command not found`):
 
 - ❌ `sudo pip install <pkg>` → esparceria en los site-packages del
   sistema, invisible para otros agentes y perdido al reconstruir el
@@ -219,9 +218,10 @@ de SO — obtendras `sudo: /usr/bin/pip: command not allowed`):
   `$JHT_AGENT_DIR/tmp/venv-<proposito>/` y acepta que sera borrado por
   el mantenimiento RULE-T12 despues de 7 dias.
 
-**Sudo permitido (whitelist):** `apt-get`, `apt`, `apt-cache`, `mkdir`,
-`chown`, `ln`. Paquetes de sistema (tesseract, pdftohtml, fuentes) →
-sigue OK via `sudo apt install`. Bibliotecas Python → solo uv.
+**Sin sudo.** El contenedor no lo tiene, a proposito: la shell de un agente nunca
+se vuelve root. Los paquetes de sistema (tesseract, pdftohtml, fuentes) estan en
+la imagen; si falta uno, pide al Capitan que lo reporte al equipo de desarrollo
+(`jht-install apt` dice lo mismo). Bibliotecas Python → solo uv.
 
 **Si la instalacion falla** porque no existe una wheel para ARM64 en el
 container, escala al Capitan — NO recurras a compilar desde fuente via
@@ -336,14 +336,13 @@ enfrenta un nuevo tipo de input o tarea, no que devuelva excusas.
 | Necesidad | Instalar via | Ejemplo |
 |---|---|---|
 | Biblioteca Python no importada aun | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` para STT de voz |
-| Paquete de sistema (binario CLI) | `sudo apt-get install -y <pkg>` (whitelisted) | `sudo apt-get install -y poppler-utils` |
+| Paquete de sistema (binario CLI) | no en runtime: va en la imagen | pide al Capitan; `jht-install apt <pkg>` lo explica |
 | Herramienta CLI de Node | `npm install -g <pkg>` al prefijo de usuario | `npm install -g yt-dlp` |
 | Binario pre-compilado | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | herramientas LLM puntuales |
 | Archivo de modelo (Whisper, etc.) | descarga en runtime a `$JHT_HOME/.cache/<tool>/` | variantes de modelo small/medium |
 
-`sudo` es **sin contrasena** para la whitelist en `/etc/sudoers.d/jht`
-(`apt-get`, `apt`, `mkdir`, `chown`, `ln`). Para paquetes Python, usa
-`uv` segun RULE-T13 (NO `sudo pip`).
+En el contenedor **no hay `sudo`**. Para paquetes Python, usa `uv` segun
+RULE-T13.
 
 ### Cuando NO instalar
 

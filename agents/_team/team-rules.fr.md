@@ -206,8 +206,7 @@ mais sur *ou*. Differentes bibliotheques PDF, differents scrapers,
 differents toolkits ML : tous bienvenus, mais tous dans le meme
 entrepot.
 
-**Patterns interdits** (la whitelist sudoers les bloquera au niveau
-OS — vous obtiendrez `sudo: /usr/bin/pip: command not allowed`) :
+**Patterns interdits** (le conteneur n'a pas de `sudo` : ils echouent avec `sudo: command not found`) :
 
 - ❌ `sudo pip install <pkg>` → disperserait dans les site-packages
   systeme, invisible pour les autres agents et perdu a la
@@ -220,9 +219,10 @@ OS — vous obtiendrez `sudo: /usr/bin/pip: command not allowed`) :
   `$JHT_AGENT_DIR/tmp/venv-<objectif>/` et acceptez qu'il sera supprime
   par la maintenance RULE-T12 apres 7 jours.
 
-**Sudo autorise (whitelist) :** `apt-get`, `apt`, `apt-cache`, `mkdir`,
-`chown`, `ln`. Paquets systeme (tesseract, pdftohtml, polices) →
-toujours OK via `sudo apt install`. Bibliotheques Python → uv
+**Pas de sudo.** Le conteneur n'en a pas, volontairement : le shell d'un agent ne
+devient jamais root. Les paquets systeme (tesseract, pdftohtml, polices) sont dans
+l'image ; s'il en manque un, demandez au Capitaine de le signaler a l'equipe de
+developpement (`jht-install apt` dit la meme chose). Bibliotheques Python → uv
 uniquement.
 
 **Si l'installation echoue** parce qu'une wheel n'existe pas pour ARM64
@@ -343,14 +343,13 @@ excuses.
 | Besoin | Installer via | Exemple |
 |---|---|---|
 | Bibliotheque Python pas encore importee | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` pour le STT vocal |
-| Paquet systeme (binaire CLI) | `sudo apt-get install -y <pkg>` (whitelisted) | `sudo apt-get install -y poppler-utils` |
+| Paquet systeme (binaire CLI) | pas au runtime : il va dans l'image | demandez au Capitaine ; `jht-install apt <pkg>` l'explique |
 | Outil CLI Node | `npm install -g <pkg>` dans le prefixe utilisateur | `npm install -g yt-dlp` |
 | Binaire pre-compile | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | outils LLM ponctuels |
 | Fichier de modele (Whisper, etc.) | telechargement au runtime dans `$JHT_HOME/.cache/<tool>/` | variantes de modele small/medium |
 
-`sudo` est **sans mot de passe** pour la whitelist dans
-`/etc/sudoers.d/jht` (`apt-get`, `apt`, `mkdir`, `chown`, `ln`). Pour
-les paquets Python, utilisez `uv` selon RULE-T13 (PAS `sudo pip`).
+Le conteneur n'a **pas de `sudo`**. Pour les paquets Python, utilisez `uv`
+selon RULE-T13.
 
 ### Quand NE PAS installer
 

@@ -39,7 +39,11 @@ function dockerCompose(args, { cwd = REPO_ROOT, inherit = true } = {}) {
  */
 function fixNextOwnership() {
   const r = spawnSync('docker', [
-    'run', '--rm', '--user', 'root', '--entrypoint', '/bin/sh',
+    // Root solo per il chown: nessun'altra capability, niente rete, niente
+    // privilegi da guadagnare (P1 del 08/10, come la riparazione dei mount).
+    'run', '--rm', '--user', 'root', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
+    '--network', 'none', '--security-opt', 'no-new-privileges',
+    '--entrypoint', '/bin/sh',
     '--volumes-from', CONTAINER_NAME,
     process.env.JHT_IMAGE || DEFAULT_RUNTIME_IMAGE,
     '-c', 'chown -R 1001:1001 /app/web/.next 2>/dev/null || true',
