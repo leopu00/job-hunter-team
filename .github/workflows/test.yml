@@ -217,10 +217,12 @@ jobs:
 
       # --locked: un Cargo.lock non allineato a Cargo.toml e' un rosso, non
       # un lock riscritto in silenzio sul runner.
-      - name: Check desktop crate
-        working-directory: desktop/src-tauri
-        run: cargo check --locked --all-targets
-
+      # Niente `cargo check --all-targets` prima (tolto il 07/10): il crate ha
+      # la lib, il binario e tests/voice_input_contract.rs, tutti con
+      # `test = true` e nessun example o bench, quindi `cargo test` li compila
+      # tutti, in prova e (lib e binario, per il test di integrazione) in modo
+      # normale. Il check rifaceva lo stesso lavoro: ~1 min su Windows, ~2 su
+      # Linux (run 37556511810).
       - name: Test desktop crate
         working-directory: desktop/src-tauri
         run: cargo test --locked
