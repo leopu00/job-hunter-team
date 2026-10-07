@@ -174,19 +174,23 @@ function withLimitsNotice(
 }
 
 function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
-  const code = typeof error === "object" && error !== null &&
-    typeof (error as { code?: unknown }).code === "string"
-    ? (error as { code: string }).code
-    : null;
+  const code = errorCodeOf(error);
   if (code === "host_key_mismatch" || code === "host_key_changed") {
+    // The server key CHANGED from the confirmed one: possibly another server.
+    // Not retryable, so no button lets the person go on anyway.
+    const described = describeError(code);
     return {
       status: "failed",
       stage: "ssh-host-key",
+      title: "Chiave del server cambiata",
       code,
       retryable: false,
-      message: "La chiave SSH osservata non coincide con quella verificata. Connessione bloccata.",
+      message: described.text,
+      action: described.action,
     };
   }
+  const known = catalogFailure("ssh-host-key", error);
+  if (known) return known;
   return {
     status: "failed",
     stage: "ssh-host-key",
@@ -604,11 +608,13 @@ export default function DashboardApp() {
         submission.host,
         sshHostKey,
       );
-      setSshHostKey(null);
-      await prepareTechnicalSetup(submission);
     } catch (error) {
       failSshHostKey(error);
     }
+    // Outside the SSH try: a runtime, provider or team failure after the
+    // confirmation shows its own message, never the SSH one.
+    setSshHostKey(null);
+    await prepareTechnicalSetup(submission);
   }, [fail, failSshHostKey, prepareTechnicalSetup, setRuntime, sshHostKey]);
 
   const cancelHostKey = useCallback(() => {

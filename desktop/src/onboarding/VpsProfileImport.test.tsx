@@ -59,6 +59,20 @@ describe("VpsProfileImport", () => {
     expect(native.probe).not.toHaveBeenCalled();
   });
 
+  it("blocks a changed server key with its own message and no way to retry", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ probe: vi.fn().mockRejectedValue({ code: "host_key_mismatch" }) });
+    render(<VpsProfileImport bridge={native} />);
+    await openAndFill(user);
+    await user.click(screen.getByRole("button", { name: /verifica e importa/i }));
+
+    expect(await screen.findByText(/non coincide con quella già confermata/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Non è stato possibile importare il profilo/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /modifica e riprova/i })).not.toBeInTheDocument();
+    expect(native.confirm).not.toHaveBeenCalled();
+    expect(native.importProfile).not.toHaveBeenCalled();
+  });
+
   it("probes, requires fingerprint confirmation, then imports and verifies the receipt", async () => {
     const user = userEvent.setup();
     const native = bridge();

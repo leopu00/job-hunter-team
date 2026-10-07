@@ -304,21 +304,36 @@ fn write_pinned_host_key(
     Err("host_key_unwritable")
 }
 
+/// Error of the two SSH host-key commands, shaped like every other command's
+/// error (`{ "code": "..." }`). They used to return a bare string, which the
+/// UI read as "no code": `host_key_changed` and `host_key_mismatch` then fell
+/// into the generic copy and their own sentence never showed.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct HostKeyError {
+    pub(crate) code: &'static str,
+}
+
+impl From<&'static str> for HostKeyError {
+    fn from(code: &'static str) -> Self {
+        Self { code }
+    }
+}
+
 #[tauri::command]
 pub(crate) fn onboarding_ssh_host_key_probe(
     app: tauri::AppHandle,
     scopes: tauri::State<'_, AccountScopeState>,
     host: ExecutionHost,
-) -> Result<SshHostKeyProbe, &'static str> {
+) -> Result<SshHostKeyProbe, HostKeyError> {
     let scope = scopes.lock_active()?;
     let ExecutionHost::Vps { address, port, .. } = &host else {
-        return Err("not_vps");
+        return Err("not_vps".into());
     };
     // Validate every host field, including the local private-key path, without
     // creating known_hosts or starting an SSH session.
     match validate_host_for_scope(&app, &host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
-        Err(error) => return Err(error),
+        Err(error) => return Err(error.into()),
     }
     let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
@@ -337,31 +352,36 @@ pub(crate) fn onboarding_ssh_host_key_confirm(
     host: ExecutionHost,
     algorithm: String,
     fingerprint: String,
-) -> Result<(), &'static str> {
+) -> Result<(), HostKeyError> {
     let scope = scopes.lock_active()?;
     if algorithm != "ssh-ed25519" || !fingerprint.starts_with("SHA256:") {
-        return Err("host_key_confirmation_invalid");
+        return Err("host_key_confirmation_invalid".into());
     }
     let ExecutionHost::Vps { address, port, .. } = &host else {
-        return Err("not_vps");
+        return Err("not_vps".into());
     };
     match validate_host_for_scope(&app, &host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
-        Err(error) => return Err(error),
+        Err(error) => return Err(error.into()),
     }
     let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
     if scanned.algorithm != algorithm || scanned.fingerprint != fingerprint {
-        return Err("host_key_changed");
+        return Err("host_key_changed".into());
     }
     if destination.is_file() {
         return if read_pinned_host_key(&destination)? == scanned {
             Ok(())
         } else {
-            Err("host_key_mismatch")
+            Err("host_key_mismatch".into())
         };
     }
-    write_pinned_host_key(&destination, address, *port, &scanned)
+    Ok(write_pinned_host_key(
+        &destination,
+        address,
+        *port,
+        &scanned,
+    )?)
 }
 
 fn decode_base64(value: &str) -> Option<Vec<u8>> {
@@ -569,10 +589,38 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_base64, encode_base64, parse_scanned_host_key, probe_status, valid_address,
-        valid_user, write_pinned_host_key, ScannedHostKey,
+        decode_base64, encode_base64, onboarding_ssh_host_key_confirm,
+        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, valid_address,
+        valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ScannedHostKey,
+        SshHostKeyProbe,
     };
+    use crate::account_scope::AccountScopeState;
     use std::{fs, time::SystemTime};
+
+    #[test]
+    fn host_key_commands_fail_with_a_structured_code_like_every_other_command() {
+        // Compile-time pin: going back to a bare `&str` error breaks the build
+        // of the tests, not just a runtime assertion.
+        let _: for<'a> fn(
+            tauri::AppHandle,
+            tauri::State<'a, AccountScopeState>,
+            ExecutionHost,
+        ) -> Result<SshHostKeyProbe, HostKeyError> = onboarding_ssh_host_key_probe;
+        let _: for<'a> fn(
+            tauri::AppHandle,
+            tauri::State<'a, AccountScopeState>,
+            ExecutionHost,
+            String,
+            String,
+        ) -> Result<(), HostKeyError> = onboarding_ssh_host_key_confirm;
+
+        for code in ["host_key_changed", "host_key_mismatch", "not_vps"] {
+            assert_eq!(
+                serde_json::to_value(HostKeyError::from(code)).unwrap(),
+                serde_json::json!({ "code": code })
+            );
+        }
+    }
 
     #[test]
     fn validates_only_shell_inert_host_parts() {

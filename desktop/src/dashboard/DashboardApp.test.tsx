@@ -861,6 +861,57 @@ describe("DashboardApp onboarding router", () => {
     expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    // The key CHANGED: its own sentence and action, not the generic SSH copy.
+    expect(screen.getByText(ERROR_CATALOG.host_key_mismatch.text.it)).toBeInTheDocument();
+    expect(screen.getByText(`Cosa fare: ${ERROR_CATALOG.host_key_mismatch.action.it}`)).toBeInTheDocument();
+    expect(screen.getByText("title:Chiave del server cambiata")).toBeInTheDocument();
+  });
+
+  it("blocks a confirmation whose key changed meanwhile, with no way to go on", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("changed-account"));
+    requireOnboarding();
+    vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({
+      status: "confirmation_required",
+      algorithm: "ssh-ed25519",
+      fingerprint: "SHA256:synthetic-fingerprint",
+    });
+    vi.mocked(confirmOnboardingSshHostKey).mockRejectedValue({ code: "host_key_changed" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-vps" }));
+    await user.click(await screen.findByRole("button", { name: "confirm-host-key" }));
+
+    expect(await screen.findByText("failed:ssh-host-key")).toBeInTheDocument();
+    expect(screen.getByText("code:host_key_changed")).toBeInTheDocument();
+    expect(screen.getByText(ERROR_CATALOG.host_key_changed.text.it)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+  });
+
+  it("shows a runtime failure after the fingerprint confirmation as itself, not as an SSH failure", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("after-confirm-account"));
+    requireOnboarding();
+    vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({
+      status: "confirmation_required",
+      algorithm: "ssh-ed25519",
+      fingerprint: "SHA256:synthetic-fingerprint",
+    });
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "runtime_download_failed",
+      message: "native text",
+      retryable: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-vps" }));
+    await user.click(await screen.findByRole("button", { name: "confirm-host-key" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText("code:runtime_download_failed")).toBeInTheDocument();
+    expect(screen.getByText(ERROR_CATALOG.runtime_download_failed.text.it)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("L’identità SSH del server non è stata verificata");
   });
 
   it("starts the team quietly when the provider limits were verified", async () => {

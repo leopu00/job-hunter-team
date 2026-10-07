@@ -268,7 +268,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
             </section>
           )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
-          {failed && runtime.retryable === false && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
+          {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">Correggi i dati indicati prima di riprendere la configurazione.</p>}
           <div className="onboarding-runtime-actions">
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               Riparti da capo

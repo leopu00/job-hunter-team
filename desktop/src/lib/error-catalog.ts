@@ -162,10 +162,10 @@ const SSH_KEY_FILE = copy(
   "Choose the right private key file and try again.",
 );
 const HOST_KEY_CHANGED = copy(
-  "L’identità SSH della VPS non coincide con quella già confermata. Per sicurezza il collegamento è bloccato.",
-  "Verifica con chi gestisce la VPS che il server sia lo stesso prima di continuare.",
-  "The VPS SSH identity does not match the one already confirmed. The connection is blocked for safety.",
-  "Check with whoever runs the VPS that it is the same server before going on.",
+  "La chiave SSH del server è CAMBIATA rispetto a quella che avevi confermato: potrebbe essere un server diverso. Il collegamento è bloccato.",
+  "Non procedere. Chiedi a chi gestisce la VPS se la chiave è stata cambiata davvero, e riprova solo dopo la sua conferma.",
+  "The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked.",
+  "Do not proceed. Ask whoever runs the VPS whether the key was really changed, and try again only after they confirm it.",
 );
 const HOST_KEY_STORE = copy(
   "Non riesco a salvare sul computer l’identità SSH confermata.",
