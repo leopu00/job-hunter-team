@@ -27,7 +27,8 @@ def test_release_builds_tauri_bundles_on_three_operating_systems() -> None:
     assert "npm --prefix desktop test" in source
     assert "cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked" in source
     assert "game/tools/run" not in source
-    assert "setup-godot" not in source
+    for godot in ("setup-godot", "build-game", "game/builds/"):
+        assert godot not in source, godot
 
 
 def test_distribution_gate_builds_tauri_not_godot() -> None:
