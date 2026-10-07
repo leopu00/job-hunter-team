@@ -32,7 +32,16 @@ def tmp_db_path(tmp_path, monkeypatch):
     if SKILLS_DIR not in sys.path:
         sys.path.insert(0, SKILLS_DIR)
 
-    return db_path
+    yield db_path
+
+    # `_seed_positions` assegna `_db.DB_PATH`, e quel globale sopravvive al
+    # test: un `importlib.reload(_db)` non lo cancella, quindi il file che
+    # viene dopo (test_position_open_ticket_state.py) scriveva nel database di
+    # questo test invece che nel suo JHT_HOME. Con l'ordine alfabetico non
+    # succedeva; con pytest-xdist l'ordine fra file cambia.
+    db_module = sys.modules.get('_db')
+    if db_module is not None:
+        vars(db_module).pop('DB_PATH', None)
 
 
 def _seed_positions(db_path, rows):

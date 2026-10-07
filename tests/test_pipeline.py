@@ -767,6 +767,23 @@ class TestDbQueryNextForExtended:
 # Escludili con: pytest tests/test_pipeline.py -m 'not slow'
 # ---------------------------------------------------------------------------
 
+def _setup_sh_env(tmp_path):
+    """L'ambiente di setup.sh, con una JHT_HOME tutta sua.
+
+    setup.sh lancia db_init.py, che crea e migra `$JHT_HOME/jobs.db`. Con
+    l'ambiente ereditato quel database finiva nella JHT_HOME di sessione di
+    tests/conftest.py, condivisa da tutta la suite: da quel momento ogni test
+    che conta su un locale vuoto (test_feedback_display_boundary.py) leggeva
+    i dati di questo. In ordine alfabetico non si vedeva; con pytest-xdist
+    l'ordine fra file cambia.
+    """
+    home = tmp_path / 'jht-home'
+    home.mkdir(exist_ok=True)
+    env = {k: v for k, v in os.environ.items() if k != 'JHT_DB'}
+    env['JHT_HOME'] = str(home)
+    return env
+
+
 class TestSetupScript:
     """
     Verifica il comportamento di setup.sh:
@@ -829,6 +846,7 @@ class TestSetupScript:
         result = subprocess.run(
             ['bash', str(tmp_path / 'scripts' / 'setup.sh')],
             cwd=str(tmp_path),
+            env=_setup_sh_env(tmp_path),
             capture_output=True,
             text=True,
             timeout=120,
@@ -871,6 +889,7 @@ class TestSetupScript:
         subprocess.run(
             ['bash', str(tmp_path / 'scripts' / 'setup.sh')],
             cwd=str(tmp_path),
+            env=_setup_sh_env(tmp_path),
             capture_output=True,
             text=True,
             timeout=120,
