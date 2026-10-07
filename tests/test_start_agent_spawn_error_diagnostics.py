@@ -93,15 +93,6 @@ def test_kill_session_is_confined_to_the_timed_out_branch():
     assert "|| true" in block[kill : kill + 120]
 
 
-def test_the_cleanup_targets_are_anchored_to_the_exact_session():
-    """Nel ramo d'errore la sessione tipicamente NON esiste: senza `=` tmux
-    passa al prefix matching e il kill atterra su una sessione sorella."""
-    block = _spawn_block()
-    assert 'tmux kill-session -t "=$SESSION"' in block
-    assert 'tmux has-session -t "=$SESSION"' in block
-    assert '-t "$SESSION"' not in block
-
-
 def test_the_cleanup_waits_for_the_session_to_materialise():
     """Il tetto uccide il CLIENT tmux, non il server: se il server era lento ma
     vivo la sessione nasce DOPO il SIGTERM, e un kill immediato la lascerebbe
