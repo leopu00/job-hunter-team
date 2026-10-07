@@ -596,7 +596,10 @@ fn create_private_dir(dir: &Path) -> Result<(), AuthStoreError> {
 
 #[cfg(not(unix))]
 fn create_private_dir(dir: &Path) -> Result<(), AuthStoreError> {
-    fs::create_dir_all(dir).map_err(|_| failure("write_failed"))
+    fs::create_dir_all(dir).map_err(|_| failure("write_failed"))?;
+    // Same owner-only ACL as every other private JHT directory, applied also
+    // when the directory already exists; a failure stops the write.
+    crate::runtime_host::set_private_dir_permissions(dir).map_err(|_| failure("write_failed"))
 }
 
 #[cfg(unix)]
@@ -1075,5 +1078,39 @@ mod tests {
         assert_eq!(read_entry(&path, NAME, &KEY).unwrap(), None);
         assert!(target.exists());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_store_directory_gets_the_owner_only_acl_new_or_existing() {
+        use crate::private_acl::{
+            assert_owner_only, current_user_sid, grants_only_owner, open_to_everyone_and_users,
+            read_acl,
+        };
+        let user = current_user_sid().unwrap();
+        let root = scratch_dir("acl");
+        fs::create_dir_all(&root).unwrap();
+        open_to_everyone_and_users(&root, false);
+        // Created by the write itself, under a parent open to everyone.
+        let fresh = root.join("fresh");
+        write_entry(&fresh, NAME, "value", &KEY).unwrap();
+        // Already there, open, with a file from before.
+        let existing = root.join("existing");
+        fs::create_dir(&existing).unwrap();
+        let stale = existing.join("stale.bin");
+        fs::write(&stale, b"stale").unwrap();
+        open_to_everyone_and_users(&stale, false);
+        assert!(!grants_only_owner(&read_acl(&existing).unwrap(), &user));
+        assert!(!grants_only_owner(&read_acl(&stale).unwrap(), &user));
+        write_entry(&existing, NAME, "value", &KEY).unwrap();
+
+        for dir in [&fresh, &existing] {
+            assert_owner_only(dir);
+            let entry = read_acl(&entry_path(dir, NAME)).unwrap();
+            assert!(grants_only_owner(&entry, &user), "{dir:?}: {entry:?}");
+        }
+        let stale = read_acl(&stale).unwrap();
+        assert!(grants_only_owner(&stale, &user), "{stale:?}");
+        fs::remove_dir_all(root).unwrap();
     }
 }
