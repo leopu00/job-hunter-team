@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { TokenExpiryNotice } from "./TokenExpiryNotice";
+import { TokenInactivityNotice } from "./TokenInactivityNotice";
 
 // Breadcrumb: senza, dalla pagina token non si tornava alle Impostazioni
 // (feedback utente 21/07).
@@ -546,6 +547,7 @@ export default function CloudTokensClient() {
                     locale={locale}
                     expiresAt={tok.expires_at}
                   />
+                  <TokenInactivityNotice locale={locale} token={tok} />
                 </div>
                 <button
                   onClick={() => handleRevoke(tok.id)}
