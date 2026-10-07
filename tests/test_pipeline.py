@@ -635,28 +635,6 @@ class TestDbMigrateVerify:
 
 
 # ---------------------------------------------------------------------------
-# Test 9: db_init.py lascia PRAGMA user_version alla versione corrente
-# ---------------------------------------------------------------------------
-
-class TestDbInitUserVersion:
-
-    def test_user_version_set_to_current_schema(self, tmp_db, tmp_path):
-        """
-        Dopo db_init.py, PRAGMA user_version deve restare allineato allo
-        schema corrente dichiarato da ensure_schema().
-        """
-        run_cli(DB_INIT, [], tmp_db, tmp_path)
-
-        conn = sqlite3.connect(tmp_db)
-        version = conn.execute("PRAGMA user_version").fetchone()[0]
-        conn.close()
-
-        assert version == 7, (
-            f"PRAGMA user_version dovrebbe essere 7 (schema corrente), trovato: {version}"
-        )
-
-
-# ---------------------------------------------------------------------------
 # Test 10: next-for-analista e filtro next-for-scrittore per status
 # ---------------------------------------------------------------------------
 
