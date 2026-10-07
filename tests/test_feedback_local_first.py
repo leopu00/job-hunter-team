@@ -119,11 +119,8 @@ def test_clear_is_an_event_and_the_latest_one_wins(box):
     assert out["count"] == 2
 
 
-def test_a_missing_position_fails_instead_of_pretending(box):
-    record = _fresh("feedback_record")
-    out = record.record("9999", "like")
-    assert out["ok"] is False
-    assert "not found" in out["error"]
+# A missing position fails instead of pretending:
+# test_feedback_record.py::test_se_il_locale_non_prende_il_comando_fallisce.
 
 
 def test_a_database_older_than_the_code_still_records(box):
