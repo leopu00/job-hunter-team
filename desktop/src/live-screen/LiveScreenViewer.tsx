@@ -33,7 +33,7 @@ type ViewerState =
 // viewer riprova da solo invece di chiedere all'utente di riaprire la finestra.
 export const RETRY_DELAY_MS = 3000;
 
-const createRfb: ConnectionFactory = async (target, url, options) => {
+export const createRfb: ConnectionFactory = async (target, url, options) => {
   const { default: RFB } = await import("@novnc/novnc");
   return new RFB(target, url, options);
 };

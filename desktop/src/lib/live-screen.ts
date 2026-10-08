@@ -17,9 +17,9 @@ export interface LiveScreenError {
 
 /**
  * Apre (o porta in primo piano) la finestra staccata dello schermo live.
- * Oggi nessuna schermata la chiama: resta perché servirà alla vista
- * interattiva del broker (decisione del 08/10), insieme al comando nativo
- * `open_live_screen`.
+ * Oggi nessuna schermata la chiama. La vista interattiva del broker
+ * (lib/broker-login.ts) usa la stessa finestra, aperta dal lato nativo con
+ * `live_screen::open_window`.
  */
 export async function openLiveScreen(): Promise<boolean> {
   if (!isTauri()) return false;

@@ -452,6 +452,7 @@ fn activate_scope(
     direct_chat::teardown(chat);
     onboarding::teardown(onboarding);
     crate::live_screen::teardown(app);
+    crate::broker_view::teardown(app);
     *active = Some(next);
     Ok(())
 }
@@ -603,6 +604,7 @@ pub(crate) async fn runtime_local_profile_migrate_to_authenticated(
     direct_chat::teardown(&chat);
     onboarding::teardown(&onboarding);
     crate::live_screen::teardown(&app);
+    crate::broker_view::teardown(&app);
     match crate::profile_migration::migrate(
         &paths,
         &source,
@@ -640,6 +642,7 @@ pub(crate) fn runtime_account_scope_reset(
     direct_chat::teardown(&chat);
     onboarding::teardown(&onboarding);
     crate::live_screen::teardown(&app);
+    crate::broker_view::teardown(&app);
     Ok(())
 }
 
@@ -796,6 +799,7 @@ pub(crate) fn runtime_playground_local_reset(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
+    crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
@@ -829,6 +833,7 @@ pub(crate) fn runtime_playground_local_orphan_recover(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
+    crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
