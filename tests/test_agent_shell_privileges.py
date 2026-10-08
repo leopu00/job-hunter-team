@@ -180,6 +180,10 @@ def test_the_windows_desktop_never_runs_docker_even_when_it_is_installed():
     windows = onboarding[onboarding.index("fn install_local_windows("):]
     windows = windows[: windows.index("\n}\n")]
     assert "wsl_state(" in windows and "run_program_lines(" in windows
+    # A runtime already installed is reused only through the release
+    # channel's rule: a test build always installs its own.
+    reuse = windows[: windows.index('"install_reused"')]
+    assert "installed_runtime_reusable(channel.as_ref()" in reuse
     assert "docker" not in windows.lower()
     launches = []
     for path in sorted(src.glob("*.rs")):

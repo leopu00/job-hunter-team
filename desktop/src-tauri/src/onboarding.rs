@@ -1631,11 +1631,17 @@ fn install_local_windows(
         Duration::from_secs(30),
     ))
     .map_err(failure)?;
-    if let Some(wrapper) = wrapper_path(app) {
-        trace_local_runtime("runtime", "install_reused");
-        return Ok(wrapper);
-    }
     let channel = release_channel::current().map_err(failure)?;
+    // A runtime already there is reused only by a production build, and only
+    // when it is a production one: a test build always installs its own.
+    if let Some(wrapper) = wrapper_path(app) {
+        if crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
+        {
+            trace_local_runtime("runtime", "install_reused");
+            return Ok(wrapper);
+        }
+    }
     let expected = expected_installer_digest(release_channel::install_ps1_digest(
         channel.as_ref(),
         INSTALL_PS1_SHA256,
