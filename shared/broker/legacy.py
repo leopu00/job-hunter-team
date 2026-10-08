@@ -9,6 +9,10 @@ prints the content in clear: `read` prints one envelope line
     legacy.py exists <name>   exit 0 if the file is there
     legacy.py read <name>     the envelope on stdout
     legacy.py remove <name>   delete it (after the broker confirmed)
+
+After the migration the runtime's guard (`legacy_guard.py`) puts a
+placeholder directory at that path: `exists` says no for it and `remove`
+leaves it.
 """
 
 from __future__ import annotations
@@ -24,10 +28,26 @@ from pathlib import Path
 
 NAMES = ("email_monitor", "email_transport")
 MAX_BYTES = 64 * 1024
+# The file's own name and the temporary names the clients of v0.3.9 write
+# before renaming (`.tmp` from the VPS settings, `.game-tmp` from the desktop).
+PLACEHOLDER_SUFFIXES = ("", ".tmp", ".game-tmp")
+PLACEHOLDER_NOTE = (
+    "README",
+    "This name is reserved: the mailbox now lives in the secrets broker.\n"
+    "Change it on your computer with: jht mail setup\n",
+)
 
 
 def legacy_path(name: str) -> Path:
     return Path(os.environ.get("JHT_HOME", "/jht_home")) / "credentials" / f"{name}.json"
+
+
+def is_placeholder(path: Path) -> bool:
+    """The guard's directory: a real directory holding the note."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode) and os.path.isfile(Path(path) / PLACEHOLDER_NOTE[0])
+    except OSError:
+        return False
 
 
 def read_envelope(name: str) -> dict:
@@ -54,15 +74,21 @@ def main(argv: list[str]) -> int:
     action, name = argv
     path = legacy_path(name)
     if action == "exists":
-        return 0 if os.path.lexists(path) else 1
+        return 0 if os.path.lexists(path) and not is_placeholder(path) else 1
     if action == "read":
         envelope = read_envelope(name)
         print(json.dumps(envelope))
         return 0 if envelope.get("ok") else 1
+    if is_placeholder(path):
+        print(json.dumps({"ok": True, "removed": None, "placeholder": name}))
+        return 0
     try:
         os.unlink(path)
     except FileNotFoundError:
         pass
+    except IsADirectoryError:
+        print(json.dumps({"ok": False, "reason": "is_a_directory"}))
+        return 1
     print(json.dumps({"ok": True, "removed": name}))
     return 0
 

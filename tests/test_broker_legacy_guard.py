@@ -142,8 +142,8 @@ def test_a_reappeared_file_is_deleted_unread_and_the_user_is_told(broker, home, 
     planted = plant(home)
     told = []
     result = legacy_guard.sweep(ask=broker.ask, notify=told.append)
-    assert result == {"ok": True, "removed": ["email_monitor"]}
-    assert not os.path.lexists(planted)
+    assert result["ok"] and result["removed"] == ["email_monitor"]
+    assert not planted.is_file()
     assert told == [["email_monitor"]]
     assert "jht mail setup" in legacy_guard.NOTICE and CANARY not in json.dumps(result)
 
@@ -154,8 +154,9 @@ def test_a_name_not_yet_migrated_is_left_for_the_host_migration(broker, home):
     waiting = plant(home)
     transport = plant(home, "email_transport")
     told = []
-    assert legacy_guard.sweep(ask=broker.ask, notify=told.append) == {"ok": True, "removed": []}
-    assert waiting.exists() and transport.exists() and told == []
+    assert legacy_guard.sweep(ask=broker.ask, notify=told.append) == {"ok": True, "removed": [], "placeholders": []}
+    assert waiting.is_file() and transport.is_file() and told == []
+    assert sorted(p.name for p in (home / "credentials").iterdir()) == ["email_monitor.json", "email_transport.json"]
 
 
 def test_without_a_broker_nothing_is_deleted(home):
@@ -163,8 +164,8 @@ def test_without_a_broker_nothing_is_deleted(home):
 
     planted = plant(home)
     result = legacy_guard.sweep(ask=lambda *a, **k: {"ok": False, "reason": "broker_unavailable"}, notify=print)
-    assert result == {"ok": False, "reason": "broker_unavailable", "removed": []}
-    assert planted.exists()
+    assert result == {"ok": False, "reason": "broker_unavailable", "removed": [], "placeholders": []}
+    assert planted.is_file()
 
 
 def test_a_symlink_goes_and_its_target_stays(broker, home, tmp_path):
@@ -176,7 +177,7 @@ def test_a_symlink_goes_and_its_target_stays(broker, home, tmp_path):
     link = home / "credentials" / "email_monitor.json"
     link.symlink_to(target)
     assert legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)["removed"] == ["email_monitor"]
-    assert not os.path.lexists(link) and target.read_text() == "keep me"
+    assert not os.path.islink(link) and target.read_text() == "keep me"
 
 
 def test_a_bad_broker_answer_deletes_nothing(home):
@@ -184,7 +185,112 @@ def test_a_bad_broker_answer_deletes_nothing(home):
 
     planted = plant(home)
     assert legacy_guard.sweep(ask=lambda *a, **k: {"ok": True}, notify=print)["reason"] == "broker_bad_answer"
-    assert planted.exists()
+    assert planted.is_file()
+
+
+# ── the placeholder (audit G1-r1) ────────────────────────────────────────
+
+GAME_PASSWORD = "CANARY-typed-into-the-old-game-3e8c"
+PAYLOAD = json.dumps({"imap_host": "imap.example.test", "user": "me@example.com", "password": GAME_PASSWORD})
+
+
+def _desktop_container_write(home):
+    """v0.3.9 `JhtFs.write_text` with the container up: base64 to
+    `<file>.game-tmp`, then `mv -f` over the file."""
+    import subprocess
+
+    rel = f"{home}/credentials/email_monitor.json"
+    b64 = base64.b64encode(PAYLOAD.encode()).decode()
+    script = f"mkdir -p \"$(dirname '{rel}')\" && echo '{b64}' | base64 -d > '{rel}.game-tmp' && mv -f '{rel}.game-tmp' '{rel}'"
+    return subprocess.run(["sh", "-c", script], capture_output=True, text=True).returncode == 0
+
+
+def _desktop_host_write(home):
+    """v0.3.9 `JhtFs.write_text` without the container: `<file>.game-tmp` on
+    the host, then a replace."""
+    path = home / "credentials" / "email_monitor.json"
+    try:
+        with open(f"{path}.game-tmp", "w") as handle:
+            handle.write(PAYLOAD)
+        os.replace(f"{path}.game-tmp", path)
+    except OSError:
+        return False
+    return True
+
+
+def _vps_write(home):
+    """v0.3.9 VPS settings: the python one-liner run in jht."""
+    p = str(home / "credentials" / "email_monitor.json")
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        t = p + ".tmp"
+        open(t, "w").write(PAYLOAD + "\n")
+        os.chmod(t, 0o600)
+        os.replace(t, p)
+    except OSError:
+        return False
+    return True
+
+
+def _on_disk(home):
+    return [p for p in home.rglob("*") if p.is_file() and GAME_PASSWORD.encode() in p.read_bytes()]
+
+
+@pytest.mark.parametrize("writer", [_desktop_container_write, _desktop_host_write, _vps_write])
+def test_after_the_migration_the_old_game_cannot_write_the_password(broker, home, writer):
+    from broker import legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    assert writer(home) is True and _on_disk(home)  # without the placeholder it lands
+    result = legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    assert result["removed"] == ["email_monitor"] and _on_disk(home) == []
+    assert set(result["placeholders"]) >= {"email_monitor.json", "email_monitor.json.tmp", "email_monitor.json.game-tmp"}
+    # The old game saves again: it fails, and the password reaches no file.
+    assert writer(home) is False
+    assert _on_disk(home) == []
+
+
+def test_the_placeholder_is_read_only_and_says_what_to_do(broker, home):
+    from broker import legacy, legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    spot = home / "credentials" / "email_monitor.json"
+    assert spot.is_dir() and legacy.is_placeholder(spot)
+    assert spot.stat().st_mode & 0o777 == 0o555
+    assert "jht mail setup" in (spot / "README").read_text()
+    # Not yet migrated: no placeholder for that name.
+    assert not (home / "credentials" / "email_transport.json").exists()
+    # A loosened placeholder is tightened again; a second sweep adds nothing.
+    spot.chmod(0o755)
+    again = legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    assert again["placeholders"] == [] and spot.stat().st_mode & 0o777 == 0o555
+
+
+def test_the_migration_reader_does_not_take_a_placeholder_for_a_file(broker, home, capsys):
+    from broker import legacy, legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    assert legacy.main(["exists", "email_monitor"]) == 1
+    assert legacy.main(["remove", "email_monitor"]) == 0
+    assert (home / "credentials" / "email_monitor.json").is_dir()
+
+
+def test_a_removed_placeholder_comes_back_and_a_file_in_its_place_goes(broker, home):
+    from broker import legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    spot = home / "credentials" / "email_monitor.json"
+    spot.chmod(0o755)
+    (spot / "README").unlink()
+    spot.rmdir()
+    plant(home)
+    told = []
+    result = legacy_guard.sweep(ask=broker.ask, notify=told.append)
+    assert result["removed"] == ["email_monitor"] and told == [["email_monitor"]]
+    assert spot.is_dir() and "email_monitor.json" in result["placeholders"]
 
 
 def test_pid1_runs_the_guard_before_the_agents_and_then_periodically():
