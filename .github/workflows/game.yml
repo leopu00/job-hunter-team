@@ -21,6 +21,22 @@ on:
       - ".github/workflows/release.yml"
       - "scripts/check-release-version.sh"
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "production (default) or test: a test build installs install.sh, compose, wrapper and image of this very commit"
+        type: choice
+        options:
+          - production
+          - test
+        default: production
+      runtime_image:
+        description: "test only: runtime image of this commit, ghcr.io/leopu00/jht@sha256:<64 hex> (preferred) or ghcr.io/leopu00/jht:<tag>"
+        type: string
+        default: ""
+      runtime_image_digest:
+        description: "test only: sha256:<64 hex> of that image, from the docker.yml push; must match runtime_image when it is a digest"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -95,6 +111,45 @@ jobs:
       - name: Run canonical desktop gates
         run: npm --prefix desktop test
 
+      # Canale di test, solo a mano (workflow_dispatch, channel=test). L'app li
+      # legge in build.rs al build: con JHT_CHANNEL=test scarica install.sh,
+      # compose e wrapper di QUESTO commit e usa l'immagine indicata. Senza
+      # canale le variabili non esistono proprio (non vuote): l'app resta
+      # quella di produzione. Gli input passano solo per l'ambiente, mai
+      # interpolati nello script.
+      - name: Select the test channel
+        if: github.event_name == 'workflow_dispatch' && inputs.channel == 'test'
+        env:
+          RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          RUNTIME_IMAGE_DIGEST: ${{ inputs.runtime_image_digest }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          # [[ =~ ]] confronta la stringa intera: grep andrebbe riga per riga e
+          # un a capo nell'input scriverebbe righe in piu' in GITHUB_ENV.
+          image_re='^ghcr\.io/leopu00/jht(@sha256:[0-9a-f]{64}|:[A-Za-z0-9._-]{1,128})$'
+          if ! [[ "$RUNTIME_IMAGE" =~ $image_re ]]; then
+            echo "::error::channel=test needs runtime_image = ghcr.io/leopu00/jht@sha256:<64 hex> or ghcr.io/leopu00/jht:<tag>"
+            exit 1
+          fi
+          if ! [[ "$RUNTIME_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::channel=test needs runtime_image_digest = sha256:<64 hex>"
+            exit 1
+          fi
+          if [[ "$RUNTIME_IMAGE" == *@sha256:* && "${RUNTIME_IMAGE#*@}" != "$RUNTIME_IMAGE_DIGEST" ]]; then
+            echo "::error::runtime_image and runtime_image_digest name two different digests"
+            exit 1
+          fi
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          install_sha256="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' scripts/install.sh)"
+          {
+            echo "JHT_CHANNEL=test"
+            echo "JHT_SOURCE_SHA=$SOURCE_SHA"
+            echo "JHT_RUNTIME_IMAGE=$RUNTIME_IMAGE"
+            echo "JHT_RUNTIME_IMAGE_DIGEST=$RUNTIME_IMAGE_DIGEST"
+            echo "JHT_INSTALL_SHA256=$install_sha256"
+          } >> "$GITHUB_ENV"
+          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256"
+
       # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
       # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.
       - name: Build Tauri bundles
@@ -134,5 +189,5 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ matrix.artifact }}
+          name: ${{ matrix.artifact }}${{ env.JHT_CHANNEL == 'test' && '-test' || '' }}
           path: gate-assets/
