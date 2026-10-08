@@ -123,6 +123,7 @@ vi.mock("../onboarding", () => ({
     return (
       <section data-testid="onboarding">
         <p>platform:{props.platform}</p>
+        <p>previous-local-data:{String(props.previousLocalData ?? false)}</p>
         <p>{props.runtime.status}{stage}</p>
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
         {props.runtime.status === "failed" && props.runtime.action && <p>Cosa fare: {props.runtime.action}</p>}
@@ -310,6 +311,24 @@ describe("DashboardApp onboarding router", () => {
     expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-profile");
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
     expect(loadOnboardingGate).not.toHaveBeenCalled();
+  });
+
+  it("tells the onboarding about an earlier version's ~/.jht, as the native side found it", async () => {
+    vi.mocked(readDesktopPlatform).mockResolvedValue("windows");
+    vi.mocked(readPreviousLocalData).mockResolvedValue(true);
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Ada Locale",
+    });
+
+    render(<DashboardApp />);
+
+    const onboarding = await screen.findByTestId("onboarding");
+    expect(onboarding).toHaveTextContent("platform:windows");
+    await waitFor(() => expect(onboarding).toHaveTextContent("previous-local-data:true"));
+    expect(readPreviousLocalData).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when a saved local profile is not owned by the backend", async () => {

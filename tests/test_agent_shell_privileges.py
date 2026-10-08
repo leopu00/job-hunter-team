@@ -170,6 +170,25 @@ def test_the_repair_names_only_callers_that_exist():
         assert direct not in windows, direct
 
 
+def test_the_windows_desktop_never_runs_docker_even_when_it_is_installed():
+    # The v0.3.9 upgrade case: Docker Desktop is still installed (stopped),
+    # Podman is not. The app checks WSL and runs install.ps1, which installs
+    # Podman; it never asks Docker anything, so a stopped Docker can neither
+    # be woken up nor be taken for the team's engine.
+    src = ROOT / "desktop" / "src-tauri" / "src"
+    onboarding = (src / "onboarding.rs").read_text(encoding="utf-8")
+    windows = onboarding[onboarding.index("fn install_local_windows("):]
+    windows = windows[: windows.index("\n}\n")]
+    assert "wsl_state(" in windows and "run_program_lines(" in windows
+    assert "docker" not in windows.lower()
+    launches = []
+    for path in sorted(src.glob("*.rs")):
+        text = path.read_text(encoding="utf-8")
+        launches += re.findall(r'(?:Command::new|run_program(?:_lines)?)\(\s*"([^"]+)"', text)
+    assert launches, "no program launch found: the search itself is broken"
+    assert not [program for program in launches if "docker" in program.lower()], launches
+
+
 # ── What used sudo ───────────────────────────────────────────────────────
 
 

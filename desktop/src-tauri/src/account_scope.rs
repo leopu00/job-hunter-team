@@ -281,7 +281,7 @@ pub(crate) fn validate_local_runtime(
 }
 
 /// The team runs on this computer on macOS (Podman), Linux and Windows
-/// (Docker Desktop, through install.ps1 and jht-wrapper.ps1). Windows was
+/// (Podman inside WSL, through install.ps1 and jht-wrapper.ps1). Windows was
 /// refused until 09/10/2026; the account's ownership of ~/.jht applies on
 /// every system alike.
 fn local_runtime_allowed(target_os: &str) -> bool {
@@ -1379,5 +1379,85 @@ mod tests {
         std::fs::write(home.join(".desktop-account-scope"), "x").unwrap();
         assert!(!super::previous_local_data_at(&home));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The upgrade the end-to-end tester runs on Windows: the v0.3.9 game
+    /// left ~/.jht full (configuration, profile, Codex login, the database,
+    /// logs). The onboarding says it will reuse it; a local profile then
+    /// takes it exactly as it is (only the owner marker is added, nothing is
+    /// moved, rewritten or removed), an account takes nothing. Synthetic
+    /// fixture, no real data. Runs on every system, Windows included.
+    #[test]
+    fn a_v039_home_is_announced_then_taken_as_it_is_by_a_local_profile_only() {
+        use std::{collections::BTreeMap, fs, path::Path};
+
+        fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
+            let mut files = BTreeMap::new();
+            let mut pending = vec![root.to_path_buf()];
+            while let Some(dir) = pending.pop() {
+                for entry in fs::read_dir(&dir).unwrap() {
+                    let path = entry.unwrap().path();
+                    let name = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                    if path.is_dir() {
+                        files.insert(format!("{name}/"), Vec::new());
+                        pending.push(path);
+                    } else {
+                        files.insert(name, fs::read(&path).unwrap());
+                    }
+                }
+            }
+            files
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "jht-v039-upgrade-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = root.join(".jht");
+        for (file, content) in [
+            ("jht.config.json", "{\"version\":\"0.3.9\",\"active_provider\":\"codex\"}\n"),
+            ("profile/candidate_profile.yml", "name: Synthetic Candidate\nlocation: Example City\n"),
+            (".codex/auth.json", "{\"auth_mode\":\"chatgpt\",\"tokens\":\"synthetic-fixture\"}\n"),
+            (".codex/config.toml", "model = \"synthetic\"\n"),
+            ("jobs.db", "SQLite format 3\u{0}synthetic"),
+            ("logs/team.log", "synthetic log line\n"),
+        ] {
+            let path = home.join(file);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, content).unwrap();
+        }
+        let before = snapshot(&home);
+
+        // The review step announces the reuse.
+        assert!(super::previous_local_data_at(&home));
+
+        // A signed-in account takes nothing and changes nothing.
+        let google = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &google),
+            Err("local_account_owner_missing")
+        );
+        assert_eq!(snapshot(&home), before);
+        assert!(super::previous_local_data_at(&home));
+
+        // A local profile takes the home as it is: every file of v0.3.9
+        // byte for byte, and only the owner marker added.
+        let local = derive_local_scope(b"local-profile-upgrade");
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        let mut after = snapshot(&home);
+        assert!(after.remove(".desktop-account-scope").is_some());
+        assert_eq!(after, before);
+        // Taken: nothing to announce on the next run, and it stays its own.
+        assert!(!super::previous_local_data_at(&home));
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &derive_local_scope(b"another-profile")),
+            Err("local_account_owner_mismatch")
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 }
