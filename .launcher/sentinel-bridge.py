@@ -43,6 +43,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -1743,13 +1744,29 @@ def _write_role_usage(entry, now_ts):
             return None
         windows = _TBA_MOD.provider_windows(entry, now_ts)
         data = _TBA_MOD.role_usage(windows, now_ts, provider=entry.get("provider"))
-        tmp = ROLE_USAGE_FILE.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
-        os.replace(tmp, ROLE_USAGE_FILE)
+        _atomic_write_json(ROLE_USAGE_FILE, data)
         return data
     except Exception as e:  # noqa: BLE001 — la misura non ferma il sensore
         print(f"[bridge] role-usage skipped: {type(e).__name__}: {e}", flush=True)
         return None
+
+
+def _atomic_write_json(path, data):
+    """Scrive `path` con un file temporaneo PROPRIO (mkstemp nella stessa
+    cartella) e os.replace: con più bridge vivi insieme ognuno scrive il suo
+    temporaneo, e chi legge vede sempre un JSON intero, il vecchio o il nuovo.
+    Un temporaneo condiviso faceva mescolare le scritture."""
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _read_role_usage(now_ts):
