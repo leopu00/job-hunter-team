@@ -142,20 +142,26 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           # python3 puo' mancare nella bash del runner Windows: sha256sum c'e'
           # nella Git Bash di Windows e su Linux, shasum su macOS.
-          if command -v sha256sum >/dev/null 2>&1; then
-            install_sha256="$(sha256sum scripts/install.sh | cut -d' ' -f1)"
-          else
-            install_sha256="$(shasum -a 256 scripts/install.sh | cut -d' ' -f1)"
-          fi
+          file_sha256() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1" | cut -d' ' -f1
+            else
+              shasum -a 256 "$1" | cut -d' ' -f1
+            fi
+          }
+          install_sha256="$(file_sha256 scripts/install.sh)"
+          install_ps1_sha256="$(file_sha256 scripts/install.ps1)"
           [[ "$install_sha256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$install_ps1_sha256" =~ ^[0-9a-f]{64}$ ]]
           {
             echo "JHT_CHANNEL=test"
             echo "JHT_SOURCE_SHA=$SOURCE_SHA"
             echo "JHT_RUNTIME_IMAGE=$RUNTIME_IMAGE"
             echo "JHT_RUNTIME_IMAGE_DIGEST=$RUNTIME_IMAGE_DIGEST"
             echo "JHT_INSTALL_SHA256=$install_sha256"
+            echo "JHT_INSTALL_PS1_SHA256=$install_ps1_sha256"
           } >> "$GITHUB_ENV"
-          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256"
+          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256, install.ps1 sha256 $install_ps1_sha256"
 
       # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
       # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.
