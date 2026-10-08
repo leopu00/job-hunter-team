@@ -530,6 +530,28 @@ mod tests {
         }
     }
 
+    /// The ids the PowerShell side prints, one by one: a phase renamed on
+    /// one side only would never show, and one the app does not know would
+    /// be dropped.
+    #[test]
+    fn the_phase_ids_are_the_ones_the_powershell_side_prints() {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts");
+        let printed: std::collections::BTreeSet<String> = ["install.ps1", "enable-podman-windows-runtime.ps1"]
+            .iter()
+            .map(|name| std::fs::read_to_string(format!("{root}/{name}")).unwrap())
+            .flat_map(|source| {
+                source
+                    .lines()
+                    .filter_map(|line| line.trim().strip_prefix("Write-JhtPhase "))
+                    .map(|id| id.trim().to_owned())
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let known: std::collections::BTreeSet<String> =
+            INSTALL_PHASES.iter().map(|(id, _)| (*id).to_owned()).collect();
+        assert_eq!(printed, known);
+    }
+
     #[test]
     fn the_compiled_install_ps1_digest_is_the_release_source() {
         use sha2::{Digest, Sha256};
