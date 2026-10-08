@@ -163,12 +163,17 @@ def _kill_by_marker(tmp_path, proc_kill_body: str):
 def test_jht_kill_by_marker_reports_a_survivor_and_returns_nonzero(tmp_path):
     result, log = _kill_by_marker(
         tmp_path,
-        "import sys\nprint('[proc-kill] FAIL x: signal refused: [162]', file=sys.stderr)\nsys.exit(1)\n",
+        "import sys\n"
+        "print('DENIED kill 162', file=sys.stderr)\n"
+        "print('[proc-kill] FAIL x: signal refused: [162]', file=sys.stderr)\n"
+        "sys.exit(1)\n",
     )
     assert "rc=1" in result.stdout
     assert "not starting a second one" in result.stderr
     assert "signal refused: [162]" in result.stderr
     assert f"marker={MARKER}" in log and "signal refused" in log
+    assert len(log.splitlines()) == 1
+    assert r"DENIED kill 162\n[proc-kill] FAIL" in log
 
 
 def test_jht_kill_by_marker_is_silent_when_the_kill_succeeds(tmp_path):

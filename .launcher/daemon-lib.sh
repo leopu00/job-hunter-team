@@ -147,11 +147,22 @@ jht_kill_by_marker() {
 # Un kill che non riesce lo dice: su stderr (per chi guarda lo spawn) e in un
 # log durevole (per chi arriva dopo). Il daemon vecchio resta vivo e chi
 # chiama non ne lancia un secondo.
+_jht_kill_log_field() {
+  local value="${1:-}"
+  value="${value//\\/\\\\}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
 _jht_kill_refused() {
-  local marker="$1" detail="$2" log
+  local marker="$1" detail="$2" log marker_log detail_log
   echo "✗ $marker: an old process is still running after the signal — not starting a second one (${detail:-no detail})" >&2
   log="${JHT_HOME:-/jht_home}/logs/daemon-kill.log"
   mkdir -p "$(dirname "$log")" 2>/dev/null || true
+  marker_log="$(_jht_kill_log_field "$marker")"
+  detail_log="$(_jht_kill_log_field "$detail")"
   printf '%s refused marker=%s detail=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$marker" "${detail:-}" >>"$log" 2>/dev/null || true
+    "$marker_log" "$detail_log" >>"$log" 2>/dev/null || true
 }

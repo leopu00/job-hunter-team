@@ -369,28 +369,39 @@ fi
 # il primo [BRIDGE TICK] arriva alla SENTINELLA che è già pronta a riceverlo.
 if [ "$ROLE" = "bridge" ]; then
   _spawn_stage="bridge_restart"
+  _bridge_failures=""
+  _bridge_mark_failed() {
+    if [ -n "$_bridge_failures" ]; then
+      _bridge_failures="$_bridge_failures, $1"
+    else
+      _bridge_failures="$1"
+    fi
+  }
   BRIDGE_SCRIPT="/app/.launcher/sentinel-bridge.py"
-  if [ ! -f "$BRIDGE_SCRIPT" ]; then
+  if [ -f "$BRIDGE_SCRIPT" ]; then
+    # Kill bridge preesistenti (pkill non è installato nell'immagine slim).
+    # Matching sul path completo di sentinel-bridge.py: copre setsid wrapper +
+    # python, e soltanto quelli di questa installazione (vedi daemon-lib.sh).
+    # Bug 2026-05-17 20:42: dopo recreate restavano 2 coppie process vive
+    # perché SIGTERM + sleep 1 era troppo permissivo. Doppio kill TERM→KILL.
+    # La scansione passa da proc-kill.py (Python): il vecchio
+    # `grep -l MARKER /proc/*/cmdline` trovava anche il proprio argv e
+    # qualunque processo innocente che nominasse il marker.
+    # NB: il singleton VERO è il flock dentro sentinel-bridge.py (copre anche
+    # l'entry point bridge-control.sh); questo kill serve al restart pulito.
+    if jht_kill_by_marker "$BRIDGE_SCRIPT" 1 0.5; then
+      BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
+      setsid sh -c "
+        JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+          python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ sentinel-bridge started (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
+    else
+      _bridge_mark_failed "sentinel-bridge"
+    fi
+  else
     echo "✗ $BRIDGE_SCRIPT not found — bridge did NOT start"
-    exit 1
-  fi
-  # Kill bridge preesistenti (pkill non è installato nell'immagine slim).
-  # Matching sul path completo di sentinel-bridge.py: copre setsid wrapper +
-  # python, e soltanto quelli di questa installazione (vedi daemon-lib.sh).
-  # Bug 2026-05-17 20:42: dopo recreate restavano 2 coppie process vive
-  # perché SIGTERM + sleep 1 era troppo permissivo. Doppio kill TERM→KILL.
-  # La scansione passa da proc-kill.py (Python): il vecchio
-  # `grep -l MARKER /proc/*/cmdline` trovava anche il proprio argv e
-  # qualunque processo innocente che nominasse il marker.
-  # NB: il singleton VERO è il flock dentro sentinel-bridge.py (copre anche
-  # l'entry point bridge-control.sh); questo kill serve al restart pulito.
-  if jht_kill_by_marker "$BRIDGE_SCRIPT" 1 0.5; then
-    BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
-    setsid sh -c "
-      JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-        python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ sentinel-bridge started (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
+    _bridge_mark_failed "sentinel-bridge"
   fi
 
   # Pacing bridge — tick alla SENTINELLA (analista del pacing) sul ritmo del
@@ -414,9 +425,12 @@ if [ "$ROLE" = "bridge" ]; then
           python3 -u $PACING_SCRIPT >> '$PACING_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ pacing-bridge started (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
+    else
+      _bridge_mark_failed "pacing-bridge"
     fi
   else
     echo "⚠ $PACING_SCRIPT not found — pacing did NOT start (sentinel is OK)"
+    _bridge_mark_failed "pacing-bridge"
   fi
 
   # Capitano heartbeat bridge — battito ORARIO al Capitano (2026-06-26). Col
@@ -432,9 +446,12 @@ if [ "$ROLE" = "bridge" ]; then
           python3 -u $HEARTBEAT_SCRIPT >> '$HEARTBEAT_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ heartbeat-bridge (hourly nudge to Capitano) started (log $HEARTBEAT_LOG)"
+    else
+      _bridge_mark_failed "heartbeat-bridge"
     fi
   else
     echo "⚠ $HEARTBEAT_SCRIPT not found — heartbeat did NOT start"
+    _bridge_mark_failed "heartbeat-bridge"
   fi
 
   # Window ratio meter — calibrazione auto del rapporto cap-5h/cap-weekly.
@@ -450,9 +467,12 @@ if [ "$ROLE" = "bridge" ]; then
         python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ window-ratio-meter started (log $WRM_LOG)"
+    else
+      _bridge_mark_failed "window-ratio-meter"
     fi
   else
     echo "⚠ $WRM_SCRIPT not found — automatic calibration unavailable (seed only)"
+    _bridge_mark_failed "window-ratio-meter"
   fi
 
   # Token-meter — nella suite dal 19/07: prima partiva SOLO a mano
@@ -467,9 +487,12 @@ if [ "$ROLE" = "bridge" ]; then
           python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ token-meter started (log $METER_LOG)"
+    else
+      _bridge_mark_failed "token-meter"
     fi
   else
     echo "⚠ $METER_SCRIPT not found — token-meter unavailable"
+    _bridge_mark_failed "token-meter"
   fi
 
   # Agent-vitals — CPU%/RSS PER-AGENTE nel tempo (richiesta Leone 19/07:
@@ -485,9 +508,12 @@ if [ "$ROLE" = "bridge" ]; then
           python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ agent-vitals started (per-agent CPU/RSS, log $AV_LOG)"
+    else
+      _bridge_mark_failed "agent-vitals"
     fi
   else
     echo "⚠ $AV_SCRIPT not found — per-agent vitals unavailable"
+    _bridge_mark_failed "agent-vitals"
   fi
 
   # Codex auth-healer (#6) — rileva "session has ended"/refresh-fail nei pane
@@ -503,9 +529,21 @@ if [ "$ROLE" = "bridge" ]; then
         JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
       " >/dev/null 2>&1 < /dev/null &
       echo "✓ codex-auth-healer started (#6, log $HEALER_LOG)"
+    else
+      _bridge_mark_failed "codex-auth-healer"
     fi
+  else
+    echo "⚠ $HEALER_SCRIPT not found — auth healer unavailable"
+    _bridge_mark_failed "codex-auth-healer"
   fi
 
+  if [ -n "$_bridge_failures" ]; then
+    _spawn_stage="bridge_restart_failed"
+    echo "✗ bridge suite incomplete — not stopped or relaunched: $_bridge_failures" >&2
+    exit 1
+  fi
+
+  _spawn_stage="complete"
   exit 0
 fi
 
