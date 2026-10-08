@@ -182,6 +182,15 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # La vista interattiva del login (`jht linkedin login`): websockify solo
+    # sul loopback dell'host, e solo mentre una sessione e' aperta, con un
+    # token monouso. Sulla VPS il desktop ci arriva dal tunnel SSH.
+    ports:
+      - "127.0.0.1:${JHT_LOGIN_VIEW_PORT:-6081}:6081"
+    # Una rete sua: sulla rete del team un agente raggiungerebbe
+    # IP_del_broker:6081 senza passare dal loopback dell'host (R4).
+    networks:
+      - broker
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -225,6 +234,8 @@ services:
     cap_drop:
       - ALL
     restart: unless-stopped
+networks:
+  broker:
 
 volumes:
   jht-deps:

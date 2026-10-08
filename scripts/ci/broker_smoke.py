@@ -89,6 +89,26 @@ def main(argv: list[str]) -> int:
         seen = agent("1001", "import os; print(os.path.exists('/jht_secrets') or os.path.exists('/jht_broker_state'))")
         if seen.stdout.strip() != "False":
             fail("secret-volumes", "the broker's volumes are visible to the agent")
+
+        # A measurement, not a check (design R3): can Chromium start with its
+        # own sandbox in the broker's conditions? The answer decides whether
+        # the login view needs a seccomp/AppArmor profile or the operator's
+        # written acceptance. It is printed, never turned into a failure.
+        probe = (
+            "from playwright.sync_api import sync_playwright as s\n"
+            "p = s().start()\n"
+            "try:\n"
+            "    b = p.chromium.launch(headless=True, chromium_sandbox=True, args=['--disable-dev-shm-usage'])\n"
+            "    b.close(); print('ok')\n"
+            "except Exception as e:\n"
+            "    print('unavailable')\n"
+            "finally:\n"
+            "    p.stop()\n"
+        )
+        measured = docker("run", "--rm", "--user", "1002:1002", "--read-only", "--tmpfs", "/tmp", *HARDENING,
+                          "--network", "none", "-e", "HOME=/tmp", "--entrypoint", "python3", image, "-c", probe,
+                          check=False, timeout=180)
+        print(f"MEASURE chromium-sandbox={(measured.stdout.strip().splitlines() or ['unknown'])[-1]}")
     finally:
         docker("rm", "-f", broker, check=False)
         for vol in vols.values():

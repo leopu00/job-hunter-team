@@ -369,6 +369,7 @@ jht - Job Hunter Team
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da li'.
     jht reset              cancella configurazione e volumi del broker
+    jht linkedin login     apre il login LinkedIn nel broker (lo mostra l'app)
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -394,7 +395,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'reset'
+    'setup', 'download', 'mail', 'telegram', 'reset', 'linkedin'
   )
 }
 
@@ -782,6 +783,27 @@ function Invoke-MailSetup {
   $code = Invoke-BrokerAdmin -InputText $password @adminArgs
   $password = $null
   return $code
+}
+
+# Lo schermo del login nel broker: ogni risposta e' una riga JSON; un broker
+# non attivo e' view_unavailable.
+function Invoke-LinkedinCommand {
+  param([string[]]$LinkedinArgs)
+  if (-not (Test-BrokerUp)) { [Console]::Out.WriteLine('{"ok": false, "reason": "view_unavailable"}'); return 1 }
+  $action = if ($LinkedinArgs.Count -gt 0) { $LinkedinArgs[0] } else { '' }
+  switch ($action) {
+    'login' {
+      if ($LinkedinArgs -contains '--stop') { & docker exec -i $BrokerContainer jht-broker-admin view stop | Out-Host }
+      else { & docker exec -i $BrokerContainer jht-broker-admin view start linkedin-login | Out-Host }
+      return $LASTEXITCODE
+    }
+    'status' { & docker exec -i $BrokerContainer jht-broker-admin view status | Out-Host; return $LASTEXITCODE }
+    default {
+      [Console]::Out.WriteLine('{"ok": false, "reason": "usage"}')
+      Write-Err 'uso: jht linkedin login [--stop] | jht linkedin status [--json]'
+      return 2
+    }
+  }
 }
 
 function Invoke-MailCommand {
@@ -1825,6 +1847,12 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-ResetCommand $Rest)
+  }
+
+  'linkedin' {
+    Require-ComposeFile
+    Require-Docker
+    exit (Invoke-LinkedinCommand $Rest)
   }
 
   'logs' {

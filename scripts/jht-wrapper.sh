@@ -1167,6 +1167,31 @@ mail_setup() {
   return $rc
 }
 
+# Lo schermo del login nel broker (contratto con l'app desktop): ogni risposta
+# e' una riga JSON; un broker giu' o non attestabile e' view_unavailable.
+linkedin_command() {
+  local action="${1:-}" broker_id
+  shift || true
+  broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" || {
+    printf '{"ok": false, "reason": "view_unavailable"}\n'
+    return 1
+  }
+  case "$action" in
+    login)
+      case " $* " in
+        *" --stop "*) docker exec -i "$broker_id" jht-broker-admin view stop ;;
+        *) docker exec -i "$broker_id" jht-broker-admin view start linkedin-login ;;
+      esac
+      ;;
+    status) docker exec -i "$broker_id" jht-broker-admin view status ;;
+    *)
+      printf '{"ok": false, "reason": "usage"}\n'
+      err "uso: jht linkedin login [--stop] | jht linkedin status [--json]"
+      return 2
+      ;;
+  esac
+}
+
 mail_command() {
   local action="${1:-status}"
   shift || true
@@ -1421,6 +1446,7 @@ jht — Job Hunter Team
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da lì.
     jht reset              cancella configurazione e volumi del broker
+    jht linkedin login     apre il login LinkedIn nel broker (lo mostra l'app)
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
@@ -1453,7 +1479,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|linkedin)
       return 0
       ;;
   esac
@@ -2732,6 +2758,13 @@ case "$SUB" in
     require_compose_file
     require_docker
     reset_command "${@:2}"
+    exit $?
+    ;;
+
+  linkedin)
+    require_compose_file
+    require_docker
+    linkedin_command "${@:2}"
     exit $?
     ;;
 

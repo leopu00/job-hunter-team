@@ -49,6 +49,8 @@ case "$target:$*" in
   broker-id:"jht-broker-admin secrets import-legacy "*)
     cat > /dev/null
     printf '%s\n' "$(cat "$FAKE_ANSWERS/$name" 2>/dev/null || echo '{"ok": false, "reason": "store_missing"}')" ;;
+  broker-id:"jht-broker-admin view "*)
+    printf '{"ok": true, "admin": "%s"}\n' "$*" ;;
   broker-id:"jht-broker-admin mailbox setup "*)
     printf 'STDIN %s\n' "$(cat)" >> "$log"
     printf '{"ok": true}\n' ;;
@@ -94,7 +96,8 @@ def run(host, body: str, stdin: str = "") -> subprocess.CompletedProcess:
         f'RUNTIME_DIR="{host.runtime}"\nCOMPOSE_FILE="{host.runtime}/docker-compose.yml"\n'
         'BROKER_SERVICE="jht-broker"\nLEGACY_SECRET_NAMES="email_monitor email_transport"\n'
         'BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"\n'
-        + wrapper_functions("broker_admin", "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
+        + wrapper_functions("broker_admin", "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup",
+                            "linkedin_command")
         + "\n" + body
     )
     return subprocess.run(["bash", "-c", script], env=host.env, input=stdin, capture_output=True, text=True, timeout=30)
@@ -193,3 +196,17 @@ def test_mail_setup_hands_the_password_on_stdin_never_in_argv(host):
     assert all(SECRET not in line for line in argv_lines)
     assert f"STDIN {SECRET}" in log
     assert SECRET not in result.stdout + result.stderr
+
+
+def test_linkedin_login_status_and_stop_go_to_the_brokers_view(host):
+    for argv, expected in ((["login"], "view start linkedin-login"), (["login", "--stop"], "view stop"),
+                           (["status", "--json"], "view status")):
+        result = run(host, "linkedin_command " + " ".join(argv) + "; echo rc=$?")
+        assert "rc=0" in result.stdout, result.stderr
+        assert f'"admin": "jht-broker-admin {expected}"' in result.stdout
+
+
+def test_linkedin_with_no_broker_answers_view_unavailable_in_json(host):
+    script = "read_only_service_id() { return 3; }\nlinkedin_command login; echo rc=$?"
+    result = run(host, script)
+    assert '{"ok": false, "reason": "view_unavailable"}' in result.stdout and "rc=1" in result.stdout
