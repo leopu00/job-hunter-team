@@ -34,6 +34,7 @@ import apply_gate  # noqa: E402
 import email_application as ea  # noqa: E402
 
 SECRET = "synthetic-smtp-secret-0000"
+LEGACY_FILE_SECRET = "synthetic-legacy-file-secret-1111"
 HREF = (
     "mailto:jobs@example.com?cc=Team%40Example.COM&subject=Application%20REF-42%20C%2B%2B"
     "&body=Hello%2C%0Aplease%20apply"
@@ -106,10 +107,13 @@ def box(tmp_path, monkeypatch):
         }
     }
     (home / "jht.config.json").write_text(json.dumps(config))
+    # The legacy secret file is there, as on a box before the migration: the
+    # flow must never read it (audit G1/M5); the password comes from the
+    # injected source only.
     creds = home / "credentials"
     creds.mkdir()
     secret = creds / "email_transport.json"
-    secret.write_text(json.dumps({"password": SECRET}))
+    secret.write_text(json.dumps({"password": LEGACY_FILE_SECRET}))
     secret.chmod(0o600)
     (home / "profile").mkdir()
     (home / "profile" / "candidate_profile.yml").write_text(
@@ -156,7 +160,7 @@ def flow(home, **kwargs):
         db_path=home / "jobs.db",
         transports={"smtp": FakeTransport},
         notifier=lambda **kw: notes.append(kw) or "1",
-        **kwargs,
+        **{"transport_password": lambda settings: SECRET, **kwargs},
     )
 
 
@@ -313,8 +317,6 @@ def test_a_stated_fact_is_used_verbatim(box):
 @pytest.mark.parametrize("mutate,reason", [
     (lambda home: sql(home, "UPDATE applications SET cv_pdf_path = NULL WHERE position_id = 1"), "cv_missing"),
     (lambda home: (home / "cv.pdf").write_bytes(b"not a pdf"), "cv_missing"),
-    (lambda home: (home / "credentials" / "email_transport.json").unlink(), "transport_missing"),
-    (lambda home: (home / "credentials" / "email_transport.json").chmod(0o644), "transport_missing"),
     (lambda home: _edit_transport(home, from_address="other-sender@example.com"), "sender_unverified"),
     (lambda home: _edit_transport(home, security="plain"), "transport_missing"),
 ])
@@ -325,13 +327,32 @@ def test_preflight_blocks_before_anything_is_sent(box, mutate, reason):
     assert FakeTransport.sends == []
 
 
-def test_a_transport_secret_owned_by_another_user_is_refused(box, monkeypatch):
-    # P1 portal secrets, phase 0: the file must be this uid's, not only 0600.
-    real_uid = os.getuid()
-    monkeypatch.setattr(ea.os, "getuid", lambda: real_uid + 1)
+@pytest.mark.parametrize("source,reason", [
+    (None, "transport_needs_broker"),
+    (lambda settings: "", "transport_missing"),
+    (lambda settings: (_ for _ in ()).throw(RuntimeError(SECRET)), "transport_missing"),
+])
+def test_without_a_password_source_nothing_is_sent_and_the_file_is_never_read(box, monkeypatch, source, reason):
+    # Audit G1/M5: no fallback to credentials/email_transport.json.
+    opened = []
+    real_open = Path.open
+
+    def spy(self, *args, **kwargs):
+        if self.name == "email_transport.json":
+            opened.append(self)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", spy)
+    out = flow(box, transport_password=source).send()
+    assert (out.state, out.reason) == ("blocked_human", reason)
+    assert FakeTransport.sends == [] and opened == []
+    assert SECRET not in json.dumps(out.to_dict(1))
+
+
+def test_the_legacy_file_password_never_reaches_the_transport(box):
     out = flow(box).send()
-    assert (out.state, out.reason) == ("blocked_human", "transport_missing")
-    assert FakeTransport.sends == []
+    assert out.state == "sent"
+    assert [t.password for t in FakeTransport.instances] == [SECRET]
 
 
 def _edit_transport(home, **changes):
@@ -498,7 +519,10 @@ def test_auth_failure_blocks_before_send_started(box):
         t.open_error = ea.TransportAuthError("refused")
         return t
 
-    out = ea.EmailApplication(1, jht_home=box, db_path=box / "jobs.db", transports={"smtp": factory}, notifier=lambda **kw: "1").send()
+    out = ea.EmailApplication(
+        1, jht_home=box, db_path=box / "jobs.db", transports={"smtp": factory}, notifier=lambda **kw: "1",
+        transport_password=lambda settings: SECRET,
+    ).send()
     assert (out.state, out.reason) == ("blocked_human", "auth_failed")
     assert sql(box, "SELECT state FROM email_application_attempts") == [("draft_ready",)]
 

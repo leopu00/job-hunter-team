@@ -46,15 +46,13 @@ CLI (agents):
       JSON line with ok, status (`pending_user_approval` or `sent`) and, on
       failure, a fixed reason code.
 
-`_read_creds` below still reads the legacy file for verification_code.py
-until the broker takes over the application flows (phase 2); after the
-migration that file no longer exists.
+Nothing in this file opens a credentials file (audit G1): the account
+reaches the core only as an argument, inside the broker.
 """
 from __future__ import annotations
 
 import argparse
 import email
-import errno
 import email.policy
 import imaplib
 import json
@@ -62,7 +60,6 @@ import os
 import re
 import smtplib
 import ssl
-import stat
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -74,52 +71,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from url_guard import is_fetchable  # noqa: E402  (dopo sys.path, per costruzione)
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
-CREDS_PATH = JHT_HOME / "credentials" / "email_monitor.json"
-
 # Cap di link estratti da una singola email (una digest può contenerne molti):
 # evita che un solo messaggio gonfi la coda con decine di candidati.
 MAX_LINKS_PER_EMAIL = 25
-
-
-def _read_creds() -> tuple[dict, str | None]:
-    """(credentials, problem). problem is None when the file is absent or
-    usable; otherwise a fixed code. Never raises, never echoes the content.
-
-    The file is opened with O_NOFOLLOW and checked on the open descriptor, so
-    a symlink or a file swapped in by another uid is refused. A file of this
-    uid with group/other bits is tightened to 0600 rather than refused: the
-    owner is the one that matters, and refusing would silently stop an inbox
-    that worked before."""
-    try:
-        fd = os.open(CREDS_PATH, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except FileNotFoundError:
-        return {}, None
-    except OSError as exc:
-        return {}, "credentials_symlink" if exc.errno == errno.ELOOP else "credentials_unreadable"
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode):
-            return {}, "credentials_not_a_file"
-        if info.st_uid != os.getuid():
-            return {}, "credentials_foreign_owner"
-        if info.st_mode & 0o077:
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "r", encoding="utf-8") as f:
-            fd = -1
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-        return {}, "credentials_unreadable"
-    finally:
-        if fd >= 0:
-            os.close(fd)
-    if not isinstance(data, dict):
-        return {}, "credentials_unreadable"
-    return data, None
-
-
-def _load_creds() -> dict:
-    return _read_creds()[0]
 
 
 # ── Pattern estrazione link per provider NOTO ──────────────────────────────

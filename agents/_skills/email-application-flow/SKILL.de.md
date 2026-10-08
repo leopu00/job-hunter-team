@@ -69,7 +69,8 @@ Eine JSON-Zeile: `state`, `reason`, `detail` plus Daten.
 
 | `reason` | Typische Ursache |
 |---|---|
-| `transport_missing` | kein E-Mail-Transport konfiguriert, oder die Geheimnisdatei fehlt oder ist nicht 0600 |
+| `transport_missing` | kein E-Mail-Transport konfiguriert, oder sein Passwort ist nicht verfügbar |
+| `transport_needs_broker` | das Mailkonto gehört dem Secrets-Broker, der noch keine Bewerbungen versendet: informiere den Nutzer, suche keine Passwortdatei |
 | `auth_failed` | der Mailserver hat die Zugangsdaten abgelehnt |
 | `sender_unverified` | die Absenderadresse ist weder das authentifizierte Konto noch ein verifizierter Absender |
 | `mailto_missing` | kein Browser-Checkpoint in `email_channel` für diese Position: zuerst `apply_flow.py` ausführen; die Seite wird nie nach einer Adresse durchsucht |

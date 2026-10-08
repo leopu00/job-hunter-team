@@ -101,7 +101,24 @@ def status(args: dict, role: str) -> dict:
         "admission": box.get("admission", "allowlist"),
         "rotation_pending": rotation_pending(),
         "seen_count": len(store.read_state("seen", [])),
+        "legacy_migrated": legacy_migrated(),
     }
+
+
+def legacy_migrated() -> dict[str, bool]:
+    """Which legacy files are past their one migration: imported once, made
+    pointless by a host setup, or replaced by a secret the broker holds. A
+    copy that reappears in /jht_home after this is never read, and the
+    runtime's guard deletes it unread (audit G1). Names only, never values."""
+    done = store.read_state("legacy", {})
+    migrated = {}
+    for name in store.SECRET_NAMES:
+        try:
+            held = bool(store.read_secret(name))
+        except store.StoreError:
+            held = False  # unknown is "not yet": the guard then leaves the file alone
+        migrated[name] = bool(done.get(name)) or held
+    return migrated
 
 
 def count(args: dict, role: str) -> dict:

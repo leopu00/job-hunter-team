@@ -68,7 +68,8 @@ Una riga JSON: `state`, `reason`, `detail`, più i dati.
 
 | `reason` | Causa tipica |
 |---|---|
-| `transport_missing` | nessun trasporto email configurato, o il file del segreto manca o non è 0600 |
+| `transport_missing` | nessun trasporto email configurato, o la sua password non è disponibile |
+| `transport_needs_broker` | l'account di posta è del broker dei segreti, che non invia ancora le candidature: avvisa l'utente, non cercare un file di password |
 | `auth_failed` | il server di posta ha rifiutato le credenziali |
 | `sender_unverified` | l'indirizzo mittente non è l'account autenticato né un mittente verificato |
 | `mailto_missing` | nessun checkpoint del browser in `email_channel` per questa posizione: esegui prima `apply_flow.py`; la pagina non viene mai letta per cercare un indirizzo |

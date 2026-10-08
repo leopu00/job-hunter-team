@@ -24,7 +24,8 @@ SOCKET_NAME = "broker.sock"
 # Roles are a reinforcement, not a boundary: every agent has the same uid, so
 # the declared role can be forged (design §4.7).
 OPERATIONS: dict[str, tuple[dict[str, type], dict[str, type], tuple[str, ...]]] = {
-    "mail.status": ({}, {}, ("scout", "capitano", "assistente", "mentor", "closer")),
+    # `runtime` is pid1's guard of the legacy files (audit G1): read-only.
+    "mail.status": ({}, {}, ("scout", "capitano", "assistente", "mentor", "closer", "runtime")),
     "mail.count": ({}, {"since_days": int}, ("scout", "capitano")),
     "mail.poll": ({}, {"since_days": int}, ("scout", "capitano")),
     "mail.send": (

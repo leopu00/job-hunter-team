@@ -69,7 +69,8 @@ Une ligne JSON : `state`, `reason`, `detail`, plus les données.
 
 | `reason` | Cause typique |
 |---|---|
-| `transport_missing` | aucun transport e-mail configuré, ou le fichier du secret manque ou n'est pas en 0600 |
+| `transport_missing` | aucun transport e-mail configuré, ou son mot de passe n'est pas disponible |
+| `transport_needs_broker` | le compte e-mail appartient au broker des secrets, qui n'envoie pas encore les candidatures : préviens l'utilisateur, ne cherche pas de fichier de mot de passe |
 | `auth_failed` | le serveur mail a refusé les identifiants |
 | `sender_unverified` | l'adresse d'expéditeur n'est ni le compte authentifié ni un expéditeur vérifié |
 | `mailto_missing` | aucun checkpoint navigateur en `email_channel` pour cette position : lance d'abord `apply_flow.py` ; la page n'est jamais lue pour y chercher une adresse |

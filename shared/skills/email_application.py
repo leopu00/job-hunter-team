@@ -49,8 +49,11 @@ Transport configuration (no secret) lives in `$JHT_HOME/jht.config.json`::
       }
     }
 
-The secret lives in `$JHT_HOME/credentials/email_transport.json`
-(`{"password": "..."}`), mode 0600.
+The password is never read from a file here (audit G1/M5): it belongs to the
+portal-secrets broker, and a send needs a `transport_password` source handed
+in by the caller. Until the broker sends applications (phase 1b) there is no
+default source, and a real send stops as `blocked_human` /
+`transport_needs_broker` before anything is sent; dry runs are unaffected.
 """
 from __future__ import annotations
 
@@ -542,6 +545,7 @@ class EmailApplication:
         notifier: Callable[..., str] | None = None,
         recorder: Callable[[int], None] | None = None,
         clock: Callable[[], str] = _utc_now,
+        transport_password: Callable[[TransportSettings], str] | None = None,
     ):
         self.position_id = int(position_id)
         self.jht_home = Path(jht_home or os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
@@ -551,6 +555,7 @@ class EmailApplication:
         self.notifier = notifier or _default_notifier
         self.recorder = recorder or self._record_applied
         self.clock = clock
+        self.transport_password = transport_password
 
     # ── paths and persistence ────────────────────────────────────────────────
 
@@ -739,21 +744,16 @@ class EmailApplication:
                 "sender_unverified",
                 "the sender address is neither the authenticated account nor a verified sender",
             )
-        secret_path = self.jht_home / "credentials" / "email_transport.json"
+        if self.transport_password is None:
+            # Never the legacy file under credentials/ (audit G1/M5): fail closed.
+            raise _blocked(
+                "transport_needs_broker",
+                "email applications go out only through the secrets broker, which does not send them yet",
+            )
         try:
-            info = secret_path.lstat()
-        except OSError as exc:
-            raise _blocked("transport_missing", "the email transport secret file does not exist") from exc
-        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
-            raise _blocked("transport_missing", "the email transport secret file must be a regular file with mode 0600")
-        # Owned by this uid: a file another uid placed or swapped in is not ours
-        # to send with (P1 portal secrets, phase 0 — reduces, does not close).
-        if info.st_uid != os.getuid():
-            raise _blocked("transport_missing", "the email transport secret file must be owned by this user")
-        try:
-            password = json.loads(secret_path.read_text(encoding="utf-8"))["password"]
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            raise _blocked("transport_missing", "the email transport secret cannot be read") from exc
+            password = self.transport_password(settings)
+        except Exception:  # the source's own error text may hold the secret
+            raise _blocked("transport_missing", "the email transport secret is unavailable") from None
         if not isinstance(password, str) or not password:
             raise _blocked("transport_missing", "the email transport secret is empty")
         return settings, password

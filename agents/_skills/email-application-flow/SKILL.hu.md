@@ -68,7 +68,8 @@ a `blocked_human` 3). A `state` alapján dönts, soha ne a szám alapján.
 
 | `reason` | Tipikus ok |
 |---|---|
-| `transport_missing` | nincs beállított e-mail küldés, vagy a titokfájl hiányzik vagy nem 0600 |
+| `transport_missing` | nincs beállított e-mail küldés, vagy a jelszava nem elérhető |
+| `transport_needs_broker` | a postafiók a titokkezelő brokeré, amely még nem küld jelentkezéseket: szólj a felhasználónak, ne keress jelszófájlt |
 | `auth_failed` | a levelezőszerver elutasította a hitelesítő adatokat |
 | `sender_unverified` | a feladó címe se nem a hitelesített fiók, se nem ellenőrzött feladó |
 | `mailto_missing` | ehhez a pozícióhoz nincs `email_channel` állapotú böngészős checkpoint: előbb futtasd az `apply_flow.py`-t; az oldalt soha nem olvassa címért |
