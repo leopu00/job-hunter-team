@@ -14,6 +14,7 @@ Eseguire:
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -200,3 +201,43 @@ def test_tick_without_role_usage_has_no_role_line():
                                   "work_phase": "ON", "fivehh": {"usage": 40}})
     assert "ROLE-USAGE" not in tick
     assert bridge_message.role_usage_lines({"5h": {"total_kt": 0, "roles": {}}}) == []
+
+
+_WRITER = r"""
+import importlib.util, json, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("bridge_writer", sys.argv[1])
+bridge = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bridge)
+target, who = Path(sys.argv[2]), sys.argv[3]
+payload = {"writer": who, "windows": {"5h": {"roles": {f"r{i}": {"kt": i} for i in range(4000)}}}}
+for n in range(int(sys.argv[4])):
+    payload["n"] = n
+    bridge._atomic_write_json(target, payload)
+"""
+
+
+def test_two_bridges_writing_together_never_leave_a_broken_file(tmp_path):
+    """Con più sentinel-bridge vivi (visto su ashley: 3 insieme), chi legge
+    role-usage.json deve trovare sempre un JSON intero, e nessun temporaneo
+    deve restare indietro."""
+    target = tmp_path / "role-usage.json"
+    env = dict(os.environ, JHT_HOME=str(tmp_path / "home"))
+    writers = [subprocess.Popen([sys.executable, "-c", _WRITER, BRIDGE, str(target), who, "150"],
+                                env=env) for who in ("a", "b")]
+    reads = broken = 0
+    while any(w.poll() is None for w in writers):
+        try:
+            raw = target.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        reads += 1
+        try:
+            assert json.loads(raw)["writer"] in ("a", "b")
+        except ValueError:
+            broken += 1
+    assert [w.wait() for w in writers] == [0, 0]
+    assert reads > 0
+    assert broken == 0, f"{broken} of {reads} reads saw a broken file"
+    assert json.loads(target.read_text(encoding="utf-8"))["n"] == 149
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
