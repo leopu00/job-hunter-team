@@ -50,9 +50,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **Nunca abras, hagas `cat` o `json.load` ni imprimas nada bajo `$JHT_HOME/credentials/`**,
 y nunca pongas una contraseña en un script, un chat o un log: el script es lo
 único que toca la cuenta. `"reason": "not_configured"` significa que aún no hay
-buzón: dile al usuario que se configura en los ajustes de la app de escritorio.
+buzón: dile al usuario que lo guarde con `jht mail setup` en el ordenador donde
+corre el equipo.
 
-Luego responde "Hecho, enviado ✅" — nunca "ve a autorizar Gmail".
+La respuesta dice qué pasó:
+- `"status": "pending_user_approval"` — el email es un **borrador** que espera al
+  usuario: sale solo cuando lo aprueba (`jht mail drafts`, luego
+  `jht mail approve <id>`). Díselo así, con el id del borrador; nunca digas que se
+  envió.
+- `"status": "sent"` — solo para un correo al propio buzón del usuario: responde "Hecho, enviado ✅".
+
+Nunca "ve a autorizar Gmail".
 
 ### Si realmente necesitas un slash-command / herramienta en TU sesión
 Puedes manejar tu propia sesión — no se lo pidas al usuario:

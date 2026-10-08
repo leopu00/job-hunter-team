@@ -33,8 +33,12 @@ mas **precisa** (la alerta ya viene filtrada segun el target del usuario) y la m
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → el buzon no existe: salta, haz web sourcing normal.
-`any_platform=true` significa que procesamos **toda** la inbox dedicada (ningun
-`from_filters` restringido) → se lee cada remitente que el usuario reenvia.
+`admission=whole_mailbox` significa que se lee **toda** la inbox dedicada (cada
+remitente que el usuario reenvia); `admission=allowlist` solo los remitentes que
+el usuario admitio. En ambos casos el buzon esta en el broker de secretos, no en
+un archivo que puedas abrir: el correo de seguridad (resets de contrasena,
+codigos, avisos de acceso) se retiene, y los enlaces vuelven sin tracking ni
+tokens. Una linea `{"withheld": N}` en stderr tras `poll` es normal, no un error.
 
 ### 2. Estima el VOLUMEN (economico, sin body fetch)
 ```bash
@@ -53,7 +57,7 @@ Cada linea JSONL es un lead: `{"url","source","subject","sender","received_at"}`
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` para los
   providers conocidos, `email:<domain>` para cualquier otra plataforma (extraccion
   generica).
-- La idempotencia (Message-ID en `state/email_monitor_seen.json`) garantiza que un
+- La idempotencia (Message-ID en el estado del broker) garantiza que un
   re-run **no** reprocese las mismas alertas.
 
 ### 4. Por cada lead → los 5 gate de `position-insert`

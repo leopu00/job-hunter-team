@@ -100,7 +100,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 # → stdout JSONL: {"url":"https://linkedin.com/jobs/view/...","source":"linkedin-email"}
 ```
 
-Idempotenz: Zustand in `$JHT_HOME/state/email_monitor_seen.json` mit Set
+Idempotenz: Zustand in dem Zustand des Brokers (Container `jht-broker`) mit Set
 von bereits verarbeiteten `Message-ID`. Sicherer Re-run alle 30 Min ohne Duplikate.
 
 Hauptvorteil: die Stellen sind bereits **nach dem Benutzerprofil vorgefiltert**

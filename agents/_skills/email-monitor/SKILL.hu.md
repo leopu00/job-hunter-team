@@ -33,9 +33,13 @@ celra) es a leg**olcsobb tokenben** (nincs vak scraping).
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → a fiok nincs meg: hagyd ki, csinald a normal web sourcingot.
-`any_platform=true` azt jelenti, hogy a **teljes** dedikalt inboxot feldolgozzuk
-(nincs szukitett `from_filters`) → minden feladot, akit a felhasznalo tovabbit,
-elolvasunk.
+`admission=whole_mailbox` azt jelenti, hogy a **teljes** dedikalt inboxot olvassuk
+(minden feladot, akit a felhasznalo tovabbit); `admission=allowlist` csak a
+felhasznalo altal engedelyezett feladokat. Mindket esetben a fiok a titkok
+brokereben van, nem egy fajlban, amit megnyithatnal: a biztonsagi leveleket
+(jelszo-visszaallitas, kodok, bejelentkezesi ertesitesek) visszatartjuk, a linkek
+pedig kovetes es token nelkul jonnek vissza. Egy `{"withheld": N}` sor a stderr-en
+`poll` utan normalis, nem hiba.
 
 ### 2. Becsuld meg a VOLUMENT (olcso, nincs body fetch)
 ```bash
@@ -53,7 +57,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 Minden JSONL sor egy lead: `{"url","source","subject","sender","received_at"}`.
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` az ismert
   szolgaltatoknal, `email:<domain>` barmely mas platformnal (altalanos kinyeres).
-- Az idempotencia (Message-ID a `state/email_monitor_seen.json`-ban) garantalja,
+- Az idempotencia (Message-ID a broker allapotaban) garantalja,
   hogy egy ujrafuttatas **ne** dolgozza fel ujra ugyanazokat az ertesiteseket.
 
 ### 4. Minden lead-hez → a `position-insert` 5 gate-je

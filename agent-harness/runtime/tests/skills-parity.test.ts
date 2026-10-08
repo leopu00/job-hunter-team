@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
-import { createEmailMonitorTool, IMAP_UNAVAILABLE_NOTE } from "../src/parity/skills/email-monitor.ts";
+import { BROKER_UNAVAILABLE, createEmailMonitorTool } from "../src/parity/skills/email-monitor.ts";
 import { sanitizeFeedbackDisplay } from "../src/parity/skills/feedback-display.ts";
 import { createFeedbackQueryTool } from "../src/parity/skills/feedback-query.ts";
 import { createScoutCoordTool } from "../src/parity/skills/scout-coord.ts";
@@ -270,20 +270,22 @@ describe.skipIf(!HAS_PYTHON)("the display sanitiser ↔ feedback_display.py", ()
 });
 
 describe("email_monitor", () => {
-  it.skipIf(!HAS_PYTHON)("answers status, count and poll exactly as the script does with no mailbox", async () => {
-    mkdirSync(join(jhtHome, "state"));
-    writeFileSync(join(jhtHome, "state", "email_monitor_seen.json"), JSON.stringify({ seen_message_ids: ["<a@x>", "<b@x>"] }));
+  it.skipIf(!HAS_PYTHON)("answers status, count and poll exactly as the script does with no broker", async () => {
     const tool = createEmailMonitorTool({ jhtHome });
     for (const args of [["status"], ["count"], ["count", "--since-days", "3"], ["poll"], ["poll", "--since-days", "1"]]) {
       const py = python("email_monitor.py", args, {});
       const ts = await native(tool, { command: args[0], ...(args[2] ? { since_days: Number(args[2]) } : {}) });
-      expect(py.status, args.join(" ")).toBe(0);
+      const isStatus = args[0] === "status";
+      expect(py.status, args.join(" ")).toBe(isStatus ? 0 : 1);
       expect(ts.content, args.join(" ")).toBe(py.stdout);
-      expect(ts.ok).toBe(true);
+      expect(ts.ok).toBe(isStatus);
     }
+    // The prompts decide on `configured`: status says it, with the reason.
+    const status = JSON.parse((await native(tool, { command: "status" })).content) as Record<string, unknown>;
+    expect(status).toEqual({ ok: true, configured: false, unavailable: BROKER_UNAVAILABLE });
   });
 
-  it.skipIf(!HAS_PYTHON)("answers send exactly as the script does with no mailbox", async () => {
+  it.skipIf(!HAS_PYTHON)("answers send exactly as the script does with no broker", async () => {
     const py = python("email_monitor.py", ["send", "--to", "someone@example.com", "--subject", "s", "--body", "b"], {});
     const ts = await native(createEmailMonitorTool({ jhtHome }), {
       command: "send",
@@ -296,15 +298,14 @@ describe("email_monitor", () => {
     expect(ts.ok).toBe(false);
   });
 
-  it("never opens the credentials file, and says the mailbox is unavailable here rather than not set up", async () => {
+  it("never opens a credentials file, even when one is there", async () => {
     mkdirSync(join(jhtHome, "credentials"));
     const creds = join(jhtHome, "credentials", "email_monitor.json");
     writeFileSync(creds, JSON.stringify({ user: "someone@example.com", password: "app-password" }));
     chmodSync(creds, 0o000);
     try {
       const result = await native(createEmailMonitorTool({ jhtHome }), { command: "status" });
-      const status = JSON.parse(result.content) as Record<string, unknown>;
-      expect(status).toMatchObject({ configured: false, creds_exists: true, note: IMAP_UNAVAILABLE_NOTE, user: "" });
+      expect(JSON.parse(result.content)).toEqual({ ok: true, configured: false, unavailable: BROKER_UNAVAILABLE });
       expect(result.content).not.toContain("app-password");
       expect(result.content).not.toContain("someone@example.com");
     } finally {

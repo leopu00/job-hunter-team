@@ -50,10 +50,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **Soha ne nyiss meg, ne `cat`-elj, ne `json.load`-olj és ne írj ki semmit a `$JHT_HOME/credentials/` alól**,
 és soha ne tegyél jelszót szkriptbe, chatbe vagy logba: egyedül a szkript nyúl a
 fiókhoz. A `"reason": "not_configured"` azt jelenti, hogy még nincs beállított
-postafiók: mondd meg a felhasználónak, hogy az asztali alkalmazás
-beállításaiban lehet megadni.
+postafiók: mondd meg a felhasználónak, hogy a `jht mail setup` paranccsal
+mentse el azon a gépen, ahol a csapat fut.
 
-Aztán válaszolj: „Kész, elküldve ✅" — soha ne „menj és engedélyezd a Gmailt".
+A válasz megmondja, mi történt:
+- `"status": "pending_user_approval"` — az email egy **piszkozat**, amely a
+  felhasználóra vár: csak akkor megy el, ha jóváhagyja (`jht mail drafts`, majd
+  `jht mail approve <id>`). Ezt mondd meg neki, a piszkozat azonosítójával; soha
+  ne mondd, hogy elküldted.
+- `"status": "sent"` — csak a felhasználó saját postafiókjába küldött levélnél: válaszolj: „Kész, elküldve ✅".
+
+Soha ne „menj és engedélyezd a Gmailt".
 
 ### Ha tényleg slash-parancs / eszköz kell a SAJÁT munkamenetedben
 Te magad vezérelheted a saját munkamenetedet — ne a felhasználót kérd:

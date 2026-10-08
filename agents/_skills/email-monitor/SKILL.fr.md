@@ -34,8 +34,13 @@ l'utilisateur) et la plus **economique en tokens** (pas de scraping a l'aveugle)
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → la boite n'existe pas : passe, fais du web sourcing normal.
-`any_platform=true` signifie qu'on traite **toute** l'inbox dediee (aucun
-`from_filters` restreint) → chaque expediteur que l'utilisateur transfere est lu.
+`admission=whole_mailbox` signifie qu'on lit **toute** l'inbox dediee (chaque
+expediteur que l'utilisateur transfere) ; `admission=allowlist` seulement les
+expediteurs que l'utilisateur a admis. Dans les deux cas la boite est dans le
+broker des secrets, pas dans un fichier que tu peux ouvrir : le courrier de
+securite (reinitialisations de mot de passe, codes, alertes de connexion) est
+retenu, et les liens reviennent sans tracking ni token. Une ligne
+`{"withheld": N}` sur stderr apres `poll` est normale, pas une erreur.
 
 ### 2. Estime le VOLUME (economique, pas de fetch du corps)
 ```bash
@@ -54,7 +59,7 @@ Chaque ligne JSONL est un lead : `{"url","source","subject","sender","received_a
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` pour les
   providers connus, `email:<domain>` pour n'importe quelle autre plateforme
   (extraction generique).
-- L'idempotence (Message-ID dans `state/email_monitor_seen.json`) garantit qu'un
+- L'idempotence (Message-ID dans l'etat du broker) garantit qu'un
   re-run **ne** retraite **pas** les memes alertes.
 
 ### 4. Pour chaque lead → les 5 gates de `position-insert`

@@ -34,9 +34,13 @@ python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → das Postfach ist nicht da: ueberspringen, normales
 Web-Sourcing machen.
-`any_platform=true` bedeutet, dass wir die **gesamte** dedizierte Inbox
-verarbeiten (kein eingeschraenkter `from_filters`) → jeder Absender, den der
-Benutzer weiterleitet, wird gelesen.
+`admission=whole_mailbox` bedeutet, dass die **gesamte** dedizierte Inbox gelesen
+wird (jeder Absender, den der Benutzer weiterleitet); `admission=allowlist` nur
+die Absender, die der Benutzer zugelassen hat. In beiden Faellen liegt das
+Postfach im Secrets-Broker, nicht in einer Datei, die du oeffnen kannst:
+Sicherheits-Mails (Passwort-Resets, Codes, Anmeldehinweise) werden
+zurueckgehalten, und Links kommen ohne Tracking und Token zurueck. Eine Zeile
+`{"withheld": N}` auf stderr nach `poll` ist normal, kein Fehler.
 
 ### 2. Schaetze das VOLUMEN (guenstig, kein Body-Fetch)
 ```bash
@@ -55,7 +59,7 @@ Jede JSONL-Zeile ist ein Lead: `{"url","source","subject","sender","received_at"
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` fuer die
   bekannten Provider, `email:<domain>` fuer jede andere Plattform (generische
   Extraktion).
-- Die Idempotenz (Message-ID in `state/email_monitor_seen.json`) garantiert, dass
+- Die Idempotenz (Message-ID in dem Zustand des Brokers) garantiert, dass
   ein Re-run die gleichen Alerts **nicht** erneut verarbeitet.
 
 ### 4. Fuer jeden Lead → die 5 Gates von `position-insert`

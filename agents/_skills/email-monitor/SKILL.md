@@ -32,8 +32,12 @@ the most **token-cheap** one (no blind scraping).
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → the mailbox is not there: skip, do normal web sourcing.
-`any_platform=true` means we process the **entire** dedicated inbox (no narrow
-`from_filters`) → every sender the user forwards gets read.
+`admission=whole_mailbox` means the **entire** dedicated inbox is read (every
+sender the user forwards); `admission=allowlist` means only the senders the user
+allowed. Either way the mailbox lives in the secrets broker, not in a file you
+can open: security mail (password resets, codes, sign-in alerts) is withheld,
+and links come back without tracking or tokens. A `{"withheld": N}` line on
+stderr after `poll` is normal, not an error.
 
 ### 2. Estimate the VOLUME (cheap, no body fetch)
 ```bash
@@ -51,7 +55,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 Every JSONL line is a lead: `{"url","source","subject","sender","received_at"}`.
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` for the known
   providers, `email:<domain>` for any other platform (generic extraction).
-- Idempotency (Message-ID in `state/email_monitor_seen.json`) guarantees that a
+- Idempotency (Message-ID in the broker's state) guarantees that a
   re-run does **not** reprocess the same alerts.
 
 ### 4. For every lead → the 5 gates of `position-insert`
