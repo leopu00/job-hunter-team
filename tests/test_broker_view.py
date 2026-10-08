@@ -199,11 +199,91 @@ def test_the_view_is_not_an_operation_of_the_agents_socket():
 
 def test_the_supervisor_runs_websockify_quiet_and_x11vnc_interactive_on_loopback():
     source = (ROOT / "shared" / "broker" / "view.py").read_text()
-    websockify = re.search(r'\[sys\.executable, "-m", "websockify".*?\]', source, re.S).group(0)
+    websockify = re.search(r'\[sys\.executable, "-m", "broker\.view_ws".*?\]', source, re.S).group(0)
     assert "--verbose" not in websockify and "--record" not in websockify and "--log-file" not in websockify
     x11vnc = re.search(r'\["x11vnc".*?\]', source, re.S).group(0)
     assert "-localhost" in x11vnc and "-viewonly" not in x11vnc
     assert "screenshot" not in source.lower().replace("no screenshots", "")
+
+
+# ── websockify's log (review note: the token never in a log) ─────────────
+
+TOKEN = "Zk3q-SyntheticOneTimeToken_0123456789abcdefgh"
+
+
+def test_redact_drops_the_query_and_a_quoted_token():
+    from broker.view_ws import redact
+
+    assert TOKEN not in redact(f"127.0.0.1: Path: '/websockify?token={TOKEN}'")
+    assert redact(f"127.0.0.1: Path: '/websockify?token={TOKEN}'") == "127.0.0.1: Path: '/websockify?[redacted]'"
+    assert redact(f"Token '{TOKEN}' not found") == "Token '[redacted]' not found"
+    assert redact("Plain non-SSL (ws://) WebSocket connection") == "Plain non-SSL (ws://) WebSocket connection"
+
+
+def test_every_log_record_is_written_without_the_token():
+    """websockify's own messages, through a real logging handler: the
+    formats of 0.10-0.12 (`log_message`, a refused lookup, a GET line)."""
+    script = (
+        "import logging, sys\n"
+        f"sys.path.insert(0, {str(ROOT / 'shared')!r})\n"
+        "from broker import view_ws\n"
+        "view_ws.install()\n"
+        "logging.basicConfig(level=logging.DEBUG, stream=sys.stderr, format='%(message)s')\n"
+        "log = logging.getLogger('websockify.websocketproxy')\n"
+        f"log.info('%s - - [%s] %s', '127.0.0.1', 'now', \"127.0.0.1: Path: '/websockify?token={TOKEN}'\")\n"
+        f"log.info(\"%s: Token '%s' not found\", '127.0.0.1', {TOKEN!r})\n"
+        f"log.info('\"GET /websockify?token=%s HTTP/1.1\" 101 -', {TOKEN!r})\n"
+        f"log.info('/websockify?token=' + {TOKEN!r})\n"
+    )
+    out = subprocess.run([sys.executable, "-I", "-c", script], capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    assert out.stderr.count("[redacted]") == 4
+    assert TOKEN not in out.stdout + out.stderr
+
+
+def test_the_real_websockify_logs_a_connection_without_its_token(tmp_path):
+    """End to end where websockify is installed (the image runs the same
+    check in scripts/ci/broker_smoke.py)."""
+    pytest.importorskip("websockify")
+    import socket
+
+    run = tmp_path / "run"
+    run.mkdir(mode=0o700)
+    issue(run, TOKEN)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    log = tmp_path / "ws.log"
+    with open(log, "wb") as sink:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "broker.view_ws", "--token-plugin", "broker.view_token.OneShot",
+             # --run-once: the connection is served in this process on every
+             # platform, through the same handler and log as the forked child.
+             "--run-once", "--token-source", str(run), f"127.0.0.1:{port}"],
+            stdout=sink, stderr=sink, env={**os.environ, "PYTHONPATH": str(ROOT / "shared")})
+        try:
+            for _ in range(100):
+                try:
+                    conn = socket.create_connection(("127.0.0.1", port), timeout=1)
+                    break
+                except OSError:
+                    time.sleep(0.1)
+            with conn:
+                conn.sendall((f"GET /websockify?token={TOKEN} HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                              "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+                              f"Sec-WebSocket-Key: {'A' * 22}==\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+                conn.settimeout(3)
+                try:
+                    conn.recv(4096)
+                except OSError:
+                    pass
+            time.sleep(0.5)
+        finally:
+            proc.terminate()
+            proc.wait(timeout=10)
+    written = log.read_text(errors="replace")
+    assert "Path" in written  # the connection was logged...
+    assert TOKEN not in written  # ...without its token
 
 
 def test_a_stop_with_no_live_session_touches_nothing(env, monkeypatch):

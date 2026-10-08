@@ -20,8 +20,9 @@ The contract with the desktop:
   view_busy, view_unavailable, login_timeout, token_expired, plus
   chromium_sandbox_unavailable (design R3).
 - No screenshots, no recording, no request log: websockify runs without
-  --verbose or --record, its output goes to /dev/null, and the token is
-  never written anywhere (only its sha256, in the run dir).
+  --verbose or --record, its output goes to /dev/null, its log records are
+  rewritten without the query string (view_ws.py), and the token is never
+  written anywhere (only its sha256, in the run dir).
 
 R3: the login browser runs with Chromium's own sandbox. When the container
 cannot give it one (namespaces denied), the view fails closed with
@@ -299,10 +300,11 @@ def supervise(purpose: str, session_id: str) -> int:
         if not _wait_port(VNC_PORT, 15):
             _write(directory / "result.json", {"failed": "view_unavailable"})
             return 1
-        # No --verbose, no --record, output to /dev/null: the token never
-        # reaches a log (view_token.py never returns None either).
+        # No --verbose, no --record, output to /dev/null, and the launcher
+        # rewrites every log record without the query or a quoted token: the
+        # token never reaches a log (view_token.py never returns None either).
         procs.append(subprocess.Popen(
-            [sys.executable, "-m", "websockify", "--token-plugin", "broker.view_token.OneShot",
+            [sys.executable, "-m", "broker.view_ws", "--token-plugin", "broker.view_token.OneShot",
              "--token-source", str(directory), f"0.0.0.0:{VIEW_PORT}"],
             stdout=devnull, stderr=devnull, env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}))
         if not _wait_port(VIEW_PORT, 15):
