@@ -899,6 +899,15 @@ def test_sender_normal_delivery_still_exits_zero(tmux_factory, home):
     assert keys == ["Enter"], keys
 
 
+# La misura sta fra due limiti, e i limiti cambiano col sistema. Sopra:
+# il buffer della pipe più quello che head legge prima di uscire (Linux:
+# 64 KiB + 8 KiB; macOS: rosso sicuro da circa 128 KB). Sotto: su Linux un
+# SINGOLO argomento non supera 128 KiB (MAX_ARG_STRLEN), e il messaggio
+# arriva al sender, e da lì a python3, come un argomento solo: a 200 KB la
+# CI moriva con E2BIG prima di provare niente. macOS quel limite non lo ha.
+_LARGER_THAN_A_PIPE = 200_000 if sys.platform == "darwin" else 100_000
+
+
 def test_sender_survives_a_message_larger_than_a_pipe_buffer(tmux_factory, home):
     """Un messaggio oltre il buffer di una pipe (64 KB su Linux, fino a 128 su macOS).
 
@@ -909,7 +918,7 @@ def test_sender_survives_a_message_larger_than_a_pipe_buffer(tmux_factory, home)
     uno oltre il buffer succede sempre, e qui il rosso non dipende dal caso.
     """
     tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
-    msg = "[@capitano -> @scout-1] [MSG] " + "x" * 200_000 + " FINE"
+    msg = "[@capitano -> @scout-1] [MSG] " + "x" * _LARGER_THAN_A_PIPE + " FINE"
 
     r = _send(tmux, home, "SCOUT-1", msg)
 
