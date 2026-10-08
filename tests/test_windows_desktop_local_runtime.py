@@ -6,6 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 INSTALLER = ROOT / "scripts" / "install.ps1"
+ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
+ACL_SELFTEST = ROOT / "scripts" / "windows-config-acl-selftest.ps1"
+PODMAN_COMPOSE = ROOT / "docker-compose.podman.yml"
+PODMAN_PROBE = ROOT / "scripts" / "podman-windows-probe.ps1"
+SECURE_CONFIG_IO = ROOT / "cli" / "src" / "lib" / "secure-config-io.js"
 
 
 def _wrapper() -> str:
@@ -175,3 +180,94 @@ def test_only_explicit_up_wakes_the_podman_machine():
     assert dispatcher.count("Start-PodmanMachineForUp") == 1
     up = dispatcher[dispatcher.index("@('up', 'start-container')") : dispatcher.index("@('down', 'stop-container')")]
     assert up.index("Start-PodmanMachineForUp") < up.index("Require-Docker")
+
+
+def test_declining_dependency_installation_cannot_run_winget():
+    """The desktop owns consent; without its opt-in flag scripts install nothing."""
+    enabler = ENABLER.read_text(encoding="utf-8")
+    guarded = enabler[
+        enabler.index("if ($InstallDependencies) {") : enabler.index(
+            "Update-ProcessPath", enabler.index("if ($InstallDependencies) {")
+        )
+    ]
+    assert enabler.count("Invoke-Checked 'winget' 'install'") == 2
+    assert guarded.count("Invoke-Checked 'winget' 'install'") == 2
+    assert "'--source' 'winget' '--version' $PodmanCliVersion" in guarded
+    assert "'--source' 'winget' '--version' $ComposeProviderVersion" in guarded
+    assert "$PodmanCliVersion = '6.0.2'" in enabler
+    assert "$ComposeProviderVersion = '5.1.2'" in enabler
+
+
+def test_podman_failures_reach_the_documented_exit_codes():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    dependency_failure = enabler[
+        enabler.index("if ($InstallDependencies) {") : enabler.index(
+            "$machines =", enabler.index("if ($InstallDependencies) {")
+        )
+    ]
+    machine_failure = enabler[
+        enabler.index("$machines =") : enabler.index(
+            "configure-podman-windows-network.ps1", enabler.index("$machines =")
+        )
+    ]
+    assert "[Console]::Error.WriteLine" in dependency_failure
+    assert "exit 21" in dependency_failure
+    assert "Write-Error" not in dependency_failure
+    assert "[Console]::Error.WriteLine" in machine_failure
+    assert "exit 22" in machine_failure
+    assert "Write-Error" not in machine_failure
+
+
+def test_an_unrelated_podman_machine_does_not_replace_the_jht_machine():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    machine = enabler[enabler.index("$machines =") : enabler.index("} catch {", enabler.index("$machines ="))]
+    assert "$machines | Where-Object Name -eq $MachineName" in machine
+    assert "'machine' 'init' '--provider' 'wsl'" in machine
+    assert "'--disk-size' '30' $MachineName" in machine
+    assert "machine reset" not in machine
+    assert "'machine' 'rm'" not in machine
+
+
+def test_a_stopped_docker_desktop_distro_is_never_selected_or_started():
+    installer = INSTALLER.read_text(encoding="utf-8")
+    enabler = ENABLER.read_text(encoding="utf-8")
+    runtime_path = installer + enabler
+    assert "docker-desktop" not in runtime_path.lower()
+    assert "Docker.DockerDesktop" not in runtime_path
+    assert "'-MachineName', 'jht-podman'" in installer
+    assert "'--provider' 'wsl'" in enabler
+
+
+def test_the_dedicated_machine_budget_fits_the_low_memory_test_host():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    assert "'--cpus' '2' '--memory' '3072' '--disk-size' '30'" in enabler
+    assert 3072 < int(4.9 * 1024)
+
+
+def test_mount_repair_accepts_a_quoted_windows_path_with_spaces():
+    selftest = ACL_SELFTEST.read_text(encoding="utf-8")
+    assert "Documents\\Job Hunter Team" in selftest
+    assert ':/jht_home"?' in selftest
+    assert ':/jht_user"?' in selftest
+
+
+def test_container_lifecycle_is_detached_from_the_desktop_process():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    unit = enabler[enabler.index("$containerUnit = @'") : enabler.index("'@", enabler.index("$containerUnit = @'") + 20)]
+    assert "Type=oneshot" in unit
+    assert "RemainAfterExit=yes" in unit
+    assert "ExecStart=/usr/bin/podman --remote" in unit
+    assert "start --sig-proxy=false jht" in unit
+    assert "WantedBy=multi-user.target" in unit
+    assert "sudo systemctl enable jht-container.service" in enabler
+
+
+def test_keep_id_closes_the_atomic_jht_config_rename_regression():
+    compose = PODMAN_COMPOSE.read_text(encoding="utf-8")
+    probe = PODMAN_PROBE.read_text(encoding="utf-8")
+    secure_io = SECURE_CONFIG_IO.read_text(encoding="utf-8")
+    assert 'userns_mode: "keep-id:uid=1001,gid=1001"' in compose
+    assert "fs.renameSync(t,p)" in probe
+    assert "stat -c %u /jht_home/jht.config.json" in probe
+    assert "test ! -e /jht_home/.jht.config.tmp" in probe
+    assert secure_io.index("chmodSync(tmp") < secure_io.index("renameSync(tmp, path)")

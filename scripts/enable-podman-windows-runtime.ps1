@@ -18,6 +18,8 @@ $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
+$PodmanCliVersion = '6.0.2'
+$ComposeProviderVersion = '5.1.2'
 
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
@@ -188,10 +190,10 @@ if ($InstallDependencies) {
   Write-JhtPhase podman_install
   try {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
-    if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
+    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $PodmanCliVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
+    if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $ComposeProviderVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
   } catch {
-    Write-Error $_.Exception.Message
+    [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
   }
 }
@@ -201,8 +203,8 @@ if (-not $Podman) {
   $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
   if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
 }
-if (-not $Podman) { Write-Error 'podman.exe is unavailable after installation.'; exit 21 }
-if (-not (Get-Application 'docker-compose.exe')) { Write-Error 'docker-compose.exe is unavailable after installation.'; exit 21 }
+if (-not $Podman) { [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable after installation.'); exit 21 }
+if (-not (Get-Application 'docker-compose.exe')) { [Console]::Error.WriteLine('podman_not_installable: docker-compose.exe is unavailable after installation.'); exit 21 }
 
 try {
   $machines = @((& $Podman machine list --format json | ConvertFrom-Json))
@@ -219,7 +221,7 @@ try {
   }
   Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
 } catch {
-  Write-Error $_.Exception.Message
+  [Console]::Error.WriteLine("podman_machine_unavailable: $($_.Exception.Message)")
   exit 22
 }
 
