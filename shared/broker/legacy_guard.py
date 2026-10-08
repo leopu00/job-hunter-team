@@ -30,6 +30,14 @@ loosen it with chmod and remove it; the next sweep, within 30 s, deletes a
 file found in its place unread and puts the placeholder back. The threat the
 placeholder closes is the old client's save, which does not remove it.
 
+Declared residue (G1-r4): the password a client of v0.3.9 saved does not
+enter the broker's exposed list. Nothing reads the reappeared file: an
+operation that let the broker read it (and restart the rotation on a match)
+answered agents differently by the file's content, since the role on the
+socket is the client's word and the uid is the guard's, so it was a password
+oracle and was removed (review R1). The user's notice says the password is
+exposed and must be rotated; the release notes say it too.
+
 pid1 runs a sweep at boot and then periodically. Output: one JSON line,
 `{"ok": true, "removed": [...], "placeholders": [...]}`; never a path content.
 """

@@ -82,15 +82,14 @@ def _rotation(name: str) -> dict:
     return store.read_state("rotation", {}).get(name, {})
 
 
-MAX_EXPOSED = 20
-
-
 def _exposed(entry: dict) -> list[str]:
-    """Digests of the passwords the agents could read (B2), oldest first."""
+    """Digests of the passwords the agents could read (B2), oldest first. No
+    cap: an exposed password stays refused for good, and only the host's
+    import adds to the list (one digest per migrated name)."""
     seen = [d for d in entry.get("exposed", []) if isinstance(d, str)]
     if isinstance(entry.get("digest"), str) and entry["digest"] not in seen:
         seen.append(entry["digest"])  # the 1a shape: one digest, no list
-    return seen[-MAX_EXPOSED:]
+    return seen
 
 
 def _set_rotation(name: str, *, pending: bool, expose: str | None = None) -> None:
@@ -101,7 +100,7 @@ def _set_rotation(name: str, *, pending: bool, expose: str | None = None) -> Non
         rotation = store.read_state("rotation", {})
         exposed = _exposed(rotation.get(name, {}))
         if expose and expose not in exposed:
-            exposed = (exposed + [expose])[-MAX_EXPOSED:]
+            exposed = exposed + [expose]
         rotation[name] = {"pending": pending, "exposed": exposed}
         store.write_state("rotation", rotation)
 

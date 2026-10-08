@@ -19,6 +19,7 @@ Run with: pytest tests/test_broker_legacy_guard.py -v
 import base64
 import builtins
 import hashlib
+import inspect
 import io
 import json
 import os
@@ -54,8 +55,13 @@ def broker(tmp_path, monkeypatch):
             sys.stdout, sys.stdin = real_stdout, real_stdin
         return json.loads(out.getvalue())
 
-    def ask(op, args=None, role=None):
-        return server.handle(json.dumps({"op": op, "args": args or {}, "role": role}).encode())
+    def ask(op, args=None, role=None, fd=None):
+        raw = json.dumps({"op": op, "args": args or {}, "role": role}).encode()
+        # A descriptor goes along only where the server takes one: the review
+        # test below must exercise the operation of 3da3d777d, which did.
+        if fd is not None and "fds" in inspect.signature(server.handle).parameters:
+            return server.handle(raw, [fd])
+        return server.handle(raw)
 
     return type("B", (), {"admin_run": staticmethod(admin_run), "ask": staticmethod(ask)})
 
@@ -355,6 +361,85 @@ def test_a_removed_placeholder_comes_back_and_a_file_in_its_place_goes(broker, h
     result = legacy_guard.sweep(ask=broker.ask, notify=told.append)
     assert result["removed"] == ["email_monitor"] and told == [["email_monitor"]]
     assert spot.is_dir() and "email_monitor.json" in result["placeholders"]
+
+
+# ── no password oracle (review R1 on 3da3d777d) ─────────────────────────
+
+def _forged_guess(broker, tmp_path, guess, n=[0]):
+    """What an agent can do: declare itself `runtime` (the role is the
+    client's word, the uid is the guard's) and hand over a file holding a
+    guessed password, as 3da3d777d's `mail.legacy_exposed` took it."""
+    n[0] += 1
+    path = tmp_path / f"guess{n[0]}.json"
+    path.write_text(json.dumps({"password": guess}))
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        return broker.ask("mail.legacy_exposed", {"name": "email_monitor"}, role="runtime", fd=fd)
+    finally:
+        os.close(fd)
+
+
+def _seen_by_an_agent(broker):
+    """What an agent can observe of the mailbox: status, and whether a send
+    to the saved address goes or is refused (mail_rotation_pending)."""
+    status = broker.ask("mail.status", role="scout")
+    send = broker.ask("mail.send", {"kind": "chat", "to": ["me@example.com"], "subject": "s", "body": "b"},
+                      role="assistente")
+    return status, send.get("reason", send.get("status"))
+
+
+def test_a_forged_runtime_caller_learns_nothing_from_the_content_of_a_file(broker, tmp_path, monkeypatch):
+    """Review R1 (ALTO): with 3da3d777d a right guess set rotation_pending,
+    which every agent role sees, so wrong and right guesses could be told
+    apart. The operation is gone: every guess gets the same refusal, and the
+    agents' view of the mailbox does not move."""
+    from broker import mailops
+
+    class NoSmtp:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            pass
+
+    monkeypatch.setattr(mailops.email_monitor.smtplib, "SMTP_SSL", NoSmtp)
+    secret = "CANARY-the-real-one-4d1e"
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    assert broker.admin_run(["secrets", "set", "email_monitor"], mailbox_json(secret))["ok"]
+    before = _seen_by_an_agent(broker)
+    answers = [_forged_guess(broker, tmp_path, guess) for guess in ("wrong-1", "wrong-2", secret)]
+    assert _seen_by_an_agent(broker) == before
+    assert before[0]["rotation_pending"] is False
+    assert answers == [{"ok": False, "reason": "unknown_operation"}] * 3
+
+
+def test_the_broker_takes_no_descriptor_and_has_no_exposure_operation():
+    from broker import client, protocol, server
+
+    assert set(protocol.OPERATIONS) == {"mail.status", "mail.count", "mail.poll", "mail.send"}
+    for module in (protocol, server, client):
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        assert "legacy_exposed" not in source and "recv_fds" not in source and "send_fds" not in source
+
+
+def test_an_exposed_digest_is_never_pushed_out(broker):
+    """Whatever the list grows to, the first exposed password stays refused."""
+    from broker import mailops, store
+
+    first = "CANARY-first-exposed-6a0b"
+    digests = [mailops.password_digest(first)] + [mailops.password_digest(f"other-{i}") for i in range(40)]
+    store.write_state("rotation", {"email_monitor": {"pending": False, "exposed": digests}})
+    out = broker.admin_run(["secrets", "set", "email_monitor"], mailbox_json(first))
+    assert out == {"ok": False, "reason": "password_not_rotated"}
 
 
 def test_pid1_runs_the_guard_before_the_agents_and_then_periodically():
