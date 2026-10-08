@@ -10,6 +10,8 @@ import {
   setupChannels,
   TelegramPairingBelongsToHostError,
 } from "@/lib/setup-channels";
+import { getRequestLocale } from "@/lib/request-locale";
+import { telegramPairingError } from "@/lib/telegram-pairing-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -213,13 +215,9 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     if (err instanceof TelegramPairingBelongsToHostError) {
-      return NextResponse.json(
-        {
-          error: "telegram_pair_on_host",
-          command: "jht telegram pair <assistente|capitano|mentor>",
-        },
-        { status: 400 },
-      );
+      return NextResponse.json(telegramPairingError(await getRequestLocale()), {
+        status: 400,
+      });
     }
     throw err;
   }
