@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 from . import store
-from .mailfilter import Admission, reduce_row, verdict
+from .mailfilter import Admission, admitted, reduce_row, verdict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills"))
 
@@ -74,7 +74,6 @@ def admission() -> Admission:
         addresses=frozenset(addresses),
         domains=frozenset(d for d in domains if d),
         thread_ids=frozenset(threads),
-        registered_domains=frozenset(str(d).lower() for d in box.get("registered_domains", [])),
     )
 
 
@@ -124,8 +123,20 @@ def legacy_migrated() -> dict[str, bool]:
 def count(args: dict, role: str) -> dict:
     creds = mailbox_account()
     seen = set(store.read_state("seen", []))
+    allowed = admission()
+
+    def admit(msg) -> bool:
+        # Audit M6: the same admission as `mail.poll`, so in `allowlist` the
+        # senders of the rest of the mailbox never reach an agent.
+        return admitted(
+            allowed,
+            str(msg.get("From", "") or ""),
+            str(msg.get("In-Reply-To", "") or ""),
+            str(msg.get("References", "") or ""),
+        )
+
     try:
-        result = email_monitor.count_mailbox(creds, seen, args["since_days"])
+        result = email_monitor.count_mailbox(creds, seen, args["since_days"], admit)
     except email_monitor.CredentialsEncodingError:
         raise BrokerRefusal("credentials_unsupported_characters") from None
     except OSError:

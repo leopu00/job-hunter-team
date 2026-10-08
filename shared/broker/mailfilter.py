@@ -26,6 +26,7 @@ recognises (not a link, not a code).
 
 from __future__ import annotations
 
+import html
 import math
 import re
 from dataclasses import dataclass, field
@@ -110,15 +111,36 @@ _AUTH_PATH_RE = re.compile(
 )
 
 
+_HTML_TAG = re.compile(r"<[^<>]*>")
+# Characters that render as nothing and would split a phrase: zero-width
+# space/joiners, word joiner, BOM, soft hyphen.
+_INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
+
+
+def _readings(subject: str, body: str) -> tuple[str, ...]:
+    """The text as the user would read it (audit M8): the raw source, and the
+    HTML without tags and entities, once with each tag as a space (`<br>`
+    between words) and once with tags dropped (`re<b>set</b>` inside a
+    word). Invisible characters go, and runs of whitespace (`&nbsp;`
+    included) become one space."""
+    raw = f"{subject or ''}\n{body or ''}"
+
+    def clean(text: str) -> str:
+        return " ".join(_INVISIBLE.sub("", html.unescape(text)).split())
+
+    return raw, clean(_HTML_TAG.sub(" ", raw)), clean(_HTML_TAG.sub("", raw))
+
+
 def is_security_message(subject: str, body: str) -> bool:
     """True when the message reads like a reset, a verification, a one-time
     code, a sign-in alert, 2FA or a magic link, or links to a sign-in, reset
     or verification page with a secret-bearing query key. Withholds the whole
-    message: subject and links included."""
-    text = f"{subject or ''}\n{body or ''}"
-    if _SECURITY_RE.search(text):
+    message: subject and links included. HTML is read without its tags and
+    entities, so markup cannot split a phrase or hide `&amp;token=`."""
+    if any(_SECURITY_RE.search(text) for text in _readings(subject, body)):
         return True
-    for match in _URL_RE.finditer(body or ""):
+    links = f"{body or ''}\n{html.unescape(body or '')}"
+    for match in _URL_RE.finditer(links):
         try:
             parts = urlsplit(match.group(0).rstrip(".,);'\""))
         except ValueError:
@@ -239,9 +261,10 @@ class Admission:
     addresses: frozenset[str] = field(default_factory=frozenset)
     domains: frozenset[str] = field(default_factory=frozenset)
     thread_ids: frozenset[str] = field(default_factory=frozenset)
-    # Domains whose sites hold an account the broker logs into (LinkedIn, ATS
-    # tenants): their mail is the broker's, except exact alert addresses.
-    registered_domains: frozenset[str] = field(default_factory=frozenset)
+    # No "registered domains" here (audit M7): in phase 1a the broker logs
+    # into no site, and a list nobody writes would be a promise, not a check.
+    # Phase 2, when the broker holds LinkedIn/ATS accounts, adds it together
+    # with the command that writes it.
 
     def __post_init__(self) -> None:
         if self.policy not in ADMISSION_POLICIES:
@@ -255,8 +278,6 @@ def _thread_refs(in_reply_to: str, references: str) -> set[str]:
 def admitted(admission: Admission, sender: str, in_reply_to: str = "", references: str = "") -> bool:
     address = sender_address(sender)
     domain = _domain_of(address)
-    if any(_domain_matches(domain, reg) for reg in admission.registered_domains):
-        return address in admission.addresses
     if admission.policy == "whole_mailbox":
         return True
     if address in admission.addresses:

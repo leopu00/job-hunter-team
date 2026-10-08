@@ -28,6 +28,10 @@ import sys
 from . import mailops, store
 from .mailfilter import ADMISSION_POLICIES
 
+# The repo's one list of characters that reorder or hide text (mailops has
+# already put shared/skills on the path).
+from external_content import INVISIBLE_COMMANDS  # noqa: E402
+
 MAX_STDIN = 64 * 1024
 MAILBOX_KEYS = {"user", "password", "imap_host", "imap_port", "folder", "smtp_host", "smtp_port"}
 TRANSPORT_KEYS = {"password"}
@@ -78,27 +82,41 @@ def _rotation(name: str) -> dict:
     return store.read_state("rotation", {}).get(name, {})
 
 
-def _set_rotation(name: str, value: dict | None) -> None:
+MAX_EXPOSED = 20
+
+
+def _exposed(entry: dict) -> list[str]:
+    """Digests of the passwords the agents could read (B2), oldest first."""
+    seen = [d for d in entry.get("exposed", []) if isinstance(d, str)]
+    if isinstance(entry.get("digest"), str) and entry["digest"] not in seen:
+        seen.append(entry["digest"])  # the 1a shape: one digest, no list
+    return seen[-MAX_EXPOSED:]
+
+
+def _set_rotation(name: str, *, pending: bool, expose: str | None = None) -> None:
+    """The rotation mark of `name`. The exposed digests are never dropped:
+    not by a completed rotation, not by `secrets delete` (audit M4), so a
+    password the agents could read is refused for good."""
     with store.locked("rotation"):
         rotation = store.read_state("rotation", {})
-        if value is None:
-            rotation.pop(name, None)
-        else:
-            rotation[name] = value
+        exposed = _exposed(rotation.get(name, {}))
+        if expose and expose not in exposed:
+            exposed = (exposed + [expose])[-MAX_EXPOSED:]
+        rotation[name] = {"pending": pending, "exposed": exposed}
         store.write_state("rotation", rotation)
 
 
 def secrets_set(name: str, raw: bytes) -> dict:
     data, filters = _parse_secret(name, raw)
-    pending = _rotation(name)
-    if pending.get("pending") and pending.get("digest") == mailops.password_digest(data["password"]):
-        # B2: the migrated password has been readable by the agents. Saving
-        # the same one again does not end the rotation.
+    if mailops.password_digest(data["password"]) in _exposed(_rotation(name)):
+        # B2: that password has been readable by the agents. Saving it again
+        # (also after a delete, or after a rotation to another one) does not
+        # end the rotation.
         raise AdminError("password_not_rotated")
     store.write_secret(name, data)
     if filters:
         _merge_allow(filters)
-    _set_rotation(name, None)
+    _set_rotation(name, pending=False)
     return {"ok": True, "secret": name, "state": "present"}
 
 
@@ -127,21 +145,23 @@ def secrets_import_legacy(name: str, envelope_raw: bytes) -> dict:
         if store.read_secret(name) != data:
             raise AdminError("write_not_observed")
         if name == "email_monitor":
+            # Audit M2: the agents could write this file, so only the account
+            # and its hosts are taken from it. The policy starts at
+            # `allowlist` until the host chooses, and the old sender filters
+            # are only proposed: they enter the allowlist when the user
+            # confirms each one (`jht mail allow add`), never on import.
             with store.locked("mailbox"):
                 box = store.read_state("mailbox", {})
-                if "admission" not in box:
-                    # Until the operator decides (design §11): an empty filter
-                    # list was the dedicated, any-platform mailbox; a list is an
-                    # allowlist.
-                    box["admission"] = "allowlist" if filters else "whole_mailbox"
-                box["allow_addresses"] = sorted(
-                    {*box.get("allow_addresses", []), *(f.lower() for f in filters if "@" in f)}
-                )
+                box.setdefault("admission", "allowlist")
+                proposed = {*box.get("imported_to_confirm", []), *filter(None, map(_proposed_entry, filters))}
+                box["imported_to_confirm"] = sorted(proposed)
                 store.write_state("mailbox", box)
-        _set_rotation(name, {"pending": True, "digest": mailops.password_digest(data["password"])})
+        _set_rotation(name, pending=True, expose=mailops.password_digest(data["password"]))
         done[name] = True
         store.write_state("legacy", done)
-    return {"ok": True, "secret": name, "state": "imported", "rotation_pending": True}
+    box = store.read_state("mailbox", {})
+    return {"ok": True, "secret": name, "state": "imported", "rotation_pending": True,
+            "imported_to_confirm": box.get("imported_to_confirm", []) if name == "email_monitor" else []}
 
 
 def mailbox_setup(user: str, imap_host: str, smtp_host: str, admission: str, password: str) -> dict:
@@ -176,12 +196,33 @@ def _merge_allow(entries: list[str]) -> None:
         mailbox_allow("add", entry)
 
 
-def mailbox_allow(action: str, entry: str) -> dict:
+def _allow_entry(entry: str) -> str | None:
+    """`name@host` or `@domain`, lower-cased; None when it is neither."""
     entry = entry.strip().lower()
     is_domain = entry.startswith("@")
     value = entry[1:] if is_domain else entry
-    if not value or " " in value or (not is_domain and "@" not in value) or (is_domain and "@" in value):
+    if not value or any(ch.isspace() for ch in value) or (not is_domain and "@" not in value) or (is_domain and "@" in value):
+        return None
+    return entry
+
+
+def _proposed_entry(legacy_filter: str) -> str | None:
+    """A legacy filter as an allow entry: an address, `@domain`, or a bare
+    `domain.tld` read as `@domain.tld`."""
+    entry = legacy_filter.strip().lower()
+    if "@" not in entry and "." in entry:
+        entry = "@" + entry
+    return _allow_entry(entry)
+
+
+def mailbox_allow(action: str, entry: str) -> dict:
+    """Add or remove one sender. Either answer settles a filter proposed by
+    the legacy import (audit M2): add confirms it, remove dismisses it."""
+    entry = _allow_entry(entry) or ""
+    if not entry:
         raise AdminError("allow_entry_invalid")
+    is_domain = entry.startswith("@")
+    value = entry[1:] if is_domain else entry
     key = "allow_domains" if is_domain else "allow_addresses"
     with store.locked("mailbox"):
         box = store.read_state("mailbox", {})
@@ -191,8 +232,10 @@ def mailbox_allow(action: str, entry: str) -> dict:
         else:
             current.discard(value)
         box[key] = sorted(current)
+        if entry in box.get("imported_to_confirm", []):
+            box["imported_to_confirm"] = [e for e in box["imported_to_confirm"] if e != entry]
         store.write_state("mailbox", box)
-    return {"ok": True, key: box[key]}
+    return {"ok": True, key: box[key], "imported_to_confirm": box.get("imported_to_confirm", [])}
 
 
 def mailbox_show() -> dict:
@@ -202,6 +245,9 @@ def mailbox_show() -> dict:
         "admission": box.get("admission", "allowlist"),
         "allow_addresses": box.get("allow_addresses", []),
         "allow_domains": box.get("allow_domains", []),
+        # Old sender filters from the legacy file, NOT in effect until the
+        # user confirms each one with `jht mail allow add` (audit M2).
+        "imported_to_confirm": box.get("imported_to_confirm", []),
         "rotation_pending": sorted(n for n, v in store.read_state("rotation", {}).items() if v.get("pending")),
     }
 
@@ -216,9 +262,44 @@ def mailbox_admission(policy: str) -> dict:
     return {"ok": True, "admission": policy}
 
 
+def _shown(text: str, keep_newlines: bool = True) -> tuple[str, int]:
+    """(text as the terminal must show it, how many characters were made
+    visible). An agent writes the drafts: a bidi override, a C0/C1 control or
+    an invisible character could make the user approve a mail other than the
+    one they read (audit M9). Each becomes a visible `⟨U+XXXX⟩`; the draft that
+    is sent is not changed, the user sees what it holds."""
+    out, hidden = [], 0
+    for ch in str(text):
+        code = ord(ch)
+        if ch == "\n" and keep_newlines or ch == "\t":
+            out.append(ch)
+        elif ch in INVISIBLE_COMMANDS or code < 0x20 or 0x7F <= code <= 0x9F or ch in "\u2028\u2029":
+            out.append(f"⟨U+{code:04X}⟩")
+            hidden += 1
+        else:
+            out.append(ch)
+    return "".join(out), hidden
+
+
+def _shown_mail(entry: dict) -> dict:
+    shown, hidden = dict(entry), 0
+    for key, multiline in (("subject", False), ("body", True)):
+        if isinstance(shown.get(key), str):
+            shown[key], n = _shown(shown[key], multiline)
+            hidden += n
+    if isinstance(shown.get("to"), list):
+        pairs = [_shown(a, False) for a in shown["to"]]
+        shown["to"] = [a for a, _ in pairs]
+        hidden += sum(n for _, n in pairs)
+    if hidden:
+        shown["hidden_characters"] = hidden
+    return shown
+
+
 def mail_drafts() -> dict:
     drafts = store.read_state("drafts", {})
-    return {"ok": True, "drafts": [{"id": k, **v} for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))]}
+    ordered = sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
+    return {"ok": True, "drafts": [_shown_mail({"id": k, **v}) for k, v in ordered]}
 
 
 def mail_approve(draft_id: str) -> dict:
@@ -239,7 +320,7 @@ def mail_approve(draft_id: str) -> dict:
             raise AdminError(result.get("reason", "smtp_failed"))
         drafts.pop(draft_id)
         store.write_state("drafts", drafts)
-    return {"ok": True, "status": "sent", "draft_id": draft_id, "to": draft["to"]}
+    return {"ok": True, "status": "sent", "draft_id": draft_id, "to": _shown_mail({"to": draft["to"]})["to"]}
 
 
 def mail_discard(draft_id: str) -> dict:
@@ -253,7 +334,7 @@ def mail_discard(draft_id: str) -> dict:
 
 def mail_journal(limit: int) -> dict:
     journal = store.read_state("journal", [])
-    return {"ok": True, "journal": journal[-limit:]}
+    return {"ok": True, "journal": [_shown_mail(e) if isinstance(e, dict) else e for e in journal[-limit:]]}
 
 
 def secrets_status() -> dict:
@@ -301,8 +382,9 @@ def main(argv: list[str]) -> int:
             if args.cmd == "import-legacy":
                 return _out(secrets_import_legacy(args.name, _stdin_bytes()))
             if args.cmd == "delete":
+                # The rotation mark stays (audit M4): delete + setup with the
+                # exposed password must not end the rotation.
                 existed = store.delete_secret(args.name)
-                _set_rotation(args.name, None)
                 return _out({"ok": True, "secret": args.name, "state": "deleted" if existed else "absent"})
         if args.area == "mailbox":
             if args.cmd == "show":

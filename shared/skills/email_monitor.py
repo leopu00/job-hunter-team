@@ -324,10 +324,13 @@ def poll_mailbox(creds: dict, seen: set[str], since_days: int, gate=None) -> tup
     return new_jobs, new_seen_msgids, withheld
 
 
-def count_mailbox(creds: dict, seen: set[str], since_days: int = 1) -> dict:
+def count_mailbox(creds: dict, seen: set[str], since_days: int = 1, admit=None) -> dict:
     """Conta le NUOVE email (non ancora processate) per mittente SENZA scaricarne
     il body. Serve al Capitano per stimare il volume e bilanciare il carico.
-    Account passato dal chiamante (il broker)."""
+    Account passato dal chiamante (il broker). `admit(msg) -> bool` sugli
+    header decide se un messaggio entra nel conto: il broker ci passa la sua
+    admission, così il conto non rivela i mittenti di una casella personale
+    (audit M6). Senza `admit` non conta niente."""
     folder = creds.get("folder", "INBOX")
     from_filters = creds.get("from_filters") or []
     since_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
@@ -341,13 +344,15 @@ def count_mailbox(creds: dict, seen: set[str], since_days: int = 1) -> dict:
         all_uids = _search_uids(M, from_filters, since_imap)
         for uid in all_uids:
             # Solo header: From + Message-ID, niente body (economico).
-            typ, msg_data = M.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM MESSAGE-ID)])")
+            typ, msg_data = M.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM MESSAGE-ID IN-REPLY-TO REFERENCES)])")
             if typ != "OK" or not msg_data or not msg_data[0]:
                 continue
             raw = msg_data[0][1]
             msg = email.message_from_bytes(raw, policy=email.policy.default)
             mid = (msg.get("Message-ID", "") or "").strip()
             if not mid or mid in seen:
+                continue
+            if admit is None or not admit(msg):
                 continue
             new_total += 1
             by_sender[_sender_domain(msg.get("From", ""))] += 1

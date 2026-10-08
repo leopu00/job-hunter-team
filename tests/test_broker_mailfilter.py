@@ -156,11 +156,11 @@ def test_admission_allowlist():
                    references="<a@b> <sent-1@jht.invalid>") == "ok"
 
 
-def test_registered_domains_stay_the_brokers_except_exact_alert_addresses():
-    admission = Admission(policy="whole_mailbox", addresses=frozenset({"jobalerts-noreply@linkedin.com"}),
-                          registered_domains=frozenset({"linkedin.com", "ats.invalid"}))
-    assert verdict(admission, **LINKEDIN_ALERT) == "ok"
-    assert verdict(admission, sender="noreply@ats.invalid", subject="Hello", body="") == "withheld"
+def test_no_admission_field_promises_a_check_nobody_feeds():
+    # Audit M7: `registered_domains` was read from the state and written by no
+    # command. Phase 2 brings it back with its writer.
+    assert "registered_domains" not in Admission.__dataclass_fields__
+    assert "registered_domains" not in (ROOT / "shared" / "broker" / "mailops.py").read_text(encoding="utf-8")
 
 
 def test_there_is_no_switch_for_the_filter_or_the_reduction():
@@ -174,3 +174,20 @@ def test_there_is_no_switch_for_the_filter_or_the_reduction():
 def test_reduce_row_touches_url_and_subject_only():
     row = {"url": "https://x.example/job/1?utm=1#f", "subject": "PIN 1234", "sender": "a@example.com"}
     assert mailfilter.reduce_row(row) == {"url": "https://x.example/job/1", "subject": "PIN [codice]", "sender": "a@example.com"}
+
+
+@pytest.mark.parametrize("subject,body", [
+    ("Hello", "<p>Please reset <b>your</b> password below.</p>"),
+    ("Hello", "<p>Please reset&nbsp;your&nbsp;password below.</p>"),
+    ("Hello", "<p>Please re<span>set</span> your pass<i>word</i> below.</p>"),
+    ("Hello", "<p>Please reset your pass​word below.</p>"),
+    ("Hello", '<a href="https://acct.example/login?next=%2F&amp;token=abc123">open</a>'),
+])
+def test_html_markup_cannot_split_a_security_phrase_or_hide_a_token(subject, body):
+    # Audit M8: the filter reads the HTML without tags and entities.
+    assert mailfilter.is_security_message(subject, body)
+
+
+def test_plain_job_alert_html_stays_a_job_alert():
+    body = '<p>New <b>Python</b> jobs&nbsp;for you</p><a href="https://www.indeed.com/viewjob?jk=0a1b2c3d4e5f6a7b&amp;from=mail">View</a>'
+    assert not mailfilter.is_security_message("New jobs", body)
