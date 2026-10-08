@@ -413,11 +413,12 @@ def test_import_checks_the_digest_marks_rotation_and_starts_at_allowlist(broker,
     assert out["reason"] == "digest_mismatch" and not (broker.secrets / "email_monitor.json").exists()
     code, out = admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(raw))
     assert out == {"ok": True, "secret": "email_monitor", "state": "imported", "rotation_pending": True,
-                   "imported_to_confirm": []}
+                   "imported_to_confirm": [], "warning": broker.mailops.ROTATION_WARNING}
     # Audit M2: the file (which the agents could write) no longer picks the
     # policy; an empty filter list is not a whole-mailbox grant.
     assert admin_run(broker, ["mailbox", "show"])[1]["admission"] == "allowlist"
-    assert chat(broker, ["me@example.com"]) == {"ok": False, "reason": "mail_rotation_pending"}
+    # Operator decision (08/10): a pending rotation does not stop sending.
+    assert chat(broker, ["me@example.com"])["status"] == "sent"
     code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
     assert out["reason"] == "password_not_rotated"
     code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=ROTATED))
@@ -425,6 +426,38 @@ def test_import_checks_the_digest_marks_rotation_and_starts_at_allowlist(broker,
     assert chat(broker, ["me@example.com"])["status"] == "sent"
     state_blob = "".join(p.read_text() for p in broker.state.glob("*.json"))
     assert CANARY not in state_blob and ROTATED not in state_blob
+
+
+def test_a_pending_rotation_leaves_sending_open_and_warns_until_a_new_password(broker, smtp):
+    """Operator decision (08/10): the rotation is a warning, not a stop. The
+    chat draft is approved and goes out, a mail to the account itself goes
+    out, and the host's answers carry the warning until a new password is
+    saved; the exposed one still cannot be saved again."""
+    admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    assert broker.mailops.rotation_pending()
+    assert chat(broker, ["me@example.com"])["status"] == "sent"
+    draft = chat(broker, ["recruiter@example.com"])
+    assert draft["status"] == "pending_user_approval"
+    code, approved = admin_run(broker, ["mail", "approve", draft["draft_id"]])
+    assert code == 0 and approved["status"] == "sent"
+    assert [m["To"] for m in smtp.sent] == ["me@example.com", "recruiter@example.com"]
+    for argv in (["mailbox", "show"], ["secrets", "status"]):
+        assert admin_run(broker, argv)[1]["warning"] == broker.mailops.ROTATION_WARNING, argv
+    assert approved["warning"] == broker.mailops.ROTATION_WARNING
+    assert "jht mail setup" in broker.mailops.ROTATION_WARNING
+    # The exposed password is still refused; a new one ends the warning.
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())[1]["reason"] == "password_not_rotated"
+    assert "warning" in admin_run(broker, ["mailbox", "show"])[1]
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=ROTATED))[1]["ok"]
+    for argv in (["mailbox", "show"], ["secrets", "status"]):
+        assert "warning" not in admin_run(broker, argv)[1], argv
+
+
+def test_the_wrappers_no_longer_say_sending_is_stopped():
+    for wrapper in ("scripts/jht-wrapper.sh", "scripts/jht-wrapper.ps1"):
+        text = (ROOT / wrapper).read_text(encoding="utf-8")
+        assert "invio resta fermo" not in text and "mail_rotation_pending" not in text, wrapper
+        assert "si invia con la password di oggi" in text, wrapper
 
 
 def test_a_legacy_file_is_imported_once_never_again(broker):

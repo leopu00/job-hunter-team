@@ -10,6 +10,12 @@ reason code replaces every failure.
   address, which goes out at once.
 - `mail.send` kind `application`: phase 1b (the authorisation register); until
   then it is refused with a code, never sent.
+
+A pending rotation (the migrated password was readable by the agents) does
+not stop sending: by the operator's decision of 08/10 the broker keeps using
+today's password and the host shows a warning until a new one is saved
+(`ROTATION_WARNING`). An exposed password still cannot be saved again as the
+new one, so the day of the rotation the password really changes.
 """
 
 from __future__ import annotations
@@ -75,6 +81,12 @@ def admission() -> Admission:
         domains=frozenset(d for d in domains if d),
         thread_ids=frozenset(threads),
     )
+
+
+ROTATION_WARNING = (
+    "The mailbox password was readable by the agents: create a new app password with your mail "
+    "provider and save it with `jht mail setup`. Mail keeps going out with the current one until then."
+)
 
 
 def rotation_pending() -> bool:
@@ -219,8 +231,6 @@ def send(args: dict, role: str) -> dict:
         # may go. Until it exists the broker does not send one.
         raise BrokerRefusal("application_channel_not_ready")
     creds = mailbox_account()
-    if rotation_pending():
-        raise BrokerRefusal("mail_rotation_pending")
     to = [a.strip() for a in args["to"]]
     subject, body = args["subject"], args["body"]
     _valid_message(to, subject)
