@@ -98,6 +98,14 @@ jobs:
       - name: Agent shell cannot reach root
         run: python3 scripts/ci/agent_shell_privileges.py jht:agent-shell-check
 
+      # Broker dei segreti dei portali (P1 del 08/10), sull'immagine vera: utente
+      # 1002, mount point creati dall'immagine (i volumi con nome ne copiano
+      # proprietario e modo), tini e il symlink in /usr/local/bin. L'agente
+      # (1001, socket montato :ro) deve ricevere una risposta dal broker; un
+      # altro uid deve essere rifiutato.
+      - name: Portal-secrets broker answers the agents and only them
+        run: python3 scripts/ci/broker_smoke.py jht:agent-shell-check
+
       - name: Build & push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

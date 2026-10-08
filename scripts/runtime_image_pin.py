@@ -60,8 +60,11 @@ PINNED_CONSUMERS = (
 # Ogni pattern estrae il valore effettivo dal costrutto canonico; i due esempi
 # della guida sono contratti separati perché vengono copiati dagli utenti.
 CONSUMER_VALUE_PATTERNS: dict[Path, tuple[str, ...]] = {
+    # The compose names the image once, with a YAML anchor that the broker
+    # service reuses (`image: *jht-image`): two literal lines would be two
+    # values to keep equal.
     Path("docker-compose.yml"): (
-        r"^[ \t]*image: \$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
+        r"^[ \t]*image: (?:&[A-Za-z0-9_-]+[ \t]+)?\$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
     ),
     Path("game/scripts/backend/payloads/runtime_compose.yml"): (
         r"^[ \t]*image: \$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",

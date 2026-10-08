@@ -19,7 +19,7 @@ services:
     # Utile per testare immagini di branch dev prima del merge a master.
     # Il default release e' content-addressed: reinstallare la stessa versione
     # non puo' risolvere byte diversi se il tag semver viene spostato.
-    image: ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598}
+    image: &jht-image ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598}
     container_name: jht
     # Override del CMD Dockerfile (--help): entry point `pid1` che
     # in base a JHT_HOST_TYPE dispatch tra:
@@ -120,6 +120,12 @@ services:
       - ${HOME}/Documents/Job Hunter Team:/jht_user
       # Volume Docker (dentro la VM su Windows/macOS: veloce), non bind.
       - jht-deps:/opt/jht-deps
+      # Il solo volume in comune col broker dei segreti dei portali: il socket.
+      # Account della posta e stato del broker stanno in volumi che qui non
+      # sono montati (P1 del 08/10). In sola lettura: connect() su un socket
+      # unix funziona lo stesso, e gli agenti non possono sostituire il socket
+      # né metterci un symlink.
+      - jht-broker-sock:/run/jht-broker:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -149,9 +155,39 @@ services:
     cap_drop:
       - ALL
 
+  # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della
+  # posta e fa IMAP e SMTP per conto degli agenti, che gli parlano solo dal
+  # socket in jht-broker-sock e ricevono esiti, mai password. Stessa immagine,
+  # uid suo (1002), nessun bind dell'host: i segreti stanno in volumi con nome
+  # montati solo qui. L'host lo amministra con `exec jht-broker-admin`.
+  jht-broker:
+    image: *jht-image
+    container_name: jht-broker
+    user: "1002:1002"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "/usr/local/bin/jht-broker"]
+    command: ["serve"]
+    environment:
+      - LANG=C.UTF-8
+      - JHT_BROKER_CLIENT_UID=1001
+    volumes:
+      - jht-secrets:/jht_secrets
+      - jht-broker-state:/jht_broker_state
+      - jht-broker-sock:/run/jht-broker
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   jht-deps:
   jht-runtime-mask:
+  jht-secrets:
+  jht-broker-state:
+  jht-broker-sock:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #
