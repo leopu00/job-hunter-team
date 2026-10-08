@@ -1054,7 +1054,10 @@ export default function SwipeDeck({
       <style>{`@keyframes swipe-rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }`}</style>
 
       {/* Header minimo: una riga sola, la card vuole spazio */}
-      <div data-swipe-header className="flex items-center justify-between mb-1.5">
+      <div
+        data-swipe-header
+        className="flex items-center justify-between mb-1.5"
+      >
         <span
           className="text-[13px] font-bold tracking-wide flex items-center gap-1.5"
           style={{ color: "var(--color-white)" }}
@@ -1214,7 +1217,11 @@ export default function SwipeDeck({
         </div>
       ) : (
         <>
-          <div ref={deckRef} data-swipe-card-stage className="relative flex-1 min-h-0">
+          <div
+            ref={deckRef}
+            data-swipe-card-stage
+            className="relative flex-1 min-h-0"
+          >
             {/* Card corrente + le 2 successive come stack */}
             {cards
               .slice(idx, idx + 3)
@@ -1288,7 +1295,10 @@ export default function SwipeDeck({
                     )}
 
                     {/* Contenuto card */}
-                    <div data-swipe-card-content className="p-5 flex flex-col gap-3 flex-1 min-h-0">
+                    <div
+                      data-swipe-card-content
+                      className="p-5 flex flex-col gap-3 flex-1 min-h-0"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           {/* Titolo cliccabile = apre i dettagli (il vecchio
@@ -1393,7 +1403,10 @@ export default function SwipeDeck({
 
           {/* Bottoni: 4 giudizi + commento (quinto posto, scelta utente
               19/07) */}
-          <div data-swipe-actions className="shrink-0 flex items-start justify-center gap-2 mt-3">
+          <div
+            data-swipe-actions
+            className="shrink-0 flex items-start justify-center gap-2 mt-3"
+          >
             {VERDICT_ORDER.map((v) => (
               <VerdictButton
                 key={v}
@@ -1402,7 +1415,10 @@ export default function SwipeDeck({
                 onClick={() => judge(v)}
               />
             ))}
-            <div data-swipe-comment className="flex flex-col items-center gap-1 w-[64px]">
+            <div
+              data-swipe-comment
+              className="flex flex-col items-center gap-1 w-[64px]"
+            >
               <button
                 type="button"
                 aria-label={t.commentTitle}
@@ -2035,7 +2051,10 @@ function VerdictButton({
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
-    <div data-swipe-verdict={verdict} className="flex flex-col items-center gap-1 w-[64px]">
+    <div
+      data-swipe-verdict={verdict}
+      className="flex flex-col items-center gap-1 w-[64px]"
+    >
       <button
         type="button"
         aria-label={label}
