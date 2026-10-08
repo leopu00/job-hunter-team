@@ -8,6 +8,10 @@ on:
       - 'scripts/windows-config-acl-selftest.ps1'
       - 'scripts/windows-private-acl.ps1'
       - 'web/public/install.ps1'
+      - 'tests/test_windows_native_runtime_pieces.py'
+      - 'tests/test_podman_windows_probe.py'
+      - 'tests/conftest.py'
+      - 'tests/requirements-ci.txt'
       - '.github/workflows/windows-config-acl.yml'
 
 permissions:
@@ -23,3 +27,31 @@ jobs:
       - name: Host ACL and fail-closed wrapper selftest
         shell: pwsh
         run: ./scripts/windows-config-acl-selftest.ps1
+
+      # The Podman-in-WSL pieces only a real Windows runs: the docker.exe shims
+      # compiled with Add-Type (the enabler's, which the product installs, and
+      # the probe's) and ConvertTo-WslPath on real Windows paths, under
+      # Windows PowerShell 5.1 and pwsh. The pytest jobs of test.yml all run on
+      # ubuntu, where these tests skip: until this step nothing ran them.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install --require-hashes -r tests/requirements-ci.txt
+      # A skip here is a failure: with a shell missing the step would be green
+      # having proved nothing. 44 = 42 cases of the native file + the probe's
+      # shim under powershell and pwsh; the count may grow, never shrink.
+      - name: Native Windows pieces of the Podman runtime
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+        run: |
+          $out = python -m pytest tests/test_windows_native_runtime_pieces.py `
+            'tests/test_podman_windows_probe.py::test_native_shim_compiles_and_propagates_backend_exit_code' `
+            -n 4 -p no:cacheprovider -rs 2>&1
+          $code = $LASTEXITCODE
+          $out | ForEach-Object { "$_" }
+          if ($code -ne 0) { exit $code }
+          $summary = "$($out[-1])"
+          if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
+          if ([int]$Matches[1] -lt 44) { throw "only $($Matches[1]) native Windows tests ran, expected at least 44" }
