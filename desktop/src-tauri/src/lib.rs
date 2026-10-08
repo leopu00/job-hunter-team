@@ -1,6 +1,7 @@
 mod account_scope;
 mod auth_login;
 mod auth_store;
+mod broker_view;
 mod browsers;
 mod desktop_platform;
 mod direct_chat;
@@ -21,6 +22,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(account_scope::AccountScopeState::default())
+        .manage(broker_view::BrokerViewState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(onboarding::OnboardingNativeState::default())
         .manage(profile_import::ProfileImportState::default())
@@ -46,6 +48,10 @@ pub fn run() {
             auth_store::auth_store_prepare,
             auth_store::auth_store_remove,
             auth_store::auth_store_set,
+            broker_view::broker_login_status,
+            broker_view::broker_login_view_close,
+            broker_view::broker_login_view_open,
+            broker_view::broker_login_view_session,
             browsers::auth_browsers,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,

@@ -8,6 +8,7 @@ import { readLocaleCookie } from "@/lib/use-locale";
 import { supabase } from "../../lib/supabase";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
+import { LinkedinLoginCard } from "./LinkedinLoginCard";
 import { loadProfile, profileExport, type ProfileData } from "./load-profile";
 
 type Load =
@@ -74,6 +75,7 @@ export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) 
           non si aprono ancora.
         </p>
       )}
+      <LinkedinLoginCard />
     </>
   );
 }

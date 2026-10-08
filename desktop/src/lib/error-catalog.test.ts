@@ -90,6 +90,9 @@ const NOT_ERRORS: Record<string, string> = {
   snapshot: "wrapper subcommand",
   status: "wrapper subcommand",
   up: "wrapper subcommand",
+  // States of the broker's LinkedIn login (`jht linkedin status`), shown as a status.
+  logged_in: "broker login state",
+  login_required: "broker login state",
 };
 
 function compiledRustModules(): string[] {

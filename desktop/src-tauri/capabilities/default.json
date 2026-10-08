@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimum permissions for the first-run window and the detached CLOSER live screen",
-  "windows": ["main", "live-screen"],
+  "description": "Minimum permissions for the first-run window, the detached CLOSER live screen and the broker's LinkedIn login view",
+  "windows": ["main", "live-screen", "broker-login"],
   "permissions": ["core:default"]
 }

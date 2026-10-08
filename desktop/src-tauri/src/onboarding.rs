@@ -122,7 +122,7 @@ impl SubscriptionProvider {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum LocalCliOperation {
+pub(crate) enum LocalCliOperation {
     Up,
     Status,
     ProviderUse(SubscriptionProvider),
@@ -134,6 +134,9 @@ enum LocalCliOperation {
     AssistantStart,
     ProviderLimits,
     PodmanMachineRecreate,
+    LinkedinLogin,
+    LinkedinLoginStop,
+    LinkedinStatus,
 }
 
 impl LocalCliOperation {
@@ -150,6 +153,9 @@ impl LocalCliOperation {
             Self::AssistantStart => vec!["team", "start", "assistente"],
             Self::ProviderLimits => vec!["providers", "limits", "--json"],
             Self::PodmanMachineRecreate => vec!["podman-machine-recreate", "--confirm"],
+            Self::LinkedinLogin => vec!["linkedin", "login"],
+            Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
+            Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
         }
     }
 
@@ -166,6 +172,9 @@ impl LocalCliOperation {
             Self::AssistantStart => "assistant-start",
             Self::ProviderLimits => "provider-limits",
             Self::PodmanMachineRecreate => "podman-machine-recreate",
+            Self::LinkedinLogin => "linkedin-login",
+            Self::LinkedinLoginStop => "linkedin-login-stop",
+            Self::LinkedinStatus => "linkedin-status",
         }
     }
 }
@@ -1665,6 +1674,9 @@ const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/d
 const REMOTE_PROVIDER_LIMITS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers limits --json"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
+pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login"#;
+pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
+pub(crate) const REMOTE_LINKEDIN_STATUS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin status --json"#;
 const REMOTE_OAUTH_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login"#;
 
 fn ensure_success(
@@ -1726,6 +1738,31 @@ fn run_local(
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
     refuse_broad_podman_machine(run_verified_local_wrapper(wrapper, args, None, timeout))
+}
+
+/// The broker's LinkedIn login view commands (`jht linkedin ...`), on this
+/// computer through the attested wrapper, on a VPS through SSH. Used by
+/// broker_view.rs; the answer is the command's own JSON line.
+pub(crate) fn run_linkedin_command(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    operation: LocalCliOperation,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    let remote = match operation {
+        LocalCliOperation::LinkedinLogin => REMOTE_LINKEDIN_LOGIN,
+        LocalCliOperation::LinkedinLoginStop => REMOTE_LINKEDIN_LOGIN_STOP,
+        LocalCliOperation::LinkedinStatus => REMOTE_LINKEDIN_STATUS,
+        _ => return Err("invalid_request"),
+    };
+    match host {
+        ValidatedHost::Local => {
+            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            run_scoped_local(app, scope, &wrapper, operation, timeout)
+        }
+        ValidatedHost::Vps { .. } => run_ssh(host, remote, None, timeout, None),
+    }
 }
 
 /// A wrapper that refused a Podman machine mounting more of the Mac answers

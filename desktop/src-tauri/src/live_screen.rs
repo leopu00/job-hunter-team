@@ -52,8 +52,8 @@ pub(crate) struct LiveScreenSession {
 /// sincrono blocca il thread che dovrebbe disegnarla.
 ///
 /// Oggi nessuna schermata la chiama (`openLiveScreen` in lib/live-screen.ts
-/// non ha chiamanti): resta registrata di proposito, servirà alla vista
-/// interattiva del broker (decisione del 08/10/2026). Non è codice morto.
+/// non ha chiamanti): resta registrata di proposito. La vista interattiva del
+/// broker (broker_view.rs) apre la sua finestra con lo stesso `open_window`.
 #[tauri::command]
 pub(crate) async fn open_live_screen(
     app: tauri::AppHandle,
@@ -61,23 +61,34 @@ pub(crate) async fn open_live_screen(
 ) -> Result<(), LiveScreenError> {
     let scope = scopes.lock_active().map_err(failure)?;
     crate::account_scope::validate_local_runtime(&app, scope.scope()).map_err(failure)?;
-    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+    open_window(&app, WINDOW_LABEL, "live-screen.html", "CLOSER · schermo live")
+        .map(|_| ())
+        .map_err(failure)
+}
+
+/// La finestra staccata di uno schermo (`live-screen.html`, con la vista
+/// scelta nella query): portata in primo piano se c'è già, altrimenti creata.
+/// Restituisce la finestra solo quando è nuova, perché chi la apre possa
+/// legarle la chiusura.
+pub(crate) fn open_window(
+    app: &tauri::AppHandle,
+    label: &str,
+    page: &str,
+    title: &str,
+) -> Result<Option<tauri::WebviewWindow>, &'static str> {
+    if let Some(window) = app.get_webview_window(label) {
         let _ = window.unminimize();
         let _ = window.show();
-        return window.set_focus().map_err(|_| failure("window_failed"));
+        return window.set_focus().map(|_| None).map_err(|_| "window_failed");
     }
-    WebviewWindowBuilder::new(
-        &app,
-        WINDOW_LABEL,
-        WebviewUrl::App("live-screen.html".into()),
-    )
-    .title("CLOSER · schermo live")
-    .inner_size(1180.0, 860.0)
-    .min_inner_size(480.0, 360.0)
-    .resizable(true)
-    .build()
-    .map(|_| ())
-    .map_err(|_| failure("window_failed"))
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
+        .title(title)
+        .inner_size(1180.0, 860.0)
+        .min_inner_size(480.0, 360.0)
+        .resizable(true)
+        .build()
+        .map(Some)
+        .map_err(|_| "window_failed")
 }
 
 /// Dati di connessione per la finestra: URL WebSocket su loopback e password

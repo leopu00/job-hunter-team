@@ -651,6 +651,38 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Start the team: the window connects by itself.",
   ),
 
+  // ── LinkedIn login in the broker (broker_view.rs) ──────────────────────
+  view_busy: copy(
+    "È già aperta una sessione di accesso a LinkedIn.",
+    "Chiudi l’altra finestra di accesso, poi riprova.",
+    "A LinkedIn login session is already open.",
+    "Close the other login window, then try again.",
+  ),
+  view_unavailable: copy(
+    "Lo schermo di accesso a LinkedIn non è disponibile.",
+    "Controlla che il team sia acceso e riprova.",
+    "The LinkedIn login screen is not available.",
+    "Check that the team is running and try again.",
+  ),
+  login_timeout: copy(
+    "La sessione di accesso a LinkedIn è scaduta: dura al massimo 15 minuti.",
+    "Riapri l’accesso a LinkedIn e completalo.",
+    "The LinkedIn login session expired: it lasts at most 15 minutes.",
+    "Start the LinkedIn login again and complete it.",
+  ),
+  token_expired: copy(
+    "Lo schermo di accesso non si è collegato in tempo.",
+    "Riapri l’accesso a LinkedIn: la chiave dello schermo vale una volta sola, per due minuti.",
+    "The login screen did not connect in time.",
+    "Start the LinkedIn login again: the screen key is valid once, for two minutes.",
+  ),
+  chromium_sandbox_unavailable: copy(
+    "Il browser protetto per l’accesso non può partire isolato su questa installazione.",
+    "Segnalalo dall’app: l’accesso resta bloccato finché il browser non può girare isolato.",
+    "The protected login browser cannot run isolated on this installation.",
+    "Report it from the app: the login stays blocked until the browser can run isolated.",
+  ),
+
   // ── Profile import from a VPS ────────────────────────────────────────────
   local_profile_required: copy(
     "Questa funzione è disponibile solo nel profilo locale.",
