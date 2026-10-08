@@ -38,6 +38,222 @@ $JHT_UPGRADE_PROTOCOL = 1
 $JHT_HOST_RUNTIME_PROTOCOL = 1
 $JHT_DESKTOP_CHAT_PROTOCOL = 1
 $JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
+$JHT_UNINSTALL_PROTOCOL = 1
+
+# `uninstall` deve funzionare anche quando il runtime e' gia' parzialmente
+# rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
+# I target ricevuti dal dispatcher sono cartelle standard calcolate dalle API
+# Windows, mai override d'ambiente o valori letti dal runtime da cancellare.
+function Write-JhtUninstallPhase {
+  param([Parameter(Mandatory)][ValidateSet(
+    'uninstall_machine', 'uninstall_runtime', 'uninstall_commands'
+  )][string]$Id)
+  [Console]::Out.WriteLine("JHT_PHASE $Id")
+}
+
+function Write-JhtUninstallLeft {
+  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id)
+  [Console]::Out.WriteLine("JHT_LEFT $Id")
+}
+
+function Get-JhtNormalizedWindowsPath {
+  param([string]$Path)
+  if (-not $Path) { return $null }
+  try {
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))
+    return [IO.Path]::GetFullPath($expanded).TrimEnd('\', '/')
+  } catch { return $null }
+}
+
+function Get-JhtPodmanMachineState {
+  param(
+    [string]$PodmanPath,
+    [string]$WslPath,
+    [string]$MachineName
+  )
+  if ($PodmanPath) {
+    try {
+      $raw = ((& $PodmanPath machine list --format json 2>$null) -join '')
+      if ($LASTEXITCODE -eq 0 -and $raw) {
+        $machines = @($raw | ConvertFrom-Json)
+        if (@($machines | Where-Object { ([string]$_.Name) -ceq $MachineName }).Count -gt 0) { return 'present' }
+        return 'absent'
+      }
+    } catch {}
+  }
+  if ($WslPath) {
+    try {
+      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      if ($LASTEXITCODE -eq 0) {
+        if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
+        return 'absent'
+      }
+    } catch {}
+  }
+  return 'unknown'
+}
+
+function Remove-JhtUserEnvironment {
+  param(
+    [string]$BinPath,
+    [System.EnvironmentVariableTarget]$Target = [System.EnvironmentVariableTarget]::User
+  )
+  try {
+    foreach ($name in @('JHT_CONTAINER_RUNTIME', 'JHT_PODMAN_MACHINE')) {
+      [Environment]::SetEnvironmentVariable($name, $null, $Target)
+      if ([Environment]::GetEnvironmentVariable($name, $Target)) { return $false }
+    }
+    $userPath = [Environment]::GetEnvironmentVariable('Path', $Target)
+    if ($userPath) {
+      $normalizedBin = Get-JhtNormalizedWindowsPath $BinPath
+      $kept = @($userPath -split ';' | Where-Object {
+        $candidate = Get-JhtNormalizedWindowsPath $_
+        $_ -and (-not $candidate -or -not $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase))
+      })
+      [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), $Target)
+      $remaining = @(([Environment]::GetEnvironmentVariable('Path', $Target)) -split ';' | Where-Object {
+        $candidate = Get-JhtNormalizedWindowsPath $_
+        $_ -and $candidate -and $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase)
+      })
+      if ($remaining.Count -gt 0) { return $false }
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Invoke-JhtWindowsUninstall {
+  param(
+    [string[]]$UninstallArgs,
+    [Parameter(Mandatory)][string]$ProfilePath,
+    [Parameter(Mandatory)][string]$LocalAppDataPath,
+    [string]$PodmanPath,
+    [string]$WslPath,
+    [System.EnvironmentVariableTarget]$EnvironmentTarget = [System.EnvironmentVariableTarget]::User
+  )
+  if ($UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm') {
+    [Console]::Error.WriteLine('uso: jht uninstall --confirm')
+    return 2
+  }
+
+  $machineName = 'jht-podman'
+  $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
+  $binPath = [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.local', 'bin')
+  $selectionPath = Join-Path $runtimePath 'container-runtime'
+  $knownCommands = @(
+    (Join-Path $binPath 'jht.ps1'),
+    (Join-Path $binPath 'jht.cmd'),
+    (Join-Path $binPath 'windows-private-acl.ps1'),
+    (Join-Path $binPath 'docker.exe')
+  )
+
+  # Un wrapper nuovo puo' essere arrivato anche sopra una vecchia installazione
+  # Docker. In quel caso non cancelliamo i file host lasciando il container
+  # legacy attivo sugli stessi dati: solo il runtime Podman ha questo comando.
+  if (Test-Path -LiteralPath $runtimePath) {
+    try {
+      if (-not (Test-Path -LiteralPath $selectionPath -PathType Leaf) -or
+          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') {
+        Write-JhtUninstallLeft runtime
+        Write-JhtUninstallLeft commands
+        return 24
+      }
+    } catch {
+      Write-JhtUninstallLeft runtime
+      Write-JhtUninstallLeft commands
+      return 24
+    }
+  }
+
+  Write-JhtUninstallPhase uninstall_machine
+  $machineState = Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
+  if ($machineState -eq 'present') {
+    if (-not $PodmanPath -or -not $WslPath) {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+    & $WslPath --status *> $null
+    if ($LASTEXITCODE -ne 0) {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+    & $PodmanPath machine rm --force $machineName *> $null
+    if ($LASTEXITCODE -ne 0 -or
+        (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+  } elseif ($machineState -ne 'absent') {
+    Write-JhtUninstallLeft machine
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    return 24
+  }
+
+  Write-JhtUninstallPhase uninstall_runtime
+  if (Test-Path -LiteralPath $runtimePath) {
+    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch {}
+  }
+  if (Test-Path -LiteralPath $runtimePath) {
+    Write-JhtUninstallLeft runtime
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    return 24
+  }
+
+  Write-JhtUninstallPhase uninstall_commands
+  $foreignCommands = @()
+  if (Test-Path -LiteralPath $binPath -PathType Container) {
+    $knownFullPaths = @($knownCommands | ForEach-Object { [IO.Path]::GetFullPath($_) })
+    $foreignCommands = @(Get-ChildItem -LiteralPath $binPath -Force | Where-Object {
+      $knownFullPaths -notcontains [IO.Path]::GetFullPath($_.FullName)
+    })
+  }
+  $commandFailure = $false
+  foreach ($path in $knownCommands | Where-Object { $_ -notlike '*\jht.ps1' }) {
+    if (-not (Test-Path -LiteralPath $path)) { continue }
+    try { Remove-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $commandFailure = $true }
+  }
+  if (-not $commandFailure) {
+    # Se la cartella ospita altri programmi non togliamo dal PATH la loro casa.
+    # Le due variabili JHT invece appartengono sempre a questa installazione.
+    if ($foreignCommands.Count -eq 0) {
+      $commandFailure = -not (Remove-JhtUserEnvironment -BinPath $binPath -Target $EnvironmentTarget)
+    } else {
+      try {
+        foreach ($name in @('JHT_CONTAINER_RUNTIME', 'JHT_PODMAN_MACHINE')) {
+          [Environment]::SetEnvironmentVariable($name, $null, $EnvironmentTarget)
+          if ([Environment]::GetEnvironmentVariable($name, $EnvironmentTarget)) { $commandFailure = $true }
+        }
+      } catch { $commandFailure = $true }
+    }
+  }
+  $wrapperPath = Join-Path $binPath 'jht.ps1'
+  if (-not $commandFailure -and (Test-Path -LiteralPath $wrapperPath)) {
+    try { Remove-Item -LiteralPath $wrapperPath -Force -ErrorAction Stop } catch { $commandFailure = $true }
+  }
+  if ($commandFailure -or @($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
+    Write-JhtUninstallLeft commands
+    return 24
+  }
+  return 0
+}
+
+if ($args.Count -ge 1 -and $args[0] -ceq 'uninstall') {
+  [string[]]$uninstallArgs = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
+  $fixedProfile = [Environment]::GetFolderPath('UserProfile')
+  $fixedLocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
+  $podmanCommand = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  $wslCommand = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  exit (Invoke-JhtWindowsUninstall -UninstallArgs $uninstallArgs `
+    -ProfilePath $fixedProfile -LocalAppDataPath $fixedLocalAppData `
+    -PodmanPath $(if ($podmanCommand) { $podmanCommand.Source } else { '' }) `
+    -WslPath $(if ($wslCommand) { $wslCommand.Source } else { '' }))
+}
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
@@ -414,6 +630,8 @@ jht - Job Hunter Team
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da li'.
     jht reset              cancella configurazione e volumi del broker
+    jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,
+                            documenti, Podman e Compose
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
