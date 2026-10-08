@@ -22,7 +22,8 @@ sys.path.insert(0, str(ROOT / "shared"))
 sys.path.insert(0, str(ROOT / "shared" / "skills"))
 
 CANARY = "CANARY-broker-mailbox-7d21"
-NEW_PASSWORD = "CANARY-rotated-0b9e"
+# The rotated app password of the fixtures: a canary like the one above.
+ROTATED = "CANARY-rotated-0b9e"
 
 
 @pytest.fixture
@@ -318,11 +319,11 @@ def test_import_checks_the_digest_marks_rotation_and_keeps_the_old_policy(broker
     assert chat(broker, ["me@example.com"]) == {"ok": False, "reason": "mail_rotation_pending"}
     code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
     assert out["reason"] == "password_not_rotated"
-    code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=NEW_PASSWORD))
+    code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=ROTATED))
     assert out["ok"]
     assert chat(broker, ["me@example.com"])["status"] == "sent"
     state_blob = "".join(p.read_text() for p in broker.state.glob("*.json"))
-    assert CANARY not in state_blob and NEW_PASSWORD not in state_blob
+    assert CANARY not in state_blob and ROTATED not in state_blob
 
 
 def test_a_legacy_file_is_imported_once_never_again(broker):
@@ -338,7 +339,7 @@ def test_a_legacy_file_is_imported_once_never_again(broker):
 
 def test_a_legacy_file_after_a_host_setup_is_not_imported(broker):
     code, out = admin_run(broker, ["mailbox", "setup", "--user", "name.jht@gmail.com", "--admission", "allowlist"],
-                          (NEW_PASSWORD + "\n").encode())
+                          (ROTATED + "\n").encode())
     assert out["ok"] and out["admission"] == "allowlist"
     assert broker.store.read_secret("email_monitor")["imap_host"] == "imap.gmail.com"
     planted = json.dumps({"user": "attacker@evil.invalid", "password": "x" * 12}).encode()
