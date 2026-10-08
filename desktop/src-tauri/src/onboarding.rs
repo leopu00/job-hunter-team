@@ -1,4 +1,5 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
+use crate::release_channel;
 use crate::runtime_host::{
     run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -21,7 +22,6 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
-const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
@@ -1348,19 +1348,29 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
             return false;
         }
     }
-    let expected_keys = [
+    // A test-channel install also pins its image (install.sh --image):
+    // the file and its manifest line come together, or neither does.
+    let image_pin = runtime_dir.join("runtime-image");
+    let pinned = entries.contains_key("runtime-image");
+    if !pinned && fs::symlink_metadata(&image_pin).is_ok() {
+        return false;
+    }
+    let mut expected_keys = vec![
         "container-runtime",
         "docker-compose.yml",
         "docker-shim",
         "host-setup.sh",
         "jht-wrapper.sh",
         "podman-machine",
-        "version",
     ];
+    if pinned {
+        expected_keys.push("runtime-image");
+    }
+    expected_keys.push("version");
     if entries.keys().copied().collect::<Vec<_>>() != expected_keys || entries["version"] != "1" {
         return false;
     }
-    let artifacts = [
+    let mut artifacts = vec![
         ("docker-compose.yml", runtime_dir.join("docker-compose.yml")),
         ("host-setup.sh", runtime_dir.join("host-setup.sh")),
         ("jht-wrapper.sh", wrapper.to_path_buf()),
@@ -1368,6 +1378,9 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
         ("podman-machine", runtime_dir.join("podman-machine")),
         ("docker-shim", runtime_dir.join("bin/docker")),
     ];
+    if pinned {
+        artifacts.push(("runtime-image", image_pin));
+    }
     if fs::read_to_string(runtime_dir.join("container-runtime"))
         .ok()
         .is_none_or(|value| value.trim() != "podman")
@@ -1484,7 +1497,7 @@ pub(crate) fn attest_then<T>(
     })
 }
 
-fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
     // Refuse a release without a compiled-in digest before touching the network.
     expected_installer_digest(expected_digest)?;
     let target = std::env::temp_dir().join(format!(
@@ -1495,7 +1508,7 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     let result = (|| {
         let curl_args = [
             "-fsSL",
-            INSTALL_URL,
+            url,
             "-o",
             target.to_str().ok_or_else(|| failure("storage_failed"))?,
         ];
@@ -1515,12 +1528,30 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     result
 }
 
+/// Downloads install.sh of the channel this app was built for, checks it
+/// against that channel's digest and hands it over with the channel's
+/// installer arguments (none in production).
 fn with_downloaded_installer<T>(
-    execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
+    execute: impl FnOnce(&VerifiedInstaller, &[String]) -> Result<T, OnboardingError>,
 ) -> Result<T, OnboardingError> {
-    let expected = expected_installer_digest(INSTALL_SHA256)?;
-    let bytes = download_installer_bytes(expected)?;
-    attest_then(bytes, expected, execute)
+    let channel = release_channel::current().map_err(failure)?;
+    let expected = expected_installer_digest(release_channel::install_digest(
+        channel.as_ref(),
+        INSTALL_SHA256,
+    ))?;
+    let bytes =
+        download_installer_bytes(&release_channel::install_url(channel.as_ref()), expected)?;
+    let args = release_channel::installer_args(channel.as_ref());
+    attest_then(bytes, expected, |installer| execute(installer, &args))
+}
+
+/// A local install command line: the fixed part, then the channel's
+/// installer arguments after `bash -s --`.
+fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
+    base.iter()
+        .map(|arg| (*arg).to_owned())
+        .chain(channel_args.iter().cloned())
+        .collect()
 }
 
 /// Windows: Docker Desktop first (it runs the team), then the runtime that
@@ -1628,11 +1659,11 @@ fn install_local(
             );
             if install_required {
                 trace_local_runtime("runtime", "install_required");
-                let installed = with_downloaded_installer(|installer| {
+                let installed = with_downloaded_installer(|installer, channel_args| {
                     ensure_success(
                         run_program(
                             "/usr/bin/env",
-                            LOCAL_PODMAN_INSTALL_ARGS,
+                            local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
                             Some(installer.bytes()),
                             PREPARE_TIMEOUT,
                         ),
@@ -1699,8 +1730,11 @@ fn install_local(
         #[cfg(not(target_os = "macos"))]
         {
             if wrapper_path(app).is_none() {
-                with_downloaded_installer(|installer| {
-                    let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
+                with_downloaded_installer(|installer, channel_args| {
+                    let args = local_install_args(
+                        &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+                        channel_args,
+                    );
                     ensure_success(
                         run_program(
                             "/usr/bin/env",
@@ -1734,6 +1768,27 @@ else
 fi
 [ "$jht_actual_sha256" = "$JHT_INSTALL_SHA256" ] || exit 87
 /bin/bash "$jht_installer" --pairing-token "$JHT_PAIRING_TOKEN""#;
+
+/// REMOTE_INSTALL with the channel's installer arguments appended, each in
+/// single quotes. They are public build coordinates (commit, image ref,
+/// digest), never a secret, and only a closed character set is accepted, so
+/// the quoting cannot be broken; production appends nothing.
+fn remote_install_command(channel_args: &[String]) -> Result<String, OnboardingError> {
+    let mut command = REMOTE_INSTALL.to_owned();
+    for arg in channel_args {
+        if arg.is_empty()
+            || !arg
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_.:/@".contains(&byte))
+        {
+            return Err(failure("installer_digest_invalid"));
+        }
+        command.push_str(" '");
+        command.push_str(arg);
+        command.push('\'');
+    }
+    Ok(command)
+}
 
 pub(crate) fn remote_install_input(
     installer: &VerifiedInstaller,
@@ -2077,12 +2132,13 @@ fn prepare_impl(
                     if !valid_pairing_token(token) {
                         return Err(failure("pairing_token_invalid"));
                     }
-                    with_downloaded_installer(|installer| {
+                    with_downloaded_installer(|installer, channel_args| {
+                        let command = remote_install_command(channel_args)?;
                         let mut input = remote_install_input(installer, token)?;
                         let result = ensure_success(
-                            run_ssh(
+                            crate::runtime_host::run_ssh_command(
                                 &validated,
-                                REMOTE_INSTALL,
+                                &command,
                                 Some(&input),
                                 PREPARE_TIMEOUT,
                                 None,
@@ -3837,6 +3893,83 @@ mod tests {
         );
     }
 
+    const CHANNEL_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+    const CHANNEL_DIGEST: &str =
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn channel_args() -> Vec<String> {
+        [
+            "--source-sha",
+            CHANNEL_SHA,
+            "--image",
+            "ghcr.io/leopu00/jht:master-arthur",
+            "--expected-image-digest",
+            CHANNEL_DIGEST,
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    }
+
+    #[test]
+    fn production_install_commands_are_unchanged() {
+        assert_eq!(super::remote_install_command(&[]).unwrap(), REMOTE_INSTALL);
+        assert_eq!(
+            super::local_install_args(&["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"], &[]),
+            ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
+        );
+    }
+
+    #[test]
+    fn test_channel_coordinates_reach_the_installer_as_arguments() {
+        let local = super::local_install_args(
+            &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+            &channel_args(),
+        );
+        assert_eq!(local[..4], ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
+        assert_eq!(local[4..], channel_args()[..]);
+
+        // The fixed remote script, run for real: the attested installer gets
+        // the pairing token and then exactly the channel's arguments, while
+        // stdin keeps its contract (digest, token, installer bytes).
+        let command = super::remote_install_command(&channel_args()).unwrap();
+        assert!(command.starts_with(REMOTE_INSTALL));
+        let installer = b"printf '%s\\n' \"$@\"\n";
+        let digest = format!("{:x}", Sha256::digest(installer));
+        let output = super::attest_then(installer.to_vec(), &digest, |verified| {
+            let input = super::remote_install_input(verified, &"t".repeat(32))?;
+            let mut child = std::process::Command::new("/bin/bash")
+                .args(["-c", &command])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            {
+                use std::io::Write;
+                child.stdin.take().unwrap().write_all(&input).unwrap();
+            }
+            Ok(child.wait_with_output().unwrap())
+        })
+        .unwrap();
+        assert!(output.status.success());
+        let mut expected = vec!["--pairing-token".to_owned(), "t".repeat(32)];
+        expected.extend(channel_args());
+        assert_eq!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn remote_install_command_refuses_arguments_that_could_break_quoting() {
+        for bad in ["", "a'b", "a b", "$(id)", "a\nb", "a;b", "`id`"] {
+            let error = super::remote_install_command(&[bad.to_owned()]).unwrap_err();
+            assert_eq!(error.code, "installer_digest_invalid", "{bad:?}");
+        }
+    }
+
     fn outcome(success: bool) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult {
             code: if success { 0 } else { 1 },
@@ -4259,6 +4392,72 @@ mod tests {
         .unwrap_err();
         assert_eq!(calls, 1);
         assert_eq!(error.code, "runtime_wrapper_probe_failed");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_test_channel_keeps_the_podman_path_and_adds_the_coordinates() {
+        let args = super::local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, &channel_args());
+        assert_eq!(args[..6], LOCAL_PODMAN_INSTALL_ARGS.map(str::to_owned)[..]);
+        assert_eq!(args[6..], channel_args()[..]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_manifest_accepts_the_image_pin_only_with_its_digest() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-image-pin-{nonce}"));
+        let runtime = root.join("runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        let wrapper = root.join("jht");
+        let files = [
+            (wrapper.clone(), "#!/bin/sh\n"),
+            (runtime.join("docker-compose.yml"), "services: {}\n"),
+            (runtime.join("host-setup.sh"), "#!/bin/sh\n"),
+            (runtime.join("container-runtime"), "podman\n"),
+            (runtime.join("podman-machine"), "jht-podman\n"),
+            (runtime.join("bin/docker"), "#!/bin/sh\n"),
+        ];
+        for (path, content) in &files {
+            fs::write(path, content).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let digest =
+            |path: &std::path::Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
+        let base = format!(
+            "version=1\ndocker-compose.yml={}\nhost-setup.sh={}\njht-wrapper.sh={}\ncontainer-runtime={}\npodman-machine={}\ndocker-shim={}\n",
+            digest(&runtime.join("docker-compose.yml")),
+            digest(&runtime.join("host-setup.sh")),
+            digest(&wrapper),
+            digest(&runtime.join("container-runtime")),
+            digest(&runtime.join("podman-machine")),
+            digest(&runtime.join("bin/docker")),
+        );
+        let manifest = runtime.join(".runtime-integrity");
+        fs::write(&manifest, &base).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+
+        let pin = runtime.join("runtime-image");
+        fs::write(&pin, format!("ghcr.io/leopu00/jht@{CHANNEL_DIGEST}\n")).unwrap();
+        // A pin the manifest does not attest is refused.
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::write(&manifest, format!("{base}runtime-image={}\n", digest(&pin))).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        // A changed pin, or one that went missing, is refused too.
+        fs::write(&pin, "ghcr.io/leopu00/jht:latest\n").unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::remove_file(&pin).unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[cfg(target_os = "macos")]

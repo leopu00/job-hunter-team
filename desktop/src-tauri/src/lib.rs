@@ -15,6 +15,8 @@ mod podman;
 mod private_acl;
 mod profile_import;
 mod profile_migration;
+mod release_channel;
+mod release_channel_rules;
 mod runtime_host;
 mod voice_input;
 mod windows_runtime;

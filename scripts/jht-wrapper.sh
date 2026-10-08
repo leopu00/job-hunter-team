@@ -55,6 +55,11 @@ COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
+# Canale di test: install.sh --image fissa qui l'immagine verificata del suo
+# commit (ref canonico per digest). Sta nel runtime host, fuori dai mount del
+# container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
+# ai `jht up` successivi. Assente = produzione (immagine del compose).
+RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -263,6 +268,9 @@ runtime_write_manifest() {
       printf 'podman-machine=%s\n' "$(runtime_sha256 "$PODMAN_MACHINE_FILE")"
       printf 'docker-shim=%s\n' "$(runtime_sha256 "$DOCKER_SHIM")"
     fi
+    if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+      printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
+    fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
   mv -f "$tmp" "$RUNTIME_MANIFEST"
@@ -326,9 +334,28 @@ runtime_bundle_trusted() {
     [ "$(runtime_manifest_value docker-shim)" = "$(runtime_sha256 "$DOCKER_SHIM")" ] || return 1
     grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$DOCKER_SHIM" || return 1
   fi
+  if [ -e "$RUNTIME_IMAGE_PIN" ] || [ -L "$RUNTIME_IMAGE_PIN" ]; then
+    runtime_node_safe "$RUNTIME_IMAGE_PIN" file || return 1
+    [ "$(runtime_manifest_value runtime-image)" = "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")" ] || return 1
+    runtime_image_pin_value >/dev/null || return 1
+  elif [ -n "$(runtime_manifest_value runtime-image)" ]; then
+    # Il manifest attesta un pin che non c'e' piu': tornare in silenzio
+    # all'immagine di produzione cambierebbe canale senza che nessuno lo chieda.
+    return 1
+  fi
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
+}
+
+# Il ref del pin, solo nella forma canonica scritta da install.sh.
+runtime_image_pin_value() {
+  local value
+  [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_IMAGE_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "$value"
 }
 
 runtime_bootstrap_release() {
@@ -409,6 +436,12 @@ require_trusted_runtime() {
     err "runtime host non attendibile (path, owner, permessi o SHA-256)"
     return 1
   }
+  # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
+  # e' deciso all'installazione, non da chi lancia il comando.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    JHT_IMAGE="$(runtime_image_pin_value)" || return 1
+    export JHT_IMAGE
+  fi
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
@@ -2368,6 +2401,12 @@ handle_runtime_upgrade() {
   fi
   if ! runtime_bundle_trusted; then
     upgrade_result false false preflight unknown none unknown none false "Runtime host non attendibile" false
+    return 1
+  fi
+  # Un'installazione del canale di test e' fissata a un commit: l'upgrade
+  # scaricherebbe il compose di produzione e mescolerebbe i due canali.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    upgrade_result false false preflight unknown none unknown none false "Installazione del canale di test: si aggiorna reinstallando dalla build di test" false
     return 1
   fi
   if ! upgrade_docker_ready; then

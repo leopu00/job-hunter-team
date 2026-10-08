@@ -1,5 +1,9 @@
 use std::{env, fs};
 
+#[path = "src/release_channel_rules.rs"]
+#[allow(dead_code)]
+mod release_channel_rules;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=VITE_SUPABASE_URL");
     println!("cargo:rerun-if-env-changed=VITE_SUPABASE_ANON_KEY");
@@ -11,6 +15,8 @@ fn main() {
     // service-role credentials must never be accepted here.
     println!("cargo:rustc-env=JHT_SUPABASE_URL={supabase_url}");
     println!("cargo:rustc-env=JHT_SUPABASE_ANON_KEY={supabase_anon_key}");
+
+    emit_release_channel();
 
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         build_macos_voice_input();
@@ -87,4 +93,55 @@ fn build_macos_voice_input() {
     println!("cargo:rustc-link-lib=framework=AVFoundation");
     println!("cargo:rustc-link-lib=framework=Foundation");
     println!("cargo:rustc-link-lib=framework=Speech");
+}
+
+/// The release channel, fixed at build time (release_channel_rules.rs). A
+/// test build without every value, or values without a test channel, does
+/// not build at all.
+fn emit_release_channel() {
+    let names = [
+        "JHT_CHANNEL",
+        "JHT_SOURCE_SHA",
+        "JHT_RUNTIME_IMAGE",
+        "JHT_RUNTIME_IMAGE_DIGEST",
+        "JHT_INSTALL_SHA256",
+    ];
+    for name in names {
+        println!("cargo:rerun-if-env-changed={name}");
+    }
+    let [channel, source_sha, runtime_image, image_digest, install_sha256] =
+        names.map(|name| env::var(name).ok());
+    let resolved = release_channel_rules::resolve(
+        channel.as_deref(),
+        source_sha.as_deref(),
+        runtime_image.as_deref(),
+        image_digest.as_deref(),
+        install_sha256.as_deref(),
+    )
+    .unwrap_or_else(|error| panic!("release channel: {error}"));
+    match resolved {
+        None => {
+            println!("cargo:rustc-env=JHT_BUILD_CHANNEL=production");
+            println!("cargo:rustc-env=JHT_BUILD_SOURCE_SHA=");
+            println!("cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE=");
+            println!("cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE_DIGEST=");
+            println!("cargo:rustc-env=JHT_BUILD_INSTALL_SHA256=");
+        }
+        Some(test) => {
+            println!("cargo:rustc-env=JHT_BUILD_CHANNEL=test");
+            println!("cargo:rustc-env=JHT_BUILD_SOURCE_SHA={}", test.source_sha);
+            println!(
+                "cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE={}",
+                test.runtime_image
+            );
+            println!(
+                "cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE_DIGEST={}",
+                test.image_digest
+            );
+            println!(
+                "cargo:rustc-env=JHT_BUILD_INSTALL_SHA256={}",
+                test.install_sha256
+            );
+        }
+    }
 }
