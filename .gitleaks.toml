@@ -80,6 +80,12 @@ paths = ['''^cli/src/lib/realtime-subscriber\.js$''']
 id = "generic-api-key"
 
 [[rules.allowlists]]
+description = "Sec-WebSocket-Key of the RFC 6455 example handshake in a broker-view test of the desktop, not a credential, verified 08/10/2026"
+condition = "AND"
+commits = ["f8814a0a76b6498ed3b583dd223d4b0ec79fe1fa"]
+paths = ['''^desktop/src-tauri/src/broker_view\.rs$''']
+
+[[rules.allowlists]]
 description = "Canary 'CANARY-rotated-...' standing in for a rotated app password in the broker test, verified 08/10/2026; renamed since the next commit"
 condition = "AND"
 commits = ["42879df11a2e1cec55cc0a93fd986b1431b399ad"]
