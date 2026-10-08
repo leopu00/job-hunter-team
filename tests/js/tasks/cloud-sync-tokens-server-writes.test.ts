@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
     patch: Record<string, unknown>;
     filters: [string, unknown][];
   }[],
+  // La tabella vista dal service_role, che non ha RLS: un token per utente.
+  rows: [] as Record<string, unknown>[],
 }));
 
 vi.mock("@/lib/workspace", () => ({ isSupabaseConfigured: true }));
@@ -70,14 +72,21 @@ vi.mock("@/lib/supabase/admin", () => ({
           update(patch: Record<string, unknown>) {
             const entry = { patch, filters: [] as [string, unknown][] };
             mocks.updates.push(entry);
+            // Come PostgREST: l'UPDATE tocca le righe che passano TUTTI i
+            // filtri, e `.select()` restituisce quelle toccate.
+            const apply = () => {
+              const hit = mocks.rows.filter((row) =>
+                entry.filters.every(([column, value]) => row[column] === value),
+              );
+              for (const row of hit) Object.assign(row, patch);
+              return hit.map((row) => ({ id: row.id }));
+            };
             const chain = {
               eq(column: string, value: unknown) {
                 entry.filters.push([column, value]);
                 return chain;
               },
-              then(resolve: (value: { error: null }) => unknown) {
-                return Promise.resolve({ error: null }).then(resolve);
-              },
+              select: async () => ({ data: apply(), error: null }),
             };
             return chain;
           },
@@ -104,10 +113,14 @@ beforeEach(() => {
   mocks.sessionWrites.length = 0;
   mocks.inserted.length = 0;
   mocks.updates.length = 0;
+  mocks.rows = [
+    { id: "token-1", user_id: USER, revoked_at: null },
+    { id: "token-other", user_id: OTHER, revoked_at: null },
+  ];
 });
 
 describe("POST /api/cloud-sync/tokens", () => {
-  it("crea il token col service_role, per l'utente della sessione", async () => {
+  it("crea il token col service_role, per l'utente della sessione e mai per quello del corpo", async () => {
     const { POST } = await import("@/app/api/cloud-sync/tokens/route");
 
     const res = await POST(
@@ -159,6 +172,28 @@ describe("DELETE /api/cloud-sync/tokens", () => {
       ["id", "token-1"],
       ["user_id", USER],
     ]);
+    expect(mocks.rows[0].revoked_at).toEqual(expect.any(String));
+  });
+
+  it("l'id del token di un altro utente: 404 e la sua riga resta intatta", async () => {
+    const { DELETE } = await import("@/app/api/cloud-sync/tokens/route");
+
+    const res = await DELETE(deleteRequest("token-other"));
+
+    expect(res.status).toBe(404);
+    expect(mocks.rows).toEqual([
+      { id: "token-1", user_id: USER, revoked_at: null },
+      { id: "token-other", user_id: OTHER, revoked_at: null },
+    ]);
+  });
+
+  it("un id che non esiste: 404", async () => {
+    const { DELETE } = await import("@/app/api/cloud-sync/tokens/route");
+
+    const res = await DELETE(deleteRequest("token-inesistente"));
+
+    expect(res.status).toBe(404);
+    expect(mocks.rows.every((row) => row.revoked_at === null)).toBe(true);
   });
 
   it("senza sessione: 401 e nessun client admin", async () => {

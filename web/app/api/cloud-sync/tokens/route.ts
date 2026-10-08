@@ -194,13 +194,19 @@ export async function DELETE(req: NextRequest) {
   const admin = serviceRole();
   if (!admin) return NO_SERVICE_ROLE;
 
-  const { error } = await admin
+  // Il filtro su `user_id` è l'unico confine: il service_role non ha RLS, e
+  // senza di esso l'id di un token altrui basterebbe a revocarlo. Nessuna
+  // riga toccata (id inesistente o di un altro utente) = 404.
+  const { data, error } = await admin
     .from("cloud_sync_tokens")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id");
 
   if (error)
     return sanitizedError(error, { status: 500, scope: "cloud-sync/tokens" });
+  if (!data || data.length === 0)
+    return NextResponse.json({ error: "Token non trovato" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }
