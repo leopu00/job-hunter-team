@@ -160,8 +160,8 @@ def secrets_import_legacy(name: str, envelope_raw: bytes) -> dict:
         done[name] = True
         store.write_state("legacy", done)
     box = store.read_state("mailbox", {})
-    return {"ok": True, "secret": name, "state": "imported", "rotation_pending": True,
-            "imported_to_confirm": box.get("imported_to_confirm", []) if name == "email_monitor" else []}
+    return _with_rotation_warning({"ok": True, "secret": name, "state": "imported", "rotation_pending": True,
+                                   "imported_to_confirm": box.get("imported_to_confirm", []) if name == "email_monitor" else []})
 
 
 def mailbox_setup(user: str, imap_host: str, smtp_host: str, admission: str, password: str) -> dict:
@@ -238,9 +238,17 @@ def mailbox_allow(action: str, entry: str) -> dict:
     return {"ok": True, key: box[key], "imported_to_confirm": box.get("imported_to_confirm", [])}
 
 
+def _with_rotation_warning(answer: dict) -> dict:
+    """The host's answers carry the warning while a rotation is pending: it
+    goes away only when a new password is saved (operator decision, 08/10)."""
+    if mailops.rotation_pending():
+        answer["warning"] = mailops.ROTATION_WARNING
+    return answer
+
+
 def mailbox_show() -> dict:
     box = store.read_state("mailbox", {})
-    return {
+    return _with_rotation_warning({
         "ok": True,
         "admission": box.get("admission", "allowlist"),
         "allow_addresses": box.get("allow_addresses", []),
@@ -249,7 +257,7 @@ def mailbox_show() -> dict:
         # user confirms each one with `jht mail allow add` (audit M2).
         "imported_to_confirm": box.get("imported_to_confirm", []),
         "rotation_pending": sorted(n for n, v in store.read_state("rotation", {}).items() if v.get("pending")),
-    }
+    })
 
 
 def mailbox_admission(policy: str) -> dict:
@@ -313,15 +321,14 @@ def mail_approve(draft_id: str) -> dict:
             creds = mailops.mailbox_account()
         except mailops.BrokerRefusal as err:
             raise AdminError(err.code) from None
-        if mailops.rotation_pending():
-            raise AdminError("mail_rotation_pending")
         result = mailops.deliver(creds, draft["to"], draft["subject"], draft["body"], "chat", draft.get("role", ""),
                                  draft_id=draft_id)
         if not result.get("ok"):
             raise AdminError(result.get("reason", "smtp_failed"))
         drafts.pop(draft_id)
         store.write_state("drafts", drafts)
-    return {"ok": True, "status": "sent", "draft_id": draft_id, "to": _shown_mail({"to": draft["to"]})["to"]}
+    return _with_rotation_warning(
+        {"ok": True, "status": "sent", "draft_id": draft_id, "to": _shown_mail({"to": draft["to"]})["to"]})
 
 
 def mail_discard(draft_id: str) -> dict:
@@ -342,7 +349,7 @@ def secrets_status() -> dict:
     out = {}
     for name in store.SECRET_NAMES:
         out[name] = "present" if store.read_secret(name) else "absent"
-    return {"ok": True, "secrets": out}
+    return _with_rotation_warning({"ok": True, "secrets": out})
 
 
 def main(argv: list[str]) -> int:

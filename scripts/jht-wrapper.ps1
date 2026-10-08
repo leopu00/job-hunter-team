@@ -658,7 +658,7 @@ function Invoke-BrokerMigrateLegacy {
   if ($migrated) {
     Write-Warn 'La casella di posta ora sta nel broker dei segreti. La sua password era leggibile dagli agenti:'
     Write-Warn 'genera una nuova password per app dal tuo provider e salvala con: jht mail setup'
-    Write-Warn "Fino ad allora gli agenti leggono la posta, ma l'invio resta fermo (mail_rotation_pending)."
+    Write-Warn "Fino ad allora la posta si legge e si invia con la password di oggi; l'avviso resta in jht mail status."
   }
   if ($failed) { return 1 }
   return 0

@@ -381,7 +381,7 @@ def _forged_guess(broker, tmp_path, guess, n=[0]):
 
 def _seen_by_an_agent(broker):
     """What an agent can observe of the mailbox: status, and whether a send
-    to the saved address goes or is refused (mail_rotation_pending)."""
+    to the saved address goes or is refused."""
     status = broker.ask("mail.status", role="scout")
     send = broker.ask("mail.send", {"kind": "chat", "to": ["me@example.com"], "subject": "s", "body": "b"},
                       role="assistente")
