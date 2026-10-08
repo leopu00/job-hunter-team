@@ -30,15 +30,14 @@ const SERVER_ONLY = [
 ];
 
 // Il vecchio entrypoint locale chiedeva una chiave OpenAI e avviava un team
-// API separato. I file restano per ora nel sorgente, ma non devono essere
-// raggiungibili da nessuno dei tre entrypoint Vite distribuiti.
+// API separato. Questi file restano per ora nel sorgente, ma non devono essere
+// raggiungibili da nessuno dei tre entrypoint Vite distribuiti. La pagina
+// Budget e lib/spend.ts sono stati tolti l'08/10: il testo che mostravano
+// resta vietato qui sotto.
 const RETIRED_DESKTOP_MODULES = [
   "desktop/src/components/team-dashboard.tsx",
   "desktop/src/lib/podman.ts",
-  "desktop/src/lib/spend.ts",
   "desktop/src/lib/team.ts",
-  "desktop/src/pages/budget/BudgetScreen.tsx",
-  "desktop/src/pages/budget/index.tsx",
 ];
 
 const RETIRED_UI_TEXT = [
