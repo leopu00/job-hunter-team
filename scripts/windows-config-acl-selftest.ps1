@@ -155,7 +155,9 @@ exit /b 0
   $wrapperExit = $LASTEXITCODE
   if ($wrapperExit -ne 0) { throw "E03 clean-start wrapper failed before Docker: $($output | Out-String)" }
   $dockerCalls = Get-Content -LiteralPath $dockerLog -Raw
-  $repairCall = [regex]::Match($dockerCalls, '(?m)^run .*--user 0:0 .*--cap-drop ALL .*--cap-add CHOWN .*--network none .*--security-opt no-new-privileges .*:/jht_home .*:/jht_user .*$')
+  # A mount whose host path has a space (Documents\Job Hunter Team) is quoted
+  # whole, so the fake docker logs -v "...:/jht_user" with the quote last.
+  $repairCall = [regex]::Match($dockerCalls, '(?m)^run .*--user 0:0 .*--cap-drop ALL .*--cap-add CHOWN .*--network none .*--security-opt no-new-privileges .*:/jht_home"? .*:/jht_user"? .*$')
   if (-not $repairCall.Success) { throw "E03 clean-start did not use the confined mount repair: $dockerCalls" }
   if ($dockerCalls -notmatch '(?m)^compose .* up -d\s*$') { throw "E03 clean-start did not reach docker compose up -d: $dockerCalls" }
   if ($repairCall.Index -gt $dockerCalls.IndexOf(' up -d')) { throw 'E03 clean-start reached compose up before mount repair' }
