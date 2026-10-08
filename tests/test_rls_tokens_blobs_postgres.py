@@ -11,7 +11,8 @@ Two databases answer the same questions:
   default grants (the fixture of tests/test_rls_postgres.py, the one CI runs);
 - "supabase": the local Supabase stack (JHT_TEST_SUPABASE_DB_URL, the DB_URL
   of `supabase status -o env`), with Supabase's own roles, grants and
-  auth.uid(). Skipped without it.
+  auth.uid(). Skipped without it, and when it names a host other than this
+  machine (tests/local_supabase.py).
 
 Every probe seeds its two users and their rows, switches role and rolls
 back, in one transaction: nothing is left behind on either database.
@@ -25,12 +26,12 @@ and a write that reaches no row both count as "nothing written" below.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import uuid
 
 import pytest
 
+from local_supabase import local_supabase_db_url
 from test_rls_postgres import database  # noqa: F401  (fixture)
 
 
@@ -64,10 +65,7 @@ SEED = "\n".join(
 def target(request) -> str:
     if request.param == "pg16":
         return request.getfixturevalue("database")
-    url = os.environ.get("JHT_TEST_SUPABASE_DB_URL")
-    if not url:
-        pytest.skip("JHT_TEST_SUPABASE_DB_URL non impostata: serve lo stack Supabase locale")
-    return url
+    return local_supabase_db_url()
 
 
 def _probe(url: str, statements: str, *, role: str | None = None, user: str | None = None,

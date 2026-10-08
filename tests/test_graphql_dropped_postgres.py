@@ -27,6 +27,8 @@ from urllib.parse import urlparse, urlunparse
 
 import pytest
 
+from local_supabase import local_supabase_db_url
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/091_graphql_extension_dropped.sql"
@@ -103,9 +105,7 @@ def test_self_hosted_postgres_without_pg_graphql_runs_091_as_a_no_op(plain_pg):
 
 
 def _supabase_session(sql: str) -> list[str]:
-    url = os.environ.get("JHT_TEST_SUPABASE_DB_URL")
-    if not url:
-        pytest.skip("JHT_TEST_SUPABASE_DB_URL non impostata: serve lo stack Supabase locale")
+    url = local_supabase_db_url()
     client = shutil.which("psql")
     if not client:
         pytest.fail("JHT_TEST_SUPABASE_DB_URL richiede psql")
