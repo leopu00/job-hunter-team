@@ -97,6 +97,49 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("button", { name: /importa profilo/i })).not.toBeInTheDocument();
   });
 
+  it("proposes Codex: first and already chosen, so going on submits it", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow();
+    await reachProviderLocal(user);
+    const providers = screen.getAllByRole("radio");
+    expect(providers[0]).toHaveTextContent("Codex");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
+      host: { kind: "local" },
+      provider: "codex",
+    }));
+  });
+
+  it("says before the setup that a local profile takes an earlier version's data as it is", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" }, platform: "windows", previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/riutilizziamo configurazione, profilo, accesso al provider e documenti/i);
+    expect(note).toHaveTextContent(/cambia la password per app/i);
+  });
+
+  it("tells an account that only a local profile takes an earlier version's data", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "google" }, previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.getByRole("note")).toHaveTextContent(/lo riprende solo un profilo locale/i);
+  });
+
+  it("says nothing about earlier data when there is none", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" } });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
@@ -130,9 +173,9 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("heading", { name: /scegli il provider/i })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("restores focus to the greeting when navigating back", async () => {
@@ -169,14 +212,15 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
-  it("offers this computer on Windows, with Docker Desktop", async () => {
+  it("offers this computer on Windows, with Podman in WSL installed by the app", async () => {
     // Red if the Windows block of 03/10 (66e744298) comes back.
     const user = userEvent.setup();
     renderFlow({ platform: "windows" });
     await begin(user);
     const local = screen.getByRole("radio", { name: /questo computer/i });
     expect(local).toHaveAttribute("aria-checked", "true");
-    expect(local).toHaveTextContent("Docker Desktop");
+    expect(local).toHaveTextContent(/installa Podman e la sua macchina in WSL/i);
+    expect(local).not.toHaveTextContent(/docker/i);
     expect(screen.queryByText(/VPS Linux/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
   });

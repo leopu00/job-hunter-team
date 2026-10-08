@@ -173,6 +173,12 @@ export interface OnboardingFlowProps {
    * `podman_machine_mounts_home` error, after the person confirms it.
    */
   onRecreatePodmanMachine?: () => Promise<void>;
+  /**
+   * ~/.jht holds the data of an earlier version (the game, up to v0.3.9)
+   * that no profile has taken yet: a local profile takes it as it is, and the
+   * review step says so before the setup starts.
+   */
+  previousLocalData?: boolean;
 }
 
 export type OnboardingGateState =

@@ -1,3 +1,4 @@
+import { homeDir } from "@tauri-apps/api/path";
 import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 
 export type SshKeySelector = () => Promise<string | null>;
@@ -13,9 +14,19 @@ const SSH_KEY_DIALOG_OPTIONS = {
   canCreateDirectories: false,
 } as const satisfies OpenDialogOptions;
 
-/** Opens a native single-file dialog without reading or copying the selected file. */
-export async function pickSshKey(openDialog: OpenDialog = open): Promise<string | null> {
-  const selected = await openDialog(SSH_KEY_DIALOG_OPTIONS);
+/**
+ * Opens a native single-file dialog without reading or copying the selected
+ * file. It starts in the person's home folder: without a starting folder
+ * Windows opens it in the app's own program folder.
+ */
+export async function pickSshKey(
+  openDialog: OpenDialog = open,
+  home: () => Promise<string> = homeDir,
+): Promise<string | null> {
+  const defaultPath = await home().catch(() => "");
+  const selected = await openDialog(defaultPath
+    ? { ...SSH_KEY_DIALOG_OPTIONS, defaultPath }
+    : SSH_KEY_DIALOG_OPTIONS);
   if (selected === null || selected === "") return null;
   if (typeof selected !== "string") throw new Error("ssh-key-dialog-invalid-selection");
   return selected;

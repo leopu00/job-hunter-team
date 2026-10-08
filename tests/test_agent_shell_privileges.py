@@ -162,7 +162,7 @@ def test_the_repair_names_only_callers_that_exist():
     # compose or docker itself.
     onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     install = onboarding[onboarding.index("fn install_local("):]
-    assert "#[cfg(windows)]" in install[:400] and "return install_local_windows(app);" in install[:400]
+    assert "#[cfg(windows)]" in install[:500] and "return install_local_windows(app, phase);" in install[:500]
     windows = onboarding[onboarding.index("fn install_local_windows("):]
     windows = windows[: windows.index("\n}\n")]
     assert "installer_invocation(&script, &channel_args)" in windows

@@ -302,3 +302,13 @@ export async function openOnboardingAssistant(
   if (!isTauri()) desktopOnly();
   return invoke("onboarding_assistant_open", { host, onProgress: progressChannel(onProgress) });
 }
+
+/** Whether ~/.jht holds an earlier version's data no profile has taken yet. */
+export async function readPreviousLocalData(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    return await invoke<unknown>("onboarding_previous_local_data") === true;
+  } catch {
+    return false;
+  }
+}

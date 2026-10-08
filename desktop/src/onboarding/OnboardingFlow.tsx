@@ -20,9 +20,11 @@ function emptyVpsHost(): ExecutionHost {
   return { kind: "vps", address: "", user: "root", port: 22, keyPath: "" };
 }
 const COLLECTION_STEPS = ["Benvenuto", "Ambiente", "Provider", "Conferma"] as const;
+// Codex is the provider the onboarding proposes: first, and already chosen.
+const PROPOSED_PROVIDER: SubscriptionProvider = "codex";
 const PROVIDERS: Array<{ value: SubscriptionProvider; label: string; vendor: string; mark: string }> = [
-  { value: "claude", label: "Claude Code", vendor: "Anthropic · Claude Pro/Max", mark: "CL" },
   { value: "codex", label: "Codex", vendor: "OpenAI · ChatGPT Plus/Pro", mark: "CX" },
+  { value: "claude", label: "Claude Code", vendor: "Anthropic · Claude Pro/Max", mark: "CL" },
   { value: "kimi", label: "Kimi", vendor: "Moonshot · piano Kimi", mark: "KM" },
 ];
 const RUNTIME_STAGES: Array<{ value: OnboardingRuntimeStage; label: string; detail: string }> = [
@@ -321,12 +323,12 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine }: OnboardingFlowProps) {
-  // Windows runs the team locally too, with Docker Desktop (since 09/10/2026).
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, previousLocalData = false }: OnboardingFlowProps) {
+  // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
-  const [provider, setProvider] = useState<SubscriptionProvider | null>(null);
+  const [provider, setProvider] = useState<SubscriptionProvider | null>(PROPOSED_PROVIDER);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -402,7 +404,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               ? <p className="onboarding-lede">Puoi eseguire tutto su questo computer oppure collegare una VPS già disponibile.</p>
               : <p className="onboarding-lede">Su questa piattaforma il team deve essere eseguito su una VPS Linux. L’esecuzione locale non è ancora disponibile.</p>}
             <div className="onboarding-choice-grid" role="radiogroup" aria-label="Ambiente di esecuzione">
-              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>{platform === "windows" ? "Docker Desktop e container locali" : "Podman e container locali"}, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>}
+              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>{platform === "windows" ? "L’app installa Podman e la sua macchina in WSL, se mancano" : "Podman e container locali"}, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>}
               <button data-radio-value="vps" tabIndex={host.kind === "vps" || !localRuntimeSupported ? 0 : -1} className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onKeyDown={(event) => moveRadio(event, localRuntimeSupported ? ["local", "vps"] as const : ["vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost(emptyVpsHost())}><span className="onboarding-choice__icon">VPS</span><strong>Server VPS</strong><small>Team sempre acceso su una macchina remota.</small><span className="onboarding-choice__check">✓</span></button>
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
@@ -432,6 +434,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <dl className="onboarding-review">
               <div><dt>Ambiente</dt><dd>{hostName(host)}</dd></div><div><dt>Provider</dt><dd>{providerName(provider)}<small>Accesso tramite abbonamento</small></dd></div>
             </dl>
+            {host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note">{account.identity === "local"
+              ? "Su questo computer c’è già Job Hunter Team di una versione precedente: riutilizziamo configurazione, profilo, accesso al provider e documenti, così come sono. Se avevi configurato la posta nel vecchio gioco, dopo l’avvio cambia la password per app della casella."
+              : "Su questo computer c’è già Job Hunter Team di una versione precedente: lo riprende solo un profilo locale, e con un account il team su questo computer non parte. Per continuare da lì entra con un profilo locale, oppure scegli un server VPS."}</p>}
             {submitError && <p className="onboarding-error" role="alert">Il setup non è partito. Nessun dato è andato perso: controlla la connessione e riprova.</p>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => { setSubmitError(false); setStep(2); }} disabled={submitting}>Modifica</button><button className="onboarding-primary" type="submit" disabled={submitting}>{submitting ? "Avvio del setup…" : "Prepara la squadra"}<span aria-hidden="true">→</span></button></div>
           </form>}

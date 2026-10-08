@@ -36,6 +36,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  readPreviousLocalData,
   recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
@@ -73,6 +74,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   prepareOnboardingRuntime: vi.fn(),
   probeOnboardingSshHostKey: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
+  readPreviousLocalData: vi.fn(),
   recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
@@ -255,6 +257,7 @@ describe("DashboardApp onboarding router", () => {
     vi.resetAllMocks();
     localStorage.clear();
     vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
+    vi.mocked(readPreviousLocalData).mockResolvedValue(false);
     vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
     vi.mocked(confirmOnboardingSshHostKey).mockResolvedValue();
     vi.mocked(sendOnboardingProviderInput).mockResolvedValue();

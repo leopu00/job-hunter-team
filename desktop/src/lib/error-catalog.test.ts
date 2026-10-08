@@ -103,6 +103,13 @@ const NOT_ERRORS: Record<string, string> = {
   // States of the broker's LinkedIn login (`jht linkedin status`), shown as a status.
   logged_in: "broker login state",
   login_required: "broker login state",
+  // install.ps1's phases (windows_runtime::INSTALL_PHASES): shown as progress, never an error.
+  wsl_check: "install.ps1 phase id",
+  podman_install: "install.ps1 phase id",
+  podman_machine_init: "install.ps1 phase id",
+  podman_machine_start: "install.ps1 phase id",
+  runtime_download: "install.ps1 phase id",
+  image_pull: "install.ps1 phase id",
 };
 
 function compiledRustModules(): string[] {

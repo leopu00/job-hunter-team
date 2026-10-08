@@ -333,6 +333,29 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
     verify_local_owner_marker(&marker, scope)
 }
 
+/// Whether ~/.jht holds the data of a version before this app (the game, up
+/// to v0.3.9) that no profile of this app has taken yet. The onboarding says
+/// so before the setup: a local profile then takes that home as it is, on
+/// purpose (configuration, profile, provider login, documents), never a copy
+/// and never in silence.
+#[tauri::command]
+pub(crate) fn onboarding_previous_local_data(app: tauri::AppHandle) -> bool {
+    local_owner_marker_path(&app)
+        .ok()
+        .and_then(|marker| marker.parent().map(Path::to_path_buf))
+        .is_some_and(|home| previous_local_data_at(&home))
+}
+
+fn previous_local_data_at(home: &Path) -> bool {
+    let unowned = matches!(
+        fs::symlink_metadata(home.join(".desktop-account-scope")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    );
+    unowned
+        && fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_dir())
+        && recognized_legacy_local_home(home) == Ok(true)
+}
+
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     // These are durable artifacts written by the Electron local flow or by
     // the authoritative installer it invoked. Merely finding an arbitrary
@@ -1328,5 +1351,33 @@ mod tests {
         assert_eq!(fs::read(&owner).unwrap(), marker_before);
         assert_eq!(fs::read(&host_path).unwrap(), host_before);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn previous_local_data_is_a_recognised_home_no_profile_has_taken() {
+        let root = std::env::temp_dir().join(format!(
+            "jht-previous-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = root.join(".jht");
+        // Nothing there: a first install.
+        assert!(!super::previous_local_data_at(&home));
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        // A folder the game never wrote is not its data.
+        std::fs::write(home.join("notes.txt"), "x").unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        // The game's config and Codex login.
+        std::fs::write(home.join("jht.config.json"), "{}").unwrap();
+        std::fs::create_dir_all(home.join(".codex")).unwrap();
+        assert!(super::previous_local_data_at(&home));
+        // Already taken by a profile of this app: nothing to say any more.
+        std::fs::write(home.join(".desktop-account-scope"), "x").unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

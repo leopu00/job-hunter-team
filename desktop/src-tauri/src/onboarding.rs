@@ -1,5 +1,6 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::release_channel;
+use crate::windows_runtime::exit_failure;
 use crate::runtime_host::{
     run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -743,12 +744,8 @@ fn failure(code: &'static str) -> OnboardingError {
             "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
             true,
         ),
-        "docker_desktop_missing" => (
-            "Docker Desktop non è installato: su Windows fa girare il team.",
-            true,
-        ),
-        "docker_desktop_not_running" => (
-            "Docker Desktop è installato ma non è acceso.",
+        "wsl_not_ready" => (
+            "WSL non risponde: su Windows fa girare la macchina Podman del team.",
             true,
         ),
         // Retrying cannot help: the machine has to be recreated, and only after
@@ -923,6 +920,10 @@ fn trace_local_runtime(_stage: &'static str, _event: &'static str) {}
 struct ProgressReporter {
     emit: Arc<dyn Fn(OnboardingProgress) + Send + Sync>,
     sequence: Arc<AtomicU64>,
+    /// The step running now and the phase it last reported (install.ps1's
+    /// JHT_PHASE): the heartbeat repeats the phase instead of its generic
+    /// message, so the screen keeps saying what is happening.
+    current: Arc<Mutex<Option<(OnboardingProgressStage, Instant, &'static str)>>>,
 }
 
 impl ProgressReporter {
@@ -936,6 +937,22 @@ impl ProgressReporter {
         Self {
             emit: Arc::new(emit),
             sequence: Arc::new(AtomicU64::new(1)),
+            current: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// A phase of the running step, shown at once with the step's elapsed
+    /// time and repeated by its heartbeat. Outside a step it is dropped.
+    fn phase(&self, message: &'static str) {
+        let running = {
+            let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_mut().map(|(stage, started, shown)| {
+                *shown = message;
+                (*stage, *started)
+            })
+        };
+        if let Some((stage, started)) = running {
+            self.send(stage, OnboardingProgressStatus::Progress, message, started, None);
         }
     }
 
@@ -994,6 +1011,8 @@ impl ProgressReporter {
             started,
             None,
         );
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some((stage, started, heartbeat_message));
         let stopped = Arc::new(AtomicBool::new(false));
         let heartbeat_stopped = Arc::clone(&stopped);
         let heartbeat_reporter = self.clone();
@@ -1002,16 +1021,22 @@ impl ProgressReporter {
             if heartbeat_stopped.load(Ordering::Acquire) {
                 break;
             }
+            let message = heartbeat_reporter
+                .current
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .map_or(heartbeat_message, |(_, _, shown)| shown);
             heartbeat_reporter.send(
                 stage,
                 OnboardingProgressStatus::Progress,
-                heartbeat_message,
+                message,
                 started,
                 None,
             );
         });
 
         let result = operation();
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) = None;
         stopped.store(true, Ordering::Release);
         heartbeat.thread().unpark();
         let _ = heartbeat.join();
@@ -1583,20 +1608,27 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Windows: Docker Desktop first (it runs the team), then the runtime that
-/// install.ps1 publishes, installed only when no verified wrapper is there.
+/// Windows: WSL first (the Podman machine runs in it), then the runtime that
+/// install.ps1 publishes, installed only when no verified wrapper is there:
+/// install.ps1 installs Podman when missing and creates the JHT machine.
 /// install.ps1 runs only if it has the compiled digest, from a private
-/// temporary file, through Windows PowerShell by its absolute path.
+/// temporary file, through Windows PowerShell by its absolute path; each
+/// `JHT_PHASE` line it prints goes to the screen through `phase`.
 #[cfg(windows)]
-fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+fn install_local_windows(
+    app: &tauri::AppHandle,
+    phase: &dyn Fn(&'static str),
+) -> Result<PathBuf, OnboardingError> {
     use crate::windows_runtime::{
-        docker_state, installer_invocation, powershell_path, INSTALL_PS1_SHA256,
+        installer_invocation, installer_outcome, phase_message, powershell_path, wsl_path,
+        wsl_state, INSTALL_PS1_SHA256,
     };
-    docker_state(run_program(
-        "docker",
-        ["info", "--format", "{{.ServerVersion}}"],
+    let wsl = wsl_path(std::env::var_os("SystemRoot"));
+    wsl_state(run_program(
+        wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?,
+        ["--status"],
         None,
-        Duration::from_secs(25),
+        Duration::from_secs(30),
     ))
     .map_err(failure)?;
     if let Some(wrapper) = wrapper_path(app) {
@@ -1626,15 +1658,17 @@ fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingEr
             fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
             crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
             let shell = powershell_path(std::env::var_os("SystemRoot"));
-            ensure_success(
-                run_program(
-                    shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
-                    installer_invocation(&script, &channel_args),
-                    None,
-                    PREPARE_TIMEOUT,
-                ),
-                "runtime_install_failed",
-            )
+            installer_outcome(crate::runtime_host::run_program_lines(
+                shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
+                installer_invocation(&script, &channel_args),
+                PREPARE_TIMEOUT,
+                |line| {
+                    if let Some(message) = phase_message(line) {
+                        phase(message);
+                    }
+                },
+            ))
+            .map_err(failure)
         })();
         let _ = fs::remove_dir_all(&dir);
         result
@@ -1677,12 +1711,15 @@ fn download_verified_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, 
 fn install_local(
     app: &tauri::AppHandle,
     diagnostics: Option<&OnboardingDiagnosticSink>,
+    phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
     #[cfg(windows)]
     {
         let _ = diagnostics;
-        return install_local_windows(app);
+        return install_local_windows(app, phase);
     }
+    #[cfg(not(windows))]
+    let _ = phase;
     #[cfg(not(any(unix, windows)))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
@@ -2106,6 +2143,13 @@ fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingErro
     )
 }
 
+/// jht.ps1 up wakes the Podman machine in WSL and says with its exit code
+/// what did not start (windows_runtime::exit_failure); the sh wrapper's exit
+/// codes mean other things.
+fn up_exit_failure(code: i32, windows: bool) -> Option<&'static str> {
+    windows.then(|| exit_failure(code)).flatten()
+}
+
 fn start_and_verify_local_container_with(
     mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
     mut pause: impl FnMut(Duration),
@@ -2113,6 +2157,10 @@ fn start_and_verify_local_container_with(
 ) -> Result<(), OnboardingError> {
     let requested = match run(LocalCliOperation::Up, PREPARE_TIMEOUT) {
         Ok(result) if result.success() => Ok(()),
+        Ok(result) => match up_exit_failure(result.code, cfg!(windows)) {
+            Some(code) => return Err(failure(code)),
+            None => Err("container_start_failed"),
+        },
         Err("process_timeout") => Err("container_timeout"),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err("container_start_failed"),
@@ -2172,7 +2220,11 @@ fn prepare_impl(
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(install_local(&app, diagnostics.as_ref())?),
+                ValidatedHost::Local => Some(install_local(
+                    &app,
+                    diagnostics.as_ref(),
+                    &|message| reporter.phase(message),
+                )?),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -4086,11 +4138,46 @@ mod tests {
     }
 
     #[test]
+    fn windows_up_exit_codes_name_wsl_podman_or_the_machine() {
+        assert_eq!(super::up_exit_failure(20, true), Some("wsl_not_ready"));
+        assert_eq!(super::up_exit_failure(21, true), Some("podman_missing"));
+        assert_eq!(super::up_exit_failure(22, true), Some("podman_start_failed"));
+        assert_eq!(super::up_exit_failure(1, true), None);
+        // The sh wrapper's 20 means something else.
+        assert_eq!(super::up_exit_failure(20, false), None);
+        let code = |code| {
+            Ok(ProcessResult {
+                code,
+                stdout: Vec::new(),
+            })
+        };
+        if cfg!(windows) {
+            let mut calls = Vec::new();
+            let error = start_and_verify_local_container_with(
+                |operation, _| {
+                    calls.push(operation.argv()[0]);
+                    code(22)
+                },
+                |_| {},
+                3,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "podman_start_failed");
+            assert_eq!(calls, ["up"]);
+        } else {
+            let error =
+                start_and_verify_local_container_with(|_, _| code(22), |_| {}, 1).unwrap_err();
+            assert_eq!(error.code, "container_start_failed");
+        }
+    }
+
+    #[test]
     fn local_runtime_prepare_errors_preserve_sanitized_contract() {
         for code in [
             "podman_missing",
             "podman_start_failed",
             "podman_not_ready",
+            "wsl_not_ready",
             "runtime_download_failed",
             "runtime_install_failed",
             "runtime_missing",

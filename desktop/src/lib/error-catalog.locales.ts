@@ -351,19 +351,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A jelszó nem lett elmentve.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a Job Hunter Teamet."],
     pt: ["A palavra-passe não foi guardada.", "Tenta novamente. Se voltar a acontecer, reinicia o Job Hunter Team."],
   },
-  "Docker Desktop is not installed: on Windows it runs the team.": {
-    de: ["Docker Desktop ist nicht installiert: Unter Windows führt es das Team aus.", "Installiere es von docker.com (Docker Desktop für Windows), starte es und tippe auf Erneut versuchen."],
-    es: ["Docker Desktop no está instalado: en Windows es el que ejecuta el equipo.", "Instálalo desde docker.com (Docker Desktop para Windows), ábrelo y pulsa Reintentar."],
-    fr: ["Docker Desktop n’est pas installé : sous Windows, c’est lui qui fait tourner l’équipe.", "Installe-le depuis docker.com (Docker Desktop pour Windows), lance-le et appuie sur Réessayer."],
-    hu: ["A Docker Desktop nincs telepítve: Windowson ez futtatja a csapatot.", "Telepítsd a docker.com oldalról (Docker Desktop Windowsra), indítsd el, majd nyomd meg az Újra gombot."],
-    pt: ["O Docker Desktop não está instalado: no Windows é ele que executa a equipa.", "Instala-o a partir de docker.com (Docker Desktop para Windows), abre-o e carrega em Tentar novamente."],
-  },
-  "Docker Desktop is installed but not running.": {
-    de: ["Docker Desktop ist installiert, läuft aber nicht.", "Öffne es über das Startmenü, warte, bis die Engine läuft, und tippe auf Erneut versuchen."],
-    es: ["Docker Desktop está instalado, pero no está en marcha.", "Ábrelo desde el menú Inicio, espera a que el motor esté en marcha y pulsa Reintentar."],
-    fr: ["Docker Desktop est installé mais n’est pas lancé.", "Ouvre-le depuis le menu Démarrer, attends que son moteur tourne et appuie sur Réessayer."],
-    hu: ["A Docker Desktop telepítve van, de nem fut.", "Nyisd meg a Start menüből, várd meg, amíg a motorja elindul, majd nyomd meg az Újra gombot."],
-    pt: ["O Docker Desktop está instalado, mas não está em execução.", "Abre-o a partir do menu Iniciar, espera que o motor esteja em execução e carrega em Tentar novamente."],
+  "WSL is not ready: on Windows it runs the team’s Podman machine.": {
+    de: ["WSL ist nicht bereit: Unter Windows führt es die Podman-Maschine des Teams aus.", "Öffne den Microsoft Store, installiere oder aktualisiere „Windows-Subsystem für Linux“, starte den Computer neu und tippe auf Erneut versuchen."],
+    es: ["WSL no está listo: en Windows es el que ejecuta la máquina Podman del equipo.", "Abre Microsoft Store, instala o actualiza «Subsistema de Windows para Linux», reinicia el ordenador y pulsa Reintentar."],
+    fr: ["WSL n’est pas prêt : sous Windows, c’est lui qui fait tourner la machine Podman de l’équipe.", "Ouvre le Microsoft Store, installe ou mets à jour « Sous-système Windows pour Linux », redémarre l’ordinateur et appuie sur Réessayer."],
+    hu: ["A WSL nem áll készen: Windowson ez futtatja a csapat Podman-gépét.", "Nyisd meg a Microsoft Store-t, telepítsd vagy frissítsd a „Linuxos Windows-alrendszer” alkalmazást, indítsd újra a számítógépet, majd nyomd meg az Újra gombot."],
+    pt: ["O WSL não está pronto: no Windows é ele que executa a máquina Podman da equipa.", "Abre a Microsoft Store, instala ou atualiza o «Subsistema Windows para Linux», reinicia o computador e carrega em Tentar novamente."],
   },
   "The installed team version does not match the one this app needs.": {
     de: ["Die installierte Teamversion entspricht nicht der von dieser App benötigten Version.", "Aktualisiere Job Hunter Team auf die neueste Version und wiederhole die Einrichtung."],
@@ -626,8 +619,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
 
   podman_missing: translated("The container engine (Podman) was not installed."),
   podman_not_ready: translated("The container engine is installed but does not answer."),
-  docker_desktop_missing: translated("Docker Desktop is not installed: on Windows it runs the team."),
-  docker_desktop_not_running: translated("Docker Desktop is installed but not running."),
+  wsl_not_ready: translated("WSL is not ready: on Windows it runs the team’s Podman machine."),
   podman_start_failed: translated("The container engine did not start."),
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
   podman_machine_recreate_failed: translated("The JHT Podman machine was not recreated."),

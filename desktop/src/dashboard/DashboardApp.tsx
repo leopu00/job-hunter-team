@@ -49,6 +49,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  readPreviousLocalData,
   recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
@@ -313,6 +314,7 @@ export default function DashboardApp() {
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
+  const [previousLocalData, setPreviousLocalData] = useState(false);
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
@@ -443,6 +445,9 @@ export default function DashboardApp() {
     let active = true;
     void readDesktopPlatform().then((detected) => {
       if (active) setPlatform(detected);
+    });
+    void readPreviousLocalData().then((found) => {
+      if (active) setPreviousLocalData(found);
     });
     return () => { active = false; };
   }, []);
@@ -1156,6 +1161,7 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRecreatePodmanMachine={recreatePodmanMachine}
+        previousLocalData={previousLocalData}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
       />

@@ -321,17 +321,11 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The container engine (Podman) was not installed.",
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
   ),
-  docker_desktop_missing: copy(
-    "Docker Desktop non è installato: su Windows è lui a far girare il team.",
-    "Installalo da docker.com (Docker Desktop per Windows), avvialo e premi Riprova.",
-    "Docker Desktop is not installed: on Windows it runs the team.",
-    "Install it from docker.com (Docker Desktop for Windows), start it and press Try again.",
-  ),
-  docker_desktop_not_running: copy(
-    "Docker Desktop è installato ma non è acceso.",
-    "Aprilo dal menu Start, aspetta che il motore sia avviato e premi Riprova.",
-    "Docker Desktop is installed but not running.",
-    "Open it from the Start menu, wait until its engine is running and press Try again.",
+  wsl_not_ready: copy(
+    "WSL non è pronto: su Windows è lui a far girare la macchina Podman del team.",
+    "Apri il Microsoft Store, installa o aggiorna «Sottosistema Windows per Linux», riavvia il computer e premi Riprova.",
+    "WSL is not ready: on Windows it runs the team’s Podman machine.",
+    "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
   ),
   podman_not_ready: copy(
     "Il motore dei container è installato ma non risponde.",
@@ -1011,7 +1005,6 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
  */
 export const NOT_EMITTED: ReadonlySet<string> = new Set([
   // Rust: only in the message table of onboarding::failure().
-  "podman_start_failed",
   "runtime_wrapper_install_failed",
   "command_timeout",
   // TS: handled by the UI, produced by no backend.
