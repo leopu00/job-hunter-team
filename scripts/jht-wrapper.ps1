@@ -365,7 +365,9 @@ jht - Job Hunter Team
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
     jht telegram status    stato del servizio Telegram isolato
-    jht telegram pair ROLE abbina un token nuovo via stdin, fuori dagli agenti
+    jht telegram pair ROLE chiede il token senza eco sul computer host
+                           Per automazioni: JSON su stdin. Non salvare il token
+                           in ~/.jht; cancella subito file usati fuori da li'.
     jht reset              cancella configurazione e volumi del broker
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
@@ -537,7 +539,8 @@ function Invoke-TelegramAdmin {
 function Invoke-TelegramPair {
   param([string]$Role)
   if ($Role -notin @('assistente', 'capitano', 'mentor')) {
-    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor> < bot.json'
+    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor>'
+    Write-Err 'Interattivo: il token viene chiesto senza eco. Automazioni: JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da li''.'
     return 2
   }
   $agentId = Get-RunningComposeServiceId $Container
@@ -552,7 +555,31 @@ function Invoke-TelegramPair {
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
   $adminArgs = @('bots', 'pair', $Role)
   foreach ($digest in $digests) { $adminArgs += @('--legacy-digest', $digest) }
-  $payload = [Console]::In.ReadToEnd()
+  $token = $null
+  $chatId = $null
+  if ([Console]::IsInputRedirected) {
+    $payload = [Console]::In.ReadToEnd()
+  } else {
+    Write-Info 'Se esisteva gia'' un bot, revoca il token precedente in BotFather e usa quello nuovo.'
+    $secureToken = Read-Host 'Token del bot (input nascosto)' -AsSecureString
+    $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer) }
+    $secureToken = $null
+    $chatId = Read-Host 'Chat ID dell''utente'
+    if ($token -notmatch '^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$') {
+      $token = $null; $chatId = $null
+      Write-Err 'bot_token_invalid: controlla il token generato da BotFather.'
+      return 1
+    }
+    if ($chatId -notmatch '^-?[0-9]{1,20}$') {
+      $token = $null; $chatId = $null
+      Write-Err 'chat_id_invalid: inserisci l''identificativo numerico della chat.'
+      return 1
+    }
+    $payload = @{ bot_token = $token; chat_id = $chatId } | ConvertTo-Json -Compress
+    $token = $null; $chatId = $null
+  }
   if (-not $payload) { Write-Err 'input_not_json: passa bot_token e chat_id come JSON su stdin.'; return 2 }
   $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
   $payload = $null

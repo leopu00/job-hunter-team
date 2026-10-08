@@ -879,9 +879,11 @@ telegram_legacy() {
 
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
+  local token="" chat_id="" pair_rc=0
   local -a digest_args=()
   case "$role" in assistente|capitano|mentor) ;; *)
-    err "uso: jht telegram pair <assistente|capitano|mentor> < bot.json"
+    err "uso: jht telegram pair <assistente|capitano|mentor>"
+    err "Interattivo: il token viene chiesto senza eco. Automazioni: JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da lì."
     return 2
     ;;
   esac
@@ -900,10 +902,48 @@ telegram_pair() {
   fi
 
   was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
-  telegram_admin bots pair "$role" "${digest_args[@]}" || {
+  if [ -t 0 ]; then
+    info "Se esisteva già un bot, revoca il token precedente in BotFather e usa quello nuovo."
+    printf 'Token del bot (input nascosto): ' >&2
+    if ! IFS= read -rs token; then
+      printf '\n' >&2
+      err "input_interrotto: token non letto."
+      return 1
+    fi
+    printf "\nChat ID dell'utente: " >&2
+    if ! IFS= read -r chat_id; then
+      unset token
+      err "input_interrotto: chat id non letto."
+      return 1
+    fi
+    if [[ ! "$token" =~ ^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$ ]]; then
+      unset token chat_id
+      err "bot_token_invalid: controlla il token generato da BotFather."
+      return 1
+    fi
+    if [[ ! "$chat_id" =~ ^-?[0-9]{1,20}$ ]]; then
+      unset token chat_id
+      err "chat_id_invalid: inserisci l'identificativo numerico della chat."
+      return 1
+    fi
+    if printf '{"bot_token":"%s","chat_id":"%s"}' "$token" "$chat_id" \
+        | telegram_admin bots pair "$role" "${digest_args[@]}"; then
+      pair_rc=0
+    else
+      pair_rc=$?
+    fi
+    unset token chat_id
+  else
+    if telegram_admin bots pair "$role" "${digest_args[@]}"; then
+      pair_rc=0
+    else
+      pair_rc=$?
+    fi
+  fi
+  if [ "$pair_rc" -ne 0 ]; then
     err "Abbinamento rifiutato. Se esisteva già un bot, revoca il token da BotFather e usa quello nuovo."
-    return 1
-  }
+    return "$pair_rc"
+  fi
   telegram_legacy remove "$role" || {
     err "legacy_cleanup_failed: il nuovo token è al sicuro, ma il token vecchio è ancora in ~/.jht; cutover negato."
     return 1
@@ -1377,7 +1417,9 @@ jht — Job Hunter Team
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
     jht telegram status    stato del servizio Telegram isolato
-    jht telegram pair ROLE abbina un token nuovo via stdin, fuori dagli agenti
+    jht telegram pair ROLE chiede il token senza eco sul computer host
+                           Per automazioni: JSON su stdin. Non salvare il token
+                           in ~/.jht; cancella subito file usati fuori da lì.
     jht reset              cancella configurazione e volumi del broker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
