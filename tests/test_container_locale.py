@@ -25,36 +25,88 @@ Eseguire:
 """
 
 import os
-import re
+
+import yaml
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-COMPOSES = {
-    'docker-compose.yml': os.path.join(REPO_ROOT, 'docker-compose.yml'),
-}
+# Il compose base: ogni servizio che ha un environment dichiara la locale. Da
+# quando c'e' il broker dei segreti i servizi sono due, e il conteggio va fatto
+# per servizio, non sul file intero.
+BASE = os.path.join(REPO_ROOT, 'docker-compose.yml')
+# Gli override si sommano al base: non devono ridichiarare LANG due volte nello
+# stesso servizio, ne' metterci una locale non UTF-8.
+OVERRIDES = [
+    os.path.join(REPO_ROOT, name)
+    for name in ('docker-compose.podman.yml', 'docker-compose.dev.yml')
+    if os.path.exists(os.path.join(REPO_ROOT, name))
+]
 
-# `- LANG=...` nella lista environment. Il `-\s*` e il confine iniziale sono ciò
-# che impedisce a `JHT_LANG=it` di passare per la locale di sistema.
-LANG_RE = re.compile(r'^\s*-\s*LANG=(\S+)\s*$', re.MULTILINE)
-JHT_LANG_RE = re.compile(r'^\s*-\s*JHT_LANG=(\S+)\s*$', re.MULTILINE)
+
+def _environment(service):
+    """Le chiavi e i valori dell'environment, nella forma lista o mappa. La
+    chiave e' confrontata intera: `JHT_LANG` non passa mai per `LANG`."""
+    env = (service or {}).get('environment')
+    if env is None:
+        return None
+    if isinstance(env, dict):
+        return [(str(k), '' if v is None else str(v)) for k, v in env.items()]
+    pairs = []
+    for item in env:
+        key, _, value = str(item).partition('=')
+        pairs.append((key.strip(), value.strip()))
+    return pairs
 
 
-def _read(path):
+class _ComposeLoader(yaml.SafeLoader):
+    """I tag di merge di compose (`!reset`, `!override`) letti come il loro
+    contenuto: qui conta che cosa dichiarano, non come si fondono."""
+
+
+def _compose_tag(loader, node):
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return loader.construct_scalar(node)
+
+
+for _tag in ('!reset', '!override'):
+    _ComposeLoader.add_constructor(_tag, _compose_tag)
+
+
+def _services(path):
     with open(path, encoding='utf-8') as f:
-        return f.read()
+        return (yaml.load(f, Loader=_ComposeLoader) or {}).get('services') or {}
+
+
+def _langs(pairs):
+    return [value for key, value in pairs if key == 'LANG']
+
+
+def _utf8(value):
+    return 'utf-8' in value.lower() or 'utf8' in value.lower()
 
 
 def test_ogni_compose_dichiara_una_locale_utf8():
-    for name, path in COMPOSES.items():
-        found = LANG_RE.findall(_read(path))
+    services = _services(BASE)
+    assert services, "docker-compose.yml: nessun servizio"
+    for name, service in services.items():
+        pairs = _environment(service)
+        if pairs is None:
+            continue
+        found = _langs(pairs)
         assert found, (
-            f"{name}: manca `- LANG=...` nella sezione environment. Senza, "
+            f"docker-compose.yml, servizio {name}: manca `LANG=...` nell'environment. Senza, "
             "LC_CTYPE resta POSIX e i pane si vedono con `_` al posto delle accentate."
         )
-        assert len(found) == 1, f"{name}: LANG dichiarata {len(found)} volte"
-        assert 'utf-8' in found[0].lower() or 'utf8' in found[0].lower(), (
-            f"{name}: LANG={found[0]} non è una locale UTF-8"
-        )
+        assert len(found) == 1, f"docker-compose.yml, servizio {name}: LANG dichiarata {len(found)} volte"
+        assert _utf8(found[0]), f"docker-compose.yml, servizio {name}: LANG={found[0]} non e' una locale UTF-8"
+    for path in OVERRIDES:
+        for name, service in _services(path).items():
+            found = _langs(_environment(service) or [])
+            assert len(found) <= 1, f"{os.path.basename(path)}, servizio {name}: LANG dichiarata {len(found)} volte"
+            assert all(_utf8(v) for v in found), f"{os.path.basename(path)}, servizio {name}: LANG non UTF-8"
 
 
 def test_lang_e_jht_lang_restano_due_variabili_distinte():
@@ -63,9 +115,10 @@ def test_lang_e_jht_lang_restano_due_variabili_distinte():
     La trappola del ticket: chi «vede LANG» dentro `JHT_LANG` potrebbe rinominare
     l'una nell'altra credendo di semplificare. Sono due cose diverse — una la
     sceglie l'utente al wizard fra en|it, l'altra è neutra e vale per tutte e 7
-    le lingue del prodotto.
+    le lingue del prodotto. Vale per il servizio del team, quello che ha la
+    lingua del prodotto.
     """
-    for name, path in COMPOSES.items():
-        text = _read(path)
-        assert JHT_LANG_RE.search(text), f"{name}: sparita JHT_LANG (lingua del prodotto)"
-        assert LANG_RE.search(text), f"{name}: sparita LANG (locale di sistema)"
+    pairs = _environment(_services(BASE)['jht'])
+    keys = [key for key, _ in pairs]
+    assert 'JHT_LANG' in keys, "docker-compose.yml: sparita JHT_LANG (lingua del prodotto)"
+    assert 'LANG' in keys, "docker-compose.yml: sparita LANG (locale di sistema)"
