@@ -204,3 +204,15 @@ def test_the_supervisor_runs_websockify_quiet_and_x11vnc_interactive_on_loopback
     x11vnc = re.search(r'\["x11vnc".*?\]', source, re.S).group(0)
     assert "-localhost" in x11vnc and "-viewonly" not in x11vnc
     assert "screenshot" not in source.lower().replace("no screenshots", "")
+
+
+def test_a_stop_with_no_live_session_touches_nothing(env, monkeypatch):
+    """The desktop always calls `--stop` when its window closes, also after a
+    session ended by itself: that stop must be harmless."""
+    killed = []
+    monkeypatch.setattr(view.os, "killpg", lambda pid, sig: killed.append(pid))
+    assert view.stop() == {"ok": True, "view": "idle"}
+    # A session record whose supervisor is gone counts as no session.
+    (env / "run" / "session.json").write_text(json.dumps({"supervisor_pid": 2 ** 22 + 7}))
+    assert view.stop() == {"ok": True, "view": "idle"}
+    assert killed == []
