@@ -322,7 +322,8 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
 }
 
 export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine }: OnboardingFlowProps) {
-  const localRuntimeSupported = platform === "macos" || platform === "linux";
+  // Windows runs the team locally too, with Docker Desktop (since 09/10/2026).
+  const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
   const [step, setStep] = useState(0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
   const [provider, setProvider] = useState<SubscriptionProvider | null>(null);
@@ -399,9 +400,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <p className="onboarding-eyebrow">Dove lavorerà il team</p><h2 ref={headingRef} tabIndex={-1}>Scegli l’ambiente.</h2>
             {localRuntimeSupported
               ? <p className="onboarding-lede">Puoi eseguire tutto su questo computer oppure collegare una VPS già disponibile.</p>
-              : <p className="onboarding-lede">{platform === "windows" ? "Su Windows 0.4 il team deve essere eseguito su una VPS Linux. L’esecuzione locale sarà disponibile in una versione successiva." : "Su questa piattaforma il team deve essere eseguito su una VPS Linux. L’esecuzione locale non è ancora disponibile."}</p>}
+              : <p className="onboarding-lede">Su questa piattaforma il team deve essere eseguito su una VPS Linux. L’esecuzione locale non è ancora disponibile.</p>}
             <div className="onboarding-choice-grid" role="radiogroup" aria-label="Ambiente di esecuzione">
-              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>Podman e container locali, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>}
+              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>Questo computer</strong><small>{platform === "windows" ? "Docker Desktop e container locali" : "Podman e container locali"}, dati sotto il tuo controllo.</small><span className="onboarding-choice__check">✓</span></button>}
               <button data-radio-value="vps" tabIndex={host.kind === "vps" || !localRuntimeSupported ? 0 : -1} className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onKeyDown={(event) => moveRadio(event, localRuntimeSupported ? ["local", "vps"] as const : ["vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost(emptyVpsHost())}><span className="onboarding-choice__icon">VPS</span><strong>Server VPS</strong><small>Team sempre acceso su una macchina remota.</small><span className="onboarding-choice__check">✓</span></button>
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">

@@ -743,6 +743,14 @@ fn failure(code: &'static str) -> OnboardingError {
             "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
             true,
         ),
+        "docker_desktop_missing" => (
+            "Docker Desktop non è installato: su Windows fa girare il team.",
+            true,
+        ),
+        "docker_desktop_not_running" => (
+            "Docker Desktop è installato ma non è acceso.",
+            true,
+        ),
         // Retrying cannot help: the machine has to be recreated, and only after
         // the person confirms it (onboarding_podman_machine_recreate).
         PODMAN_MACHINE_MOUNTS_HOME => (
@@ -1040,12 +1048,19 @@ fn valid_team_id(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
-fn wrapper_candidates(home: &Path) -> [PathBuf; 3] {
-    [
+#[cfg(not(windows))]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![
         home.join(".local/bin/jht"),
         PathBuf::from("/usr/local/bin/jht"),
         PathBuf::from("/opt/homebrew/bin/jht"),
     ]
+}
+
+/// Where install.ps1 publishes the PowerShell wrapper.
+#[cfg(windows)]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join(".local").join("bin").join("jht.ps1")]
 }
 
 fn wrapper_path_from_home(home: &Path) -> Option<PathBuf> {
@@ -1092,12 +1107,24 @@ fn valid_host_wrapper_file(path: &Path) -> bool {
         .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
 }
 
+#[cfg(not(windows))]
 fn valid_wrapper_file(path: &Path) -> bool {
     wrapper_source(path).is_some_and(|source| {
         wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     })
+}
+
+/// jht.ps1 with the desktop's protocol lines, exactly as install.ps1 recorded
+/// it in the runtime's integrity manifest (with the compose file and the ACL
+/// helper it dot-sources).
+#[cfg(windows)]
+fn valid_wrapper_file(path: &Path) -> bool {
+    use crate::windows_runtime::{runtime_dir, wrapper_bundle_valid, wrapper_has_protocols};
+    wrapper_source(path).is_some_and(|source| wrapper_has_protocols(&source))
+        && runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|runtime| wrapper_bundle_valid(path, &runtime))
 }
 
 #[cfg(target_os = "macos")]
@@ -1496,11 +1523,99 @@ fn with_downloaded_installer<T>(
     attest_then(bytes, expected, execute)
 }
 
+/// Windows: Docker Desktop first (it runs the team), then the runtime that
+/// install.ps1 publishes, installed only when no verified wrapper is there.
+/// install.ps1 runs only if it has the compiled digest, from a private
+/// temporary file, through Windows PowerShell by its absolute path.
+#[cfg(windows)]
+fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    use crate::windows_runtime::{
+        docker_state, installer_invocation, powershell_path, INSTALL_PS1_SHA256, INSTALL_PS1_URL,
+    };
+    docker_state(run_program(
+        "docker",
+        ["info", "--format", "{{.ServerVersion}}"],
+        None,
+        Duration::from_secs(25),
+    ))
+    .map_err(failure)?;
+    if let Some(wrapper) = wrapper_path(app) {
+        trace_local_runtime("runtime", "install_reused");
+        return Ok(wrapper);
+    }
+    let expected = expected_installer_digest(INSTALL_PS1_SHA256)?;
+    let bytes = download_verified_bytes(INSTALL_PS1_URL, expected)?;
+    attest_then(bytes, expected, |installer| {
+        let dir = std::env::temp_dir().join(format!(
+            "jht-install-{}-{}",
+            std::process::id(),
+            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).map_err(|_| failure("storage_failed"))?;
+        let result = (|| {
+            crate::private_acl::protect_dir(&dir).map_err(|_| failure("permissions_failed"))?;
+            let script = dir.join("install.ps1");
+            fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
+            crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
+            let shell = powershell_path(std::env::var_os("SystemRoot"));
+            ensure_success(
+                run_program(
+                    shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
+                    installer_invocation(&script),
+                    None,
+                    PREPARE_TIMEOUT,
+                ),
+                "runtime_install_failed",
+            )
+        })();
+        let _ = fs::remove_dir_all(&dir);
+        result
+    })?;
+    wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+}
+
+/// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
+/// when no digest was compiled in.
+#[cfg(windows)]
+fn download_verified_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+    expected_installer_digest(expected_digest)?;
+    let target = std::env::temp_dir().join(format!(
+        "jht-download-{}-{}.ps1",
+        std::process::id(),
+        SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let target_text = target.to_str().ok_or_else(|| failure("storage_failed"))?;
+        let downloaded = run_program(
+            "curl.exe",
+            ["-fsSL", url, "-o", target_text],
+            None,
+            Duration::from_secs(90),
+        )
+        .map_err(failure)?;
+        if !downloaded.success() {
+            return Err(failure("runtime_download_failed"));
+        }
+        let metadata = fs::metadata(&target).map_err(|_| failure("runtime_download_failed"))?;
+        if metadata.len() == 0 || metadata.len() > MAX_INSTALLER_BYTES as u64 {
+            return Err(failure("installer_payload_invalid"));
+        }
+        fs::read(&target).map_err(|_| failure("runtime_download_failed"))
+    })();
+    let _ = fs::remove_file(&target);
+    result
+}
+
 fn install_local(
     app: &tauri::AppHandle,
     diagnostics: Option<&OnboardingDiagnosticSink>,
 ) -> Result<PathBuf, OnboardingError> {
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        let _ = diagnostics;
+        return install_local_windows(app);
+    }
+    #[cfg(not(any(unix, windows)))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
     {
@@ -1856,7 +1971,18 @@ pub(crate) fn run_verified_local_wrapper(
             timeout,
         );
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        use crate::windows_runtime::{powershell_path, script_invocation};
+        let shell = powershell_path(std::env::var_os("SystemRoot"));
+        return run_program(
+            shell.to_str().ok_or("runtime_missing")?,
+            script_invocation(wrapper, args),
+            input,
+            timeout,
+        );
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     run_program(
         wrapper.to_str().ok_or("runtime_missing")?,
         args,
@@ -3044,7 +3170,14 @@ pub(crate) fn onboarding_provider_login(
                     cmd.arg("-q").arg("/dev/null").arg(program).args(invocation);
                     cmd
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(windows)]
+                {
+                    use crate::windows_runtime::{powershell_path, script_invocation};
+                    let mut cmd = Command::new(powershell_path(std::env::var_os("SystemRoot")));
+                    cmd.args(script_invocation(&wrapper, &LocalCliOperation::OauthLogin.argv()));
+                    cmd
+                }
+                #[cfg(not(any(target_os = "macos", windows)))]
                 {
                     let mut cmd = Command::new(wrapper);
                     cmd.args(LocalCliOperation::OauthLogin.argv());

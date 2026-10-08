@@ -321,6 +321,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The container engine (Podman) was not installed.",
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
   ),
+  docker_desktop_missing: copy(
+    "Docker Desktop non è installato: su Windows è lui a far girare il team.",
+    "Installalo da docker.com (Docker Desktop per Windows), avvialo e premi Riprova.",
+    "Docker Desktop is not installed: on Windows it runs the team.",
+    "Install it from docker.com (Docker Desktop for Windows), start it and press Try again.",
+  ),
+  docker_desktop_not_running: copy(
+    "Docker Desktop è installato ma non è acceso.",
+    "Aprilo dal menu Start, aspetta che il motore sia avviato e premi Riprova.",
+    "Docker Desktop is installed but not running.",
+    "Open it from the Start menu, wait until its engine is running and press Try again.",
+  ),
   podman_not_ready: copy(
     "Il motore dei container è installato ma non risponde.",
     "Riprova. Se si ripete, riavvia il computer.",

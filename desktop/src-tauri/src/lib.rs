@@ -17,6 +17,7 @@ mod profile_import;
 mod profile_migration;
 mod runtime_host;
 mod voice_input;
+mod windows_runtime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

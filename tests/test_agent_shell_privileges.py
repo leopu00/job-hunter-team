@@ -156,10 +156,18 @@ def test_the_repair_names_only_callers_that_exist():
     text = REPAIR.read_text(encoding="utf-8")
     assert "setup_service.gd" not in text and "_repair_mount_ownership" not in text
     assert "jht-wrapper.ps1 (Repair-MountOwnership)" in text
-    # The Tauri desktop starts no local runtime off Unix: it never needs the repair.
+    # On Windows the Tauri desktop starts the local runtime only through the
+    # installed jht.ps1, whose every `up` repairs first
+    # (test_every_up_of_the_windows_wrapper_repairs_first): it never runs
+    # compose or docker itself.
     onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     install = onboarding[onboarding.index("fn install_local("):]
-    assert '#[cfg(not(unix))]\n    return Err(failure("runtime_install_unsupported"));' in install[:400]
+    assert "#[cfg(windows)]" in install[:400] and "return install_local_windows(app);" in install[:400]
+    windows = onboarding[onboarding.index("fn install_local_windows("):]
+    windows = windows[: windows.index("\n}\n")]
+    assert "installer_invocation(&script)" in windows
+    for direct in ("compose", '"up"', "docker run", "chown"):
+        assert direct not in windows, direct
 
 
 # ── What used sudo ───────────────────────────────────────────────────────

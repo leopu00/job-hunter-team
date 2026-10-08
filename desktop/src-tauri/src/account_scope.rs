@@ -273,26 +273,21 @@ pub(crate) fn validate_local_runtime(
     if !local_runtime_allowed(std::env::consts::OS) {
         return Err("local_runtime_unsupported");
     }
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scope);
-        unreachable!("Windows is denied before local runtime access")
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let home = local_owner_marker_path(app)?
-            .parent()
-            .ok_or("local_account_owner_unavailable")?
-            .to_path_buf();
-        validate_or_claim_local_owner(&home, scope)
-    }
+    let home = local_owner_marker_path(app)?
+        .parent()
+        .ok_or("local_account_owner_unavailable")?
+        .to_path_buf();
+    validate_or_claim_local_owner(&home, scope)
 }
 
+/// The team runs on this computer on macOS (Podman), Linux and Windows
+/// (Docker Desktop, through install.ps1 and jht-wrapper.ps1). Windows was
+/// refused until 09/10/2026; the account's ownership of ~/.jht applies on
+/// every system alike.
 fn local_runtime_allowed(target_os: &str) -> bool {
-    target_os != "windows"
+    matches!(target_os, "macos" | "linux" | "windows")
 }
 
-#[cfg(not(target_os = "windows"))]
 pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .home_dir()
@@ -300,7 +295,6 @@ pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf,
         .map_err(|_| "local_account_owner_unavailable")
 }
 
-#[cfg(not(target_os = "windows"))]
 pub(crate) fn verify_local_runtime_owner(
     marker: &Path,
     scope: &AccountScope,
@@ -308,7 +302,6 @@ pub(crate) fn verify_local_runtime_owner(
     verify_local_owner_marker(marker, scope)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     let marker = home.join(".desktop-account-scope");
     if marker.exists() {
@@ -340,7 +333,6 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
     verify_local_owner_marker(&marker, scope)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     // These are durable artifacts written by the Electron local flow or by
     // the authoritative installer it invoked. Merely finding an arbitrary
@@ -382,7 +374,6 @@ fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     Ok(false)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn verify_local_owner_marker(marker: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     let metadata = fs::symlink_metadata(marker).map_err(|_| "local_account_owner_unavailable")?;
     if !metadata.file_type().is_file() || metadata.len() > 80 {
@@ -396,7 +387,6 @@ fn verify_local_owner_marker(marker: &Path, scope: &AccountScope) -> Result<(), 
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 fn create_private_dir(path: &Path) -> Result<(), &'static str> {
     #[cfg(unix)]
     {
@@ -408,11 +398,15 @@ fn create_private_dir(path: &Path) -> Result<(), &'static str> {
             .and_then(|_| fs::set_permissions(path, fs::Permissions::from_mode(0o700)))
             .map_err(|_| "local_account_owner_unavailable")
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        fs::create_dir_all(path).map_err(|_| "local_account_owner_unavailable")?;
+        crate::private_acl::protect_dir(path).map_err(|_| "local_account_owner_unavailable")
+    }
+    #[cfg(not(any(unix, windows)))]
     fs::create_dir_all(path).map_err(|_| "local_account_owner_unavailable")
 }
 
-#[cfg(not(target_os = "windows"))]
 fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'static str> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
@@ -422,11 +416,16 @@ fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'st
         options.mode(0o600);
     }
     match options.open(marker) {
-        Ok(mut file) => file
-            .write_all(scope.digest().as_bytes())
-            .and_then(|_| file.write_all(b"\n"))
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "local_account_owner_unavailable"),
+        Ok(mut file) => {
+            file.write_all(scope.digest().as_bytes())
+                .and_then(|_| file.write_all(b"\n"))
+                .and_then(|_| file.sync_all())
+                .map_err(|_| "local_account_owner_unavailable")?;
+            #[cfg(windows)]
+            crate::private_acl::protect_file(marker)
+                .map_err(|_| "local_account_owner_unavailable")?;
+            Ok(())
+        }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(_) => Err("local_account_owner_unavailable"),
     }
@@ -654,7 +653,6 @@ fn playground_reset_enabled(debug_build: bool) -> Result<(), &'static str> {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 fn orphaned_local_scope_at(
     profiles_root: &Path,
     owner_marker: &Path,
@@ -704,7 +702,6 @@ fn orphaned_local_scope_at(
     matched.ok_or("playground_reset_owner_unattested")
 }
 
-#[cfg(not(target_os = "windows"))]
 fn recover_playground_orphan_at(
     debug_build: bool,
     profiles_root: &Path,
@@ -734,7 +731,6 @@ fn recover_playground_orphan_at(
     Ok(true)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn reset_playground_scope_at(
     profiles_root: &Path,
     owner_marker: &Path,
@@ -786,12 +782,6 @@ pub(crate) fn runtime_playground_local_reset(
     profile_id: String,
 ) -> Result<(), AccountScopeError> {
     playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scopes, chat, onboarding, profile_id);
-        return Err(failure("local_runtime_unsupported"));
-    }
-    #[cfg(not(target_os = "windows"))]
     {
         let profiles = local_profiles_dir(&app).map_err(failure)?;
         let marker = local_owner_marker_path(&app).map_err(failure)?;
@@ -799,7 +789,7 @@ pub(crate) fn runtime_playground_local_reset(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
-    crate::broker_view::teardown(&app);
+            crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
@@ -816,12 +806,6 @@ pub(crate) fn runtime_playground_local_orphan_recover(
     onboarding: State<'_, onboarding::OnboardingNativeState>,
 ) -> Result<bool, AccountScopeError> {
     playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scopes, chat, onboarding);
-        return Err(failure("local_runtime_unsupported"));
-    }
-    #[cfg(not(target_os = "windows"))]
     {
         let app_data = app
             .path()
@@ -833,7 +817,7 @@ pub(crate) fn runtime_playground_local_orphan_recover(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
-    crate::broker_view::teardown(&app);
+            crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
@@ -876,10 +860,13 @@ mod tests {
     }
 
     #[test]
-    fn windows_local_runtime_is_unconditionally_denied() {
-        assert!(!local_runtime_allowed("windows"));
+    fn windows_runs_the_team_locally_like_macos_and_linux() {
+        // Red if the Windows block of 03/10 (66e744298) comes back.
+        assert!(local_runtime_allowed("windows"));
         assert!(local_runtime_allowed("macos"));
         assert!(local_runtime_allowed("linux"));
+        assert!(!local_runtime_allowed("ios"));
+        assert!(!local_runtime_allowed(""));
     }
 
     #[test]

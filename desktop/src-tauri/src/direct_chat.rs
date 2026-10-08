@@ -433,9 +433,6 @@ fn run_connection(
 ) -> Result<ProcessResult, DirectChatError> {
     match &connection.validated {
         ValidatedHost::Local => {
-            #[cfg(target_os = "windows")]
-            return Err(failure("local_runtime_unsupported"));
-            #[cfg(not(target_os = "windows"))]
             {
                 crate::account_scope::verify_local_runtime_owner(
                     connection
@@ -498,17 +495,12 @@ fn connect_impl(
 ) -> Result<Connection, DirectChatError> {
     let validated = validate_host(app, &host).map_err(failure)?;
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
-        ValidatedHost::Local => {
-            #[cfg(target_os = "windows")]
-            return Err(failure("local_runtime_unsupported"));
-            #[cfg(not(target_os = "windows"))]
-            (
+        ValidatedHost::Local => (
                 Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
                 Some(crate::account_scope::local_owner_marker_path(app).map_err(failure)?),
                 None,
                 None,
-            )
-        }
+            ),
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_tunnel(&validated)?;
             (None, None, Some(path), Some(child))

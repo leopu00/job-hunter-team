@@ -169,9 +169,21 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
-  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+  it("offers this computer on Windows, with Docker Desktop", async () => {
+    // Red if the Windows block of 03/10 (66e744298) comes back.
     const user = userEvent.setup();
     renderFlow({ platform: "windows" });
+    await begin(user);
+    const local = screen.getByRole("radio", { name: /questo computer/i });
+    expect(local).toHaveAttribute("aria-checked", "true");
+    expect(local).toHaveTextContent("Docker Desktop");
+    expect(screen.queryByText(/VPS Linux/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
+  });
+
+  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "other" });
     await begin(user);
     expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
@@ -262,7 +274,7 @@ describe("OnboardingFlow technical setup", () => {
     unmount();
 
     renderFlow({
-      platform: "windows",
+      platform: "other",
       runtime: { status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false, message: "Macchina." },
       onRecreatePodmanMachine,
     });
