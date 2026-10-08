@@ -1,6 +1,8 @@
 /** Test E2E batch 14 — SecretRef config, jht setup/doctor/reset CLI, FloatingChat (Badge rimosso: componente orfano cancellato) */
 import { describe, it, expect } from "vitest";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const WEB = path.resolve(__dirname, "../../../web");
@@ -97,6 +99,46 @@ describe("jht reset CLI", () => {
     expect(src).toContain("function buildDeleteList"); expect(src).toContain("function executeReset");
     expect(src).toContain("function pathExists"); expect(src).toContain("function countFiles");
     expect(src).toContain("Confirm deletion");
+  });
+  it("il protocollo host include i volumi broker nella conferma e segnala il nuovo login", () => {
+    expect(src).toContain("JHT_HOST_RESET_PROTOCOL");
+    expect(src).toContain("HOST_RESET_CONFIRMED_EXIT = 20");
+    for (const volume of ["jht-secrets", "jht-broker-state", "jht-broker-sock"])
+      expect(src).toContain(volume);
+    expect(src).toContain("Portal and mailbox logins will need to be configured again");
+  });
+  it("segnala al wrapper solo un reset confermato e completato", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "jht-reset-host-protocol-"));
+    const config = path.join(home, "jht.config.json");
+    fs.writeFileSync(config, "{}\n");
+    try {
+      const run = spawnSync(
+        process.execPath,
+        ["--input-type=module", "-e",
+          "import { Command } from 'commander'; import { registerResetCommand } from './src/commands/reset.js'; " +
+          "const p = new Command(); registerResetCommand(p); " +
+          "await p.parseAsync(['node','jht','reset','--scope','config','--non-interactive','--confirm-reset']);"],
+        { cwd: CLI, encoding: "utf-8", env: { ...process.env, JHT_HOME: home, JHT_HOST_RESET_PROTOCOL: "1" } },
+      );
+      expect(run.status).toBe(20);
+      expect(fs.existsSync(config)).toBe(false);
+      expect(run.stdout + run.stderr).toContain("jht-broker-state");
+      expect(run.stdout + run.stderr).toContain("sign in to the portals");
+
+      fs.writeFileSync(config, "{}\n");
+      const refused = spawnSync(
+        process.execPath,
+        ["--input-type=module", "-e",
+          "import { Command } from 'commander'; import { registerResetCommand } from './src/commands/reset.js'; " +
+          "const p = new Command(); registerResetCommand(p); " +
+          "await p.parseAsync(['node','jht','reset','--scope','config','--non-interactive']);"],
+        { cwd: CLI, encoding: "utf-8", env: { ...process.env, JHT_HOME: home, JHT_HOST_RESET_PROTOCOL: "1" } },
+      );
+      expect(refused.status).toBe(1);
+      expect(fs.existsSync(config)).toBe(true);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 

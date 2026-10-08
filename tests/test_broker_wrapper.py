@@ -21,6 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
+POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 SECRET = "CANARY-wrapper-app-password-5e1"
 
 FAKE_DOCKER = r"""#!/bin/sh
@@ -28,16 +29,22 @@ log="$FAKE_LOG"
 printf 'ARGV %s\n' "$*" >> "$log"
 [ "$1" = exec ] || exit 0
 shift
-[ "$1" = -i ] && shift
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i|-it) shift ;;
+    -u|--user) shift 2 ;;
+    *) break ;;
+  esac
+done
 target="$1"; shift
 for last; do :; done
 name="$last"
 case "$target:$*" in
-  agent-id:"python3 /app/shared/broker/legacy.py exists "*)
+  agent-id:"/usr/bin/python3 -I /app/shared/broker/legacy.py exists "*)
     [ -e "$FAKE_LEGACY/$name.json" ] ;;
-  agent-id:"python3 /app/shared/broker/legacy.py read "*)
+  agent-id:"/usr/bin/python3 -I /app/shared/broker/legacy.py read "*)
     printf '{"ok": true, "sha256": "x", "b64": "eA=="}\n' ;;
-  agent-id:"python3 /app/shared/broker/legacy.py remove "*)
+  agent-id:"/usr/bin/python3 -I /app/shared/broker/legacy.py remove "*)
     rm -f "$FAKE_LEGACY/$name.json"; printf 'REMOVE %s\n' "$name" >> "$log" ;;
   broker-id:"jht-broker-admin secrets import-legacy "*)
     cat > /dev/null
@@ -102,6 +109,46 @@ def test_a_legacy_file_leaves_jht_home_only_after_the_broker_imported_it(host):
     assert "REMOVE email_monitor" in host.log.read_text()
     assert "jht mail setup" in result.stderr  # the rotation is asked for
     assert (host.runtime / ".broker-legacy-migrated").exists()
+
+
+def test_legacy_python_is_absolute_isolated_and_never_runs_as_container_default(host):
+    (host.legacy / "email_monitor.json").write_text("{}")
+    (host.answers / "email_monitor").write_text('{"ok": true, "secret": "email_monitor", "state": "imported"}')
+
+    result = run(host, "broker_migrate_legacy")
+
+    assert result.returncode == 0, result.stderr
+    legacy_calls = [line for line in host.log.read_text().splitlines() if "legacy.py" in line]
+    assert legacy_calls
+    assert all("exec -u 1001 agent-id /usr/bin/python3 -I /app/shared/broker/legacy.py" in line for line in legacy_calls)
+
+
+def test_both_wrappers_pin_the_legacy_interpreter_and_uid():
+    shell = WRAPPER.read_text(encoding="utf-8")
+    powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+
+    assert shell.count('docker exec -u 1001 "$agent_id" /usr/bin/python3 -I /app/shared/broker/legacy.py') == 4
+    assert powershell.count('docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py') == 4
+    assert not re.search(r"docker exec[^\n]*\bpython3\s+/app/shared/broker/legacy\.py", shell)
+    assert not re.search(r"docker exec[^\n]*\bpython3\s+/app/shared/broker/legacy\.py", powershell)
+
+
+def test_powershell_migration_has_the_shell_markers_errors_and_compose_attestation():
+    source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+
+    assert "$BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'" in source
+    assert "function Invoke-BrokerMigrateLegacyOnce" in source
+    assert "if ($failed) { return 1 }" in source
+    assert "if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker" in source
+    assert "return $code" in source
+    assert "function Get-RunningComposeServiceId" in source
+    assert "com.docker.compose.project" in source
+    assert "com.docker.compose.service" in source
+    assert "$parts[1] -ne $expectedProject" in source
+    broker_up = re.search(r"function Test-BrokerUp \{\n(.*?)\n\}", source, re.S)
+    assert broker_up
+    assert "Get-RunningComposeServiceId $BrokerContainer" in broker_up.group(1)
+    assert "docker ps --format '{{.Names}}'" not in broker_up.group(1)
 
 
 def test_a_reappeared_file_is_removed_never_imported(host):

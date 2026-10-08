@@ -26,6 +26,12 @@ const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
 const CREDS_DIR   = join(JHT_DIR, 'credentials')
 const SESSIONS_DIR = join(JHT_DIR, 'sessions')
+// The host wrapper owns the container volumes. Exit 20 is an internal
+// handshake: the CLI reached the end only after the existing confirmation,
+// so the wrapper may now stop Compose and remove the broker data.
+const HOST_RESET_PROTOCOL = process.env.JHT_HOST_RESET_PROTOCOL === '1'
+const HOST_RESET_CONFIRMED_EXIT = 20
+const BROKER_VOLUMES = ['jht-secrets', 'jht-broker-state', 'jht-broker-sock']
 
 // ── Scope definitions ─────────────────────────────────────────────────────
 
@@ -130,6 +136,13 @@ async function handleReset(opts) {
   // ── Build delete list ─────────────────────────────────────────────────
 
   const list = await buildDeleteList(scope.targets)
+  if (HOST_RESET_PROTOCOL) {
+    list.push(...BROKER_VOLUMES.map(name => ({
+      label: `broker volume: ${name}`,
+      exists: true,
+      hostVolume: true,
+    })))
+  }
   const toDelete = list.filter(t => t.exists)
 
   if (!toDelete.length) {
@@ -140,6 +153,9 @@ async function handleReset(opts) {
   // ── Show preview ──────────────────────────────────────────────────────
 
   clack.log.warn(scope.warn)
+  if (HOST_RESET_PROTOCOL) {
+    clack.log.warn('Broker secrets and state will also be deleted. You will need to sign in to the portals and configure the mailbox again.')
+  }
   clack.log.message(pc.bold('Files that will be deleted:'))
   for (const t of list) {
     if (t.exists)
@@ -159,7 +175,9 @@ async function handleReset(opts) {
     }
   } else {
     const ans = await clack.confirm({
-      message: `Confirm deletion for scope ${pc.bold(scopeKey)}?`,
+      message: HOST_RESET_PROTOCOL
+        ? `Confirm deletion for scope ${pc.bold(scopeKey)}, including broker volumes? Portal and mailbox logins will need to be configured again.`
+        : `Confirm deletion for scope ${pc.bold(scopeKey)}?`,
       initialValue: false,
     })
     if (clack.isCancel(ans) || !ans) { clack.outro(pc.dim('Cancelled')); return }
@@ -177,6 +195,7 @@ async function handleReset(opts) {
   for (const sk of skipped) clack.log.info(pc.dim(`Skipped (not found): ${sk}`))
 
   clack.outro(pc.green(`Reset ${scopeKey} completed — run jht setup to reconfigure`))
+  if (HOST_RESET_PROTOCOL) process.exitCode = HOST_RESET_CONFIRMED_EXIT
 }
 
 // ── Registration ──────────────────────────────────────────────────────────

@@ -41,6 +41,8 @@ $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { '
 # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
 $BrokerContainer = 'jht-broker'
 $LegacySecretNames = @('email_monitor', 'email_transport')
+$BrokerVolumeNames = @('jht-secrets', 'jht-broker-state', 'jht-broker-sock')
+$HostResetConfirmedExit = 20
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
 if (-not $env:HOME) { $env:HOME = $env:USERPROFILE }
@@ -77,6 +79,7 @@ if ($ContainerRuntime -eq 'podman') {
   $env:PODMAN_COMPOSE_WARNING_LOGS = 'false'
 }
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
+$BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
@@ -360,6 +363,7 @@ jht - Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht reset              cancella configurazione e volumi del broker
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -385,7 +389,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail'
+    'setup', 'download', 'mail', 'reset'
   )
 }
 
@@ -439,16 +443,53 @@ function Repair-MountOwnership {
   return $false
 }
 
+function Get-ComposeProjectName {
+  if ($ContainerRuntime -eq 'podman') { return 'jht' }
+  $json = ((& docker compose -f $ComposeFile --project-directory $RuntimeDir config --format json 2>$null) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
+  try {
+    $name = [string](($json | ConvertFrom-Json -ErrorAction Stop).name)
+    if ($name -notmatch '^[a-z0-9][a-z0-9_-]*$') { return $null }
+    return $name
+  } catch { return $null }
+}
+
+function Get-RunningComposeServiceId {
+  param([string]$Service)
+  $expectedProject = Get-ComposeProjectName
+  if (-not $expectedProject) { return $null }
+  $files = @('-f', $ComposeFile)
+  if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, 'ps', '-q')
+  if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
+  $ids = @(& docker @composeArgs 2>$null | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  $found = $null
+  foreach ($id in $ids) {
+    if ($id -notmatch '^[0-9a-fA-F]{12,64}$') { return $null }
+    $details = ((& docker inspect --type container $id --format '{{.State.Running}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}' 2>$null | Select-Object -First 1) -as [string])
+    if (-not $details) { return $null }
+    $parts = $details.Trim().Split('|')
+    if ($parts.Count -ne 3 -or $parts[1] -ne $expectedProject) { return $null }
+    if ($parts[2] -ne $Service) {
+      if ($ContainerRuntime -eq 'podman' -and $parts[2] -in @($Container, $BrokerContainer)) { continue }
+      return $null
+    }
+    if ($parts[0] -ne 'true' -or $found) { return $null }
+    $found = $id
+  }
+  return $found
+}
+
 function Test-BrokerUp {
-  $running = & docker ps --format '{{.Names}}' 2>$null
-  return ($running -split "`n") -contains $BrokerContainer
+  return [bool](Get-RunningComposeServiceId $BrokerContainer)
 }
 
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
 function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
-  if (-not (Test-BrokerUp)) {
+  $brokerId = Get-RunningComposeServiceId $BrokerContainer
+  if (-not $brokerId) {
     Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
     Write-Err 'Cosa fare: jht up'
     return 1
@@ -461,12 +502,12 @@ function Invoke-BrokerAdmin {
     $previousEncoding = $OutputEncoding
     $OutputEncoding = [Text.UTF8Encoding]::new($false)
     try {
-      $InputText | & docker exec -i $BrokerContainer jht-broker-admin @AdminArgs | Out-Host
+      $InputText | & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
     } finally {
       $OutputEncoding = $previousEncoding
     }
   } else {
-    & docker exec -i $BrokerContainer jht-broker-admin @AdminArgs | Out-Host
+    & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
   }
   return $LASTEXITCODE
 }
@@ -475,23 +516,28 @@ function Invoke-BrokerAdmin {
 # li passa al broker in una busta (sha256 + base64). Il broker li importa una
 # volta sola; solo dopo il suo "ok" l'originale si cancella.
 function Invoke-BrokerMigrateLegacy {
-  if (-not (Test-ContainerUp) -or -not (Test-BrokerUp)) { return }
+  $agentId = Get-RunningComposeServiceId 'jht'
+  if (-not $agentId) { return 1 }
+  $brokerId = Get-RunningComposeServiceId $BrokerContainer
+  if (-not $brokerId) { return 1 }
   $migrated = $false
+  $failed = $false
   foreach ($name in $LegacySecretNames) {
-    & docker exec $Container python3 /app/shared/broker/legacy.py exists $name *> $null
+    & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py exists $name *> $null
     if ($LASTEXITCODE -ne 0) { continue }
-    $envelope = (& docker exec $Container python3 /app/shared/broker/legacy.py read $name 2>$null | Select-Object -First 1)
+    $envelope = (& docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py read $name 2>$null | Select-Object -First 1)
     $answer = ''
-    if ($envelope) { $answer = ($envelope | & docker exec -i $BrokerContainer jht-broker-admin secrets import-legacy $name 2>$null) -join '' }
+    if ($envelope) { $answer = ($envelope | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null) -join '' }
     if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
-      & docker exec $Container python3 /app/shared/broker/legacy.py remove $name *> $null
+      & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null
       if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
       $migrated = $true
     } elseif ($answer -match '"ok": true' -and $answer -match '"state": "already_migrated"') {
-      & docker exec $Container python3 /app/shared/broker/legacy.py remove $name *> $null
+      & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null
       Write-Warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json e' ricomparso dopo la migrazione; rimosso senza importarlo."
     } else {
       Write-Warn "legacy_migration_failed: $name resta in ~/.jht/credentials."
+      $failed = $true
     }
   }
   if ($migrated) {
@@ -499,6 +545,99 @@ function Invoke-BrokerMigrateLegacy {
     Write-Warn 'genera una nuova password per app dal tuo provider e salvala con: jht mail setup'
     Write-Warn "Fino ad allora gli agenti leggono la posta, ma l'invio resta fermo (mail_rotation_pending)."
   }
+  if ($failed) { return 1 }
+  return 0
+}
+
+function Invoke-BrokerMigrateLegacyOnce {
+  if (-not ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):")) { return 0 }
+  if (Test-Path -LiteralPath $BrokerLegacyMarker) { return 0 }
+  $code = Invoke-BrokerMigrateLegacy
+  if ($code -eq 0) {
+    New-Item -ItemType File -Path $BrokerLegacyMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  }
+  # Come nel wrapper sh, un errore della migrazione non fa fallire `up`: il
+  # marker resta assente e il tentativo verra' ripetuto al prossimo avvio.
+  return 0
+}
+
+function Remove-BrokerResetData {
+  $project = Get-ComposeProjectName
+  if (-not $project) {
+    Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
+    return 1
+  }
+  Invoke-Compose down
+  if ($LASTEXITCODE -ne 0) {
+    Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
+    return 1
+  }
+  $failed = $false
+  foreach ($logical in $BrokerVolumeNames) {
+    if ($ContainerRuntime -eq 'podman') {
+      # podman-compose 1.6 omette la label col nome logico del volume. La
+      # label progetto piu' il nome esatto prodotto da Compose confinano la
+      # cancellazione al solo volume richiesto.
+      $ids = @(& docker volume ls -q `
+        --filter "label=com.docker.compose.project=$project" 2>$null |
+        ForEach-Object { "$($_)".Trim() } |
+        Where-Object { $_ -eq "${project}_${logical}" })
+    } else {
+      $ids = @(& docker volume ls -q `
+        --filter "label=com.docker.compose.project=$project" `
+        --filter "label=com.docker.compose.volume=$logical" 2>$null |
+        ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+    }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Err "reset: ricerca del volume $logical non riuscita."
+      $failed = $true
+      continue
+    }
+    if ($ids.Count -eq 0) {
+      Write-Info "Saltato (non trovato): volume broker $logical"
+      continue
+    }
+    foreach ($id in $ids) {
+      if ($id -notmatch '^[A-Za-z0-9_.-]+$') {
+        Write-Err "reset: nome volume non valido per $logical; rimozione negata."
+        $failed = $true
+        continue
+      }
+      & docker volume rm $id *> $null
+      if ($LASTEXITCODE -eq 0) {
+        Write-Info "Cancellato: volume broker $logical ($id)"
+      } else {
+        Write-Err "reset: impossibile cancellare il volume broker $logical ($id)."
+        $failed = $true
+      }
+    }
+  }
+  if (Test-Path -LiteralPath $BrokerLegacyMarker) {
+    try {
+      Remove-Item -LiteralPath $BrokerLegacyMarker -Force -ErrorAction Stop
+      Write-Info "Cancellato: marcatore migrazione broker $BrokerLegacyMarker"
+    } catch {
+      Write-Err "reset: impossibile cancellare il marcatore migrazione broker $BrokerLegacyMarker."
+      $failed = $true
+    }
+  }
+  if (-not $failed) {
+    Write-Warn 'I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta.'
+    return 0
+  }
+  return 1
+}
+
+function Invoke-ResetCommand {
+  param([string[]]$ResetArgs)
+  Ensure-Up
+  & docker exec @ExecFlags `
+    -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" `
+    -e 'JHT_HOST_RESET_PROTOCOL=1' `
+    $Container node $NodeEntry reset @ResetArgs
+  $code = $LASTEXITCODE
+  if ($code -ne $HostResetConfirmedExit) { return $code }
+  return (Remove-BrokerResetData)
 }
 
 function Invoke-MailSetup {
@@ -544,7 +683,11 @@ function Invoke-MailCommand {
     { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin mail $action @rest }
     'journal' { return Invoke-BrokerAdmin mail journal @rest }
     'delete' { return Invoke-BrokerAdmin secrets delete email_monitor }
-    'migrate' { Invoke-BrokerMigrateLegacy; return 0 }
+    'migrate' {
+      $code = Invoke-BrokerMigrateLegacy
+      if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker -Force -ErrorAction SilentlyContinue | Out-Null }
+      return $code
+    }
     default {
       Write-Err 'uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate'
       return 2
@@ -1425,7 +1568,7 @@ function Invoke-RuntimeUpgrade {
       if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $BrokerContainer)) {
         Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
       }
-      Invoke-BrokerMigrateLegacy
+      $null = Invoke-BrokerMigrateLegacyOnce
     }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
@@ -1513,7 +1656,7 @@ switch ($Sub) {
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
-    Invoke-BrokerMigrateLegacy
+    $null = Invoke-BrokerMigrateLegacyOnce
     break
   }
 
@@ -1537,7 +1680,7 @@ switch ($Sub) {
     Invoke-Compose down
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
-    Invoke-BrokerMigrateLegacy
+    $null = Invoke-BrokerMigrateLegacyOnce
     break
   }
 
@@ -1550,6 +1693,12 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-MailCommand $Rest)
+  }
+
+  'reset' {
+    Require-ComposeFile
+    Require-Docker
+    exit (Invoke-ResetCommand $Rest)
   }
 
   'logs' {

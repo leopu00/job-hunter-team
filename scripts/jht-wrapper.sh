@@ -536,7 +536,7 @@ require_confined_podman_machine() {
     0) return 0 ;;
     1)
       err "La macchina Podman '$PODMAN_MACHINE_NAME' vede piu' cartelle del Mac di quelle che servono a JHT (~/.jht e ~/Documents/Job Hunter Team)."
-      err "Ricreala con 'jht podman-machine-recreate --confirm': i dati in quelle due cartelle restano."
+      err "Ricreala con 'jht podman-machine-recreate --confirm': i file e lo stato del broker restano, ma le CLI interne e i segreti vengono cancellati."
       exit "$PODMAN_MOUNTS_EXIT"
       ;;
     *)
@@ -594,6 +594,158 @@ compose_project_name() {
   # restare identica per compose canonico e stage di upgrade: podman-compose
   # 1.6.0 adotta i container esistenti filtrando questa label.
   printf 'jht\n'
+}
+
+# `podman machine rm` distrugge i named volume. Lo stato non segreto del
+# broker viene quindi esportato sul runtime host protetto e reimportato nella
+# macchina nuova. L'archivio vive solo per la durata del comando; i segreti
+# non percorrono mai questo canale.
+PODMAN_STATE_BACKUP_DIR=""
+PODMAN_STATE_BACKUP_ARCHIVE=""
+PODMAN_STATE_MANIFEST=""
+PODMAN_STATE_VERIFY_MANIFEST=""
+PODMAN_STATE_BACKUP_HASH=""
+PODMAN_STATE_VOLUME=""
+PODMAN_STATE_IMAGE=""
+
+podman_state_backup_cleanup() {
+  if [ -n "${PODMAN_STATE_BACKUP_ARCHIVE:-}" ]; then
+    rm -f -- "$PODMAN_STATE_BACKUP_ARCHIVE" 2>/dev/null || true
+  fi
+  [ -z "${PODMAN_STATE_MANIFEST:-}" ] || rm -f -- "$PODMAN_STATE_MANIFEST" 2>/dev/null || true
+  [ -z "${PODMAN_STATE_VERIFY_MANIFEST:-}" ] || rm -f -- "$PODMAN_STATE_VERIFY_MANIFEST" 2>/dev/null || true
+  if [ -n "${PODMAN_STATE_BACKUP_DIR:-}" ]; then
+    rmdir -- "$PODMAN_STATE_BACKUP_DIR" 2>/dev/null || true
+  fi
+  PODMAN_STATE_BACKUP_DIR=""
+  PODMAN_STATE_BACKUP_ARCHIVE=""
+  PODMAN_STATE_MANIFEST=""
+  PODMAN_STATE_VERIFY_MANIFEST=""
+  PODMAN_STATE_BACKUP_HASH=""
+  PODMAN_STATE_VOLUME=""
+  PODMAN_STATE_IMAGE=""
+}
+
+podman_project_volume_name() {
+  local podman_bin="$1" logical="$2" project expected ids id found=""
+  project="$(compose_project_name)" || return 1
+  expected="${project}_${logical}"
+  ids="$("$podman_bin" --connection "$PODMAN_MACHINE_NAME" volume ls -q \
+    --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || return 1
+  for id in $ids; do
+    case "$id" in *[!A-Za-z0-9_.-]*) return 1 ;; esac
+    [ "$id" = "$expected" ] || continue
+    [ -z "$found" ] || return 1
+    found="$id"
+  done
+  [ -n "$found" ] || return 3
+  printf '%s\n' "$found"
+}
+
+podman_stream_broker_state() {
+  local podman_bin="$1" image="$2" volume="$3"
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm \
+    --userns keep-id:uid=1001,gid=1001 --user 1002:1002 \
+    --network none --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --volume "$volume:/jht_broker_state:ro" \
+    --entrypoint /bin/sh "$image" -ceu '
+      dir=/jht_broker_state
+      [ "$(/usr/bin/stat -c "%u %a" "$dir")" = "1002 700" ]
+      set --
+      for name in authorisations.json drafts.json journal.json legacy.json mailbox.json rotation.json seen.json; do
+        if [ -e "$dir/$name" ] || [ -L "$dir/$name" ]; then
+          [ -f "$dir/$name" ] && [ ! -L "$dir/$name" ]
+          [ "$(/usr/bin/stat -c "%u %a" "$dir/$name")" = "1002 600" ]
+          [ "$(/usr/bin/stat -c "%s" "$dir/$name")" -le 4194304 ]
+          set -- "$@" "$name"
+        fi
+      done
+      cd "$dir"
+      if [ "$#" -eq 0 ]; then
+        exec /usr/bin/tar -cf - --files-from=/dev/null
+      fi
+      exec /usr/bin/tar -cf - "$@"
+    '
+}
+
+podman_broker_state_manifest() {
+  local podman_bin="$1" image="$2" volume="$3"
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm \
+    --userns keep-id:uid=1001,gid=1001 --user 1002:1002 \
+    --network none --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --volume "$volume:/jht_broker_state:ro" \
+    --entrypoint /bin/sh "$image" -ceu '
+      dir=/jht_broker_state
+      [ "$(/usr/bin/stat -c "%u %a" "$dir")" = "1002 700" ]
+      for name in authorisations.json drafts.json journal.json legacy.json mailbox.json rotation.json seen.json; do
+        if [ -e "$dir/$name" ] || [ -L "$dir/$name" ]; then
+          [ -f "$dir/$name" ] && [ ! -L "$dir/$name" ]
+          [ "$(/usr/bin/stat -c "%u %a" "$dir/$name")" = "1002 600" ]
+          [ "$(/usr/bin/stat -c "%s" "$dir/$name")" -le 4194304 ]
+          /usr/bin/sha256sum "$dir/$name"
+        fi
+      done
+    '
+}
+
+podman_export_broker_state() {
+  local podman_bin="$1" image="$2" status=0 hash
+  PODMAN_STATE_VOLUME="$(podman_project_volume_name "$podman_bin" jht-broker-state)" || status=$?
+  [ "$status" -ne 3 ] || { PODMAN_STATE_VOLUME=""; return 0; }
+  [ "$status" -eq 0 ] || return 1
+  [ -n "$image" ] || return 1
+  PODMAN_STATE_IMAGE="$image"
+  PODMAN_STATE_BACKUP_DIR="$(mktemp -d "$RUNTIME_DIR/.broker-state-recreate.XXXXXX")" || return 1
+  chmod 700 "$PODMAN_STATE_BACKUP_DIR" || return 1
+  PODMAN_STATE_BACKUP_ARCHIVE="$PODMAN_STATE_BACKUP_DIR/state.tar"
+  PODMAN_STATE_MANIFEST="$PODMAN_STATE_BACKUP_DIR/state.sha256"
+  PODMAN_STATE_VERIFY_MANIFEST="$PODMAN_STATE_BACKUP_DIR/verify.sha256"
+  podman_broker_state_manifest "$podman_bin" "$image" "$PODMAN_STATE_VOLUME" \
+    > "$PODMAN_STATE_MANIFEST" || return 1
+  podman_stream_broker_state "$podman_bin" "$image" "$PODMAN_STATE_VOLUME" \
+    > "$PODMAN_STATE_BACKUP_ARCHIVE" || return 1
+  hash="$(runtime_sha256 "$PODMAN_STATE_BACKUP_ARCHIVE")" || return 1
+  case "$hash" in *[!0-9a-fA-F]*|'') return 1 ;; esac
+  [ "${#hash}" -eq 64 ] || return 1
+  PODMAN_STATE_BACKUP_HASH="$hash"
+}
+
+podman_import_broker_state() {
+  local podman_bin="$1" hash project
+  [ -n "$PODMAN_STATE_VOLUME" ] || return 0
+  hash="$(runtime_sha256 "$PODMAN_STATE_BACKUP_ARCHIVE")" || return 1
+  [ "$hash" = "$PODMAN_STATE_BACKUP_HASH" ] || return 1
+  project="$(compose_project_name)" || return 1
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" pull "$PODMAN_STATE_IMAGE" >/dev/null || return 1
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" volume create \
+    --label "io.podman.compose.project=$project" \
+    --label "com.docker.compose.project=$project" \
+    "$PODMAN_STATE_VOLUME" >/dev/null || return 1
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm \
+    --userns keep-id:uid=1001,gid=1001 --user 1002:1002 \
+    --network none --read-only --security-opt no-new-privileges --cap-drop ALL \
+    --volume "$PODMAN_STATE_VOLUME:/jht_broker_state" \
+    --entrypoint /bin/sh "$PODMAN_STATE_IMAGE" -ceu '
+      dir=/jht_broker_state
+      chmod 700 "$dir"
+      cd "$dir"
+      /usr/bin/tar -xf -
+      for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        name="${entry##*/}"
+        case "$name" in
+          authorisations.json|drafts.json|journal.json|legacy.json|mailbox.json|rotation.json|seen.json) ;;
+          *) exit 1 ;;
+        esac
+        [ -f "$entry" ] && [ ! -L "$entry" ]
+        [ "$(/usr/bin/stat -c "%u %a" "$entry")" = "1002 600" ]
+        [ "$(/usr/bin/stat -c "%s" "$entry")" -le 4194304 ]
+      done
+      [ "$(/usr/bin/stat -c "%u %a" "$dir")" = "1002 700" ]
+    ' < "$PODMAN_STATE_BACKUP_ARCHIVE" || return 1
+  podman_broker_state_manifest "$podman_bin" "$PODMAN_STATE_IMAGE" "$PODMAN_STATE_VOLUME" \
+    > "$PODMAN_STATE_VERIFY_MANIFEST" || return 1
+  cmp -s -- "$PODMAN_STATE_MANIFEST" "$PODMAN_STATE_VERIFY_MANIFEST"
 }
 
 require_compose_file() {
@@ -678,6 +830,8 @@ container_postcheck_running() {
 # amministra con exec di `jht-broker-admin`, e il segreto passa solo su stdin.
 BROKER_SERVICE="jht-broker"
 LEGACY_SECRET_NAMES="email_monitor email_transport"
+BROKER_VOLUME_NAMES="jht-secrets jht-broker-state jht-broker-sock"
+HOST_RESET_CONFIRMED_EXIT=20
 
 broker_admin() {
   local broker_id
@@ -699,19 +853,19 @@ broker_migrate_legacy() {
   agent_id="$(read_only_container_id)" || return 1
   broker_id="$(read_only_service_id "$BROKER_SERVICE")" || return 1
   for name in $LEGACY_SECRET_NAMES; do
-    docker exec "$agent_id" python3 /app/shared/broker/legacy.py exists "$name" >/dev/null 2>&1 || continue
-    answer="$(docker exec "$agent_id" python3 /app/shared/broker/legacy.py read "$name" 2>/dev/null \
+    docker exec -u 1001 "$agent_id" /usr/bin/python3 -I /app/shared/broker/legacy.py exists "$name" >/dev/null 2>&1 || continue
+    answer="$(docker exec -u 1001 "$agent_id" /usr/bin/python3 -I /app/shared/broker/legacy.py read "$name" 2>/dev/null \
       | docker exec -i "$broker_id" jht-broker-admin secrets import-legacy "$name" 2>/dev/null)" || true
     case "$answer" in
       *'"ok": true'*'"state": "imported"'*)
-        docker exec "$agent_id" python3 /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 \
+        docker exec -u 1001 "$agent_id" /usr/bin/python3 -I /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 \
           || warn "legacy_remove_failed: $name è nel broker ma la copia in ~/.jht/credentials è rimasta."
         migrated=1
         ;;
       *'"ok": true'*'"state": "already_migrated"'*)
         # Un file ricomparso dopo la migrazione non si importa: lo possono
         # scrivere gli agenti. Si toglie e basta.
-        docker exec "$agent_id" python3 /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 || true
+        docker exec -u 1001 "$agent_id" /usr/bin/python3 -I /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 || true
         warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json è ricomparso dopo la migrazione; rimosso senza importarlo."
         ;;
       *)
@@ -740,6 +894,97 @@ broker_migrate_legacy_once() {
     : > "$BROKER_LEGACY_MARKER" 2>/dev/null || true
   fi
   return 0
+}
+
+# The CLI owns the existing reset preview and confirmation. Only its internal
+# exit 20 means that confirmation completed; cancellation (0) and errors must
+# leave the Compose volumes untouched.
+reset_compose_project_name() {
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    compose_project_name
+    return $?
+  fi
+  local configured project
+  configured="$(compose config --format json 2>/dev/null)" || return 1
+  project="$(printf '%s\n' "$configured" \
+    | sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([a-z0-9][a-z0-9_-]*\)"[,[:space:]]*$/\1/p' \
+    | head -n 1)"
+  [ -n "$project" ] || return 1
+  printf '%s\n' "$project"
+}
+
+remove_broker_reset_data() {
+  local project logical ids id failed=0 marker_existed=0
+  project="$(reset_compose_project_name)" || {
+    err "reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati."
+    return 1
+  }
+  compose down || {
+    err "reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati."
+    return 1
+  }
+  for logical in $BROKER_VOLUME_NAMES; do
+    if [ "$CONTAINER_RUNTIME" = podman ]; then
+      # podman-compose 1.6 labels volumes with the project but, unlike Docker
+      # Compose, not with the logical volume name. Select the one exact name
+      # generated by that attested project; never delete another project.
+      ids="$(docker volume ls -q \
+        --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || {
+        err "reset: ricerca del volume $logical non riuscita."
+        failed=1
+        continue
+      }
+      ids="$(printf '%s\n' "$ids" | awk -v expected="${project}_${logical}" '$0 == expected')"
+    else
+      ids="$(docker volume ls -q \
+        --filter "label=com.docker.compose.project=$project" \
+        --filter "label=com.docker.compose.volume=$logical" 2>/dev/null)" || {
+        err "reset: ricerca del volume $logical non riuscita."
+        failed=1
+        continue
+      }
+    fi
+    if [ -z "$ids" ]; then
+      info "Saltato (non trovato): volume broker $logical"
+      continue
+    fi
+    for id in $ids; do
+      case "$id" in *[!A-Za-z0-9_.-]*)
+        err "reset: nome volume non valido per $logical; rimozione negata."
+        failed=1
+        continue
+        ;;
+      esac
+      if docker volume rm "$id" >/dev/null; then
+        info "Cancellato: volume broker $logical ($id)"
+      else
+        err "reset: impossibile cancellare il volume broker $logical ($id)."
+        failed=1
+      fi
+    done
+  done
+  [ -e "$BROKER_LEGACY_MARKER" ] && marker_existed=1
+  if rm -f -- "$BROKER_LEGACY_MARKER"; then
+    [ "$marker_existed" -eq 0 ] || info "Cancellato: marcatore migrazione broker $BROKER_LEGACY_MARKER"
+  else
+    err "reset: impossibile cancellare il marcatore migrazione broker $BROKER_LEGACY_MARKER."
+    failed=1
+  fi
+  if [ "$failed" -eq 0 ]; then
+    warn "I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta."
+  fi
+  return "$failed"
+}
+
+reset_command() {
+  ensure_up
+  docker exec $EXEC_FLAGS \
+    -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
+    -e JHT_HOST_RESET_PROTOCOL=1 \
+    "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" reset "$@"
+  local code=$?
+  [ "$code" -eq "$HOST_RESET_CONFIRMED_EXIT" ] || return "$code"
+  remove_broker_reset_data
 }
 
 mail_setup() {
@@ -1026,6 +1271,7 @@ jht — Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht reset              cancella configurazione e volumi del broker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
@@ -1058,7 +1304,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|reset)
       return 0
       ;;
   esac
@@ -2191,9 +2437,9 @@ case "$SUB" in
     ;;
 
   # ── Machine Podman confinata (macOS) ─────────────────────────────────
-  # Solo su richiesta esplicita (--confirm): ferma e cancella la VM di JHT
-  # (immagini e volumi interni si rifanno al prossimo `jht up`) e la ricrea
-  # vedendo solo ~/.jht e ~/Documents/Job Hunter Team, che restano intatte.
+  # Solo su richiesta esplicita (--confirm): salva lo stato non segreto del
+  # broker, ferma e cancella la VM di JHT e la ricrea confinata. I segreti non
+  # vengono mai esportati: password e login vanno reinseriti.
   # `podman machine rm` sposta la connessione di default dell'utente: quella
   # di prima viene rimessa, perche' e' condivisa con altri progetti.
   podman-machine-recreate)
@@ -2203,30 +2449,58 @@ case "$SUB" in
       exit 1
     fi
     if [ "${2:-}" != "--confirm" ] || [ $# -ne 2 ]; then
-      err "Ricrea la macchina Podman '$PODMAN_MACHINE_NAME': la ferma e la cancella (immagini e volumi interni si riscaricano), poi la ricrea vedendo solo ~/.jht e ~/Documents/Job Hunter Team. I dati in quelle due cartelle restano."
+      err "Ricrea la macchina Podman '$PODMAN_MACHINE_NAME': la ferma e la cancella, poi la ricrea vedendo solo ~/.jht e ~/Documents/Job Hunter Team."
+      err "ATTENZIONE: le CLI interne verranno reinstallate e i segreti non saranno conservati. La configurazione e lo stato della posta restano, ma dovrai reinserire la password della posta e rifare il login LinkedIn."
       err "Per procedere: jht podman-machine-recreate --confirm"
       exit 2
     fi
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
     ensure_podman_mount_dirs \
       || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
+    if ! "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1; then
+      "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
+        || { err "Non riesco ad avviare la macchina Podman per salvare lo stato del broker."; exit 1; }
+    fi
+    broker_state_image="$(compose config --images 2>/dev/null | sort -u)" \
+      || { err "Non riesco a determinare l'immagine attestata del broker."; exit 1; }
+    case "$broker_state_image" in ''|*$'\n'*)
+      err "Il compose non indica una sola immagine condivisa per team e broker; preservazione negata."
+      exit 1
+      ;;
+    esac
+    compose down \
+      || { err "Non riesco a fermare i servizi prima di salvare lo stato del broker."; exit 1; }
+    trap podman_state_backup_cleanup EXIT INT TERM
+    podman_export_broker_state "$podman_bin" "$broker_state_image" \
+      || { err "Non riesco a esportare in modo verificabile lo stato del broker; la macchina non e' stata cancellata."; exit 1; }
     default_connection="$("$podman_bin" system connection list --format '{{.Name}} {{.Default}}' 2>/dev/null \
       | awk '$2 == "true" { print $1; exit }')"
     info "Fermo e ricreo la macchina Podman '$PODMAN_MACHINE_NAME'..."
     "$podman_bin" machine stop "$PODMAN_MACHINE_NAME" >/dev/null 2>&1 || true
     "$podman_bin" machine rm -f "$PODMAN_MACHINE_NAME" >/dev/null \
       || { err "Non riesco a rimuovere la macchina Podman '$PODMAN_MACHINE_NAME'."; exit 1; }
-    "$podman_bin" machine init --now --update-connection=false \
+    rm -f -- "$BROKER_LEGACY_MARKER" \
+      || warn "Non ho potuto rimuovere il marcatore della migrazione del broker: $BROKER_LEGACY_MARKER"
+    if ! "$podman_bin" machine init --now --update-connection=false \
       --volume "$PODMAN_MOUNT_JHT_HOME:$PODMAN_MOUNT_JHT_HOME" \
       --volume "$PODMAN_MOUNT_JHT_DOCS:$PODMAN_MOUNT_JHT_DOCS" \
-      "$PODMAN_MACHINE_NAME" >/dev/null \
-      || { err "La nuova macchina Podman '$PODMAN_MACHINE_NAME' non si e' creata."; exit 1; }
+      "$PODMAN_MACHINE_NAME" >/dev/null; then
+      if [ -n "$default_connection" ]; then
+        "$podman_bin" system connection default "$default_connection" >/dev/null 2>&1 || true
+      fi
+      err "La nuova macchina Podman '$PODMAN_MACHINE_NAME' non si e' creata."
+      exit 1
+    fi
     if [ -n "$default_connection" ]; then
       "$podman_bin" system connection default "$default_connection" >/dev/null 2>&1 \
         || warn "Non ho potuto rimettere '$default_connection' come connessione Podman predefinita."
     fi
+    podman_import_broker_state "$podman_bin" \
+      || { err "La macchina e' stata ricreata, ma lo stato del broker non ha superato la verifica/importazione."; exit 1; }
     require_confined_podman_machine
-    info "Macchina Podman ricreata: vede solo ~/.jht e ~/Documents/Job Hunter Team. Avvia il team con 'jht up'."
+    podman_state_backup_cleanup
+    trap - EXIT INT TERM
+    info "Macchina Podman ricreata: vede solo ~/.jht e ~/Documents/Job Hunter Team. Lo stato del broker e' stato conservato; le CLI verranno reinstallate. Avvia il team con 'jht up', reinserisci la password della posta e rifai il login LinkedIn."
     ;;
 
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
@@ -2293,6 +2567,13 @@ case "$SUB" in
     require_compose_file
     require_docker
     mail_command "${@:2}"
+    exit $?
+    ;;
+
+  reset)
+    require_compose_file
+    require_docker
+    reset_command "${@:2}"
     exit $?
     ;;
 

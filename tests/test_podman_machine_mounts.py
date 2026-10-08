@@ -15,8 +15,9 @@ Here, against the real wrapper and installer with fake binaries:
   unreadable config is refused too;
 - `up` creates the two folders before starting the machine;
 - `podman-machine-recreate` does nothing without --confirm, and with it
-  rebuilds the machine with exactly the two folders and puts back the
-  person's default Podman connection;
+  rebuilds the machine with exactly the two folders, preserves the broker
+  state byte-for-byte, drops its secrets, and restores the person's default
+  Podman connection;
 - the installer creates a new machine with exactly the two folders.
 """
 
@@ -40,6 +41,37 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="the wrapper is a POSIX 
 RICH_PODMAN = """#!/bin/sh
 if [ "$1" = --version ]; then printf '%s\\n' 'podman version 6.1.3'; exit 0; fi
 printf 'podman %s\\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+if [ "$1:$2:$3" = --connection:jht-podman:volume ]; then
+  case "$4" in
+    ls)
+      [ -f "$JHT_TEST_BROKER_STATE_PRESENT" ] && printf '%s\\n' jht_jht-broker-state
+      exit 0 ;;
+    export)
+      [ "$5" = jht_jht-broker-state ] || exit 96
+      cat "$JHT_TEST_BROKER_STATE"
+      exit 0 ;;
+    create)
+      for last; do :; done
+      [ "$last" = jht_jht-broker-state ] || exit 97
+      : > "$JHT_TEST_BROKER_STATE"
+      : > "$JHT_TEST_BROKER_STATE_PRESENT"
+      printf '%s\\n' "$last"
+      exit 0 ;;
+    import)
+      [ "$5:$6" = jht_jht-broker-state:- ] || exit 98
+      cat > "$JHT_TEST_BROKER_STATE"
+      exit 0 ;;
+  esac
+fi
+if [ "$1:$2:$3" = --connection:jht-podman:pull ]; then exit 0; fi
+if [ "$1:$2:$3" = --connection:jht-podman:run ]; then
+  case "$*" in
+    *"jht_jht-broker-state:/jht_broker_state:ro"*) cat "$JHT_TEST_BROKER_STATE" ;;
+    *"jht_jht-broker-state:/jht_broker_state"*) cat > "$JHT_TEST_BROKER_STATE" ;;
+    *) exit 99 ;;
+  esac
+  exit 0
+fi
 case "$1:$2" in
   machine:start)
     [ "${JHT_TEST_WAKE_SUCCESS:-0}" = 1 ] || exit 93
@@ -48,7 +80,11 @@ case "$1:$2" in
     done
     : > "$JHT_TEST_RUNTIME_STATE"; exit 0 ;;
   machine:stop) exit 0 ;;
-  machine:rm) rm -f "$JHT_TEST_MACHINE_CONFIG"; exit 0 ;;
+  machine:rm)
+    rm -f "$JHT_TEST_MACHINE_CONFIG" "$JHT_TEST_BROKER_STATE_PRESENT"
+    : > "$JHT_TEST_BROKER_STATE"
+    : > "$JHT_TEST_BROKER_SECRETS"
+    exit 0 ;;
   machine:init)
     shift 2
     mounts=""
@@ -82,10 +118,33 @@ def _wrapper(tmp_path: Path, sources: tuple[str, ...] | None = None):
     podman = wrapper.parent / "podman"
     podman.write_text(RICH_PODMAN, encoding="utf-8")
     podman.chmod(0o700)
+    provider = wrapper.parent / "podman-compose"
+    provider_source = provider.read_text(encoding="utf-8")
+    provider_source = provider_source.replace(
+        'case "$*" in\n',
+        'case "$*" in\n  *" config --images") printf \'%s\\n\' test-broker-image ;;\n',
+    )
+    provider.write_text(
+        provider_source.replace('  *" up -d")', '  *" down") exit 0 ;;\n  *" up -d")'),
+        encoding="utf-8",
+    )
+    state = tmp_path / "broker-state.volume"
+    state.write_text(
+        '{"policy":"allowlist","allowed_domains":["alerts.invalid"],'
+        '"authorisations":["approved-1"],"journal":["sent-1"],"drafts":["draft-1"]}\n',
+        encoding="utf-8",
+    )
+    state_present = tmp_path / "broker-state.present"
+    state_present.write_text("", encoding="utf-8")
+    secrets = tmp_path / "broker-secrets.volume"
+    secrets.write_text("mail-password-and-linkedin-session\n", encoding="utf-8")
     default = tmp_path / "default-connection"
     default.write_text("hht-podman\n", encoding="utf-8")
     env["JHT_TEST_MACHINE_CONFIG"] = str(config)
     env["JHT_TEST_DEFAULT_CONNECTION"] = str(default)
+    env["JHT_TEST_BROKER_STATE"] = str(state)
+    env["JHT_TEST_BROKER_STATE_PRESENT"] = str(state_present)
+    env["JHT_TEST_BROKER_SECRETS"] = str(secrets)
     return wrapper, env, log, home, config
 
 
@@ -187,12 +246,19 @@ def test_recreate_without_confirmation_touches_nothing(tmp_path: Path):
 
     assert result.returncode == 2
     assert "jht podman-machine-recreate --confirm" in result.stderr
+    assert "La configurazione e lo stato della posta restano" in result.stderr
+    assert "reinserire la password della posta" in result.stderr
+    assert "rifare il login LinkedIn" in result.stderr
     assert not any(line.startswith("podman machine") for line in _calls(log))
     assert config.is_file()
 
 
 def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_default(tmp_path: Path):
     wrapper, env, log, home, config = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    marker = Path(env["JHT_RUNTIME_DIR"]) / ".broker-legacy-migrated"
+    marker.write_text("", encoding="utf-8")
+    state_before = Path(env["JHT_TEST_BROKER_STATE"]).read_bytes()
 
     result = _run(wrapper, env, "podman-machine-recreate", "--confirm")
 
@@ -206,10 +272,81 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
         f"--volume {jht_docs}:{jht_docs} jht-podman",
     ]
     assert [m["Source"] for m in json.loads(config.read_text(encoding="utf-8"))["Mounts"]] == [jht_home, jht_docs]
+    all_calls = _calls(log)
+    export = next(i for i, line in enumerate(all_calls) if "jht_jht-broker-state:/jht_broker_state:ro" in line)
+    remove = all_calls.index("podman machine rm -f jht-podman")
+    create = next(i for i, line in enumerate(all_calls) if "volume create" in line and "jht_jht-broker-state" in line)
+    imported = next(
+        i for i, line in enumerate(all_calls)
+        if "jht_jht-broker-state:/jht_broker_state" in line and ":ro" not in line
+    )
+    assert export < remove < create < imported
+    assert not any("jht-secrets:" in line for line in all_calls)
     # The person's default connection (another project's machine) is put back.
     assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
     assert "podman system connection default hht-podman" in _calls(log)
+    assert not marker.exists()
+    assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
+    assert Path(env["JHT_TEST_BROKER_SECRETS"]).read_bytes() == b""
+    assert not list(Path(env["JHT_RUNTIME_DIR"]).glob(".broker-state-recreate.*"))
+    assert "Lo stato del broker e' stato conservato" in result.stderr
+    assert "reinserisci la password della posta" in result.stderr
+    assert "rifai il login LinkedIn" in result.stderr
     assert _run(wrapper, env, "status").returncode != 78
+
+
+def test_recreate_starts_a_stopped_machine_before_exporting_state(tmp_path: Path):
+    wrapper, env, log, _, _ = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
+    env["JHT_TEST_WAKE_SUCCESS"] = "1"
+    state_before = Path(env["JHT_TEST_BROKER_STATE"]).read_bytes()
+
+    result = _run(wrapper, env, "podman-machine-recreate", "--confirm")
+
+    assert result.returncode == 0, result.stderr
+    calls = _calls(log)
+    start = calls.index("podman machine start --update-connection=false jht-podman")
+    export = next(i for i, line in enumerate(calls) if "jht_jht-broker-state:/jht_broker_state:ro" in line)
+    remove = calls.index("podman machine rm -f jht-podman")
+    assert start < export < remove
+    assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
+
+
+def test_recreate_refuses_a_changed_state_archive_before_import_and_cleans_it(tmp_path: Path):
+    wrapper, env, log, _, _ = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    counter = tmp_path / "state-hash-count"
+    fake_hash = wrapper.parent / "sha256sum"
+    fake_hash.write_text(
+        """#!/bin/sh
+case "$1" in
+  */.broker-state-recreate.*/state.tar)
+    count=$(cat "$JHT_TEST_STATE_HASH_COUNT" 2>/dev/null || echo 0)
+    count=$((count + 1))
+    printf '%s\\n' "$count" > "$JHT_TEST_STATE_HASH_COUNT"
+    if [ "$count" -gt 1 ]; then
+      printf '%064d  %s\\n' 0 "$1"
+      exit 0
+    fi ;;
+esac
+exec /usr/bin/shasum -a 256 "$1"
+""",
+        encoding="utf-8",
+    )
+    fake_hash.chmod(0o700)
+    env["JHT_TEST_STATE_HASH_COUNT"] = str(counter)
+
+    result = _run(wrapper, env, "podman-machine-recreate", "--confirm")
+
+    assert result.returncode == 1
+    calls = _calls(log)
+    assert "podman --connection jht-podman volume create --label io.podman.compose.project=jht " \
+        "--label com.docker.compose.project=jht jht_jht-broker-state" not in calls
+    assert not any(
+        "jht_jht-broker-state:/jht_broker_state" in line and ":ro" not in line
+        for line in calls
+    )
+    assert "non ha superato la verifica/importazione" in result.stderr
+    assert not list(Path(env["JHT_RUNTIME_DIR"]).glob(".broker-state-recreate.*"))
 
 
 def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Path):
