@@ -176,6 +176,29 @@ def test_host_admin_reads_secret_from_stdin_and_never_echoes_it(
         text=True,
     )
     assert seeded.returncode == 0
+    incomplete = subprocess.run(
+        [str(command), "legacy", "complete"],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert incomplete.returncode == 1
+    for role in ("capitano", "mentor"):
+        subprocess.run(
+            [str(command), "legacy", "remember", role],
+            input="",
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    complete = subprocess.run(
+        [str(command), "legacy", "complete"],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert complete.returncode == 0
     saved = subprocess.run(
         [str(command), "bots", "pair", "assistente"],
         input=json.dumps({"bot_token": token, "chat_id": "42"}),
@@ -504,6 +527,9 @@ def test_container_lifecycle_starts_telegram_and_host_pairing_is_exposed() -> No
     assert 'telegram_admin_input legacy remember "$role"' in bash_wrapper
     assert "jht-telegram-legacy.py" in bash_wrapper
     assert "docker run --rm" in bash_wrapper
+    assert bash_wrapper.count("telegram_prepare_legacy_inventory ||") >= 4
+    assert "function Initialize-TelegramLegacyInventory" in powershell_wrapper
+    assert powershell_wrapper.count("Initialize-TelegramLegacyInventory") >= 4
     assert 'force-recreate "$TELEGRAM_SERVICE"' in bash_wrapper
     assert "'telegram' {" in powershell_wrapper
     assert "'--force-recreate' $TelegramContainer" in powershell_wrapper

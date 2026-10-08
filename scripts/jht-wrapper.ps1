@@ -554,6 +554,26 @@ function Invoke-TelegramLegacy {
   & docker @runArgs
 }
 
+function Initialize-TelegramLegacyInventory {
+  Invoke-Compose up '-d' $TelegramContainer | Out-Null
+  if ($LASTEXITCODE -ne 0) { return $false }
+  if ((Invoke-TelegramAdmin -AdminArgs @('legacy', 'complete')) -eq 0) { return $true }
+  if (Test-ContainerUp) {
+    Invoke-Compose stop $Container | Out-Null
+    if ($LASTEXITCODE -ne 0) { return $false }
+  }
+  foreach ($role in @('assistente', 'capitano', 'mentor')) {
+    $digests = @(Invoke-TelegramLegacy inventory $role 2>$null)
+    if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
+      return $false
+    }
+    if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $role)) -ne 0) {
+      return $false
+    }
+  }
+  return $true
+}
+
 function Invoke-TelegramPair {
   param([string]$Role)
   if ($Role -notin @('assistente', 'capitano', 'mentor')) {
@@ -851,6 +871,10 @@ function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     Write-Info "Container '$Container' non attivo, lo avvio..."
     if (-not (Repair-MountOwnership)) { exit 1 }
+    if (-not (Initialize-TelegramLegacyInventory)) {
+      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      exit 1
+    }
     Invoke-Compose 'up' '-d'
     # Attendi che il container sia in stato running.
     $tries = 20
@@ -1812,6 +1836,10 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
+    if (-not (Initialize-TelegramLegacyInventory)) {
+      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      exit 1
+    }
     Invoke-Compose 'up' '-d'
     $null = Invoke-BrokerMigrateLegacyOnce
     break
@@ -1836,6 +1864,10 @@ switch ($Sub) {
     Require-Docker
     Invoke-Compose down
     if (-not (Repair-MountOwnership)) { exit 1 }
+    if (-not (Initialize-TelegramLegacyInventory)) {
+      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      exit 1
+    }
     Invoke-Compose 'up' '-d'
     $null = Invoke-BrokerMigrateLegacyOnce
     break

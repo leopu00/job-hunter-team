@@ -905,6 +905,30 @@ telegram_legacy() {
     /app/shared/telegram_service/bin/jht-telegram-legacy.py "$@"
 }
 
+telegram_prepare_legacy_inventory() {
+  local role digests digest agent_status=0
+  compose up -d "$TELEGRAM_SERVICE" >/dev/null || return 1
+  if telegram_admin legacy complete >/dev/null 2>&1; then
+    return 0
+  fi
+  if read_only_container_id >/dev/null 2>&1; then
+    compose stop "$CONTAINER_SERVICE" >/dev/null || return 1
+  else
+    agent_status=$?
+    [ "$agent_status" -eq 3 ] || return 1
+  fi
+  for role in assistente capitano mentor; do
+    digests="$(telegram_legacy inventory "$role")" || return 1
+    if [ -n "$digests" ]; then
+      while IFS= read -r digest; do
+        printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$' || return 1
+      done <<< "$digests"
+    fi
+    printf '%s' "$digests" \
+      | telegram_admin_input legacy remember "$role" >/dev/null || return 1
+  done
+}
+
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
   local agent_was_running=0 agent_status=0
@@ -1579,6 +1603,10 @@ ensure_up() {
   }
   info "Container '$CONTAINER_SERVICE' non attivo, lo avvio..."
   ensure_bind_owner
+  telegram_prepare_legacy_inventory || {
+    err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+    exit 1
+  }
   compose up -d
   # Attendi che il container sia in stato running e con ownership completa
   # prima di inoltrare qualunque comando nel nuovo processo.
@@ -2513,6 +2541,11 @@ handle_runtime_upgrade() {
 
   phase="activate"
   upgrade_note "Attivo il nuovo runtime..."
+  if ! telegram_prepare_legacy_inventory; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Inventario Telegram host non conservato prima dell'avvio degli agenti" "$rolled_back"
+    return 1
+  fi
   if ! upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER_SERVICE"; then
     if upgrade_restore_previous; then rolled_back=true; fi
     upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Avvio della nuova versione fallito" "$rolled_back"
@@ -2713,6 +2746,10 @@ case "$SUB" in
     wake_container_runtime_for_up
     container_mutation_preflight || exit 1
     ensure_bind_owner
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
@@ -2723,6 +2760,10 @@ case "$SUB" in
     require_docker
     container_mutation_preflight || exit 1
     ensure_bind_owner
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
@@ -2758,6 +2799,10 @@ case "$SUB" in
     }
     ensure_bind_owner
     compose down
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once

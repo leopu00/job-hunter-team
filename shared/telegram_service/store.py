@@ -191,6 +191,10 @@ def token_history(role: str) -> tuple[set[str], bool]:
     return digests, entry.get("inventory_complete") is True
 
 
+def legacy_inventory_complete() -> bool:
+    return all(token_history(role)[1] for role in BOT_ROLES)
+
+
 def record_pairing(role: str, rotation: str) -> None:
     if role not in BOT_ROLES or rotation not in {"fresh", "rotated"}:
         raise StoreError("pairing_invalid")

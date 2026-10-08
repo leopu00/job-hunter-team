@@ -69,6 +69,7 @@ def main(argv: list[str]) -> int:
     bots.add_parser("delete").add_argument("role", choices=BOT_ROLES)
     legacy = area.add_parser("legacy").add_subparsers(dest="command", required=True)
     legacy.add_parser("remember").add_argument("role", choices=BOT_ROLES)
+    legacy.add_parser("complete")
     cutover = area.add_parser("cutover").add_subparsers(dest="command", required=True)
     cutover.add_parser("status")
     cutover.add_parser("enable")
@@ -80,9 +81,13 @@ def main(argv: list[str]) -> int:
                 "bots": {role: "present" if store.read_bot(role) else "absent" for role in BOT_ROLES},
                 "cutover": store.cutover_status(),
             }
-        elif args.area == "legacy":
+        elif args.area == "legacy" and args.command == "remember":
             store.remember_token_digests(args.role, _read_digests(), inventory_complete=True)
             result = {"ok": True, "legacy": args.role, "state": "remembered"}
+        elif args.area == "legacy":
+            if not store.legacy_inventory_complete():
+                raise AdminError("legacy_inventory_required")
+            result = {"ok": True, "legacy": "complete"}
         elif args.area == "bots" and args.command == "pair":
             if any(not re.fullmatch(r"[0-9a-f]{64}", item) for item in args.legacy_digest):
                 raise AdminError("legacy_digest_invalid")
