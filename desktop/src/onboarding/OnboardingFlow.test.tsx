@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
 import { describeError, ERROR_LOCALES } from "../lib/error-catalog";
 import { OnboardingFlow } from "./OnboardingFlow";
+import { WINDOWS_SETUP } from "./windows-setup";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange }: { value: string; onChange: (path: string) => void }) => (
@@ -136,11 +137,14 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("note", { name: /versione precedente/i })).toHaveTextContent(/lo riprende solo un profilo locale/i);
   });
 
-  it("lists, before the Windows setup starts, what it installs: the numbers are the script's", async () => {
+  it("lists, before the Windows setup starts, what it installs: the values are the script's", async () => {
     const script = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
     const init = script.match(/'machine' 'init' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
     expect(init, "podman machine init not found in the script").not.toBeNull();
     const [, cpus, memoryMb, diskGb] = init!;
+    expect(WINDOWS_SETUP).toMatchObject({ cpus: Number(cpus), memoryGb: Number(memoryMb) / 1024, diskGb: Number(diskGb) });
+    expect(script).toContain(`$PodmanCliVersion = '${WINDOWS_SETUP.podmanVersion}'`);
+    expect(script).toContain(`$ComposeProviderVersion = '${WINDOWS_SETUP.composeVersion}'`);
     const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
     expect(packages).toEqual(["Podman.CLI", "Docker.DockerCompose"]);
 
@@ -149,10 +153,52 @@ describe("OnboardingFlow technical setup", () => {
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion} e Docker Compose ${WINDOWS_SETUP.composeVersion}`);
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
     expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
     expect(installs).toHaveTextContent(/PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman/i);
+    // How they are removed, and what the app cannot remove yet.
+    expect(installs).toHaveTextContent(/si disinstallano da Impostazioni › App › App installate/);
+    expect(installs).toHaveTextContent(/per ora, non si tolgono dall’app/);
+  });
+
+  it("asks for the consent in the language of Windows when the person chose none", async () => {
+    const navigator = window.navigator;
+    const languages = Object.getOwnPropertyDescriptor(navigator, "languages");
+    const language = Object.getOwnPropertyDescriptor(navigator, "language");
+    Object.defineProperty(navigator, "languages", { configurable: true, get: () => ["de-DE", "en-US"] });
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "de-DE" });
+    try {
+      const user = userEvent.setup();
+      renderFlow({ platform: "windows" });
+      await user.click(screen.getByRole("button", { name: /einrichtung starten/i }));
+      await user.click(screen.getByRole("button", { name: /^weiter/i }));
+      await user.click(screen.getByRole("button", { name: /einrichtung prüfen/i }));
+      const installs = screen.getByRole("note", { name: /was die app installiert/i });
+      expect(installs).toHaveTextContent(`eine Podman-Maschine in WSL: ${WINDOWS_SETUP.cpus} CPUs, ${WINDOWS_SETUP.memoryGb} GB Arbeitsspeicher`);
+      expect(installs).toHaveTextContent(/auch bei geschlossener App laufen lässt/);
+      expect(installs).toHaveTextContent(/Einstellungen › Apps › Installierte Apps/);
+      expect(screen.getByRole("button", { name: /team vorbereiten/i })).toBeInTheDocument();
+    } finally {
+      if (languages) Object.defineProperty(navigator, "languages", languages);
+      if (language) Object.defineProperty(navigator, "language", language);
+    }
+  });
+
+  it.each(["en", "es", "fr", "hu", "pt"] as const)("shows the Windows consent in %s with the script's values", async (locale) => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows", locale });
+    for (let step = 0; step < 3; step += 1) {
+      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
+      await user.click(buttons[buttons.length - 1]);
+    }
+    const installs = screen.getAllByRole("note")[0];
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}`);
+    expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}`);
+    expect(installs).toHaveTextContent(`${WINDOWS_SETUP.diskGb}`);
+    expect(installs).toHaveTextContent("winget");
+    expect(installs).not.toHaveTextContent(/installa|macchina|servizio/);
   });
 
   it("lists nothing to install for Windows on a Mac", async () => {

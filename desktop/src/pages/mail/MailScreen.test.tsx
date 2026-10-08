@@ -72,3 +72,25 @@ it("a mail service that cannot be reached is said with the catalog, never raw", 
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(unavailable.text));
   expect(screen.queryByText(/raw ssh text/)).not.toBeInTheDocument();
 });
+
+it("speaks the language of the app: an English system gets the page and the catalog in English", async () => {
+  const user = userEvent.setup();
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<MailScreen loadStatus={vi.fn().mockResolvedValue(PENDING)} save={save} locale="en" />);
+
+  const state = await screen.findByLabelText("Mailbox status");
+  expect(within(state).getByText("configured")).toBeInTheDocument();
+  expect(within(state).getByText(/to be replaced: the agents could read it/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Mailbox address")).toHaveValue("jobs@example.com");
+  await user.click(screen.getByLabelText(/No: the team reads only the allowed senders/));
+  await user.type(screen.getByLabelText(/App password/), "a-new-password");
+  await user.click(screen.getByRole("button", { name: "Save the password" }));
+  expect(await screen.findByRole("status")).toHaveTextContent("Password saved. The team uses the new one right away.");
+});
+
+it("says an unreachable mail service in the page's language", async () => {
+  render(<MailScreen loadStatus={vi.fn().mockRejectedValue(new Error("raw ssh text"))} save={vi.fn()} locale="de" />);
+  const described = describeError("mail_unavailable", { locale: "de" });
+  expect(await screen.findByRole("alert")).toHaveTextContent(`${described.text} ${described.action}`);
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("E-Mail");
+});

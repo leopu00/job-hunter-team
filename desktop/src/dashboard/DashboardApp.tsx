@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
+import { appLocale } from "../lib/app-locale";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   connectDirectChat,
@@ -119,7 +120,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     ? "container"
     : PROVIDER_RUNTIME_ERRORS.has(value.code) ? "provider" : "runtime";
   if (value.code === "podman_machine_mounts_home") {
-    const described = describeError(value.code);
+    const described = describeError(value.code, { locale: appLocale() });
     return {
       status: "failed",
       stage: "runtime",
@@ -136,7 +137,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       stage: "container",
       title: "Versione del container non compatibile",
       message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
-      action: describeError(value.code).action,
+      action: describeError(value.code, { locale: appLocale() }).action,
       code: value.code,
       retryable: false,
     };
@@ -147,13 +148,13 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       stage,
       title: "Avvio del container non riuscito",
       message: "Il container del team non risulta pronto. Il team non è stato avviato.",
-      action: describeError(value.code).action,
+      action: describeError(value.code, { locale: appLocale() }).action,
       code: value.code,
       retryable: value.retryable,
     };
   }
   // The sentence comes from the app's catalog, never from the native message.
-  const described = describeError(value.code);
+  const described = describeError(value.code, { locale: appLocale() });
   return {
     status: "failed",
     stage,
@@ -168,7 +169,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
 function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
   const code = errorCodeOf(error);
   if (!code) return null;
-  const described = describeError(code, { resetsAt: errorResetsAt(error) });
+  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale() });
   if (!described.known) return null;
   const retryable = typeof error === "object" && error !== null &&
     typeof (error as { retryable?: unknown }).retryable === "boolean"
@@ -183,7 +184,7 @@ function withLimitsNotice(
   snapshot: OnboardingRuntimeSnapshot,
 ): OnboardingRuntimeState {
   if (snapshot.limitsVerified !== false || !("message" in state)) return state;
-  const notice = describeError("provider_limits_unverified");
+  const notice = describeError("provider_limits_unverified", { locale: appLocale() });
   return { ...state, message: `${state.message} ${notice.text} ${notice.action}` };
 }
 
@@ -192,7 +193,7 @@ function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
   if (code === "host_key_mismatch" || code === "host_key_changed") {
     // The server key CHANGED from the confirmed one: possibly another server.
     // Not retryable, so no button lets the person go on anyway.
-    const described = describeError(code);
+    const described = describeError(code, { locale: appLocale() });
     return {
       status: "failed",
       stage: "ssh-host-key",
@@ -260,23 +261,23 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   const code = nativeErrorCode(error);
   if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
   if (code === "resume_runtime_not_ready") return {
-    status: "failed", stage: "runtime", code, action: describeError(code).action, retryable: false,
+    status: "failed", stage: "runtime", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
     message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
   };
   if (code === "resume_container_not_ready") return {
-    status: "failed", stage: "container", code, action: describeError(code).action, retryable: false,
+    status: "failed", stage: "container", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
     message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
   };
   if (code === "resume_provider_not_configured") return {
-    status: "failed", stage: "provider", code, action: describeError(code).action, retryable: false,
+    status: "failed", stage: "provider", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
     message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
   };
   if (code === "resume_provider_not_authenticated") return {
-    status: "failed", stage: "provider-login", code, action: describeError(code).action, retryable: false,
+    status: "failed", stage: "provider-login", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
     message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
   };
   if (code === "team_start_failed" || code === "team_verify_failed") return {
-    status: "failed", stage: "team-start", code, action: describeError(code).action, retryable: true,
+    status: "failed", stage: "team-start", code, action: describeError(code, { locale: appLocale() }).action, retryable: true,
     message: "Le sessioni del team non risultano ancora operative. Riprova.",
   };
   return null;

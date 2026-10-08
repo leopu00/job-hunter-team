@@ -125,6 +125,7 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/local-queries$/, replacement: fromHere("./src/web-shims/server/local-queries.ts") },
       { find: /^@\/lib\/demo\/mode$/, replacement: fromHere("./src/web-shims/server/demo-mode.ts") },
       { find: /^@\/lib\/server-locale$/, replacement: fromHere("./src/web-shims/server/server-locale.ts") },
+      { find: /^@\/lib\/use-locale$/, replacement: fromHere("./src/web-shims/use-locale.ts") },
       { find: /^@\/lib\/position-document-file\.server$/, replacement: fromHere("./src/web-shims/server/position-document-file.ts") },
       { find: /^@\/lib\/deploy-mode$/, replacement: fromHere("./src/web-shims/server/deploy-mode.ts") },
       { find: /^@\/lib\/local-token$/, replacement: fromHere("./src/web-shims/server/local-token.ts") },
