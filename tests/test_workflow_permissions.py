@@ -11,9 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 READ_CONTENTS = {"contents": "read"}
 
-# This is deliberately an exact 12/12 census. A new workflow or job must make
+# This is deliberately an exact 13/13 census. A new workflow or job must make
 # its token contract explicit here before it can enter the repository.
 EXPECTED_EFFECTIVE_PERMISSIONS = {
+    # Chromium's sandbox in the broker (R3): builds locally, publishes nothing.
+    "broker-sandbox.yml": {"broker-sandbox": READ_CONTENTS},
     "ci.yml": {
         "lint-typecheck": READ_CONTENTS,
         "build": READ_CONTENTS,
@@ -83,7 +85,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 12
+    assert len(workflow_paths) == 13
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])
