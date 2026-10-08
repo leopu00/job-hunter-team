@@ -3,10 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   POSITIONS_COLUMNS,
-  POSITIONS_COL_MIN_WIDTH,
   parseColumnsCookie,
 } from "../../../web/app/(protected)/positions/columns";
-import { T } from "../../../web/app/(protected)/positions/page.i18n";
 
 /**
  * O-34 — «CV scritto il» e «Trovata» in lista.
@@ -21,6 +19,10 @@ import { T } from "../../../web/app/(protected)/positions/page.i18n";
  * E soprattutto l'ORDINAMENTO: la domanda che queste due colonne devono
  * rispondere è «da quanto è ferma?», e senza sort si legge solo scorrendo
  * venti righe a mente — cioè non si legge.
+ *
+ * Larghezza minima, label nelle sette lingue, header e cella si controllano
+ * per OGNI colonna in positions-column-widths e positions-column-parity:
+ * qui resta solo quello che è proprio di queste colonne.
  */
 const ROOT = resolve(__dirname, "../../..");
 const PAGE = readFileSync(
@@ -29,7 +31,6 @@ const PAGE = readFileSync(
 );
 const CLOUD = readFileSync(resolve(ROOT, "web/lib/queries.ts"), "utf-8");
 const LOCAL = readFileSync(resolve(ROOT, "web/lib/local-queries.ts"), "utf-8");
-const LOCALES = ["it", "en", "hu", "es", "de", "fr", "pt"] as const;
 
 // L'oggetto dell'header di una colonna, per leggerne le opzioni (sortable).
 function headerEntry(col: string): string {
@@ -38,34 +39,16 @@ function headerEntry(col: string): string {
 }
 
 describe.each([
-  { col: "written_at", label: "col_written_at" },
-  { col: "found_at", label: "col_found_at" },
-])("colonna '$col' in lista", ({ col, label }) => {
+  { col: "written_at" },
+  { col: "found_at" },
+])("colonna '$col' in lista", ({ col }) => {
   it("è registrata fra le colonne della tabella", () => {
     expect(POSITIONS_COLUMNS).toContain(col);
-  });
-
-  it("ha una larghezza minima, come ogni altra colonna", () => {
-    expect(
-      POSITIONS_COL_MIN_WIDTH[col as keyof typeof POSITIONS_COL_MIN_WIDTH],
-    ).toBeGreaterThan(0);
-  });
-
-  it("ha la label in tutte e sette le lingue", () => {
-    for (const loc of LOCALES) {
-      const text = (T[label as keyof typeof T] as Record<string, string>)[loc];
-      expect(text, `manca la label ${loc}`).toBeTruthy();
-    }
   });
 
   it("si può accendere dal picker e sopravvive al cookie", () => {
     expect(PAGE).toContain(`key: "${col}"`);
     expect(parseColumnsCookie(`title,${col}`).has(col as never)).toBe(true);
-  });
-
-  it("ha un header e una cella, non solo una chiave", () => {
-    expect(headerEntry(col)).not.toBe("");
-    expect(PAGE).toContain(`show("${col}")`);
   });
 
   it("si può ORDINARE cliccando l'intestazione", () => {

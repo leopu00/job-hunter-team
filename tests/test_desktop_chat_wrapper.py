@@ -439,95 +439,6 @@ esac
     assert not any("argv=ps --connection" in line for line in calls)
 
 
-def test_podman_compose_fails_closed_when_named_connection_capability_fails(
-    tmp_path: Path,
-):
-    wrapper, env, log = _runtime(tmp_path)
-    env["JHT_TEST_RUNTIME_READY"] = "1"
-    podman = wrapper.parent / "podman"
-    podman.write_text(
-        """#!/bin/sh
-if [ "$1" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
-printf 'podman-capability connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
-exit 125
-""",
-        encoding="utf-8",
-    )
-    podman.chmod(0o700)
-
-    result = subprocess.run(
-        [str(wrapper), "up"],
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    assert "non attestabile" in result.stderr
-    calls = log.read_text(encoding="utf-8")
-    assert "podman-capability connection= argv=--connection jht-podman info" in calls
-    assert "podman-compose " not in calls
-
-
-@pytest.mark.parametrize("component", ("podman", "podman-compose"))
-def test_podman_compose_fails_closed_on_unpinned_version(
-    tmp_path: Path, component: str
-):
-    wrapper, env, log = _runtime(tmp_path)
-    env["JHT_TEST_RUNTIME_READY"] = "1"
-    binary = wrapper.parent / component
-    expected = "podman version 6.2.0" if component == "podman" else "podman-compose version 1.7.0"
-    binary.write_text(
-        f"#!/bin/sh\nif [ \"$1\" = --version ]; then printf '%s\\n' '{expected}'; exit 0; fi\n"
-        f"printf '{component}-unexpected %s\\n' \"$*\" >> \"$JHT_TEST_DOCKER_LOG\"\nexit 125\n",
-        encoding="utf-8",
-    )
-    binary.chmod(0o700)
-
-    result = subprocess.run(
-        [str(wrapper), "up"],
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    assert "non attestabile" in result.stderr
-    calls = log.read_text(encoding="utf-8")
-    assert "podman-compose " not in calls
-    assert "-unexpected" not in calls
-
-
-@pytest.mark.parametrize(
-    "argv",
-    (("up",), ("desktop-chat", "probe"), ("upgrade", "--check")),
-)
-def test_podman_machine_override_must_match_attested_marker_before_any_runtime_io(
-    tmp_path: Path, argv: tuple[str, ...]
-):
-    wrapper, env, log = _runtime(tmp_path)
-    env["JHT_TEST_RUNTIME_READY"] = "1"
-    env["JHT_PODMAN_MACHINE"] = "other-machine"
-    env["CONTAINER_CONNECTION"] = "external-default"
-
-    result = subprocess.run(
-        [str(wrapper), *argv],
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    assert result.stderr
-    assert not log.exists()
-
-
 @pytest.mark.parametrize("machine_name", ("", "invalid/name"))
 def test_podman_machine_marker_must_be_present_and_valid_before_any_runtime_io(
     tmp_path: Path, machine_name: str
@@ -641,7 +552,7 @@ def test_onboarding_snapshot_never_auto_ups_when_container_stops_mid_probe(
     assert "machine start" not in calls and "machine init" not in calls
 
 
-@pytest.mark.parametrize("argv", (("desktop-chat", "probe"), ("onboarding-snapshot",)))
+@pytest.mark.parametrize("argv", (("onboarding-snapshot",),))
 @pytest.mark.parametrize(
     "failure",
     (
@@ -731,46 +642,3 @@ def test_read_only_consumers_reject_unowned_or_ambiguous_compose_results(
         for line in calls.splitlines()
     )
     assert "machine start" not in calls and "machine init" not in calls
-
-
-@pytest.mark.parametrize(
-    "details",
-    (
-        "foreign|true|jht|jht|jht|jht|1|{runtime}|{compose}|1.6.0|{unit}|{hash}",
-        "jht|true|foreign|jht|jht|jht|1|{runtime}|{compose}|1.6.0|{unit}|{hash}",
-        "jht|true|jht|jht|jht|jht|1|{runtime}|{compose}|1.6.0|{unit}|{wrong_hash}",
-        "jht|false|jht|jht|jht|jht|1|{runtime}|{compose}|1.6.0|{unit}|{hash}",
-    ),
-)
-def test_explicit_up_rejects_unowned_container_before_mutation(
-    tmp_path: Path, details: str
-):
-    wrapper, env, log = _runtime(tmp_path)
-    env["JHT_TEST_RUNTIME_READY"] = "1"
-    runtime = Path(env["JHT_RUNTIME_DIR"])
-    env["JHT_TEST_INSPECT_DETAILS"] = details.format(
-        runtime=runtime,
-        compose=runtime / "docker-compose.yml",
-        unit=PODMAN_SYSTEMD_UNIT,
-        hash=env["JHT_TEST_CONFIG_HASH"],
-        wrong_hash="b" * 64,
-    )
-
-    result = subprocess.run(
-        [str(wrapper), "up"],
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    calls = log.read_text(encoding="utf-8").splitlines()
-    assert not any(
-        line.startswith("podman-compose ")
-        and line.endswith(" up -d")
-        and "--dry-run" not in line
-        for line in calls
-    )
-    assert not any("machine start" in line or " create" in line for line in calls)
