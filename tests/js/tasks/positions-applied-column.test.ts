@@ -3,10 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   POSITIONS_COLUMNS,
-  POSITIONS_COL_MIN_WIDTH,
   parseColumnsCookie,
 } from "../../../web/app/(protected)/positions/columns";
-import { T } from "../../../web/app/(protected)/positions/page.i18n";
 
 /**
  * O-25 — «vedere DOVUNQUE se la candidatura è partita, e l'ORARIO ESATTO».
@@ -17,6 +15,10 @@ import { T } from "../../../web/app/(protected)/positions/page.i18n";
  * label in una delle sette lingue, o assente dal picker, produce una colonna
  * che esiste per il server e non si riesce ad accendere, oppure che si accende
  * e rompe il layout. Ognuno di questi pezzi è invisibile agli altri.
+ *
+ * Larghezza minima, label nelle sette lingue, header e cella si controllano
+ * per OGNI colonna in positions-column-widths e positions-column-parity:
+ * qui resta solo quello che è proprio di queste colonne.
  */
 const ROOT = resolve(__dirname, "../../..");
 const PAGE = readFileSync(
@@ -27,35 +29,16 @@ const EVENT_STAMP = readFileSync(
   resolve(ROOT, "web/lib/position-event-stamp.ts"),
   "utf-8",
 );
-const LOCALES = ["it", "en", "hu", "es", "de", "fr", "pt"] as const;
 
 describe("colonna 'candidatura inviata' in lista", () => {
   it("è registrata fra le colonne della tabella", () => {
     expect(POSITIONS_COLUMNS).toContain("applied_at");
   });
 
-  it("ha una larghezza minima, come ogni altra colonna", () => {
-    // Senza, il colgroup calcola una proporzione su undefined e la tabella
-    // perde la sua geometria.
-    expect(POSITIONS_COL_MIN_WIDTH.applied_at).toBeGreaterThan(0);
-  });
-
-  it("ha la label in tutte e sette le lingue", () => {
-    for (const loc of LOCALES) {
-      const label = (T.col_applied_at as Record<string, string>)[loc];
-      expect(label, `manca la label ${loc}`).toBeTruthy();
-    }
-  });
-
   it("si può accendere dal picker e sopravvive al cookie", () => {
     expect(PAGE).toContain('key: "applied_at"');
     const chosen = parseColumnsCookie("title,applied_at");
     expect(chosen.has("applied_at")).toBe(true);
-  });
-
-  it("ha un header e una cella, non solo una chiave", () => {
-    expect(PAGE).toContain('col: "applied_at"');
-    expect(PAGE).toContain('show("applied_at")');
   });
 
   it("mostra data E ora, anche per oggi", () => {
