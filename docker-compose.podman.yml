@@ -1,9 +1,9 @@
 # Podman-on-Windows compatibility override.
 #
-# The agent container uses host networking for compatibility with Podman
-# Machine 6 / Netavark 2, whose custom rootless bridge can fail while applying
-# nftables rules. Isolated services remain on a bridge and do not join the
-# agent's host network namespace.
+# The agent container does not use Netavark's custom rootless bridge, which
+# can fail on Podman Machine 6 / Netavark 2 while applying nftables rules: it
+# runs on pasta (userspace, no nftables) with no way out but the egress proxy.
+# Isolated services remain on a bridge.
 
 services:
   jht:
@@ -11,16 +11,32 @@ services:
     # keep-id is required for the owner-only Windows ACL on ~/.jht: the jht
     # process must reach the bind mount as the Podman machine user (UID 1000).
     userns_mode: "keep-id:uid=1001,gid=1001"
-    network_mode: host
-    # Host networking puts the container on the host's own interfaces: the
-    # live-screen port of the base file cannot be published (Compose rejects
-    # ports with network_mode host), and the stream must bind loopback itself —
-    # the 0.0.0.0 default of .launcher/live-screen.sh would be every interface
-    # of the machine here.
-    ports: !reset []
+    # Its own network namespace, and the egress proxy as the only way out.
+    # `network_mode: host` shared the VM's network: an agent could skip the
+    # proxy (`curl --noproxy '*'`) and reach the LAN, the Windows host and the
+    # VM's loopback (the proxy itself, the broker's login view on 6081).
+    # pasta options:
+    #   -o 127.0.0.1    every connection pasta opens on the container's behalf
+    #                   leaves from the VM's loopback, which has no route out:
+    #                   LAN, gateway and Internet are refused;
+    #   -T 3128         the one way out: the container's 127.0.0.1:3128 is the
+    #                   VM's 127.0.0.1:3128, the egress proxy, which filters
+    #                   what may be reached (wsl-interop-connect-proxy.py);
+    #   --no-udp, --no-icmp  no DNS or tunnel over UDP/ICMP (behind a CONNECT
+    #                   proxy the proxy resolves the names);
+    #   --no-map-gw     the gateway address is not the VM's loopback;
+    #   -4              no IPv6, so no second source address to leave from.
+    # tests/test_podman_network_egress.py checks the line, and on a real
+    # Podman machine what the container can reach.
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"
+    # The live-screen port of the base file (127.0.0.1:6080 of the VM) is
+    # published again: pasta forwards it to the container's own address, so
+    # the stream keeps the 0.0.0.0 default of .launcher/live-screen.sh,
+    # which inside this namespace is reachable only through that port.
     environment:
-      - JHT_LIVE_SCREEN_BIND=127.0.0.1
-      - JHT_LIVE_SCREEN_PORT=${JHT_LIVE_SCREEN_PORT:-6080}
+      # Node's fetch ignores HTTP(S)_PROXY unless told: with no direct route
+      # it would time out (measured on the image's Node 22.22.2).
+      - NODE_USE_ENV_PROXY=1
       - HTTP_PROXY=${JHT_PODMAN_HTTP_PROXY:-}
       - HTTPS_PROXY=${JHT_PODMAN_HTTPS_PROXY:-}
       - ALL_PROXY=${JHT_PODMAN_ALL_PROXY:-}

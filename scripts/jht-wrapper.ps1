@@ -265,7 +265,7 @@ function Test-RuntimeBundleTrusted {
       $machineActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
       $containerUnitActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
       if ($values.'docker-compose.podman.yml' -ne $podmanActual -or $values.'docker.exe' -ne $shimActual -or $values.'container-runtime' -ne $selectionActual -or $values.'podman-machine' -ne $machineActual -or $values.'jht-container.service' -ne $containerUnitActual) { return $false }
-      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: host' -Quiet)) { return $false }
+      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"' -Quiet)) { return $false }
       if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { return $false }
     }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }

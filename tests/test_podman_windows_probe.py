@@ -121,7 +121,7 @@ def test_podman_compose_preserves_private_bind_mount_ownership():
     source = PODMAN_COMPOSE.read_text(encoding="utf-8")
 
     assert 'userns_mode: "keep-id:uid=1001,gid=1001"' in source
-    assert "network_mode: host" in source
+    assert 'network_mode: "pasta:' in source
 
 
 def test_probe_closes_the_atomic_config_rename_and_signal_regressions():
