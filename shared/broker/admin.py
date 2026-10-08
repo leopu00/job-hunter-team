@@ -15,7 +15,6 @@ value, length or hash of a secret.
     mailbox allow add|remove <address|@domain>
     mail drafts | mail approve <id> | mail discard <id> | mail journal [--limit N]
     view start linkedin-login | view stop | view status
-    view accept-no-sandbox --by <who> | view require-sandbox     (design R3)
 """
 
 from __future__ import annotations
@@ -339,28 +338,6 @@ def mail_journal(limit: int) -> dict:
     return {"ok": True, "journal": [_shown_mail(e) if isinstance(e, dict) else e for e in journal[-limit:]]}
 
 
-def view_accept_no_sandbox(by: str) -> dict:
-    """R3 (c): the operator's written acceptance of a login browser without
-    Chromium's sandbox, recorded with who and when. Off by default; the
-    browser stays limited to linkedin.com and licdn.com either way."""
-    by = by.strip()
-    if not by:
-        raise AdminError("acceptance_needs_a_name")
-    with store.locked("view"):
-        state = store.read_state("view", {})
-        state["chromium_no_sandbox_accepted"] = {"by": by, "at": mailops._now()}
-        store.write_state("view", state)
-    return {"ok": True, "chromium_sandbox": "not_required", "accepted_by": by}
-
-
-def view_require_sandbox() -> dict:
-    with store.locked("view"):
-        state = store.read_state("view", {})
-        state.pop("chromium_no_sandbox_accepted", None)
-        store.write_state("view", state)
-    return {"ok": True, "chromium_sandbox": "required"}
-
-
 def secrets_status() -> dict:
     out = {}
     for name in store.SECRET_NAMES:
@@ -400,8 +377,6 @@ def main(argv: list[str]) -> int:
     vw.add_parser("start").add_argument("purpose")
     vw.add_parser("stop")
     vw.add_parser("status")
-    vw.add_parser("accept-no-sandbox").add_argument("--by", required=True)
-    vw.add_parser("require-sandbox")
 
     args = p.parse_args(argv)
     try:
@@ -446,10 +421,6 @@ def main(argv: list[str]) -> int:
                 return _out(view.stop())
             if args.cmd == "status":
                 return _out(view.status())
-            if args.cmd == "accept-no-sandbox":
-                return _out(view_accept_no_sandbox(args.by))
-            if args.cmd == "require-sandbox":
-                return _out(view_require_sandbox())
     except view.ViewError as err:
         return _out({"ok": False, "reason": err.code})
     except (AdminError, store.StoreError) as err:

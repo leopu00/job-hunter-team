@@ -1,0 +1,64 @@
+# AppArmor profile of the jht-broker container (Job Hunter Team, design R3).
+#
+# The container default of github.com/moby/profiles apparmor/v0.2.3
+# (Apache-2.0, rendered with Name=jht-broker), with what the broker's login
+# browser needs to run Chromium's own sandbox:
+#   - `userns,`: on Ubuntu >= 23.10 only a confined process whose profile says
+#     so may create a user namespace (kernel.apparmor_restrict_unprivileged_userns);
+#   - signal and ptrace among the container's own processes also under
+#     Podman + crun, whose label is stacked (`jht-broker//&crun`).
+# ABI 4.0 is needed for `userns`; under it `network` no longer includes unix
+# sockets, so `unix,` is written out.
+# Kept as .txt in the repo; installed by the installer as /etc/apparmor.d/jht-broker and loaded with
+# `apparmor_parser -r`; `jht up` applies it only once it is loaded.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile jht-broker flags=(attach_disconnected,mediate_deleted) {
+  network,
+  unix,
+  # Disallow AF_ALG (Linux kernel crypto API).
+  deny network alg,
+  # Disallow AF_VSOCK to prevent host/guest communication.
+  deny network vsock,
+  capability,
+  file,
+  umount,
+
+  # Chromium's namespace sandbox (R3).
+  userns,
+
+  # Host (privileged) processes and the runtimes may signal the container.
+  signal (receive) peer=unconfined,
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+  # Container processes may signal each other, with the label alone or stacked.
+  signal (send,receive) peer=jht-broker,
+  signal (send,receive) peer="jht-broker//&crun",
+
+  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
+  # deny write to files not in /proc/<number>/** or /proc/sys/**
+  deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  deny mount,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # The container's processes may trace each other (Chromium's zygote and
+  # crash handling), with the label alone or stacked.
+  ptrace (trace,tracedby,read,readby) peer=jht-broker,
+  ptrace (trace,tracedby,read,readby) peer="jht-broker//&crun",
+}

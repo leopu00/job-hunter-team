@@ -33,7 +33,20 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("JHT_BROKER_SECRETS", str(tmp_path / "secrets"))
     monkeypatch.setenv("JHT_BROKER_STATE", str(tmp_path / "state"))
     monkeypatch.setenv("JHT_BROKER_VIEW_RUN", str(tmp_path / "run"))
+    # A broker confined as the installer sets it up (R3): the tests that need
+    # another confinement write their own.
+    monkeypatch.setattr(view, "PROC_SELF", fake_proc(tmp_path / "proc", seccomp="2", apparmor="jht-broker (enforce)"))
     return tmp_path
+
+
+def fake_proc(root: Path, seccomp: str = "2", apparmor: str | None = None, lsm_current: str | None = None) -> Path:
+    (root / "attr" / "apparmor").mkdir(parents=True, exist_ok=True)
+    (root / "status").write_text(f"Name:\tpython3\nNoNewPrivs:\t1\nSeccomp:\t{seccomp}\n")
+    if apparmor is not None:
+        (root / "attr" / "apparmor" / "current").write_text(apparmor + "\n")
+    if lsm_current is not None:
+        (root / "attr" / "current").write_text(lsm_current + "\x00")
+    return root
 
 
 def issue(run: Path, token: str, ttl: float = 120) -> None:
@@ -181,13 +194,118 @@ def admin(argv, stdin=b""):
     return code, json.loads(out.getvalue())
 
 
-def test_the_sandbox_is_required_until_the_host_records_an_acceptance(env):
-    assert view.no_sandbox_accepted() is False
-    assert admin(["view", "accept-no-sandbox", "--by", " "])[1]["reason"] == "acceptance_needs_a_name"
-    code, out = admin(["view", "accept-no-sandbox", "--by", "operator"])
-    assert out["ok"] and view.no_sandbox_accepted() is True
-    admin(["view", "require-sandbox"])
-    assert view.no_sandbox_accepted() is False
+# ── R3, way (a): the sandbox, always ────────────────────────────────────
+
+
+def test_there_is_no_way_to_turn_the_sandbox_off(env):
+    """The operator's decision: never --no-sandbox, not even as a bridge."""
+    for argv in (["view", "accept-no-sandbox", "--by", "operator"], ["view", "require-sandbox"]):
+        with pytest.raises(SystemExit):
+            admin(argv)
+    for name in ("view.py", "admin.py"):
+        source = (ROOT / "shared" / "broker" / name).read_text()
+        assert "no_sandbox" not in source and "chromium_sandbox=False" not in source, name
+    source = (ROOT / "shared" / "broker" / "view.py").read_text()
+    assert source.count("chromium_sandbox=True") == 1
+    assert "def _launch_browser(playwright):" in source  # no switch to pass
+
+
+@pytest.mark.parametrize("seccomp,apparmor,lsm,ready", [
+    ("2", "jht-broker (enforce)", None, True),
+    ("2", "jht-broker//&crun (enforce)", None, True),       # Podman's stacked label
+    ("2", "crun//&jht-broker (enforce)", None, True),
+    ("2", None, "system_u:system_r:container_t:s0:c1,c2", True),  # SELinux host: seccomp only
+    ("2", None, None, True),                                 # no LSM label at all
+    ("2", "docker-default (enforce)", None, False),          # the runtime's default profile
+    ("2", "containers-default-0.66.0//&crun (enforce)", None, False),
+    ("2", "unconfined", None, False),
+    ("0", "jht-broker (enforce)", None, False),              # seccomp off
+    ("", None, None, False),                                 # no /proc/self/status
+])
+def test_the_broker_checks_its_own_confinement(tmp_path, seccomp, apparmor, lsm, ready):
+    proc = fake_proc(tmp_path / "p", seccomp=seccomp, apparmor=apparmor, lsm_current=lsm)
+    if seccomp == "":
+        (proc / "status").unlink()
+    expected = {"ready": True, "reason": None} if ready else {"ready": False, "reason": "secure_browser_unavailable"}
+    assert view.confinement(proc) == expected
+
+
+def test_without_the_profiles_no_browser_starts_and_status_says_so_in_advance(env, monkeypatch):
+    monkeypatch.setattr(view, "PROC_SELF", fake_proc(env / "plain", apparmor="docker-default (enforce)"))
+    monkeypatch.setattr(view.subprocess, "Popen", lambda *a, **k: pytest.fail("a supervisor was started"))
+    with pytest.raises(view.ViewError) as caught:
+        view.start("linkedin-login")
+    assert caught.value.code == "secure_browser_unavailable"
+    out = view.status()
+    assert out["browser"] == "unavailable" and out["browser_reason"] == "secure_browser_unavailable"
+
+
+def test_status_says_ready_when_confined(env):
+    out = view.status()
+    assert out["browser"] == "ready" and "browser_reason" not in out
+
+
+# What chrome://sandbox prints for a sandboxed Chromium on Linux (rows of a
+# table, read as text); T1 pins it on a real one in CI.
+SANDBOXED = "Layer 1 Sandbox\tNamespace\nNamespace Sandbox\tYes\nPID namespaces\tYes\nNetwork namespaces\tYes\nSeccomp-BPF sandbox\tYes\nYou are adequately sandboxed."
+
+
+class FakeChromium:
+    def __init__(self, sandbox_text=SANDBOXED, fail=False):
+        self.calls, self.closed, self.sandbox_text, self.fail = [], False, sandbox_text, fail
+
+    def launch_persistent_context(self, profile, **kwargs):
+        self.calls.append(kwargs)
+        if self.fail:
+            raise RuntimeError("Failed to move to new namespace: PID namespaces supported, Network namespace supported")
+        chromium = self
+
+        class Page:
+            def goto(self, url, timeout=None):
+                assert url == "chrome://sandbox"
+
+            def inner_text(self, selector, timeout=None):
+                return chromium.sandbox_text
+
+            def close(self):
+                pass
+
+        class Context:
+            pages = []
+
+            def new_page(self):
+                return Page()
+
+            def close(self):
+                chromium.closed = True
+
+        return Context()
+
+
+def _playwright(chromium):
+    return type("PW", (), {"chromium": chromium})()
+
+
+def test_chromium_is_always_launched_with_its_sandbox(env):
+    chromium = FakeChromium()
+    assert view.open_browser(_playwright(chromium)) is not None
+    (kwargs,) = chromium.calls
+    assert kwargs["chromium_sandbox"] is True
+    assert not any("sandbox" in a for a in kwargs["args"])
+
+
+@pytest.mark.parametrize("chromium", [
+    FakeChromium(fail=True),
+    FakeChromium(sandbox_text="Namespace Sandbox: No\nSeccomp-BPF sandbox: No\nYou are not adequately sandboxed!"),
+    FakeChromium(sandbox_text=""),
+    FakeChromium(sandbox_text=SANDBOXED.replace("Seccomp-BPF sandbox\tYes", "Seccomp-BPF sandbox\tNo")),
+    FakeChromium(sandbox_text=SANDBOXED.replace("Namespace Sandbox\tYes", "Namespace Sandbox\tNo")),
+], ids=["launch-fails", "not-sandboxed", "no-answer", "no-seccomp", "no-namespaces"])
+def test_a_browser_without_an_active_sandbox_is_closed_and_refused(env, chromium):
+    with pytest.raises(view.ViewError) as caught:
+        view.open_browser(_playwright(chromium))
+    assert caught.value.code == "chromium_sandbox_unavailable"
+    assert chromium.fail or chromium.closed
 
 
 def test_the_view_is_not_an_operation_of_the_agents_socket():

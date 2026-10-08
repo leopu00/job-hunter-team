@@ -17,18 +17,28 @@ The contract with the desktop:
   ends on a successful login (the li_at cookie appears) or on `view stop`.
   At the end x11vnc goes first, so websockify closes the WebSocket normally.
 - Errors are one JSON line {"ok": false, "reason": ...} with a non-zero exit:
-  view_busy, view_unavailable, login_timeout, token_expired, plus
-  chromium_sandbox_unavailable (design R3).
+  view_busy, view_unavailable, login_timeout, token_expired, plus the two of
+  R3 below: secure_browser_unavailable and chromium_sandbox_unavailable.
 - No screenshots, no recording, no request log: websockify runs without
   --verbose or --record, its output goes to /dev/null, its log records are
   rewritten without the query string (view_ws.py), and the token is never
   written anywhere (only its sha256, in the run dir).
 
-R3: the login browser runs with Chromium's own sandbox. When the container
-cannot give it one (namespaces denied), the view fails closed with
-chromium_sandbox_unavailable, unless the host has recorded the operator's
-written acceptance (`view accept-no-sandbox`). In both cases the browser may
-only load linkedin.com and licdn.com: every other request is aborted.
+R3, way (a), the operator's decision: the login browser runs only with
+Chromium's own sandbox (user namespaces + seccomp-bpf), never --no-sandbox,
+not even as a bridge. The container gets it from the host's `jht-broker`
+profiles (AppArmor where the host has it, seccomp always), which the
+installer loads and `jht up` applies only when they are loaded:
+
+- secure_browser_unavailable: the broker checks from inside, before opening
+  anything, that it runs under those profiles (`confinement()`). If not, no
+  browser starts; mail is not affected.
+- chromium_sandbox_unavailable: the profiles are there, but Chromium did not
+  start, or chrome://sandbox does not say it is sandboxed.
+
+`status()` tells the desktop in advance: "browser": "ready" | "unavailable",
+with "browser_reason". Whatever happens, the browser may only load
+linkedin.com and licdn.com: every other request is aborted.
 """
 
 from __future__ import annotations
@@ -36,6 +46,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import secrets
 import signal
 import socket
@@ -113,8 +124,47 @@ def session() -> dict:
     return record if isinstance(pid, int) and _alive(pid) else {}
 
 
-def no_sandbox_accepted() -> bool:
-    return bool(store.read_state("view", {}).get("chromium_no_sandbox_accepted"))
+APPARMOR_PROFILE = "jht-broker"
+PROC_SELF = Path("/proc/self")
+
+
+def _apparmor_label(proc: Path) -> str | None:
+    """This process's AppArmor label, or None when the kernel runs no
+    AppArmor (SELinux hosts, the Podman machine of macOS, WSL2)."""
+    for name in ("attr/apparmor/current", "attr/current"):
+        try:
+            label = (proc / name).read_text(encoding="utf-8", errors="replace").strip().rstrip("\x00")
+        except OSError:
+            continue
+        if name == "attr/current" and not (label.endswith(")") or label == "unconfined"):
+            return None  # another LSM's label (SELinux `system_u:…`)
+        return label
+    return None
+
+
+def _seccomp_mode(proc: Path) -> str:
+    try:
+        for line in (proc / "status").read_text(encoding="utf-8").splitlines():
+            if line.startswith("Seccomp:"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def confinement(proc: Path | None = None) -> dict:
+    """Whether the broker runs under the host's `jht-broker` profiles (R3):
+    seccomp in filter mode always, and, where the kernel runs AppArmor, the
+    `jht-broker` profile (alone or stacked: `jht-broker//&crun (enforce)`)."""
+    proc = proc or PROC_SELF
+    if _seccomp_mode(proc) != "2":
+        return {"ready": False, "reason": "secure_browser_unavailable"}
+    label = _apparmor_label(proc)
+    if label is not None:
+        names = {part.split(" (", 1)[0].strip() for part in label.split("//&")}
+        if APPARMOR_PROFILE not in names:
+            return {"ready": False, "reason": "secure_browser_unavailable"}
+    return {"ready": True, "reason": None}
 
 
 def linkedin_logged_in(profile: Path | None = None) -> bool:
@@ -151,6 +201,10 @@ def status() -> dict:
         view = "waiting"
     last = store.read_state("view", {}).get("last_session", {})
     out = {"ok": True, "view": view, "linkedin": "logged_in" if linkedin_logged_in() else "login_required"}
+    confined = confinement()
+    out["browser"] = "ready" if confined["ready"] else "unavailable"
+    if not confined["ready"]:
+        out["browser_reason"] = confined["reason"]
     if not live and last.get("ended"):
         out["last_session"] = {k: last[k] for k in ("ended", "reason") if k in last}
     return out
@@ -161,6 +215,9 @@ def start(purpose: str) -> dict:
         raise ViewError("view_purpose_unknown")
     if session():
         raise ViewError("view_busy")
+    confined = confinement()
+    if not confined["ready"]:
+        raise ViewError(confined["reason"])
     directory = run_dir()
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(directory, 0o700)
@@ -234,19 +291,60 @@ def _allowed(url: str) -> bool:
     return parts.scheme == "https" and any(host == s or host.endswith("." + s) for s in ALLOWED_HOST_SUFFIXES)
 
 
-def _launch_browser(playwright, sandbox: bool):
+BROWSER_ARGS = ("--disable-dev-shm-usage", "--no-first-run", "--disable-features=Translate")
+
+
+def _launch_browser(playwright):
+    """Always with Chromium's sandbox: there is no parameter to turn it off."""
     profile = profile_dir()
     profile.mkdir(mode=0o700, exist_ok=True)
     return playwright.chromium.launch_persistent_context(
         str(profile),
         headless=False,
-        chromium_sandbox=sandbox,
-        args=["--disable-dev-shm-usage", "--no-first-run", "--disable-features=Translate"],
+        chromium_sandbox=True,
+        args=list(BROWSER_ARGS),
         viewport=None,
         # HOME on the tmpfs: the root is read-only, and the profile lives in
         # the secrets volume, not in a home.
         env={**os.environ, "DISPLAY": DISPLAY, "HOME": "/tmp"},
     )
+
+
+def sandboxed(text: str) -> bool:
+    """chrome://sandbox, read as text: Chromium's own verdict. Both layers must
+    say Yes (the namespace sandbox and seccomp-bpf), and the verdict must be
+    the positive one: "You are not adequately sandboxed!" contains the
+    positive words too."""
+    flat = " ".join(text.split()).lower()
+    return (
+        "you are adequately sandboxed" in flat
+        and "not adequately sandboxed" not in flat
+        and re.search(r"namespace sandbox\W*yes\b", flat) is not None
+        and re.search(r"seccomp-bpf sandbox\W*yes\b", flat) is not None
+    )
+
+
+def open_browser(playwright):
+    """The login browser, sandboxed and checked, or ViewError: never a
+    browser without its sandbox."""
+    try:
+        context = _launch_browser(playwright)
+    except Exception:  # noqa: BLE001 - the reason is the code, never the text
+        raise ViewError("chromium_sandbox_unavailable") from None
+    try:
+        probe = context.new_page()
+        probe.goto("chrome://sandbox", timeout=15000)
+        text = probe.inner_text("body", timeout=15000)
+        probe.close()
+    except Exception:  # noqa: BLE001
+        text = ""
+    if not sandboxed(text):
+        try:
+            context.close()
+        except Exception:  # noqa: BLE001
+            pass
+        raise ViewError("chromium_sandbox_unavailable")
+    return context
 
 
 def supervise(purpose: str, session_id: str) -> int:
@@ -278,12 +376,10 @@ def supervise(purpose: str, session_id: str) -> int:
         from playwright.sync_api import sync_playwright
 
         playwright = sync_playwright().start()
-        sandbox = not no_sandbox_accepted()
         try:
-            context = _launch_browser(playwright, sandbox)
-        except Exception:  # noqa: BLE001 - the reason is the code below, never the text
-            _write(directory / "result.json",
-                   {"failed": "chromium_sandbox_unavailable" if sandbox else "view_unavailable"})
+            context = open_browser(playwright)
+        except ViewError as err:
+            _write(directory / "result.json", {"failed": err.code})
             return 1
         context.route("**/*", lambda route: route.continue_() if _allowed(route.request.url) else route.abort())
         page = context.pages[0] if context.pages else context.new_page()
