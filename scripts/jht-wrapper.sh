@@ -867,18 +867,71 @@ telegram_admin() {
     err "Cosa fare: jht up"
     return 1
   }
+  docker exec "$telegram_id" jht-telegram-admin "$@"
+}
+
+telegram_admin_input() {
+  local telegram_id
+  telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
+    err "Cosa fare: jht up"
+    return 1
+  }
   docker exec -i "$telegram_id" jht-telegram-admin "$@"
 }
 
+telegram_image() {
+  local images
+  images="$(compose config --images 2>/dev/null | sort -u)" || return 1
+  case "$images" in ''|*$'\n'*) return 1 ;; esac
+  printf '%s\n' "$images"
+}
+
 telegram_legacy() {
-  local agent_id
-  agent_id="$(read_only_container_id)" || return 1
-  docker exec -u 1001 "$agent_id" /usr/bin/python3 -I \
+  local command="${1:-}" image mode home_mount
+  local -a userns_args=()
+  case "$command" in inventory|remaining) mode=ro ;; remove) mode=rw ;; *) return 2 ;; esac
+  image="$(telegram_image)" || return 1
+  home_mount="${JHT_HOME_HOST:-$HOME/.jht}"
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    userns_args=(--userns keep-id:uid=1001,gid=1001)
+  fi
+  docker run --rm \
+    ${userns_args[@]+"${userns_args[@]}"} \
+    --user 1001:1001 --read-only --tmpfs /tmp:size=4m,mode=1777 \
+    --network none --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$home_mount:/jht_home:$mode" \
+    --entrypoint /usr/bin/python3 "$image" -I \
     /app/shared/telegram_service/bin/jht-telegram-legacy.py "$@"
+}
+
+telegram_prepare_legacy_inventory() {
+  local role digests digest agent_status=0
+  compose up -d "$TELEGRAM_SERVICE" >/dev/null || return 1
+  if telegram_admin legacy complete >/dev/null 2>&1; then
+    return 0
+  fi
+  if read_only_container_id >/dev/null 2>&1; then
+    compose stop "$CONTAINER_SERVICE" >/dev/null || return 1
+  else
+    agent_status=$?
+    [ "$agent_status" -eq 3 ] || return 1
+  fi
+  for role in assistente capitano mentor; do
+    digests="$(telegram_legacy inventory "$role")" || return 1
+    if [ -n "$digests" ]; then
+      while IFS= read -r digest; do
+        printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$' || return 1
+      done <<< "$digests"
+    fi
+    printf '%s' "$digests" \
+      | telegram_admin_input legacy remember "$role" >/dev/null || return 1
+  done
 }
 
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
+  local agent_was_running=0 agent_status=0
   local token="" chat_id="" pair_rc=0
   local -a digest_args=()
   case "$role" in assistente|capitano|mentor) ;; *)
@@ -887,7 +940,21 @@ telegram_pair() {
     return 2
     ;;
   esac
+  if read_only_container_id >/dev/null 2>&1; then
+    agent_was_running=1
+    compose stop "$CONTAINER_SERVICE" >/dev/null || {
+      err "legacy_inventory_failed: non riesco a fermare gli agenti prima dell'inventario host."
+      return 1
+    }
+  else
+    agent_status=$?
+    if [ "$agent_status" -ne 3 ]; then
+      err "legacy_inventory_failed: lo stato del container agenti non è attestabile."
+      return 1
+    fi
+  fi
   digests="$(telegram_legacy inventory "$role")" || {
+    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
     err "legacy_inventory_failed: migrazione Telegram interrotta."
     return 1
   }
@@ -899,6 +966,17 @@ telegram_pair() {
       }
       digest_args+=(--legacy-digest "$digest")
     done <<< "$digests"
+  fi
+  if ! printf '%s' "$digests" | telegram_admin_input legacy remember "$role" >/dev/null; then
+    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
+    err "legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato."
+    return 1
+  fi
+  if [ "$agent_was_running" -eq 1 ]; then
+    compose start "$CONTAINER_SERVICE" >/dev/null || {
+      err "agent_restart_failed: inventario conservato, ma il team non è ripartito. Cosa fare: jht up"
+      return 1
+    }
   fi
 
   was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
@@ -927,14 +1005,14 @@ telegram_pair() {
       return 1
     fi
     if printf '{"bot_token":"%s","chat_id":"%s"}' "$token" "$chat_id" \
-        | telegram_admin bots pair "$role" "${digest_args[@]}"; then
+        | telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
     else
       pair_rc=$?
     fi
     unset token chat_id
   else
-    if telegram_admin bots pair "$role" "${digest_args[@]}"; then
+    if telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
     else
       pair_rc=$?
@@ -953,7 +1031,7 @@ telegram_pair() {
     case "$was_enabled" in *'"enabled": true'*) ;; *) first_cutover=1 ;; esac
     telegram_admin cutover enable >/dev/null || return 1
     compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
-    if [ "$first_cutover" -eq 1 ]; then
+    if [ "$first_cutover" -eq 1 ] && [ "$agent_was_running" -eq 1 ]; then
       # Il riavvio spegne anche eventuali tg-bridge che conservavano il token
       # vecchio in memoria. Al boot pid1 vede il marker read-only.
       compose restart "$CONTAINER_SERVICE" >/dev/null || return 1
@@ -1545,6 +1623,10 @@ ensure_up() {
   }
   info "Container '$CONTAINER_SERVICE' non attivo, lo avvio..."
   ensure_bind_owner
+  telegram_prepare_legacy_inventory || {
+    err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+    exit 1
+  }
   compose up -d
   # Attendi che il container sia in stato running e con ownership completa
   # prima di inoltrare qualunque comando nel nuovo processo.
@@ -2479,6 +2561,11 @@ handle_runtime_upgrade() {
 
   phase="activate"
   upgrade_note "Attivo il nuovo runtime..."
+  if ! telegram_prepare_legacy_inventory; then
+    if upgrade_restore_previous; then rolled_back=true; fi
+    upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Inventario Telegram host non conservato prima dell'avvio degli agenti" "$rolled_back"
+    return 1
+  fi
   if ! upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$CONTAINER_SERVICE"; then
     if upgrade_restore_previous; then rolled_back=true; fi
     upgrade_result false false activate "$old_version" "$old_image" "$old_version" "$old_image" false "Avvio della nuova versione fallito" "$rolled_back"
@@ -2679,6 +2766,10 @@ case "$SUB" in
     wake_container_runtime_for_up
     container_mutation_preflight || exit 1
     ensure_bind_owner
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
@@ -2689,6 +2780,10 @@ case "$SUB" in
     require_docker
     container_mutation_preflight || exit 1
     ensure_bind_owner
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
@@ -2724,6 +2819,10 @@ case "$SUB" in
     }
     ensure_bind_owner
     compose down
+    telegram_prepare_legacy_inventory || {
+      err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
+      exit 1
+    }
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
