@@ -21,6 +21,13 @@ the mailbox again then fails on its first open, and the password never
 reaches the disk. The deletion above stays as the second defence, should a
 placeholder be removed.
 
+Declared residue (G1-r1): the placeholder belongs to uid 1001, the agents'
+own uid. Inside `jht` nothing else can create it (no root, every capability
+dropped), and a root helper container was ruled out. An agent can therefore
+loosen it with chmod and remove it; the next sweep, within 30 s, deletes a
+file found in its place unread and puts the placeholder back. The threat the
+placeholder closes is the old client's save, which does not remove it.
+
 pid1 runs a sweep at boot and then periodically. Output: one JSON line,
 `{"ok": true, "removed": [...], "placeholders": [...]}`; never a path content.
 """
