@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { generateSyncToken } from "@/lib/cloud-sync/tokens";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
@@ -16,6 +17,25 @@ const NOT_CLOUD = NextResponse.json(
   { status: 400 },
 );
 const UNAUTH = NextResponse.json({ error: "Non autenticato" }, { status: 401 });
+const NO_SERVICE_ROLE = NextResponse.json(
+  { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
+  { status: 500 },
+);
+
+// Creare e revocare un token si fa solo da qui, col client service_role
+// (migrazione 093): la sessione dell'utente legge i suoi token ma non li
+// scrive. Con le policy INSERT/UPDATE aperte, chi aveva la sessione poteva
+// crearsi un token con un hash scelto da lui e senza scadenza, o togliere
+// `revoked_at` a un token revocato, scavalcando questa route. Il service_role
+// salta la RLS: l'utente lo decide la sessione verificata qui sotto, e ogni
+// scrittura porta il suo `user_id`.
+function serviceRole() {
+  try {
+    return createAdminClient();
+  } catch {
+    return null;
+  }
+}
 
 // Tokens lifecycle (list/create/revoke) e' raro per design: 10/min
 // per user e' largo per UI normale ma cappa abuso (es. enumeration).
@@ -132,8 +152,11 @@ export async function POST(req: NextRequest) {
     expiresAt = new Date(Date.now() + requested * 86_400_000).toISOString();
   }
 
+  const admin = serviceRole();
+  if (!admin) return NO_SERVICE_ROLE;
+
   const { token, prefix, hash } = generateSyncToken();
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("cloud_sync_tokens")
     .insert({
       user_id: user.id,
@@ -168,7 +191,10 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id mancante" }, { status: 400 });
 
-  const { error } = await supabase
+  const admin = serviceRole();
+  if (!admin) return NO_SERVICE_ROLE;
+
+  const { error } = await admin
     .from("cloud_sync_tokens")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id)
