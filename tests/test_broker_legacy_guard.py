@@ -148,6 +148,27 @@ def test_a_reappeared_file_is_deleted_unread_and_the_user_is_told(broker, home, 
     assert "jht mail setup" in legacy_guard.NOTICE and CANARY not in json.dumps(result)
 
 
+def test_the_notice_says_the_old_apps_password_is_exposed_and_how_to_rotate_it(broker, home, monkeypatch):
+    """Audit G1-r4: v0.3.9 put the password on a command line the agents'
+    container can read, so the notice asks for a rotation, not only a setup."""
+    from broker import legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    plant(home)
+    tool = home / "jht-notify-user"
+    tool.write_text("#!/bin/sh\n")
+    sent = []
+    monkeypatch.setattr(legacy_guard.shutil, "which", lambda name: str(tool))
+    monkeypatch.setattr(legacy_guard.subprocess, "run", lambda argv, **kwargs: sent.append(argv))
+    legacy_guard.sweep(ask=broker.ask)
+    (argv,) = sent
+    assert argv[1:5] == ["--agent", "assistente", "--kind", "alert"]
+    message = argv[-1]
+    assert "credentials/email_monitor.json" in message
+    assert "EXPOSED" in message and "new app password" in message
+    assert message.index("new app password") < message.index("jht mail setup")
+
+
 def test_a_name_not_yet_migrated_is_left_for_the_host_migration(broker, home):
     from broker import legacy_guard
 

@@ -48,11 +48,16 @@ from broker.client import call  # noqa: E402
 from broker.legacy import NAMES, PLACEHOLDER_NOTE, PLACEHOLDER_SUFFIXES, is_placeholder, legacy_path  # noqa: E402
 
 RUNTIME_ROLE = "runtime"
+# Audit G1-r4: an old client (v0.3.9) passes the password to the agents'
+# container on a command line other processes there can read. A password
+# saved that way is exposed, whatever happened to the file afterwards.
 NOTICE = (
     "A mailbox password file reappeared in the agents' folder "
     "(credentials/{names}) after it had been moved to the secrets broker. "
-    "It was deleted without being read. To change the mailbox account, run "
-    "`jht mail setup` on your computer."
+    "It was deleted without being read. If you saved the mailbox from an old "
+    "version of the app, treat that password as EXPOSED: create a new app "
+    "password with your mail provider, then save it on your computer with "
+    "`jht mail setup`."
 )
 
 
