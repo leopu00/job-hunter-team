@@ -105,7 +105,11 @@ sender_claimed=""
 sender_origin=""
 if [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
   if verdict=$(python3 "$ORIGIN_LIB" "$message" 2>/dev/null); then
-    verdict_head=$(printf '%s' "$verdict" | head -n 1)
+    # La prima riga senza una pipe verso `head`: con `set -o pipefail` il
+    # printf a sinistra prende SIGPIPE se head e' gia' uscito, e lo script
+    # moriva con 141 senza una parola (in CI sotto xdist; in locale 3 corse
+    # su 1400 del sender; la sonda ERR ha indicato questa riga).
+    verdict_head=${verdict%%$'\n'*}
     sender_trust=$(printf '%s' "$verdict_head" | cut -f1)
     sender_claimed=$(printf '%s' "$verdict_head" | cut -f2)
     sender_origin=$(printf '%s' "$verdict_head" | cut -f3)
@@ -226,7 +230,10 @@ fi
 # mentre Ink lo rende, i primi caratteri scorrono fuori da capture-pane e il
 # sender conclude a torto che il testo non sia mai apparso. La coda resta
 # invece accanto al cursore ed e' quindi la prova piu' stabile.
-signature_head=$(printf '%s' "$message" | head -c 30)
+# `head` legge da una sostituzione di processo, non da una pipeline: se si
+# ferma ai 30 byte, il SIGPIPE del printf non e' l'esito del comando
+# (`set -o pipefail` lo trasformerebbe in un exit 141 muto, come al verdetto).
+signature_head=$(head -c 30 < <(printf '%s' "$message"))
 signature_tail=$(printf '%s' "$message" | tail -c 30)
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
