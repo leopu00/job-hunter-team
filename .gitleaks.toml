@@ -35,6 +35,12 @@ paths = [
 id = "jwt"
 
 [[rules.allowlists]]
+description = "Made-up JWT in a magic-link fixture of the mailbox filter test, verified 08/10/2026; built at runtime since the next commit"
+condition = "AND"
+commits = ["42879df11a2e1cec55cc0a93fd986b1431b399ad"]
+paths = ['''^tests/test_broker_mailfilter\.py$''']
+
+[[rules.allowlists]]
 description = "Supabase anon key"
 condition = "AND"
 commits = ["0034c621ffad586a4057a9419d4e88b8ce292840", "ae46cb654fb93cbeb623d9229dc4c7872031ddfc"]
@@ -72,6 +78,12 @@ paths = ['''^cli/src/lib/realtime-subscriber\.js$''']
 
 [[rules]]
 id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Canary 'CANARY-rotated-...' standing in for a rotated app password in the broker test, verified 08/10/2026; renamed since the next commit"
+condition = "AND"
+commits = ["42879df11a2e1cec55cc0a93fd986b1431b399ad"]
+paths = ['''^tests/test_broker_core\.py$''']
 
 [[rules.allowlists]]
 description = "localStorage key name, not a credential"
