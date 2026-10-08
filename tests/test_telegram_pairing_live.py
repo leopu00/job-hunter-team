@@ -71,13 +71,16 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
             engine, "run", "-d", "--name", container, *userns, "--user", "1003:1003",
             "--network", "none", "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
-            "-e", "PATH=/app/shared/telegram_service/bin:/usr/local/bin:/usr/bin:/bin",
+            "-e", "PATH=/tmp/bin:/usr/local/bin:/usr/bin:/bin",
             "-e", "PYTHONDONTWRITEBYTECODE=1",
             "-e", "JHT_TELEGRAM_SECRETS=/jht_telegram_secrets",
             "-e", "JHT_TELEGRAM_STATE=/jht_telegram_state",
             "-v", f"{ROOT / 'shared'}:/app/shared:ro",
             "-v", f"{secrets}:/jht_telegram_secrets", "-v", f"{state}:/jht_telegram_state",
-            IMAGE, "python3", "-c", "import time; time.sleep(300)",
+            IMAGE, "python3", "-c",
+            "import os,time; os.mkdir('/tmp/bin'); "
+            "os.symlink('/app/shared/telegram_service/bin/jht-telegram-admin.py', "
+            "'/tmp/bin/jht-telegram-admin'); time.sleep(300)",
         )
         script = (
             "set -euo pipefail\n"
