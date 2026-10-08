@@ -339,6 +339,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs.",
     "Recreate the Podman machine: your data in ~/.jht and in Documents › Job Hunter Team stays where it is.",
   ),
+  // Not an error: the confirmation before the machine is deleted.
+  podman_machine_recreate_confirm: copy(
+    "Ricreare la macchina Podman di JHT cancella ciò che vive solo al suo interno: le CLI dei provider installate (volume jht-deps), l’account email e gli altri accessi ai portali salvati nel broker, il diario degli invii, le bozze e le autorizzazioni della posta.",
+    "Dopo, la preparazione riscarica da sola le CLI dei provider (qualche minuto, serve la connessione); tu ricollega l’account email, rifai l’accesso a LinkedIn e ridai le autorizzazioni della posta. Restano il profilo, i CV, i dati in ~/.jht e in Documenti › Job Hunter Team e l’accesso al provider.",
+    "Recreating the JHT Podman machine deletes what lives only inside it: the installed provider CLIs (the jht-deps volume), the email account and the other portal logins saved in the broker, and the mail journal, drafts and authorisations.",
+    "Afterwards the setup downloads the provider CLIs again by itself (a few minutes, online); you connect the email account again, log in to LinkedIn again and give the mail authorisations again. Your profile, CVs, the data in ~/.jht and Documents › Job Hunter Team and the provider login stay.",
+  ),
   podman_machine_recreate_failed: copy(
     "La macchina Podman di JHT non è stata ricreata.",
     "Riprova. Se si ripete, riavvia il computer.",

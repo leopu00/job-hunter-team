@@ -12,6 +12,7 @@ import {
   runtimeArtwork,
 } from "./OnboardingArtwork";
 import { OAuthLoginTakeover } from "../oauth-login-takeover";
+import { describeError } from "../lib/error-catalog";
 import VpsProfileImport from "./VpsProfileImport";
 import "./onboarding.css";
 
@@ -177,6 +178,9 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
     : runtime.stage === "team-start"
       ? "Avvia la squadra"
       : runtime.stage === "ssh-host-key" ? "Conferma fingerprint" : "Accedi al provider";
+  // What the deletion loses and what the person redoes after it, from the
+  // catalog like every other sentence of this flow.
+  const recreateConfirm = describeError("podman_machine_recreate_confirm");
   // Deleting the machine is never one click: the first button only asks.
   const recreatePodmanMachine = failed && runtime.code === "podman_machine_mounts_home" && host.kind === "local"
     ? onRecreatePodmanMachine
@@ -275,7 +279,7 @@ function RuntimeView({ host, runtime, activity, onRetry, onRestart, onExitFailur
           )}
           {recreatePodmanMachine && confirmingRecreate && (
             <section className="onboarding-provider-console" aria-label="Conferma ricreazione macchina Podman">
-              <div className="onboarding-provider-console__heading"><div><strong>Cancellare e ricreare la macchina Podman di JHT?</strong><small>La macchina viene cancellata e creata di nuovo con le sole cartelle ~/.jht e Documenti › Job Hunter Team. I tuoi dati in queste due cartelle restano; l’immagine del team viene scaricata di nuovo. Le altre macchine Podman non vengono toccate.</small></div></div>
+              <div className="onboarding-provider-console__heading"><div><strong>Cancellare e ricreare la macchina Podman di JHT?</strong><small>La macchina viene creata di nuovo con le sole cartelle ~/.jht e Documenti › Job Hunter Team; le altre macchine Podman non vengono toccate.</small><small>{recreateConfirm.text}</small><small>{recreateConfirm.action}</small></div></div>
             </section>
           )}
           {actionFailed && <p className="onboarding-error" role="alert">L’azione non è partita. Nessuna configurazione è stata persa: riprova.</p>}
