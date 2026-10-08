@@ -6,7 +6,6 @@
   "scripts": {
     "recording-browser": "node scripts/open-recording-browser.mjs",
     "test": "playwright test",
-    "test:quarantine": "E2E_INCLUDE_QUARANTINE=1 playwright test quarantine/",
     "test:report": "playwright show-report reports/playwright"
   },
   "keywords": [],

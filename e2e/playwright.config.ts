@@ -46,20 +46,14 @@ if (hasSession) {
   );
 }
 
-// ── Quarantena ──────────────────────────────────────────────────────────
-// 75 delle 78 spec storiche testano un sito che non esiste più (pagine
-// rimosse, plane locale ritirato, contratti API cambiati). Stanno in
-// `tests/quarantine/` e non girano: una suite che "passa" perché salta se
-// stessa è peggio di nessuna suite, perché sembra un segnale. Il perché,
-// gruppo per gruppo, è in tests/quarantine/README.md.
-//
-// Per girarle apposta — revisione, recupero di una spec:
-//   E2E_INCLUDE_QUARANTINE=1 npx playwright test quarantine/
-const INCLUDE_QUARANTINE = process.env.E2E_INCLUDE_QUARANTINE === "1";
+// ── Niente quarantena ───────────────────────────────────────────────────
+// 75 delle 78 spec storiche testavano un sito che non esiste più. Messe in
+// `tests/quarantine/` il 26/07 (c798ee1bd, col perché gruppo per gruppo nel
+// suo README) e mai più eseguite, sono state tolte l'08/10: si recuperano
+// dalla storia git. Ogni spec in tests/ gira.
 
 export default defineConfig({
   testDir: "./tests",
-  testIgnore: INCLUDE_QUARANTINE ? [] : ["**/quarantine/**"],
   timeout: 30_000,
   retries: 1,
   reporter: [["html", { outputFolder: "reports/playwright" }], ["list"]],

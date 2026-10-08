@@ -8,8 +8,7 @@ Browser-driven end-to-end tests for the Job Hunter Team **web** surface.
 ## Layout
 
 ```
-tests/             4 live specs — these run, in CI and locally
-tests/quarantine/  75 specs kept for parts, excluded from every run
+tests/             the live specs — these run, in CI and locally
 playwright.config.ts
 ```
 
@@ -47,8 +46,8 @@ seventy-five useless specs pass; a page answering 200 with its loading
 skeleton would satisfy it.
 
 Still open in that ticket: `/map` cannot be verified beyond reachability
-(WebGL is absent in headless), and the 11 API routes exercised only by
-quarantined specs remain without a caller.
+(WebGL is absent in headless), and the 11 API routes once exercised only by
+the quarantined specs remain without a caller.
 
 ⚠️ **These specs are meant to be able to fail.** Until 2026-07-30
 `39-og-twitter-image` guarded all 21 of its tests with
@@ -59,18 +58,19 @@ quarantine defect, alive inside a promoted spec. Those guards now assert
 regression; if the job goes red because `next start` does not produce one of
 them, that is the suite doing its job for the first time.
 
-**What does not: the other 75 specs**, moved to [`tests/quarantine/`](tests/quarantine/README.md).
-The 2026-07-25 measurement of the full suite — 770 passed · 574 skipped ·
-0 failed — was the thing that hid the problem: the "passes" were largely specs
-skipping themselves, and the file that says why is the quarantine README. In
-short: the site map was rewritten under them (`/faq`, `/guide`, `/about`,
-`/changelog`, `/demo`, `/stats`, `/applications`, `/jobs`… no longer exist), the
-local plane they logged into was retired, `/api/health` changed shape, and a few
-assert on `https://jobhunterteam.ai` rather than on the code.
+**What is gone: the other 75 specs.** Moved to `tests/quarantine/` on 2026-07-26
+(c798ee1bd), never run again, removed on 2026-10-08; they and their README are
+in the git history. The 2026-07-25 measurement of the full suite — 770 passed ·
+574 skipped · 0 failed — was the thing that hid the problem: the "passes" were
+largely specs skipping themselves; the quarantine README said why. In short: the
+site map was rewritten under them (`/faq`, `/guide`, `/about`, `/changelog`,
+`/demo`, `/stats`, `/applications`, `/jobs`… no longer exist), the local plane
+they logged into was retired, `/api/health` changed shape, and a few assert on
+`https://jobhunterteam.ai` rather than on the code.
 
 The triage was static — every route in every spec matched against `web/app/` —
-and no spec was condemned on the strength of a red run. Reviving one is a
-documented path, not a rewrite: see the quarantine README.
+and no spec was condemned on the strength of a red run. Reviving one starts
+from the history: `git show c798ee1bd:e2e/tests/quarantine/README.md`.
 
 Tracked in `BACKLOG.md` as **[JHT-E2E-STALE]**.
 
@@ -107,12 +107,6 @@ cd e2e && npm ci && BASE_URL=http://localhost:3008 npx playwright test
 Anonymous: the demo API and the auth-closure tests pass; everything behind the
 login skips. With a session (below): everything runs.
 
-To review a quarantined spec — the only reason to run one:
-
-```bash
-E2E_INCLUDE_QUARANTINE=1 BASE_URL=http://localhost:3008 npx playwright test quarantine/27-pricing
-```
-
 There used to be a second recipe here, `local` deploy mode without
 `NEXT_PUBLIC_JHT_DEPLOY=cloud`, in which the protected-area gate is off
 (`isLocalDeploy()`) and every page renders. It is gone with the specs that
@@ -128,8 +122,7 @@ green run there proved something nobody uses.
 > this reason.
 
 ```bash
-npm test                  # the 4 live specs
-npm run test:quarantine   # the 75 retired ones, on purpose
+npm test                  # the live specs
 npm run test:report       # open the HTML report
 ```
 
