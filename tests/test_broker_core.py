@@ -492,6 +492,17 @@ def test_an_exposed_password_stays_refused_after_the_rotation(broker):
     assert CANARY not in state_blob and ROTATED not in state_blob
 
 
+@pytest.mark.parametrize("typed", ["abcd efgh ijkl mnop", "abcdefghijklmnop", " abcd\u00a0efgh ijkl  mnop\t"])
+def test_an_exposed_app_password_is_refused_with_or_without_its_spaces(broker, typed):
+    """Audit M4: Gmail shows an app password in four groups; the server takes
+    it with or without the spaces, so the rotation must not."""
+    admin_run(broker, ["secrets", "import-legacy", "email_monitor"],
+                envelope(mailbox_json(password="abcd efgh ijkl mnop")))
+    out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=typed))[1]
+    assert out == {"ok": False, "reason": "password_not_rotated"}
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password="qrst uvwx yzab cdef"))[1]["ok"]
+
+
 def test_a_rotation_mark_of_phase_1a_is_still_honoured(broker):
     # The 1a shape kept one digest and no list.
     broker.store.write_state("rotation", {"email_monitor": {

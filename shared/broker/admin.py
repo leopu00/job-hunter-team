@@ -108,7 +108,7 @@ def _set_rotation(name: str, *, pending: bool, expose: str | None = None) -> Non
 
 def secrets_set(name: str, raw: bytes) -> dict:
     data, filters = _parse_secret(name, raw)
-    if mailops.password_digest(data["password"]) in _exposed(_rotation(name)):
+    if mailops.password_digests(data["password"]) & set(_exposed(_rotation(name))):
         # B2: that password has been readable by the agents. Saving it again
         # (also after a delete, or after a rotation to another one) does not
         # end the rotation.

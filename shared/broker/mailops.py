@@ -83,8 +83,18 @@ def rotation_pending() -> bool:
 
 def password_digest(password: str) -> str:
     """Kept only in the broker's 0700 state, never returned or logged: it lets
-    `secrets set` refuse the same password after a migration (B2)."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    `secrets set` refuse the same password after a migration (B2).
+
+    Whitespace does not count (audit M4): a Gmail app password is shown as
+    four groups of four letters and the server takes it with or without the
+    spaces, so `abcd efgh ijkl mnop` and `abcdefghijklmnop` are one password."""
+    return hashlib.sha256("".join(password.split()).encode("utf-8")).hexdigest()
+
+
+def password_digests(password: str) -> set[str]:
+    """The digest above and the one of phase 1a (the password as typed), so a
+    mark written before the normalisation still matches."""
+    return {password_digest(password), hashlib.sha256(password.encode("utf-8")).hexdigest()}
 
 
 def status(args: dict, role: str) -> dict:
