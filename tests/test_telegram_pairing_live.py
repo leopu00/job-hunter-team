@@ -8,6 +8,7 @@ the second call fails with ``input_not_json``.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -84,6 +85,7 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
         )
         script = (
             "set -euo pipefail\n"
+            "docker() { \"$JHT_LIVE_ENGINE\" \"$@\"; }\n"
             "err() { printf '%s\\n' \"$*\" >&2; }\n"
             f"read_only_service_id() {{ printf '%s\\n' '{container}'; }}\n"
             "TELEGRAM_SERVICE=jht-telegram\n"
@@ -99,6 +101,7 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
             capture_output=True,
             text=True,
             timeout=60,
+            env={**os.environ, "JHT_LIVE_ENGINE": shutil.which(engine) or engine},
         )
         assert paired.returncode == 0, paired.stderr
         assert json.loads(paired.stdout.strip()) == {
