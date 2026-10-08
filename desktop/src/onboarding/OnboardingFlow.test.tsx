@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
+import { describeError, ERROR_LOCALES } from "../lib/error-catalog";
 import { OnboardingFlow } from "./OnboardingFlow";
 
 vi.mock("../components/SshKeyPicker", () => ({
@@ -219,8 +220,22 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByText(/correggi i dati indicati/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^ricrea la macchina podman/i }));
     expect(onRecreatePodmanMachine).not.toHaveBeenCalled();
-    expect(screen.getByRole("region", { name: "Conferma ricreazione macchina Podman" }))
-      .toHaveTextContent("I tuoi dati in queste due cartelle restano");
+    // It says what is lost (the jht-deps volume with the provider CLIs, the
+    // broker's portal logins and mail state) and what the person redoes.
+    const confirmation = screen.getByRole("region", { name: "Conferma ricreazione macchina Podman" });
+    const copy = describeError("podman_machine_recreate_confirm");
+    expect(copy.known).toBe(true);
+    expect(confirmation).toHaveTextContent(copy.text);
+    expect(confirmation).toHaveTextContent(copy.action);
+    expect(copy.text).toContain("jht-deps");
+    expect(copy.text).toContain("CLI dei provider");
+    expect(copy.action).toContain("riscarica");
+    for (const locale of ERROR_LOCALES) {
+      const localized = describeError("podman_machine_recreate_confirm", { locale });
+      expect(localized.known, locale).toBe(true);
+      expect(localized.text, locale).toContain("jht-deps");
+      expect(localized.action, locale).toContain("LinkedIn");
+    }
 
     await user.click(screen.getByRole("button", { name: "Annulla" }));
     expect(screen.queryByRole("region", { name: "Conferma ricreazione macchina Podman" })).not.toBeInTheDocument();

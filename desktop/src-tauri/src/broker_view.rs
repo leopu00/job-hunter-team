@@ -27,11 +27,12 @@ use crate::runtime_host::{ssh_base_args, validate_host, ProcessResult, Validated
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::OsString,
+    io::{BufRead, BufReader},
     net::{Ipv4Addr, SocketAddrV4, TcpListener},
     process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        mpsc, Mutex,
     },
     thread,
     time::{Duration, Instant},
@@ -233,6 +234,9 @@ fn tunnel_args(
     let target = args.pop().ok_or("invalid_host")?;
     args.extend([
         "-N".into(),
+        // debug1 says when the forward listens (wait_for_tunnel); it stays in
+        // memory, never in a log.
+        "-v".into(),
         "-o".into(),
         "ExitOnForwardFailure=yes".into(),
         "-o".into(),
@@ -254,36 +258,129 @@ fn free_loopback_port() -> Result<u16, &'static str> {
         .map_err(|_| "tunnel_start_failed")
 }
 
-/// Ready when ssh holds the local port: binding it fails. Never connects to
-/// it, so the broker's websockify sees nothing before the window does.
+/// What ssh's stderr says about the forward.
+#[derive(Debug, PartialEq, Eq)]
+enum TunnelSignal {
+    Ready,
+    PortBusy,
+}
+
+/// Reads ssh -v in order. "Local forwarding listening on ..." comes BEFORE
+/// the bind (seen live: it is followed by "Address already in use" when the
+/// port is taken), so it is not proof. With ExitOnForwardFailure ssh only
+/// reaches "Entering interactive session." once every forward is bound: that
+/// line, after the announcement for our port, is the ready signal.
+#[derive(Default)]
+struct TunnelOutput {
+    announced: bool,
+}
+
+impl TunnelOutput {
+    fn feed(&mut self, line: &str, local_port: u16) -> Option<TunnelSignal> {
+        if line.contains(&format!(
+            "bind [127.0.0.1]:{local_port}: Address already in use"
+        )) || line.contains(&format!("cannot listen to port: {local_port}"))
+        {
+            return Some(TunnelSignal::PortBusy);
+        }
+        if line.contains(&format!(
+            "Local forwarding listening on 127.0.0.1 port {local_port}."
+        )) {
+            self.announced = true;
+            return None;
+        }
+        (self.announced && line.contains("Entering interactive session."))
+            .then_some(TunnelSignal::Ready)
+    }
+}
+
+/// Reads ssh's stderr to the end, so a verbose ssh never blocks on a full
+/// pipe, and passes on only what concerns the forward.
+fn watch_tunnel_output(
+    stderr: impl std::io::Read + Send + 'static,
+    local_port: u16,
+) -> mpsc::Receiver<TunnelSignal> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut output = TunnelOutput::default();
+        for line in BufReader::new(stderr).lines() {
+            let Ok(line) = line else { break };
+            if let Some(signal) = output.feed(&line, local_port) {
+                let _ = sender.send(signal);
+            }
+        }
+    });
+    receiver
+}
+
+fn port_taken(local_port: u16) -> bool {
+    TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, local_port)).is_err()
+}
+
+/// Ready only when ssh itself says its forward on our port is bound
+/// (TunnelOutput), and it is still running. A port that is merely taken may belong to another
+/// program: that is `tunnel_port_busy`, never our tunnel. The port is never
+/// connected to, so the broker's websockify sees nothing before the window.
 fn wait_for_tunnel(
     child: &mut Child,
+    signals: &mpsc::Receiver<TunnelSignal>,
     local_port: u16,
     within: Duration,
 ) -> Result<(), &'static str> {
     let started = Instant::now();
+    let busy = |code: &'static str| {
+        if port_taken(local_port) {
+            "tunnel_port_busy"
+        } else {
+            code
+        }
+    };
     while started.elapsed() < within {
+        match signals.recv_timeout(Duration::from_millis(100)) {
+            Ok(TunnelSignal::Ready) => {
+                return match child.try_wait() {
+                    Ok(None) => Ok(()),
+                    _ => Err("tunnel_start_failed"),
+                };
+            }
+            Ok(TunnelSignal::PortBusy) => return Err("tunnel_port_busy"),
+            Err(_) => {}
+        }
         if !matches!(child.try_wait(), Ok(None)) {
-            return Err("tunnel_start_failed");
+            // Exited: a last look at what it said before going.
+            return match signals.recv_timeout(Duration::from_millis(200)) {
+                Ok(TunnelSignal::PortBusy) => Err("tunnel_port_busy"),
+                _ => Err(busy("tunnel_start_failed")),
+            };
         }
-        if TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, local_port)).is_err() {
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(200));
     }
-    Err("tunnel_verify_failed")
+    Err(busy("tunnel_verify_failed"))
+}
+
+fn spawn_tunnel(
+    program: &str,
+    args: Vec<OsString>,
+    local_port: u16,
+) -> Result<(Child, mpsc::Receiver<TunnelSignal>), &'static str> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| "tunnel_start_failed")?;
+    let stderr = child.stderr.take().ok_or("tunnel_start_failed")?;
+    Ok((child, watch_tunnel_output(stderr, local_port)))
 }
 
 fn open_tunnel(host: &ValidatedHost, remote_port: u16) -> Result<(u16, Child), &'static str> {
     let local_port = free_loopback_port()?;
-    let mut child = Command::new("ssh")
-        .args(tunnel_args(host, local_port, remote_port)?)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|_| "tunnel_start_failed")?;
-    match wait_for_tunnel(&mut child, local_port, TUNNEL_READY_TIMEOUT) {
+    let (mut child, signals) = spawn_tunnel(
+        "ssh",
+        tunnel_args(host, local_port, remote_port)?,
+        local_port,
+    )?;
+    match wait_for_tunnel(&mut child, &signals, local_port, TUNNEL_READY_TIMEOUT) {
         Ok(()) => Ok((local_port, child)),
         Err(code) => {
             let _ = child.kill();
@@ -939,6 +1036,26 @@ mod tests {
             grant.port
         );
 
+        // A real ssh on a port another program holds: refused, not ready.
+        let foreign_port = free_loopback_port().unwrap();
+        let foreign =
+            TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, foreign_port)).unwrap();
+        let (mut busy, busy_signals) = spawn_tunnel(
+            "ssh",
+            tunnel_args(&host, foreign_port, grant.port).unwrap(),
+            foreign_port,
+        )
+        .unwrap();
+        assert_eq!(
+            wait_for_tunnel(&mut busy, &busy_signals, foreign_port, TUNNEL_READY_TIMEOUT)
+                .unwrap_err(),
+            "tunnel_port_busy"
+        );
+        let _ = busy.kill();
+        let _ = busy.wait();
+        drop(foreign);
+        println!("ssh on a port held by another program: tunnel_port_busy");
+
         let opened = Instant::now();
         let mut active = ActiveView {
             session: grant.session.clone(),
@@ -1011,35 +1128,166 @@ mod tests {
         }
     }
 
+    /// A stand-in for ssh: `sh -c <script>`, stderr read like ssh's.
+    #[cfg(unix)]
+    fn fake_ssh(script: &str, port: u16) -> (Child, mpsc::Receiver<TunnelSignal>) {
+        spawn_tunnel("sh", vec!["-c".into(), script.into()], port).unwrap()
+    }
+
+    #[cfg(unix)]
+    fn finish(mut child: Child) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
     #[cfg(unix)]
     #[test]
-    fn a_tunnel_counts_only_when_ssh_holds_the_loopback_port() {
-        // `sleep` stands in for an ssh that never opens its forward.
-        let within = Duration::from_millis(600);
-        let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    fn a_port_taken_by_another_program_is_never_our_tunnel() {
+        let within = Duration::from_millis(800);
         let port = free_loopback_port().unwrap();
+        let foreign = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).unwrap();
+        // ssh alive and silent while someone else holds the port: the old
+        // check (the port is taken) called this ready.
+        let (mut child, signals) = fake_ssh("exec sleep 30", port);
         let started = Instant::now();
         assert_eq!(
-            wait_for_tunnel(&mut child, port, within).unwrap_err(),
-            "tunnel_verify_failed"
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_port_busy"
         );
         assert!(started.elapsed() >= within);
-        child.kill().unwrap();
-        child.wait().unwrap();
+        finish(child);
 
-        let mut exited = Command::new("true").spawn().unwrap();
-        thread::sleep(Duration::from_millis(100));
+        // What ssh with ExitOnForwardFailure says and does on a taken port.
+        let (mut child, signals) = fake_ssh(
+            &format!("echo 'bind [127.0.0.1]:{port}: Address already in use' >&2; echo 'channel_setup_fwd_listener_tcpip: cannot listen to port: {port}' >&2; exit 255"),
+            port,
+        );
         assert_eq!(
-            wait_for_tunnel(&mut exited, port, within).unwrap_err(),
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_port_busy"
+        );
+        finish(child);
+        drop(foreign);
+    }
+
+    /// What a real ssh -v prints around a forward that binds (seen live on
+    /// OpenSSH, 08/10/2026).
+    #[cfg(unix)]
+    fn bound_forward(port: u16) -> String {
+        format!(
+            "echo 'debug1: Local connections to 127.0.0.1:{port} forwarded to remote address 127.0.0.1:6081' >&2; \
+             echo 'debug1: Local forwarding listening on 127.0.0.1 port {port}.' >&2; \
+             echo 'debug1: channel 0: new port-listener [port listener] (inactive timeout: 0)' >&2; \
+             echo 'debug1: Entering interactive session.' >&2"
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_tunnel_is_ready_only_when_ssh_has_bound_its_forward() {
+        let within = Duration::from_millis(800);
+        let port = free_loopback_port().unwrap();
+
+        let (mut child, signals) =
+            fake_ssh(&format!("{}; exec sleep 30", bound_forward(port)), port);
+        assert!(wait_for_tunnel(&mut child, &signals, port, within).is_ok());
+        finish(child);
+
+        // The real order on a taken port: announced, then refused, then gone.
+        let (mut child, signals) = fake_ssh(
+            &format!(
+                "echo 'debug1: Local forwarding listening on 127.0.0.1 port {port}.' >&2; \
+                      echo 'bind [127.0.0.1]:{port}: Address already in use' >&2; \
+                      echo 'channel_setup_fwd_listener_tcpip: cannot listen to port: {port}' >&2; \
+                      echo 'Could not request local forwarding.' >&2; exit 255"
+            ),
+            port,
+        );
+        assert_eq!(
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_port_busy"
+        );
+        finish(child);
+
+        // Announced but never bound: not ready.
+        let (mut child, signals) = fake_ssh(
+            &format!("echo 'debug1: Local forwarding listening on 127.0.0.1 port {port}.' >&2; exec sleep 30"),
+            port,
+        );
+        assert_eq!(
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_verify_failed"
+        );
+        finish(child);
+
+        // Bound for another port is not ours.
+        let other = port.wrapping_add(1);
+        let (mut child, signals) =
+            fake_ssh(&format!("{}; exec sleep 30", bound_forward(other)), port);
+        assert_eq!(
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_verify_failed"
+        );
+        finish(child);
+
+        // Bound, then died: not a tunnel.
+        let (mut child, signals) = fake_ssh(&format!("{}; exit 0", bound_forward(port)), port);
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
             "tunnel_start_failed"
         );
+        finish(child);
 
-        // A listener on the port is what ssh holding it looks like.
-        let holder = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).unwrap();
-        let mut running = Command::new("sleep").arg("30").spawn().unwrap();
-        assert!(wait_for_tunnel(&mut running, port, within).is_ok());
-        running.kill().unwrap();
-        running.wait().unwrap();
-        drop(holder);
+        // Exited without a word, the port free.
+        let (mut child, signals) = fake_ssh("exit 255", port);
+        assert_eq!(
+            wait_for_tunnel(&mut child, &signals, port, within).unwrap_err(),
+            "tunnel_start_failed"
+        );
+        finish(child);
+    }
+
+    #[test]
+    fn only_sshs_own_lines_about_our_port_count() {
+        let mut output = TunnelOutput::default();
+        // Entering the session before our port was announced proves nothing.
+        assert_eq!(
+            output.feed("debug1: Entering interactive session.", 50123),
+            None
+        );
+        assert_eq!(
+            output.feed(
+                "debug1: Local forwarding listening on 127.0.0.1 port 501234.",
+                50123
+            ),
+            None
+        );
+        assert_eq!(
+            output.feed(
+                "debug1: Local forwarding listening on ::1 port 50123.",
+                50123
+            ),
+            None
+        );
+        assert_eq!(
+            output.feed("debug1: Entering interactive session.", 50123),
+            None
+        );
+        assert_eq!(
+            output.feed(
+                "debug1: Local forwarding listening on 127.0.0.1 port 50123.",
+                50123
+            ),
+            None
+        );
+        assert_eq!(
+            output.feed("debug1: Entering interactive session.", 50123),
+            Some(TunnelSignal::Ready)
+        );
+        assert_eq!(
+            TunnelOutput::default().feed("bind [127.0.0.1]:50123: Address already in use", 50123),
+            Some(TunnelSignal::PortBusy)
+        );
     }
 }
