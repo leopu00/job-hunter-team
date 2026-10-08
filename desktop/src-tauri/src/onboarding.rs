@@ -4034,11 +4034,23 @@ mod tests {
         assert_eq!(local[..4], ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
         assert_eq!(local[4..], channel_args()[..]);
 
-        // The fixed remote script, run for real: the attested installer gets
-        // the pairing token and then exactly the channel's arguments, while
-        // stdin keeps its contract (digest, token, installer bytes).
+        // The fixed remote script, then each argument in single quotes.
         let command = super::remote_install_command(&channel_args()).unwrap();
-        assert!(command.starts_with(REMOTE_INSTALL));
+        let quoted: String = channel_args()
+            .iter()
+            .map(|arg| format!(" '{arg}'"))
+            .collect();
+        assert_eq!(command, format!("{REMOTE_INSTALL}{quoted}"));
+    }
+
+    /// The fixed remote script, run for real by the shell that runs it on
+    /// the VPS: the attested installer gets the pairing token and then
+    /// exactly the channel's arguments, while stdin keeps its contract
+    /// (digest, token, installer bytes). /bin/bash exists only on unix.
+    #[cfg(unix)]
+    #[test]
+    fn the_remote_script_hands_the_channel_arguments_to_the_installer() {
+        let command = super::remote_install_command(&channel_args()).unwrap();
         let installer = b"printf '%s\\n' \"$@\"\n";
         let digest = format!("{:x}", Sha256::digest(installer));
         let output = super::attest_then(installer.to_vec(), &digest, |verified| {
