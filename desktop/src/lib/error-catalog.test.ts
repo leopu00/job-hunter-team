@@ -87,6 +87,7 @@ const NOT_ERRORS: Record<string, string> = {
   granted: "permission state",
   local: "host kind",
   vps: "host kind",
+  production: "release channel name (release_channel_rules.rs), not an error",
   snapshot: "wrapper subcommand",
   status: "wrapper subcommand",
   up: "wrapper subcommand",
