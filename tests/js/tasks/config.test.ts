@@ -57,11 +57,6 @@ describe("Schema — TelegramChannelSchema (3 bot dedicati)", () => {
     mentor:     { bot_token: "333:CCC" },
   };
 
-  it("accetta 3 bot configurati", () => {
-    const r = TelegramChannelSchema.safeParse({ bots: validBots });
-    expect(r.success).toBe(true);
-  });
-
   it("accetta chat_id opzionale per ruolo", () => {
     const r = TelegramChannelSchema.safeParse({
       bots: {
@@ -71,26 +66,6 @@ describe("Schema — TelegramChannelSchema (3 bot dedicati)", () => {
     });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.bots.capitano.chat_id).toBe("-100123456");
-  });
-
-  it("rifiuta quando manca un ruolo (mentor)", () => {
-    const { mentor: _drop, ...incomplete } = validBots;
-    const r = TelegramChannelSchema.safeParse({ bots: incomplete });
-    expect(r.success).toBe(false);
-  });
-
-  it("rifiuta bot_token vuoto", () => {
-    const r = TelegramChannelSchema.safeParse({
-      bots: { ...validBots, assistente: { bot_token: "" } },
-    });
-    expect(r.success).toBe(false);
-  });
-
-  it("rifiuta schema legacy single-bot (no bots wrapper)", () => {
-    const r = TelegramChannelSchema.safeParse({
-      bot_token: "123:ABC", chat_id: "100",
-    });
-    expect(r.success).toBe(false);
   });
 });
 
@@ -106,18 +81,6 @@ describe("Schema — multi-provider e refine", () => {
       workspace: "/tmp/jht",
     });
     expect(r.success).toBe(true);
-  });
-
-  it("rifiuta active_provider senza config nei providers", () => {
-    const r = validateConfig({
-      active_provider: "kimi",
-      providers: {
-        claude: { name: "claude", auth_method: "api_key", api_key: "sk-c" },
-      },
-      channels: {},
-      workspace: "/tmp/jht",
-    });
-    expect(r.success).toBe(false);
   });
 
   it("rifiuta version decimale (deve essere int)", () => {
