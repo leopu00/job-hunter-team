@@ -93,15 +93,19 @@ def status(args: dict, role: str) -> dict:
     except store.StoreError as err:
         return {"ok": False, "reason": err.code}
     box = mailbox_settings()
-    return {
+    answer = {
         "ok": True,
         "configured": bool(creds.get("user") and creds.get("password")),
         "address": creds.get("user", ""),
         "admission": box.get("admission", "allowlist"),
         "rotation_pending": rotation_pending(),
         "seen_count": len(store.read_state("seen", [])),
-        "legacy_migrated": legacy_migrated(),
     }
+    # Only pid1's guard needs it; the agents get the answer they always had,
+    # and learn nothing about the migration of the files they could write.
+    if role == "runtime":
+        answer["legacy_migrated"] = legacy_migrated()
+    return answer
 
 
 def legacy_migrated() -> dict[str, bool]:

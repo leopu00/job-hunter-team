@@ -117,6 +117,15 @@ def test_status_names_what_is_migrated_and_never_a_value(broker):
     assert CANARY not in json.dumps(answer)
 
 
+@pytest.mark.parametrize("role", ["scout", "capitano", "assistente", "mentor", "closer"])
+def test_the_agents_status_carries_no_migration_state(broker, role):
+    # The same exact answer test_broker_socket_live checks for an agent.
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    answer = broker.ask("mail.status", role=role)
+    assert answer["ok"] and "legacy_migrated" not in answer
+    assert set(answer) == {"ok", "configured", "address", "admission", "rotation_pending", "seen_count"}
+
+
 def test_a_host_setup_counts_as_migrated(broker):
     out = broker.admin_run(["mailbox", "setup", "--user", "name.jht@gmail.com", "--admission", "allowlist"],
                            (CANARY + "\n").encode())
