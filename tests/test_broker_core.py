@@ -92,9 +92,18 @@ def make_mail(mid, sender, subject, body, **headers):
     return msg.as_bytes()
 
 
+def _core_module():
+    """The email_monitor the broker calls: another test file may drop the
+    module from sys.modules, and a fresh import would be a different object
+    from the one `broker.mailops` already holds."""
+    from broker import mailops
+
+    return mailops.email_monitor
+
+
 @pytest.fixture
 def imap(monkeypatch):
-    import email_monitor
+    email_monitor = _core_module()
 
     FakeImap.messages = []
     logins = []
@@ -128,7 +137,7 @@ class FakeSmtp:
 
 @pytest.fixture
 def smtp(monkeypatch):
-    import email_monitor
+    email_monitor = _core_module()
 
     FakeSmtp.sent = []
     monkeypatch.setattr(email_monitor.smtplib, "SMTP_SSL", FakeSmtp)
