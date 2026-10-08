@@ -140,7 +140,14 @@ jobs:
             exit 1
           fi
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          install_sha256="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' scripts/install.sh)"
+          # python3 puo' mancare nella bash del runner Windows: sha256sum c'e'
+          # nella Git Bash di Windows e su Linux, shasum su macOS.
+          if command -v sha256sum >/dev/null 2>&1; then
+            install_sha256="$(sha256sum scripts/install.sh | cut -d' ' -f1)"
+          else
+            install_sha256="$(shasum -a 256 scripts/install.sh | cut -d' ' -f1)"
+          fi
+          [[ "$install_sha256" =~ ^[0-9a-f]{64}$ ]]
           {
             echo "JHT_CHANNEL=test"
             echo "JHT_SOURCE_SHA=$SOURCE_SHA"
