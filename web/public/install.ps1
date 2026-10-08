@@ -108,9 +108,12 @@ function Set-JhtNodeOwner {
   $actualSid = ([Security.Principal.NTAccount]$actualOwner).Translate([Security.Principal.SecurityIdentifier])
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
-$RuntimeImage = if ($TestChannel) { $Image } elseif ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
+$TestChannelImage = $Image
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
+$RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
 $RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
-$env:JHT_IMAGE = $RuntimeImage
+$env:JHT_IMAGE = $Image
+if ($TestChannel) { $env:JHT_IMAGE = $RuntimeImage }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 
 $TotalSteps = 5
@@ -262,11 +265,13 @@ function Get-RuntimeFiles {
   $userDataHost = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
   $userDataFull = [IO.Path]::GetFullPath($userDataHost).TrimEnd('\', '/')
   $binFull = [IO.Path]::GetFullPath($BinDir).TrimEnd('\', '/')
-  foreach ($candidate in @($runtimeFull, $binFull)) {
-    if ($candidate.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $candidate.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-        $candidate.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $candidate.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-      Write-Fail "Protected host runtime path overlaps a container-writable tree: $candidate"
-    }
+  if ($runtimeFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+      $runtimeFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Protected host runtime path overlaps a container-writable tree: $runtimeFull"
+  }
+  if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+      $binFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Fail "Protected host wrapper path overlaps a container-writable tree: $binFull"
   }
 
   New-Item -ItemType Directory -Force -Path $RuntimeDir, $BinDir, $JhtHome | Out-Null
