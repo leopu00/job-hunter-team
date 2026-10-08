@@ -39,6 +39,7 @@ try {
   if (-not $getRuntimeFiles) { throw 'standalone Get-RuntimeFiles function missing' }
   . ([scriptblock]::Create($getRuntimeFiles.Extent.Text))
   function Write-Step { param([int]$N, [int]$Total, [string]$Title) }
+  function Write-JhtPhase { param([string]$Id) }
   function Write-Info { param([string]$Msg) }
   function Write-Ok { param([string]$Msg) }
   function Write-Dry { param([string]$Cmd) throw "unexpected dry run: $Cmd" }
@@ -51,11 +52,44 @@ try {
     param([string]$Url, [string]$Dest)
     $source = switch -Wildcard ($Url) {
       '*/docker-compose.yml' { Join-Path $PSScriptRoot '..\docker-compose.yml'; break }
+      '*/docker-compose.podman.yml' { Join-Path $PSScriptRoot '..\docker-compose.podman.yml'; break }
       '*/scripts/jht-wrapper.ps1' { Join-Path $PSScriptRoot 'jht-wrapper.ps1'; break }
       '*/scripts/windows-private-acl.ps1' { Join-Path $PSScriptRoot 'windows-private-acl.ps1'; break }
+      '*/scripts/enable-podman-windows-runtime.ps1' { Join-Path $PSScriptRoot 'enable-podman-windows-runtime.ps1'; break }
+      '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
+      '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
     Copy-Item -LiteralPath $source -Destination $Dest
+  }
+  function Invoke-PodmanRuntimeEnabler {
+    param([Parameter(Mandatory)][string]$ScriptPath)
+    $scripts = Split-Path -Parent $ScriptPath
+    $stage = Split-Path -Parent $scripts
+    Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.yml') -Force
+    Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.podman.yml') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'jht-container.service'), "fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllBytes((Join-Path $BinDir 'docker.exe'), [byte[]](0))
+    $entries = [ordered]@{
+      'docker-compose.yml' = (Join-Path $RuntimeDir 'docker-compose.yml')
+      'jht-wrapper.ps1' = (Join-Path $BinDir 'jht.ps1')
+      'docker-compose.podman.yml' = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
+      'docker.exe' = (Join-Path $BinDir 'docker.exe')
+      'container-runtime' = (Join-Path $RuntimeDir 'container-runtime')
+      'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
+      'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
+      'windows-private-acl.ps1' = (Join-Path $BinDir 'windows-private-acl.ps1')
+    }
+    $manifestText = "version=1`n"
+    foreach ($name in $entries.Keys) {
+      $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $entries[$name]).Hash.ToLowerInvariant()
+      $manifestText += "$name=$digest`n"
+    }
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifestText, [Text.UTF8Encoding]::new($false))
   }
 
   $cleanRoot = Join-Path $root 'clean-start'
@@ -66,6 +100,9 @@ try {
   $JhtHome = Join-Path $cleanProfile '.jht'
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
+  $TestChannel = $false
+  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
+  $RuntimeImageDigest = 'sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
   $DryRun = $false
   $env:USERPROFILE = $cleanProfile
   $env:JHT_USER_DIR_HOST = $cleanUserData
@@ -137,6 +174,9 @@ exit /b 0
   $env:JHT_RUNTIME_DIR = $RuntimeDir
   $env:JHT_COMPOSE_FILE = Join-Path $RuntimeDir 'docker-compose.yml'
   $env:JHT_WRAPPER_PATH = $installedWrapper
+  # Exercise the legacy Docker ACL branch explicitly. The production Windows
+  # selection installed above is Podman and therefore never chowns DrvFS.
+  $env:JHT_CONTAINER_RUNTIME = 'docker'
   $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $installerOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $standalone -DryRun -SkipOnboard 2>&1
   if ($LASTEXITCODE -ne 0) { throw "desktop noninteractive installer contract failed: $($installerOutput | Out-String)" }

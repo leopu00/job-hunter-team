@@ -82,6 +82,7 @@ if ($ContainerRuntime -eq 'podman') {
   $env:PODMAN_COMPOSE_WARNING_LOGS = 'false'
 }
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
+$RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
@@ -92,7 +93,8 @@ $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } e
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
-. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
+$AclHelperPath = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
+. $AclHelperPath
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -196,8 +198,9 @@ function Test-RuntimePathAuthority {
 function Write-RuntimeManifest {
   $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
   $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
+  $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $AclHelperPath).Hash.ToLowerInvariant()
   $temp = "$RuntimeManifest.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
-  $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`n"
+  $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n"
   if ($ContainerRuntime -eq 'podman') {
     $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanComposeFile).Hash.ToLowerInvariant()
     $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DockerShim).Hash.ToLowerInvariant()
@@ -207,11 +210,16 @@ function Write-RuntimeManifest {
     $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
     $content += "container-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`n"
   }
+  if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
+    $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
+    $content += "runtime-image=$runtimeImageHash`n"
+  }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
 
 function Test-RuntimeBundleTrusted {
+  $script:TrustedRuntimeImage = $null
   if (-not (Test-RuntimePathAuthority)) { return $false }
   if (-not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir)) { return $false }
   if (-not (Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath)) { return $false }
@@ -220,12 +228,31 @@ function Test-RuntimeBundleTrusted {
   if (-not (Test-ProtectedRuntimeNode $ComposeFile)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $RuntimeManifest)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $WrapperPath)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $AclHelperPath)) { return $false }
   try {
     $values = ConvertFrom-StringData (Get-Content -LiteralPath $RuntimeManifest -Raw)
     if ($values.version -ne '1') { return $false }
+    $expectedKeys = @('version', 'docker-compose.yml', 'jht-wrapper.ps1', 'windows-private-acl.ps1')
+    if ($ContainerRuntime -eq 'podman') {
+      $expectedKeys += @('docker-compose.podman.yml', 'docker.exe', 'container-runtime', 'podman-machine', 'jht-container.service')
+    }
+    $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
+    if ($pinPresent) { $expectedKeys += 'runtime-image' }
+    if ($values.Count -ne $expectedKeys.Count -or @($values.Keys | Where-Object { $_ -notin $expectedKeys }).Count -ne 0) { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
-    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual) { return $false }
+    $helperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $AclHelperPath).Hash.ToLowerInvariant()
+    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual -or $values.'windows-private-acl.ps1' -ne $helperActual) { return $false }
+    $pinDeclared = $values.ContainsKey('runtime-image')
+    if ($pinDeclared -ne $pinPresent) { return $false }
+    if ($pinDeclared) {
+      if (-not (Test-ProtectedRuntimeNode $RuntimeImageFile)) { return $false }
+      $pinHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
+      $pinBytes = [IO.File]::ReadAllText($RuntimeImageFile)
+      $pin = $pinBytes.TrimEnd("`n")
+      if ($values.'runtime-image' -ne $pinHash -or $pin -notmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' -or $pinBytes -ne "$pin`n") { return $false }
+      $script:TrustedRuntimeImage = $pin
+    }
     if ($ContainerRuntime -eq 'podman') {
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineFile)) { return $false }
@@ -243,6 +270,7 @@ function Test-RuntimeBundleTrusted {
     }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }
     if (-not (Select-String -LiteralPath $ComposeFile -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { return $false }
+    if ($script:TrustedRuntimeImage) { $env:JHT_IMAGE = $script:TrustedRuntimeImage }
     return $true
   } catch { return $false }
 }
@@ -310,13 +338,28 @@ function Require-PrivateJhtHomeAcl {
 function Require-Docker {
   Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
+    Write-Err "client Podman JHT non trovato nel PATH. Reinstalla il runtime locale."
     exit 127
   }
   $null = docker info 2>&1
   if ($LASTEXITCODE -ne 0) {
-    Write-Err "Docker daemon non risponde. Avvia Docker Desktop."
+    Write-Err "La macchina Podman JHT non risponde. Esegui 'jht up'."
     exit 1
+  }
+}
+
+# Solo l'azione esplicita `up` può risvegliare la machine. Status, snapshot e
+# desktop-chat restano osservativi e non tengono in vita WSL quando l'utente
+# non ha chiesto di avviare il team.
+function Start-PodmanMachineForUp {
+  if ($ContainerRuntime -ne 'podman') { return }
+  if (Test-DockerReachable) { return }
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $podman) { Write-Err 'podman_not_installable: podman.exe non disponibile.'; exit 21 }
+  & $podman.Source machine start --update-connection=false $env:CONTAINER_CONNECTION 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not (Test-DockerReachable)) {
+    Write-Err 'podman_machine_unavailable: la macchina Podman JHT non si avvia.'
+    exit 22
   }
 }
 
@@ -1764,6 +1807,10 @@ function Invoke-RuntimeUpgrade {
     elseif ($arg -eq '--check') { $checkOnly = $true }
     elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Opzione upgrade non supportata' $false; return 2 }
   }
+  if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
+    Write-UpgradeResult $false $false 'preflight' 'pinned' 'none' 'pinned' 'none' $false 'Canale di test: si aggiorna reinstallando dalla build di test' $false
+    return 1
+  }
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
     if (-not (Install-ProtectedRuntimeFromRelease)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host protetto non installabile' $false; return 1 }
   }
@@ -1932,6 +1979,7 @@ switch ($Sub) {
 
   { $_ -in @('up', 'start-container') } {
     Require-ComposeFile
+    Start-PodmanMachineForUp
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'

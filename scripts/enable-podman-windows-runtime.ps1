@@ -6,7 +6,10 @@
 param(
   [string]$MachineName = 'jht-podman',
   [switch]$InstallDependencies,
-  [switch]$InitializeMachine
+  [switch]$InitializeMachine,
+  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598',
+  [string]$ExpectedImageDigest = '',
+  [switch]$PersistImagePin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +18,14 @@ $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
+
+function Write-JhtPhase {
+  param([Parameter(Mandatory)][ValidateSet(
+    'wsl_check', 'podman_install', 'podman_machine_init',
+    'podman_machine_start', 'runtime_download', 'image_pull'
+  )][string]$Id)
+  [Console]::Out.WriteLine("JHT_PHASE $Id")
+}
 
 function Update-ProcessPath {
   $env:PATH = @(
@@ -174,9 +185,15 @@ function Install-JhtContainerService {
 }
 
 if ($InstallDependencies) {
-  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-  if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
-  if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
+  Write-JhtPhase podman_install
+  try {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
+    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
+    if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
+  } catch {
+    Write-Error $_.Exception.Message
+    exit 21
+  }
 }
 Update-ProcessPath
 $Podman = Get-Application 'podman.exe'
@@ -184,20 +201,67 @@ if (-not $Podman) {
   $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
   if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
 }
-if (-not $Podman) { throw 'podman.exe is unavailable; re-run with -InstallDependencies.' }
-if (-not (Get-Application 'docker-compose.exe')) { throw 'docker-compose.exe is unavailable; re-run with -InstallDependencies.' }
+if (-not $Podman) { Write-Error 'podman.exe is unavailable after installation.'; exit 21 }
+if (-not (Get-Application 'docker-compose.exe')) { Write-Error 'docker-compose.exe is unavailable after installation.'; exit 21 }
 
-$machines = @((& $Podman machine list --format json | ConvertFrom-Json))
-$machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
-if (-not $machine) {
-  if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
-  Invoke-Checked $Podman 'machine' 'init' '--now' '--provider' 'wsl' $MachineName
-} elseif (-not [bool]$machine.Running) {
-  Invoke-Checked $Podman 'machine' 'start' $MachineName
+try {
+  $machines = @((& $Podman machine list --format json | ConvertFrom-Json))
+  $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
+  if (-not $machine) {
+    if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
+    Write-JhtPhase podman_machine_init
+    Invoke-Checked $Podman 'machine' 'init' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
+    Write-JhtPhase podman_machine_start
+    Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  } elseif (-not [bool]$machine.Running) {
+    Write-JhtPhase podman_machine_start
+    Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  }
+  Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
+} catch {
+  Write-Error $_.Exception.Message
+  exit 22
 }
 
 & (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName
 if ($LASTEXITCODE -ne 0) { throw 'Podman network configuration failed.' }
+
+if ($RuntimeImage -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$') {
+  throw 'Runtime image reference is not canonical.'
+}
+if (-not $ExpectedImageDigest -and $RuntimeImage -match '@(sha256:[0-9a-f]{64})$') {
+  $ExpectedImageDigest = $Matches[1]
+}
+if ($ExpectedImageDigest -and $ExpectedImageDigest -notmatch '^sha256:[0-9a-f]{64}$') { throw 'Expected runtime image digest is invalid.' }
+if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $ExpectedImageDigest) {
+  throw 'Runtime image reference and expected digest disagree.'
+}
+Write-JhtPhase image_pull
+Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
+$repoDigestsJson = ((& $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null) -join '')
+if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
+$repoDigests = @($repoDigestsJson | ConvertFrom-Json)
+$matchingRepoDigests = @($repoDigests | Where-Object { $_ -match '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' })
+if ($ExpectedImageDigest) {
+  $canonicalImage = "ghcr.io/leopu00/jht@$ExpectedImageDigest"
+  if ($matchingRepoDigests -notcontains $canonicalImage) { throw 'Pulled runtime image does not expose the expected repository digest.' }
+} else {
+  # Preserve the production JHT_IMAGE tag override. It is resolved once to
+  # the immutable identity reported by Podman; only the build test channel
+  # requires that identity to match an independently supplied digest.
+  $canonicalImage = $matchingRepoDigests | Select-Object -First 1
+  if (-not $canonicalImage) { throw 'Pulled runtime image has no canonical repository digest.' }
+}
+$env:JHT_IMAGE = $canonicalImage
+
+$legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
+  (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
+  (Test-Path -LiteralPath (Join-Path $JhtHome '.codex'))
+if ($legacyInstallDetected) {
+  Write-Host 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.' -ForegroundColor Yellow
+  Write-Host 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.' -ForegroundColor Yellow
+}
+
 $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman
 
 New-Item -ItemType Directory -Path $RuntimeDir, $BinDir, $JhtHome -Force | Out-Null
@@ -236,7 +300,7 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
-ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start jht
+ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht
 ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht
 TimeoutStartSec=90
 TimeoutStopSec=45
@@ -256,7 +320,16 @@ $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'w
 $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selectionFile).Hash.ToLowerInvariant()
 $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $machineFile).Hash.ToLowerInvariant()
 $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerUnitFile).Hash.ToLowerInvariant()
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n"
+$runtimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+$runtimeImageManifest = ''
+if ($PersistImagePin) {
+  [IO.File]::WriteAllText($runtimeImageFile, "$canonicalImage`n", [Text.UTF8Encoding]::new($false))
+  $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeImageFile).Hash.ToLowerInvariant()
+  $runtimeImageManifest = "runtime-image=$runtimeImageHash`n"
+} else {
+  Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
+}
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 
 [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')

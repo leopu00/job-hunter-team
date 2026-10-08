@@ -192,30 +192,26 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
     runtime_files = source[source.index("function Get-RuntimeFiles") : source.index(
         "# ── Step 4:", source.index("function Get-RuntimeFiles")
     )]
-    # jht-wrapper.ps1 dot-sources this sibling before dispatching `up`: a clean
-    # installer must publish the helper from the same immutable release and
-    # attest the exact bytes before the first automatic setup can reach Docker.
+    # Every executable/config input is staged from one immutable release. The
+    # enabler verifies the image before publishing the attested Podman bundle.
     for seam in (
-        '$helperUrl   = "$releaseBase/scripts/windows-private-acl.ps1"',
-        "$helperDest = Join-Path $BinDir 'windows-private-acl.ps1'",
-        "Get-File -Url $helperUrl -Dest $helperTemp",
-        "[scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw))",
-        "Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force",
+        "'docker-compose.podman.yml' = (Join-Path $stage 'docker-compose.podman.yml')",
+        "'scripts/windows-private-acl.ps1' = (Join-Path $stageScripts 'windows-private-acl.ps1')",
+        "'scripts/enable-podman-windows-runtime.ps1' = (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')",
+        'Get-File -Url "$releaseBase/$relative"',
+        "[scriptblock]::Create((Get-Content -LiteralPath (Join-Path $stageScripts $ps1) -Raw))",
+        "Invoke-PodmanRuntimeEnabler -ScriptPath",
         ". $helperDest",
         "Test-PrivateJhtHomeAcl -Path $JhtHome",
-        "Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest",
-        "windows-private-acl.ps1=$helperHash",
+        "Podman runtime artifact missing",
     ):
         assert seam in runtime_files
 
-    assert runtime_files.index("Get-File -Url $helperUrl") < runtime_files.index(
-        "Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest"
+    assert runtime_files.index('Get-File -Url "$releaseBase/$relative"') < runtime_files.index(
+        "Invoke-PodmanRuntimeEnabler -ScriptPath"
     )
-    assert source.index("windows-private-acl.ps1=$helperHash") < source.index(
-        "Invoke-Onboard", source.index("# ── Main")
-    )
-    for protected_node in ("$RuntimeDir", "$composeDest", "$helperDest", "$wrapperDest", "$manifestDest"):
-        assert f"Set-JhtNodeOwner -Path {protected_node}" in source
+    assert "Remove-Item -LiteralPath $stage -Recurse -Force" in runtime_files
+    assert "Set-JhtNodeOwner -Path $RuntimeDir" in runtime_files
 
 
 def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():

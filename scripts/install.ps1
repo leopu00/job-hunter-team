@@ -8,9 +8,9 @@
 # ║    # Alternative branch, to test dev-N:                                  ║
 # ║    & ([scriptblock]::Create((iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/install.ps1).Content)) -Branch dev-1
 # ║                                                                          ║
-# ║  Default (Docker mode): installs nothing on the host except Docker       ║
-# ║  Desktop (which must already be there; we check for it but do not        ║
-# ║  download it for you — it needs user consent + WSL2 + a reboot).         ║
+# ║  Default: Podman rootless in a dedicated WSL machine. The desktop        ║
+# ║  obtains consent; this script installs the user-scope Podman CLI and      ║
+# ║  Compose provider when absent. Docker Desktop is not used.               ║
 # ║                                                                          ║
 # ║  Downloads:                                                              ║
 # ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
@@ -29,8 +29,8 @@
 # ║  Differences vs install.sh (Linux/macOS):                                ║
 # ║    - NO --no-docker: Windows native (Node+tmux+Claude standalone) is     ║
 # ║      not supported. The container is the only path.                      ║
-# ║    - NO sudo / apt / dnf / pacman / Colima / Homebrew: Docker Desktop    ║
-# ║      is the only runtime; pre-install it via winget or by hand.          ║
+# ║    - NO Docker Desktop. WSL must already be usable; Podman and the        ║
+# ║      standalone Compose provider are installed silently through winget.  ║
 # ║    - PATH registered with [Environment]::SetEnvironmentVariable in the   ║
 # ║      User scope (no shell rc). Effective from the next terminal.         ║
 # ║                                                                          ║
@@ -39,6 +39,9 @@
 # ║    -Branch <name>    Source branch (default: production)                 ║
 # ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
 # ║    -SkipOnboard      Noninteractive install; do not launch the wizard    ║
+# ║    -SourceSha        Test channel source commit (with next two options)  ║
+# ║    -Image            Test channel image reference                        ║
+# ║    -ExpectedImageDigest  Expected test image sha256                      ║
 # ║                                                                          ║
 # ║  Design reference: docs/internal/ops/vps.md                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -48,10 +51,30 @@ param(
   [switch]$DryRun,
   [string]$Branch = $(if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }),
   [string]$PairingToken = '',
-  [switch]$SkipOnboard
+  [switch]$SkipOnboard,
+  [string]$SourceSha = '',
+  [string]$Image = '',
+  [string]$ExpectedImageDigest = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The test channel is one atomic contract. Validate it before environment,
+# filesystem, network or process access so malformed build metadata cannot
+# leave a half-published runtime.
+$channelValues = @($SourceSha, $Image, $ExpectedImageDigest)
+$channelPresent = @($channelValues | Where-Object { $_ }).Count
+if ($channelPresent -notin @(0, 3) -or
+    ($channelPresent -eq 3 -and (
+      $SourceSha -notmatch '^[0-9a-f]{40}$' -or
+      $Image -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$' -or
+      $ExpectedImageDigest -notmatch '^sha256:[0-9a-f]{64}$' -or
+      ($Image -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $ExpectedImageDigest)
+    ))) {
+  [Console]::Error.WriteLine('invalid test-channel parameters')
+  exit 2
+}
+$TestChannel = ($channelPresent -eq 3)
 
 # ── Config ────────────────────────────────────────────────────────────────
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
@@ -85,8 +108,9 @@ function Set-JhtNodeOwner {
   $actualSid = ([Security.Principal.NTAccount]$actualOwner).Translate([Security.Principal.SecurityIdentifier])
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
-$Image      = if ($env:JHT_IMAGE)       { $env:JHT_IMAGE }       else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
-$env:JHT_IMAGE = $Image
+$RuntimeImage = if ($TestChannel) { $Image } elseif ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598' }
+$RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
+$env:JHT_IMAGE = $RuntimeImage
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 
 $TotalSteps = 5
@@ -98,6 +122,13 @@ function Write-Info { param([string]$Msg) Write-Host "  > $Msg" -ForegroundColor
 function Write-Fail { param([string]$Msg) Write-Host "  x $Msg" -ForegroundColor Red; exit 1 }
 function Write-Step { param([int]$N, [int]$Total, [string]$Title) Write-Host ""; Write-Host "[$N/$Total] $Title" -ForegroundColor White }
 function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute: $Cmd" -ForegroundColor DarkGray }
+function Write-JhtPhase {
+  param([Parameter(Mandatory)][ValidateSet(
+    'wsl_check', 'podman_install', 'podman_machine_init',
+    'podman_machine_start', 'runtime_download', 'image_pull'
+  )][string]$Id)
+  [Console]::Out.WriteLine("JHT_PHASE $Id")
+}
 
 
 function Invoke-Action {
@@ -115,8 +146,8 @@ function Show-Header {
   Write-Host "|     Job Hunter Team - Installer (Win)    |" -ForegroundColor White
   Write-Host "+------------------------------------------+" -ForegroundColor White
   Write-Host ""
-  Write-Host "  mode:    Docker Desktop (Windows-native)" -ForegroundColor DarkGray
-  Write-Host "  image:   $Image" -ForegroundColor DarkGray
+  Write-Host "  mode:    Podman machine (WSL)" -ForegroundColor DarkGray
+  Write-Host "  image:   $RuntimeImage" -ForegroundColor DarkGray
   Write-Host "  branch:  $Branch" -ForegroundColor DarkGray
   Write-Host "  runtime: $RuntimeDir" -ForegroundColor DarkGray
   Write-Host "  bin:     $BinDir" -ForegroundColor DarkGray
@@ -139,40 +170,16 @@ function Test-System {
   Write-Ok "Windows $($os.Version) / PowerShell $psVersion"
 }
 
-# ── Step 2: Docker Desktop check ──────────────────────────────────────────
-function Test-DockerDesktop {
-  Write-Step 2 $TotalSteps "Docker Desktop check"
-
-  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Warn "docker not found in PATH."
-    Write-Info "Install Docker Desktop for Windows:"
-    Write-Info "  - winget install Docker.DockerDesktop"
-    Write-Info "  - or: https://www.docker.com/products/docker-desktop/"
-    Write-Info "Docker Desktop needs WSL2 enabled and a reboot after installation."
-    Write-Fail "Re-run install.ps1 once Docker Desktop is installed."
-  }
-  Write-Ok "docker CLI found: $(docker --version)"
-
-  if ($DryRun) {
-    Write-Dry "docker info (skip in dry-run)"
-    return
-  }
-
-  $null = & docker info 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warn "docker daemon is not responding."
-    Write-Info "Start Docker Desktop from the system tray icon or the Start menu."
-    Write-Info "Wait until the status reads 'Engine running' before retrying."
-    Write-Fail "Docker Desktop is not running."
-  }
-  Write-Ok "docker daemon reachable"
-
-  # Check compose v2 (bundled with Docker Desktop by default, but verify)
-  $null = & docker compose version 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Fail "docker compose v2 not available. Update Docker Desktop to the latest version."
-  }
-  Write-Ok "docker compose v2 available"
+# ── Step 2: WSL check ─────────────────────────────────────────────────────
+function Test-WindowsSubsystem {
+  Write-Step 2 $TotalSteps "Windows Subsystem for Linux check"
+  Write-JhtPhase wsl_check
+  if ($DryRun) { Write-Dry 'wsl.exe --status'; return }
+  $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $wsl) { [Console]::Error.WriteLine('wsl_not_ready: wsl.exe is unavailable'); exit 20 }
+  $null = & $wsl.Source --status 2>&1
+  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine('wsl_not_ready: WSL is not usable'); exit 20 }
+  Write-Ok 'WSL is ready'
 }
 
 # ── Step 3: Download runtime files ────────────────────────────────────────
@@ -193,10 +200,40 @@ function Get-File {
   }
 }
 
-function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps "Downloading wrapper + ACL helper + docker-compose.yml"
+function Invoke-PodmanRuntimeEnabler {
+  param([Parameter(Mandatory)][string]$ScriptPath)
+  $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $enablerArgs = @(
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', $ScriptPath, '-MachineName', 'jht-podman', '-InitializeMachine',
+    '-RuntimeImage', $RuntimeImage, '-ExpectedImageDigest', $RuntimeImageDigest
+  )
+  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -or
+      -not (Get-Command docker-compose.exe -CommandType Application -ErrorAction SilentlyContinue)) {
+    $enablerArgs += '-InstallDependencies'
+  }
+  if ($TestChannel) { $enablerArgs += '-PersistImagePin' }
+  $oldRuntimeDir = $env:JHT_RUNTIME_DIR
+  $oldBinDir = $env:JHT_BIN_DIR
+  try {
+    $env:JHT_RUNTIME_DIR = $RuntimeDir
+    $env:JHT_BIN_DIR = $BinDir
+    & $powerShell @enablerArgs
+    $code = $LASTEXITCODE
+  } finally {
+    $env:JHT_RUNTIME_DIR = $oldRuntimeDir
+    $env:JHT_BIN_DIR = $oldBinDir
+  }
+  if ($code -ne 0) { exit $code }
+}
 
-  if ($RawBaseOverride) {
+function Get-RuntimeFiles {
+  Write-Step 3 $TotalSteps "Downloading and enabling the Podman runtime"
+  Write-JhtPhase runtime_download
+
+  if ($TestChannel) {
+    $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$SourceSha"
+  } elseif ($RawBaseOverride) {
     $releaseBase = $RawBaseOverride
   } elseif ($DryRun) {
     $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$Branch"
@@ -208,123 +245,85 @@ function Get-RuntimeFiles {
       $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$sha"
     } catch { Write-Fail "Cannot resolve branch '$Branch' to an immutable release commit." }
   }
-  $composeUrl  = "$releaseBase/docker-compose.yml"
-  $wrapperUrl  = "$releaseBase/scripts/jht-wrapper.ps1"
-  $helperUrl   = "$releaseBase/scripts/windows-private-acl.ps1"
-  $composeDest = Join-Path $RuntimeDir 'docker-compose.yml'
-  $wrapperDest = Join-Path $BinDir 'jht.ps1'
-  $helperDest = Join-Path $BinDir 'windows-private-acl.ps1'
-  $shimDest    = Join-Path $BinDir 'jht.cmd'
-  $manifestDest = Join-Path $RuntimeDir '.runtime-integrity'
+
+  if ($DryRun) {
+    foreach ($relative in @(
+      'docker-compose.yml', 'docker-compose.podman.yml', 'scripts/jht-wrapper.ps1',
+      'scripts/windows-private-acl.ps1', 'scripts/enable-podman-windows-runtime.ps1',
+      'scripts/configure-podman-windows-network.ps1', 'scripts/wsl-interop-connect-proxy.py'
+    )) { Write-Dry "iwr $releaseBase/$relative" }
+    Write-JhtPhase image_pull
+    Write-Dry "podman pull $RuntimeImage"
+    return
+  }
 
   $runtimeFull = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
   $legacyFull = [IO.Path]::GetFullPath($JhtHome).TrimEnd('\', '/')
   $userDataHost = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
   $userDataFull = [IO.Path]::GetFullPath($userDataHost).TrimEnd('\', '/')
-  if ($runtimeFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Host runtime must be outside the container-writable .jht tree: $RuntimeDir"
-  }
-  if ($runtimeFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Host runtime must be outside the container-writable user data tree: $RuntimeDir"
-  }
   $binFull = [IO.Path]::GetFullPath($BinDir).TrimEnd('\', '/')
-  if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Host wrapper must be outside the container-writable .jht tree: $BinDir"
-  }
-  if ($binFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Host wrapper must be outside the container-writable user data tree: $BinDir"
-  }
-
-  Invoke-Action -Description "mkdir $RuntimeDir, $BinDir, $JhtHome" -Block {
-    New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $BinDir     | Out-Null
-    New-Item -ItemType Directory -Force -Path $JhtHome    | Out-Null
-    Protect-JhtHomeAcl -Path $JhtHome
-  } | Out-Null
-
-  if (-not $DryRun) {
-    foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
-      $current = Get-Item -LiteralPath $protectedPath -Force -ErrorAction Stop
-      while ($current) {
-        if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-          Write-Fail "Protected host path has a reparse-point ancestor: $protectedPath"
-        }
-        $parent = $current.Parent
-        if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
-        $current = $parent
-      }
-    }
-    $acl = Get-Acl -LiteralPath $RuntimeDir
-    $acl.SetAccessRuleProtection($true, $false)
-    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
-      [Security.Principal.WindowsIdentity]::GetCurrent().User,
-      'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-    $acl.SetAccessRule($rule)
-    Set-Acl -LiteralPath $RuntimeDir -AclObject $acl
-    Set-JhtNodeOwner -Path $RuntimeDir
-  }
-
-  Write-Info "Downloading docker-compose.yml..."
-  $composeTemp = Join-Path $RuntimeDir ('.compose-' + [guid]::NewGuid().ToString('N'))
-  Get-File -Url $composeUrl -Dest $composeTemp
-  if (-not $DryRun -and -not (Select-String -LiteralPath $composeTemp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) {
-    Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.'
-  }
-  if (-not $DryRun) {
-    Move-Item -LiteralPath $composeTemp -Destination $composeDest -Force
-    Set-JhtNodeOwner -Path $composeDest
-  }
-  Write-Ok "compose: $composeDest"
-
-  # The wrapper dot-sources this sibling before dispatching any command. Keep
-  # the helper download ahead of the wrapper publication so a clean install
-  # can never expose a jht.ps1 whose first instruction points at a missing file.
-  Write-Info "Downloading windows-private-acl.ps1..."
-  $helperTemp = Join-Path $BinDir ('.windows-private-acl-' + [guid]::NewGuid().ToString('N') + '.ps1')
-  Get-File -Url $helperUrl -Dest $helperTemp
-  if (-not $DryRun) {
-    [scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw)) | Out-Null
-    foreach ($requiredFunction in @('function Protect-JhtHomeAcl', 'function Test-PrivateJhtHomeAcl')) {
-      if (-not (Select-String -LiteralPath $helperTemp -SimpleMatch $requiredFunction -Quiet)) {
-        Write-Fail "Downloaded ACL helper is missing $requiredFunction."
-      }
-    }
-    Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force
-    Set-JhtNodeOwner -Path $helperDest
-    . $helperDest
-    if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
-      Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome"
+  foreach ($candidate in @($runtimeFull, $binFull)) {
+    if ($candidate.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $candidate.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+        $candidate.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $candidate.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+      Write-Fail "Protected host runtime path overlaps a container-writable tree: $candidate"
     }
   }
-  Write-Ok "ACL helper: $helperDest"
 
-  Write-Info "Downloading jht-wrapper.ps1..."
-  $wrapperTemp = Join-Path $BinDir ('.jht-' + [guid]::NewGuid().ToString('N') + '.ps1')
-  Get-File -Url $wrapperUrl -Dest $wrapperTemp
-  if (-not $DryRun) {
-    [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
-    if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
-      Write-Fail 'Downloaded wrapper does not implement the protected runtime protocol.'
+  New-Item -ItemType Directory -Force -Path $RuntimeDir, $BinDir, $JhtHome | Out-Null
+  Protect-JhtHomeAcl -Path $JhtHome
+  foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
+    $current = Get-Item -LiteralPath $protectedPath -Force -ErrorAction Stop
+    while ($current) {
+      if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Fail "Protected host path has a reparse-point ancestor: $protectedPath" }
+      $parent = $current.Parent
+      if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
+      $current = $parent
     }
-    Move-Item -LiteralPath $wrapperTemp -Destination $wrapperDest -Force
-    Set-JhtNodeOwner -Path $wrapperDest
   }
-  Write-Ok "wrapper: $wrapperDest"
+  $runtimeAcl = Get-Acl -LiteralPath $RuntimeDir
+  $runtimeAcl.SetAccessRuleProtection($true, $false)
+  $runtimeAcl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
+    [Security.Principal.WindowsIdentity]::GetCurrent().User,
+    'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+  Set-Acl -LiteralPath $RuntimeDir -AclObject $runtimeAcl
+  Set-JhtNodeOwner -Path $RuntimeDir
 
-  # CMD shim for people using cmd.exe instead of pwsh. It allows `jht <args>`
-  # without the .ps1 extension, bypassing the default Restricted
-  # ExecutionPolicy. Falls back to powershell.exe (PS 5.1, ships with Windows)
-  # when pwsh (PS 7+) is not installed — feedback master#28, cross-review d87890f8.
-  if (-not $DryRun) {
-    $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $composeDest).Hash.ToLowerInvariant()
-    $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wrapperDest).Hash.ToLowerInvariant()
-    $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest).Hash.ToLowerInvariant()
-    [IO.File]::WriteAllText(
-      $manifestDest,
-      "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n",
-      [Text.UTF8Encoding]::new($false))
-    Set-JhtNodeOwner -Path $manifestDest
-    $shimContent = @"
+  $stage = Join-Path $RuntimeDir ('.install-stage-' + [guid]::NewGuid().ToString('N'))
+  $stageScripts = Join-Path $stage 'scripts'
+  New-Item -ItemType Directory -Path $stageScripts -Force | Out-Null
+  try {
+    $downloads = [ordered]@{
+      'docker-compose.yml' = (Join-Path $stage 'docker-compose.yml')
+      'docker-compose.podman.yml' = (Join-Path $stage 'docker-compose.podman.yml')
+      'scripts/jht-wrapper.ps1' = (Join-Path $stageScripts 'jht-wrapper.ps1')
+      'scripts/windows-private-acl.ps1' = (Join-Path $stageScripts 'windows-private-acl.ps1')
+      'scripts/enable-podman-windows-runtime.ps1' = (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')
+      'scripts/configure-podman-windows-network.ps1' = (Join-Path $stageScripts 'configure-podman-windows-network.ps1')
+      'scripts/wsl-interop-connect-proxy.py' = (Join-Path $stageScripts 'wsl-interop-connect-proxy.py')
+    }
+    foreach ($relative in $downloads.Keys) { Get-File -Url "$releaseBase/$relative" -Dest $downloads[$relative] }
+    foreach ($ps1 in @('jht-wrapper.ps1', 'windows-private-acl.ps1', 'enable-podman-windows-runtime.ps1', 'configure-podman-windows-network.ps1')) {
+      [scriptblock]::Create((Get-Content -LiteralPath (Join-Path $stageScripts $ps1) -Raw)) | Out-Null
+    }
+    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.yml') -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.' }
+    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { Write-Fail 'Downloaded Podman override lacks keep-id.' }
+    if (-not (Select-String -LiteralPath (Join-Path $stageScripts 'jht-wrapper.ps1') -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { Write-Fail 'Downloaded wrapper lacks the protected runtime protocol.' }
+    Invoke-PodmanRuntimeEnabler -ScriptPath (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')
+  } finally {
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
+  $wrapperDest = Join-Path $BinDir 'jht.ps1'
+  $helperDest = Join-Path $BinDir 'windows-private-acl.ps1'
+  $shimDest = Join-Path $BinDir 'jht.cmd'
+  . $helperDest
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome" }
+  foreach ($published in @(
+    (Join-Path $RuntimeDir 'docker-compose.yml'), (Join-Path $RuntimeDir 'docker-compose.podman.yml'),
+    (Join-Path $RuntimeDir '.runtime-integrity'), $wrapperDest, $helperDest
+  )) { if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" } }
+
+  $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
 if errorlevel 1 goto jht_windows_powershell
@@ -334,11 +333,9 @@ exit /b %errorlevel%
 powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 "@
-    Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
-    Write-Ok "CMD shim: $shimDest (pwsh + powershell.exe fallback)"
-  } else {
-    Write-Dry "Set-Content $shimDest (CMD shim)"
-  }
+  Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
+  Write-Ok "Podman runtime: $RuntimeDir"
+  Write-Ok "wrapper: $wrapperDest"
 }
 
 # ── Step 4: PATH register ─────────────────────────────────────────────────
@@ -477,7 +474,7 @@ function Show-Final {
   Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
   Write-Host "    jht down" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\windows-private-acl.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
-  Write-Host "    docker rmi $Image" -ForegroundColor DarkGray
+  Write-Host "    podman image rm $RuntimeImage" -ForegroundColor DarkGray
   Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
   Write-Host "    Remove-Item -Recurse -Force '$JhtHome', '$env:USERPROFILE\Documents\Job Hunter Team'" -ForegroundColor DarkGray
   Write-Host ""
@@ -515,7 +512,7 @@ function Invoke-Onboard {
 # ── Main ──────────────────────────────────────────────────────────────────
 Show-Header
 Test-System
-Test-DockerDesktop
+Test-WindowsSubsystem
 Get-RuntimeFiles
 Add-ToUserPath
 Write-HostEnv
