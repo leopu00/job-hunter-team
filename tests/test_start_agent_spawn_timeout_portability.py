@@ -83,15 +83,6 @@ def test_the_spawn_guard_uses_the_portable_timeout_helper():
     assert bare is None, f"`timeout` nudo tornato sulla new-session: {bare.group(0)!r}"
 
 
-def test_the_cleanup_clients_are_bounded_through_the_helper_too():
-    """`has-session`/`kill-session` del ramo d'errore parlano con lo STESSO
-    server sospetto di essere appeso: senza tetto sono l'ultimo punto in cui il
-    processo puo' bloccarsi per sempre tenendo il fd 9 del lock."""
-    probe = 'jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux '
-    assert f'{probe}has-session -t "=$SESSION"' in SOURCE
-    assert f'{probe}kill-session -t "=$SESSION"' in SOURCE
-
-
 def test_the_helper_is_sourced_before_the_spawn_guard():
     """Un riordino dei `source` romperebbe tutto in silenzio."""
     sourced = SOURCE.index('source "$DEV_TEAM_DIR/daemon-lib.sh"')

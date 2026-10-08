@@ -18,7 +18,7 @@ import {
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
-import { ERROR_CATALOG } from "../lib/error-catalog";
+import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -36,6 +36,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
   sendOnboardingProviderInput,
@@ -72,6 +73,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   prepareOnboardingRuntime: vi.fn(),
   probeOnboardingSshHostKey: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
+  recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
@@ -165,6 +167,9 @@ vi.mock("../onboarding", () => ({
         )}
         {props.runtime.status === "failed" && props.runtime.retryable === false && (
           <button type="button" onClick={props.onExitFailure}>exit-failure</button>
+        )}
+        {props.runtime.status === "failed" && props.runtime.code === "podman_machine_mounts_home" && props.onRecreatePodmanMachine && (
+          <button type="button" onClick={() => void props.onRecreatePodmanMachine?.().catch(() => undefined)}>recreate-podman-machine</button>
         )}
         {props.runtime.status !== "collecting" && (
           <button type="button" onClick={() => void props.onRestart().catch(() => undefined)}>restart-onboarding</button>
@@ -788,6 +793,63 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
+  it("a Podman machine that sees more of the Mac is recreated only from its own action, then setup starts over", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("podman-mounts-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "podman_machine_mounts_home",
+        message: "raw native message",
+        retryable: false,
+      })
+      .mockResolvedValueOnce(PREPARED);
+    vi.mocked(recreateOnboardingPodmanMachine).mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText("title:Macchina Podman da ricreare")).toBeInTheDocument();
+    expect(screen.getByText(describeError("podman_machine_mounts_home").text)).toBeInTheDocument();
+    expect(screen.getByText(`Cosa fare: ${describeError("podman_machine_mounts_home").action}`)).toBeInTheDocument();
+    expect(screen.queryByText("raw native message")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
+    expect(recreateOnboardingPodmanMachine).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "recreate-podman-machine" }));
+    await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledTimes(2));
+    expect(recreateOnboardingPodmanMachine).toHaveBeenCalledOnce();
+    expect(vi.mocked(recreateOnboardingPodmanMachine).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(prepareOnboardingRuntime).mock.invocationCallOrder[1]);
+    expect(vi.mocked(prepareOnboardingRuntime).mock.calls[1][0]).toEqual(SUBMISSION);
+  });
+
+  it("a failed Podman machine recreation shows its own error and does not start the setup again", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("podman-recreate-failed-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce({
+      code: "podman_machine_mounts_home",
+      message: "raw native message",
+      retryable: false,
+    });
+    vi.mocked(recreateOnboardingPodmanMachine).mockRejectedValue({
+      code: "podman_machine_recreate_failed",
+      message: "raw native message",
+      retryable: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    await user.click(await screen.findByRole("button", { name: "recreate-podman-machine" }));
+
+    expect(await screen.findByText("code:podman_machine_recreate_failed")).toBeInTheDocument();
+    expect(screen.getByText(describeError("podman_machine_recreate_failed").text)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+  });
+
   it("maps an explicit version mismatch to fixed copy without exposing backend text", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("container-version-account"));
     requireOnboarding();
@@ -1252,6 +1314,11 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
     expect(screen.getByText("code:team_start_failed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+
+    // The retry is the team start again, not the Assistant probe.
+    await user.click(screen.getByRole("button", { name: "retry-runtime" }));
+    await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledTimes(2));
     expect(reconnectDirectChat).not.toHaveBeenCalled();
   });
 

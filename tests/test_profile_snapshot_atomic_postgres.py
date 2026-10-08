@@ -496,12 +496,9 @@ def test_rpc_is_service_role_only(postgres16):
 
 
 def test_release_migration_sequence_and_prefix_census(postgres16):
-    migrations = sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql"))
-    by_prefix: dict[str, list[str]] = {}
-    for migration in migrations:
-        by_prefix.setdefault(migration.name[:3], []).append(migration.name)
-    collisions = {prefix: names for prefix, names in by_prefix.items() if len(names) > 1}
-    assert collisions == {}
+    # The prefix census (no two migrations on one number) is
+    # test_pairing_oneshot_postgres.py::test_release_migration_prefix_census_has_no_collisions,
+    # which needs no database.
     assert MIGRATION.name == "080_profile_snapshot_atomic.sql"
 
     contracts = postgres16(

@@ -8,7 +8,6 @@ Fino all'08/10 un test guardava anche gli stati vuoti del gioco Godot (game/):
 Godot e' abbandonato, e quel test e' stato tolto con lui.
 """
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,40 +16,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "agents"
 LOCALES = ("it", "es", "fr", "de", "pt", "hu")
-ROLES = (
-    "capitano", "scout", "analista", "scorer", "scrittore", "critico",
-    "sentinella", "assistente", "dottore", "mantenitore", "mentor",
-)
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _prompt_paths(role: str):
-    base = AGENTS_DIR / role
-    yield base / f"{role}.md"
-    for locale in LOCALES:
-        yield base / f"{role}.{locale}.md"
-
-
-def test_all_role_prompts_inherit_the_user_initiated_application_rule():
-    """T18 deve arrivare a tutti gli 11 ruoli e alle loro sei traduzioni."""
+def test_the_user_initiated_application_rule_exists_in_every_team_rules_locale():
+    """RULE-T18 is the rule this file guards. That every role prompt inherits up
+    to the LAST team rule (T18 included) is
+    test_agent_prompt_localization_sync.py::test_inherited_rule_range_reaches_last_team_rule."""
     team_rules = [
         AGENTS_DIR / "_team" / "team-rules.md",
         *(AGENTS_DIR / "_team" / f"team-rules.{locale}.md" for locale in LOCALES),
     ]
     for path in team_rules:
         assert "RULE-T18" in _read(path), f"regola autonomia candidature assente: {path}"
-
-    inherited_range = re.compile(r"\bT01\.\.T(\d{2})\b")
-    for role in ROLES:
-        for path in _prompt_paths(role):
-            match = inherited_range.search(_read(path))
-            assert match, f"range team-wide assente: {path}"
-            assert int(match.group(1)) >= 18, (
-                f"{path} non eredita RULE-T18 sull'autonomia delle candidature"
-            )
 
 
 def test_web_copy_does_not_frame_zero_applications_as_a_deficit():

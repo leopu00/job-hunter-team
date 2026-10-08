@@ -35,6 +35,11 @@ const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
 const DIAGNOSTIC_SCHEMA_VERSION: u8 = 1;
 const DIAGNOSTIC_MAX_RECORDS: usize = 128;
 const DIAGNOSTIC_MAX_BYTES: usize = 64 * 1024;
+/// The wrapper's exit status when the JHT Podman machine mounts more of the
+/// Mac than ~/.jht and the JHT documents (`PODMAN_MOUNTS_EXIT` in
+/// scripts/jht-wrapper.sh). `run_local` turns it into this error code.
+const PODMAN_MACHINE_MOUNTS_EXIT: i32 = 78;
+const PODMAN_MACHINE_MOUNTS_HOME: &str = "podman_machine_mounts_home";
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -128,6 +133,7 @@ enum LocalCliOperation {
     Snapshot,
     AssistantStart,
     ProviderLimits,
+    PodmanMachineRecreate,
 }
 
 impl LocalCliOperation {
@@ -143,6 +149,7 @@ impl LocalCliOperation {
             Self::Snapshot => vec!["onboarding-snapshot"],
             Self::AssistantStart => vec!["team", "start", "assistente"],
             Self::ProviderLimits => vec!["providers", "limits", "--json"],
+            Self::PodmanMachineRecreate => vec!["podman-machine-recreate", "--confirm"],
         }
     }
 
@@ -158,6 +165,7 @@ impl LocalCliOperation {
             Self::Snapshot => "snapshot",
             Self::AssistantStart => "assistant-start",
             Self::ProviderLimits => "provider-limits",
+            Self::PodmanMachineRecreate => "podman-machine-recreate",
         }
     }
 }
@@ -357,6 +365,12 @@ impl OnboardingDiagnosticSink {
                 Some("container_timeout".to_owned()),
                 Some(failure("container_timeout").retryable),
                 OnboardingDiagnosticExitCategory::Timeout,
+            ),
+            Err(PODMAN_MACHINE_MOUNTS_HOME) => (
+                OnboardingProgressStatus::Error,
+                Some(PODMAN_MACHINE_MOUNTS_HOME.to_owned()),
+                Some(false),
+                OnboardingDiagnosticExitCategory::Nonzero,
             ),
             Err(_) => (
                 OnboardingProgressStatus::Error,
@@ -718,6 +732,16 @@ fn failure(code: &'static str) -> OnboardingError {
         ),
         "podman_not_ready" => (
             "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
+            true,
+        ),
+        // Retrying cannot help: the machine has to be recreated, and only after
+        // the person confirms it (onboarding_podman_machine_recreate).
+        PODMAN_MACHINE_MOUNTS_HOME => (
+            "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono. Ricreala per continuare.",
+            false,
+        ),
+        "podman_machine_recreate_failed" => (
+            "La macchina Podman di JHT non è stata ricreata. Riprova.",
             true,
         ),
         "runtime_download_failed" => (
@@ -1650,6 +1674,7 @@ fn ensure_success(
     match result {
         Ok(value) if value.success() => Ok(()),
         Err("process_timeout") => Err(failure("timeout")),
+        Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err(failure(code)),
     }
 }
@@ -1662,6 +1687,7 @@ fn ensure_success_with_timeout(
     match result {
         Ok(value) if value.success() => Ok(()),
         Err("process_timeout") => Err(failure(timeout_code)),
+        Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err(failure(code)),
     }
 }
@@ -1699,7 +1725,27 @@ fn run_local(
     args: &[&str],
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
-    run_verified_local_wrapper(wrapper, args, None, timeout)
+    refuse_broad_podman_machine(run_verified_local_wrapper(wrapper, args, None, timeout))
+}
+
+/// A wrapper that refused a Podman machine mounting more of the Mac answers
+/// with its own error, never with the failure of the step that ran it.
+fn refuse_broad_podman_machine(
+    result: Result<ProcessResult, &'static str>,
+) -> Result<ProcessResult, &'static str> {
+    match result {
+        Ok(value) if value.code == PODMAN_MACHINE_MOUNTS_EXIT => Err(PODMAN_MACHINE_MOUNTS_HOME),
+        other => other,
+    }
+}
+
+/// The error for a failed local step: the broad Podman machine keeps its own.
+fn local_failure(error: &'static str, code: &'static str) -> OnboardingError {
+    failure(if error == PODMAN_MACHINE_MOUNTS_HOME {
+        PODMAN_MACHINE_MOUNTS_HOME
+    } else {
+        code
+    })
 }
 
 fn run_scoped_local(
@@ -1762,6 +1808,7 @@ fn start_and_verify_local_container_with(
     let requested = match run(LocalCliOperation::Up, PREPARE_TIMEOUT) {
         Ok(result) if result.success() => Ok(()),
         Err("process_timeout") => Err("container_timeout"),
+        Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err("container_start_failed"),
     };
 
@@ -1772,6 +1819,7 @@ fn start_and_verify_local_container_with(
                 return Ok(());
             }
             Err("process_timeout") => return Err(failure("container_timeout")),
+            Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
             _ => {}
         }
         if attempt + 1 < attempts {
@@ -2070,7 +2118,7 @@ fn probe_installed_wrapper_with(
     mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let status = run(LocalCliOperation::Status, LOCAL_CONTAINER_VERIFY_TIMEOUT)
-        .map_err(|_| failure("runtime_wrapper_probe_failed"))?;
+        .map_err(|error| local_failure(error, "runtime_wrapper_probe_failed"))?;
     if !matches!(status.code, 0 | 1) {
         return Err(failure("runtime_wrapper_probe_failed"));
     }
@@ -2846,7 +2894,7 @@ fn configured_subscription_provider(
                 LocalCliOperation::ProviderCurrent,
                 SNAPSHOT_TIMEOUT,
             )
-            .map_err(|_| failure("provider_login_start_failed"))?
+            .map_err(|error| local_failure(error, "provider_login_start_failed"))?
         }
         ValidatedHost::Vps { .. } => {
             run_ssh(host, REMOTE_PROVIDER_CURRENT, None, SNAPSHOT_TIMEOUT, None)
@@ -3356,6 +3404,54 @@ pub(crate) async fn onboarding_team_start(
     result
 }
 
+/// Recreates the JHT Podman machine with only ~/.jht and the JHT documents
+/// mounted. It deletes the machine (its images and internal volumes are pulled
+/// again; the person's data lives in the two folders and stays), so the app
+/// calls it only after the person confirmed it on the
+/// `podman_machine_mounts_home` error.
+fn recreate_podman_machine_with(
+    run: impl FnOnce(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
+) -> Result<(), OnboardingError> {
+    match run(LocalCliOperation::PodmanMachineRecreate, PREPARE_TIMEOUT) {
+        Ok(result) if result.success() => Ok(()),
+        Err("process_timeout") => Err(failure("timeout")),
+        Err(error) => Err(local_failure(error, "podman_machine_recreate_failed")),
+        Ok(_) => Err(failure("podman_machine_recreate_failed")),
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_podman_machine_recreate(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+        recreate_podman_machine_with(|operation, timeout| {
+            run_scoped_local(&app, &worker_expected, &wrapper, operation, timeout)
+        })
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("podman_machine_recreate_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
     app: tauri::AppHandle,
@@ -3496,6 +3592,11 @@ mod tests {
         StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
         INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
+    use super::{
+        ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
+        refuse_broad_podman_machine, PODMAN_MACHINE_MOUNTS_EXIT, PODMAN_MACHINE_MOUNTS_HOME,
+        PREPARE_TIMEOUT,
+    };
     #[cfg(target_os = "macos")]
     use super::{
         local_podman_install_required, local_wrapper_command, probe_installed_wrapper_with,
@@ -3546,6 +3647,7 @@ mod tests {
             "runtime_wrapper_publish_failed",
             "runtime_wrapper_probe_failed",
             "local_account_owner_unavailable",
+            "podman_machine_recreate_failed",
             "container_start_failed",
             "container_not_ready",
             "container_timeout",
@@ -3564,6 +3666,7 @@ mod tests {
         }
 
         for code in [
+            PODMAN_MACHINE_MOUNTS_HOME,
             "runtime_install_unsupported",
             "local_account_owner_missing",
             "local_account_owner_mismatch",
@@ -4117,32 +4220,65 @@ mod tests {
         assert!(super::bundled_wrapper_published(&runtime, &published));
 
         let inherited_path = format!("{}:/usr/bin:/bin", fake_bin.display());
-        let status = Command::new(&published)
-            .arg("status")
-            .env("HOME", &home)
-            .env("PATH", &inherited_path)
-            .env("JHT_RUNTIME_DIR", &runtime)
-            .env("JHT_WRAPPER_PATH", &published)
-            .env_remove("JHT_PODMAN_MACHINE")
-            .env_remove("CONTAINER_CONNECTION")
-            .output()
-            .unwrap();
+        // The machine's own config, as `podman machine init` writes it: the
+        // wrapper reads its mounts before using the machine.
+        let config_home = home.join(".config");
+        let machine_config = config_home.join("containers/podman/machine/applehv/jht-podman.json");
+        fs::create_dir_all(machine_config.parent().unwrap()).unwrap();
+        let write_machine_config = |sources: &[String]| {
+            let mounts = sources
+                .iter()
+                .map(|source| format!(r#"{{"Source":"{source}","Target":"{source}","Type":"virtiofs"}}"#))
+                .collect::<Vec<_>>()
+                .join(",");
+            fs::write(&machine_config, format!(r#"{{"Mounts":[{mounts}],"Name":"jht-podman"}}"#))
+                .unwrap();
+        };
+        let jht_sources = [
+            home.join(".jht").display().to_string(),
+            home.join("Documents/Job Hunter Team").display().to_string(),
+        ];
+        write_machine_config(&jht_sources);
+        let wrapper_command = |argument: &str| {
+            Command::new(&published)
+                .arg(argument)
+                .env("HOME", &home)
+                .env("PATH", &inherited_path)
+                .env("XDG_CONFIG_HOME", &config_home)
+                .env("JHT_RUNTIME_DIR", &runtime)
+                .env("JHT_WRAPPER_PATH", &published)
+                .env_remove("JHT_PODMAN_MACHINE")
+                .env_remove("CONTAINER_CONNECTION")
+                .output()
+                .unwrap()
+        };
+        let status = wrapper_command("status");
         assert_eq!(status.status.code(), Some(1));
-        let snapshot = Command::new(&published)
-            .arg("onboarding-snapshot")
-            .env("HOME", &home)
-            .env("PATH", inherited_path)
-            .env("JHT_RUNTIME_DIR", &runtime)
-            .env("JHT_WRAPPER_PATH", &published)
-            .env_remove("JHT_PODMAN_MACHINE")
-            .env_remove("CONTAINER_CONNECTION")
-            .output()
-            .unwrap();
+        let snapshot = wrapper_command("onboarding-snapshot");
         assert!(snapshot.status.success());
         let snapshot = super::parse_verified_snapshot(&String::from_utf8(snapshot.stdout).unwrap())
             .expect("installed wrapper must emit the strict snapshot contract");
         assert!(snapshot.runtime_installed);
         assert!(!snapshot.container_running);
+
+        // The default mounts of `podman machine init` on macOS: the wrapper
+        // refuses the machine with the exit status the app turns into
+        // podman_machine_mounts_home.
+        write_machine_config(&[
+            "/Users".to_owned(),
+            "/private".to_owned(),
+            "/var/folders".to_owned(),
+        ]);
+        let refused = wrapper_command("status");
+        assert_eq!(refused.status.code(), Some(PODMAN_MACHINE_MOUNTS_EXIT));
+        assert_eq!(
+            refuse_broad_podman_machine(Ok(ProcessResult {
+                code: refused.status.code().unwrap(),
+                stdout: refused.stdout,
+            }))
+            .unwrap_err(),
+            PODMAN_MACHINE_MOUNTS_HOME
+        );
 
         fs::remove_dir_all(home).unwrap();
     }
@@ -4204,6 +4340,89 @@ mod tests {
     }
 
     #[test]
+    fn a_podman_machine_that_sees_more_of_the_mac_keeps_its_own_error() {
+        let broad = || {
+            refuse_broad_podman_machine(Ok(ProcessResult {
+                code: PODMAN_MACHINE_MOUNTS_EXIT,
+                stdout: Vec::new(),
+            }))
+        };
+        assert_eq!(broad().unwrap_err(), PODMAN_MACHINE_MOUNTS_HOME);
+        assert_eq!(refuse_broad_podman_machine(outcome(false)).unwrap().code, 1);
+        assert!(refuse_broad_podman_machine(outcome(true)).unwrap().success());
+
+        // `up` refused: no status polling, no retry offered.
+        let mut calls = Vec::new();
+        let error = start_and_verify_local_container_with(
+            |operation, _| {
+                calls.push(operation.diagnostic_id());
+                broad()
+            },
+            |_| panic!("a refused machine must not wait"),
+            3,
+        )
+        .unwrap_err();
+        assert_eq!(calls, ["up"]);
+        assert_eq!(error.code, PODMAN_MACHINE_MOUNTS_HOME);
+        assert!(!error.retryable);
+
+        // `up` answered before the check (an older wrapper), `status` refuses.
+        let mut results = VecDeque::from([outcome(true), broad()]);
+        let error = start_and_verify_local_container_with(
+            |_, _| results.pop_front().unwrap(),
+            |_| panic!("a refused machine must not wait"),
+            3,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, PODMAN_MACHINE_MOUNTS_HOME);
+
+        for error in [
+            ensure_success(broad(), "team_start_failed").unwrap_err(),
+            ensure_success_with_timeout(broad(), "provider_config_failed", "provider_timeout")
+                .unwrap_err(),
+        ] {
+            assert_eq!(error.code, PODMAN_MACHINE_MOUNTS_HOME);
+        }
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            probe_installed_wrapper_with(|_, _| broad()).unwrap_err().code,
+            PODMAN_MACHINE_MOUNTS_HOME
+        );
+        assert_eq!(
+            ensure_success(Err("ssh_unavailable"), "team_start_failed")
+                .unwrap_err()
+                .code,
+            "team_start_failed"
+        );
+    }
+
+    #[test]
+    fn recreating_the_podman_machine_runs_the_confirmed_wrapper_command_once() {
+        let mut calls = Vec::new();
+        recreate_podman_machine_with(|operation, timeout| {
+            calls.push((operation.argv(), timeout));
+            outcome(true)
+        })
+        .unwrap();
+        assert_eq!(
+            calls,
+            [(vec!["podman-machine-recreate", "--confirm"], PREPARE_TIMEOUT)]
+        );
+
+        let failed = recreate_podman_machine_with(|_, _| outcome(false)).unwrap_err();
+        assert_eq!(failed.code, "podman_machine_recreate_failed");
+        assert!(failed.retryable);
+        let timed_out = recreate_podman_machine_with(|_, _| Err("process_timeout")).unwrap_err();
+        assert_eq!(timed_out.code, "timeout");
+        let missing = recreate_podman_machine_with(|_, _| Err("runtime_missing")).unwrap_err();
+        assert_eq!(missing.code, "podman_machine_recreate_failed");
+        // Recreated but still broad (the wrapper checks it again at the end).
+        let still_broad = recreate_podman_machine_with(|_, _| Err(PODMAN_MACHINE_MOUNTS_HOME))
+            .unwrap_err();
+        assert_eq!(still_broad.code, PODMAN_MACHINE_MOUNTS_HOME);
+    }
+
+    #[test]
     fn local_onboarding_uses_the_authoritative_cli_dispatcher_contract() {
         let operations = [
             (LocalCliOperation::Up, vec!["up"]),
@@ -4230,6 +4449,10 @@ mod tests {
             (
                 LocalCliOperation::ProviderLimits,
                 vec!["providers", "limits", "--json"],
+            ),
+            (
+                LocalCliOperation::PodmanMachineRecreate,
+                vec!["podman-machine-recreate", "--confirm"],
             ),
         ];
         for (operation, expected) in operations {

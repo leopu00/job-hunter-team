@@ -50,9 +50,16 @@ except ImportError:      # pragma: no cover — Windows/non-POSIX
 
 
 # I file handle restano aperti per TUTTA la vita del processo: è il possesso
-# del fd a tenere il flock. Se il modulo li lasciasse andare, il GC chiuderebbe
-# il fd e il lock cadrebbe senza che nessuno se ne accorga.
-_HELD: list = []
+# del fd a tenere il flock. Il registro vive su ``sys``, non soltanto nel
+# modulo: alcuni daemon caricano questa skill con ``spec_from_file_location``
+# senza registrare il modulo in ``sys.modules``. In quel caso una lista locale
+# morirebbe col modulo al ritorno del loader, chiudendo il file e liberando il
+# lock. ``sys`` vive invece quanto il processo ed è condiviso anche fra più
+# caricamenti per percorso della skill.
+_PROCESS_HELD_ATTR = "_jht_singleton_lock_handles"
+if not hasattr(sys, _PROCESS_HELD_ATTR):
+    setattr(sys, _PROCESS_HELD_ATTR, [])
+_HELD: list = getattr(sys, _PROCESS_HELD_ATTR)
 
 
 def acquire_singleton(lock_file, pid_file=None, label: str = "",

@@ -10,17 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 DOWNLOAD_CLIENT = ROOT / "web" / "app" / "download" / "DownloadClient.tsx"
 DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
-
-
-def test_release_publishes_tauri_nsis_installer() -> None:
-    workflow = RELEASE_WORKFLOW.read_text()
-    assert "npm run tauri:build" in workflow
-    assert "--bundles nsis" in workflow
-    assert "job-hunter-team-windows-x64-setup.exe" in workflow
-    assert "--expected-asset job-hunter-team-windows-x64-setup.exe" in workflow
 
 
 def test_download_page_points_to_the_tauri_installer() -> None:

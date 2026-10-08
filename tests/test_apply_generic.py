@@ -596,23 +596,9 @@ def test_recipe_contract_matches_the_other_recipes():
     assert all(m == m.casefold() for m in apply_generic.CONFIRMATION_MARKERS)
 
 
-# ── the CLOSER's skill names every stop of the recipe ──────────────────────
-
-
-def _generic_reasons() -> set[str]:
-    source = (ROOT / "shared" / "skills" / "apply_generic.py").read_text(encoding="utf-8")
-    found = set(__import__("re").findall(r'BlockedHuman\(\s*"([a-z_]+)"', source))
-    assert len(found) >= 15, found  # a search that finds nothing is not a pass
-    return found | {"captcha", "two_factor", "account_creation"}  # raised from _challenge_reason
-
-
-@pytest.mark.parametrize("lang", ("en", "it", "es", "fr", "de", "pt", "hu"))
-def test_apply_flow_skill_names_every_generic_stop(lang):
-    name = "SKILL.md" if lang == "en" else f"SKILL.{lang}.md"
-    text = (ROOT / "agents" / "_skills" / "apply-flow" / name).read_text(encoding="utf-8")
-    missing = sorted(r for r in _generic_reasons() if f"`{r}`" not in text)
-    assert not missing, f"{lang}: apply-flow does not name {missing}"
-    assert "apply_generic.py" in text
+# The apply-flow skill naming every stop of this recipe (and the recipe
+# itself) is checked with every other recipe's stops, in all seven
+# languages: test_closer_wiring.py::test_la_skill_apply_flow_nomina_ogni_motivo_di_blocco.
 
 
 # ── review R3 (HQ-BACKEND): a confirmation is proved, not read off the page ─

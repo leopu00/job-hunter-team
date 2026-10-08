@@ -899,6 +899,24 @@ def test_sender_normal_delivery_still_exits_zero(tmux_factory, home):
     assert keys == ["Enter"], keys
 
 
+def test_sender_survives_a_message_larger_than_a_pipe_buffer(tmux_factory, home):
+    """Un messaggio oltre il buffer di una pipe (64 KB su Linux, fino a 128 su macOS).
+
+    Il sender leggeva la prima riga del verdetto con `printf | head -n 1`
+    sotto `set -o pipefail`: quando head esce prima che printf abbia scritto
+    tutto, printf prende SIGPIPE e lo script moriva con 141, stdout e stderr
+    vuoti. Con un messaggio piccolo succedeva di rado (sotto xdist in CI); con
+    uno oltre il buffer succede sempre, e qui il rosso non dipende dal caso.
+    """
+    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
+    msg = "[@capitano -> @scout-1] [MSG] " + "x" * 200_000 + " FINE"
+
+    r = _send(tmux, home, "SCOUT-1", msg)
+
+    assert r.returncode != 141, "SIGPIPE: una pipe verso head e' tornata"
+    assert r.returncode == 0, (r.returncode, r.stdout[-300:], r.stderr[-300:])
+
+
 def test_sender_verifies_a_long_message_from_the_visible_tail(tmux_factory, home):
     """La testa di un prompt lungo può essere già fuori dal pane.
 

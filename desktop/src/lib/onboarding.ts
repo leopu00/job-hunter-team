@@ -167,6 +167,12 @@ export interface OnboardingFlowProps {
   onRetry: () => Promise<void>;
   onRestart: () => Promise<void>;
   onExitFailure: () => void;
+  /**
+   * Deletes the JHT Podman machine and creates it again with only ~/.jht and
+   * the JHT documents, then resumes the setup. Offered only on the
+   * `podman_machine_mounts_home` error, after the person confirms it.
+   */
+  onRecreatePodmanMachine?: () => Promise<void>;
 }
 
 export type OnboardingGateState =

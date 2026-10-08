@@ -43,7 +43,6 @@ Modi:
   python3 pacing-bridge.py --once     # un solo tick, stampa, niente send
   python3 pacing-bridge.py --once --send  # un solo tick + send alla SENTINELLA
 """
-import fcntl
 import importlib.util
 import json
 import os
@@ -1333,49 +1332,32 @@ def append_to_mailbox(msg: str, delivered_via_tmux: bool, kind: str | None = Non
         print(f"[pacing-bridge] WARN append mailbox: {e}", file=sys.stderr)
 
 
-# Il fd del lock resta aperto per tutta la vita del processo: è il possesso
-# del fd a tenere il flock.
-_LOCK_FH = None
-
-
 def acquire_singleton_lock():
-    """Singleton ATOMICO via flock + scrittura del PID file.
+    """Singleton atomico tramite la skill condivisa + scrittura del PID file.
 
     Il PID file da solo non basta (e qui non veniva nemmeno riletto): due
     pacing-bridge lanciati in parallelo si sovrascrivevano il pid a vicenda e
     giravano entrambi, raddoppiando i [BRIDGE PACING] alla Sentinella. flock è
     atomico e si rilascia da solo alla morte del processo, anche su SIGKILL.
     """
-    global _LOCK_FH
     try:
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        fh = open(LOCK_FILE, "a+", encoding="utf-8")
-    except OSError as e:
-        print(f"[pacing-bridge] WARN lockfile: {e} — continuing without a lock", file=sys.stderr)
-        return
-    try:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        try:
-            fh.seek(0)
-            other = fh.read().strip() or "?"
-        except OSError:
-            other = "?"
-        fh.close()
-        print(f"[pacing-bridge] another instance is running (pid={other}); exiting")
-        sys.exit(0)
-    _LOCK_FH = fh
-    try:
-        fh.seek(0)
-        fh.truncate()
-        fh.write(str(os.getpid()))
-        fh.flush()
-    except OSError:
-        pass
-    try:
-        PID_FILE.write_text(str(os.getpid()))
-    except OSError as e:
-        print(f"[pacing-bridge] WARN write pid: {e}", file=sys.stderr)
+        mod = _path_import(
+            _shared_skills_dir() / "singleton_lock.py",
+            "pacing_singleton_lock",
+        )
+        mod.acquire_singleton(
+            LOCK_FILE,
+            pid_file=PID_FILE,
+            label="pacing-bridge",
+        )
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"[pacing-bridge] WARN singleton_lock not loadable ({e}) "
+            "— continuing without a lock",
+            file=sys.stderr,
+        )
 
 
 def _serialize_report(d: dict) -> dict | None:

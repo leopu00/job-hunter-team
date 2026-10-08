@@ -421,6 +421,7 @@ require_docker() {
     err "client container non trovato nel PATH. Ripara il runtime JHT."
     exit 127
   fi
+  require_confined_podman_machine
   if ! docker info >/dev/null 2>&1; then
     if [ "$CONTAINER_RUNTIME" = "podman" ]; then
       err "Podman machine JHT non attiva. Esegui 'jht up' per avviarla."
@@ -445,6 +446,7 @@ wake_container_runtime_for_up() {
     err "client container non trovato nel PATH. Ripara il runtime JHT."
     exit 127
   fi
+  require_confined_podman_machine
   if docker info >/dev/null 2>&1; then
     return 0
   fi
@@ -452,6 +454,8 @@ wake_container_runtime_for_up() {
     local podman_bin
     podman_bin="$(podman_binary)" || podman_bin=""
     [ -n "$podman_bin" ] || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
+    ensure_podman_mount_dirs \
+      || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
     info "Podman machine '$PODMAN_MACHINE_NAME' non attiva, la avvio..."
     "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
       || { err "Podman machine non avviabile; Colima non e' stato modificato."; exit 1; }
@@ -464,6 +468,91 @@ wake_container_runtime_for_up() {
   fi
   docker info >/dev/null 2>&1 \
     || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
+}
+
+# ── Cartelle del Mac visibili alla machine Podman di JHT ─────────────────
+# Le sole due che il compose monta. Senza --volume, `podman machine init` su
+# macOS monta /Users (le home di tutti gli utenti), /private, /var/folders e
+# ~/.config/containers (misurato il 08/10/2026): la VM, e un container con un
+# bind sbagliato, vedrebbero tutto il Mac. Una machine che monta altro non si
+# usa; `jht podman-machine-recreate --confirm` la ricrea confinata.
+PODMAN_MOUNT_JHT_HOME="$HOME/.jht"
+PODMAN_MOUNT_JHT_DOCS="$HOME/Documents/Job Hunter Team"
+PODMAN_MOUNTS_EXIT=78
+
+# I file di configurazione della machine (uno per provider: applehv, libkrun),
+# letti senza chiamare podman: il probe resta osservativo e non accende nulla.
+podman_machine_config_files() {
+  local config_root="${XDG_CONFIG_HOME:-$HOME/.config}/containers/podman/machine"
+  local file found=0
+  for file in "$config_root"/*/"$PODMAN_MACHINE_NAME.json"; do
+    [ -f "$file" ] || continue
+    printf '%s\n' "$file"
+    found=1
+  done
+  [ "$found" -eq 1 ]
+}
+
+# Stampa una Source per riga. Fallisce (fail-closed) se l'array non si legge
+# o se una Source contiene caratteri che il parser non sa leggere.
+podman_machine_mount_sources() {
+  local config="$1" mounts total sources
+  mounts="$(sed -n 's/.*"Mounts":\[\([^]]*\)\].*/\1/p' "$config")"
+  if [ -z "$mounts" ]; then
+    grep -Eq '"Mounts":(null|\[\])' "$config"
+    return $?
+  fi
+  total="$(printf '%s' "$mounts" | grep -o '"Source":' | wc -l | tr -d ' ')"
+  sources="$(printf '%s' "$mounts" | grep -o '"Source":"[^"\\]*"' | sed 's/^"Source":"//; s/"$//')"
+  [ "$(printf '%s' "$sources" | grep -c '')" = "$total" ] || return 1
+  [ -z "$sources" ] || printf '%s\n' "$sources"
+}
+
+# 0 = la machine vede solo le due cartelle; 1 = vede altro; 2 = non verificabile.
+podman_machine_confined() {
+  local files file sources source
+  files="$(podman_machine_config_files)" || return 2
+  while IFS= read -r file; do
+    sources="$(podman_machine_mount_sources "$file")" || return 2
+    while IFS= read -r source; do
+      case "$source" in
+        ''|"$PODMAN_MOUNT_JHT_HOME"|"$PODMAN_MOUNT_JHT_DOCS") ;;
+        *) return 1 ;;
+      esac
+    done <<EOF_SOURCES
+$sources
+EOF_SOURCES
+  done <<EOF_FILES
+$files
+EOF_FILES
+  return 0
+}
+
+require_confined_podman_machine() {
+  [ "$CONTAINER_RUNTIME" = "podman" ] || return 0
+  local status=0
+  podman_machine_confined || status=$?
+  case "$status" in
+    0) return 0 ;;
+    1)
+      err "La macchina Podman '$PODMAN_MACHINE_NAME' vede piu' cartelle del Mac di quelle che servono a JHT (~/.jht e ~/Documents/Job Hunter Team)."
+      err "Ricreala con 'jht podman-machine-recreate --confirm': i dati in quelle due cartelle restano."
+      exit "$PODMAN_MOUNTS_EXIT"
+      ;;
+    *)
+      err "Non riesco a verificare quali cartelle del Mac vede la macchina Podman '$PODMAN_MACHINE_NAME'."
+      exit 1
+      ;;
+  esac
+}
+
+# Una cartella dichiarata con --volume che non esiste impedisce l'avvio della
+# machine (vfkit esce con 1): vanno create prima di ogni start.
+ensure_podman_mount_dirs() {
+  if [ ! -d "$PODMAN_MOUNT_JHT_HOME" ]; then
+    mkdir -p "$PODMAN_MOUNT_JHT_HOME" && chmod 700 "$PODMAN_MOUNT_JHT_HOME" || return 1
+  fi
+  mkdir -p "$PODMAN_MOUNT_JHT_DOCS"
 }
 
 podman_binary() {
@@ -905,7 +994,14 @@ desktop_chat() {
 # Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
 # serve a DECIDERE, non a pretendere.
 docker_reachable() {
-  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+  command -v docker >/dev/null 2>&1 || return 1
+  # Una machine Podman che vede piu' del Mac di ~/.jht e dei documenti JHT non
+  # e' "raggiungibile": i probe non la usano, e i comandi che la pretendono
+  # (up, status, require_docker, upgrade) escono spiegando il motivo.
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    podman_machine_confined || return 1
+  fi
+  docker info >/dev/null 2>&1
 }
 
 # L'aiuto completo vive nel CLI DENTRO il container, quindi senza container si
@@ -930,6 +1026,9 @@ jht — Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht podman-machine-recreate --confirm
+                           ricrea la macchina Podman (macOS) vedendo
+                           solo ~/.jht e ~/Documents/Job Hunter Team
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -959,7 +1058,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|mail)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail)
       return 0
       ;;
   esac
@@ -1830,6 +1929,17 @@ handle_runtime_upgrade() {
     upgrade_result false false preflight unknown none unknown none false "Runtime host fuori authority" false
     return 1
   }
+  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    local machine_status=0
+    podman_machine_confined || machine_status=$?
+    if [ "$machine_status" -eq 1 ]; then
+      upgrade_result false false preflight unknown none unknown none false "La macchina Podman vede piu' cartelle del Mac di quelle di JHT: ricreala con 'jht podman-machine-recreate --confirm'" false
+      return "$PODMAN_MOUNTS_EXIT"
+    elif [ "$machine_status" -ne 0 ]; then
+      upgrade_result false false preflight unknown none unknown none false "Cartelle visibili alla macchina Podman non verificabili" false
+      return 1
+    fi
+  fi
   if ! upgrade_acquire_lock; then
     upgrade_result false false preflight unknown none unknown none false "Un aggiornamento e gia in corso" false
     return 1
@@ -2080,6 +2190,45 @@ case "$SUB" in
     onboarding_snapshot
     ;;
 
+  # ── Machine Podman confinata (macOS) ─────────────────────────────────
+  # Solo su richiesta esplicita (--confirm): ferma e cancella la VM di JHT
+  # (immagini e volumi interni si rifanno al prossimo `jht up`) e la ricrea
+  # vedendo solo ~/.jht e ~/Documents/Job Hunter Team, che restano intatte.
+  # `podman machine rm` sposta la connessione di default dell'utente: quella
+  # di prima viene rimessa, perche' e' condivisa con altri progetti.
+  podman-machine-recreate)
+    require_compose_file
+    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+      err "Questo runtime non usa una macchina Podman: non c'e' niente da ricreare."
+      exit 1
+    fi
+    if [ "${2:-}" != "--confirm" ] || [ $# -ne 2 ]; then
+      err "Ricrea la macchina Podman '$PODMAN_MACHINE_NAME': la ferma e la cancella (immagini e volumi interni si riscaricano), poi la ricrea vedendo solo ~/.jht e ~/Documents/Job Hunter Team. I dati in quelle due cartelle restano."
+      err "Per procedere: jht podman-machine-recreate --confirm"
+      exit 2
+    fi
+    podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
+    ensure_podman_mount_dirs \
+      || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
+    default_connection="$("$podman_bin" system connection list --format '{{.Name}} {{.Default}}' 2>/dev/null \
+      | awk '$2 == "true" { print $1; exit }')"
+    info "Fermo e ricreo la macchina Podman '$PODMAN_MACHINE_NAME'..."
+    "$podman_bin" machine stop "$PODMAN_MACHINE_NAME" >/dev/null 2>&1 || true
+    "$podman_bin" machine rm -f "$PODMAN_MACHINE_NAME" >/dev/null \
+      || { err "Non riesco a rimuovere la macchina Podman '$PODMAN_MACHINE_NAME'."; exit 1; }
+    "$podman_bin" machine init --now --update-connection=false \
+      --volume "$PODMAN_MOUNT_JHT_HOME:$PODMAN_MOUNT_JHT_HOME" \
+      --volume "$PODMAN_MOUNT_JHT_DOCS:$PODMAN_MOUNT_JHT_DOCS" \
+      "$PODMAN_MACHINE_NAME" >/dev/null \
+      || { err "La nuova macchina Podman '$PODMAN_MACHINE_NAME' non si e' creata."; exit 1; }
+    if [ -n "$default_connection" ]; then
+      "$podman_bin" system connection default "$default_connection" >/dev/null 2>&1 \
+        || warn "Non ho potuto rimettere '$default_connection' come connessione Podman predefinita."
+    fi
+    require_confined_podman_machine
+    info "Macchina Podman ricreata: vede solo ~/.jht e ~/Documents/Job Hunter Team. Avvia il team con 'jht up'."
+    ;;
+
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
   up)
     require_compose_file
@@ -2161,6 +2310,8 @@ case "$SUB" in
   status)
     # Probe pura: `status` non deve avviare la machine Podman, Docker Desktop
     # o il container. Solo l'arm esplicito `up` puo' accendere la machine.
+    # Una machine che vede tutto il Mac non risulta "attiva" nemmeno qui.
+    require_confined_podman_machine
     if ! docker_reachable; then
       printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       exit 1

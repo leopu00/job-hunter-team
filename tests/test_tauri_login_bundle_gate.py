@@ -41,11 +41,21 @@ def jwt_for_role(role: str) -> bytes:
     )
 
 
-def test_sdk_secret_format_marker_without_a_value_is_allowed(tmp_path: Path) -> None:
-    bundle = write_bundle(
-        tmp_path,
+def test_the_public_login_config_is_accepted() -> None:
+    gate.validate_public_config(PUBLIC_URL, PUBLIC_KEY)
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
         b"key.startsWith('sb_secret_') || example === 'sb_secret_not-a-credential'",
-    )
+        b"sb_secret_value",
+        b"SUPABASE_SERVICE_ROLE_KEY",
+        b"c2VydmljZV9yb2xl",  # "service_role" in base64, as SDK code carries it
+    ],
+)
+def test_sdk_secret_format_marker_without_a_value_is_allowed(tmp_path: Path, marker: bytes) -> None:
+    bundle = write_bundle(tmp_path, marker)
 
     gate.verify_paths([bundle], PUBLIC_URL, PUBLIC_KEY)
 

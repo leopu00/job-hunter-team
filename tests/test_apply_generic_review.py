@@ -25,15 +25,8 @@ def test_r1_a_cv_upload_alone_does_not_make_an_application_form(heading, submit,
     assert g.classify_form(form) != "application"
 
 
-# R2 · a label that only mentions a profile fact is not that fact
-@pytest.mark.parametrize("label", [
-    "How did you hear about us? (LinkedIn, Indeed, other)",
-    "Referee email",
-    "Emergency contact phone",
-    "Website where you found this job",
-])
-def test_r2_a_question_mentioning_a_fact_is_not_filled_from_the_profile(label):
-    assert g.core_field(q(label)) is None
+# R2 · a label that only mentions a profile fact is not that fact: its four
+# probes are in test_apply_generic.py::test_labels_about_something_else_are_questions.
 
 
 # R3 · two tenants of a shared hosting suffix are not the same site

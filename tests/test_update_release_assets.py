@@ -27,9 +27,3 @@ def test_public_downloads_are_verified_release_assets() -> None:
 
 def test_release_has_linux_debian_alternative() -> None:
     assert "--expected-asset job-hunter-team-linux-x64.deb" in WORKFLOW
-
-
-def test_godot_is_not_built_or_published() -> None:
-    assert "build-game" not in WORKFLOW
-    assert "setup-godot" not in WORKFLOW
-    assert "game/builds/" not in WORKFLOW

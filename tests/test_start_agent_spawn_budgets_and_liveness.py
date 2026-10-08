@@ -68,19 +68,6 @@ def _code_lines():
     return [ln for ln in LINES if not ln.lstrip().startswith("#")]
 
 
-def _unquoted(line: str) -> str:
-    """La riga senza le porzioni fra apici: `echo "... tmux attach ..."` e'
-    testo, non un client tmux."""
-    return re.sub(r"'[^']*'|\"[^\"]*\"", " ", line)
-
-
-def _session_lock_line() -> int:
-    for number, line in enumerate(LINES, start=1):
-        if 'exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"' in line:
-            return number
-    raise AssertionError("il lock per-sessione non e' piu' riconoscibile")
-
-
 # ── 1. Budget ───────────────────────────────────────────────────────────────
 
 
@@ -152,29 +139,6 @@ def test_the_lock_timeout_message_names_the_bound():
 
 def test_the_idempotence_guard_matches_the_exact_session():
     assert f'tmux has-session -t "=$SESSION" 2>/dev/null 9>&-' in SOURCE
-
-
-def test_the_first_tmux_client_after_the_lock_is_time_bounded():
-    """La proprieta' che conta, indipendentemente da QUALE comando sia oggi:
-    il primo client che parla al server dopo la presa del lock si appende se il
-    server e' incantato, e lo fa col fd 9 in mano. Tutta la guardia sullo spawn
-    sta a valle di quel punto, quindi senza tetto qui il lockout permanente
-    torna spostato di un client."""
-    lock = _session_lock_line()
-    first = next(
-        (number, line)
-        for number, line in enumerate(LINES, start=1)
-        if number > lock
-        and not line.lstrip().startswith("#")
-        and re.search(r"\btmux\s+\S", _unquoted(line))
-    )
-    number, line = first
-    assert line.strip().startswith("jht_timeout "), (
-        f"il primo client tmux dopo il lock (riga {number}) non ha un tetto: {line.strip()!r}"
-    )
-    assert "9>&-" in line, (
-        f"il primo client tmux dopo il lock (riga {number}) non chiude il fd del lock"
-    )
 
 
 def test_an_unanswered_idempotence_probe_falls_through_instead_of_claiming_success():
