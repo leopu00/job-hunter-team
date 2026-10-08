@@ -103,7 +103,7 @@ def bot_role_for(agent: str) -> str:
     return role if role in BOT_ROLES else DEFAULT_BOT_ROLE
 
 
-def try_telegram(agent: str, body: str, row_id: int | None = None) -> bool:
+def try_telegram(agent: str, body: str, row_id: int | None = None, kind: str = "notification") -> bool:
     """Best-effort send via jht-telegram-send. Return True on exit 0.
 
     ⚠️ `--from` non c'era: il ruolo veniva passato solo in `JHT_NOTIFY_AGENT`,
@@ -129,6 +129,7 @@ def try_telegram(agent: str, body: str, row_id: int | None = None) -> bool:
             env={
                 **os.environ,
                 "JHT_NOTIFY_AGENT": agent,
+                "JHT_MESSAGE_KIND": kind,
                 **({"JHT_MESSAGE_ROW_ID": str(row_id)} if row_id else {}),
             },
         )
@@ -316,7 +317,7 @@ def main() -> int:
     if should_deliver and (
         not args.no_telegram
         and not off_hours
-        and try_telegram(args.agent, body, row_id)
+        and try_telegram(args.agent, body, row_id, args.kind)
     ):
         delivered_via = "telegram"
     if should_deliver and off_hours:

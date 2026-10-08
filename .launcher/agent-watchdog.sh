@@ -903,7 +903,8 @@ maybe_respawn_bridges() {
   # vuoto significa "niente da fare", anche quando i processi sono meno di
   # tre. Il flap-cap è per ruolo, se no quello rotto consuma il credito dei
   # sani e li lascia morti quando muoiono davvero.
-  if tg_bots_configured && [ -n "${PROC_TG_MISSING:-}" ]; then
+  if [ "${JHT_TELEGRAM_SERVICE_ENABLED:-0}" != "1" ] \
+      && tg_bots_configured && [ -n "${PROC_TG_MISSING:-}" ]; then
     for _tg_role in $PROC_TG_MISSING; do
       if bridge_flap_ok "tg-bridge-$_tg_role"; then
         log "bridge-watchdog: tg-bridge[$_tg_role] missing (alive=${PROC_TG_ALIVE:-0}, expected=${PROC_TG_EXPECTED:-0}) — respawning that role only"

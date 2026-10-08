@@ -133,6 +133,33 @@ if ! text=$(node "$redactor" --secrets <<<"$text"); then
   echo "jht-telegram-send: redazione fallita: non invio testo non ripulito" >&2
   exit 6
 fi
+
+# Cutover opt-in: finche' l'host non abilita questo interruttore, il bridge
+# esistente e la sua configurazione restano invariati. In modalita' isolata
+# questo wrapper invia solo dati sul socket: non apre jht.config.json e non
+# puo' vedere token o chat id.
+if [ "${JHT_TELEGRAM_SERVICE_ENABLED:-0}" = "1" ]; then
+  if [ -n "$parse_mode" ] || [ -n "$chat_id_override" ] || [ -n "$photo_path" ]; then
+    echo "jht-telegram-send: isolated Telegram accepts plain text only; formatting, chat overrides and outbound attachments are unavailable" >&2
+    exit 1
+  fi
+  client="$(command -v jht-telegram-client 2>/dev/null || true)"
+  if [ -z "$client" ]; then
+    client="$(dirname "$0")/../../shared/telegram_service/bin/jht-telegram-client.py"
+  fi
+  if [ ! -x "$client" ]; then
+    echo "jht-telegram-send: isolated Telegram client unavailable" >&2
+    exit 4
+  fi
+  source_args=()
+  if [ -n "${JHT_MESSAGE_ROW_ID:-}" ]; then
+    source_args=(--source-id "notify:${JHT_MESSAGE_ROW_ID}")
+  fi
+  exec "$client" send --bot-role "$role" \
+    --kind "${JHT_MESSAGE_KIND:-notification}" \
+    "${source_args[@]}" -- "$text"
+fi
+
 jht_home="${JHT_HOME:-$HOME/.jht}"
 config_path="$jht_home/jht.config.json"
 creds_path="$jht_home/credentials/telegram_bot.json"

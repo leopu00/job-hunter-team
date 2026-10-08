@@ -38,6 +38,9 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
+      # Opt-in di cutover: 0 mantiene il tg-bridge corrente; 1 usa il socket
+      # del container isolato. La rotazione dei token avviene solo al cutover.
+      - JHT_TELEGRAM_SERVICE_ENABLED=${JHT_TELEGRAM_SERVICE_ENABLED:-0}
       # JHT_HOST_TYPE letto da pid1 dispatcher. Default `local` per
       # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
       # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
@@ -126,6 +129,10 @@ services:
       # unix funziona lo stesso, e gli agenti non possono sostituire il socket
       # né metterci un symlink.
       - jht-broker-sock:/run/jht-broker:ro
+      # Il client puo' connettersi al socket Telegram ma non creare/sostituire
+      # entry. Gli allegati inbound sono copiabili, mai modificabili in loco.
+      - jht-telegram-sock:/run/jht-telegram:ro
+      - jht-telegram-inbox:/jht_telegram_inbox:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -182,12 +189,52 @@ services:
     cap_drop:
       - ALL
 
+  jht-telegram:
+    image: *jht-image
+    container_name: jht-telegram
+    entrypoint: ["/usr/bin/tini", "-g", "--"]
+    command: ["jht-telegram-service"]
+    user: "1003:1003"
+    # Non entra nella rete Compose degli agenti: il socket e' un volume Unix,
+    # mentre l'API Telegram usa solo l'egress del bridge runtime predefinito.
+    network_mode: bridge
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+      - JHT_TELEGRAM_SERVICE_ENABLED=${JHT_TELEGRAM_SERVICE_ENABLED:-0}
+      - JHT_TELEGRAM_SECRETS=/jht_telegram_secrets
+      - JHT_TELEGRAM_STATE=/jht_telegram_state
+      - JHT_TELEGRAM_SOCKET_DIR=/run/jht-telegram
+      - JHT_TELEGRAM_INBOX=/jht_telegram_inbox
+      - JHT_TELEGRAM_CLIENT_UID=1001
+    volumes:
+      - jht-telegram-secrets:/jht_telegram_secrets
+      - jht-telegram-state:/jht_telegram_state
+      - jht-telegram-sock:/run/jht-telegram
+      - jht-telegram-inbox:/jht_telegram_inbox
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      # L'immagine comune dichiara questi due VOLUME per jht. Qui li
+      # mascheriamo con directory vuote e non scrivibili: non sono ~/.jht.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
 volumes:
   jht-deps:
   jht-runtime-mask:
   jht-secrets:
   jht-broker-state:
   jht-broker-sock:
+  jht-telegram-secrets:
+  jht-telegram-state:
+  jht-telegram-sock:
+  jht-telegram-inbox:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

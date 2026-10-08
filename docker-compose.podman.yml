@@ -1,10 +1,9 @@
 # Podman-on-Windows compatibility override.
 #
-# The production stack contains one container and publishes no ports, so a
-# Compose bridge adds no isolation benefit. On Podman Machine 6 / Netavark 2 a
-# custom rootless bridge can fail while applying nftables rules. Host networking
-# avoids that compatibility seam and exposes the machine-local interop proxy at
-# 127.0.0.1 without exposing JHT services on Windows.
+# The agent container uses host networking for compatibility with Podman
+# Machine 6 / Netavark 2, whose custom rootless bridge can fail while applying
+# nftables rules. Isolated services remain on a bridge and do not join the
+# agent's host network namespace.
 
 services:
   jht:
@@ -38,4 +37,9 @@ services:
   # che non e' l'utente dell'host. NIENTE `network_mode: host`: il broker non
   # condivide il loopback con gli agenti.
   jht-broker:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+
+  jht-telegram:
+    # SO_PEERCRED è tradotto nel namespace del server. Client e server devono
+    # quindi usare la stessa mappa: uid 1001 deve restare 1001 su entrambi.
     userns_mode: "keep-id:uid=1001,gid=1001"

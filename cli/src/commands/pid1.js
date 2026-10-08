@@ -57,6 +57,10 @@ const LIVE_SCREEN_SCRIPT = '/app/.launcher/live-screen.sh';
 // riempirebbe il log senza mai accendere lo schermo.
 const LIVE_SCREEN_FATAL_EXIT_CODES = new Set([2, 3]);
 
+export function telegramServiceEnabled(env = process.env) {
+  return String(env.JHT_TELEGRAM_SERVICE_ENABLED ?? '').trim() === '1';
+}
+
 /**
  * Decide se pid1 accende lo schermo live del CLOSER (Xvfb + stream VNC).
  * Acceso di default, perché è lo schermo su cui `apply_flow.py --headful`
@@ -757,9 +761,12 @@ async function dispatch() {
   // "il tg-bridge deve essere sempre attivo, parte col container").
   // Senza, l'utente Telegram → assistente non riceve nulla anche se
   // tmux ASSISTENTE è up.
-  const hasBots = await hasTelegramBotsConfigured();
-  let tgBridgeStarted = false;
-  if (hasBots) {
+  const isolatedTelegram = telegramServiceEnabled();
+  const hasBots = isolatedTelegram || await hasTelegramBotsConfigured();
+  let tgBridgeStarted = isolatedTelegram;
+  if (isolatedTelegram) {
+    pid1Log('Telegram isolated service enabled: legacy tg-bridge stays stopped');
+  } else if (hasBots) {
     startTgBridge();
     tgBridgeStarted = true;
   } else {
@@ -861,6 +868,32 @@ async function dispatch() {
   // perché il watchdog parte sopra il daemon/realtime block.
   let shuttingDown = false;
 
+  // Il relay non possiede token: legge eventi normalizzati dal socket :ro e
+  // li inserisce nella coda chat. Parte soltanto dopo il cutover esplicito;
+  // prima resta attivo il bridge storico qui sopra.
+  let telegramRelayChild = null;
+  let telegramRelayRespawnTimer = null;
+  const startTelegramRelay = () => {
+    if (telegramRelayChild && !telegramRelayChild.killed) return;
+    pid1Log('starting isolated Telegram inbox relay');
+    telegramRelayChild = spawnLabeled('telegram-relay', '/usr/bin/env', [
+      'python3',
+      '-u',
+      '-m',
+      'shared.telegram_service.relay',
+    ]);
+    telegramRelayChild.on('exit', (code, signal) => {
+      telegramRelayChild = null;
+      if (shuttingDown) return;
+      pid1Log(`telegram inbox relay exited (code=${code} signal=${signal})`);
+      if (telegramRelayRespawnTimer) clearTimeout(telegramRelayRespawnTimer);
+      telegramRelayRespawnTimer = setTimeout(() => {
+        if (!shuttingDown) startTelegramRelay();
+      }, 5000);
+    });
+  };
+  if (isolatedTelegram) startTelegramRelay();
+
   // ── Agent watchdog: tick ogni 30s, se una tmux user-facing manca la
   // rilancia. Spawnato come child long-running con respawn-on-crash.
   // Complementare al dottore LLM (che ragiona alto livello ogni 30min):
@@ -915,8 +948,10 @@ async function dispatch() {
       void exited;
     });
   };
-  if (hasBots) {
+  if (hasBots && !isolatedTelegram) {
     startAutoReportLoop();
+  } else if (isolatedTelegram) {
+    pid1Log('auto-report-loop skip: isolated Telegram rejects arbitrary outbound attachments');
   } else {
     pid1Log('auto-report-loop skip: no Telegram bot configured');
   }
@@ -1327,6 +1362,8 @@ async function dispatch() {
     if (liveScreenRespawnTimer) clearTimeout(liveScreenRespawnTimer);
     if (autoReportChild && !autoReportChild.killed) autoReportChild.kill(sig);
     if (autoReportRespawnTimer) clearTimeout(autoReportRespawnTimer);
+    if (telegramRelayChild && !telegramRelayChild.killed) telegramRelayChild.kill(sig);
+    if (telegramRelayRespawnTimer) clearTimeout(telegramRelayRespawnTimer);
     stopTgBridge();
     // Alcuni figli detached e watcher mantengono handle Node aperti anche
     // dopo il SIGTERM. Senza un'uscita esplicita il vecchio keep-alive faceva

@@ -555,6 +555,10 @@ fi
 # partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
   _spawn_stage="tg_bridge_preflight"
+  if [ "${JHT_TELEGRAM_SERVICE_ENABLED:-0}" = "1" ]; then
+    echo "tg-bridge disabled: isolated Telegram service owns polling"
+    exit 0
+  fi
   # Accanto a questo script, non un path assoluto al container: in /app è la
   # stessa cosa, e fuori (test, host) lo script diventa eseguibile davvero
   # invece di fallire su una directory che non esiste.

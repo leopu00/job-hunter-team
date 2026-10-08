@@ -262,7 +262,16 @@ RUN for pkg in shared/*/package.json; do \
     && npm cache clean --force
 
 RUN useradd --create-home --shell /bin/bash jht \
+    # Il trasporto Telegram non condivide uid con gli agenti. Il gruppo serve
+    # soltanto a leggere gli allegati inbound dal mount :ro; non ha scrittura.
+    && groupadd --gid 1003 jhttelegram \
+    && useradd --uid 1003 --gid 1003 --no-create-home --shell /usr/sbin/nologin jhttelegram \
+    && usermod -aG jhttelegram jht \
     && mkdir -p /jht_home /jht_user \
+    && install -d -o jhttelegram -g jhttelegram -m 0700 \
+         /jht_telegram_secrets /jht_telegram_secrets/bots /jht_telegram_state \
+    && install -d -o jhttelegram -g jhttelegram -m 0711 /run/jht-telegram \
+    && install -d -o jhttelegram -g jhttelegram -m 0750 /jht_telegram_inbox \
     # /opt/jht-deps (bin+lib): prefisso globale scrivibile per gli extra,
     # ownership jht così gli agenti ci installano senza root (vedi ENV).
     && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib \
@@ -312,6 +321,9 @@ RUN useradd --create-home --shell /bin/bash jht \
     # perché aggiunta a mano nel container, e col container ricreato il
     # 27/09 è sparita, e con lei quei comandi.
     && ln -sf /app/cli/bin/jht.js /usr/local/bin/jht \
+    && ln -sf /app/shared/telegram_service/bin/jht-telegram-service.py /usr/local/bin/jht-telegram-service \
+    && ln -sf /app/shared/telegram_service/bin/jht-telegram-admin.py /usr/local/bin/jht-telegram-admin \
+    && ln -sf /app/shared/telegram_service/bin/jht-telegram-client.py /usr/local/bin/jht-telegram-client \
     # Skill discovery: per-agente, popolato dal launcher.
     # `agents/_skills/` è la library (single source of truth). Il manifest
     # `agents/<role>/skills.list` dichiara quali skill l'agente consuma;
