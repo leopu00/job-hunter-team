@@ -28,7 +28,7 @@ TAG = "ghcr.io/leopu00/jht:master-arthur"
 RAW = f"https://raw.githubusercontent.com/leopu00/job-hunter-team/{SHA}"
 
 
-def _fake_bin(tmp_path: Path, repo_digests: str) -> Path:
+def _fake_bin(tmp_path: Path, repo_digests: str, *, pull_ok: bool = True) -> Path:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     curl = fake_bin / "curl"
@@ -54,7 +54,7 @@ def _fake_bin(tmp_path: Path, repo_digests: str) -> Path:
         "set -eu\n"
         'printf \'JHT_IMAGE=%s %s\\n\' "${JHT_IMAGE:-}" "$*" >> "$JHT_TEST_DOCKER_LOG"\n'
         'case "$1" in\n'
-        "  pull) exit 0 ;;\n"
+        f"  pull) exit {0 if pull_ok else 1} ;;\n"
         f"  image) printf '%s' {shlex.quote(repo_digests)} ;;\n"
         "esac\n"
         'case " $* " in\n'
@@ -159,6 +159,40 @@ def test_channel_installs_the_commit_files_and_pins_the_digest(tmp_path):
     assert f"runtime-image={hashlib.sha256(pin.read_bytes()).hexdigest()}" in manifest.splitlines()
     docker_log = (tmp_path / "docker.log").read_text(encoding="utf-8")
     assert f"pull {TAG}" in docker_log
+
+
+def _nothing_published(env: dict[str, str]) -> None:
+    runtime = Path(env["JHT_RUNTIME_DIR"])
+    for name in ("docker-compose.yml", "host-setup.sh", ".runtime-integrity", "runtime-image"):
+        assert not (runtime / name).exists(), name
+    assert not (Path(env["JHT_BIN_DIR"]) / "jht").exists()
+
+
+def test_a_commit_that_does_not_exist_publishes_nothing(tmp_path):
+    # raw.githubusercontent.com answers 404 for a commit nobody pushed: the
+    # install stops at the first download, with no runtime half published.
+    fake_bin = _fake_bin(tmp_path, f"{PINNED}\n")
+    env = _env(tmp_path, fake_bin)
+    missing = "c" * 40
+
+    result = _install(env, "--source-sha", missing, "--image", TAG, "--expected-image-digest", DIGEST)
+
+    assert result.returncode != 0
+    urls = (tmp_path / "curl.log").read_text(encoding="utf-8").split()
+    assert urls and all(f"/{missing}/" in url for url in urls), urls
+    _nothing_published(env)
+
+
+def test_network_down_at_the_image_pull_publishes_nothing(tmp_path):
+    fake_bin = _fake_bin(tmp_path, f"{PINNED}\n", pull_ok=False)
+    env = _env(tmp_path, fake_bin)
+
+    result = _install(env, *_channel())
+
+    assert result.returncode != 0
+    assert "Cannot pull the test image" in result.stderr
+    assert not (tmp_path / "curl.log").exists()
+    _nothing_published(env)
 
 
 def _installed(tmp_path: Path) -> tuple[dict[str, str], Path]:

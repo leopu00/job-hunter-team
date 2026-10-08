@@ -1399,6 +1399,20 @@ fn bundled_wrapper_published(runtime_dir: &Path, wrapper: &Path) -> bool {
         && runtime_bundle_manifest_valid(runtime_dir, wrapper)
 }
 
+/// Linux: the host runtime dir of scripts/jht-wrapper.sh and install.sh.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    let data = match std::env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()) {
+        Some(value) => PathBuf::from(value),
+        None => app
+            .path()
+            .home_dir()
+            .map(|home| home.join(".local").join("share"))
+            .map_err(|_| failure("storage_failed"))?,
+    };
+    Ok(data.join("job-hunter-team").join("host-runtime"))
+}
+
 #[cfg(target_os = "macos")]
 fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
     app.path()
@@ -1425,8 +1439,9 @@ fn local_podman_install_required(
     wrapper_present: bool,
     marker_selected: bool,
     podman_present: bool,
+    channel_reusable: bool,
 ) -> bool {
-    !(wrapper_present && marker_selected && podman_present)
+    !(wrapper_present && marker_selected && podman_present && channel_reusable)
 }
 
 #[cfg(target_os = "macos")]
@@ -1539,10 +1554,24 @@ fn with_downloaded_installer<T>(
         channel.as_ref(),
         INSTALL_SHA256,
     ))?;
-    let bytes =
-        download_installer_bytes(&release_channel::install_url(channel.as_ref()), expected)?;
     let args = release_channel::installer_args(channel.as_ref());
-    attest_then(bytes, expected, |installer| execute(installer, &args))
+    download_then_attest(
+        &release_channel::install_url(channel.as_ref()),
+        expected,
+        |installer| execute(installer, &args),
+    )
+}
+
+/// Downloads the installer from `url` and runs `execute` only on bytes with
+/// `expected_digest`: a commit that does not exist, a network that is down or
+/// different bytes stop here, before anything runs.
+fn download_then_attest<T>(
+    url: &str,
+    expected_digest: &str,
+    execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
+) -> Result<T, OnboardingError> {
+    let bytes = download_installer_bytes(url, expected_digest)?;
+    attest_then(bytes, expected_digest, execute)
 }
 
 /// A local install command line: the fixed part, then the channel's
@@ -1660,10 +1689,15 @@ fn install_local(
     {
         #[cfg(target_os = "macos")]
         {
+            let channel = release_channel::current().map_err(failure)?;
             let install_required = local_podman_install_required(
                 host_wrapper_path(app).is_some(),
                 podman_runtime_selected(app),
                 podman_path().is_some(),
+                release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                ),
             );
             if install_required {
                 trace_local_runtime("runtime", "install_required");
@@ -1737,7 +1771,13 @@ fn install_local(
         }
         #[cfg(not(target_os = "macos"))]
         {
-            if wrapper_path(app).is_none() {
+            let channel = release_channel::current().map_err(failure)?;
+            let reusable = wrapper_path(app).is_some()
+                && release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                );
+            if !reusable {
                 with_downloaded_installer(|installer, channel_args| {
                     let args = local_install_args(
                         &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
@@ -3970,6 +4010,66 @@ mod tests {
         );
     }
 
+    /// The test channel's download, where it can go wrong: install.sh of a
+    /// commit that does not exist (raw answers 404), a network that is down,
+    /// bytes that are not the ones the build expects. Each stops before the
+    /// installer runs, with its own code.
+    #[cfg(unix)]
+    #[test]
+    fn a_missing_commit_a_dead_network_or_other_bytes_never_run_the_installer() {
+        use std::{fs, net::TcpListener};
+
+        let root = std::env::temp_dir().join(format!(
+            "jht-channel-download-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let installer = root.join("install.sh");
+        fs::write(&installer, b"echo the installer\n").unwrap();
+        let digest = format!("{:x}", Sha256::digest(b"echo the installer\n"));
+        let url = format!("file://{}", installer.display());
+        let ran = std::cell::Cell::new(0);
+        let execute = |_: &super::VerifiedInstaller| {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+
+        // The right bytes run, once.
+        super::download_then_attest(&url, &digest, execute).unwrap();
+        assert_eq!(ran.get(), 1);
+
+        // A commit that does not exist: nothing to download.
+        let missing = format!("file://{}", root.join("no-such-commit/install.sh").display());
+        let error = super::download_then_attest(&missing, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // The network is down: nobody listens on the port.
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let down = format!("http://127.0.0.1:{port}/install.sh");
+        let error = super::download_then_attest(&down, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // Other bytes than the build's digest (another commit, a tampered file).
+        fs::write(&installer, b"echo someone else\n").unwrap();
+        let error = super::download_then_attest(&url, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_mismatch");
+
+        // A build without a digest refuses before touching the network.
+        let error = super::download_then_attest(&down, "", execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_missing");
+
+        assert_eq!(ran.get(), 1, "the installer ran on a failed download");
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn remote_install_command_refuses_arguments_that_could_break_quoting() {
         for bad in ["", "a'b", "a b", "$(id)", "a\nb", "a;b", "`id`"] {
@@ -4482,11 +4582,14 @@ mod tests {
                 "podman",
             ]
         );
-        assert!(local_podman_install_required(false, false, false));
-        assert!(local_podman_install_required(false, true, true));
-        assert!(local_podman_install_required(true, false, true));
-        assert!(local_podman_install_required(true, true, false));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(local_podman_install_required(false, false, false, true));
+        assert!(local_podman_install_required(false, true, true, true));
+        assert!(local_podman_install_required(true, false, true, true));
+        assert!(local_podman_install_required(true, true, false, true));
+        assert!(!local_podman_install_required(true, true, true, true));
+        // A complete runtime of the other channel (or any runtime, in a test
+        // build) is installed again, not reused.
+        assert!(local_podman_install_required(true, true, true, false));
     }
 
     #[cfg(target_os = "macos")]
@@ -4576,7 +4679,7 @@ mod tests {
 
         assert!(super::valid_host_wrapper_file(&wrapper));
         assert!(!valid_wrapper_file(&wrapper));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(!local_podman_install_required(true, true, true, true));
         assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
 
         fs::create_dir(runtime.join(".upgrade.lock")).unwrap();

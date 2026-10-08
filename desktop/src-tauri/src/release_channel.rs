@@ -15,6 +15,7 @@
 //! its own contract (digest, pairing token, installer bytes).
 
 use crate::release_channel_rules::{resolve, TestChannel};
+use std::path::Path;
 
 const PRODUCTION_INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -122,6 +123,27 @@ pub(crate) fn install_ps1_args(channel: Option<&TestChannel>) -> Vec<String> {
     })
 }
 
+/// The file install.sh and install.ps1 write in the host runtime dir for a
+/// test install: the canonical by-digest ref of its image.
+pub(crate) const IMAGE_PIN: &str = "runtime-image";
+
+/// Whether an installed runtime may be reused instead of running the
+/// installer again. A production build reuses only a production runtime: one
+/// with a test install's image pin (file, link or anything there) would run
+/// the test commit's image. A test build never reuses: the pin names only the
+/// image, and two commits can share it (`:master-arthur`), so an earlier test
+/// build's compose and wrapper would stay. The installer is idempotent.
+pub(crate) fn installed_runtime_reusable(
+    channel: Option<&TestChannel>,
+    runtime_dir: &Path,
+) -> bool {
+    channel.is_none()
+        && matches!(
+            std::fs::symlink_metadata(runtime_dir.join(IMAGE_PIN)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,6 +221,48 @@ mod tests {
         );
         let pinned = test_channel(&format!("ghcr.io/leopu00/jht@{DIGEST}"));
         assert_eq!(pinned.image_digest, DIGEST);
+    }
+
+    #[test]
+    fn production_reuses_only_a_production_runtime_and_a_test_build_never_reuses() {
+        let root = std::env::temp_dir().join(format!(
+            "jht-reuse-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let runtime = root.join("host-runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let test = test_channel("ghcr.io/leopu00/jht:master-arthur");
+        let pin = runtime.join(IMAGE_PIN);
+
+        // No pin: a production runtime. Production reuses it; a test build
+        // installs its own commit over it.
+        assert!(installed_runtime_reusable(None, &runtime));
+        assert!(!installed_runtime_reusable(Some(&test), &runtime));
+
+        // A test install's pin: production must not run the test image, and a
+        // test build does not trust it either (same digest, other commit).
+        std::fs::write(&pin, format!("ghcr.io/leopu00/jht@{DIGEST}\n")).unwrap();
+        assert!(!installed_runtime_reusable(None, &runtime));
+        assert!(!installed_runtime_reusable(Some(&test), &runtime));
+
+        // Anything at the pin's name counts as a pin: a directory, or a
+        // link to nowhere.
+        std::fs::remove_file(&pin).unwrap();
+        std::fs::create_dir(&pin).unwrap();
+        assert!(!installed_runtime_reusable(None, &runtime));
+        std::fs::remove_dir(&pin).unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join("missing"), &pin).unwrap();
+            assert!(!installed_runtime_reusable(None, &runtime));
+            std::fs::remove_file(&pin).unwrap();
+        }
+        assert!(installed_runtime_reusable(None, &runtime));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
