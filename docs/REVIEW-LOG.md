@@ -51,7 +51,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-14 | ✅ |
-| [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-13 | ✅ |
+| [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-10-08 | ✅ |
 | [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-09-27 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-09-27 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-08-16 | ✅ |
@@ -70,7 +70,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [agents/_team/architettura.md](../agents/_team/architettura.md) | Architettura V5 4-tier (Bridge → Sentinella → Capitano → agenti) | — | 2026-08-17 | ✅ |
-| [agents/_team/team-rules.md](../agents/_team/team-rules.md) | Regole condivise team (RULE-T*), inherited da tutti gli agenti | — | 2026-08-16 | ✅ |
+| [agents/_team/team-rules.md](../agents/_team/team-rules.md) | Regole condivise team (RULE-T*), inherited da tutti gli agenti | — | 2026-10-08 | ✅ |
 | [agents/_manual/anti-collision.md](../agents/_manual/anti-collision.md) | Come evitare scritture concorrenti sul DB tra agenti | — | 2026-06-02 | ✅ |
 | [agents/_manual/communication-rules.md](../agents/_manual/communication-rules.md) | Regole comunicazione inter-agent (jht-tmux-send, jht-send) | — | 2026-07-29 | ✅ |
 | [agents/_manual/db-schema.md](../agents/_manual/db-schema.md) | Schema SQLite `~/.jht/jobs.db` (5 tabelle) | — | 2026-08-17 | ✅ |
@@ -93,7 +93,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/bridge-mailbox/SKILL.md](../agents/_skills/bridge-mailbox/SKILL.md) | Drain mailbox bridge a inizio turno (recupera tick persi via tmux rc=3) | — | 2026-05-10 | ✅ |
 | [agents/_skills/bridge-pacing/SKILL.md](../agents/_skills/bridge-pacing/SKILL.md) | Formula calibrazione throttle 15-min: durata = (f/100)·60/c con esempi | — | 2026-07-28 | ✅ |
 | [agents/_skills/cache-prune/SKILL.md](../agents/_skills/cache-prune/SKILL.md) | Reclaim cache uv + codex sqlite ~24h (Dottore-only, manutenzione) | — | 2026-06-04 | ✅ |
-| [agents/_skills/chat-web/SKILL.md](../agents/_skills/chat-web/SKILL.md) | Risposta utente da web UI via jht-send + --partial (Capitano + Assistente) | — | 2026-08-11 | ✅ |
+| [agents/_skills/chat-web/SKILL.md](../agents/_skills/chat-web/SKILL.md) | Risposta utente da web UI via jht-send + --partial (Capitano + Assistente) | — | 2026-10-08 | ✅ |
 | [agents/_skills/critic-loop/SKILL.md](../agents/_skills/critic-loop/SKILL.md) | 3 round Critico autonomi provider-aware (Scrittore-only) | — | 2026-08-13 | ✅ |
 | [agents/_skills/cv-structure/SKILL.md](../agents/_skills/cv-structure/SKILL.md) | 6 sezioni CV canoniche, verbi action, tono per company type | — | 2026-09-14 | ✅ |
 | [agents/_skills/liveness-check/SKILL.md](../agents/_skills/liveness-check/SKILL.md) | Diagnosi 10 pattern + respawn con contesto (zombie detection per Dottore) | — | 2026-06-04 | ✅ |
@@ -110,7 +110,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/circles-and-sources/SKILL.md](../agents/_skills/circles-and-sources/SKILL.md) | Strategy map for what to search WHERE, derived entirely from the candidate profile. | — | 2026-08-16 | ✅ |
 | [agents/_skills/cv-disk-audit/SKILL.md](../agents/_skills/cv-disk-audit/SKILL.md) | Healthcheck periodico (Dottore) per riconciliare CV su disk e cv_pdf_path nel DB. | — | 2026-05-17 | ✅ |
 | [agents/_skills/daily-restart-wave/SKILL.md](../agents/_skills/daily-restart-wave/SKILL.md) | Pre-emptive mass-restart of every team agent once per 24h for context freshness. | — | 2026-06-04 | ✅ |
-| [agents/_skills/email-monitor/SKILL.md](../agents/_skills/email-monitor/SKILL.md) | Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert). | — | 2026-07-30 | ✅ |
+| [agents/_skills/email-monitor/SKILL.md](../agents/_skills/email-monitor/SKILL.md) | Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert). | — | 2026-10-08 | ✅ |
 | [agents/_skills/expiration-tracking/SKILL.md](../agents/_skills/expiration-tracking/SKILL.md) | Estrae deadline dal JD (helper deadline_extract) e produce alert utente quando una candidatura READY sta per… | — | 2026-08-04 | ✅ |
 | [agents/_skills/feedback-query/SKILL.md](../agents/_skills/feedback-query/SKILL.md) | Read user feedback (like/dislike/hide/star) for a given position from the cloud. | — | 2026-08-13 | ✅ |
 | [agents/_skills/format-time/SKILL.md](../agents/_skills/format-time/SKILL.md) | Convert UTC timestamps to the user's timezone before showing them in chat, charts, Telegram, or any user-facing… | — | 2026-07-03 | ✅ |
@@ -130,7 +130,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/salary-estimate/SKILL.md](../agents/_skills/salary-estimate/SKILL.md) | Stima salariale gerarchica per il Scorer (bug 27). | — | 2026-07-30 | ✅ |
 | [agents/_skills/scaling-calc/SKILL.md](../agents/_skills/scaling-calc/SKILL.md) | 🎚️ scaling-calc — salire di marcia per gradini, non in 6ª — Calibrazione graduale del roster — misura il burn di 1 worker, calcola quanti worker e con quale throttle servono… | — | 2026-08-03 | ✅ |
 | [agents/_skills/scout-coord/SKILL.md](../agents/_skills/scout-coord/SKILL.md) | Boot-time coordination protocol between multiple Scouts. | — | 2026-08-08 | ✅ |
-| [agents/_skills/scout-web-access/SKILL.md](../agents/_skills/scout-web-access/SKILL.md) | Strato web-access cross-provider per gli Scout (F-2). | — | 2026-06-13 | ✅ |
+| [agents/_skills/scout-web-access/SKILL.md](../agents/_skills/scout-web-access/SKILL.md) | Strato web-access cross-provider per gli Scout (F-2). | — | 2026-10-08 | ✅ |
 | [agents/_skills/session-refresh/SKILL.md](../agents/_skills/session-refresh/SKILL.md) | Refresh sessione agente (solo Dottore): gate sul contesto misurato >50%, non sull'età della sessione | — | 2026-08-12 | ✅ |
 | [agents/_skills/spawn-doctor/SKILL.md](../agents/_skills/spawn-doctor/SKILL.md) | Spawn a fresh DOTTORE on-demand when you (Capitano/Assistente/Sentinella/Mentor) need an immediate health-check… | — | 2026-05-18 | ✅ |
 | [agents/_skills/telegram-send/SKILL.md](../agents/_skills/telegram-send/SKILL.md) | Send a message to the user via Telegram (outbound). | — | 2026-09-14 | ✅ |
@@ -244,7 +244,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-09-20 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-10-07 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -267,7 +267,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/cloud-sync-architecture.md](./internal/architecture/cloud-sync-architecture.md) | ☁️ Cloud sync — architecture & status — Living doc. | — | 2026-08-24 | ✅ |
 | [docs/internal/architecture/context-watchdog-spec.md](./internal/architecture/context-watchdog-spec.md) | 🩺 Agent context saturation + reboot periodico via Dottore — Status: MVP SHIPPED 2026-05-31 (daily-restart-wave) — PoC validato 2026-05-20. | — | 2026-08-12 | ✅ |
 | [docs/internal/architecture/daemon-sync-redesign.md](./internal/architecture/daemon-sync-redesign.md) | 🔌 Daemon sync — da polling Vercel a Supabase diretto + event-driven — Documento consolidato del redesign del sync daemon↔cloud (tre note datate 24–26/06, qui integrate senza modifiche al contenuto). | — | 2026-07-30 | ✅ |
-| [docs/internal/architecture/dottore-redesign-design.md](./internal/architecture/dottore-redesign-design.md) | 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first). | — | 2026-08-12 | ✅ |
+| [docs/internal/architecture/dottore-redesign-design.md](./internal/architecture/dottore-redesign-design.md) | 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh) — Stato: DRAFT — schema/flow da lockare prima di codare (design-doc-first). | — | 2026-10-08 | ✅ |
 | [docs/internal/architecture/file-bridge-on-demand.md](./internal/architecture/file-bridge-on-demand.md) | 📎 File bridge on-demand — architettura & stato — Living doc. | — | 2026-08-07 | ✅ |
 | [docs/internal/architecture/kimi-vs-codex-economics.md](./internal/architecture/kimi-vs-codex-economics.md) | 💰 Economia Kimi vs Codex — budget · coordinatori · prezzo (living doc) — Living doc (non datato): riflette lo stato corrente dell'analisi economica dei | — | 2026-07-03 | ✅ |
 | [docs/internal/architecture/onboarding-flow.md](./internal/architecture/onboarding-flow.md) | 🚪 Onboarding flow JHT — Stato: design lock — sequenza ufficiale di onboarding utente. | — | 2026-08-12 | ✅ |
@@ -408,7 +408,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/security/02-openclaw-comparison.md](./security/02-openclaw-comparison.md) | Confronto sicurezza con OpenClaw | — | 2026-04-30 | ✅ |
 | [docs/security/03-implementation-tradeoffs.md](./security/03-implementation-tradeoffs.md) | Tradeoff implementativi delle mitigation | — | 2026-04-30 | ✅ |
 | [docs/security/04-threat-model.md](./security/04-threat-model.md) | Threat model completo del progetto | — | 2026-08-04 | ✅ |
-| [docs/security/05-checklist.md](./security/05-checklist.md) | Checklist sicurezza pre-public-release | — | 2026-08-14 | ✅ |
+| [docs/security/05-checklist.md](./security/05-checklist.md) | Checklist sicurezza pre-public-release | — | 2026-10-07 | ✅ |
 | [docs/security/06-post-fix-comparison.md](./security/06-post-fix-comparison.md) | Snapshot post-fix (score 30% → 74%) | — | 2026-07-30 | ✅ |
 | [docs/security/07-auth-posture-remediation.md](./security/07-auth-posture-remediation.md) | Runbook fail-closed per verificare e correggere la postura Supabase Auth senza esporre token o dettagli sensibili | — | 2026-08-14 | ✅ |
 
@@ -451,14 +451,13 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [cli/README.md](../cli/README.md) | ⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team. | 2026-07-30 | 2026-07-30 | 🟢 |
 | [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-09-29 | ✅ |
 | [docs/launch/demo-storyboard.md](./launch/demo-storyboard.md) | Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio | — | 2026-08-04 | ✅ |
-| [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-08-08 | ✅ |
+| [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-10-08 | ✅ |
 | [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-08-14 | ✅ |
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
 | [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-07-25 | ✅ |
 | [web/README.md](../web/README.md) | 🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry, | — | 2026-07-25 | ✅ |
 | [assets/promo/2026-07-presentation/SCALETTA.md](../assets/promo/2026-07-presentation/SCALETTA.md) | Diario del video 03/08 ritirato: banner demo e CTA Beta non pubblicabili | — | 2026-08-04 | ✅ |
 | [docs/CHARACTER-VARIANTS.md](./CHARACTER-VARIANTS.md) | Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito | — | 2026-07-25 | ✅ |
-| [e2e/tests/quarantine/README.md](../e2e/tests/quarantine/README.md) | Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili | — | 2026-07-26 | ✅ |
 | [tests/fixtures/e2e_linux_cv.md](../tests/fixtures/e2e_linux_cv.md) | Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse | — | 2026-08-04 | ✅ |
 | [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |

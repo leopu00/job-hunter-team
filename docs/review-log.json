@@ -1336,11 +1336,6 @@
       "last_review": null
     },
     {
-      "path": "e2e/tests/quarantine/README.md",
-      "description": "Le 75 spec E2E in quarantena: escluse da ogni run via `testIgnore`, conservate per le asserzioni recuperabili",
-      "last_review": null
-    },
-    {
       "path": "game/assets/_attic/README.md",
       "description": "Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero",
       "last_review": null
