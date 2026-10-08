@@ -17,7 +17,7 @@
 -- Columns follow each constraint's own order, which is what the lint and
 -- the planner match. IF NOT EXISTS keeps the file idempotent. No
 -- CONCURRENTLY: it cannot run inside the migration's transaction. The
--- largest table is positions (66 MB on 07/10): building its index holds
+-- largest table is positions: building its index holds
 -- writes on it for a few seconds.
 
 CREATE INDEX IF NOT EXISTS idx_applications_user_position
