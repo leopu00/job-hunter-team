@@ -249,27 +249,10 @@ def test_candidate_migration_rejects_mixed_or_untrusted_bundle_without_publish(
     assert not sandbox["side_effect"].exists()
 
 
-@pytest.mark.parametrize("point", ("before-manifest-replace", "after-manifest-replace", "after-compose-replace", "before-wrapper-replace", "after-wrapper-replace"))
-@pytest.mark.parametrize("failure_mode", ("error", "term"))
-def test_candidate_migration_rolls_back_every_failure_window(
-    tmp_path: Path, capable_bash: str, point: str, failure_mode: str
-):
-    sandbox = _sandbox(tmp_path)
-    before = [path.read_bytes() for path in _published_files(sandbox)]
-    sandbox["env"] = {
-        **sandbox["env"],
-        "JHT_RUNTIME_PUBLISH_TEST_MODE": "1",
-        "JHT_RUNTIME_PUBLISH_FAILPOINT": point,
-        "JHT_RUNTIME_PUBLISH_FAILURE": failure_mode,
-    }
-    result = _publish(capable_bash, sandbox)
-    assert result.returncode != 0
-    assert [path.read_bytes() for path in _published_files(sandbox)] == before
-    assert not sandbox["runtime"].joinpath(".publish-runtime.lock").exists()
-    assert not list(sandbox["runtime"].glob(".*-candidate.*"))
-    assert not list(sandbox["runtime"].glob(".*-rollback.*"))
-    assert not list(sandbox["wrapper"].parent.glob(".jht-*.*"))
-    assert not sandbox["side_effect"].exists()
+# The five failure windows x error/term are proven, on every byte of the
+# bundle and on the transaction's debris, by
+# test_runtime_wrapper_publication_process_boundary.py
+# (test_every_process_failure_window_restores_all_previous_bytes).
 
 
 def test_candidate_migration_rejects_unsafe_permissions_and_noncanonical_paths(

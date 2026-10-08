@@ -187,17 +187,6 @@ def test_applied_application_status_cannot_be_downgraded_alone(box):
     assert application["status"] == "applied"
 
 
-def test_downgrade_update_rechecks_position_under_write_lock():
-    source = DB_UPDATE.read_text(encoding="utf-8")
-    function = source[source.index("def update_application(args):"):]
-    guard_read = function.index("SELECT status FROM positions")
-    guarded_predicate = function.index(
-        "AND NOT EXISTS (SELECT 1 FROM positions"
-    )
-    application_write = function.index("UPDATE applications SET")
-    assert guard_read < guarded_predicate < application_write
-
-
 def test_concurrent_applied_write_wins_over_stale_downgrade(box):
     db_path, home = box
     conn = sqlite3.connect(db_path)

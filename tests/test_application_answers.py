@@ -417,37 +417,9 @@ def test_each_missing_essential_is_asked_once_and_an_answer_closes_it(db, bridge
     assert third["status"] == "complete" and len(asked) == 1
 
 
-def test_apply_flow_waits_for_essentials_without_holding_the_position(db, tmp_path):
-    # The facts are worked out only once the page is an application the flow
-    # can send (see test_apply_flow: never for an unsupported or closed page),
-    # and waiting for them still holds nothing.
-    import apply_flow
-    from test_apply_flow import ASHBY_URL, ashby_form
-
-    playwright = pytest.importorskip("playwright.sync_api")
-    cv = tmp_path / "cv.pdf"
-    cv.write_bytes(b"%PDF-1.4 synthetic")
-    flow = apply_flow.ApplicationFlow(
-        position_id=7,
-        url=ASHBY_URL,
-        profile={"name": "Test Candidate"},
-        cv_path=cv,
-        checkpoint_path=tmp_path / "checkpoint.json",
-        db_path=db,
-        gate_checker=lambda **_: type("V", (), {"allowed": True, "context": {"mode": "authorised"}})(),
-        essentials_checker=lambda **_: ["notice period"],
-        cv_checker=lambda _path: {"ok": True, "reasons": []},
-    )
-    with playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(headless=True)
-        try:
-            page = browser.new_page()
-            page.set_content(ashby_form())
-            result = flow.run(page=page, navigate=False)
-        finally:
-            browser.close()
-    assert (result.status, result.reason) == ("blocked_human", "essential_facts_missing")
-    assert not (tmp_path / "checkpoint.json").exists()
+# Waiting for the essential facts holds nothing (no checkpoint): proven, on
+# the shared browser page, by
+# test_apply_flow.py::test_missing_essential_facts_are_listed_for_the_closer_without_asking.
 
 
 def test_apply_flow_reads_answers_from_the_database(db, tmp_path):

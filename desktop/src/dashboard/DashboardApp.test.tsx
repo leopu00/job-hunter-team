@@ -1253,6 +1253,11 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.getByText("code:team_start_failed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
     expect(reconnectDirectChat).not.toHaveBeenCalled();
+
+    // The retry is the team start again, not the Assistant probe.
+    await user.click(screen.getByRole("button", { name: "retry-runtime" }));
+    await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledTimes(2));
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
   });
 
   it("returns an unconfigured resumed host to step 1 without reconnecting chat", async () => {

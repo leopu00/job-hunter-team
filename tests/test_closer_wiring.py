@@ -318,3 +318,5 @@ def test_la_skill_apply_flow_nomina_ogni_motivo_di_blocco(lang):
     text = path.read_text()
     missing = sorted(r for r in _flow_block_reasons() if f"`{r}`" not in text)
     assert not missing, f"{path.name}: motivi di blocco del flusso non spiegati al CLOSER: {missing}"
+    # The generic recipe is named, so the CLOSER knows which script stopped.
+    assert "apply_generic.py" in text, f"{path.name}: apply_generic.py non nominato"

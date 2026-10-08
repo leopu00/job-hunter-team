@@ -14,7 +14,6 @@ CLI_SETUP = ROOT / "cli" / "wizard" / "setup.js"
 INSTALLER = ROOT / "scripts" / "install.sh"
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 DESKTOP = ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs"
-DASHBOARD = ROOT / "desktop" / "src" / "dashboard" / "DashboardApp.tsx"
 
 
 def _source(path: Path) -> str:
@@ -291,34 +290,3 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
             (up_start, up_end),
             spans,
         )
-
-
-def test_dashboard_mount_resume_is_probe_only_and_click_owns_team_start():
-    dashboard = _source(DASHBOARD)
-    resume_start = dashboard.index("const resumeAssistant = useCallback")
-    resume_end = dashboard.index("const resumeTeam = useCallback", resume_start)
-    resume = dashboard[resume_start:resume_end]
-    team_end = dashboard.index("const connectResumedAssistant", resume_end)
-    resume_team = dashboard[resume_end:team_end]
-    connect_end = dashboard.index("const connectExistingTeam", team_end)
-    resumed_chat = dashboard[team_end:connect_end]
-    mount_start = dashboard.index("useEffect(() => {", connect_end)
-    mount_end = dashboard.index("const runtimeAction", mount_start)
-    mount = dashboard[mount_start:mount_end]
-    action_start = mount_end
-    retry_start = dashboard.index("const retry = useCallback", action_start)
-    runtime_action = dashboard[action_start:retry_start]
-    retry_end = dashboard.index("if (!identityKey", retry_start)
-    retry = dashboard[retry_start:retry_end]
-
-    assert "resumeOnboardingSnapshot" in resume
-    assert "resumeOnboardingTeamStart" not in resume
-    assert "reconnectDirectChat" not in resume
-    assert "resumeAssistant" in mount
-    assert "resumeOnboardingTeamStart" not in mount
-    assert "resumeOnboardingTeamStart" in resume_team
-    assert "reconnectDirectChat" not in resume_team
-    assert "resumeOnboardingTeamStart" not in resumed_chat
-    assert "reconnectDirectChat" in resumed_chat
-    assert "resumeTeam" in runtime_action
-    assert "resumeTeam" in retry

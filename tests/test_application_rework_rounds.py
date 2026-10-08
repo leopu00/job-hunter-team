@@ -139,13 +139,8 @@ def test_a_request_the_user_made_after_the_notice_is_worth_a_new_one(box):
     assert len(notices) == 2
 
 
-def test_a_cover_letter_request_is_kept(box):
-    conn, home, notices = box
-    conn.execute("UPDATE positions SET write_requested = 1, write_request_kind = 'cover_letter' WHERE id = ?", (PID,))
-    conn.commit()
-
-    assert auto(home, notices) == {"status": "not_needed", "reason": "write_request_pending"}
-    assert flag(conn) == (1, "cover_letter")
+# A pending cover letter is never replaced by an automatic request:
+# test_application_rework.py::test_the_automatic_request_never_replaces_a_pending_cover_letter.
 
 
 # ── M2 · bounded rounds, one notice ──────────────────────────────────────────

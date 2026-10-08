@@ -189,15 +189,9 @@ def test_la_guardia_anti_downgrade_non_blocca_piu_la_progressione(db):
     assert after['pos']['status'] == 'response'
 
 
-def test_un_downgrade_vero_resta_rifiutato(db):
-    """La clausola falsa della guardia: quello che proteggeva deve restare protetto."""
-    result = update(db, '1', '--status', 'draft')
-    assert result.returncode == 1
-    assert 'APPLIED STATUS CHANGE REJECTED' in result.stderr
-
-    after = state(db, 1)
-    assert after['app']['status'] == 'applied'
-    assert after['pos']['status'] == 'applied'
+# La clausola falsa della guardia (un vero downgrade a draft resta rifiutato)
+# la prova test_application_state_invariant.py::
+# test_applied_application_status_cannot_be_downgraded_alone.
 
 
 def test_ripetere_lo_stesso_esito_non_duplica_la_transizione(db):

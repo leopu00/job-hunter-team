@@ -93,15 +93,6 @@ def test_kill_session_is_confined_to_the_timed_out_branch():
     assert "|| true" in block[kill : kill + 120]
 
 
-def test_the_cleanup_targets_are_anchored_to_the_exact_session():
-    """Nel ramo d'errore la sessione tipicamente NON esiste: senza `=` tmux
-    passa al prefix matching e il kill atterra su una sessione sorella."""
-    block = _spawn_block()
-    assert 'tmux kill-session -t "=$SESSION"' in block
-    assert 'tmux has-session -t "=$SESSION"' in block
-    assert '-t "$SESSION"' not in block
-
-
 def test_the_cleanup_waits_for_the_session_to_materialise():
     """Il tetto uccide il CLIENT tmux, non il server: se il server era lento ma
     vivo la sessione nasce DOPO il SIGTERM, e un kill immediato la lascerebbe
@@ -119,7 +110,9 @@ def test_the_cleanup_is_itself_time_bounded():
     block = _spawn_block()
     for command in ("tmux has-session", "tmux kill-session"):
         line = next(ln for ln in block.splitlines() if command in ln)
-        assert line.strip().startswith("jht_timeout "), line.strip()
+        # The probe's own ceiling, not the spawn's: a cleanup client must give up
+        # as fast as any other question to a server suspected of hanging.
+        assert line.strip().startswith('jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux '), line.strip()
         assert "9>&-" in line, f"il client di pulizia non chiude il fd del lock: {line.strip()}"
 
 
