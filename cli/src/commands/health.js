@@ -45,9 +45,21 @@ async function checkAnalytics() {
   } catch { return { name: 'Analytics', status: 'warn', detail: 'JSON invalid' }; }
 }
 
+/**
+ * Credential FILES in `dir`. A directory with a credential's name is the
+ * secrets broker's placeholder for a migrated mailbox file (audit G1-r1),
+ * not a credential, and is not counted.
+ */
+export async function credentialFiles(dir) {
+  let entries;
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return []; }
+  return entries
+    .filter(e => e.isFile() && (e.name.endsWith('.enc') || e.name.endsWith('.json')))
+    .map(e => e.name);
+}
+
 async function checkCredentials() {
-  const entries = await dirEntries(join(JHT_DIR, 'credentials'));
-  const count = entries.filter(e => e.endsWith('.enc') || e.endsWith('.json')).length;
+  const count = (await credentialFiles(join(JHT_DIR, 'credentials'))).length;
   return { name: 'Credentials', status: count > 0 ? 'ok' : 'warn', detail: `${count} providers` };
 }
 

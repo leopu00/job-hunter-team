@@ -280,21 +280,57 @@ def test_after_the_migration_the_old_game_cannot_write_the_password(broker, home
     assert _on_disk(home) == []
 
 
-def test_the_placeholder_is_read_only_and_says_what_to_do(broker, home):
+def test_the_placeholder_is_an_empty_read_only_directory(broker, home):
     from broker import legacy, legacy_guard
 
     broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
     legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
     spot = home / "credentials" / "email_monitor.json"
     assert spot.is_dir() and legacy.is_placeholder(spot)
-    assert spot.stat().st_mode & 0o777 == 0o555
-    assert "jht mail setup" in (spot / "README").read_text()
+    assert spot.stat().st_mode & 0o777 == 0o555 and list(spot.iterdir()) == []
     # Not yet migrated: no placeholder for that name.
     assert not (home / "credentials" / "email_transport.json").exists()
     # A loosened placeholder is tightened again; a second sweep adds nothing.
     spot.chmod(0o755)
     again = legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
     assert again["placeholders"] == [] and spot.stat().st_mode & 0o777 == 0o555
+
+
+def test_a_missing_credentials_folder_is_created_not_reported(broker, home):
+    """Audit G1-r1: with no credentials/ (a reset, a fresh home) every sweep
+    logged a false «could not remove». The old clients create the folder
+    before writing, so the guard creates it too, then the placeholders."""
+    from broker import legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    (home / "credentials").rmdir()
+    result = legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    assert result["ok"] and "failed" not in result and "reason" not in result
+    assert (home / "credentials").stat().st_mode & 0o777 == 0o700
+    assert (home / "credentials" / "email_monitor.json").is_dir()
+    assert _vps_write(home) is False and _on_disk(home) == []
+
+
+def test_a_reset_deletes_the_credentials_folder_with_its_placeholders(broker, home):
+    """Audit G1-r1: `jht reset` runs fs.rm(recursive, force) on credentials/,
+    which stops (EACCES) on a 0555 directory that holds a file."""
+    import shutil
+    import subprocess
+
+    from broker import legacy_guard
+
+    broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    creds = home / "credentials"
+    node = shutil.which("node")
+    assert node, "node runs jht reset; it is on every CI runner"
+    done = subprocess.run([node, "-e", "require('node:fs/promises').rm(process.argv[1], {recursive: true, force: true})"
+                           ".then(() => console.log('removed'), e => console.log('FAIL ' + e.code))", str(creds)],
+                          capture_output=True, text=True, timeout=30)
+    assert done.stdout.strip() == "removed" and not creds.exists()
+    legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
+    shutil.rmtree(creds)  # the Python way of a reset works as well
+    assert not creds.exists()
 
 
 def test_the_migration_reader_does_not_take_a_placeholder_for_a_file(broker, home, capsys):
@@ -313,8 +349,6 @@ def test_a_removed_placeholder_comes_back_and_a_file_in_its_place_goes(broker, h
     broker.admin_run(["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
     legacy_guard.sweep(ask=broker.ask, notify=lambda names: None)
     spot = home / "credentials" / "email_monitor.json"
-    spot.chmod(0o755)
-    (spot / "README").unlink()
     spot.rmdir()
     plant(home)
     told = []

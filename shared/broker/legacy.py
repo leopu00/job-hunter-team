@@ -31,11 +31,6 @@ MAX_BYTES = 64 * 1024
 # The file's own name and the temporary names the clients of v0.3.9 write
 # before renaming (`.tmp` from the VPS settings, `.game-tmp` from the desktop).
 PLACEHOLDER_SUFFIXES = ("", ".tmp", ".game-tmp")
-PLACEHOLDER_NOTE = (
-    "README",
-    "This name is reserved: the mailbox now lives in the secrets broker.\n"
-    "Change it on your computer with: jht mail setup\n",
-)
 
 
 def legacy_path(name: str) -> Path:
@@ -43,9 +38,10 @@ def legacy_path(name: str) -> Path:
 
 
 def is_placeholder(path: Path) -> bool:
-    """The guard's directory: a real directory holding the note."""
+    """A real directory (not a link) at a legacy file's name: the guard's
+    placeholder, or anything else a write of that file fails on just the same."""
     try:
-        return stat.S_ISDIR(os.lstat(path).st_mode) and os.path.isfile(Path(path) / PLACEHOLDER_NOTE[0])
+        return stat.S_ISDIR(os.lstat(path).st_mode)
     except OSError:
         return False
 

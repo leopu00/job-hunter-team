@@ -14,12 +14,14 @@ broker has not migrated yet is left alone: on the first boot after an upgrade
 the host's migration still has to take it. No broker, no deletion.
 
 Then, for each migrated name, it puts a PLACEHOLDER where the file was (audit
-G1-r1): a read-only directory with that name, holding only a note, at the
-file's path and at the two temporary names the old clients write first
+G1-r1): an empty read-only directory (0555) with that name, at the file's path and at the two temporary names the old clients write first
 (`.tmp` on a VPS, `.game-tmp` on the desktop). A client of v0.3.9 that saves
 the mailbox again then fails on its first open, and the password never
 reaches the disk. The deletion above stays as the second defence, should a
-placeholder be removed.
+placeholder be removed. Empty on purpose: `jht reset` and any `rm -r` can
+delete an empty 0555 directory, not one with a file inside. If `credentials/`
+itself is missing, the guard creates it (0700) first, as the old clients
+would.
 
 Declared residue (G1-r1): the placeholder belongs to uid 1001, the agents'
 own uid. Inside `jht` nothing else can create it (no root, every capability
@@ -45,7 +47,7 @@ from typing import Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from broker.client import call  # noqa: E402
-from broker.legacy import NAMES, PLACEHOLDER_NOTE, PLACEHOLDER_SUFFIXES, is_placeholder, legacy_path  # noqa: E402
+from broker.legacy import NAMES, PLACEHOLDER_SUFFIXES, is_placeholder, legacy_path  # noqa: E402
 
 RUNTIME_ROLE = "runtime"
 # Audit G1-r4: an old client (v0.3.9) passes the password to the agents'
@@ -78,18 +80,13 @@ def _default_notify(names: list[str]) -> None:
 
 
 def _place(path: Path) -> bool:
-    """A placeholder at `path`, which is free. False when something got there
-    first (the next sweep looks again)."""
+    """An empty 0555 directory at `path`, which is free. False when something
+    got there first (the next sweep looks again)."""
     try:
-        os.mkdir(path, 0o700)
+        os.mkdir(path, 0o555)
     except FileExistsError:
         return False
-    fd = os.open(path / PLACEHOLDER_NOTE[0], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444)
-    try:
-        os.write(fd, PLACEHOLDER_NOTE[1].encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o555)
+    os.chmod(path, 0o555)  # mkdir's mode goes through the umask
     return True
 
 
@@ -102,10 +99,10 @@ def _clear(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     if is_placeholder(path):
-        if info.st_mode & 0o222:
+        # Tightened again only while empty: a 0555 directory with files in it
+        # would stop `jht reset`.
+        if info.st_mode & 0o222 and not os.listdir(path):
             os.chmod(path, 0o555)
-        return "kept"
-    if os.path.isdir(path) and not os.path.islink(path):
         return "kept"
     os.unlink(path)  # a symlink goes, its target is never followed
     return "removed"
@@ -124,6 +121,14 @@ def sweep(
     removed, placed, failed = [], [], []
     for name in NAMES:
         if migrated.get(name) is not True:
+            continue
+        try:
+            # Missing after a reset or on a fresh home: the old clients create
+            # it before writing, so the placeholder needs it too (and its
+            # absence is not a failure to report every 30 s).
+            os.makedirs(legacy_path(name).parent, mode=0o700, exist_ok=True)
+        except OSError:
+            failed.append(name)
             continue
         for suffix in PLACEHOLDER_SUFFIXES:
             path = Path(f"{legacy_path(name)}{suffix}")

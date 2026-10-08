@@ -90,10 +90,20 @@ async function handleSecrets(action, options) {
   process.exitCode = 1;
 }
 
+/**
+ * Secret FILES in `dir`: a directory with a secret's name is the secrets
+ * broker's placeholder for a migrated mailbox file (audit G1-r1), not a secret.
+ */
+export async function secretFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  return entries
+    .filter(e => e.isFile() && (e.name.endsWith('.enc') || e.name.endsWith('.json')))
+    .map(e => e.name);
+}
+
 async function listSecrets() {
   await mkdir(CREDS_DIR, { recursive: true });
-  const entries = await readdir(CREDS_DIR);
-  const secrets = entries.filter(e => e.endsWith('.enc') || e.endsWith('.json'));
+  const secrets = await secretFiles(CREDS_DIR);
 
   console.log(`\n  ${BOLD}JHT — Secrets${RESET} (${secrets.length})\n`);
 
