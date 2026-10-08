@@ -30,7 +30,7 @@ from .mailfilter import ADMISSION_POLICIES
 
 # The repo's one list of characters that reorder or hide text (mailops has
 # already put shared/skills on the path).
-from external_content import INVISIBLE_COMMANDS  # noqa: E402
+from external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES  # noqa: E402
 
 MAX_STDIN = 64 * 1024
 MAILBOX_KEYS = {"user", "password", "imap_host", "imap_port", "folder", "smtp_host", "smtp_port"}
@@ -264,16 +264,17 @@ def mailbox_admission(policy: str) -> dict:
 
 def _shown(text: str, keep_newlines: bool = True) -> tuple[str, int]:
     """(text as the terminal must show it, how many characters were made
-    visible). An agent writes the drafts: a bidi override, a C0/C1 control or
-    an invisible character could make the user approve a mail other than the
-    one they read (audit M9). Each becomes a visible `⟨U+XXXX⟩`; the draft that
+    visible). An agent writes the drafts: a bidi override, a direction mark
+    (LRM, RLM, ALM), a joiner, a C0/C1 control or another invisible character
+    could make the user approve a mail other than the one they read (audit M9). Each becomes a visible `⟨U+XXXX⟩`; the draft that
     is sent is not changed, the user sees what it holds."""
     out, hidden = [], 0
     for ch in str(text):
         code = ord(ch)
         if ch == "\n" and keep_newlines or ch == "\t":
             out.append(ch)
-        elif ch in INVISIBLE_COMMANDS or code < 0x20 or 0x7F <= code <= 0x9F or ch in "\u2028\u2029":
+        elif (ch in INVISIBLE_COMMANDS or ch in WRITING_INVISIBLES
+              or code < 0x20 or 0x7F <= code <= 0x9F or ch in "\u2028\u2029"):
             out.append(f"⟨U+{code:04X}⟩")
             hidden += 1
         else:

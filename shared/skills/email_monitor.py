@@ -371,7 +371,12 @@ def count_mailbox(creds: dict, seen: set[str], since_days: int = 1, admit=None) 
 
 
 MAX_RECIPIENTS = 10
-_ADDRESS = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
+# Printable ASCII only, without space, `"`, `,`, `;`, `<`, `>` and `@` (audit
+# M9): an invisible or bidi character in a recipient shows the user an
+# address other than the one the mail goes to. `\Z`, not `$`, which would let
+# a trailing newline through.
+_ADDRESS_ATOM = r"[\x21\x23-\x2b\x2d-\x3a\x3d\x3f\x41-\x7e]+"
+_ADDRESS = re.compile(rf"\A{_ADDRESS_ATOM}@{_ADDRESS_ATOM}\.{_ADDRESS_ATOM}\Z")
 MAX_BODY_BYTES = 200_000
 
 

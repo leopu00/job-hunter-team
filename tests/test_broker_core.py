@@ -319,6 +319,45 @@ def test_a_draft_shows_its_hidden_characters_to_the_user(broker, smtp):
     assert entry["subject"] == "Invoice ⟨U+202E⟩gnp.exe" and entry["hidden_characters"] == 1
 
 
+@pytest.mark.parametrize("ch", ["\u200e", "\u200f", "\u200c", "\u200d", "\u061c"])
+def test_a_draft_shows_direction_marks_and_joiners_too(broker, smtp, ch):
+    # Audit M9, second round: the marks a script writes with are shown as well.
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    request(broker, "mail.send", {"kind": "chat", "to": ["recruiter@example.com"], "subject": f"Hi{ch}",
+                                  "body": f"Pay{ch} now"}, role="assistente")
+    draft = admin_run(broker, ["mail", "drafts"])[1]["drafts"][0]
+    mark = f"⟨U+{ord(ch):04X}⟩"
+    assert draft["subject"] == f"Hi{mark}" and draft["body"] == f"Pay{mark} now"
+    assert draft["hidden_characters"] == 2 and ch not in json.dumps(draft, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("address", [
+    "recruiter\u200e@example.com", "recruiter@exam\u202eple.com", "re\u200bcruiter@example.com",
+    "récruiter@example.com", "recruiter\u061c@example.com",
+])
+def test_a_recipient_with_anything_but_printable_ascii_is_refused(broker, smtp, address):
+    # Audit M9: the address the user reads must be the one the mail goes to.
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    out = request(broker, "mail.send", {"kind": "chat", "to": [address], "subject": "Hi", "body": "x"},
+                  role="assistente")
+    assert out == {"ok": False, "reason": "invalid_recipient"}
+    assert admin_run(broker, ["mail", "drafts"])[1]["drafts"] == []
+    import email_monitor
+
+    assert email_monitor.send_message(json.loads(mailbox_json()), [address], "Hi", "x") == {
+        "ok": False, "reason": "invalid_recipient"}
+    assert smtp.sent == []
+
+
+def test_the_core_refuses_a_recipient_with_a_trailing_newline(smtp):
+    # The broker strips the ends before checking; the core, which gets the
+    # list as given, must not let `$` accept a final newline.
+    import email_monitor
+
+    out = email_monitor.send_message(json.loads(mailbox_json()), ["recruiter@example.com\n"], "Hi", "x")
+    assert out == {"ok": False, "reason": "invalid_recipient"} and smtp.sent == []
+
+
 def test_a_plain_draft_has_no_hidden_characters_mark(broker, smtp):
     admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
     chat(broker, ["recruiter@example.com"])
