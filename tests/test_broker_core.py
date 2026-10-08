@@ -75,7 +75,8 @@ class FakeImap:
         raw = self.messages[int(uid) - 1]
         if "HEADER" in what:
             msg = email.message_from_bytes(raw)
-            raw = f"From: {msg['From']}\r\nMessage-ID: {msg['Message-ID']}\r\n\r\n".encode()
+            fields = [f for f in ("From", "Message-ID", "In-Reply-To", "References") if msg[f] and f.upper() in what]
+            raw = ("".join(f"{f}: {msg[f]}\r\n" for f in fields) + "\r\n").encode()
         return "OK", [(b"1", raw)]
 
     def logout(self):
@@ -247,6 +248,27 @@ def test_poll_with_an_allowlist_withholds_everyone_else(broker, imap):
     assert out["withheld"] == 1 and len(out["jobs"]) == 1
 
 
+def test_count_in_an_allowlist_names_only_admitted_senders(broker, imap):
+    """Audit M6: a personal mailbox's senders (bank, services) never reach
+    an agent through `mail.count`."""
+    fake, _ = imap
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    admin_run(broker, ["mailbox", "allow", "add", "alert@indeed.invalid"])
+    broker.store.write_state("journal", [{"kind": "application", "to": ["hr@acme.invalid"],
+                                          "message_id": "<sent-1@jht.invalid>"}])
+    fake.messages = [
+        make_mail("<1@x>", "alert@indeed.invalid", "Jobs", "x"),
+        make_mail("<2@x>", "alerts@bank.invalid", "Your statement", "x"),
+        make_mail("<3@x>", "someone@recruiter.invalid", "Re: application", "x", In_Reply_To="<sent-1@jht.invalid>"),
+    ]
+    out = request(broker, "mail.count", role="capitano")
+    assert out["ok"] and out["new_total"] == 2
+    assert set(out["by_sender"]) == {"indeed.invalid", "recruiter.invalid"}
+    assert "bank" not in json.dumps(out)
+    admin_run(broker, ["mailbox", "admission", "whole_mailbox"])
+    assert request(broker, "mail.count", role="capitano")["new_total"] == 3
+
+
 def test_status_never_carries_the_password(broker):
     admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
     out = request(broker, "mail.status", role="assistente")
@@ -274,6 +296,34 @@ def test_chat_mail_becomes_a_draft_and_leaves_only_on_host_approval(broker, smtp
     code, journal = admin_run(broker, ["mail", "journal"])
     assert journal["journal"][-1]["to"] == ["recruiter@example.com"]
     assert admin_run(broker, ["mail", "drafts"])[1]["drafts"] == []
+
+
+def test_a_draft_shows_its_hidden_characters_to_the_user(broker, smtp):
+    """Audit M9: what the user reads before approving is what goes out; a
+    bidi override or a control character is shown, not rendered."""
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    subject = "Invoice \u202egnp.exe"
+    body = "Line one\nPay \u2066here\u2069 \x9b31m now\x1b[0m"
+    out = request(broker, "mail.send", {"kind": "chat", "to": ["recruiter@example.com"], "subject": subject,
+                                        "body": body}, role="assistente")
+    draft = admin_run(broker, ["mail", "drafts"])[1]["drafts"][0]
+    assert draft["subject"] == "Invoice ⟨U+202E⟩gnp.exe"
+    assert draft["body"] == "Line one\nPay ⟨U+2066⟩here⟨U+2069⟩ ⟨U+009B⟩31m now⟨U+001B⟩[0m"
+    assert draft["hidden_characters"] == 5
+    printed = json.dumps(draft, ensure_ascii=False)
+    assert not any(ch in printed for ch in "\u202e\u2066\u2069\x9b\x1b")
+    # The mail that leaves is the draft as written: the user saw its content.
+    admin_run(broker, ["mail", "approve", out["draft_id"]])
+    assert smtp.sent[0]["Subject"] == subject
+    entry = admin_run(broker, ["mail", "journal"])[1]["journal"][-1]
+    assert entry["subject"] == "Invoice ⟨U+202E⟩gnp.exe" and entry["hidden_characters"] == 1
+
+
+def test_a_plain_draft_has_no_hidden_characters_mark(broker, smtp):
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    chat(broker, ["recruiter@example.com"])
+    draft = admin_run(broker, ["mail", "drafts"])[1]["drafts"][0]
+    assert "hidden_characters" not in draft and draft["subject"] == "Hello"
 
 
 def test_a_draft_can_be_discarded(broker, smtp):
@@ -318,13 +368,16 @@ def envelope(raw, digest=None):
                        "b64": base64.b64encode(raw).decode()}).encode()
 
 
-def test_import_checks_the_digest_marks_rotation_and_keeps_the_old_policy(broker, smtp):
+def test_import_checks_the_digest_marks_rotation_and_starts_at_allowlist(broker, smtp):
     raw = mailbox_json(from_filters=[], savedAt="2026-09-01")
     code, out = admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(raw, "0" * 64))
     assert out["reason"] == "digest_mismatch" and not (broker.secrets / "email_monitor.json").exists()
     code, out = admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(raw))
-    assert out == {"ok": True, "secret": "email_monitor", "state": "imported", "rotation_pending": True}
-    assert admin_run(broker, ["mailbox", "show"])[1]["admission"] == "whole_mailbox"
+    assert out == {"ok": True, "secret": "email_monitor", "state": "imported", "rotation_pending": True,
+                   "imported_to_confirm": []}
+    # Audit M2: the file (which the agents could write) no longer picks the
+    # policy; an empty filter list is not a whole-mailbox grant.
+    assert admin_run(broker, ["mailbox", "show"])[1]["admission"] == "allowlist"
     assert chat(broker, ["me@example.com"]) == {"ok": False, "reason": "mail_rotation_pending"}
     code, out = admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
     assert out["reason"] == "password_not_rotated"
@@ -356,11 +409,57 @@ def test_a_legacy_file_after_a_host_setup_is_not_imported(broker):
     assert broker.store.read_secret("email_monitor")["user"] == "name.jht@gmail.com"
 
 
-def test_import_of_a_filtered_mailbox_becomes_an_allowlist(broker):
-    raw = mailbox_json(from_filters=["Alert@indeed.invalid"])
-    admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(raw))
+def test_imported_filters_are_only_proposed_until_the_user_confirms_each(broker):
+    """Audit M2: the legacy `from_filters` were written where the agents can
+    write; they never enter the allowlist on import."""
+    raw = mailbox_json(from_filters=["Alert@indeed.invalid", "jobs.example.org", "not a filter", "@evil.invalid"])
+    out = admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(raw))[1]
+    assert out["imported_to_confirm"] == ["@evil.invalid", "@jobs.example.org", "alert@indeed.invalid"]
     show = admin_run(broker, ["mailbox", "show"])[1]
-    assert show["admission"] == "allowlist" and show["allow_addresses"] == ["alert@indeed.invalid"]
+    assert show["admission"] == "allowlist"
+    assert show["allow_addresses"] == [] and show["allow_domains"] == []
+    assert broker.mailops.admission().addresses == frozenset() and broker.mailops.admission().domains == frozenset()
+    # Confirming one moves it in; removing one dismisses it.
+    admin_run(broker, ["mailbox", "allow", "add", "Alert@indeed.invalid"])
+    admin_run(broker, ["mailbox", "allow", "remove", "@evil.invalid"])
+    show = admin_run(broker, ["mailbox", "show"])[1]
+    assert show["allow_addresses"] == ["alert@indeed.invalid"] and show["allow_domains"] == []
+    assert show["imported_to_confirm"] == ["@jobs.example.org"]
+    # A host setup does not turn the remaining proposal into a filter.
+    admin_run(broker, ["mailbox", "setup", "--user", "me@example.com", "--admission", "allowlist"], (ROTATED + "\n").encode())
+    show = admin_run(broker, ["mailbox", "show"])[1]
+    assert show["allow_domains"] == [] and show["imported_to_confirm"] == ["@jobs.example.org"]
+
+
+def test_a_delete_does_not_end_the_rotation(broker):
+    """Audit M4: `jht mail delete` then `setup` with the exposed password
+    must still be refused."""
+    admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    out = admin_run(broker, ["secrets", "delete", "email_monitor"])[1]
+    assert out["state"] == "deleted"
+    assert broker.mailops.rotation_pending()
+    out = admin_run(broker, ["mailbox", "setup", "--user", "me@example.com", "--admission", "allowlist"],
+                    (CANARY + "\n").encode())[1]
+    assert out == {"ok": False, "reason": "password_not_rotated"}
+    assert not (broker.secrets / "email_monitor.json").exists()
+
+
+def test_an_exposed_password_stays_refused_after_the_rotation(broker):
+    admin_run(broker, ["secrets", "import-legacy", "email_monitor"], envelope(mailbox_json()))
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=ROTATED))[1]["ok"]
+    assert not broker.mailops.rotation_pending()
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())[1]["reason"] == "password_not_rotated"
+    state_blob = "".join(p.read_text() for p in broker.state.glob("*.json"))
+    assert CANARY not in state_blob and ROTATED not in state_blob
+
+
+def test_a_rotation_mark_of_phase_1a_is_still_honoured(broker):
+    # The 1a shape kept one digest and no list.
+    broker.store.write_state("rotation", {"email_monitor": {
+        "pending": True, "digest": broker.mailops.password_digest(CANARY)}})
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())[1]["reason"] == "password_not_rotated"
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json(password=ROTATED))[1]["ok"]
+    assert admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())[1]["reason"] == "password_not_rotated"
 
 
 def test_the_legacy_reader_refuses_a_symlink_and_prints_no_clear_text(tmp_path, monkeypatch, capsys):

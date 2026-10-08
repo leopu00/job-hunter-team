@@ -13,8 +13,23 @@ then tells the user to save the mailbox with `jht mail setup`. A name the
 broker has not migrated yet is left alone: on the first boot after an upgrade
 the host's migration still has to take it. No broker, no deletion.
 
+Then, for each migrated name, it puts a PLACEHOLDER where the file was (audit
+G1-r1): a read-only directory with that name, holding only a note, at the
+file's path and at the two temporary names the old clients write first
+(`.tmp` on a VPS, `.game-tmp` on the desktop). A client of v0.3.9 that saves
+the mailbox again then fails on its first open, and the password never
+reaches the disk. The deletion above stays as the second defence, should a
+placeholder be removed.
+
+Declared residue (G1-r1): the placeholder belongs to uid 1001, the agents'
+own uid. Inside `jht` nothing else can create it (no root, every capability
+dropped), and a root helper container was ruled out. An agent can therefore
+loosen it with chmod and remove it; the next sweep, within 30 s, deletes a
+file found in its place unread and puts the placeholder back. The threat the
+placeholder closes is the old client's save, which does not remove it.
+
 pid1 runs a sweep at boot and then periodically. Output: one JSON line,
-`{"ok": true, "removed": [...]}`; never a path content.
+`{"ok": true, "removed": [...], "placeholders": [...]}`; never a path content.
 """
 
 from __future__ import annotations
@@ -30,14 +45,19 @@ from typing import Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from broker.client import call  # noqa: E402
-from broker.legacy import NAMES, legacy_path  # noqa: E402
+from broker.legacy import NAMES, PLACEHOLDER_NOTE, PLACEHOLDER_SUFFIXES, is_placeholder, legacy_path  # noqa: E402
 
 RUNTIME_ROLE = "runtime"
+# Audit G1-r4: an old client (v0.3.9) passes the password to the agents'
+# container on a command line other processes there can read. A password
+# saved that way is exposed, whatever happened to the file afterwards.
 NOTICE = (
     "A mailbox password file reappeared in the agents' folder "
     "(credentials/{names}) after it had been moved to the secrets broker. "
-    "It was deleted without being read. To change the mailbox account, run "
-    "`jht mail setup` on your computer."
+    "It was deleted without being read. If you saved the mailbox from an old "
+    "version of the app, treat that password as EXPOSED: create a new app "
+    "password with your mail provider, then save it on your computer with "
+    "`jht mail setup`."
 )
 
 
@@ -57,37 +77,71 @@ def _default_notify(names: list[str]) -> None:
     )
 
 
+def _place(path: Path) -> bool:
+    """A placeholder at `path`, which is free. False when something got there
+    first (the next sweep looks again)."""
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        return False
+    fd = os.open(path / PLACEHOLDER_NOTE[0], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444)
+    try:
+        os.write(fd, PLACEHOLDER_NOTE[1].encode("utf-8"))
+    finally:
+        os.close(fd)
+    os.chmod(path, 0o555)
+    return True
+
+
+def _clear(path: Path) -> str | None:
+    """Make `path` free for a placeholder without opening what is there:
+    `removed` for a file or link, `kept` for a placeholder or for another
+    directory (writes fail on it anyway), None when it was free."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    if is_placeholder(path):
+        if info.st_mode & 0o222:
+            os.chmod(path, 0o555)
+        return "kept"
+    if os.path.isdir(path) and not os.path.islink(path):
+        return "kept"
+    os.unlink(path)  # a symlink goes, its target is never followed
+    return "removed"
+
+
 def sweep(
     ask: Callable[..., dict] = call,
     notify: Callable[[list[str]], None] = _default_notify,
 ) -> dict:
     answer = ask("mail.status", {}, role=RUNTIME_ROLE)
     if not answer.get("ok"):
-        return {"ok": False, "reason": str(answer.get("reason", "broker_bad_answer")), "removed": []}
+        return {"ok": False, "reason": str(answer.get("reason", "broker_bad_answer")), "removed": [], "placeholders": []}
     migrated = answer.get("legacy_migrated")
     if not isinstance(migrated, dict):
-        return {"ok": False, "reason": "broker_bad_answer", "removed": []}
-    removed, failed = [], []
+        return {"ok": False, "reason": "broker_bad_answer", "removed": [], "placeholders": []}
+    removed, placed, failed = [], [], []
     for name in NAMES:
         if migrated.get(name) is not True:
             continue
-        path = legacy_path(name)
-        if not os.path.lexists(path):
-            continue
-        try:
-            os.unlink(path)  # a symlink goes, its target is never followed
-        except FileNotFoundError:
-            continue
-        except OSError:
-            failed.append(name)
-            continue
-        removed.append(name)
+        for suffix in PLACEHOLDER_SUFFIXES:
+            path = Path(f"{legacy_path(name)}{suffix}")
+            try:
+                state = _clear(path)
+                if state == "removed" and name not in removed:
+                    removed.append(name)
+                if state != "kept" and _place(path):
+                    placed.append(path.name)
+            except OSError:
+                if name not in failed:
+                    failed.append(name)
     if removed:
         try:
             notify(removed)
         except (OSError, subprocess.SubprocessError):
             pass  # the deletion is what matters; the notice is best effort
-    result: dict = {"ok": not failed, "removed": removed}
+    result: dict = {"ok": not failed, "removed": removed, "placeholders": placed}
     if failed:
         result["reason"] = "legacy_remove_failed"
         result["failed"] = failed

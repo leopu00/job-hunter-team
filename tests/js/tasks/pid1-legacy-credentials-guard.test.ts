@@ -35,6 +35,21 @@ describe("pid1 legacy credentials guard", () => {
     ]);
   });
 
+  it("says where it put a placeholder", async () => {
+    const logs: string[] = [];
+    await runLegacyCredentialsGuard({
+      spawnFn: fakeSpawn(
+        '{"ok": true, "removed": [], "placeholders": ["email_monitor.json", "email_monitor.json.tmp"]}\n',
+        [],
+      ) as never,
+      log: (line: string) => logs.push(line),
+      scriptExists: () => true,
+    });
+    expect(logs).toEqual([
+      "legacy credentials guard: placeholder in place of email_monitor.json, email_monitor.json.tmp",
+    ]);
+  });
+
   it("stays silent on a quiet sweep, so a tick every 30 s fills no log", async () => {
     const logs: string[] = [];
     await runLegacyCredentialsGuard({

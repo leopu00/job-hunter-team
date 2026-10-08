@@ -661,7 +661,9 @@ const LEGACY_GUARD_INTERVAL_MS = 30_000;
  * email_transport.json) non deve ricomparire dopo la migrazione nel broker:
  * nessuno in jht lo legge piu', e questa guardia lo cancella SENZA leggerlo
  * (solo lstat e unlink, in legacy_guard.py) per i nomi che il broker dice gia'
- * migrati, poi avvisa l'utente di usare `jht mail setup`. Niente import
+ * migrati, poi avvisa l'utente di usare `jht mail setup`; al suo posto mette
+ * una cartella segnaposto (anche sui nomi temporanei del gioco v0.3.9), cosi'
+ * un vecchio client che risalva la password fallisce senza scriverla. Niente import
  * automatico; senza broker non cancella nulla. Logga solo quando agisce o
  * fallisce: un giro ogni 30 s non deve riempire i log.
  */
@@ -697,6 +699,9 @@ export function runLegacyCredentialsGuard({
         log('legacy credentials guard: no answer');
       } else if (Array.isArray(result.removed) && result.removed.length) {
         log(`legacy credentials guard: removed unread ${result.removed.join(', ')} (reappeared after the migration)`);
+      }
+      if (result && Array.isArray(result.placeholders) && result.placeholders.length) {
+        log(`legacy credentials guard: placeholder in place of ${result.placeholders.join(', ')}`);
       }
       if (result && result.reason === 'legacy_remove_failed') {
         log(`legacy credentials guard: could not remove ${(result.failed || []).join(', ')}`);
