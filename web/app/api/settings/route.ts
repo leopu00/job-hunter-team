@@ -215,10 +215,9 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     if (err instanceof TelegramPairingBelongsToHostError) {
-      return NextResponse.json(
-        telegramPairingError(await getRequestLocale()),
-        { status: 400 },
-      );
+      return NextResponse.json(telegramPairingError(await getRequestLocale()), {
+        status: 400,
+      });
     }
     throw err;
   }
