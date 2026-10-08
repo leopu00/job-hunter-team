@@ -4,7 +4,9 @@
 //! - checks that Docker Desktop is installed and running, and says what to do
 //!   when it is not (docker_desktop_missing / docker_desktop_not_running);
 //! - downloads install.ps1, checks it against the digest compiled from
-//!   installer-windows.sha256, and runs it with `-SkipOnboard`;
+//!   installer-windows.sha256, and runs it with `-SkipOnboard`; a test build
+//!   takes install.ps1 of its commit instead, with that commit's digest and
+//!   coordinates (release_channel.rs);
 //! - calls `%USERPROFILE%\.local\bin\jht.ps1` only when the wrapper carries
 //!   the protocol markers and matches the `.runtime-integrity` that
 //!   install.ps1 wrote under `%LOCALAPPDATA%\Job Hunter Team\host-runtime`.
@@ -19,8 +21,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) const INSTALL_PS1_URL: &str = "https://jobhunterteam.ai/install.ps1";
 pub(crate) const INSTALL_PS1_SHA256: &str = include_str!("../installer-windows.sha256");
 
 /// The lines a desktop-capable jht.ps1 carries, like the sh wrapper's
@@ -60,8 +60,14 @@ pub(crate) fn script_invocation(script: &Path, args: &[&str]) -> Vec<OsString> {
         .collect()
 }
 
-pub(crate) fn installer_invocation(script: &Path) -> Vec<OsString> {
-    script_invocation(script, &["-SkipOnboard"])
+/// install.ps1 with `-SkipOnboard`, then the release channel's arguments
+/// (none in production; `-SourceSha … -Image … -ExpectedImageDigest …` in a
+/// test build).
+pub(crate) fn installer_invocation(script: &Path, channel_args: &[String]) -> Vec<OsString> {
+    let args: Vec<&str> = std::iter::once("-SkipOnboard")
+        .chain(channel_args.iter().map(String::as_str))
+        .collect();
+    script_invocation(script, &args)
 }
 
 /// `%LOCALAPPDATA%\Job Hunter Team\host-runtime`, where install.ps1 puts the
@@ -185,12 +191,29 @@ mod tests {
                 "claude"
             ]
         );
-        let install: Vec<String> = installer_invocation(Path::new(r"C:\Temp\i.ps1"))
+        let install: Vec<String> = installer_invocation(Path::new(r"C:\Temp\i.ps1"), &[])
             .into_iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert_eq!(install.last().map(String::as_str), Some("-SkipOnboard"));
         assert_eq!(install[install.len() - 2], r"C:\Temp\i.ps1");
+        // A test build: the channel's coordinates follow -SkipOnboard, as
+        // separate arguments, never through the environment.
+        let channel = [
+            "-SourceSha",
+            "0123456789abcdef0123456789abcdef01234567",
+            "-Image",
+            "ghcr.io/leopu00/jht:master-arthur",
+            "-ExpectedImageDigest",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]
+        .map(str::to_owned);
+        let test: Vec<String> = installer_invocation(Path::new(r"C:\Temp\i.ps1"), &channel)
+            .into_iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(test[..install.len()], install[..]);
+        assert_eq!(test[install.len()..], channel[..]);
     }
 
     #[test]

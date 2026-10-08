@@ -1561,7 +1561,7 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
 #[cfg(windows)]
 fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
     use crate::windows_runtime::{
-        docker_state, installer_invocation, powershell_path, INSTALL_PS1_SHA256, INSTALL_PS1_URL,
+        docker_state, installer_invocation, powershell_path, INSTALL_PS1_SHA256,
     };
     docker_state(run_program(
         "docker",
@@ -1574,8 +1574,16 @@ fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingEr
         trace_local_runtime("runtime", "install_reused");
         return Ok(wrapper);
     }
-    let expected = expected_installer_digest(INSTALL_PS1_SHA256)?;
-    let bytes = download_verified_bytes(INSTALL_PS1_URL, expected)?;
+    let channel = release_channel::current().map_err(failure)?;
+    let expected = expected_installer_digest(release_channel::install_ps1_digest(
+        channel.as_ref(),
+        INSTALL_PS1_SHA256,
+    ))?;
+    let bytes = download_verified_bytes(
+        &release_channel::install_ps1_url(channel.as_ref()),
+        expected,
+    )?;
+    let channel_args = release_channel::install_ps1_args(channel.as_ref());
     attest_then(bytes, expected, |installer| {
         let dir = std::env::temp_dir().join(format!(
             "jht-install-{}-{}",
@@ -1592,7 +1600,7 @@ fn install_local_windows(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingEr
             ensure_success(
                 run_program(
                     shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
-                    installer_invocation(&script),
+                    installer_invocation(&script, &channel_args),
                     None,
                     PREPARE_TIMEOUT,
                 ),

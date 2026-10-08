@@ -165,7 +165,7 @@ def test_the_repair_names_only_callers_that_exist():
     assert "#[cfg(windows)]" in install[:400] and "return install_local_windows(app);" in install[:400]
     windows = onboarding[onboarding.index("fn install_local_windows("):]
     windows = windows[: windows.index("\n}\n")]
-    assert "installer_invocation(&script)" in windows
+    assert "installer_invocation(&script, &channel_args)" in windows
     for direct in ("compose", '"up"', "docker run", "chown"):
         assert direct not in windows, direct
 

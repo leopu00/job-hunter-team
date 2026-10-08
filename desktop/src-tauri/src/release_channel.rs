@@ -1,12 +1,14 @@
 //! The release channel the app was built for (build.rs, from the CI's
 //! JHT_CHANNEL & co.; rules in release_channel_rules.rs).
 //!
-//! Production (the default): install.sh from jobhunterteam.ai, checked against
-//! the digest compiled from installer.sha256, run as it is.
-//! Test (only builds made for the end-to-end tester): install.sh of ONE commit
-//! from raw.githubusercontent.com, checked against the digest the CI computed
-//! from that commit, and run with that commit's coordinates
-//! (`--source-sha`, `--image`, `--expected-image-digest`): the installer
+//! Production (the default): install.sh (install.ps1 on Windows) from
+//! jobhunterteam.ai, checked against the digest compiled from installer.sha256
+//! (installer-windows.sha256), run as it is.
+//! Test (only builds made for the end-to-end tester): install.sh or install.ps1
+//! of ONE commit from raw.githubusercontent.com, checked against the digest the
+//! CI computed from that commit, and run with that commit's coordinates
+//! (`--source-sha`, `--image`, `--expected-image-digest`; for install.ps1
+//! `-SourceSha`, `-Image`, `-ExpectedImageDigest`): the installer
 //! fetches compose and wrapper of the same commit and pins the image, so the
 //! later fixed `jht up`, `jht team start`... use it without any variable.
 //! The coordinates are public and travel as installer arguments; stdin keeps
@@ -15,6 +17,8 @@
 use crate::release_channel_rules::{resolve, TestChannel};
 
 const PRODUCTION_INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
+#[cfg_attr(not(windows), allow(dead_code))]
+const PRODUCTION_INSTALL_PS1_URL: &str = "https://jobhunterteam.ai/install.ps1";
 const SOURCE_REPOSITORY: &str = "leopu00/job-hunter-team";
 
 /// The channel compiled into this build. build.rs already refused a bad
@@ -27,6 +31,7 @@ pub(crate) fn current() -> Result<Option<TestChannel>, &'static str> {
         env!("JHT_BUILD_RUNTIME_IMAGE"),
         env!("JHT_BUILD_RUNTIME_IMAGE_DIGEST"),
         env!("JHT_BUILD_INSTALL_SHA256"),
+        env!("JHT_BUILD_INSTALL_PS1_SHA256"),
     )
 }
 
@@ -36,6 +41,7 @@ fn from_build(
     runtime_image: &str,
     image_digest: &str,
     install_sha256: &str,
+    install_ps1_sha256: &str,
 ) -> Result<Option<TestChannel>, &'static str> {
     resolve(
         Some(channel),
@@ -43,6 +49,7 @@ fn from_build(
         Some(runtime_image),
         Some(image_digest),
         Some(install_sha256),
+        Some(install_ps1_sha256),
     )
     .map_err(|_| "installer_digest_invalid")
 }
@@ -77,6 +84,44 @@ pub(crate) fn installer_args(channel: Option<&TestChannel>) -> Vec<String> {
     })
 }
 
+/// Windows: where install.ps1 comes from.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn install_ps1_url(channel: Option<&TestChannel>) -> String {
+    match channel {
+        None => PRODUCTION_INSTALL_PS1_URL.to_owned(),
+        Some(test) => format!(
+            "https://raw.githubusercontent.com/{SOURCE_REPOSITORY}/{}/scripts/install.ps1",
+            test.source_sha
+        ),
+    }
+}
+
+/// Windows: the digest install.ps1 must have, the compiled production one
+/// (installer-windows.sha256) or the test commit's.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn install_ps1_digest<'a>(
+    channel: Option<&'a TestChannel>,
+    production: &'a str,
+) -> &'a str {
+    channel.map_or(production, |test| test.install_ps1_sha256.as_str())
+}
+
+/// Windows: install.ps1's extra arguments, after `-File <script>`; none in
+/// production.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn install_ps1_args(channel: Option<&TestChannel>) -> Vec<String> {
+    channel.map_or_else(Vec::new, |test| {
+        vec![
+            "-SourceSha".to_owned(),
+            test.source_sha.clone(),
+            "-Image".to_owned(),
+            test.runtime_image.clone(),
+            "-ExpectedImageDigest".to_owned(),
+            test.image_digest.clone(),
+        ]
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +130,7 @@ mod tests {
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     const DIGEST: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const INSTALL: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const INSTALL_PS1: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
     fn test_channel(image: &str) -> TestChannel {
         resolve(
@@ -93,6 +139,7 @@ mod tests {
             Some(image),
             Some(DIGEST),
             Some(INSTALL),
+            Some(INSTALL_PS1),
         )
         .unwrap()
         .unwrap()
@@ -100,11 +147,17 @@ mod tests {
 
     #[test]
     fn production_is_unchanged_without_any_variable() {
-        assert_eq!(resolve(None, None, None, None, None), Ok(None));
-        assert_eq!(from_build("production", "", "", "", ""), Ok(None));
+        assert_eq!(resolve(None, None, None, None, None, None), Ok(None));
+        assert_eq!(from_build("production", "", "", "", "", ""), Ok(None));
         assert_eq!(install_url(None), "https://jobhunterteam.ai/install.sh");
         assert_eq!(install_digest(None, "compiled"), "compiled");
         assert!(installer_args(None).is_empty());
+        assert_eq!(
+            install_ps1_url(None),
+            "https://jobhunterteam.ai/install.ps1"
+        );
+        assert_eq!(install_ps1_digest(None, "compiled"), "compiled");
+        assert!(install_ps1_args(None).is_empty());
         // This very build (cargo test, no CI variables) is production.
         assert_eq!(current(), Ok(None));
     }
@@ -128,6 +181,22 @@ mod tests {
                 DIGEST
             ]
         );
+        assert_eq!(
+            install_ps1_url(Some(&test)),
+            format!("https://raw.githubusercontent.com/leopu00/job-hunter-team/{SHA}/scripts/install.ps1")
+        );
+        assert_eq!(install_ps1_digest(Some(&test), "compiled"), INSTALL_PS1);
+        assert_eq!(
+            install_ps1_args(Some(&test)),
+            [
+                "-SourceSha",
+                SHA,
+                "-Image",
+                "ghcr.io/leopu00/jht:master-arthur",
+                "-ExpectedImageDigest",
+                DIGEST
+            ]
+        );
         let pinned = test_channel(&format!("ghcr.io/leopu00/jht@{DIGEST}"));
         assert_eq!(pinned.image_digest, DIGEST);
     }
@@ -136,8 +205,27 @@ mod tests {
     fn a_half_configured_or_malformed_build_is_refused() {
         let image = "ghcr.io/leopu00/jht:master-arthur";
         let refused = |channel, sha, image, digest, install| {
-            resolve(channel, sha, image, digest, install).is_err()
+            resolve(channel, sha, image, digest, install, Some(INSTALL_PS1)).is_err()
         };
+        // install.ps1's digest: required by a test build, refused without one,
+        // and only 64 lowercase hex.
+        let full = |install_ps1| {
+            resolve(
+                Some("test"),
+                Some(SHA),
+                Some(image),
+                Some(DIGEST),
+                Some(INSTALL),
+                install_ps1,
+            )
+        };
+        assert!(full(Some(INSTALL_PS1)).is_ok());
+        assert!(full(None).is_err());
+        assert!(full(Some("  ")).is_err());
+        let upper = INSTALL_PS1.to_uppercase();
+        assert!(full(Some(&upper)).is_err());
+        assert!(full(Some(&INSTALL_PS1[1..])).is_err());
+        assert!(resolve(None, None, None, None, None, Some(INSTALL_PS1)).is_err());
         // Values without the test channel: never a half production.
         assert!(refused(None, Some(SHA), None, None, None));
         assert!(refused(Some("production"), None, None, None, Some(INSTALL)));
@@ -182,7 +270,7 @@ mod tests {
         ));
         // The runtime check is the same: a bad compiled value is an error.
         assert_eq!(
-            from_build("test", "", image, DIGEST, INSTALL),
+            from_build("test", "", image, DIGEST, INSTALL, INSTALL_PS1),
             Err("installer_digest_invalid")
         );
 

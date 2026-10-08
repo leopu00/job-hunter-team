@@ -4,7 +4,8 @@
 //!
 //! A build is on the production channel unless JHT_CHANNEL=test. A test build
 //! (made from the CI for the end-to-end tester) installs the runtime of ONE
-//! commit: its install.sh, compose and wrapper, and its image.
+//! commit: its install.sh (VPS, Mac, Linux) or install.ps1 (Windows), compose
+//! and wrapper, and its image.
 
 pub const TEST_CHANNEL: &str = "test";
 pub const IMAGE_REPOSITORY: &str = "ghcr.io/leopu00/jht";
@@ -21,6 +22,8 @@ pub struct TestChannel {
     pub image_digest: String,
     /// sha256 of scripts/install.sh at `source_sha`, computed by the CI.
     pub install_sha256: String,
+    /// sha256 of scripts/install.ps1 at `source_sha`, computed by the CI.
+    pub install_ps1_sha256: String,
 }
 
 fn lower_hex(value: &str, len: usize) -> bool {
@@ -77,13 +80,15 @@ pub fn resolve(
     runtime_image: Option<&str>,
     image_digest: Option<&str>,
     install_sha256: Option<&str>,
+    install_ps1_sha256: Option<&str>,
 ) -> Result<Option<TestChannel>, String> {
-    let (channel, source_sha, runtime_image, image_digest, install_sha256) = (
+    let (channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256) = (
         given(channel),
         given(source_sha),
         given(runtime_image),
         given(image_digest),
         given(install_sha256),
+        given(install_ps1_sha256),
     );
     match channel {
         None | Some("production") => {
@@ -91,8 +96,9 @@ pub fn resolve(
                 || runtime_image.is_some()
                 || image_digest.is_some()
                 || install_sha256.is_some()
+                || install_ps1_sha256.is_some()
             {
-                return Err("JHT_SOURCE_SHA, JHT_RUNTIME_IMAGE, JHT_RUNTIME_IMAGE_DIGEST and JHT_INSTALL_SHA256 are only for JHT_CHANNEL=test".to_owned());
+                return Err("JHT_SOURCE_SHA, JHT_RUNTIME_IMAGE, JHT_RUNTIME_IMAGE_DIGEST, JHT_INSTALL_SHA256 and JHT_INSTALL_PS1_SHA256 are only for JHT_CHANNEL=test".to_owned());
             }
             Ok(None)
         }
@@ -116,11 +122,15 @@ pub fn resolve(
             let install_sha256 = install_sha256
                 .filter(|value| valid_sha256(value))
                 .ok_or("JHT_CHANNEL=test needs JHT_INSTALL_SHA256: 64 lowercase hex")?;
+            let install_ps1_sha256 = install_ps1_sha256
+                .filter(|value| valid_sha256(value))
+                .ok_or("JHT_CHANNEL=test needs JHT_INSTALL_PS1_SHA256: 64 lowercase hex")?;
             Ok(Some(TestChannel {
                 source_sha: source_sha.to_owned(),
                 runtime_image: runtime_image.to_owned(),
                 image_digest: image_digest.to_owned(),
                 install_sha256: install_sha256.to_owned(),
+                install_ps1_sha256: install_ps1_sha256.to_owned(),
             }))
         }
         Some(other) => Err(format!(

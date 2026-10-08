@@ -105,11 +105,12 @@ fn emit_release_channel() {
         "JHT_RUNTIME_IMAGE",
         "JHT_RUNTIME_IMAGE_DIGEST",
         "JHT_INSTALL_SHA256",
+        "JHT_INSTALL_PS1_SHA256",
     ];
     for name in names {
         println!("cargo:rerun-if-env-changed={name}");
     }
-    let [channel, source_sha, runtime_image, image_digest, install_sha256] =
+    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256] =
         names.map(|name| env::var(name).ok());
     let resolved = release_channel_rules::resolve(
         channel.as_deref(),
@@ -117,6 +118,7 @@ fn emit_release_channel() {
         runtime_image.as_deref(),
         image_digest.as_deref(),
         install_sha256.as_deref(),
+        install_ps1_sha256.as_deref(),
     )
     .unwrap_or_else(|error| panic!("release channel: {error}"));
     match resolved {
@@ -126,6 +128,7 @@ fn emit_release_channel() {
             println!("cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE=");
             println!("cargo:rustc-env=JHT_BUILD_RUNTIME_IMAGE_DIGEST=");
             println!("cargo:rustc-env=JHT_BUILD_INSTALL_SHA256=");
+            println!("cargo:rustc-env=JHT_BUILD_INSTALL_PS1_SHA256=");
         }
         Some(test) => {
             println!("cargo:rustc-env=JHT_BUILD_CHANNEL=test");
@@ -141,6 +144,10 @@ fn emit_release_channel() {
             println!(
                 "cargo:rustc-env=JHT_BUILD_INSTALL_SHA256={}",
                 test.install_sha256
+            );
+            println!(
+                "cargo:rustc-env=JHT_BUILD_INSTALL_PS1_SHA256={}",
+                test.install_ps1_sha256
             );
         }
     }
