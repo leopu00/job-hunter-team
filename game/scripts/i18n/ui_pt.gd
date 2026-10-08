@@ -944,7 +944,7 @@ const S := {
 
 	"tg.intro": "Liga os três bots privados usados pela equipa. Os tokens seguem diretamente para o serviço Telegram isolado e nunca são guardados na pasta dos agentes.",
 	"tg.botfather": "ABRIR BOTFATHER  ↗",
-	"tg.guide": "Cria ou roda os bots no BotFather e conclui o emparelhamento no terminal do host com os comandos abaixo. Se já existia um token, usa um novo.",
+	"tg.guide": "Se já existia um bot, revoga o token anterior no BotFather e usa o novo. No computador anfitrião, executa jht telegram pair assistente|capitano|mentor: o token é pedido sem ser mostrado. Para automatizações, podes passar o JSON por stdin (entrada padrão); não guardes o token em ~/.jht e, se usares um ficheiro fora dessa pasta, elimina-o logo a seguir.",
 	"tg.role_assistente": "onboarding do perfil e documentos",
 	"tg.role_capitano": "direção da equipa e posições prontas",
 	"tg.role_mentor": "coaching e estratégia profissional",

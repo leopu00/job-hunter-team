@@ -944,7 +944,7 @@ const S := {
 
 	"tg.intro": "Connecte les trois bots privés utilisés par l'équipe. Les jetons vont directement au service Telegram isolé et ne sont jamais enregistrés dans le dossier des agents.",
 	"tg.botfather": "OUVRIR BOTFATHER  ↗",
-	"tg.guide": "Crée ou renouvelle les bots dans BotFather, puis termine l'association depuis le terminal de l'hôte avec les commandes ci-dessous. Si un jeton existait déjà, utilise-en un nouveau.",
+	"tg.guide": "Si un bot existait déjà, révoquez son ancien jeton dans BotFather et utilisez le nouveau. Sur l'ordinateur hôte, exécutez jht telegram pair assistente|capitano|mentor : le jeton est demandé sans écho. Pour les automatisations, vous pouvez transmettre le JSON sur stdin ; n'enregistrez pas le jeton dans ~/.jht et, si vous utilisez un fichier en dehors de ce dossier, supprimez-le immédiatement après.",
 	"tg.role_assistente": "onboarding du profil et documents",
 	"tg.role_capitano": "direction de l'équipe et postes prêts",
 	"tg.role_mentor": "coaching et stratégie professionnelle",

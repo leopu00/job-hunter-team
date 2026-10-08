@@ -1205,7 +1205,7 @@ const S := {
 	# ── Impostazioni → Telegram ───────────────────────────────────────
 	"tg.intro": "Collega i tre bot privati usati dal team. I token passano direttamente al servizio Telegram isolato e non vengono salvati nella home degli agenti.",
 	"tg.botfather": "APRI BOTFATHER  ↗",
-	"tg.guide": "Crea o ruota i bot in BotFather, poi completa l'abbinamento dal terminale dell'host con i comandi qui sotto. Se esisteva già un token, usane uno nuovo.",
+	"tg.guide": "Se esisteva già un bot, revoca il token precedente in BotFather e usa quello nuovo. Dal computer host esegui jht telegram pair assistente|capitano|mentor: il token viene chiesto senza eco. Per automazioni puoi passare il JSON su stdin; non salvare il token in ~/.jht e, se usi un file fuori da lì, cancellalo subito dopo.",
 	"tg.role_assistente": "onboarding del profilo e documenti",
 	"tg.role_capitano": "direzione del team e posizioni pronte",
 	"tg.role_mentor": "coaching e strategia professionale",

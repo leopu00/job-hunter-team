@@ -944,7 +944,7 @@ const S := {
 
 	"tg.intro": "Csatlakoztasd a csapat három privát botját. A tokenek közvetlenül az elkülönített Telegram-szolgáltatáshoz kerülnek, és soha nem mentődnek az ügynökök home könyvtárába.",
 	"tg.botfather": "BOTFATHER MEGNYITÁSA  ↗",
-	"tg.guide": "Hozd létre vagy cseréld le a botokat a BotFatherben, majd végezd el a párosítást a host terminálján az alábbi parancsokkal. Ha már létezett token, használj újat.",
+	"tg.guide": "Ha már létezett bot, vond vissza a korábbi tokenjét a BotFatherben, és használd az újat. A gazdagépen futtasd a jht telegram pair assistente|capitano|mentor parancsot: a program visszajelzés nélkül kéri be a tokent. Automatizáláshoz átadhatod a JSON-t az stdin bemeneten; ne mentsd a tokent a ~/.jht könyvtárba, és ha azon kívüli fájlt használsz, utána azonnal töröld.",
 	"tg.role_assistente": "profil onboarding és dokumentumok",
 	"tg.role_capitano": "a csapat irányítása és a kész pozíciók",
 	"tg.role_mentor": "coaching és karrierstratégia",
