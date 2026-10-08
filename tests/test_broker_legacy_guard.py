@@ -357,10 +357,6 @@ SOURCE_SUFFIXES = {".py", ".js", ".mjs", ".ts", ".sh", ""}
 LEGACY_NAME = re.compile(r"email_(?:monitor|transport)\.json|credentials/email_")
 # The migration reader, run by the HOST wrapper, prints only a digest envelope.
 MIGRATION_READER = "shared/broker/legacy.py"
-# Read by the desktop game's settings payload (inside jht), out of this
-# ticket's scope by decision: reported, and the guard deletes the file after
-# the migration. A new reader anywhere else fails here.
-KNOWN_GAME_READER = "game/scripts/backend/payloads/settings.py"
 
 
 def _code_lines(path: Path):
@@ -380,7 +376,7 @@ def test_no_skill_or_process_in_jht_names_a_legacy_mailbox_file():
             if path.suffix == "" and not path.read_bytes()[:2] == b"#!":
                 continue
             rel = path.relative_to(ROOT).as_posix()
-            if rel in (MIGRATION_READER, KNOWN_GAME_READER):
+            if rel == MIGRATION_READER:
                 continue
             in_docstring = False
             for number, line in _code_lines(path):
@@ -403,9 +399,3 @@ def test_the_static_gate_sees_a_reader_when_one_is_added(tmp_path, monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
     with pytest.raises(AssertionError):
         test_no_skill_or_process_in_jht_names_a_legacy_mailbox_file()
-
-
-def test_the_known_game_reader_is_still_the_only_one_there():
-    # When the game stops reading the file, drop KNOWN_GAME_READER.
-    text = (ROOT / KNOWN_GAME_READER).read_text(encoding="utf-8")
-    assert "credentials/email_monitor.json" in text

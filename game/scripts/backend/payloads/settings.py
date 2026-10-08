@@ -1,4 +1,4 @@
-import json, os
+import json, os, subprocess
 out = {}
 try:
     c = json.load(open('/jht_home/jht.config.json'))
@@ -40,13 +40,23 @@ out['email'] = [
     ['Canali', ', '.join(map(str, n.get('channels') or [])) or '—'],
 ]
 try:
-    ec = json.load(open('/jht_home/credentials/email_monitor.json'))
+    email_status_result = subprocess.run(
+        ['python3', '/app/shared/skills/email_monitor.py', 'status'],
+        capture_output=True, text=True, timeout=8, check=False)
+    if email_status_result.returncode != 0:
+        raise RuntimeError('email_status_failed')
+    ec = json.loads(email_status_result.stdout)
+    if not isinstance(ec, dict):
+        raise ValueError('email_status_invalid')
+except subprocess.TimeoutExpired:
+    ec = {'configured': False, 'unavailable': 'broker_timeout'}
 except Exception:
-    ec = {}
+    ec = {'configured': False, 'unavailable': 'broker_unavailable'}
 out['email_account'] = {
-    'configured': bool(ec.get('user')),
-    'email': str(ec.get('user') or ''),
-    'host': str(ec.get('imap_host') or ''),
+    'configured': bool(ec.get('configured')),
+    'email': str(ec.get('address') or ''),
+    'policy': str(ec.get('admission') or ''),
+    'reason': str(ec.get('unavailable') or ec.get('reason') or ''),
 }
 try:
     cc = json.load(open('/jht_home/cloud.json'))
