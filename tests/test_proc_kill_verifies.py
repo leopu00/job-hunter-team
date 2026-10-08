@@ -6,7 +6,7 @@ operation=signal): i daemon vecchi restavano vivi, proc-kill.py usciva 0 lo
 stesso e start-agent.sh lanciava un secondo daemon accanto al primo. Qui:
   - proc-kill.py esce 1 se un bersaglio sopravvive (segnale rifiutato o
     ignorato), 0 se sono spariti tutti o non c'era nessuno;
-  - jht_kill_by_marker propaga l'esito, lo scrive su stderr e lo registra.
+  - `jht_kill_by_marker` propaga l'esito, lo scrive su stderr e lo registra.
 Che lo spawner non lanci il doppione lo prova
 tests/test_tg_bridge_spawn_race.py, eseguendo start-agent.sh.
 """
@@ -149,7 +149,9 @@ def _kill_by_marker(tmp_path, proc_kill_body: str):
     fake = tmp_path / "fake-proc-kill.py"
     fake.write_text(proc_kill_body, encoding="utf-8")
     home = tmp_path / "home"
-    script = f'. "{DAEMON_LIB}"; jht_kill_by_marker "{MARKER}" 0 0; echo "rc=$?"'
+    # Come lo spawner: il marker e' il path dello script, in una variabile.
+    script = (f'. "{DAEMON_LIB}"; FAKE_DAEMON_SCRIPT="{MARKER}"; '
+              'jht_kill_by_marker "$FAKE_DAEMON_SCRIPT" 0 0; echo "rc=$?"')
     result = subprocess.run(
         ["bash", "-c", script], capture_output=True, text=True, timeout=30,
         env={**os.environ, "JHT_HOME": str(home), "JHT_PROC_KILL_PY": str(fake)},
