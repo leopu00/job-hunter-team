@@ -531,47 +531,9 @@ function Invoke-TelegramAdmin {
     try { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
     finally { $OutputEncoding = $previousEncoding }
   } else {
-    & docker exec $telegramId jht-telegram-admin @AdminArgs | Out-Host
+    & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host
   }
   return $LASTEXITCODE
-}
-
-function Invoke-TelegramLegacy {
-  param([string]$Command, [string]$Role = '')
-  if ($Command -notin @('inventory', 'remove', 'remaining')) { return 2 }
-  $image = Get-ComposeImage $ComposeFile
-  if (-not $image) { return 1 }
-  $mode = if ($Command -eq 'remove') { 'rw' } else { 'ro' }
-  $runArgs = @('run', '--rm')
-  if ($ContainerRuntime -eq 'podman') { $runArgs += @('--userns', 'keep-id:uid=1001,gid=1001') }
-  $runArgs += @(
-    '--user', '1001:1001', '--read-only', '--tmpfs', '/tmp:size=4m,mode=1777',
-    '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-    '--volume', "${JhtHome}:/jht_home:$mode", '--entrypoint', '/usr/bin/python3',
-    $image, '-I', '/app/shared/telegram_service/bin/jht-telegram-legacy.py', $Command
-  )
-  if ($Role) { $runArgs += $Role }
-  & docker @runArgs
-}
-
-function Initialize-TelegramLegacyInventory {
-  Invoke-Compose up '-d' $TelegramContainer | Out-Null
-  if ($LASTEXITCODE -ne 0) { return $false }
-  if ((Invoke-TelegramAdmin -AdminArgs @('legacy', 'complete')) -eq 0) { return $true }
-  if (Test-ContainerUp) {
-    Invoke-Compose stop $Container | Out-Null
-    if ($LASTEXITCODE -ne 0) { return $false }
-  }
-  foreach ($role in @('assistente', 'capitano', 'mentor')) {
-    $digests = @(Invoke-TelegramLegacy inventory $role 2>$null)
-    if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
-      return $false
-    }
-    if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $role)) -ne 0) {
-      return $false
-    }
-  }
-  return $true
 }
 
 function Invoke-TelegramPair {
@@ -581,35 +543,15 @@ function Invoke-TelegramPair {
     Write-Err 'Interattivo: il token viene chiesto senza eco. Automazioni: JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da li''.'
     return 2
   }
+  $agentId = Get-RunningComposeServiceId $Container
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
-  if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
-  $agentWasRunning = Test-ContainerUp
-  if ($agentWasRunning) {
-    Invoke-Compose stop $Container | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      Write-Err 'legacy_inventory_failed: non riesco a fermare gli agenti prima dell''inventario host.'
-      return 1
-    }
-  }
-  $digests = @(Invoke-TelegramLegacy inventory $Role 2>$null)
+  if (-not $agentId -or -not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  $digests = @(& docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py inventory $Role 2>$null)
   if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
-    if ($agentWasRunning) { Invoke-Compose start $Container | Out-Null }
     Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
     return 1
   }
-  if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $Role)) -ne 0) {
-    if ($agentWasRunning) { Invoke-Compose start $Container | Out-Null }
-    Write-Err 'legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato.'
-    return 1
-  }
-  if ($agentWasRunning) {
-    Invoke-Compose start $Container | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      Write-Err 'agent_restart_failed: inventario conservato, ma il team non e'' ripartito. Cosa fare: jht up'
-      return 1
-    }
-  }
-  $status = ((& docker exec $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
+  $status = ((& docker exec -i $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
   $adminArgs = @('bots', 'pair', $Role)
   foreach ($digest in $digests) { $adminArgs += @('--legacy-digest', $digest) }
@@ -645,17 +587,17 @@ function Invoke-TelegramPair {
     Write-Err 'Abbinamento rifiutato. Revoca il token precedente da BotFather e usa quello nuovo.'
     return $code
   }
-  Invoke-TelegramLegacy remove $Role | Out-Null
+  & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py remove $Role
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'legacy_cleanup_failed: il token vecchio e'' ancora in ~/.jht; cutover negato.'
     return 1
   }
-  $null = Invoke-TelegramLegacy remaining
+  $null = & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py remaining
   $remainingCode = $LASTEXITCODE
   if ($remainingCode -eq 0) {
     if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
     Invoke-Compose restart $TelegramContainer
-    if (-not $wasEnabled -and $agentWasRunning) { Invoke-Compose restart $Container }
+    if (-not $wasEnabled) { Invoke-Compose restart $Container }
     Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
     return 0
   }
@@ -890,10 +832,6 @@ function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     Write-Info "Container '$Container' non attivo, lo avvio..."
     if (-not (Repair-MountOwnership)) { exit 1 }
-    if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
-      exit 1
-    }
     Invoke-Compose 'up' '-d'
     # Attendi che il container sia in stato running.
     $tries = 20
@@ -1855,10 +1793,6 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
-    if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
-      exit 1
-    }
     Invoke-Compose 'up' '-d'
     $null = Invoke-BrokerMigrateLegacyOnce
     break
@@ -1883,10 +1817,6 @@ switch ($Sub) {
     Require-Docker
     Invoke-Compose down
     if (-not (Repair-MountOwnership)) { exit 1 }
-    if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
-      exit 1
-    }
     Invoke-Compose 'up' '-d'
     $null = Invoke-BrokerMigrateLegacyOnce
     break

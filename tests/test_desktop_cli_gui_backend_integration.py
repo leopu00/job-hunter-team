@@ -96,19 +96,11 @@ def inner_exec():
         if flag == "-e":
             flags.append(argv[index])
             index += 1
-    if index >= len(argv) or argv[index] not in ("jht", "aaaaaaaaaaaa", "bbbbbbbbbbbb"):
+    if index >= len(argv) or argv[index] not in ("jht", "aaaaaaaaaaaa"):
         record("exec-invalid")
         return 92
-    target = argv[index]
     command = argv[index + 1:]
     tty = "-it" in flags
-
-    if target == "bbbbbbbbbbbb":
-        record("telegram-admin", command, tty)
-        if command == ["jht-telegram-admin", "legacy", "complete"]:
-            print('{"ok":true,"legacy":"complete"}')
-            return 0
-        return 93
 
     # Every exec targets the id attested by compose (`docker exec <id>`), so
     # the operation is told apart by its command, never by the container name.
@@ -202,27 +194,18 @@ if argv[0] == "inspect":
         else:
             print("true")
         sys.exit(0)
-    if target == "bbbbbbbbbbbb" and state["telegram_running"]:
-        print("true jht-telegram")
-        sys.exit(0)
     sys.exit(1)
 if argv[0] == "compose":
     record("compose")
     if "up" in argv:
         state["up_requests"] += 1
-        if "jht-telegram" in argv:
-            state["telegram_running"] = True
-        else:
-            if not state["container_running"]:
-                state["container_starts"] += 1
-            state["container_running"] = True
+        if not state["container_running"]:
+            state["container_starts"] += 1
+        state["container_running"] = True
         save()
         sys.exit(0)
-    if "ps" in argv and "-q" in argv:
-        if "jht-telegram" in argv:
-            if state["telegram_running"]:
-                print("bbbbbbbbbbbb")
-        elif "jht" in argv and state["container_running"]:
+    if "ps" in argv and "-q" in argv and "jht" in argv:
+        if state["container_running"]:
             print("aaaaaaaaaaaa")
         sys.exit(0)
     sys.exit(2)
@@ -275,7 +258,6 @@ class RuntimeFixture:
         compose.write_text(
             "services:\n  jht:\n    image: fixture.invalid/jht@sha256:0000\n"
             "    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n"
-            "  jht-telegram:\n    image: fixture.invalid/jht@sha256:0000\n"
             "volumes:\n  jht-runtime-mask:\n",
             encoding="utf-8",
         )
@@ -292,7 +274,6 @@ class RuntimeFixture:
                 {
                     "container_running": False,
                     "container_starts": 0,
-                    "telegram_running": False,
                     "provider": "",
                     "provider_authenticated": False,
                     "provider_updated": False,
@@ -505,14 +486,13 @@ def test_the_wrapper_runs_the_onboarding_sequence_on_a_stateful_runtime(tmp_path
     assert cli.state == {
         "container_running": True,
         "container_starts": 1,
-        "telegram_running": True,
         "provider": "codex",
         "provider_authenticated": True,
         "provider_updated": True,
         "assistant_welcomed": False,
         "profile_ready": True,
         "team": ["CAPITANO", "ASSISTENTE"],
-        "up_requests": 4,
+        "up_requests": 2,
     }
 
     # The initial probe is observational: it may inspect the runtime and list
@@ -527,17 +507,14 @@ def test_the_wrapper_runs_the_onboarding_sequence_on_a_stateful_runtime(tmp_path
     assert sum(
         row["kind"] == "compose" and "up" in row["argv"]
         for row in cli.command_plan
-    ) == 4
+    ) == 2
 
     # Every exec reaches the container through the id attested by compose,
     # never through the service name another container could be renamed to.
     exec_rows = [row for row in cli.command_plan if row["argv"][0] == "exec"]
     assert exec_rows
     assert all("jht" not in row["argv"][1:] for row in exec_rows)
-    assert all(
-        "aaaaaaaaaaaa" in row["argv"] or "bbbbbbbbbbbb" in row["argv"]
-        for row in exec_rows
-    )
+    assert all("aaaaaaaaaaaa" in row["argv"] for row in exec_rows)
 
     login = [row for row in cli.command_plan if row["kind"] == "login"]
     assert login == [{

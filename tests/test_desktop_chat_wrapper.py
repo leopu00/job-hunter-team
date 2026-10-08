@@ -36,12 +36,7 @@ def _runtime(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
 
     compose = runtime / "docker-compose.yml"
     compose.write_text(
-        "services:\n"
-        "  jht:\n"
-        "    volumes:\n"
-        "      - jht-runtime-mask:/jht_home/runtime\n"
-        "  jht-telegram:\n"
-        "    image: fixture.invalid/jht@sha256:0000\n",
+        "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n",
         encoding="utf-8",
     )
     setup = runtime / "host-setup.sh"
@@ -59,19 +54,14 @@ case "$1" in
   info) [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] || [ -f "$JHT_TEST_RUNTIME_STATE" ] ;;
   inspect)
     if [ "$2:$3" = --type:container ]; then inspect_id="$4"; else inspect_id="$2"; fi
-    case "$inspect_id" in
-      aaaaaaaaaaaa) inspect_service=jht ;;
-      bbbbbbbbbbbb) inspect_service=jht-telegram ;;
-      *) exit 91 ;;
-    esac
+    [ "$inspect_id" = aaaaaaaaaaaa ] || exit 91
     case "$*" in
       *'.State.Running}}|{{index'*)
         [ "${JHT_TEST_INSPECT_FAIL:-0}" != 1 ] || exit 93
         if [ -n "${JHT_TEST_INSPECT_DETAILS:-}" ]; then
           printf '%s\n' "$JHT_TEST_INSPECT_DETAILS"
         else
-          printf '%s|true|jht|jht|%s|%s|1|%s|%s/docker-compose.yml|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$inspect_service" "$inspect_service" "$inspect_service" \
+          printf 'jht|true|jht|jht|jht|jht|1|%s|%s/docker-compose.yml|1.6.0|podman-compose%sjht.service|%s\n' \
             "$JHT_RUNTIME_DIR" "$JHT_RUNTIME_DIR" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
@@ -83,14 +73,8 @@ case "$1" in
     shift
     if [ "$1" = -i ] || [ "$1" = -it ]; then shift; fi
     while [ "$1" = -e ]; do shift 2; done
-    exec_id="$1"
-    case "$exec_id" in aaaaaaaaaaaa|bbbbbbbbbbbb) ;; *) exit 95 ;; esac
+    [ "$1" = aaaaaaaaaaaa ] || exit 95
     shift
-    if [ "$exec_id" = bbbbbbbbbbbb ]; then
-      [ "$*" = "jht-telegram-admin legacy complete" ] || exit 98
-      printf '%s\n' '{"ok":true,"legacy":"complete"}'
-      exit 0
-    fi
     [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
     case "$1:$2" in
       node:-e) printf '1 1 1' ;;
@@ -130,8 +114,7 @@ exit 93
 if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit 0; fi
 printf 'podman-compose %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
-  *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht"|\
-  *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht-telegram")
+  *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
     printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q")
@@ -140,13 +123,9 @@ case "$*" in
       true
     else
       printf '%s\n' "${JHT_TEST_PS_IDS-aaaaaaaaaaaa}"
-    fi
-    [ ! -f "$JHT_TEST_TELEGRAM_STATE" ] || printf '%s\n' bbbbbbbbbbbb ;;
-  *" up -d"|*" up -d jht-telegram")
-    case "$*" in
-      *" up -d jht-telegram") : > "$JHT_TEST_TELEGRAM_STATE" ;;
-      *) [ -z "${JHT_TEST_PS_STATE:-}" ] || : > "$JHT_TEST_PS_STATE" ;;
-    esac ;;
+    fi ;;
+  *" up -d")
+    [ -z "${JHT_TEST_PS_STATE:-}" ] || : > "$JHT_TEST_PS_STATE" ;;
   *) exit 90 ;;
 esac
 """,
@@ -182,7 +161,6 @@ esac
         "JHT_TEST_DOCKER_LOG": str(log),
         "JHT_TEST_RUNTIME_STATE": str(tmp_path / "runtime-ready"),
         "JHT_TEST_CONTAINER_STOPPED": str(tmp_path / "container-stopped"),
-        "JHT_TEST_TELEGRAM_STATE": str(tmp_path / "telegram-running"),
         "JHT_TEST_CONFIG_HASH": "a" * 64,
         "JHT_CONTAINER_NAME": "same-name-decoy",
     }
@@ -381,8 +359,7 @@ def test_explicit_up_allows_zero_ids_then_verifies_the_created_container(tmp_pat
     calls = log.read_text(encoding="utf-8").splitlines()
     ps_calls = [line for line in calls if line.startswith("podman-compose ") and " ps -q" in line]
     action_calls = [line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]
-    # Preflight, isolated Telegram attestation, then the agent postcheck.
-    assert len(ps_calls) == 3
+    assert len(ps_calls) == 2
     assert len(action_calls) == 1
     assert " -p jht " in action_calls[0]
     assert not any("machine start" in line or " create" in line for line in calls)
@@ -417,8 +394,7 @@ esac
 if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit 0; fi
 printf 'podman-compose-1.6.0 connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
-  "--verbose --dry-run --project-name jht "*" up -d --force-recreate jht"|\
-  "--verbose --dry-run --project-name jht "*" up -d --force-recreate jht-telegram")
+  "--verbose --dry-run --project-name jht "*" up -d --force-recreate jht")
     printf '%s\n' 'INFO --label io.podman.compose.config-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --label next=value' >&2
     exit 0 ;;
 esac
@@ -430,10 +406,7 @@ shift 2
 [ "$1" = -f ] || exit 121
 shift 2
 case "$*" in
-  "ps -q")
-    printf '%s\n' aaaaaaaaaaaa
-    [ ! -f "$JHT_TEST_TELEGRAM_STATE" ] || printf '%s\n' bbbbbbbbbbbb ;;
-  "up -d jht-telegram") : > "$JHT_TEST_TELEGRAM_STATE" ;;
+  "ps -q") printf '%s\n' aaaaaaaaaaaa ;;
   "up -d")
     "$podman_path" ps -a --filter label=io.podman.compose.project=jht --format '{{.ID}}' ;;
   *) exit 122 ;;
@@ -615,7 +588,7 @@ def test_read_only_consumers_reject_unowned_or_ambiguous_compose_results(
     if failure == "zero-ids":
         env["JHT_TEST_PS_IDS"] = ""
     elif failure == "multiple-ids":
-            env["JHT_TEST_PS_IDS"] = "aaaaaaaaaaaa\ncccccccccccc"
+        env["JHT_TEST_PS_IDS"] = "aaaaaaaaaaaa\nbbbbbbbbbbbb"
     elif failure == "inspect-error":
         env["JHT_TEST_INSPECT_FAIL"] = "1"
     else:

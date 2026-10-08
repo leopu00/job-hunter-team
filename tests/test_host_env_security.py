@@ -60,10 +60,7 @@ def make_fake_docker(fake_bin: Path, log: Path) -> None:
         'printf \'%s\\n\' "$*" >> "$JHT_TEST_DOCKER_LOG"\n'
         'case " $* " in\n'
         '  *" ps -q jht "*) printf \'aaaaaaaaaaaa\\n\' ;;\n'
-        '  *" ps -q jht-telegram "*) printf \'bbbbbbbbbbbb\\n\' ;;\n'
         '  " inspect --type container aaaaaaaaaaaa "*) printf \'true jht\\n\' ;;\n'
-        '  " inspect --type container bbbbbbbbbbbb "*) printf \'true jht-telegram\\n\' ;;\n'
-        '  *" exec bbbbbbbbbbbb jht-telegram-admin legacy complete "*) printf \'{"ok":true,"legacy":"complete"}\\n\' ;;\n'
         'esac\n',
         encoding="utf-8",
     )
@@ -304,7 +301,7 @@ def test_legacy_runtime_migration_downloads_fresh_release_bytes(tmp_path):
         "printf '%s\\n' \"$url\" >> \"$JHT_TEST_CURL_LOG\"\n"
         "case \"$url\" in\n"
         f"  */commits/production) printf '{{\\n  \"sha\": \"{release_sha}\"\\n}}\\n' ;;\n"
-        "  */docker-compose.yml) printf 'services:\\n  jht:\\n    image: example.invalid/jht\\n    volumes:\\n      - jht-runtime-mask:/jht_home/runtime\\n  jht-telegram:\\n    image: example.invalid/jht\\nvolumes:\\n  jht-runtime-mask:\\n' > \"$out\" ;;\n"
+        "  */docker-compose.yml) printf 'services:\\n  jht:\\n    image: example.invalid/jht\\n    volumes:\\n      - jht-runtime-mask:/jht_home/runtime\\nvolumes:\\n  jht-runtime-mask:\\n' > \"$out\" ;;\n"
         "  */scripts/host-setup.sh) printf '#!/usr/bin/env bash\\nJHT_HOST_SETUP_PROTOCOL=1\\n: > \"$JHT_TEST_SAFE_SETUP_MARKER\"\\n' > \"$out\" ;;\n"
         "  *) exit 22 ;;\n"
         "esac\n",

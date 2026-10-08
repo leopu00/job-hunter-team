@@ -20,7 +20,6 @@ POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 SAFE_COMPOSE = (
     "services:\n  jht:\n    image: example.invalid/jht\n"
     "    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n"
-    "  jht-telegram:\n    image: example.invalid/jht\n"
     "volumes:\n  jht-runtime-mask:\n"
 )
 
@@ -60,7 +59,6 @@ def make_docker_spy(tmp_path: Path, *, reachable: bool, container_running: bool)
     fake_bin.mkdir(exist_ok=True)
     log = tmp_path / "docker-calls.log"
     state = tmp_path / "container-running"
-    telegram_state = tmp_path / "telegram-running"
     if container_running:
         state.touch()
     docker = fake_bin / "docker"
@@ -73,26 +71,16 @@ case "$1" in
     if [ -e {state!s} ]; then printf 'jht\\n'; fi
     ;;
   compose)
-    case " $* " in
-      *" up -d jht-telegram "*) : > {telegram_state!s} ;;
-      *" up -d "*) : > {state!s}; : > {telegram_state!s} ;;
-    esac
+    for arg in "$@"; do
+      if [ "$arg" = up ]; then : > {state!s}; fi
+    done
     case " $* " in
       *" ps -q jht "*) if [ -e {state!s} ]; then printf 'aaaaaaaaaaaa\\n'; fi ;;
-      *" ps -q jht-telegram "*) if [ -e {telegram_state!s} ]; then printf 'bbbbbbbbbbbb\\n'; fi ;;
     esac
     ;;
   inspect)
-    case "$2:$3:$4" in
-      --type:container:aaaaaaaaaaaa) [ -e {state!s} ] || exit 1; printf 'true jht\\n' ;;
-      --type:container:bbbbbbbbbbbb) [ -e {telegram_state!s} ] || exit 1; printf 'true jht-telegram\\n' ;;
-      *) exit 1 ;;
-    esac
-    ;;
-  exec)
-    case "$*" in
-      *"bbbbbbbbbbbb jht-telegram-admin legacy complete"*) printf '{{"ok":true,"legacy":"complete"}}\\n' ;;
-    esac
+    [ "$2:$3:$4" = --type:container:aaaaaaaaaaaa ] && [ -e {state!s} ] || exit 1
+    printf 'true jht\\n'
     ;;
   *) true ;;
 esac

@@ -17,7 +17,6 @@ from .protocol import BOT_ROLES
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 CUTOVER_STATE = "cutover"
-TOKEN_HISTORY_STATE = "token-history"
 
 
 class StoreError(Exception):
@@ -145,54 +144,6 @@ def delete_bot(role: str) -> bool:
         return True
     except FileNotFoundError:
         return False
-
-
-def remember_token_digests(role: str, digests: list[str], *, inventory_complete: bool = False) -> None:
-    """Keep every exposed/used token fingerprint for the lifetime of the volume.
-
-    Deleting a bot must never make its token acceptable again.  The inventory
-    bit is separate because an empty host inventory is still meaningful: it
-    proves that the trusted host-side scan ran before pairing.
-    """
-    if role not in BOT_ROLES:
-        raise StoreError("bot_role_unknown")
-    if any(
-        not isinstance(digest, str)
-        or len(digest) != 64
-        or any(char not in "0123456789abcdef" for char in digest)
-        for digest in digests
-    ):
-        raise StoreError("token_digest_invalid")
-    with locked(TOKEN_HISTORY_STATE):
-        state = read_state(TOKEN_HISTORY_STATE, {})
-        roles = state.setdefault("roles", {})
-        entry = roles.setdefault(role, {})
-        known = entry.get("digests") if isinstance(entry.get("digests"), list) else []
-        entry["digests"] = sorted(set(known) | set(digests))
-        if inventory_complete:
-            entry["inventory_complete"] = True
-        state["version"] = 1
-        write_state(TOKEN_HISTORY_STATE, state)
-
-
-def token_history(role: str) -> tuple[set[str], bool]:
-    if role not in BOT_ROLES:
-        raise StoreError("bot_role_unknown")
-    with locked(TOKEN_HISTORY_STATE):
-        state = read_state(TOKEN_HISTORY_STATE, {})
-    roles = state.get("roles") if isinstance(state.get("roles"), dict) else {}
-    entry = roles.get(role) if isinstance(roles.get(role), dict) else {}
-    values = entry.get("digests") if isinstance(entry.get("digests"), list) else []
-    digests = {
-        value for value in values
-        if isinstance(value, str) and len(value) == 64
-        and all(char in "0123456789abcdef" for char in value)
-    }
-    return digests, entry.get("inventory_complete") is True
-
-
-def legacy_inventory_complete() -> bool:
-    return all(token_history(role)[1] for role in BOT_ROLES)
 
 
 def record_pairing(role: str, rotation: str) -> None:

@@ -49,32 +49,12 @@ def _safe_json(path: Path) -> dict:
     return value
 
 
-def _config_paths() -> list[Path]:
-    root = home()
-    paths = [root / "jht.config.json"]
-    try:
-        names = sorted(
-            entry.name for entry in os.scandir(root)
-            if entry.name.startswith("jht.config.json.bak-model-pin-")
-        )
-    except FileNotFoundError:
-        names = []
-    paths.extend(root / name for name in names)
-    return paths
-
-
-def _config_tokens(config: dict, role: str) -> list[object]:
+def _tokens(role: str) -> list[str]:
+    config = _safe_json(home() / "jht.config.json")
     bots = ((config.get("channels") or {}).get("telegram") or {}).get("bots") or {}
     values: list[object] = []
     if isinstance(bots, dict) and isinstance(bots.get(role), dict):
         values.append(bots[role].get("bot_token"))
-    return values
-
-
-def _tokens(role: str) -> list[str]:
-    values: list[object] = []
-    for path in _config_paths():
-        values.extend(_config_tokens(_safe_json(path), role))
     if role == "assistente":
         credentials = _safe_json(home() / "credentials" / "telegram_bot.json")
         values.append(credentials.get("token"))
@@ -86,7 +66,8 @@ def _tokens(role: str) -> list[str]:
     return [value.strip() for value in values if isinstance(value, str) and value.strip()]
 
 
-def _write_config(path: Path, value: dict) -> None:
+def _write_config(value: dict) -> None:
+    path = home() / "jht.config.json"
     parent = path.parent
     raw = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     temporary = f".{path.name}.{os.getpid()}.telegram-migration"
@@ -118,14 +99,17 @@ def _write_config(path: Path, value: dict) -> None:
 
 
 def remove(role: str) -> None:
-    for path in _config_paths():
-        config = _safe_json(path)
-        channels = config.get("channels")
-        telegram = channels.get("telegram") if isinstance(channels, dict) else None
-        bots = telegram.get("bots") if isinstance(telegram, dict) else None
-        if isinstance(bots, dict) and role in bots:
-            bots.pop(role, None)
-            _write_config(path, config)
+    path = home() / "jht.config.json"
+    config = _safe_json(path)
+    channels = config.get("channels")
+    telegram = channels.get("telegram") if isinstance(channels, dict) else None
+    bots = telegram.get("bots") if isinstance(telegram, dict) else None
+    changed = False
+    if isinstance(bots, dict) and role in bots:
+        bots.pop(role, None)
+        changed = True
+    if changed:
+        _write_config(config)
     if role == "assistente":
         credentials = home() / "credentials" / "telegram_bot.json"
         try:

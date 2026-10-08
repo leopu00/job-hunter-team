@@ -7,7 +7,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 import threading
 import time
 import unicodedata
@@ -26,7 +25,6 @@ DAY_SECONDS = 86_400
 QUESTION_TTL_SECONDS = 7 * DAY_SECONDS
 LEASE_SECONDS = 30
 MAX_EVENTS = 1_000
-MAX_DISCARDED_UPDATES = 500
 MAX_TELEGRAM_UTF16 = 4_096
 OTP_NUMERIC = re.compile(r"[0-9]{4,8}\Z")
 OTP_SHORT_TOKEN = re.compile(r"(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9_-]{6,12}\Z")
@@ -144,31 +142,7 @@ class Runtime:
                     configured.append(role)
             except store.StoreError:
                 continue
-        discarded = {}
-        for role in BOT_ROLES:
-            try:
-                count = len(store.read_state(f"discarded-{role}", []))
-            except store.StoreError:
-                count = 0
-            if count:
-                discarded[role] = count
-        return {"ok": True, "configured": configured, "discarded": discarded}
-
-    @staticmethod
-    def _record_discard(role: str, update_id: int, reason: str) -> None:
-        name = f"discarded-{role}"
-        try:
-            with store.locked(name):
-                discarded = store.read_state(name, [])
-                discarded.append({"update_id": update_id, "reason": reason, "at": _now_iso()})
-                store.write_state(name, discarded[-MAX_DISCARDED_UPDATES:])
-        except store.StoreError:
-            pass
-        print(
-            f"[jht-telegram] discarded role={role} update_id={update_id} reason={reason}",
-            file=sys.stderr,
-            flush=True,
-        )
+        return {"ok": True, "configured": configured}
 
     def _bot(self, role: str) -> tuple[dict[str, str], BotAPI]:
         try:
@@ -451,13 +425,10 @@ class Runtime:
                     update_id = update.get("update_id")
                     try:
                         self.process_update(role, update, secret, api)
-                    except Exception as exc:
+                    except Exception:
                         # A permanently bad update must not pin getUpdates.
-                        # Its id is consumed below; later updates continue and
-                        # the operator can see the bounded dead-letter trace.
-                        if isinstance(update_id, int) and not isinstance(update_id, bool):
-                            reason = getattr(exc, "code", "telegram_internal_error")
-                            self._record_discard(role, update_id, str(reason))
+                        # Its id is consumed below; later updates continue.
+                        pass
                     finally:
                         if isinstance(update_id, int) and not isinstance(update_id, bool):
                             with store.locked("offsets"):
