@@ -649,6 +649,59 @@ async function runProviderAutoUpdate() {
   });
 }
 
+const LEGACY_GUARD_SCRIPT = '/app/shared/broker/legacy_guard.py';
+const LEGACY_GUARD_INTERVAL_MS = 30_000;
+
+/**
+ * [AUDIT-G1] Il file della casella di posta (credentials/email_monitor.json,
+ * email_transport.json) non deve ricomparire dopo la migrazione nel broker:
+ * nessuno in jht lo legge piu', e questa guardia lo cancella SENZA leggerlo
+ * (solo lstat e unlink, in legacy_guard.py) per i nomi che il broker dice gia'
+ * migrati, poi avvisa l'utente di usare `jht mail setup`. Niente import
+ * automatico; senza broker non cancella nulla. Logga solo quando agisce o
+ * fallisce: un giro ogni 30 s non deve riempire i log.
+ */
+export function runLegacyCredentialsGuard({
+  spawnFn = spawn,
+  log = pid1Log,
+  script = LEGACY_GUARD_SCRIPT,
+  scriptExists = existsSync,
+} = {}) {
+  return new Promise((resolve) => {
+    if (!scriptExists(script)) { resolve(null); return; }
+    let out = '';
+    let child;
+    try {
+      child = spawnFn('/usr/bin/python3', ['-I', script, 'sweep'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        env: { ...process.env },
+      });
+    } catch (err) {
+      log(`legacy credentials guard spawn error: ${err.message}`);
+      resolve(null);
+      return;
+    }
+    child.stdout.on('data', (chunk) => { out += chunk.toString('utf-8'); });
+    child.on('error', (err) => {
+      log(`legacy credentials guard spawn error: ${err.message}`);
+      resolve(null);
+    });
+    child.on('close', () => {
+      let result = null;
+      try { result = JSON.parse(out.trim().split('\n').pop() || 'null'); } catch { /* sotto */ }
+      if (!result || typeof result !== 'object') {
+        log('legacy credentials guard: no answer');
+      } else if (Array.isArray(result.removed) && result.removed.length) {
+        log(`legacy credentials guard: removed unread ${result.removed.join(', ')} (reappeared after the migration)`);
+      }
+      if (result && result.reason === 'legacy_remove_failed') {
+        log(`legacy credentials guard: could not remove ${(result.failed || []).join(', ')}`);
+      }
+      resolve(result);
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
@@ -669,6 +722,12 @@ async function dispatch() {
 
   // Pulizia pid/state file orfani dei bridge (pre-teardown).
   await cleanupStaleBridgeState();
+
+  // [AUDIT-G1] Prima di ogni agente, e poi ogni 30 s: un file della casella
+  // ricomparso dopo la migrazione si cancella senza leggerlo.
+  await runLegacyCredentialsGuard();
+  const legacyGuardTick = coalesceAsyncCalls(() => runLegacyCredentialsGuard());
+  const legacyGuardTimer = setInterval(() => { legacyGuardTick(); }, LEGACY_GUARD_INTERVAL_MS);
 
   // Aggiornamento della CLI del provider attivo. Qui e non piu' avanti: da
   // questo punto in poi il boot spawna bridge, watchdog e agenti, e un update
@@ -1250,6 +1309,7 @@ async function dispatch() {
     shuttingDown = true;
     pid1Log(`shutdown (${sig}): killing children`);
     clearInterval(keepAlive);
+    clearInterval(legacyGuardTimer);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);

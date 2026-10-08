@@ -8,10 +8,12 @@ confirmation and stopped as receipt_missing.
 
 The code is fetched, never stored:
 
-1. from the user's mailbox, when the box's email monitor is configured
-   (`$JHT_HOME/credentials/email_monitor.json`, the same IMAP login
-   `email_monitor.py` uses): a message from the site, received after the
-   submit started, whose text holds exactly one code of the expected shape;
+1. from the user's mailbox, only through a reader the caller hands in: the
+   mailbox account lives in the portal-secrets broker (uid 1002), and no file
+   under `$JHT_HOME/credentials` is ever opened here (audit G1). Until the
+   broker serves verification codes there is no default reader:
+   `mailbox_configured()` is False and `code_from_mailbox` without a reader
+   fails closed with `mailbox_code_needs_broker`;
 2. otherwise on Telegram, through the closer_login_code channel the LinkedIn
    sign-in uses (`application_answers.login_code_path`: the bridge writes the
    code to a 0600 file, the row says [received], this module reads the file,
@@ -23,8 +25,6 @@ checkpoint, a receipt or a notice.
 from __future__ import annotations
 
 import contextlib
-import email
-import email.policy
 import json
 import os
 import re
@@ -34,7 +34,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -87,40 +87,10 @@ def code_in_text(text: str, shape: str = "alnum8") -> str | None:
 
 
 def mailbox_configured() -> bool:
-    try:
-        import email_monitor
-    except ImportError:
-        return False
-    creds = email_monitor._load_creds()
-    return bool(creds.get("user") and creds.get("password"))
-
-
-def _default_mailbox_messages(since: datetime) -> list[tuple[str, datetime | None, str]]:
-    """(sender, received, text) of the messages since `since`, read with email_monitor's own login."""
-    import email_monitor
-
-    creds = email_monitor._load_creds()
-    conn = email_monitor._imap_connect(creds)
-    try:
-        conn.select(creds.get("folder", "INBOX"), readonly=True)
-        since_imap = (since - timedelta(days=1)).strftime("%d-%b-%Y")
-        typ, data = conn.search(None, "(SINCE", since_imap + ")")
-        uids = data[0].split() if typ == "OK" and data and data[0] else []
-        messages = []
-        for uid in uids[-50:]:
-            typ, raw = conn.fetch(uid, "(RFC822)")
-            if typ != "OK" or not raw or not isinstance(raw[0], tuple):
-                continue
-            msg = email.message_from_bytes(raw[0][1], policy=email.policy.default)
-            try:
-                received = parsedate_to_datetime(msg.get("Date"))
-            except (TypeError, ValueError):
-                received = None
-            messages.append((str(msg.get("From") or ""), received, email_monitor._extract_email_body(msg)))
-        return messages
-    finally:
-        with contextlib.suppress(Exception):
-            conn.logout()
+    """False until the broker serves verification codes: the mailbox account
+    is the broker's, and this module never reads a credentials file to find
+    it (audit G1). The caller then takes the Telegram route."""
+    return False
 
 
 def code_from_mailbox(
@@ -133,7 +103,13 @@ def code_from_mailbox(
     reader: Callable[[datetime], list[tuple[str, datetime | None, str]]] | None = None,
 ) -> str:
     """Wait for the site's email and return its code; CodeUnavailable when none arrives in time."""
-    read = reader or _default_mailbox_messages
+    if reader is None:
+        # Never a fallback to the credentials file (audit G1): fail closed.
+        raise CodeUnavailable(
+            "mailbox_code_needs_broker",
+            "The mailbox is read only by the secrets broker, which does not serve verification codes yet",
+        )
+    read = reader
     deadline = time.monotonic() + timeout_s
     while True:
         codes = set()

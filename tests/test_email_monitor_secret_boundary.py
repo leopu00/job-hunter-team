@@ -9,8 +9,9 @@ sends requests to it and never opens a credentials file. What stays here:
   shows the password, in a result or in an exception;
 - the agents' CLI refuses a body file inside the portal secrets, and with no
   broker it answers `broker_unavailable` without falling back to the file;
-- `_read_creds` (still used by verification_code.py until phase 2) refuses a
-  symlink or another uid's file.
+- nothing in jht reads the legacy file any more (audit G1): the readers
+  `_read_creds`/`_load_creds` are gone, and the core gets the account only
+  as an argument.
 
 A canary stands in for the password; no real credential is read.
 
@@ -84,6 +85,12 @@ def mailbox(tmp_path, monkeypatch):
     sys.modules.pop("email_monitor", None)
 
 
+def account(home: Path) -> dict:
+    """The account the broker would pass to the core: the test reads its own
+    fixture, the module under test never does."""
+    return json.loads((home / "credentials" / "email_monitor.json").read_text())
+
+
 def run_cli(module, argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -97,7 +104,7 @@ def files_without_the_secret_file(home: Path):
 
 def test_the_core_send_uses_the_password_and_never_shows_it(mailbox, tmp_path):
     home, em = mailbox
-    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "Hello from the team")
+    result = em.send_message(account(home), ["someone@example.com"], "Hi", "Hello from the team")
 
     # The send really happened with the stored password...
     assert FakeSmtp.logins == [("team@example.invalid", CANARY)]
@@ -129,7 +136,7 @@ def test_a_failed_login_reports_a_code_never_the_server_text(mailbox):
     home, em = mailbox
     # A server that echoes what it got: its text must never reach the result.
     FakeSmtp.fail_with = smtplib.SMTPAuthenticationError(535, f"bad credentials {CANARY}".encode())
-    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "x")
+    result = em.send_message(account(home), ["someone@example.com"], "Hi", "x")
     assert result == {"ok": False, "reason": "auth_failed"}
 
 
@@ -139,37 +146,16 @@ def test_a_failed_login_reports_a_code_never_the_server_text(mailbox):
     ("a@example.com", "Hi\r\nBcc: injected@example.com", "invalid_subject"),
 ])
 def test_header_injection_sends_nothing(mailbox, to, subject, reason):
-    _, em = mailbox
-    assert em.send_message(em._load_creds(), [to], subject, "x") == {"ok": False, "reason": reason}
+    home, em = mailbox
+    assert em.send_message(account(home), [to], subject, "x") == {"ok": False, "reason": reason}
     assert FakeSmtp.logins == [] and FakeSmtp.sent == []
 
 
-def test_a_file_of_another_uid_is_refused(mailbox, monkeypatch):
+def test_the_module_has_no_reader_of_the_credentials_file(mailbox):
+    # Audit G1: the last reader (for verification_code.py) is gone.
     _, em = mailbox
-    real_uid = os.getuid()
-    monkeypatch.setattr(em.os, "getuid", lambda: real_uid + 1)
-    assert em._read_creds() == ({}, "credentials_foreign_owner")
-    assert em._load_creds() == {}
-
-
-def test_a_symlink_is_refused(mailbox, tmp_path):
-    home, em = mailbox
-    creds = home / "credentials" / "email_monitor.json"
-    target = tmp_path / "elsewhere.json"
-    target.write_text(creds.read_text())
-    target.chmod(0o600)
-    creds.unlink()
-    creds.symlink_to(target)
-    assert em._read_creds() == ({}, "credentials_symlink")
-    assert em._load_creds() == {}
-
-
-def test_an_open_mode_of_this_uid_is_tightened_not_refused(mailbox):
-    home, em = mailbox
-    creds = home / "credentials" / "email_monitor.json"
-    creds.chmod(0o644)
-    assert em._load_creds()["user"] == "team@example.invalid"
-    assert creds.stat().st_mode & 0o777 == 0o600
+    for name in ("_read_creds", "_load_creds", "CREDS_PATH"):
+        assert not hasattr(em, name), name
 
 
 def test_no_agent_prompt_tells_the_model_to_open_a_credentials_file():
@@ -211,7 +197,7 @@ def write_password(home: Path, password: str) -> None:
 def test_a_non_ascii_password_never_leaks_through_an_encoding_error(mailbox):
     home, em = mailbox
     write_password(home, NON_ASCII_CANARY)
-    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "x")
+    result = em.send_message(account(home), ["someone@example.com"], "Hi", "x")
     assert result == {"ok": False, "reason": "encoding_unsupported"}
     for piece in pieces_of(NON_ASCII_CANARY):
         assert piece not in json.dumps(result), piece
@@ -235,7 +221,7 @@ def test_imap_login_with_a_non_ascii_password_raises_a_clean_error(mailbox, monk
     write_password(home, NON_ASCII_CANARY)
     monkeypatch.setattr(em.imaplib, "IMAP4_SSL", FakeImap)
     with pytest.raises(em.CredentialsEncodingError) as caught:
-        em._imap_connect(em._load_creds())
+        em._imap_connect(account(home))
     rendered = "".join(traceback.format_exception(caught.value))
     assert caught.value.__cause__ is None and caught.value.__suppress_context__
     for piece in pieces_of(NON_ASCII_CANARY):
@@ -264,8 +250,8 @@ def test_a_symlink_to_a_secret_is_refused_too(mailbox, tmp_path):
 
 
 def test_recipients_are_capped(mailbox):
-    _, em = mailbox
-    creds = em._load_creds()
+    home, em = mailbox
+    creds = account(home)
     many = [f"r{i}@example.com" for i in range(em.MAX_RECIPIENTS + 1)]
     assert em.send_message(creds, many, "Hi", "x") == {"ok": False, "reason": "too_many_recipients"}
     assert em.send_message(creds, many[: em.MAX_RECIPIENTS], "Hi", "x")["ok"] is True
