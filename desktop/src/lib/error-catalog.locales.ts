@@ -288,6 +288,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A JHT Podman-gépének újralétrehozása törli azt, ami csak benne van: a telepített szolgáltatói CLI-ket (jht-deps kötet), az e-mail-fiókot és a brokerben mentett többi portál-hozzáférést, valamint a levelezés küldési naplóját, piszkozatait és engedélyeit.", "Utána a beállítás magától újra letölti a szolgáltatói CLI-ket (néhány perc, internetkapcsolattal); te kapcsold újra az e-mail-fiókot, jelentkezz be újra a LinkedInre, és add meg újra a levelezés engedélyeit. A profilod, az önéletrajzaid, a ~/.jht és a Dokumentumok › Job Hunter Team adatai, valamint a szolgáltatói bejelentkezés megmaradnak."],
     pt: ["Voltar a criar a máquina Podman do JHT apaga o que só existe dentro dela: as CLI dos fornecedores instaladas (volume jht-deps), a conta de e-mail e os outros acessos a portais guardados no broker, o diário de envios, os rascunhos e as autorizações do correio.", "Depois, a preparação volta a descarregar sozinha as CLI dos fornecedores (alguns minutos, com ligação); volta a ligar a conta de e-mail, inicia sessão de novo no LinkedIn e dá outra vez as autorizações do correio. Ficam o teu perfil, os teus CV, os dados em ~/.jht e em Documentos › Job Hunter Team e o acesso ao fornecedor."],
   },
+  "The port of this computer chosen for the login screen is taken by another program.": {
+    de: ["Der für den Anmeldebildschirm gewählte Port dieses Computers wird von einem anderen Programm belegt.", "Versuche es erneut: Die App wählt einen anderen Port."],
+    es: ["El puerto de este ordenador elegido para la pantalla de acceso lo está usando otro programa.", "Inténtalo de nuevo: la aplicación elige otro puerto."],
+    fr: ["Le port de cet ordinateur choisi pour l’écran de connexion est occupé par un autre programme.", "Réessaie : l’application choisit un autre port."],
+    hu: ["A bejelentkezési képernyőhöz választott port ezen a számítógépen egy másik program által foglalt.", "Próbáld újra: az alkalmazás másik portot választ."],
+    pt: ["A porta deste computador escolhida para o ecrã de início de sessão está ocupada por outro programa.", "Tenta novamente: a aplicação escolhe outra porta."],
+  },
   "The installed team version does not match the one this app needs.": {
     de: ["Die installierte Teamversion entspricht nicht der von dieser App benötigten Version.", "Aktualisiere Job Hunter Team auf die neueste Version und wiederhole die Einrichtung."],
     es: ["La versión instalada del equipo no coincide con la que necesita esta aplicación.", "Actualiza Job Hunter Team a la última versión y repite la configuración."],
@@ -553,6 +560,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
   podman_machine_recreate_failed: translated("The JHT Podman machine was not recreated."),
   podman_machine_recreate_confirm: translated("Recreating the JHT Podman machine deletes what lives only inside it: the installed provider CLIs (the jht-deps volume), the email account and the other portal logins saved in the broker, and the mail journal, drafts and authorisations."),
+  tunnel_port_busy: translated("The port of this computer chosen for the login screen is taken by another program."),
   runtime_download_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_install_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_failed: translated("Preparing the team’s environment did not succeed."),

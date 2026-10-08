@@ -659,6 +659,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
 
   // ── LinkedIn login in the broker (broker_view.rs) ──────────────────────
+  tunnel_port_busy: copy(
+    "La porta di questo computer scelta per lo schermo di accesso è occupata da un altro programma.",
+    "Riprova: l’app sceglie un’altra porta.",
+    "The port of this computer chosen for the login screen is taken by another program.",
+    "Try again: the app picks another port.",
+  ),
   view_busy: copy(
     "È già aperta una sessione di accesso a LinkedIn.",
     "Chiudi l’altra finestra di accesso, poi riprova.",
