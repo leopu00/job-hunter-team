@@ -341,10 +341,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   // Not an error: the confirmation before the machine is deleted.
   podman_machine_recreate_confirm: copy(
-    "Ricreare la macchina Podman di JHT cancella ciò che vive solo al suo interno: le CLI dei provider installate (volume jht-deps), l’account email e gli altri accessi ai portali salvati nel broker, il diario degli invii, le bozze e le autorizzazioni della posta.",
-    "Dopo, la preparazione riscarica da sola le CLI dei provider (qualche minuto, serve la connessione); tu ricollega l’account email, rifai l’accesso a LinkedIn e ridai le autorizzazioni della posta. Restano il profilo, i CV, i dati in ~/.jht e in Documenti › Job Hunter Team e l’accesso al provider.",
-    "Recreating the JHT Podman machine deletes what lives only inside it: the installed provider CLIs (the jht-deps volume), the email account and the other portal logins saved in the broker, and the mail journal, drafts and authorisations.",
-    "Afterwards the setup downloads the provider CLIs again by itself (a few minutes, online); you connect the email account again, log in to LinkedIn again and give the mail authorisations again. Your profile, CVs, the data in ~/.jht and Documents › Job Hunter Team and the provider login stay.",
+    "Ricreare la macchina Podman di JHT cancella ciò che vive solo al suo interno e non si conserva: le CLI dei provider installate (volume jht-deps) e i segreti del broker, cioè la password della posta e i login dei portali (LinkedIn compreso).",
+    "Dopo, la preparazione riscarica da sola le CLI dei provider (qualche minuto, serve la connessione); tu reinserisci la password della posta e rifai l’accesso a LinkedIn. Restano la configurazione della posta con diario, bozze e autorizzazioni, il profilo, i CV, i dati in ~/.jht e in Documenti › Job Hunter Team e l’accesso al provider.",
+    "Recreating the JHT Podman machine deletes what lives only inside it and is not kept: the installed provider CLIs (the jht-deps volume) and the broker's secrets, that is the mail password and the portal logins (LinkedIn included).",
+    "Afterwards the setup downloads the provider CLIs again by itself (a few minutes, online); you enter the mail password again and log in to LinkedIn again. The mail configuration with its journal, drafts and authorisations stays, and so do your profile, CVs, the data in ~/.jht and Documents › Job Hunter Team and the provider login.",
   ),
   podman_machine_recreate_failed: copy(
     "La macchina Podman di JHT non è stata ricreata.",

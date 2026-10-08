@@ -230,6 +230,11 @@ describe("OnboardingFlow technical setup", () => {
     expect(copy.text).toContain("jht-deps");
     expect(copy.text).toContain("CLI dei provider");
     expect(copy.action).toContain("riscarica");
+    // The broker's mail state survives the recreation (jht-broker-state is
+    // exported and imported); its secrets do not (jht-secrets).
+    expect(copy.text).toContain("password della posta");
+    expect(copy.text).not.toContain("diario");
+    expect(copy.action).toContain("diario, bozze e autorizzazioni");
     for (const locale of ERROR_LOCALES) {
       const localized = describeError("podman_machine_recreate_confirm", { locale });
       expect(localized.known, locale).toBe(true);
