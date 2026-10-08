@@ -1132,8 +1132,13 @@ reset_command() {
   remove_broker_reset_data
 }
 
+# `jht mail setup --password-stdin --user U --dedicated|--not-dedicated` e' il
+# canale del desktop: nessuna domanda, la password e' la prima riga di stdin
+# (mai argv, file o log), e su stdout c'e' una sola riga JSON, quella del
+# broker o un errore fisso (setup_argument_missing, secret_password_missing).
+# Una password gia' esposta torna come {"ok": false, "reason": "password_not_rotated"}.
 mail_setup() {
-  local user="" imap_host="" smtp_host="" dedicated="" admission password
+  local user="" imap_host="" smtp_host="" dedicated="" admission password="" from_stdin=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --user) user="${2:-}"; shift 2 ;;
@@ -1141,9 +1146,22 @@ mail_setup() {
       --smtp-host) smtp_host="${2:-}"; shift 2 ;;
       --dedicated) dedicated=yes; shift ;;
       --not-dedicated) dedicated=no; shift ;;
+      --password-stdin) from_stdin=yes; shift ;;
       *) err "mail setup: opzione sconosciuta $1"; return 2 ;;
     esac
   done
+  if [ -n "$from_stdin" ]; then
+    if [ -z "$user" ] || [ -z "$dedicated" ]; then
+      printf '%s\n' '{"ok": false, "reason": "setup_argument_missing"}'
+      return 2
+    fi
+    IFS= read -r password || [ -n "$password" ] || password=""
+    password="${password%$'\r'}"
+    if [ -z "$password" ]; then
+      printf '%s\n' '{"ok": false, "reason": "secret_password_missing"}'
+      return 1
+    fi
+  fi
   if [ -z "$user" ]; then
     printf 'Indirizzo della casella: ' >&2
     IFS= read -r user || return 1
@@ -1154,10 +1172,12 @@ mail_setup() {
     case "$dedicated" in s|S|si|sì|y|Y|yes) dedicated=yes ;; *) dedicated=no ;; esac
   fi
   if [ "$dedicated" = yes ]; then admission=whole_mailbox; else admission=allowlist; fi
-  printf 'Password per app (non viene mostrata): ' >&2
-  IFS= read -rs password || return 1
-  printf '\n' >&2
-  [ -n "$password" ] || { err "mail setup: password vuota"; return 1; }
+  if [ -z "$from_stdin" ]; then
+    printf 'Password per app (non viene mostrata): ' >&2
+    IFS= read -rs password || return 1
+    printf '\n' >&2
+    [ -n "$password" ] || { err "mail setup: password vuota"; return 1; }
+  fi
   set -- mailbox setup --user "$user" --admission "$admission"
   [ -z "$imap_host" ] || set -- "$@" --imap-host "$imap_host"
   [ -z "$smtp_host" ] || set -- "$@" --smtp-host "$smtp_host"

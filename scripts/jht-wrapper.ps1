@@ -754,9 +754,13 @@ function Invoke-ResetCommand {
   return (Remove-BrokerResetData)
 }
 
+# `jht mail setup --password-stdin --user U --dedicated|--not-dedicated`: the
+# desktop's channel. No prompt; the password is the first line of stdin (never
+# argv, a file or a log); stdout is one JSON line, the broker's or a fixed
+# error (setup_argument_missing, secret_password_missing).
 function Invoke-MailSetup {
   param([string[]]$MailArgs)
-  $user = ''; $imapHost = ''; $smtpHost = ''; $dedicated = ''
+  $user = ''; $imapHost = ''; $smtpHost = ''; $dedicated = ''; $fromStdin = $false; $password = ''
   for ($i = 0; $i -lt $MailArgs.Count; $i++) {
     switch ($MailArgs[$i]) {
       '--user' { $user = $MailArgs[++$i] }
@@ -764,7 +768,20 @@ function Invoke-MailSetup {
       '--smtp-host' { $smtpHost = $MailArgs[++$i] }
       '--dedicated' { $dedicated = 'yes' }
       '--not-dedicated' { $dedicated = 'no' }
+      '--password-stdin' { $fromStdin = $true }
       default { Write-Err "mail setup: opzione sconosciuta $($MailArgs[$i])"; return 2 }
+    }
+  }
+  if ($fromStdin) {
+    if (-not $user -or -not $dedicated) {
+      [Console]::Out.WriteLine('{"ok": false, "reason": "setup_argument_missing"}')
+      return 2
+    }
+    $line = [Console]::In.ReadLine()
+    $password = if ($null -eq $line) { '' } else { $line.TrimEnd("`r") }
+    if (-not $password) {
+      [Console]::Out.WriteLine('{"ok": false, "reason": "secret_password_missing"}')
+      return 1
     }
   }
   if (-not $user) { $user = Read-Host 'Indirizzo della casella' }
@@ -773,9 +790,11 @@ function Invoke-MailSetup {
     $dedicated = if ($answer -match '^(s|si|y|yes)$') { 'yes' } else { 'no' }
   }
   $admission = if ($dedicated -eq 'yes') { 'whole_mailbox' } else { 'allowlist' }
-  $secure = Read-Host 'Password per app (non viene mostrata)' -AsSecureString
-  $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-  if (-not $password) { Write-Err 'mail setup: password vuota'; return 1 }
+  if (-not $fromStdin) {
+    $secure = Read-Host 'Password per app (non viene mostrata)' -AsSecureString
+    $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+    if (-not $password) { Write-Err 'mail setup: password vuota'; return 1 }
+  }
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
