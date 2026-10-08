@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: recheck-liveness
 description: "Ellenőrzi, hogy egy álláshirdetés MÉG NYITVA VAN-E, hamis nyitottak nélkül. Kiváltja a rögtönzött curl-t (HTTP 200 = \"nyitva\"), amely NEM látja a JavaScriptben renderelt lejáratot (Ashby/Workday/Greenhouse), sem a LinkedIn authwallját (200-at ad a lezártakra is). MINDIG ezt használd a recheck során; soha ne állítsd be az is_open értékét kézzel egyetlen HTTP 200 alapján."
 allowed-tools: Bash(python3 /app/shared/skills/recheck_liveness.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # recheck-liveness — "nyitva van még a hirdetés?", rendesen megcsinálva
 

@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: daily-restart-wave
 description: "Redémarrage préventif de masse de chaque agent de l'équipe une fois par 24h pour la fraîcheur de contexte. Propriété du Dottore. S'exécute uniquement dans une fenêtre quotidienne étroite (défaut 03:00 UTC ± 30 min) et uniquement si aucune vague n'a été lancée dans les dernières 23h. Chaque agent est tué + respawné via la même séquence atomique de `liveness-check` Étape 3, ordonné tier 3 → tier 2 → tier 1 pour que les workers cyclent en premier et les coordinateurs (Capitano/Sentinella/Mentor/Assistente) en dernier. Contexte : les sessions longue durée Codex/Kimi accumulent du \"bruit\" — anciennes décisions, faits périmés, dérive du prompt — et deviennent mesurément moins lucides après des heures. Preuve empirique du Case Study #1 (run Codex 2026-05-19/21) : le redémarrage de masse manuel a restauré la qualité de décision. Cette skill comble ce gap sans intervention manuelle."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(date *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # daily-restart-wave — redémarrage préventif pour la fraîcheur de contexte
 

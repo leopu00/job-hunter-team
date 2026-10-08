@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: onboarding-flow
 description: Konversationsprotokoll, dem der Assistente beim Onboarding des Nutzers folgt — erste Nachricht, iteratives Eine-Frage-pro-Runde-Pacing, blockierende Checkliste (das Minimum, das das Dashboard freischaltet) vs reichhaltige Checkliste (was die Writer tatsächlich nützlich macht), branchenneutraler Fragestil (NIEMALS IT annehmen), und die verpflichtende Checkpoint-Sequenz wenn der Nutzer Dateien hochlädt. Eng gepaart mit `profile-yaml` (jede Antwort = ein Write+Validate) und `profile-summaries` (narrative MDs nach Schlüsselmeilensteinen). Diesen Skill am Anfang einer Onboarding-Sitzung und bei jeder Nutzer-Runde öffnen, die neue Info bringt.
 allowed-tools: Bash(mkdir -p *), Bash(cp *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # onboarding-flow — wie der Assistente die Konversation führt
 

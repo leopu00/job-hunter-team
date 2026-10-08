@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: first-run-burst
 description: "Az első fél óra, amikor egy vadonatúj felhasználó egyáltalán látja dolgozni a csapatot. Akkor nyisd meg ezt a skillt, amikor `[PROFILO-PRONTO]`-t kapsz az Assistentétől, vagy ébredéskor, ha a `first_run.py status` `awaiting_profile` / `burst` fázist jelent. Kizárólag az első ablakra felülírja a fokozatos kalibrációt (C-02), és a sikert a képernyőn megjelenő, PONTOZOTT pozíciókként definiálja — nem megtalált pozíciókként."
 allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # first-run-burst — a bemutató, amin múlik, hogy a felhasználó marad-e
 

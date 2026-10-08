@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Inicia un agente del equipo JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a través del launcher, luego envía el mensaje de kick-off que realmente inicia su bucle principal. Solo Capitano — el Capitano es el único propietario del escalado del equipo. USA SIEMPRE esta skill: saltarse `start-agent.sh` con `tmux new-session` + `send-keys \"kimi ...\"` directo produce sesiones donde la CLI nunca arranca (`command not found`), el Capitano ve una sesión \"activa\" que en realidad está muerta, y el equipo rinde por debajo silenciosamente."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *), Bash(jht-throttle-check *)
 ---
+<!-- @translation: es, ai-translated 2026-06-13 -->
 
 # spawn-agent — poner un agente en línea
 

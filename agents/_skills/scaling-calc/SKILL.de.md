@@ -1,8 +1,8 @@
-<!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: scaling-calc
 description: "Schrittweise Kalibrierung des Rosters — miss den Burn von 1 Worker, berechne, wie viele Worker und welcher Throttle nötig sind, um die Zielgeschwindigkeit zu treffen, und spawne in Stufen (nie im sechsten Gang)."
 ---
+<!-- @translation: de, ai-translated 2026-08-03 -->
 
 # 🎚️ scaling-calc — schalte einen Gang nach dem anderen, nicht direkt in den sechsten
 

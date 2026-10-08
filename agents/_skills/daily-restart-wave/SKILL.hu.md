@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: daily-restart-wave
 description: "Az összes csapatágens megelőző tömeges újraindítása 24 óránként egyszer a kontextus frissességéért. A Dottore felelőssége. Csak egy szűk napi ablakban fut (alapértelmezés: 03:00 UTC ± 30 perc) és csak ha az utolsó 23 órában nem volt hullám. Minden ágens megölésre + újraindításra kerül a `liveness-check` 3. lépésének azonos atomic szekvenciájával, tier 3 → tier 2 → tier 1 sorrendben, így a dolgozók ciklizálnak először és a koordinátorok (Capitano/Sentinella/Mentor/Assistente) utoljára. Háttér: a Codex/Kimi hosszú élettartamú munkamenetek \"zajt\" halmoznak fel — régi döntések, elavult tények, prompt-eltolódás — és órák után mérhetően kevésbé tudatosak. Empirikus bizonyíték az 1. esettanulmányból (Codex futás 2026-05-19/21): a kézi tömeges újraindítás helyreállította a döntési minőséget. Ez a skill zárja a rést kézi beavatkozás nélkül."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(date *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # daily-restart-wave — kontextus frissesség megelőző újraindítás
 

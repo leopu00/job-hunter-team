@@ -1,6 +1,6 @@
 ---
 name: cv-structure
-description: Write the CV markdown that will be PDF'd and reviewed by the Critico. First read the user's ORIGINAL CV in `$JHT_HOME/profile/sources/` to mirror their voice and match the register to the industry (the tech defaults — "Technical Skills: Python", metric+tech-in-parens — are wrong for hospitality/sales/care/creative). Six fixed sections, max 2 pages, every claim traceable to `candidate_profile.yml`/sources (zero invenzioni — T10). Languages appear ONCE (Header only). Cover Letter only if the JD explicitly asks, with its own "Cover Letter" title (never "CV"). Owned by the Scrittore. Pair with `application-flow` (claim + path) and `critic-loop` (review iterations).
+description: "Write the CV markdown that will be PDF'd and reviewed by the Critico. First read the user's ORIGINAL CV in `$JHT_HOME/profile/sources/` to mirror their voice and match the register to the industry (the tech defaults — \"Technical Skills: Python\", metric+tech-in-parens — are wrong for hospitality/sales/care/creative). Six fixed sections, max 2 pages, every claim traceable to `candidate_profile.yml`/sources (zero invenzioni — T10). Languages appear ONCE (Header only). Cover Letter only if the JD explicitly asks, with its own \"Cover Letter\" title (never \"CV\"). Owned by the Scrittore. Pair with `application-flow` (claim + path) and `critic-loop` (review iterations)."
 allowed-tools: Bash(pandoc *)
 ---
 

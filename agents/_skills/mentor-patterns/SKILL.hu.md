@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
 description: A hat minta, amelyet a Mentor keres a nyilvántartásban, hogy eldöntse MIKOR szólaljon meg. A csend az alapértelmezés; csak egy valódi, visszatérő minta ér meg egy szót. Ez a skill adja a kanonikus detektálási módszert minden mintához (DB lekérdezés + küszöb), így a Mentor soha nem beszél egyetlen adatpont alapján. Csak olvasható — soha nem ír a DB-be. A Mentor felelőssége.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # mentor-patterns — amit a nyilvántartás feltár
 

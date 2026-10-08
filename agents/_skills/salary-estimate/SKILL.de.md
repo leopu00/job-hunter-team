@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: salary-estimate
 description: Hierarchische Gehaltsschätzung für den Scorer (Bug #27). 4 Ebenen — deklarierter Bereich (L1), lokaler Cache (L2), Web-Suche (L3), neutraler Standard (L4). Lokaler Cache nur für Scorer, keine Remote-Synchronisation. TTL 30 Tage, da sich Gehälter jährlich ändern, nicht wöchentlich. Diesen Skill verwenden, wann immer du `salary_fit` schreiben willst: ohne ihn hat 95% der Positionen `salary_fit=5/10` neutral (de facto inaktiv).
 allowed-tools: Bash(python3 /app/shared/skills/salary_estimate.py *), Bash(python3 /app/shared/skills/db_update.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # salary-estimate — hierarchische Schätzung mit lokalem Cache
 

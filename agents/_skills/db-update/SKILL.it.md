@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: db-update
 description: Aggiorna record esistenti nel DB JHT (positions / applications). Usala per promuovere posizioni a checked/excluded, scrivere punteggio/verdetto del Critico, marcare application come inviate, aggiornare salario, last-checked, ecc. Sempre dopo un `db-query` che conferma lo stato corrente del record.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # db-update — aggiornamento record nel DB JHT
 

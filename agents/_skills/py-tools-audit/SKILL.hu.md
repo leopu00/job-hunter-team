@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: py-tools-audit
 description: "Koordinalt, csapatszintu takaritas a `$JHT_HOME/.local` ala telepitett Python csomagokbol, amelyek `uv pip install --user` segitsegevel kerultek oda (T13 magazzino). A Dottore felelos erte. Az audit NEM egyoldalu -- csak a Writer / Critic agensek tudjak, hogy egy dinamikusan importalt konyvtar meg hasznos-e nekik, ezert a folyamat: broadcast -> 1 oras beleegyezesi ablak -> a csendes halmazt eltavolitjuk -> ujra-audit. Mivel a Dottore one-shot (~10 perc koronkent, ~30 perc kozott), az 1 oras beleegyezesi ablak 2 Dottore-kort fed le: az N. kor inditja az auditot + broadcastot, az N+1. kor osszegyujti a valaszokat + eltavolit."
 allowed-tools: Bash(python3 /app/shared/skills/py_tools_audit.py *), Bash(uv pip uninstall *), Bash(jht-tmux-send *), Bash(tmux *), Bash(du *), Bash(xargs *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # py-tools-audit — a kozos Python magazzino takaritasa
 

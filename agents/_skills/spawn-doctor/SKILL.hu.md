@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: spawn-doctor
 description: Indit egy friss DOTTORE-t igeny szerint, amikor neked (Capitano/Assistente/Sentinella/Mentor) azonnali health-check korre van szukseged. Ezt a skillt hasznald AHELYETT, hogy a DOTTORE sessionbe irnal, amikor a felhasznalo azt keri "fai partire il dottore" / "dottora" / "controlla il team", mert az utemezett korok kozott a DOTTORE session rezidualis bash (one-shot eletciklus, ~10 perc aktiv + ~110 perc alvas a kovetkezo 2h-ciklus spawnig).
 allowed-tools: Bash(/app/.launcher/spawn-doctor.sh *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # spawn-doctor — surgos hivas a Dottore-hoz
 

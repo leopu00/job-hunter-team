@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: tmux-send
 description: Entrega uma mensagem a sessao tmux de outro agente de forma atomica. Use SEMPRE este skill para comunicar com SCOUT/ANALISTA/SCORER/SCRITTORE/CRITICO/SENTINELLA/CAPITANO. NUNCA chame `tmux send-keys` manualmente — TUIs baseadas em Ink (Codex, Kimi) perdem o caractere Enter.
 allowed-tools: Bash(jht-tmux-send *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # tmux-send — mensagens inter-agente
 

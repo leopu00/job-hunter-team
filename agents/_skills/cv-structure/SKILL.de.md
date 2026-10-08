@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: cv-structure
-description: Das CV-Markdown schreiben, das als PDF gerendert und vom Critico geprüft wird. Sechs feste Abschnitte, max. 2 Seiten, jede Behauptung rückverfolgbar zu `candidate_profile.yml` (null Erfindungen — T10). Aufzählungspunkte folgen dem Muster "Metrik fett + Tech in Klammern"; Ton passt zum Firmentyp der JD (Startup/Konzern/Fintech); Anschreiben nur wenn die JD es explizit verlangt. Zuständig: Scrittore. Zusammen mit `application-flow` (Beanspruchung + Pfad) und `critic-loop` (Review-Iterationen).
+description: "Das CV-Markdown schreiben, das als PDF gerendert und vom Critico geprüft wird. Sechs feste Abschnitte, max. 2 Seiten, jede Behauptung rückverfolgbar zu `candidate_profile.yml` (null Erfindungen — T10). Aufzählungspunkte folgen dem Muster \"Metrik fett + Tech in Klammern\"; Ton passt zum Firmentyp der JD (Startup/Konzern/Fintech); Anschreiben nur wenn die JD es explizit verlangt. Zuständig: Scrittore. Zusammen mit `application-flow` (Beanspruchung + Pfad) und `critic-loop` (Review-Iterationen)."
 allowed-tools: Bash(pandoc *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # cv-structure — das kanonische CV-Layout
 

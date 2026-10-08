@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: game-reply-options
 description: "Ofrece de 2 a 5 botones de respuesta clicables, específicos del contexto, en el chat del juego JHT cuando de verdad le faciliten al usuario la siguiente decisión. Úsalos solo para una elección pequeña y acotada; en el resto de casos responde normalmente con jht-send. No los uses nunca como un árbol de onboarding fijo."
 allowed-tools: Bash(jht-reply-options *)
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # Opciones de respuesta generadas en el juego
 

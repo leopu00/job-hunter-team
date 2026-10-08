@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: pipeline-triage
 description: "Decidi QUALE ruolo spawnare / mettere in pausa / killare basandoti sullo stato del backlog, non sull'istinto. Apri questa skill OGNI VOLTA che osservi — vel team < 50% target, O qualsiasi coda ruolo = 0, O fonti Scout esaurite, O [SCALA UP] dalla Sentinella, O `PIPELINE VUOTA + UNDERSHOOT`, O `MARGINE` dal bridge-pacing, O cold start, O ogni volta che sei tentato di \"spawnare un altro Scout\". NON aspettare un [SCALA UP] esplicito dalla Sentinella quando le condizioni sono già visibili nelle metriche. Il punto: leggi 4 numeri, scegli l'unico ruolo che sblocca il bottleneck, passa a `spawn-agent`."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # pipeline-triage — scaling basato sui dati
 

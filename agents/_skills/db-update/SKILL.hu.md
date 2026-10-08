@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: db-update
 description: Meglévő rekordok frissítése a JHT DB-ben (positions / applications). Használd pozíciók checked/excluded állapotra léptetéséhez, Critic pontszám/ítélet írásához, alkalmazások elküldöttnek jelöléséhez, fizetés frissítéséhez, last-checked frissítéséhez, stb. Mindig egy `db-query` után, amely megerősíti az aktuális rekord állapotot.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # db-update — rekord frissítések a JHT DB-ben
 

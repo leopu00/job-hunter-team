@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: rate-budget
 description: Beolvassa az aktív provider rate-limit költségvetés-pillanatképét (használat %, reset-ig hátralevő idő, sebesség, projekció, ajánlott throttle) a bridge-ből. A Captain indításakor használd a tempó tervezéséhez és annak eldöntéséhez, hány ágenst spawnolj, majd időszakosan, ha friss pillanatképet szeretnél anélkül, hogy tokeneket költenél közvetlen provider-hívásra. Nulla provider-hívás — a bridge által már megírt utolsó tickot olvassa.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # rate-budget — rate-limit költségvetés-pillanatkép
 

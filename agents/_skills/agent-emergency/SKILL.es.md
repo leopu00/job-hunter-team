@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — gestiona un agente del que se sospecha que está ATASCADO EN UN BUCLE ACTIVO (vivo y generando turnos, pero repitiendo el mismo ciclo sin producir nada: ping-loop de ACK con otro agente, la misma acción/consulta que no lleva a ninguna parte). Cubre la grieta entre C-08 (muerto/silencioso → Dottore) y C-12 (quemando a cadencia 0.00/min → kill). Escalera graduada, primero el Dottore → kill+respawn limpio solo si persiste o quema presupuesto. Detección determinista (diff de capture-pane + 0 progreso en la DB), la decisión de escalado queda en manos del LLM."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: es, ai-translated 2026-07-30 -->
 
 # agent-emergency — agente atascado en un bucle activo
 

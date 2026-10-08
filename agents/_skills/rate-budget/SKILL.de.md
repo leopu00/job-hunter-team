@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: rate-budget
 description: Den Rate-Limit-Budget-Snapshot für den aktiven Provider (Nutzung %, Zeit bis Reset, Geschwindigkeit, Projektion, empfohlener Throttle) von der Bridge lesen. Beim Captain-Start verwenden, um das Tempo zu planen und zu entscheiden, wie viele Agenten gespawnt werden, dann periodisch wenn du einen frischen Snapshot willst, ohne Token für einen direkten Provider-Aufruf auszugeben. Null Provider-Aufrufe — liest den letzten bereits von der Bridge geschriebenen Tick.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # rate-budget — Rate-Limit-Budget-Snapshot
 

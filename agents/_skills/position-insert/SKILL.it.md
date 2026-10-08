@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: position-insert
 description: "La sequenza a 5 gate che lo Scout esegue per OGNI posizione candidata prima dell'INSERT in `positions`: dedup → verifica link → fetch JD → filtri permissivi → INSERT. Saltare qualsiasi gate riempie il DB di duplicati, link morti, o righe fuori scope che l'Analista deve poi scartare — budget Sonnet sprecato a valle. Responsabilità del ruolo Scout; abbina con `circles-and-sources` (decide DOVE cercare) e `scout-coord` (decide CHI cerca dove)."
 allowed-tools: Bash(python3 *), Bash(grep *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # position-insert — 5 gate per posizione
 

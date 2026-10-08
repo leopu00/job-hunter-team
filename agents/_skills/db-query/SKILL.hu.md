@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: db-query
 description: A JHT SQLite DB lekérdezése (pozíciók, alkalmazások, statisztikák). Használd, amikor pozíció állapotot, ágensenkénti sorokat, pontszámokat, egyezési arányt vagy rekordszámokat kell látnod. DB útvonal a $JHT_DB-ből, tartalék /jht_home/jobs.db.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # db-query — JHT DB lekérdezések
 

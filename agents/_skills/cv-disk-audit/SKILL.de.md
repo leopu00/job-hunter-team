@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: cv-disk-audit
 description: Periodischer Healthcheck (Dottore) zur Abstimmung von CVs auf der Festplatte und cv_pdf_path in der DB. Identifiziert Waisen (Datei auf Festplatte ohne DB-Zeile) und Geister (DB-Zeile mit cv_pdf_path, die auf nicht-existierende Datei zeigt). Benachrichtigt den Capitano über Diskrepanzen, damit der Nutzer keine unsichtbaren Top-PASS verliert und kein "CV zu schreiben" für bereits geschriebene CVs sieht.
 allowed-tools: Bash(python3 *), Bash(find *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # cv-disk-audit — Abstimmung Festplatte↔DB bei CVs
 

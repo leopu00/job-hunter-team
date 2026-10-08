@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: recheck-liveness
 description: "Comprueba si una oferta SIGUE ABIERTA sin producir falsos abiertos. Sustituye al curl improvisado (HTTP 200 = \"abierta\") que NO ve la caducidad renderizada en JavaScript (Ashby/Workday/Greenhouse) ni el authwall de LinkedIn (200 también para las cerradas). Úsala SIEMPRE en el recheck; nunca fijes is_open a mano a partir de un único HTTP 200."
 allowed-tools: Bash(python3 /app/shared/skills/recheck_liveness.py *)
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # recheck-liveness — "¿la oferta sigue abierta?", hecho como es debido
 

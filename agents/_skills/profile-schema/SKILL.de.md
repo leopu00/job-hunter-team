@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: profile-schema
 description: "Single Source of Truth des SCHEMAS von candidate_profile.yml — das kanonische Format, das das GESAMTE Team produziert und konsumiert. 3-Ebenen-Modell: eingefrorener Core + Standard-Bloecke + freie Custom-Bloecke. Definiert die 6 `kind` von Bloecken, die das Web rendern kann, und die Governance-Regel (kein Agent erfindet das Format). Jeder Profil-Write muss mit `jht profile validate` validiert werden. Referenziert von profile-yaml, onboarding-flow, parse-cv, cv-structure."
 allowed-tools: Bash(jht profile validate *), Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # profile-schema — das kanonische Profilformat
 

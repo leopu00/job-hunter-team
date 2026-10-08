@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: critic-loop
 description: "Executar o loop obrigatório de revisão de CV de 3 rodadas com o Critico — autonomamente, sem passar pelo Capitano. Para cada rodada, gera uma sessão FRESCA `CRITICO-S<N>` (mesmo N que a sua sessão Scrittore: SCRITTORE-2 → CRITICO-S2), envia PDF + JD, espera pelo veredito estruturado, elimina o Critico, corrige o CV, regenera o PDF e inicia a próxima rodada com outra instância fresca. Três rodadas são inegociáveis — nem 1 nem 2. Após a 3ª rodada, porta: `critic_score ≥ 5` → `ready`, senão `excluded`. Pertence ao Scrittore."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # critic-loop — 3 rodadas frescas, sem atalhos
 

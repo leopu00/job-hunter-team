@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: cv-structure
 description: A CV markdown megírása, amelyből PDF készül és a Critico felülvizsgálja. Hat rögzített szekció, max 2 oldal, minden állítás visszavezethető a `candidate_profile.yml`-re (nulla kitalálás — T10). A felsorolásjelek a "metrika félkövéren + tech zárójelben" mintát követik; a hangnem illeszkedik a JD cégtípusához (startup/vállalati/fintech); kísérőlevél csak ha a JD kifejezetten kéri. A Scrittore felelőssége. Párosítsd az `application-flow`-val (foglalás + útvonal) és a `critic-loop`-pal (felülvizsgálati iterációk).
 allowed-tools: Bash(pandoc *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # cv-structure — a kanonikus CV elrendezés
 

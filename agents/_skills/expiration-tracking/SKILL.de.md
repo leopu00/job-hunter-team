@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
 description: Extrahiert Fristen aus Stellenanzeigen und gibt sachliche Fristinformationen nur auf ausdrueckliche Anfrage des Nutzers aus. Nie automatisch benachrichtigen oder draengen.
 allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # expiration-tracking — Fristdaten auf Anfrage
 

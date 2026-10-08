@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: daily-restart-wave
 description: "Präventiver Massen-Neustart jedes Team-Agenten einmal pro 24h für Kontextfrische. Zuständig: Dottore. Läuft nur innerhalb eines engen täglichen Fensters (Standard 03:00 UTC ± 30 Min.) und nur wenn keine Welle in den letzten 23h ausgelöst wurde. Jeder Agent wird beendet + über die gleiche atomare Sequenz wie `liveness-check` Schritt 3 neu gespawnt, geordnet Tier 3 → Tier 2 → Tier 1, damit die Worker zuerst durchlaufen und die Koordinatoren (Capitano/Sentinella/Mentor/Assistente) zuletzt. Hintergrund: Codex/Kimi Langzeit-Sitzungen akkumulieren 'Rauschen' — alte Entscheidungen, veraltete Fakten, Prompt-Drift — und werden nach Stunden messbar weniger klar. Empirischer Beleg aus Case Study #1 (Codex-Lauf 2026-05-19/21): manueller Massen-Neustart stellte Entscheidungsqualität wieder her. Dieser Skill schließt diese Lücke ohne manuellen Eingriff."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(date *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # daily-restart-wave — präventiver Neustart für Kontextfrische
 

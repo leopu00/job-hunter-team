@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: blind-review
-description: Das vollständige Review-Protokoll des Critic — PDF + JD empfangen, ein Blind-Review durchführen (kein Profilzugriff), ein strukturiertes Urteil mit Score 1-10 + 7 festen Abschnitten + JD-vs-CV-Tabelle + priorisierten Maßnahmen erstellen, die Datei unter `$JHT_USER_DIR/critiche/` speichern, den aufrufenden Writer benachrichtigen, stoppen. Zuständig: Critic. Der ganze Sinn von "blind" — du darfst das Kandidatenprofil NICHT lesen; du weißt nur, was auf dem PDF vor dir steht. Verankerungsbias durch Vorwissen würde das 3-Runden-Protokoll brechen, auf das der Writer angewiesen ist.
+description: "Das vollständige Review-Protokoll des Critic — PDF + JD empfangen, ein Blind-Review durchführen (kein Profilzugriff), ein strukturiertes Urteil mit Score 1-10 + 7 festen Abschnitten + JD-vs-CV-Tabelle + priorisierten Maßnahmen erstellen, die Datei unter `$JHT_USER_DIR/critiche/` speichern, den aufrufenden Writer benachrichtigen, stoppen. Zuständig: Critic. Der ganze Sinn von \"blind\" — du darfst das Kandidatenprofil NICHT lesen; du weißt nur, was auf dem PDF vor dir steht. Verankerungsbias durch Vorwissen würde das 3-Runden-Protokoll brechen, auf das der Writer angewiesen ist."
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # blind-review — ein Review, keine Anker
 

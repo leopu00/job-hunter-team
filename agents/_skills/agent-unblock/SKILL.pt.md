@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-07-30 -->
 ---
 name: agent-unblock
 description: "Apenas para o Dottore. Fase UNBLOCK, corre ANTES do refresh em cada ronda do Dottore. Deteta as quatro formas de bloqueio que param uma equipa inteira — texto pendente no pane de um coordenador, um agente em retry-loop contra um par mudo, todos os operativos parados num prompt vazio com quota por gastar, um coordenador em silêncio para além do limiar — e RESOLVE-AS. Nunca envia nem apaga texto escrito pelo utilizador: contorna-o (pergunta ao Assistente, `prossegue entretanto` ao coordenador através da mailbox, arranque direto dos workers). Um bloqueio que sobreviva à ronda torna a ronda FALHADA, não completa."
 allowed-tools: Bash(python3 /app/shared/skills/agent_unblock.py *), Bash(python3 /app/shared/skills/doctor_analytics.py *), Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
+<!-- @translation: pt, ai-translated 2026-07-30 -->
 
 # agent-unblock — não reportas um bloqueio, dissolve-lo
 

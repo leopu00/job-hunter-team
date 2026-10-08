@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: application-flow
 description: Contrato de DB + filesystem que cada Scrittore sigue cuando lleva una posición de `scored` (≥50) a `ready`/`excluded`. Tres puertas ANTES de escribir una sola línea de CV (anti-reescritura, anti-colisión, verificación de enlace), una ruta canónica para entregables, una puerta final después de la 3.ª ronda del Critic. Saltarse cualquiera de estas produce trabajo duplicado, sobrescribe la reclamación de otro Writer, o — peor — envía un CV de grado `excluded` al usuario como `ready`. Propiedad del Scrittore.
 allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # application-flow — reclamar, escribir, validar
 

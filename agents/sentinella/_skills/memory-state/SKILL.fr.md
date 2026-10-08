@@ -1,8 +1,8 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: memory-state
 description: Variables d'etat que la Sentinelle doit conserver entre les ticks (dernier ordre envoye, flag de freeze, serie FATAL, compteurs par etat, historique des urgences, cooldowns). Utilise cette skill a chaque tick pour mettre a jour la memoire et decider si un nouvel ordre est necessaire (edge-triggered).
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # Skill — Memoire d'etat (variables entre ticks)
 

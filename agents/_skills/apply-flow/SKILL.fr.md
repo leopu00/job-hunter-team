@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-09-13 -->
 ---
 name: apply-flow
 description: Comment le CLOSER exécute une candidature autorisée avec `apply_flow.py` — la machine à états avec checkpoints (detect, fill, upload_cv, screening, review, submit), le reçu obligatoire sans lequel `applied` n'est jamais écrit, et que faire pour chaque résultat, `blocked_human` avant tout. Utilise-la pour chaque position prise dans la queue. Au CLOSER.
 allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-09-13 -->
 
 # apply-flow — une candidature, un reçu, aucune nouvelle tentative à l'aveugle
 

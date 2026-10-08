@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: emergency-handling
 description: Come gestire le emergenze da rate-limit e la cascata FATAL quando il bridge diventa cieco. Include i trigger di bypass cooldown, il percorso di recupero L4-SOFT/L5-HARD e la gestione del RESET SESSIONE in caso di calo di usage > 30 punti.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # Skill — Gestione emergenze e cascata FATAL
 

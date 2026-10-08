@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
 description: Felhasználói visszajelzést olvas (like/dislike/hide/star) a felhőből — pozíciónként vagy időablakra összesítve. A Scorer csak jövőbeli pozíciók kontextuális preferenciajeleként használja, az aktuálisat kizárva; a Mentor visszatérő indokokat számol (F minta), a Scout kontextuális jelként használja. Elérhetetlen felhőnél semleges "nincs jel" payloadot ad.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 ## Raw/display határ (`RAW_DISPLAY_BOUNDARY`)
 

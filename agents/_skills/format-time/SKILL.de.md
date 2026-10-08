@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: format-time
 description: UTC-Zeitstempel in die Zeitzone des Nutzers konvertieren, bevor sie im Chat, in Diagrammen, Telegram oder einer anderen nutzerorientierten Ausgabe angezeigt werden. Verwende diesen Helfer immer, wenn du sonst ein rohes `strftime("%H:%M")` eines UTC-Datetime in etwas schreiben würdest, das der Nutzer liest.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # format-time — UTC → Nutzer-Zeitzone in nutzerorientierter Ausgabe
 

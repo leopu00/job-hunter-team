@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: captain-diary
 description: "Tägliches Übergabe-Tagebuch für den Capitano. Der Capitano wird häufig neu gestartet (Context-Refresh, neues Arbeitsfenster, Reboot) und verliert sonst die mühsam erarbeiteten Pacing-Lektionen des Tages — er wiederholt dieselben Fehler (z. B. 3 Scout auf einmal → ein nicht bremsbarer Spike → 5 h Drosselung, um die Schuld abzutragen). Lies beim Start die Notizen des VORTAGS (handoff) und HÄNGE eine einzeilige Notiz an, sobald im Laufe des Tages etwas Bedeutsames passiert (eine Scaling-Entscheidung, ein Spike, ein Kill, eine Lektion). Eine Append-only-Datei pro Tag."
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: de, ai-translated 2026-08-03 -->
 
 # captain-diary — die Übergabe zwischen Capitanos
 

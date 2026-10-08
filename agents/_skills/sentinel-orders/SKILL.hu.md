@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: sentinel-orders
 description: Fordítsd le minden `[SENTINELLA] ...` parancsot, ami a Kapitány tmux-ában érkezik, a megfelelő akcióra (throttle szint, spawn/kill, freeze, soft-pause, resume). A Sentinella a csapat szívverése — a parancsai utasítások, nem javaslatok. Az alapértelmezett viselkedés a végrehajtás újraellenőrzés nélkül; a Sentinella megkérdőjelezése egy azonnali `rate_budget live` futtatásával felfújja a velocity_smoothing-ot a JSONL-ben, és hibás követő parancsokat indukál. Nyisd meg ezt a skillt MINDEN ALKALOMMAL, amikor egy `[SENTINELLA]` boríték érkezik.
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(python3 /app/shared/skills/freeze_team.py *), Bash(python3 /app/shared/skills/soft_pause_team.py *), Bash(tmux *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # sentinel-orders — reagálás a watchdogra
 

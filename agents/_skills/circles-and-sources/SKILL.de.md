@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: circles-and-sources
 description: Strategiekarte dafür, was WO gesucht wird, vollständig abgeleitet vom Kandidatenprofil. Die 5 konzentrischen Kreise (work_mode + Umzug) definieren den geografischen Scope; die 4 Quellenstufen (LinkedIn → ATS-Aggregatoren → Nische → Web) definieren, welche Plattformen in welcher Reihenfolge durchsucht werden. Ein Scout, der die falsche Stufe im falschen Kreis durchsucht, verschwendet sein Kontingent und seine `scout-coord`-Partition. Öffne diesen Skill beim Boot (nach `scout-coord`) und erneut, wenn ein Kreis erschöpft ist oder ein `[FEEDBACK]` vom Analysten eine Quellenänderung nahelegt.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # circles-and-sources — Profil lesen, Karte erstellen
 

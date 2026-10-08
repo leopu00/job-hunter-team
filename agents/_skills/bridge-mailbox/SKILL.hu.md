@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: bridge-mailbox
 description: A függőben lévő bridge ítéletek kiürítése MINDEN Capitano kör ELEJÉN — KÖTELEZŐ első művelet bármi más előtt. Egy hosszú kör során a `jht-tmux-send` a bridge-ből meghiúsulhat rc=3-mal (a szöveg soha nem jelent meg a panelen), és egy `[BRIDGE PACING]` vagy `PIPELINE STALLED` ítélet csendben elvész. A bridge MINDEN ítéletet hozzáfűz egy JSONL postaládához, hogy visszanyerhesd őket. Ennek kihagyása elavult mérésekre való reagálást jelent, miközben egy frissebb ítélet olvasatlanul vár.
 allowed-tools: Bash(python3 /app/shared/skills/bridge_mailbox.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # bridge-mailbox — elveszett ítéletek visszanyerése
 

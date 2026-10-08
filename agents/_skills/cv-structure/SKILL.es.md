@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: cv-structure
 description: Escribir el CV en markdown que será convertido a PDF y revisado por el Critico. Seis secciones fijas, máximo 2 páginas, cada afirmación trazable a `candidate_profile.yml` (cero invenciones — T10). Las viñetas siguen el patrón "métrica en negrita + tecnología entre paréntesis"; el tono coincide con el tipo de empresa del JD (startup/corporativa/fintech); Carta de Presentación solo si el JD la solicita explícitamente. Propiedad del Scrittore. Combinar con `application-flow` (reclamación + ruta) y `critic-loop` (iteraciones de revisión).
 allowed-tools: Bash(pandoc *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # cv-structure — el layout canónico del CV
 

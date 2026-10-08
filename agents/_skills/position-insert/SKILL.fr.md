@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: position-insert
 description: "La séquence à 5 portes que le Scout exécute pour CHAQUE position candidate avant d'INSÉRER dans `positions` : dédup → vérification de lien → fetch JD → filtres permissifs → INSERT. Sauter une porte remplit la DB de doublons, liens morts ou lignes hors périmètre que l'Analista doit ensuite supprimer — budget Sonnet gaspillé en aval. Propriété du rôle Scout ; à associer avec `circles-and-sources` (décide OÙ chercher) et `scout-coord` (décide QUI cherche où)."
 allowed-tools: Bash(python3 *), Bash(grep *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # position-insert — 5 portes par position
 

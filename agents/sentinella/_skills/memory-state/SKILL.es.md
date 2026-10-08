@@ -1,8 +1,8 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: memory-state
 description: Variables de estado que el Centinela debe mantener entre ticks (ultima orden enviada, flag de freeze, racha FATAL, contadores por estado, historial de emergencias, cooldowns). Usa esta skill en cada tick para actualizar la memoria y decidir si se requiere una nueva orden (edge-triggered).
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # Skill — Memoria de estado (variables entre ticks)
 

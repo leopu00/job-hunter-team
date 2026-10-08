@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-07-30 -->
 ---
 name: graceful-shutdown
 description: Clôture la journée de travail à la demande de l'utilisateur. Déclenchée par un message `[SHUTDOWN]` de @utente. L'utilisateur ferme l'application et chaque agent est sur le point d'être arrêté en pleine tâche ; avant que cela n'arrive, chacun doit noter où il en est, pour que demain l'équipe reprenne au lieu de repartir de zéro. Arrête les agents un par un, puis crée le flag qui permet à l'application de se fermer. N'utilise JAMAIS ceci pour des décisions de pacing courantes — cela met fin à toute l'équipe.
 allowed-tools: Bash(jht-tmux-send *), Bash(node /app/cli/bin/jht.js team *), Bash(touch /jht_home/.shutdown-ready.flag), Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-07-30 -->
 
 # graceful-shutdown — clôturer la journée quand l'utilisateur s'en va
 

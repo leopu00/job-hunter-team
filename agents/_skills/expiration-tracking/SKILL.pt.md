@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
 description: Extrai prazos das ofertas e fornece informacao factual sobre eles apenas apos um pedido explicito do utilizador. Nunca notifiques nem pressiones automaticamente.
 allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # expiration-tracking — dados de prazo a pedido
 

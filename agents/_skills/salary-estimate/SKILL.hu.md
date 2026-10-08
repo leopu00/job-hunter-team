@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: salary-estimate
 description: Hierarchikus fizetésbecslés a Scorer számára (bug #27). 4 szint — megadott tartomány (L1), helyi cache (L2), web search (L3), semleges default (L4). A cache kizárólag a Scorer-ek helyi tárhelye, nincs távoli szinkronizálás. TTL 30 nap, mert a fizetések évről évre változnak, nem hetente. Használd a skillt minden alkalommal, amikor `salary_fit`-et írsz: nélküle a pozíciók 95%-a `salary_fit=5/10` semleges értéket kap (de facto inert).
 allowed-tools: Bash(python3 /app/shared/skills/salary_estimate.py *), Bash(python3 /app/shared/skills/db_update.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # salary-estimate — hierarchikus becslés helyi cache-sel
 

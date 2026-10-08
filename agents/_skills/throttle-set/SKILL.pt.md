@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-07-30 -->
 ---
 name: throttle-set
 description: A UNICA forma como os ritmos da equipa sao escritos. So o Capitao. `throttle-set <agente> <segundos>` edita a config de throttle por agente; o motor volta a le-la quando arma cada temporizador, logo a mudanca morde no ciclo SEGUINTE desse agente por si so - nenhuma mensagem tmux, nenhum agente tem de reler nada, e o ciclo ja em curso nao e perturbado. Usa-o em vez de mandar numeros aos workers. Tambem `throttle-set a=N b=M ...` para uma escrita multipla atomica, `--dump` para os valores efetivos, `--get <agente>`, `--reset`.
 allowed-tools: Bash(throttle-set *), Bash(python3 /app/shared/skills/throttle-config.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-07-30 -->
 
 # throttle-set — governa os ritmos sem tocar nos agentes
 

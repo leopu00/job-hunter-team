@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
 description: Lit les retours utilisateur (like/dislike/hide/star) depuis le cloud — une position à la fois ou agrégés sur une fenêtre. Le Scorer les utilise comme indice contextuel de préférence uniquement pour les positions futures, en excluant la position courante ; le Mentor compte les raisons récurrentes (Pattern F) et le Scout les utilise comme signal contextuel. Retourne un payload neutre "no signal" si le cloud est indisponible.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 ## Frontière raw/display (`RAW_DISPLAY_BOUNDARY`)
 

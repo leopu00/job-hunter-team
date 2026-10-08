@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: db-update
 description: Bestehende Datensätze in der JHT-DB aktualisieren (positions / applications). Verwende es, um Positions auf checked/excluded zu befördern, Critic-Score/Urteil zu schreiben, Applications als gesendet zu markieren, Gehalt, last-checked usw. zu aktualisieren. Immer nach einer `db-query`, die den aktuellen Datensatzstatus bestätigt.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # db-update — Datensatz-Updates in der JHT-DB
 

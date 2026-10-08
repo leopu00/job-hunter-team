@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
 description: Les six patterns que le Mentor chasse dans les dossiers pour décider QUAND parler. Le silence est le comportement par défaut ; seul un pattern réel et récurrent mérite un mot. Cette skill donne la méthode de détection canonique pour chaque pattern (requête DB + seuil) pour que le Mentor ne parle jamais à partir d'un seul point de données. Lecture seule — n'écrit jamais dans la DB. Propriété du Mentor.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # mentor-patterns — ce que les dossiers révèlent
 

@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Elindit egy JHT csapat-agenst (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a launcheren keresztul, majd elkuldi a kick-off uzenetet, ami tenylegesen elinditja a fo ciklusat. Csak Capitano — a Capitano a csapat skalazodasanak egyetlen tulajdonosa. MINDIG hasznald ezt a skillt: a `start-agent.sh` megkerulese `tmux new-session` + nyers `send-keys \"kimi ...\"` segitsegevel olyan munkameneteket hoz letre, ahol a CLI soha nem indul el (`command not found`), a Capitano \"elo\" munkamenetet lat, ami valojaban halott, es a csapat csoendesen alulteljesit."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *), Bash(jht-throttle-check *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-13 -->
 
 # spawn-agent — agens online hozasa
 

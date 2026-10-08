@@ -1,8 +1,8 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: scaling-calc
 description: "Calibración gradual del roster — mide el burn de 1 worker, calcula cuántos workers y qué throttle hacen falta para alcanzar la velocidad objetivo, y spawnea por etapas (nunca en sexta)."
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # 🎚️ scaling-calc — cambia de marcha un escalón cada vez, no arranques en sexta
 

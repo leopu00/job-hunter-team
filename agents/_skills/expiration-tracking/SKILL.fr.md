@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
 description: Extrait les echeances des offres et fournit des informations factuelles uniquement apres une demande explicite de l'utilisateur. Ne notifie ni ne relance jamais automatiquement.
 allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # expiration-tracking — donnees d'echeance sur demande
 

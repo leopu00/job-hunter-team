@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: onboarding-flow
 description: Társalgási protokoll, amelyet az Assistente követ a felhasználó bevezető folyamatában — első üzenet, iteratív egy-kérdés-per-kör ütemezés, blokkoló ellenőrzőlista (a küszöb, ami feloldja a dashboardot) vs gazdag ellenőrzőlista (amitől a Writer-ek valóban hasznosak lesznek), szektoragnosztikus kérdésstílus (SOHA ne feltételezd, hogy IT), és a kötelező ellenőrzőpont-szekvencia, amikor a felhasználó fájlokat tölt fel. Szorosan összepárosítva a `profile-yaml`-lal (minden válasz = egy Write+validate) és a `profile-summaries`-szal (narratív MD-k kulcsfontosságú mérföldkövek után). Nyisd meg ezt a skillt egy onboarding munkamenet elején és minden olyan felhasználói körnél, ami új információt hoz.
 allowed-tools: Bash(mkdir -p *), Bash(cp *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # onboarding-flow — hogyan vezeti a beszélgetést az Assistente
 

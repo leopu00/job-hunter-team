@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: office-geocoding
 description: Geocodifica l'edificio preciso dell'ufficio (lat/lon/indirizzo) per una posizione DOPO che location-enrichment ha popolato loc_city/loc_country. Usa la web search aggressivamente (3+ tentativi) per trovare l'indirizzo HQ/ufficio dell'azienda, poi risolvi le coordinate via Nominatim/Photon. Salta SOLO dopo che la ricerca esaustiva fallisce o quando esistono più uffici ambigui. Imposta office_lat, office_lon, office_address, office_geocoded, office_verified.
 allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # office-geocoding — coordinate precise dell'ufficio
 

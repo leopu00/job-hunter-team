@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: bridge-mailbox
 description: Ausstehende Bridge-Urteile am ANFANG jeder Captain-Runde abrufen — VERPFLICHTENDE erste Aktion bevor irgendetwas anderes getan wird. Während einer langen Runde kann `jht-tmux-send` von der Bridge mit rc=3 fehlschlagen (Text erschien nie im Panel) und ein `[BRIDGE PACING]`- oder `PIPELINE STALLED`-Urteil wird stillschweigend verworfen. Die Bridge hängt JEDES Urteil an eine JSONL-Mailbox an, damit du sie wiederherstellen kannst. Das Überspringen dieses Abrufens bedeutet, auf veralteten Messungen zu handeln, während ein frischeres Urteil ungelesen bereitliegt.
 allowed-tools: Bash(python3 /app/shared/skills/bridge_mailbox.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # bridge-mailbox — verpasste Urteile wiederherstellen
 

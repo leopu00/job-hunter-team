@@ -1,8 +1,8 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: memory-state
 description: Allapotvalttozok, amelyeket az Orszem tickek kozott meg kell oriznie (utolso kuldott parancs, freeze flag, FATAL sorozat, allapotonkenti szamlalok, veszhelyzeti elozmeny, cooldownok). Hasznald ezt a skillt minden ticknel a memoria frissitesehez es annak eldontsehez, hogy szukseges-e uj parancs (edge-triggered).
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — Allapotmemoria (valtozok tickek kozott)
 

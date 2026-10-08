@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: py-tools-audit
 description: "Koordinierte, teamweite Bereinigung von Python-Paketen, die unter `$JHT_HOME/.local` via `uv pip install --user` installiert wurden (T13 magazzino). Verantwortlich ist der Dottore. Das Audit ist NICHT einseitig — nur die Writer-/Critic-Agenten wissen, ob eine dynamisch importierte Bibliothek noch benötigt wird, daher der Ablauf: Broadcast → 1h-Zustimmungsfenster → stilles Set deinstallieren → Re-Audit. Da der Dottore one-shot ist (~10 Min pro Runde, ~30 Min Abstand), erstreckt sich das 1h-Zustimmungsfenster über 2 Dottore-Runden: Runde N startet das Audit + Broadcast, Runde N+1 sammelt Antworten + deinstalliert."
 allowed-tools: Bash(python3 /app/shared/skills/py_tools_audit.py *), Bash(uv pip uninstall *), Bash(jht-tmux-send *), Bash(tmux *), Bash(du *), Bash(xargs *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # py-tools-audit — das gemeinsame Python-Magazzino bereinigen
 

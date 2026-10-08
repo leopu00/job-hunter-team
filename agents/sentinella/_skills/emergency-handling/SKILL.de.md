@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: emergency-handling
 description: Wie Rate-Limit-Notfälle und die FATAL-Kaskade behandelt werden, wenn die Bridge blind wird. Enthält die Cooldown-Bypass-Trigger, den L4-SOFT/L5-HARD-Wiederherstellungspfad und die RESET SESSIONE-Behandlung bei einem Usage-Rückgang > 30 Punkte.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # Skill — Notfallbehandlung und FATAL-Kaskade
 

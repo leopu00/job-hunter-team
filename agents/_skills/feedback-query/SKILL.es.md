@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
 description: Lee feedback del usuario (like/dislike/hide/star) desde la nube — una posición a la vez o agregado sobre una ventana. El Scorer lo usa como evidencia contextual de preferencia solo para posiciones futuras, excluyendo la actual; el Mentor cuenta motivos recurrentes (Patrón F) y el Scout lo usa como señal contextual. Devuelve un payload neutral "sin señal" cuando la nube está deshabilitada o inaccesible.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 ## Límite raw/display (`RAW_DISPLAY_BOUNDARY`)
 

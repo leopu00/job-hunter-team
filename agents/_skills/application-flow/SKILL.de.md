@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: application-flow
-description: DB- + Dateisystem-Vertrag, dem jeder Scrittore folgt, wenn er eine Position von `scored` (≥50) nach `ready`/`excluded` bringt. Drei Gates VOR dem Schreiben einer einzigen CV-Zeile (Anti-Rewriting, Anti-Kollision, Link-Verifizierung), ein kanonischer Pfad für Ergebnisse, ein finales Gate nach der 3. Critic-Runde. Das Überspringen eines dieser Gates erzeugt doppelte Arbeit, überschreibt die Beanspruchung eines anderen Writers oder — schlimmstenfalls — pusht einen CV mit `excluded`-Qualität als `ready` an den Nutzer. Zuständig: Scrittore.
+description: "DB- + Dateisystem-Vertrag, dem jeder Scrittore folgt, wenn er eine Position von `scored` (≥50) nach `ready`/`excluded` bringt. Drei Gates VOR dem Schreiben einer einzigen CV-Zeile (Anti-Rewriting, Anti-Kollision, Link-Verifizierung), ein kanonischer Pfad für Ergebnisse, ein finales Gate nach der 3. Critic-Runde. Das Überspringen eines dieser Gates erzeugt doppelte Arbeit, überschreibt die Beanspruchung eines anderen Writers oder — schlimmstenfalls — pusht einen CV mit `excluded`-Qualität als `ready` an den Nutzer. Zuständig: Scrittore."
 allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # application-flow — beanspruchen, schreiben, Gate
 

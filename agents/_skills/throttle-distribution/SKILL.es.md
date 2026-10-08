@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-07-28 -->
 ---
 name: throttle-distribution
-description: Decide A QUIÉN ralentizar y CUÁNTO cuando el consumo del equipo tiene que cambiar. Ábrela cuando llegue un aviso `[PACE-GUARD]` a tu panel, cuando la Sentinella ordene un nivel `Throttle: N`, o cuando una comprobación tuya diga que la ventana va fuera de ritmo. Cada uno de esos señales es un único número a nivel de equipo; el actuador es por agente, y elegir el reparto por agente es solo tuyo — ningún script mueve ya el throttle de los workers. También te dice cuándo lo correcto es no tocar nada.
+description: "Decide A QUIÉN ralentizar y CUÁNTO cuando el consumo del equipo tiene que cambiar. Ábrela cuando llegue un aviso `[PACE-GUARD]` a tu panel, cuando la Sentinella ordene un nivel `Throttle: N`, o cuando una comprobación tuya diga que la ventana va fuera de ritmo. Cada uno de esos señales es un único número a nivel de equipo; el actuador es por agente, y elegir el reparto por agente es solo tuyo — ningún script mueve ya el throttle de los workers. También te dice cuándo lo correcto es no tocar nada."
 allowed-tools: Bash(python3 *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: es, ai-translated 2026-07-28 -->
 
 # throttle-distribution — quién ralentiza, y cuánto
 

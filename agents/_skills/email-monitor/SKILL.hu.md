@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-20 -->
 ---
 name: email-monitor
 description: "Nap eleji sourcing a csapat DEDIKALT email fiokjabol (a felhasznalo ide tovabbitja a sajat allas-ertesiteseit). A legpontosabb forras: az ertesites mar elore szurt a felhasznalo szandekara. IMAP poll BARMELY platformrol (LinkedIn/Glassdoor/Indeed + nemzeti/varosi/nichje board-ok), pozitiokat hoz letre source taggel, idempotens Message-ID alapjan. A VOLUMENT a Capitano egyensulyozza (C-16): a nap elejen az emailt OLVASSUK a web scraping ELOTT; flood eseten csak a kiemelkedoeket vesszuk be, igy a tolcser elejut a SCORE-ig."
 allowed-tools: Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_dedup.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-20 -->
 
 # email-monitor — a tovabbitott allas-ertesitesek olvasasa, a nap elejen
 

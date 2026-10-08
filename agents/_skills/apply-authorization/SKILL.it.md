@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-09-13 -->
 ---
 name: apply-authorization
 description: I due cancelli fra il team e la casella di un recruiter, e come leggerne i rifiuti. Una candidatura parte SOLO se l'utente ha dato il consenso generale (`applications.auto_apply` nel config utente) E ha flaggato proprio quella posizione. Entrambi fail-closed e verificati nel codice da `apply_gate.py`. Usala al boot e prima di ogni posizione per leggere la coda del CLOSER, e ogni volta che devi spiegare perché una posizione non è partita. Del CLOSER; il Capitano legge la stessa coda per decidere se spawnarlo.
 allowed-tools: Bash(python3 /app/shared/skills/apply_gate.py *)
 ---
+<!-- @translation: it, ai-translated 2026-09-13 -->
 
 # apply-authorization — cosa può partire, e perché il resto no
 

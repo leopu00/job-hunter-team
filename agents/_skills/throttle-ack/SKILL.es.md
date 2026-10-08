@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-07-30 -->
 ---
 name: throttle-ack
 description: Firma tu despertar. SIEMPRE el PRIMER comando de cada despertar, antes de cualquier otra cosa, cada vez que recibas un mensaje `[RIPRENDI]` despues de una pausa de throttle. `throttle-ack <tu-nombre>` cambia tu flag de NOTIFIED a ACTIVE. Solo tu puedes hacerlo - el motor no puede - y precisamente por eso un flag que se queda en NOTIFIED es la prueba de que un agente recibio el aviso y no respondio, y por eso el watchdog escala sobre el. Omitirlo hace parecer bloqueado a un agente que esta perfectamente sano.
 allowed-tools: Bash(throttle-ack *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: es, ai-translated 2026-07-30 -->
 
 # throttle-ack — firma el despertar, luego vuelve al trabajo
 

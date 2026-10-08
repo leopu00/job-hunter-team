@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: liveness-check
 description: "Diagnostica se la sessione tmux di un agente del team è viva, in un turno lungo, o silenziosamente morta — e la respawna preservando il contesto se morta. Responsabilità del Dottore (l'agente di health-check itinerante del team), non del Capitano. La modalità di fallimento core che questa skill cattura: `jht-tmux-send` restituisce `exit 0` anche quando la CLI del target è crashata (il messaggio viene scritto in una bash nuda, poi perso). Senza check di liveness periodici il team continua a \"parlare a un cadavere\" e il Capitano conta su azioni che non avverranno mai."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # liveness-check — mantieni il team onesto
 

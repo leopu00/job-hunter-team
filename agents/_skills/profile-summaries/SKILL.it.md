@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: profile-summaries
 description: Scrivi i 4 riassunti narrativi Markdown sotto `$JHT_HOME/profile/summaries/` che complementano lo YAML strutturato. Gli Scrittori a valle NE HANNO BISOGNO — uno YAML da solo produce CV sterili perché non ha voce, né narrativa, né posizionamento. Responsabilità dell'Assistente. I nomi file sono FISSI (il frontend ignora qualsiasi altro); sempre scritti in prima persona dell'utente ("sono uno sviluppatore…"); sempre riscritti per intero (Write, non Edit append) — sono snapshot del presente, non log append-only.
 allowed-tools: Bash(mkdir -p *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # profile-summaries — la voce del candidato su disco
 

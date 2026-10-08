@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: position-insert
 description: "La secuencia de 5 puertas que el Scout ejecuta para CADA posición candidata antes de INSERTAR en `positions`: dedup → verificación de enlace → fetch de JD → filtros permisivos → INSERT. Saltarse cualquier puerta llena la DB con duplicados, enlaces muertos, o filas fuera de alcance que el Analyst luego tiene que descartar — presupuesto Sonnet desperdiciado downstream. Propiedad del rol Scout; combinar con `circles-and-sources` (decide DÓNDE buscar) y `scout-coord` (decide QUIÉN busca dónde)."
 allowed-tools: Bash(python3 *), Bash(grep *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # position-insert — 5 puertas por posición
 

@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: critic-loop
 description: "Exécuter la boucle de revue CV obligatoire en 3 tours avec le Critico — de manière autonome, sans passer par le Capitano. Pour chaque tour, vous spawnez une instance FRAÎCHE `CRITICO-S<N>` (même N que votre session Scrittore : SCRITTORE-2 → CRITICO-S2), envoyez le PDF + JD, attendez le verdict structuré, tuez le Critico, corrigez le CV, régénérez le PDF, et commencez le tour suivant avec une nouvelle instance fraîche. Trois tours sont non négociables — ni 1 ni 2. Après le 3e tour, porte : `critic_score ≥ 5` → `ready`, sinon `excluded`. Propriété du Scrittore."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # critic-loop — 3 tours frais, pas de raccourcis
 

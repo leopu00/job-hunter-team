@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: db-insert
 description: Neue Datensätze in die JHT-DB einfügen (positions / scores / applications / companies / position_highlights). Nur verwenden, wenn ein Agent einen Datensatz erstellen muss — Scout für Positions, Analyst für Companies und Highlights, Scorer für Scores, Writer für Applications. Niemals blind überschreiben — für Updates `db-update` verwenden.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # db-insert — Datensatzerstellung in der JHT-DB
 

@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: format-time
 description: Convertir timestamps UTC a la zona horaria del usuario antes de mostrarlos en chat, gráficos, Telegram o cualquier salida orientada al usuario. Usa este helper cada vez que de otro modo escribirías un `strftime("%H:%M")` crudo de un datetime UTC en algo que el usuario lee.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # format-time — UTC → zona horaria del usuario en salida orientada al usuario
 

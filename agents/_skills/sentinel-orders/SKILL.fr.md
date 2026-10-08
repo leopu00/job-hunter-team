@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: sentinel-orders
 description: Traduis chaque ordre `[SENTINELLA] ...` reçu dans le tmux du Capitaine en l'action correcte (niveau de throttle, spawn/kill, freeze, soft-pause, resume). La Sentinella est le battement de coeur de l'équipe — ses ordres sont des commandes, pas des suggestions. Le comportement par défaut est d'exécuter sans revérifier ; remettre en question la Sentinella en lançant un `rate_budget live` immédiat gonfle le velocity_smoothing dans son JSONL et induit des ordres suivants incorrects. Ouvre cette skill À CHAQUE FOIS qu'une enveloppe `[SENTINELLA]` arrive.
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(python3 /app/shared/skills/freeze_team.py *), Bash(python3 /app/shared/skills/soft_pause_team.py *), Bash(tmux *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # sentinel-orders — réagir au watchdog
 

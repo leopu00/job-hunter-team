@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: critic-loop
 description: "A kötelező 3 körös CV felülvizsgálati ciklus futtatása a Critico-val — önállóan, a Capitano-n keresztül haladás nélkül. Minden körhöz FRISS `CRITICO-S<N>` munkamenetet hozol létre (azonos N, mint a te Scrittore munkameneted: SCRITTORE-2 → CRITICO-S2), elküldöd a PDF-et + JD-t, megvárod a strukturált ítéletet, megölöd a Critic-et, javítod a CV-t, újragenerálod a PDF-et, és új friss példánnyal kezded a következő kört. Három kör nem vitatható — sem 1, sem 2. A 3. kör után kapu: `critic_score ≥ 5` → `ready`, különben `excluded`. A Scrittore felelőssége."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # critic-loop — 3 friss kör, nincs rövidítés
 

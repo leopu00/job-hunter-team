@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: db-insert
 description: ÚJ rekordok beszúrása a JHT DB-be (positions / scores / applications / companies / position_highlights). Csak akkor használd, amikor egy ágensnek rekordot kell létrehoznia — Scout pozíciókhoz, Analyst cégekhez és kiemelésekhez, Scorer pontszámokhoz, Writer alkalmazásokhoz. Soha ne írd vakon felül — frissítésekhez használd a `db-update`-t.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # db-insert — rekord létrehozás a JHT DB-ben
 

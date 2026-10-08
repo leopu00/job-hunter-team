@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: agent-unblock
 description: "Csak a Dottore számára. UNBLOCK fázis, minden Dottore-körben a refresh ELŐTT fut. Felismeri azt a négy blokk-formát, amely egy egész csapatot megállít — függőben lévő szöveg egy koordinátor pane-jében, egy néma társat újra és újra próbálgató agens, minden operatív üres promptnál ül, miközben van elkölthető kvóta, egy koordinátor a küszöbön túl is hallgat — és FELOLDJA őket. Soha nem küldi el és nem törli a felhasználó által beírt szöveget: megkerüli (kérdés az Assistentének, `folytasd közben` a koordinátornak a mailboxon át, a workerek közvetlen elindítása). Egy blokk, amely túléli a kört, a kört SIKERTELENNÉ teszi, nem befejezetté."
 allowed-tools: Bash(python3 /app/shared/skills/agent_unblock.py *), Bash(python3 /app/shared/skills/doctor_analytics.py *), Bash(tmux *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # agent-unblock — nem jelentesz egy blokkot, hanem feloldod
 

@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: maintainer-sweep
 description: "A Mantenitore INFRA-karbantartó körútja 👷‍♂️ (a Dottore ikertestvére, csak nem az ügynökökre, hanem az infrastruktúrára fókuszálva). Naponta egyetlen one-shot menet: a konténer életfenntartó folyamatainak (bridge/daemon/watchdog) liveness-kanárija a process_health.py-jal, a mission-critical eszközök (browser/LinkedIn) füstpróbája a tool_health.py-jal, a nem szabványos helyre telepített függőségek auditja és összevonása, árva szkriptek és tmp-fájlok GC-je, ismétlődő szkriptek de-dupja, függőségek frissessége, lemez- és RAM-trend, a pane-ek UTF-8 locale-kanárija a locale_health.py-jal (kozmetikai hiba vs sérült adat). Single-writer: az infrát KIZÁRÓLAG a Mantenitore javítja; a ROMBOLÓ műveleteket (törlés/archiválás) csak JAVASOLJA, dönteni a Capitano dönt. Az eredmény a mantenitore-logbook.jsonl végére kerül."
 allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/locale_health.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # maintainer-sweep — az INFRA egészségben tartása csendben és regressziómentesen
 

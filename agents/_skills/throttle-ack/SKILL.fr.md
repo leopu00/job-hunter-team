@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-07-30 -->
 ---
 name: throttle-ack
 description: Signe ton reveil. TOUJOURS la PREMIERE commande de chaque reveil, avant toute autre chose, chaque fois que tu recois un message `[RIPRENDI]` apres une pause de throttle. `throttle-ack <ton-nom>` fait passer ton flag de NOTIFIED a ACTIVE. Toi seul peux le faire - le moteur ne peut pas - et c'est precisement pour cela qu'un flag reste sur NOTIFIED est la preuve qu'un agent a recu le reveil et n'a pas repondu, et pour cela que le watchdog escalade dessus. L'omettre fait passer pour bloque un agent en parfaite sante.
 allowed-tools: Bash(throttle-ack *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-07-30 -->
 
 # throttle-ack — signe le reveil, puis retourne au travail
 

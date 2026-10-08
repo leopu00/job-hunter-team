@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: bridge-pacing
-description: Olvasd el a 15 perces `[BRIDGE PACING]` kalibrációs tick-et — a bridge mérését a csapat tényleges sebességéről, ítélettel (SFORO / MARGINE / ALLINEATO), valamint ágensenkénti részesedéssel és kadenciával. A tick a SENTINELLÁNAK szól, nem neked: akkor nyisd meg ezt a skillt, amikor ő továbbítja neked ezeket a számokat, vagy amikor saját kezdeményezésből nézel meg egy tick-et. Ne várd, hogy a te paneledbe érkezzen — nem fog. Az ítélet ágensenkénti throttle-értékekké alakítása a `throttle-distribution` dolga.
+description: "Olvasd el a 15 perces `[BRIDGE PACING]` kalibrációs tick-et — a bridge mérését a csapat tényleges sebességéről, ítélettel (SFORO / MARGINE / ALLINEATO), valamint ágensenkénti részesedéssel és kadenciával. A tick a SENTINELLÁNAK szól, nem neked: akkor nyisd meg ezt a skillt, amikor ő továbbítja neked ezeket a számokat, vagy amikor saját kezdeményezésből nézel meg egy tick-et. Ne várd, hogy a te paneledbe érkezzen — nem fog. Az ítélet ágensenkénti throttle-értékekké alakítása a `throttle-distribution` dolga."
 allowed-tools: Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # bridge-pacing — a 15 perces kalibrációs tick olvasása
 

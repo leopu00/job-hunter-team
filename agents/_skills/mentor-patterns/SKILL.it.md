@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
 description: I sei pattern che il Mentor cerca nei record per decidere QUANDO parlare. Il silenzio è il default; solo un pattern reale e ricorrente merita una parola. Questa skill fornisce il metodo canonico di rilevazione per ogni pattern (query DB + soglia) così il Mentor non parla mai da un singolo data point. Read-only — non scrive mai nel DB. Responsabilità del Mentor.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # mentor-patterns — cosa rivelano i record
 

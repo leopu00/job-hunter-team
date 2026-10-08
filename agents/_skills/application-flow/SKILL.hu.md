@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: application-flow
 description: DB + fájlrendszer-szerződés, amelyet minden Scrittore követ, amikor egy pozíciót `scored` (≥50) állapotból `ready`/`excluded` állapotba visz. Három kapu a CV írása ELŐTT (anti-újraírás, anti-ütközés, link-ellenőrzés), egy kanonikus útvonal a végtermékeknek, egy záró kapu a 3. Critic kör után. Bármelyik kihagyása dupla munkát, másik Író foglalásának felülírását eredményezi — vagy ami a legrosszabb — egy `excluded` szintű CV-t küld el a felhasználónak `ready` státuszban. A Scrittore felelőssége.
 allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # application-flow — foglalás, írás, kapu
 

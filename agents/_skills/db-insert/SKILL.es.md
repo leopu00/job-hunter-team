@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: db-insert
 description: Insertar NUEVOS registros en la DB de JHT (positions / scores / applications / companies / position_highlights). Usarlo SOLO cuando un agente necesita crear un registro — Scout para posiciones, Analyst para empresas y highlights, Scorer para puntuaciones, Writer para applications. Nunca sobrescribir a ciegas — para actualizaciones usa `db-update`.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # db-insert — creación de registros en la DB de JHT
 

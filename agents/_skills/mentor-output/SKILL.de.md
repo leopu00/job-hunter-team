@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: mentor-output
-description: Wie der Mentor spricht, sobald ein Muster aus `mentor-patterns` die Schwelle überschritten hat. Drei Ausgabeformate — strategischer Rat (selten, gewichtig), wöchentliche Zusammenfassung, Antwort auf Anfrage — jeweils mit strikten Form- und Stimmregeln. Die Autorität des Mentors kommt davon, wie selten die Worte kommen und wie schwer jedes einzelne wiegt; dieser Skill erzwingt das. Zuständig: Mentor. Zusammen mit `chat-web` (Zustellung via jht-send) und `mentor-patterns` (der Trigger).
+description: "Wie der Mentor spricht, sobald ein Muster aus `mentor-patterns` die Schwelle überschritten hat. Drei Ausgabeformate — strategischer Rat (selten, gewichtig), wöchentliche Zusammenfassung, Antwort auf Anfrage — jeweils mit strikten Form- und Stimmregeln. Die Autorität des Mentors kommt davon, wie selten die Worte kommen und wie schwer jedes einzelne wiegt; dieser Skill erzwingt das. Zuständig: Mentor. Zusammen mit `chat-web` (Zustellung via jht-send) und `mentor-patterns` (der Trigger)."
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # mentor-output — Stimme + Format
 

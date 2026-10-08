@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: parse-cv
 description: Pre-processa un file CV/profilo (PDF, DOCX, ODT, RTF) in testo plain PRIMA di darlo in pasto al contesto LLM. Riduce il costo token di 5-10x su CV lunghi e produce un'estrazione più affidabile rispetto alla lettura diretta di PDF binari via vision multimodale. L'Assistente chiama questa skill su ogni documento caricato in `$JHT_HOME/profile/sources/` prima di popolare `candidate_profile.yml`. Per immagini (jpg/png di CV cartaceo) salta questa skill — leggile via vision direttamente (il LLM è multimodale). Per formati non supportati la skill esce con codice non-zero e l'Assistente chiede all'utente un'alternativa.
 allowed-tools: Bash(pdftotext *), Bash(pandoc *), Bash(file *), Bash(test *), Bash(cat *), Bash(wc *), Bash(head *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # parse-cv — estrazione testo da file caricato dall'utente
 

@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: notify-user
 description: Notifica l'utente con fallback automatico. Prova Telegram prima; se il bot non è configurato / irraggiungibile / rate-limitato, il messaggio atterra sulla dashboard web via cloud sync. Registra sempre il messaggio in `pending_user_messages` così nulla si perde. Usala ogni volta che devi raggiungere l'utente con un aggiornamento di stato, una domanda o un digest — mai chiamare `jht-telegram-send` direttamente per quello scopo.
 allowed-tools: Bash(jht-notify-user *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # notify-user — API unica per raggiungere l'utente
 

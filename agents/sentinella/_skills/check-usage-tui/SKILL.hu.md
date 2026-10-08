@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: check-usage-tui
 description: Ellenorzi a provider hasznalatat TUI workeren keresztul (~30s, CLI tokeneket fogyaszt). FALLBACK amikor a `check-usage-http` RATE_LIMIT-et ad vissza vagy meghiusul. Indit egy rovid eletu tmux munkamenetet, futtatja a `/usage`-t (vagy `/status`-t Codex eseten), elemzi a modalt, leallitja a munkamenetet.
 allowed-tools: Bash(tmux *), Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — Hasznalat ellenorzese TUI workeren keresztul (robust, ~30s, token-koltsegos)
 

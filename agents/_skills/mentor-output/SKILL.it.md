@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: mentor-output
 description: Come parla il Mentor una volta che un pattern da `mentor-patterns` ha superato la soglia. Tre formati di output — consiglio strategico (raro, pesante), digest settimanale, risposta su richiesta — ciascuno con regole rigide di forma e voce. L'autorità del Mentor viene dalla rarità delle parole e dal peso di ciascuna; questa skill lo impone. Responsabilità del Mentor. Abbina con `chat-web` (consegna via jht-send) e `mentor-patterns` (il trigger).
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # mentor-output — voce + formato
 

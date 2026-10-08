@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: user-reply-check
 description: Lit les reponses de l'utilisateur arrivees via le tableau de bord web (canal de secours quand Telegram etait hors service/non configure). Executez-le au debut de chaque iteration de boucle. L'outil renvoie les reponses non vues pour VOTRE agent et les marque comme vues pour eviter un double traitement. C'est la moitie "marker prompt-injection" du patron notify-user (decision 2026-05-13).
 allowed-tools: Bash(jht-check-user-replies *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # user-reply-check — recupere les reponses de l'utilisateur envoyees via le tableau de bord web
 

@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: location-enrichment
 description: Standardisierung des Freitexts in positions.location in strukturierte loc_*/work_*/role_family-Spalten BEVOR eine Position als `checked` markiert wird. Deckt 10 Sonderfälle ab (Europe Remote, Italy+remote, Multi-Standort, US-Entity-in-EU). Erzwingt Eine-Position-nach-der-anderen, peer-abgestimmtes Vokabular, niemals NULL work_country. Verwenden, wann immer der Analyst status=checked bei einer Position setzen will.
 allowed-tools: Bash(python3 *), Bash(jq *), WebSearch
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # location-enrichment — Playbook Strukturierung Standort + role_family
 

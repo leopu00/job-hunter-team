@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: graceful-shutdown
 description: Lezárja a munkanapot a felhasználó kérésére. A @utente `[SHUTDOWN]` üzenete indítja el. A felhasználó bezárja az alkalmazást, és minden ügynököt a feladat közepén állítanának le; mielőtt ez megtörténik, mindenkinek fel kell jegyeznie, hol tart, hogy holnap a csapat folytassa és ne elölről kezdje. Állítsd le az ügynököket egyenként, majd hozd létre a flaget, amely engedi az alkalmazást kilépni. SOHA ne használd ezt rutinszerű pacing-döntésekhez — az egész csapatot leállítja.
 allowed-tools: Bash(jht-tmux-send *), Bash(node /app/cli/bin/jht.js team *), Bash(touch /jht_home/.shutdown-ready.flag), Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # graceful-shutdown — a nap lezárása, amikor a felhasználó kilép
 

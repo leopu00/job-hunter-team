@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: profile-schema
 description: "Fonte unica de verdade do SCHEMA do candidate_profile.yml — o formato canónico que TODO o time produz e consome. Modelo de 3 níveis: core congelado + blocos standard + blocos custom livres. Define os 6 `kind` de bloco que o web sabe renderizar e a regra de governança (nenhum agente inventa o formato). Cada escrita do perfil deve ser validada com `jht profile validate`. Referenciada por profile-yaml, onboarding-flow, parse-cv, cv-structure."
 allowed-tools: Bash(jht profile validate *), Bash(python3 *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # profile-schema — o formato canónico do perfil
 

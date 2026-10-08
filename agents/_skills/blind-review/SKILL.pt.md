@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: blind-review
 description: O protocolo completo de revisão do Critico — receber PDF + JD, executar uma revisão cega (sem acesso ao perfil), produzir um veredito estruturado com pontuação 1-10 + 7 secções fixas + tabela JD-vs-CV + ações priorizadas, guardar o ficheiro em `$JHT_USER_DIR/critiche/`, notificar o Scrittore que o gerou, parar. Pertence ao Critico. O objetivo de "cego" — NÃO DEVE ler o perfil do candidato; conhece apenas o que está no PDF à sua frente. O viés de ancoragem de conhecimento prévio quebraria o protocolo de 3 rodadas do qual o Scrittore depende.
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # blind-review — uma revisão, sem âncoras
 

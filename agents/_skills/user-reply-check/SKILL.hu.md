@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: user-reply-check
 description: Beolvassa a felhasznalo valaszait, amelyek a webes dashboardon keresztul erkeztek (tartalek csatorna, amikor a Telegram nem mukodott/nem volt konfiguralna). Futtasd minden ciklus-iteracio elejen. Az eszkoz visszaadja a NEM LATOTT valaszokat a TE agensednek, es megjeloli oket latottnak, igy nem dolgozod fel oket ketszer. Ez a notify-user minta "marker prompt-injection" fele (dontes 2026-05-13).
 allowed-tools: Bash(jht-check-user-replies *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # user-reply-check — a webes dashboardon keresztul kuldott felhasznaloi valaszok atvetele
 

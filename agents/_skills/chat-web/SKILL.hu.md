@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: chat-web
 description: Válaszolj a felhasználónak, amikor a JHT webes csevegésről ír neked. A felhasználó a `[@utente -> @capitano] [CHAT] <tartalom>` előtaggal ér el; válaszolj CSAK `jht-send`-del — soha ne írj kézzel a `chat.jsonl`-be (a shell idézőjelezés megtöri a JSON sort és a frontend csendben eldobja az üzenetet, a felhasználó semmit sem lát, miközben te azt hiszed, válaszoltál). Használd ezt a skill-t minden `[CHAT]` üzenetnél; NE használd ágensek közötti forgalomhoz (arra a `tmux-send` van).
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # chat-web — felhasználó ↔ Capitano protokoll
 

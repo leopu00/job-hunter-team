@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: order-formats
 description: Sablonok az Őrszem által a Kapitánynak küldött parancsokhoz. Használd ezt a skillt minden alkalommal, amikor úgy döntesz, hogy értesíted a Kapitányt — válaszd ki a megfelelő sablont, töltsd ki a helyőrzőket, küldd el a `jht-tmux-send` segítségével.
 allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — PARANCS-formátumok a Kapitánynak
 

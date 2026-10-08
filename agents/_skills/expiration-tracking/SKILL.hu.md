@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
 description: Hataridoket nyer ki az allasleirasokbol, es tenyszeru hatarido-informaciot csak a felhasznalo kifejezett keresere ad. Soha ne ertesits vagy osztonozz automatikusan.
 allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # expiration-tracking — hatarido-adatok keresre
 

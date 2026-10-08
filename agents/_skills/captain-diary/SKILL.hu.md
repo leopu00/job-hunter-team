@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: captain-diary
 description: "Napi átadási napló a Capitanónak. A Capitanót gyakran újraindítják (context-refresh, új munkaablak, reboot), és ilyenkor elvesznek a nap keservesen megszerzett pacing-tanulságai — így ugyanazokat a hibákat ismétli (pl. 3 Scout egyszerre → fékezhetetlen kiugrás → 5 óra lassított menet az adósság törlesztésére). Induláskor olvasd el az ELŐZŐ nap jegyzeteit (handoff), és FŰZZ HOZZÁ egysoros jegyzetet, valahányszor a nap folyamán valami lényeges történik (skálázási döntés, kiugrás, kill, tanulság). Naponta egy, csak hozzáfűzhető fájl."
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # captain-diary — az átadás Capitanók között
 

@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: bridge-pacing
-description: Lies einen 15-Minuten-Kalibrierungs-Tick `[BRIDGE PACING]` — die Messung der Bridge zur tatsächlichen Rate des Teams, mit einem Urteil (SFORO / MARGINE / ALLINEATO) plus Anteil und Kadenz pro Agent. Der Tick ist an die SENTINELLA adressiert, nicht an dich: öffne diesen Skill, wenn sie dir diese Zahlen weitergibt, oder wenn du aus eigener Initiative einen Tick nachliest. Warte nicht darauf, dass einer in deinem Pane landet — das passiert nicht. Das Urteil in Throttle-Werte pro Agent zu übersetzen, ist `throttle-distribution`.
+description: "Lies einen 15-Minuten-Kalibrierungs-Tick `[BRIDGE PACING]` — die Messung der Bridge zur tatsächlichen Rate des Teams, mit einem Urteil (SFORO / MARGINE / ALLINEATO) plus Anteil und Kadenz pro Agent. Der Tick ist an die SENTINELLA adressiert, nicht an dich: öffne diesen Skill, wenn sie dir diese Zahlen weitergibt, oder wenn du aus eigener Initiative einen Tick nachliest. Warte nicht darauf, dass einer in deinem Pane landet — das passiert nicht. Das Urteil in Throttle-Werte pro Agent zu übersetzen, ist `throttle-distribution`."
 allowed-tools: Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # bridge-pacing — den 15-Minuten-Kalibrierungs-Tick lesen
 

@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: throttle
 description: Regisztrald a szunetedet es ZARD LE A KORODET. Az ido mar nem a tied - egy motor a folyamatodon kivul birtokolja az idozitot, es tmux-on keresztul felkelt, amikor lejar. MINDIG ezt hasznald `sleep` helyett, ha lassitani akarod az iteracios ritmusodat. Egy hivas, `throttle <neved>`, azonnal visszater; nem tudod, meddig varsz, es nem is szabad megprobalnod megtudni. Felebredeskor az ELSO parancsod mindig `throttle-ack <neved>`. `sleep` throttle szunetekhez TILOS, es az is tilos, hogy ezt a hivast `&` / `nohup` / hatterfeladat modon hatterbe kuldd.
 allowed-tools: Bash(throttle *), Bash(throttle-ack *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # throttle — regisztrald a szunetet, aztan allj meg
 

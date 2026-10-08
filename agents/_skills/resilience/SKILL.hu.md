@@ -1,8 +1,8 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Ha egy küldetéskritikus eszköz elromlik, SOHA ne degradálj némán, és ne jelents \"kimerült sort\"/new=0-t. Osztályozz: elromlott vagy üres — majd mászd végig a fallback-létrát: automatikus javítás jht-install-lal, újrapróbálkozás, alternatív módszer, OPEN_UNVERIFIED jelölés, eszkaláció a Capitano felé a pontos javítással. Használd, valahányszor egy eszköz, amelytől függsz (böngésző, linkedin_check, egy fetch, egy CLI), hibára fut, vagy hiányzik egy függőség."
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # resilience — soha ne add fel némán egy elromlott eszköz miatt
 

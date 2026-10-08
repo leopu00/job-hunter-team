@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-08-03 -->
 ---
 name: captain-diary
 description: "Diario di consegna quotidiano per il Capitano. Il Capitano viene riavviato spesso (context-refresh, nuova finestra di lavoro, reboot) e altrimenti perde le lezioni di pacing conquistate a fatica durante la giornata — ripetendo gli stessi errori (es. 3 Scout in una volta → uno spike infrenabile → 5h di marcia lenta per ripagare il debito). All'avvio leggi le note del giorno PRECEDENTE (handoff) e AGGIUNGI una nota di una riga ogni volta che durante la giornata succede qualcosa di significativo (una decisione di scaling, uno spike, un kill, una lezione). Un file append-only al giorno."
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: it, ai-translated 2026-08-03 -->
 
 # captain-diary — la consegna tra Capitani
 

@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: notify-user
 description: Értesítsd a felhasználót automatikus tartalékkal. Először Telegram-on próbál; ha a bot nincs konfigurálva / nem elérhető / rate-limited, az üzenet a webes dashboardra kerül felhő szinkronizáción keresztül. Mindig rögzíti az üzenetet a `pending_user_messages`-ben, hogy semmi ne vesszen el. Használd ezt, amikor állapotfrissítéssel, kérdéssel vagy összefoglalóval kell elérnod a felhasználót — soha ne hívd közvetlenül a `jht-telegram-send`-et erre a célra.
 allowed-tools: Bash(jht-notify-user *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # notify-user — egyetlen API a felhasználó eléréséhez
 

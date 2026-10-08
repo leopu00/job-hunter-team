@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: rate-budget
 description: Lire l'instantané du budget de rate-limit pour le fournisseur actif (utilisation %, temps avant réinitialisation, vélocité, projection, throttle recommandé) depuis le bridge. Utilisez-le au démarrage du Capitaine pour planifier le rythme et décider combien d'agents lancer, puis périodiquement quand vous souhaitez un instantané frais sans dépenser de tokens en appelant directement le fournisseur. Zéro appel fournisseur — lit le dernier tick déjà écrit par le bridge.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # rate-budget — instantané du budget de rate-limit
 

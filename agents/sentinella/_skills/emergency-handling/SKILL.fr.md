@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: emergency-handling
 description: Comment gérer les urgences de rate-limit et la cascade FATAL lorsque le bridge devient aveugle. Inclut les déclencheurs de bypass du cooldown, le chemin de récupération L4-SOFT/L5-HARD et la gestion du RESET SESSIONE lors d'une chute de usage > 30 points.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # Skill — Gestion des urgences et cascade FATAL
 

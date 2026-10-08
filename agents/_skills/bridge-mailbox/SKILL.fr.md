@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: bridge-mailbox
 description: Vider les verdicts du bridge en attente au DÉBUT de chaque tour du Capitano — action OBLIGATOIRE avant toute autre chose. Pendant un long tour, `jht-tmux-send` depuis le bridge peut échouer avec rc=3 (texte jamais apparu dans le panneau) et un verdict `[BRIDGE PACING]` ou `PIPELINE STALLED` est silencieusement perdu. Le bridge ajoute CHAQUE verdict dans une boîte aux lettres JSONL pour que vous puissiez les récupérer. Ne pas vider signifie agir sur des mesures obsolètes alors qu'un verdict plus récent est en attente de lecture.
 allowed-tools: Bash(python3 /app/shared/skills/bridge_mailbox.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # bridge-mailbox — récupérer les verdicts manqués
 

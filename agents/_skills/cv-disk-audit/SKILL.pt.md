@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: cv-disk-audit
 description: Healthcheck periódico (Dottore) para reconciliar CVs em disco e cv_pdf_path no DB. Identifica órfãos (ficheiro em disco sem linha DB) e ghost (linha DB com cv_pdf_path apontando para ficheiro inexistente). Notifica o Capitano sobre os desajustes para que o utilizador não perca top PASS invisíveis e não veja "CV por escrever" para CVs já escritos.
 allowed-tools: Bash(python3 *), Bash(find *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # cv-disk-audit — reconciliação disco↔DB nos CVs
 

@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: application-flow
 description: Contratto DB + filesystem che ogni Scrittore segue per portare una posizione da `scored` (≥50) a `ready`/`excluded`. Tre gate PRIMA di scrivere una singola riga di CV (anti-riscrittura, anti-collisione, verifica link), un percorso canonico per i deliverable, un gate finale dopo il 3° round del Critico. Saltare uno qualsiasi di questi produce lavoro duplicato, sovrascrive il claim di un altro Scrittore, o — peggio — propone all'utente un CV di grado `excluded` come `ready`. Responsabilità dello Scrittore.
 allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(find *), Bash(test *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # application-flow — claim, scrivi, gate
 

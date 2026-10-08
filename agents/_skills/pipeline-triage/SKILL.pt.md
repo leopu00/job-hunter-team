@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: pipeline-triage
 description: "Decidir QUE papel spawnar / pausar / eliminar com base no estado do backlog, não por intuição. Abrir esta skill SEMPRE QUE observar — vel team < 50% alvo, OU fila de qualquer papel = 0, OU fontes do Scout esgotadas, OU [SCALA UP] da Sentinella, OU `PIPELINE VUOTA + UNDERSHOOT`, OU `MARGINE` do bridge-pacing, OU cold start, OU sempre que estiver tentado a \"simplesmente spawnar outro Scout\". NÃO esperar por um [SCALA UP] explícito da Sentinella quando as condições já são visíveis nas métricas. O objetivo: ler 4 números, escolher o papel que quebra o bottleneck, passar a `spawn-agent`."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # pipeline-triage — escalonamento baseado em dados
 

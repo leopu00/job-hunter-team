@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: cv-disk-audit
 description: Vérification de santé périodique (Dottore) pour réconcilier les CV sur disque et cv_pdf_path dans la DB. Identifie les orphelins (fichier sur disque sans ligne DB) et les fantômes (ligne DB avec cv_pdf_path pointant vers un fichier inexistant). Notifie le Capitano sur les incohérences pour que l'utilisateur ne perde pas les meilleurs PASS invisibles et ne voie pas "CV à écrire" pour des CV déjà écrits.
 allowed-tools: Bash(python3 *), Bash(find *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # cv-disk-audit — réconciliation disque↔DB des CV
 
