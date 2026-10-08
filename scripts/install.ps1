@@ -38,7 +38,7 @@
 # ║    -DryRun           Show the actions without running them               ║
 # ║    -Branch <name>    Source branch (default: production)                 ║
 # ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
-# ║    -SkipOnboard      Do not launch the wizard at the end                 ║
+# ║    -SkipOnboard      Noninteractive install; do not launch the wizard    ║
 # ║                                                                          ║
 # ║  Design reference: docs/internal/ops/vps.md                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -291,6 +291,10 @@ function Get-RuntimeFiles {
     }
     Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force
     Set-JhtNodeOwner -Path $helperDest
+    . $helperDest
+    if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
+      Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome"
+    }
   }
   Write-Ok "ACL helper: $helperDest"
 

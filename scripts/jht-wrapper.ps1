@@ -36,6 +36,8 @@ $ErrorActionPreference = 'Stop'
 # wrapper production con WrapperPath ancorato al comando host originale.
 $JHT_UPGRADE_PROTOCOL = 1
 $JHT_HOST_RUNTIME_PROTOCOL = 1
+$JHT_DESKTOP_CHAT_PROTOCOL = 1
+$JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
@@ -440,8 +442,21 @@ function Repair-MountOwnership {
       -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
       --entrypoint /bin/sh $Image -c $MountRepairDispatch 2>$null)
   $code = $LASTEXITCODE
-  $failed = @($out | Where-Object { "$_" -like 'mount_repair_failed*' })
-  if ($code -eq 0 -and $failed.Count -eq 0) { return $true }
+  $receipts = @($out | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  $expected = @('/jht_home', '/jht_user')
+  $confirmed = @{}
+  $invalid = $false
+  foreach ($receipt in $receipts) {
+    if ($receipt -notmatch '^mount_(?:ok|repaired) (/jht_home|/jht_user)$') {
+      $invalid = $true
+      continue
+    }
+    $confirmed[$Matches[1]] = $true
+  }
+  if ($code -eq 0 -and -not $invalid -and $receipts.Count -eq $expected.Count -and
+      @($expected | Where-Object { -not $confirmed.ContainsKey($_) }).Count -eq 0) {
+    return $true
+  }
   # Codice, frase, azione: mai un avvio che si ferma in silenzio.
   Write-Err "mount_repair_failed: le cartelle di Job Hunter Team ($homeMount, $userMount) non sono scrivibili dal container e non si sono potute sistemare."
   Write-Info "  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell'utente sia condivisa, poi rilancia 'jht up'."
@@ -483,6 +498,122 @@ function Get-RunningComposeServiceId {
     $found = $id
   }
   return $found
+}
+
+function Write-InactiveOnboardingSnapshot {
+  param([ValidateSet(0, 1)][int]$RuntimeInstalled)
+  foreach ($line in @(
+    "runtimeInstalled=$RuntimeInstalled",
+    'containerRunning=0',
+    'providerConfigured=0',
+    'providerAuthenticated=0',
+    'assistantWelcomed=0',
+    'assistantRunning=0',
+    'captainRunning=0',
+    'profileReady=0'
+  )) { [Console]::Out.WriteLine($line) }
+}
+
+# Read-only bridge used by the desktop onboarding state machine. It never
+# starts Docker, Compose, the container or the team, and always emits exactly
+# the eight protocol lines so a strict parser cannot inherit incidental host
+# output.
+function Write-OnboardingSnapshot {
+  $runtimeInstalled = 0
+  try {
+    if (-not (Test-RuntimeBundleTrusted)) {
+      Write-InactiveOnboardingSnapshot 0
+      return
+    }
+    $runtimeInstalled = 1
+    $containerId = Get-RunningComposeServiceId $Container
+    if (-not $containerId) {
+      Write-InactiveOnboardingSnapshot 1
+      return
+    }
+
+  $metadataScript = @'
+const fs=require("fs"); let config={};
+try { config=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
+const provider=String(config.active_provider||"").toLowerCase();
+const providers=config.providers||{}; const entry=providers[provider]||{};
+const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
+  && (entry.auth_method||"subscription")==="subscription";
+const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
+process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+'@
+    $metadata = ((& docker exec $containerId node -e $metadataScript 2>$null | Select-Object -First 1) -as [string])
+    $metadataCode = $LASTEXITCODE
+    $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
+    if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
+      $values = @('0', '0', '0')
+    }
+
+    $null = & docker exec $containerId tmux has-session -t ASSISTENTE 2>$null
+    $assistantRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    $null = & docker exec $containerId tmux has-session -t CAPITANO 2>$null
+    $captainRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    $null = & docker exec $containerId test -f /jht_home/profile/ready.flag 2>$null
+    $profileReady = if ($LASTEXITCODE -eq 0) { 1 } else {
+      $null = & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null
+      if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    }
+    $finalRunning = ((& docker inspect $containerId --format '{{.State.Running}}' 2>$null | Select-Object -First 1) -as [string])
+    $finalInspectCode = $LASTEXITCODE
+    if ($finalInspectCode -ne 0 -or -not $finalRunning -or $finalRunning.Trim() -ne 'true') {
+      Write-InactiveOnboardingSnapshot 1
+      return
+    }
+
+    foreach ($line in @(
+      'runtimeInstalled=1',
+      'containerRunning=1',
+      "providerConfigured=$($values[0])",
+      "providerAuthenticated=$($values[1])",
+      "assistantWelcomed=$($values[2])",
+      "assistantRunning=$assistantRunning",
+      "captainRunning=$captainRunning",
+      "profileReady=$profileReady"
+    )) { [Console]::Out.WriteLine($line) }
+  } catch {
+    Write-InactiveOnboardingSnapshot $runtimeInstalled
+  }
+}
+
+$script:DesktopChatExitCode = 1
+function Invoke-DesktopChat {
+  param([string[]]$ChatArgs)
+  $script:DesktopChatExitCode = 1
+  if (-not (Test-RuntimeBundleTrusted)) {
+    Write-Err 'runtime o container JHT non disponibile'
+    return
+  }
+  $containerId = Get-RunningComposeServiceId $Container
+  if (-not $containerId) {
+    Write-Err 'runtime o container JHT non disponibile'
+    return
+  }
+  $action = if ($ChatArgs.Count -gt 0) { $ChatArgs[0] } else { '' }
+  switch ($action) {
+    'probe' {
+      if ($ChatArgs.Count -ne 1) { $script:DesktopChatExitCode = 2; return }
+      [Console]::Out.WriteLine('true')
+      $script:DesktopChatExitCode = 0
+    }
+    'python' {
+      if ($ChatArgs.Count -ne 1) { $script:DesktopChatExitCode = 2; return }
+      & docker exec -i $containerId python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'
+      $script:DesktopChatExitCode = $LASTEXITCODE
+    }
+    'send' {
+      if ($ChatArgs.Count -ne 2 -or $ChatArgs[1] -notin @(
+        'CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO'
+      )) { $script:DesktopChatExitCode = 2; return }
+      & docker exec -i $containerId sh -c 'msg=$(cat); exec jht-tmux-send "$1" "$msg"' sh $ChatArgs[1]
+      $script:DesktopChatExitCode = $LASTEXITCODE
+    }
+    default { $script:DesktopChatExitCode = 2 }
+  }
 }
 
 function Test-BrokerUp {
@@ -1777,6 +1908,16 @@ switch ($Sub) {
       Write-Info "Per la versione del CLI in esecuzione serve il container attivo: 'jht up'."
     }
     exit 0
+  }
+
+  'onboarding-snapshot' {
+    Write-OnboardingSnapshot
+    exit 0
+  }
+
+  'desktop-chat' {
+    Invoke-DesktopChat $Rest
+    exit $script:DesktopChatExitCode
   }
 
   'game' {

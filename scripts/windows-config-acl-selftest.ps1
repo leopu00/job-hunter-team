@@ -123,6 +123,12 @@ try {
   $dockerCmd = @"
 @echo off
 >>"$dockerLog" echo %*
+if "%~1"=="run" (
+  if not "%JHT_FAKE_REPAIR_EMPTY%"=="1" (
+    echo mount_repaired /jht_home
+    echo mount_repaired /jht_user
+  )
+)
 exit /b 0
 "@
   Set-Content -LiteralPath (Join-Path $fakeBin 'docker.cmd') -Value $dockerCmd -Encoding ASCII
@@ -131,11 +137,40 @@ exit /b 0
   $env:JHT_RUNTIME_DIR = $RuntimeDir
   $env:JHT_COMPOSE_FILE = Join-Path $RuntimeDir 'docker-compose.yml'
   $env:JHT_WRAPPER_PATH = $installedWrapper
-  $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
+  $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $installerOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $standalone -DryRun -SkipOnboard 2>&1
+  if ($LASTEXITCODE -ne 0) { throw "desktop noninteractive installer contract failed: $($installerOutput | Out-String)" }
+  if (($installerOutput | Out-String) -match 'Launching the setup wizard') { throw 'desktop installer unexpectedly launched onboarding' }
+
+  $env:JHT_FAKE_REPAIR_EMPTY = '1'
+  $emptyRepairOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
+  $emptyRepairExit = $LASTEXITCODE
+  Remove-Item Env:JHT_FAKE_REPAIR_EMPTY
+  if ($emptyRepairExit -eq 0) { throw 'empty mount-repair output was accepted' }
+  $emptyRepairCalls = Get-Content -LiteralPath $dockerLog -Raw
+  if ($emptyRepairCalls -match '(?m)^compose .* up -d\s*$') { throw 'empty mount-repair output reached compose up' }
+  Clear-Content -LiteralPath $dockerLog
+
+  $output = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
   $wrapperExit = $LASTEXITCODE
   if ($wrapperExit -ne 0) { throw "E03 clean-start wrapper failed before Docker: $($output | Out-String)" }
   $dockerCalls = Get-Content -LiteralPath $dockerLog -Raw
+  $repairCall = [regex]::Match($dockerCalls, '(?m)^run .*--user 0:0 .*--cap-drop ALL .*--cap-add CHOWN .*--network none .*--security-opt no-new-privileges .*:/jht_home .*:/jht_user .*$')
+  if (-not $repairCall.Success) { throw "E03 clean-start did not use the confined mount repair: $dockerCalls" }
   if ($dockerCalls -notmatch '(?m)^compose .* up -d\s*$') { throw "E03 clean-start did not reach docker compose up -d: $dockerCalls" }
+  if ($repairCall.Index -gt $dockerCalls.IndexOf(' up -d')) { throw 'E03 clean-start reached compose up before mount repair' }
+
+  # The fake compose deliberately returns no service id: the desktop must get
+  # the exact eight-line, exit-zero inactive snapshot without starting again.
+  $snapshotOutput = @(& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper onboarding-snapshot 2>&1)
+  if ($LASTEXITCODE -ne 0) { throw "desktop onboarding snapshot failed: $($snapshotOutput | Out-String)" }
+  $expectedSnapshot = @(
+    'runtimeInstalled=1', 'containerRunning=0', 'providerConfigured=0', 'providerAuthenticated=0',
+    'assistantWelcomed=0', 'assistantRunning=0', 'captainRunning=0', 'profileReady=0'
+  )
+  if (($snapshotOutput -join "`n") -ne ($expectedSnapshot -join "`n")) {
+    throw "desktop onboarding snapshot schema changed: $($snapshotOutput | Out-String)"
+  }
   Write-Host 'E03 CLEAN_START installer-helper-smoke PASS'
 
   $acl = Get-Acl $root

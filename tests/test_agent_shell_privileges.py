@@ -238,6 +238,15 @@ def test_a_failed_repair_stops_the_start_with_code_sentence_and_action():
     assert text.count("if (-not (Repair-MountOwnership)) { exit 1 }") == 3
 
 
+def test_windows_wrapper_requires_positive_receipts_for_both_mounts():
+    text = PS1.read_text(encoding="utf-8")
+    repair = text[text.index("function Repair-MountOwnership") : text.index("function Get-ComposeProjectName")]
+    assert "$expected = @('/jht_home', '/jht_user')" in repair
+    assert "^mount_(?:ok|repaired) (/jht_home|/jht_user)$" in repair
+    assert "$receipts.Count -eq $expected.Count" in repair
+    assert "$confirmed.ContainsKey($_)" in repair
+
+
 def _stubbed_repair(tmp_path: Path, owners: dict[str, str], chown_works: bool):
     """Run repair-mounts.sh on temporary folders with stat, find and chown faked."""
     bin_dir = tmp_path / "bin"

@@ -201,6 +201,8 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
         "Get-File -Url $helperUrl -Dest $helperTemp",
         "[scriptblock]::Create((Get-Content -LiteralPath $helperTemp -Raw))",
         "Move-Item -LiteralPath $helperTemp -Destination $helperDest -Force",
+        ". $helperDest",
+        "Test-PrivateJhtHomeAcl -Path $JhtHome",
         "Get-FileHash -Algorithm SHA256 -LiteralPath $helperDest",
         "windows-private-acl.ps1=$helperHash",
     ):
@@ -224,7 +226,14 @@ def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():
         "Get-RuntimeFiles",
         "$installedHelperHash -ne $sourceHelperHash",
         "$manifestValues.'windows-private-acl.ps1' -ne $installedHelperHash",
-        "-File $installedWrapper up",
+        "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up",
+        "mount_repaired /jht_home",
+        "mount_repaired /jht_user",
+        "empty mount-repair output was accepted",
+        "empty mount-repair output reached compose up",
+        "--security-opt no-new-privileges",
+        "-File $installedWrapper onboarding-snapshot",
+        "desktop onboarding snapshot schema changed",
         "E03 CLEAN_START installer-helper-smoke PASS",
     ):
         assert seam in smoke
