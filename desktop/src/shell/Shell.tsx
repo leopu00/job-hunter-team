@@ -5,6 +5,7 @@ import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { signOut } from "../lib/supabase";
 import { DESKTOP_LINKS } from "./desktop-links";
+import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
@@ -118,6 +119,7 @@ export default function Shell({ onLogout }: ShellProps) {
           style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "calc(100svh / var(--zoom, 1))", overflow: "hidden" }}
         >
           <Navbar onLogout={onLogout} />
+          <MailRotationBanner />
           <main className="relative min-h-0 flex-1" data-testid="full-bleed">
             {page}
           </main>
@@ -129,6 +131,7 @@ export default function Shell({ onLogout }: ShellProps) {
     <DashboardI18nProvider>
       <div style={{ position: "relative", zIndex: 1 }}>
       <Navbar onLogout={onLogout} />
+        <MailRotationBanner />
         <MainChrome>{page}</MainChrome>
       </div>
     </DashboardI18nProvider>

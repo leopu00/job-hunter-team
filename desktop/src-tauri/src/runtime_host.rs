@@ -506,6 +506,18 @@ pub(crate) fn run_ssh(
     timeout: Duration,
     control_path: Option<&Path>,
 ) -> Result<ProcessResult, &'static str> {
+    run_ssh_command(host, remote_command, input, timeout, control_path)
+}
+
+/// Like `run_ssh`, for a command built at run time. The caller quotes every
+/// value it puts in it; a secret never goes there, only on `input`.
+pub(crate) fn run_ssh_command(
+    host: &ValidatedHost,
+    remote_command: &str,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    control_path: Option<&Path>,
+) -> Result<ProcessResult, &'static str> {
     let mut args = ssh_base_args(host)?;
     if let Some(path) = control_path {
         args.insert(0, format!("ControlPath={}", path.display()).into());

@@ -1765,6 +1765,46 @@ pub(crate) fn run_linkedin_command(
     }
 }
 
+/// The host's `jht` with arguments built at run time and an optional stdin:
+/// the attested wrapper on this computer, `jht` over SSH on a VPS. Every
+/// argument is single-quoted in the remote command; secrets go only on
+/// `input`, never in `args`.
+pub(crate) fn run_host_jht(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    args: &[&str],
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    match host {
+        ValidatedHost::Local => {
+            crate::account_scope::validate_local_runtime(app, scope)?;
+            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            refuse_broad_podman_machine(run_verified_local_wrapper(&wrapper, args, input, timeout))
+        }
+        ValidatedHost::Vps { .. } => crate::runtime_host::run_ssh_command(
+            host,
+            &remote_jht_command(args),
+            input,
+            timeout,
+            None,
+        ),
+    }
+}
+
+/// `jht <args>` for the VPS's shell, each argument single-quoted.
+pub(crate) fn remote_jht_command(args: &[&str]) -> String {
+    let quoted: Vec<String> = args
+        .iter()
+        .map(|arg| format!("'{}'", arg.replace('\'', "'\\''")))
+        .collect();
+    format!(
+        r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" {}"#,
+        quoted.join(" ")
+    )
+}
+
 /// A wrapper that refused a Podman machine mounting more of the Mac answers
 /// with its own error, never with the failure of the step that ran it.
 fn refuse_broad_podman_machine(

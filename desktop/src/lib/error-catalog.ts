@@ -696,6 +696,56 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Report it from the app: the login stays blocked until the browser can run isolated.",
   ),
 
+  // ── The team's mailbox (mail.rs) ─────────────────────────────────────────
+  mail_rotation_pending: copy(
+    "La password della casella email era leggibile dagli agenti. L’invio continua a funzionare.",
+    "Crea una nuova password per app dal tuo provider di posta e salvala in Posta.",
+    "The mailbox password was readable by the agents. Sending keeps working.",
+    "Create a new app password with your mail provider and save it in Mail.",
+  ),
+  password_not_rotated: copy(
+    "Questa password era leggibile dagli agenti: non si può riusare.",
+    "Creane una nuova dal tuo provider di posta (password per app) e salvala qui.",
+    "This password was readable by the agents: it cannot be used again.",
+    "Create a new one with your mail provider (an app password) and save it here.",
+  ),
+  mail_unavailable: copy(
+    "Il servizio della posta non è raggiungibile.",
+    "Controlla che il team sia acceso e riprova.",
+    "The mail service cannot be reached.",
+    "Check that the team is running and try again.",
+  ),
+  mail_address_invalid: copy(
+    "L’indirizzo della casella non è valido.",
+    "Scrivilo per intero, con la @ (per esempio nome@example.com).",
+    "The mailbox address is not valid.",
+    "Write it in full, with the @ (for example name@example.com).",
+  ),
+  mail_password_missing: copy(
+    "Manca la password per app.",
+    "Incollala nel campo della password e salva.",
+    "The app password is missing.",
+    "Paste it into the password field and save.",
+  ),
+  mail_password_invalid: copy(
+    "La password contiene caratteri che non si possono salvare.",
+    "Incolla la password per app così come te la dà il provider, su una riga sola.",
+    "The password contains characters that cannot be saved.",
+    "Paste the app password exactly as your provider gives it, on a single line.",
+  ),
+  mail_host_invalid: copy(
+    "Il server di posta indicato non è valido.",
+    "Scrivi solo il nome del server (per esempio imap.gmail.com) o lascia il campo vuoto.",
+    "The mail server given is not valid.",
+    "Write only the server name (for example imap.gmail.com) or leave the field empty.",
+  ),
+  mail_save_failed: copy(
+    "La password non è stata salvata.",
+    "Riprova. Se si ripete, riavvia Job Hunter Team.",
+    "The password was not saved.",
+    "Try again. If it happens again, restart Job Hunter Team.",
+  ),
+
   // ── Profile import from a VPS ────────────────────────────────────────────
   local_profile_required: copy(
     "Questa funzione è disponibile solo nel profilo locale.",
