@@ -21,6 +21,14 @@ def _run(args, *, input_text=None, check=True):
     return subprocess.run(args, input=input_text, text=True, capture_output=True, check=check, timeout=45)
 
 
+def _spawn(args, sql):
+    """A second session that runs alongside the main one (locks are per session)."""
+    proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc.stdin.write(sql)
+    proc.stdin.close()
+    return proc
+
+
 @pytest.fixture(scope="module")
 def pg16():
     external_url = os.environ.get("JHT_TEST_POSTGRES_URL")
@@ -55,6 +63,10 @@ def pg16():
         def psql(sql: str, *, check=True):
             return external_psql(sql, target=database_url, check=check)
 
+        psql.spawn = lambda sql: _spawn(
+            [psql_client, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", database_url, "-At", "-F", "|"], sql
+        )
+
         try:
             yield psql
         finally:
@@ -72,6 +84,10 @@ def pg16():
 
     def psql(sql: str, *, check=True):
         return _run(["docker", "exec", "-i", name, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-At", "-F", "|"], input_text=sql, check=check)
+
+    psql.spawn = lambda sql: _spawn(
+        ["docker", "exec", "-i", name, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-At", "-F", "|"], sql
+    )
 
     try:
         stable = 0
@@ -127,7 +143,19 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     identity_sql = IDENTITY_MIGRATION.read_text()
     sql = MIGRATION.read_text()
     pg16(identity_sql)
+    before_077 = _public_functions(pg16)
     pg16(sql)
+    # Narrow: 077 installs the two click RPCs and touches no other function
+    # (sync_upsert_applications belongs to 072/076 and must not be re-run).
+    after_077 = _public_functions(pg16)
+    changed = {name for name, version in after_077.items() if before_077.get(name) != version}
+    assert changed == {"mark_position_applied", "undo_manual_position_application"}
+    assert set(before_077) <= set(after_077)
+    # Invoker rights: the RLS policies on these tables are the second wall
+    # behind the user_id filter, and a SECURITY DEFINER function would run as
+    # the owner, outside them.
+    definer = pg16("SELECT bool_or(prosecdef) FROM pg_proc WHERE oid IN ('public.mark_position_applied(integer,timestamptz,text,text)'::regprocedure, 'public.undo_manual_position_application(integer,text)'::regprocedure);").stdout.strip()
+    assert definer == "f"
     # Supabase grants newly-created public RPCs to every API role. The
     # migration must remove those explicit grants as well as PUBLIC on reapply.
     pg16("GRANT EXECUTE ON FUNCTION public.mark_position_applied(integer,timestamptz,text,text), public.undo_manual_position_application(integer,text) TO anon, service_role;")
@@ -168,3 +196,73 @@ def test_pg16_apply_reapply_click_undo_tenant_and_privileges(pg16):
     assert '"status": "ready"' in undone or '"status":"ready"' in undone
     assert pg16("SELECT status FROM public.positions WHERE user_id='" + owner + "' AND legacy_id=73;").stdout.strip() == "ready"
     assert pg16("SELECT status FROM public.positions WHERE user_id='" + other + "' AND legacy_id=74;").stdout.strip() == "ready"
+
+    # Undo clears the application's timestamp and channel, not only the flag.
+    app = f"FROM public.applications WHERE position_id='{pos}'"
+    assert pg16(f"SELECT applied, applied_at, applied_via, status {app};").stdout.strip() == "f|||draft"
+
+    # Click again after the undo, with the same instant as the first click: the
+    # application row comes back applied, and the transition already recorded
+    # for that instant is not a reason to fail.
+    again = pg16(_as(owner) + "SELECT public.mark_position_applied(73,'2026-08-13T12:00:00Z','user_manual','synthetic');", check=False)
+    assert again.returncode == 0, again.stderr
+    assert pg16(f"SELECT applied AND applied_at = '2026-08-13T12:00:00Z'::timestamptz AND applied_via = 'user_manual' {app};").stdout.strip() == "t"
+
+    # A second click minutes later on an already applied position records no
+    # second transition into `applied`.
+    pg16(_as(owner) + "SELECT public.mark_position_applied(73,'2026-08-13T12:05:00Z','user_manual','synthetic');")
+    applied_transitions = "SELECT count(*) FROM public.position_transitions WHERE position_legacy_id=73 AND to_state='applied' AND by_agent='user'"
+    assert pg16(applied_transitions + ";").stdout.strip() == "1"
+
+    # Concurrency: a click still in flight holds the position row. An undo that
+    # arrives meanwhile waits for it and undoes it, instead of reading the old
+    # status and answering "not applied".
+    pg16(_as(owner) + "SELECT public.undo_manual_position_application(73,'ready');")
+    holder, undo_meanwhile = _while_held(
+        pg16, _as(owner) + "SELECT public.mark_position_applied(73,'2026-08-13T13:00:00Z','user_manual','synthetic');",
+        _as(owner) + "SELECT public.undo_manual_position_application(73,'ready');",
+    )
+    assert holder.returncode == 0, holder.stderr
+    assert undo_meanwhile.returncode == 0, undo_meanwhile.stderr
+    assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "ready"
+
+    # Two clicks at once (two tabs): the second waits for the first, sees the
+    # position applied, and records no second transition.
+    holder, second_click = _while_held(
+        pg16, _as(owner) + "SELECT public.mark_position_applied(73,'2026-08-13T14:00:00Z','user_manual','synthetic');",
+        _as(owner) + "SELECT public.mark_position_applied(73,'2026-08-13T14:01:00Z','user_manual','synthetic');",
+    )
+    assert holder.returncode == 0, holder.stderr
+    assert second_click.returncode == 0, second_click.stderr
+    assert pg16(applied_transitions + " AND ts >= '2026-08-13T14:00:00Z';").stdout.strip() == "1"
+
+    # An application the team sent is not the user's to undo.
+    pg16(f"UPDATE public.applications SET applied_via='telegram' WHERE position_id='{pos}';")
+    by_team = pg16(_as(owner) + "SELECT public.undo_manual_position_application(73,'ready');", check=False)
+    assert by_team.returncode != 0 and "applied_by_team" in by_team.stderr
+    assert pg16("SELECT status FROM public.positions WHERE legacy_id=73;").stdout.strip() == "applied"
+
+
+def _as(user: str) -> str:
+    return f"SET ROLE authenticated; SET request.jwt.claim.sub='{user}'; "
+
+
+def _public_functions(pg16) -> dict[str, str]:
+    """Each public function with the version of its catalog row (xmin changes on CREATE OR REPLACE)."""
+    rows = pg16("SELECT proname, xmin FROM pg_proc WHERE pronamespace = 'public'::regnamespace;").stdout.split()
+    return dict(row.split("|") for row in rows)
+
+
+def _while_held(pg16, holder_sql: str, contender_sql: str):
+    """Run holder_sql in a transaction that keeps its locks for 2 s; run contender_sql meanwhile."""
+    holder = pg16.spawn(f"BEGIN; {holder_sql} SELECT pg_sleep(2); COMMIT;")
+    deadline = time.monotonic() + 15
+    # pg_sleep starts only after holder_sql returned, so its locks are held.
+    while pg16("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event = 'PgSleep';").stdout.strip() != "1":
+        assert holder.poll() is None, holder.stderr.read()
+        assert time.monotonic() < deadline, "the holding session never reached pg_sleep"
+        time.sleep(0.05)
+    contender = pg16(contender_sql, check=False)
+    holder.wait(timeout=30)
+    err = holder.stderr.read()
+    return subprocess.CompletedProcess(holder.args, holder.returncode, "", err), contender
