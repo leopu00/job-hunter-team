@@ -5,6 +5,10 @@ import { ACTIVE_PROVIDERS } from "@/lib/providers";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  setupChannels,
+  TelegramPairingBelongsToHostError,
+} from "@/lib/setup-channels";
 
 export const dynamic = "force-dynamic";
 
@@ -158,12 +162,40 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let existingChannels: Record<string, unknown> = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+      if (existing.channels && typeof existing.channels === "object") {
+        existingChannels = existing.channels;
+      }
+    } catch {
+      // La validazione e la riscrittura sottostante riparano la config corrotta.
+    }
+  }
+
+  let channels: Record<string, unknown>;
+  try {
+    channels = setupChannels(body.channels, existingChannels);
+  } catch (err) {
+    if (err instanceof TelegramPairingBelongsToHostError) {
+      return NextResponse.json(
+        {
+          error: "telegram_pair_on_host",
+          command: "jht telegram pair <assistente|capitano|mentor>",
+        },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
+
   // Workspace path fisso — ignora qualsiasi override dal body
   const config = {
     version: 1,
     active_provider: activeProvider,
     providers,
-    channels: body.channels ?? {},
+    channels,
     workspace: JHT_USER_DIR,
     workspacePath: JHT_USER_DIR,
   };

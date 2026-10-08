@@ -1203,9 +1203,9 @@ const S := {
 	"email.help": "COME CREARE UNA APP PASSWORD  ↗",
 
 	# ── Impostazioni → Telegram ───────────────────────────────────────
-	"tg.intro": "Collega i tre bot privati usati dal team. I token restano nel runtime locale o sulla tua VPS e non vengono mai inviati al cloud JHT.",
+	"tg.intro": "Collega i tre bot privati usati dal team. I token passano direttamente al servizio Telegram isolato e non vengono salvati nella home degli agenti.",
 	"tg.botfather": "APRI BOTFATHER  ↗",
-	"tg.guide": "Crea un bot, incolla il token, apri la chat col bot e premi Start; poi usa SALVA E RILEVA CHAT.",
+	"tg.guide": "Crea o ruota i bot in BotFather, poi completa l'abbinamento dal terminale dell'host con i comandi qui sotto. Se esisteva già un token, usane uno nuovo.",
 	"tg.role_assistente": "onboarding del profilo e documenti",
 	"tg.role_capitano": "direzione del team e posizioni pronte",
 	"tg.role_mentor": "coaching e strategia professionale",

@@ -950,9 +950,9 @@ const S := {
 	"email.remove": "REMOVE",
 	"email.help": "HOW TO CREATE AN APP PASSWORD  ↗",
 
-	"tg.intro": "Connect the three private bots the team uses. The tokens stay in the local runtime or on your VPS and are never sent to the JHT cloud.",
+	"tg.intro": "Connect the three private bots the team uses. Tokens go straight to the isolated Telegram service and are never saved in the agents' home.",
 	"tg.botfather": "OPEN BOTFATHER  ↗",
-	"tg.guide": "Create a bot, paste the token, open the chat with the bot and press Start; then use SAVE AND DETECT CHAT.",
+	"tg.guide": "Create or rotate the bots in BotFather, then finish pairing from the host terminal with the commands below. If a token already existed, use a new one.",
 	"tg.role_assistente": "profile onboarding and documents",
 	"tg.role_capitano": "team direction and ready positions",
 	"tg.role_mentor": "coaching and career strategy",

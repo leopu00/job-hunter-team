@@ -942,9 +942,9 @@ const S := {
 	"email.remove": "SUPPRIMER",
 	"email.help": "COMMENT CRÉER UN MOT DE PASSE D'APPLICATION  ↗",
 
-	"tg.intro": "Connecte les trois bots privés utilisés par l'équipe. Les jetons restent dans le runtime local ou sur ta VPS et ne sont jamais envoyés au cloud JHT.",
+	"tg.intro": "Connecte les trois bots privés utilisés par l'équipe. Les jetons vont directement au service Telegram isolé et ne sont jamais enregistrés dans le dossier des agents.",
 	"tg.botfather": "OUVRIR BOTFATHER  ↗",
-	"tg.guide": "Crée un bot, colle le jeton, ouvre le chat avec le bot et appuie sur Start ; puis utilise ENREGISTRER ET DÉTECTER LE CHAT.",
+	"tg.guide": "Crée ou renouvelle les bots dans BotFather, puis termine l'association depuis le terminal de l'hôte avec les commandes ci-dessous. Si un jeton existait déjà, utilise-en un nouveau.",
 	"tg.role_assistente": "onboarding du profil et documents",
 	"tg.role_capitano": "direction de l'équipe et postes prêts",
 	"tg.role_mentor": "coaching et stratégie professionnelle",

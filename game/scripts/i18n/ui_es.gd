@@ -942,9 +942,9 @@ const S := {
 	"email.remove": "QUITAR",
 	"email.help": "CÓMO CREAR UNA CONTRASEÑA DE APLICACIÓN  ↗",
 
-	"tg.intro": "Conecta los tres bots privados que usa el equipo. Los tokens se quedan en el runtime local o en tu VPS y nunca se envían a la nube de JHT.",
+	"tg.intro": "Conecta los tres bots privados que usa el equipo. Los tokens pasan directamente al servicio aislado de Telegram y nunca se guardan en la carpeta de los agentes.",
 	"tg.botfather": "ABRIR BOTFATHER  ↗",
-	"tg.guide": "Crea un bot, pega el token, abre el chat con el bot y pulsa Start; luego usa GUARDAR Y DETECTAR CHAT.",
+	"tg.guide": "Crea o rota los bots en BotFather y completa el emparejamiento desde el terminal del host con los comandos de abajo. Si ya existía un token, usa uno nuevo.",
 	"tg.role_assistente": "onboarding del perfil y documentos",
 	"tg.role_capitano": "dirección del equipo y posiciones listas",
 	"tg.role_mentor": "coaching y estrategia profesional",

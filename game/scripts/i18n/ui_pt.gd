@@ -942,9 +942,9 @@ const S := {
 	"email.remove": "REMOVER",
 	"email.help": "COMO CRIAR UMA PALAVRA-PASSE DE APLICAÇÃO  ↗",
 
-	"tg.intro": "Liga os três bots privados usados pela equipa. Os tokens ficam no runtime local ou na tua VPS e nunca são enviados para a cloud do JHT.",
+	"tg.intro": "Liga os três bots privados usados pela equipa. Os tokens seguem diretamente para o serviço Telegram isolado e nunca são guardados na pasta dos agentes.",
 	"tg.botfather": "ABRIR BOTFATHER  ↗",
-	"tg.guide": "Cria um bot, cola o token, abre a conversa com o bot e carrega em Start; depois usa GUARDAR E DETETAR CONVERSA.",
+	"tg.guide": "Cria ou roda os bots no BotFather e conclui o emparelhamento no terminal do host com os comandos abaixo. Se já existia um token, usa um novo.",
 	"tg.role_assistente": "onboarding do perfil e documentos",
 	"tg.role_capitano": "direção da equipa e posições prontas",
 	"tg.role_mentor": "coaching e estratégia profissional",

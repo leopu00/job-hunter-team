@@ -6,6 +6,10 @@ import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
 import { ACTIVE_PROVIDERS } from "@/lib/providers";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import {
+  setupChannels,
+  TelegramPairingBelongsToHostError,
+} from "@/lib/setup-channels";
 
 export const dynamic = "force-dynamic";
 
@@ -201,11 +205,24 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  // Telegram
-  const channels = (body.channels ?? existing.channels ?? {}) as Record<
-    string,
-    unknown
-  >;
+  let channels: Record<string, unknown>;
+  try {
+    channels = setupChannels(
+      body.channels,
+      (existing.channels ?? {}) as Record<string, unknown>,
+    );
+  } catch (err) {
+    if (err instanceof TelegramPairingBelongsToHostError) {
+      return NextResponse.json(
+        {
+          error: "telegram_pair_on_host",
+          command: "jht telegram pair <assistente|capitano|mentor>",
+        },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
 
   // Cron
   const cronEnabled =

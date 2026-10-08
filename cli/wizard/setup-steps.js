@@ -2,13 +2,10 @@
  * JHT Setup Wizard — Step Telegram, subscription, salvataggio, riepilogo
  * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team), non chiesti.
  */
-import https from 'node:https';
-import crypto from 'node:crypto';
 import {
   JHT_CONFIG_PATH,
   JHT_CONFIG_DIR,
   writeConfigFile,
-  validateTelegramToken,
   validateEmail,
 } from './setup-helpers.js';
 import { describeSecret } from './secret-ref.js';
@@ -16,321 +13,37 @@ import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 import { t } from './i18n.js';
 
-// ─── Privacy suffix per bot username Telegram ──────────────────────────
-// I bot Telegram hanno username GLOBALI UNICI raggiungibili da chiunque
-// conosca il nome (Telegram non supporta "bot privati" nativamente). Il
-// nostro tg-bridge fa whitelist via chat_id, quindi un attaccante che
-// indovina lo username puo' solo SCRIVERE al bot (i messaggi vengono
-// scartati, niente effetto su LLM/DB), ma resta scopribile.
-// Forzare un suffix random nello username rende lo username unguessable:
-// con 8 char lower+digits = 36^8 ≈ 2.8 trilioni di combinazioni. Combinato
-// con la whitelist chat_id = privacy reale per la beta.
-
-/**
- * Genera un suffix random alfanumerico lower-case, sicuro per crypto.
- * Telegram bot username permette: [a-zA-Z0-9_], must end in 'bot', max 32 char.
- * Usiamo solo [a-z0-9] per semplicita' di lettura nelle istruzioni.
- */
-function generatePrivacySuffix(length = 8) {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = crypto.randomBytes(length);
-  let out = '';
-  for (let i = 0; i < length; i++) {
-    out += alphabet[bytes[i] % alphabet.length];
-  }
-  return out;
-}
-
-// ─── Telegram Bot API helpers ──────────────────────────────────────────
-// In-line fetch wrapper: niente dipendenze extra (axios/grammy), niente
-// global fetch nei vecchi Node. Tutto urllib-equivalente con https + Promise.
-
-function tgFetchJson(token, method, params = {}, timeoutMs = 30000) {
-  const qs = Object.entries(params)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
-  const url = `https://api.telegram.org/bot${token}/${method}${qs ? `?${qs}` : ''}`;
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: timeoutMs }, (res) => {
-      let body = '';
-      res.on('data', (c) => (body += c));
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(new Error('timeout')); });
-  });
-}
-
-async function tgGetBotUsername(token) {
-  const r = await tgFetchJson(token, 'getMe', {}, 10000);
-  if (!r.ok) throw new Error(r.description || 'getMe failed');
-  return r.result.username; // senza @
-}
-
-/**
- * Poll getUpdates finche' un utente scrive al bot, restituendo il suo
- * chat_id (numero). Skippa il backlog: parte dall'update_id corrente +1.
- * Timeout: 15 min totali. Long-poll Telegram con timeout=20s per round.
- */
-async function tgWaitForFirstChat(token, deadlineMs) {
-  // Reset offset al massimo update_id esistente, cosi' un backlog di
-  // messaggi vecchi (es. utente curioso che ha gia' scritto al bot in
-  // sviluppo) non ci da' un chat_id stantio.
-  let offset = 0;
-  try {
-    const init = await tgFetchJson(token, 'getUpdates', { offset: -1, timeout: 0 }, 8000);
-    if (init.ok && init.result.length > 0) {
-      offset = init.result[init.result.length - 1].update_id;
-    }
-  } catch { /* fallback: parti da 0 */ }
-
-  while (Date.now() < deadlineMs) {
-    try {
-      const r = await tgFetchJson(
-        token, 'getUpdates',
-        { offset: offset + 1, timeout: 20 },
-        30000,
-      );
-      if (r.ok && r.result.length > 0) {
-        for (const u of r.result) {
-          const chat = u.message?.chat || u.edited_message?.chat;
-          if (chat?.id) return chat.id;
-        }
-        offset = r.result[r.result.length - 1].update_id;
-      }
-    } catch { /* network glitch: ritenta */ }
-  }
-  return null;
-}
-
-/**
- * Setup Telegram OBBLIGATORIO — 3 bot dedicati (decisione 2026-05-13 rev2).
- *
- * L'utente crea su BotFather 3 bot separati (assistente, capitano, mentor) e
- * per ognuno: token → getMe → deep-link → /start → cattura chat_id automatica.
- * Tutti e 3 sono richiesti per uscire dal wizard.
- *
- * Ritorna: { bots: { assistente, capitano, mentor } } dove ogni voce e'
- * { bot_token, chat_id }.
- */
-export async function promptTelegramRequired(prompter, baseChannels) {
-  const existing = baseChannels?.telegram?.bots || {};
-
-  // ── Step A: chiedi nome utente per personalizzare gli username dei bot ──
-  // Il nome utente diventa parte dello username Telegram bot, insieme a un
-  // random suffix. Risultato: `<role>_<username>_<random>_bot`. Pattern
-  // brand-meno-guessable + suffix random = privacy in pratica.
-  const userTag = await prompter.text({
-    message: 'Tag/username to customize Telegram bots',
-    placeholder: 'alex',
-    initialValue: existing?.userTag,
-    validate: (v) => {
-      const trimmed = (v || '').trim().toLowerCase();
-      if (!trimmed) return 'Required (it will be part of the bot usernames)';
-      if (!/^[a-z0-9]{2,20}$/.test(trimmed)) {
-        return 'Only a-z and 0-9, 2-20 characters (no spaces, no underscores)';
-      }
-      return undefined;
-    },
-  });
-  const userTagClean = userTag.trim().toLowerCase();
-
-  // ── Step B: genera 3 suffix INDIPENDENTI (uno per bot) ──
-  // Indipendenza: se uno collide su BotFather, posso rigenerare solo
-  // quello senza toccare gli altri. Anche se l'utente ricorda 1 nome
-  // (il proprio userTag) e legge i suffix dal wizard, no carico cognitivo.
-  const suggestedUsernames = {
-    assistente: `assistente_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
-    capitano:   `capitano_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
-    mentor:     `mentor_${userTagClean}_${generatePrivacySuffix(6)}_bot`,
-  };
-
-  await prompter.note(
-    'Telegram is required: each user-facing agent has a dedicated bot\n' +
-    '(separate notifications, targeted conversations, clean context).\n\n' +
-    'You need to create 3 bots on @BotFather, one for each agent:\n' +
-    '  1. Assistente — profile onboarding and document drop zone\n' +
-    '  2. Capitano — team management and ready-position notifications\n' +
-    '  3. Mentor — growth mentoring and strategic positioning\n\n' +
-    'PRIVACY: Telegram bot usernames are public. Anyone who knows\n' +
-    '   a username can find its bot, although messages from chats outside\n' +
-    '   the allowlist are discarded by our chat_id filter. To make the bots\n' +
-    '   difficult to guess, use your tag plus a random suffix:\n\n' +
-    `      ${suggestedUsernames.assistente}\n` +
-    `      ${suggestedUsernames.capitano}\n` +
-    `      ${suggestedUsernames.mentor}\n\n` +
-    '   If BotFather says "username already taken" for one of the three,\n' +
-    '   in the next step you can regenerate the suffix for that bot.\n\n' +
-    'Repeat these steps for each bot in @BotFather:\n' +
-    '  • /newbot\n' +
-    '  • Any display name (for example, "Assistente JHT")\n' +
-    '  • Username with the pattern above (it must end in "bot")\n' +
-    '  • BotFather answers with a token "123456789:ABC... "\n\n' +
-    'Keep the 3 tokens at your fingertips: I\'ll ask you one by one.',
-    'Set up Telegram (3 required bots)',
-  );
-
-  const roles = [
-    { key: 'assistente', label: 'Assistente', hint: 'profile onboarding and documents' },
-    { key: 'capitano',   label: 'Capitano',   hint: 'team management and batch notifications' },
-    { key: 'mentor',     label: 'Mentor',     hint: 'growth mentor' },
-  ];
-
-  const bots = {};
-  for (const role of roles) {
-    bots[role.key] = await promptSingleTelegramBot(
-      prompter,
-      role,
-      existing[role.key],
-      suggestedUsernames[role.key],
-      userTagClean,
-    );
-  }
-  return { bots, userTag: userTagClean };
-}
-
 /**
  * Setup Telegram CONSIGLIATO ma OPZIONALE (direction shift "interaction
- * planes", 2026-06-16). L'interazione primaria si sposta sul desktop; Telegram
- * diventa il canale async per quando sei lontano dal desktop. Niente piu' gate:
- * chiediamo con un confirm e l'utente puo' saltare (e configurarlo dopo con
- * `jht config` o rilanciando il wizard).
- *
- * Ritorna il telegramChannel (`{ bots, userTag }`) se configurato, oppure
- * `null` se l'utente salta. Isolata da `promptTelegramRequired` apposta per
- * essere testabile senza rete: il ramo "skip" non tocca Telegram.
- *
- * @param {import('./prompts.js').WizardPrompter} prompter
- * @param {object} [baseChannels] — config.channels esistente (per pre-fill)
- * @returns {Promise<object|null>}
+ * planes", 2026-06-16). Il pairing appartiene al comando host: il wizard
+ * dentro jht non raccoglie token e non puo' inoltrarli al servizio isolato.
  */
-export async function promptTelegramOptional(prompter, baseChannels) {
+export async function promptTelegramOptional(prompter) {
   const wants = await prompter.confirm({
     message:
-      'Configure Telegram bots now? Recommended (notifications + chat from ' +
-      'away from the desktop), but you can skip and do it later with `jht config`.',
+      'Show the host commands for Telegram pairing? Recommended for ' +
+      'notifications and chat away from the desktop.',
     initialValue: true,
   });
   if (!wants) {
     await prompter.note(
       'Telegram skipped. The team remains available from the desktop ' +
-      '(dashboard and chat). To add Telegram later, run `jht config` or ' +
-      '`jht setup` again.',
+      '(dashboard and chat). To add Telegram later, run ' +
+      '`jht telegram pair <assistente|capitano|mentor>` on the host.',
       'Optional Telegram — skipped',
     );
-    return null;
+    return;
   }
-  return promptTelegramRequired(prompter, baseChannels);
-}
-
-/**
- * Wizard di un singolo bot Telegram: token → getMe → deep-link → wait /start.
- * Riusa la logica precedente (un solo bot) parametrizzata sul ruolo.
- */
-async function promptSingleTelegramBot(prompter, role, existing, suggestedUsernameInitial, userTag) {
-  // Loop: se BotFather dice "username taken", l'utente puo' chiedere di
-  // rigenerare il suffix (random nuovo) prima di provare di nuovo. Max 5
-  // regen, poi fall-through al token input (l'utente decide da solo).
-  let suggestedUsername = suggestedUsernameInitial;
-  let regenCount = 0;
-  const MAX_REGEN = 5;
-
-  while (regenCount < MAX_REGEN) {
-    await prompter.note(
-      `Now configure the ${role.label} bot (${role.hint}).\n\n` +
-      `On @BotFather: /newbot → follow the instructions → copy the token.\n\n` +
-      `Suggested privacy-friendly username: ${suggestedUsername}\n`,
-      `Bot ${role.label} (${role.key})`,
-    );
-
-    // Se BotFather ha accettato lo username → vai avanti.
-    // Se preso → regen il suffix e ripresenta.
-    const accepted = await prompter.confirm({
-      message: `BotFather accepted the username ${suggestedUsername}?`,
-      initialValue: true,
-    });
-
-    if (accepted) break;
-
-    if (userTag) {
-      suggestedUsername = `${role.key}_${userTag}_${generatePrivacySuffix(6)}_bot`;
-      regenCount++;
-      await prompter.note(
-        `Try this new random suffix: ${suggestedUsername}`,
-        `Regen ${regenCount}/${MAX_REGEN}`,
-      );
-    } else {
-      // No userTag (modalita' legacy): break e l'utente sceglie a mano.
-      break;
-    }
-  }
-
-  const botToken = await prompter.text({
-    message: `Token for the ${role.label} bot`,
-    placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz',
-    initialValue: existing?.bot_token,
-    validate: (v) => {
-      if (!v || v.trim().length === 0) return 'Token is required';
-      return validateTelegramToken(v);
-    },
-  });
-  const token = botToken.trim();
-
-  let botUsername = null;
-  const probe = prompter.progress(`Verifying the ${role.label} bot...`);
-  try {
-    botUsername = await tgGetBotUsername(token);
-    probe.stop(`Bot ${role.label} recognized: @${botUsername}`);
-  } catch (e) {
-    probe.stop(`Error ${role.label}: ${e.message}`);
-    throw new Error(`Invalid Telegram token for ${role.key}, or network unavailable: ${e.message}`);
-  }
-
-  // Privacy warning: username NON contiene il userTag → bot probabilmente
-  // brand-guessable. Non blocchiamo il setup (l'utente ha gia' creato il bot),
-  // ma lo informiamo. Puo' sempre rinominarlo via @BotFather (/setusername).
-  if (userTag && !botUsername.toLowerCase().includes(userTag.toLowerCase())) {
-    await prompter.note(
-      `⚠️ The bot @${botUsername} does not contain your user tag (${userTag}).\n\n` +
-      `   This username is easier for third parties to guess. Spam messages\n` +
-      `   are still discarded by the chat_id allowlist, so functionality is\n` +
-      `   unaffected; only privacy is reduced.\n\n` +
-      `   To recreate it, use @BotFather → /deletebot → /newbot and the pattern\n` +
-      `   "${role.key}_${userTag}_<random>_bot". You can also continue as is.`,
-      `Privacy warning (${role.label})`,
-    );
-  }
-
-  const deepLink = `https://t.me/${botUsername}?start=jht`;
   await prompter.note(
-    `Open the bot ${role.label} and press Start:\n\n` +
-    `  ${deepLink}\n\n` +
-    `(Open the link on your phone, or search for @${botUsername} on Telegram and\n` +
-    `press "Start" or send /start.)\n\n` +
-    `I am monitoring the chat. As soon as /start arrives, setup continues with the next bot.`,
-    `Start chat with @${botUsername}`,
+    'Create or rotate each bot in BotFather, then run these commands in a host terminal:\n\n' +
+    '  jht telegram pair assistente\n' +
+    '  jht telegram pair capitano\n' +
+    '  jht telegram pair mentor\n\n' +
+    'Each command reads bot_token and chat_id from JSON on stdin. If this machine had a legacy token, generate a new token first: reusing it is refused with rotation_required.\n\n' +
+    'Check the result with: jht telegram status',
+    'Telegram pairing runs on the host',
   );
-
-  const waitSpinner = prompter.progress(`Waiting for /start in ${role.label}...`);
-  const deadline = Date.now() + 15 * 60 * 1000; // 15 min
-  const chatId = await tgWaitForFirstChat(token, deadline);
-  if (!chatId) {
-    waitSpinner.stop(`Timeout (15 min) for ${role.label}: no message received.`);
-    throw new Error(
-      `No /start was received from the ${role.label} bot. Run jht setup again.`,
-    );
-  }
-  waitSpinner.stop(`${role.label}: detected chat (${chatId})`);
-
-  return { bot_token: token, chat_id: String(chatId) };
 }
-
-/**
- * Assembla e salva la config finale conforme a shared/config/ schema.
- * apiKey puo' essere un SecretInput (oggetto) o una stringa plaintext legacy.
- */
 /**
  * Step working-hours: chiede all'utente come distribuire il budget weekly
  * sulle ore di lavoro. 5 preset + skip ("configura dopo"). Lo step è
@@ -394,7 +107,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
 
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          telegramChannel, baseProviders, workingHours } = params;
+          baseProviders, workingHours } = params;
 
   const progress = prompter.progress('Saving configuration...');
 
@@ -421,9 +134,6 @@ export async function assembleAndSaveConfig(prompter, params) {
     channels: {},
   };
 
-  // telegramChannel = { bots: { assistente, capitano, mentor } } (schema 2026-05-13)
-  if (telegramChannel) config.channels.telegram = telegramChannel;
-
   // Working hours: presenti solo se l'utente ha scelto un preset (no 24/7).
   // Quando assenti il team gira 24/7 (default storico).
   if (workingHours) {
@@ -440,8 +150,7 @@ export async function assembleAndSaveConfig(prompter, params) {
  * Mostra riepilogo finale.
  */
 export async function showSummary(prompter, params) {
-  const { selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
-          model, telegramChannel } = params;
+  const { selectedProvider } = params;
 
   // Riepilogo minimo: il wizard chiede solo il provider, tutto il resto
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.

@@ -208,11 +208,6 @@ export async function runSetupWizard(prompter) {
   const model = baseConfig.providers?.[providerChoice]?.model
     || selectedProvider.models[0].value;
 
-  // Telegram: chiesto inline solo se VPS (vedi step post-config).
-  // Su locale l'app nativa controlla direttamente il team e Telegram
-  // resta opzionale → si configura dopo con `jht config`.
-  let telegramChannel = baseConfig.channels?.telegram || undefined;
-
   // --- Working hours: orari di lavoro del team (distribuzione weekly) ---
   // Step non-bloccante: skip = 24/7 (default storico). Lo facciamo PRIMA
   // di salvare il config così atterra in jht.config.json al primo write,
@@ -225,12 +220,12 @@ export async function runSetupWizard(prompter) {
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
+    baseProviders: baseConfig.providers || {}, workingHours,
   });
 
   await showSummary(prompter, {
     selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
-    model, telegramChannel,
+    model,
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -263,19 +258,11 @@ export async function runSetupWizard(prompter) {
   // desktop; Telegram diventa il canale async OPZIONALE. Niente piu' gate —
   // l'utente puo' saltare e configurarlo dopo con `jht config`. Anche il cloud
   // pairing proposto a inizio wizard resta facoltativo e separato dal runtime.
-  // Telegram va dopo providers update perche' richiede solo input utente,
-  // non risorse del container.
+  // Il wizard gira dentro jht: mostra i comandi host, ma non raccoglie ne'
+  // conserva token che il container degli agenti non deve poter leggere.
   // ────────────────────────────────────────────────────────────────────────
   if (isVps) {
-    const tg = await promptTelegramOptional(prompter, baseConfig.channels);
-    if (tg) {
-      telegramChannel = tg;
-      // Aggiorno config sul disco con il telegram appena configurato.
-      await assembleAndSaveConfig(prompter, {
-        providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-        telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
-      });
-    }
+    await promptTelegramOptional(prompter);
   }
 
   // ────────────────────────────────────────────────────────────────────────

@@ -591,17 +591,9 @@ func _build_email() -> void:
 
 func _build_telegram() -> void:
 	_listen_setup()
-	var states: Dictionary = SetupService.telegram_status()
 	_content.add_child(TerminalTheme.label(
 			UIStrings.t("tg.intro"),
 			14, Palette.MUTED))
-	# I tre SALVA delle schede qui sotto scrivono nel container: se è spento
-	# sono disabilitati tutti e tre per la stessa ragione, detta UNA volta.
-	if not bool(SetupService.status.get("container_running", false)):
-		var why := TerminalTheme.label(
-				UIStrings.t("setup.needs_container_cmd"), 12, Palette.YELLOW)
-		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_content.add_child(why)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	_content.add_child(actions)
@@ -615,6 +607,9 @@ func _build_telegram() -> void:
 	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	guide.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(guide)
+	var status_command := TerminalTheme.label("jht telegram status", 13, Palette.GREEN, "medium")
+	status_command.selection_enabled = true
+	_content.add_child(status_command)
 	_content.add_child(HSeparator.new())
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -630,8 +625,6 @@ func _build_telegram() -> void:
 		"mentor": UIStrings.t("tg.role_mentor"),
 	}
 	for role in ["assistente", "capitano", "mentor"]:
-		var state: Dictionary = states.get(role, {}) \
-				if states.get(role, {}) is Dictionary else {}
 		var panel := BracketPanel.new()
 		list.add_child(panel)
 		var pad := MarginContainer.new()
@@ -647,38 +640,10 @@ func _build_telegram() -> void:
 		var role_detail := TerminalTheme.label("  ·  " + str(details[role]), 13, Palette.MUTED)
 		role_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(role_detail)
-		head.add_child(TerminalTheme.label(
-				UIStrings.t("tg.configured") if bool(state.get("configured", false)) \
-				else UIStrings.t("tg.to_link"), 13,
-				Palette.GREEN if bool(state.get("configured", false)) else Palette.YELLOW,
-				"medium"))
-		var fields := HBoxContainer.new()
-		fields.add_theme_constant_override("separation", 10)
-		col.add_child(fields)
-		var token := LineEdit.new()
-		token.secret = true
-		token.placeholder_text = UIStrings.t("tg.token_ph")
-		token.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fields.add_child(token)
-		var chat_id := LineEdit.new()
-		chat_id.placeholder_text = UIStrings.t("tg.chat_id_ph")
-		chat_id.custom_minimum_size = Vector2(360, 0)
-		fields.add_child(chat_id)
-		var save := Button.new()
-		save.text = UIStrings.t("tg.save")
-		save.disabled = not bool(SetupService.status.get("container_running", false))
-		save.add_theme_color_override("font_color", Palette.GREEN)
-		save.add_theme_color_override("font_disabled_color", Palette.MUTED)
-		save.pressed.connect(func() -> void:
-			SetupService.save_telegram_bot(role, token.text, chat_id.text)
-			token.clear())
-		fields.add_child(save)
-		if bool(state.get("configured", false)):
-			var remove := Button.new()
-			remove.text = UIStrings.t("tg.remove")
-			remove.add_theme_color_override("font_color", Palette.RED)
-			remove.pressed.connect(SetupService.delete_telegram_bot.bind(role))
-			fields.add_child(remove)
+		for command in ["jht telegram pair " + role, "jht telegram remove " + role]:
+			var command_label := TerminalTheme.label(command, 13, Palette.GREEN, "medium")
+			command_label.selection_enabled = true
+			col.add_child(command_label)
 	_setup_message = TerminalTheme.label("", 13, Palette.DIM)
 	_content.add_child(_setup_message)
 

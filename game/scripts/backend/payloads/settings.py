@@ -68,14 +68,6 @@ out['cloud_account'] = {
     'user_id': str(cc.get('user_id') or ''),
     'token_name': str(cc.get('token_name') or ''),
 }
-tg = (((c.get('channels') or {}).get('telegram') or {}).get('bots') or {})
-out['telegram_bots'] = {
-    role: {
-        'configured': bool((tg.get(role) or {}).get('bot_token')),
-        'chat_ready': bool((tg.get(role) or {}).get('chat_id')),
-    }
-    for role in ('assistente', 'capitano', 'mentor')
-}
 a = c.get('analytics') or {}
 out['advanced'] = [
     ['Config version', str(c.get('version', '—'))],

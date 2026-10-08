@@ -942,9 +942,9 @@ const S := {
 	"email.remove": "ENTFERNEN",
 	"email.help": "SO ERSTELLST DU EIN APP-PASSWORT  ↗",
 
-	"tg.intro": "Verbinde die drei privaten Bots des Teams. Die Tokens bleiben in der lokalen Runtime oder auf deiner VPS und werden nie an die JHT-Cloud geschickt.",
+	"tg.intro": "Verbinde die drei privaten Bots des Teams. Tokens gehen direkt an den isolierten Telegram-Dienst und werden nie im Home-Verzeichnis der Agenten gespeichert.",
 	"tg.botfather": "BOTFATHER ÖFFNEN  ↗",
-	"tg.guide": "Erstelle einen Bot, füge den Token ein, öffne den Chat mit dem Bot und drücke Start; nutze dann SPEICHERN UND CHAT ERKENNEN.",
+	"tg.guide": "Erstelle oder rotiere die Bots in BotFather und schließe das Pairing im Host-Terminal mit den Befehlen unten ab. Wenn bereits ein Token existierte, verwende ein neues.",
 	"tg.role_assistente": "Onboarding des Profils und Dokumente",
 	"tg.role_capitano": "Leitung des Teams und fertige Stellen",
 	"tg.role_mentor": "Coaching und Karrierestrategie",

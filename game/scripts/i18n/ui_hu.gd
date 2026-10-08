@@ -942,9 +942,9 @@ const S := {
 	"email.remove": "ELTÁVOLÍTÁS",
 	"email.help": "ÍGY KÉSZÍTHETSZ ALKALMAZÁSJELSZÓT  ↗",
 
-	"tg.intro": "Csatlakoztasd a csapat három privát botját. A tokenek a helyi runtime-ban vagy a te VPS-eden maradnak, és soha nem kerülnek a JHT felhőbe.",
+	"tg.intro": "Csatlakoztasd a csapat három privát botját. A tokenek közvetlenül az elkülönített Telegram-szolgáltatáshoz kerülnek, és soha nem mentődnek az ügynökök home könyvtárába.",
 	"tg.botfather": "BOTFATHER MEGNYITÁSA  ↗",
-	"tg.guide": "Hozz létre egy botot, illeszd be a tokent, nyisd meg a csevegést a bottal és nyomd meg a Start gombot; utána használd a MENTÉS ÉS CSEVEGÉS FELISMERÉSE gombot.",
+	"tg.guide": "Hozd létre vagy cseréld le a botokat a BotFatherben, majd végezd el a párosítást a host terminálján az alábbi parancsokkal. Ha már létezett token, használj újat.",
 	"tg.role_assistente": "profil onboarding és dokumentumok",
 	"tg.role_capitano": "a csapat irányítása és a kész pozíciók",
 	"tg.role_mentor": "coaching és karrierstratégia",
