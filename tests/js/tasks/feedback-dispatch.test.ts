@@ -77,19 +77,29 @@ describe("consegna segnalazione — la posta decide", () => {
 });
 
 describe("la route risponde secondo la consegna", () => {
-  it("non usa più Promise.all sui due canali", async () => {
+  const feedbackRoute = async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const url = await import("node:url");
     const here = path.dirname(url.fileURLToPath(import.meta.url));
-    const route = fs.readFileSync(
+    return fs.readFileSync(
       path.resolve(here, "../../../web/app/api/feedback/route.ts"),
       "utf8",
     );
+  };
+
+  it("non usa più Promise.all sui due canali", async () => {
+    const route = await feedbackRoute();
     expect(route).toContain("dispatchFeedback");
     // La vecchia forma: `Promise.all([sendEmail…, notifyWebhook…])`.
     expect(route.includes("Promise.all")).toBe(false);
     // E la vecchia condizione, che accettava il solo webhook.
     expect(route.includes("!mail && !webhook")).toBe(false);
+  });
+
+  it("senza posta la route risponde 503", async () => {
+    const route = await feedbackRoute();
+    expect(route).toContain("outcome.delivered");
+    expect(route).toContain("status: 503");
   });
 });
