@@ -139,7 +139,8 @@ INVISIBLE_COMMANDS = (
 # Invisibili sì, comandi no: con questi si scrive. Stanno qui per poter essere
 # citati da un test — la garanzia che sopravvivano è che NON siano in
 # `INVISIBLE_COMMANDS` e che la loro categoria non sia fra quelle strutturali.
-WRITING_INVISIBLES = frozenset("\u200c\u200d\u200e\u200f")  # ZWNJ, ZWJ, LRM, RLM
+# ALM (U+061C) è la marca di direzione dell'arabo, sorella di LRM e RLM.
+WRITING_INVISIBLES = frozenset("\u200c\u200d\u200e\u200f\u061c")  # ZWNJ, ZWJ, LRM, RLM, ALM
 
 
 def _defang_markers(text):

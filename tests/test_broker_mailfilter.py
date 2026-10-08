@@ -191,3 +191,26 @@ def test_html_markup_cannot_split_a_security_phrase_or_hide_a_token(subject, bod
 def test_plain_job_alert_html_stays_a_job_alert():
     body = '<p>New <b>Python</b> jobs&nbsp;for you</p><a href="https://www.indeed.com/viewjob?jk=0a1b2c3d4e5f6a7b&amp;from=mail">View</a>'
     assert not mailfilter.is_security_message("New jobs", body)
+
+
+def _every_invisible():
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    from external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES
+
+    return sorted(INVISIBLE_COMMANDS | WRITING_INVISIBLES)
+
+
+@pytest.mark.parametrize("ch", _every_invisible(), ids=lambda ch: f"U+{ord(ch):04X}")
+def test_no_invisible_character_of_the_repo_list_splits_a_security_phrase(ch):
+    # Audit M8 (second round): bidi overrides and isolates, LRM/RLM/ALM, ZWNJ/ZWJ
+    # and the tag characters, taken from the repo's one list.
+    assert mailfilter.is_security_message("Hello", f"Please reset your pass{ch}word below.")
+    assert mailfilter.is_security_message(f"Re{ch}set your password", "")
+
+
+def test_the_filter_uses_the_repo_list_not_a_copy():
+    from external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES
+
+    assert mailfilter._INVISIBLE == INVISIBLE_COMMANDS | WRITING_INVISIBLES
+    source = (ROOT / "shared" / "broker" / "mailfilter.py").read_text(encoding="utf-8")
+    assert "\\u200b" not in source and "\\u202e" not in source

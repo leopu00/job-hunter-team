@@ -29,9 +29,16 @@ from __future__ import annotations
 import html
 import math
 import re
+import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from email.utils import parseaddr
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills"))
+# The repo's one list of characters that reorder or hide text, and of the
+# invisible ones a script writes with (audit M8: imported, never copied).
+from external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES  # noqa: E402
 
 ADMISSION_POLICIES = ("allowlist", "whole_mailbox")
 
@@ -112,9 +119,10 @@ _AUTH_PATH_RE = re.compile(
 
 
 _HTML_TAG = re.compile(r"<[^<>]*>")
-# Characters that render as nothing and would split a phrase: zero-width
-# space/joiners, word joiner, BOM, soft hyphen.
-_INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
+# For matching only, every invisible goes: the commands (bidi overrides and
+# isolates, tag characters, zero-width space, soft hyphen) and the marks a
+# script writes with (ZWNJ, ZWJ, LRM, RLM, ALM). The text is never returned.
+_INVISIBLE = frozenset(INVISIBLE_COMMANDS | WRITING_INVISIBLES)
 
 
 def _readings(subject: str, body: str) -> tuple[str, ...]:
@@ -126,7 +134,7 @@ def _readings(subject: str, body: str) -> tuple[str, ...]:
     raw = f"{subject or ''}\n{body or ''}"
 
     def clean(text: str) -> str:
-        return " ".join(_INVISIBLE.sub("", html.unescape(text)).split())
+        return " ".join("".join(ch for ch in html.unescape(text) if ch not in _INVISIBLE).split())
 
     return raw, clean(_HTML_TAG.sub(" ", raw)), clean(_HTML_TAG.sub("", raw))
 
