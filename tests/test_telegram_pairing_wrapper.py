@@ -9,6 +9,7 @@ import re
 import select
 import shutil
 import subprocess
+import termios
 import time
 from pathlib import Path
 
@@ -92,6 +93,52 @@ def pair_script() -> str:
         + '\ntelegram_image() { printf "fake-image\\n"; }\n'
         + '\ntelegram_pair assistente\n'
     )
+
+
+def prepare_inventory_script(*, inventory_fails: bool = False) -> str:
+    legacy = "return 42" if inventory_fails else ":"
+    return (
+        "set -u\n"
+        'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
+        'telegram_admin() { return 1; }\n'
+        'telegram_admin_input() { value=$(cat); printf "REMEMBER %s bytes=%s\\n" "$*" "${#value}" >> "$FAKE_LOG"; }\n'
+        'telegram_legacy() { ' + legacy + '; }\n'
+        'read_only_container_id() { return 3; }\n'
+        'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
+        + functions("telegram_prepare_legacy_inventory")
+        + "\ntelegram_prepare_legacy_inventory\n"
+    )
+
+
+def test_empty_legacy_inventory_is_persisted_before_agent_start(tmp_path: Path) -> None:
+    log = tmp_path / "calls.log"
+    done = subprocess.run(
+        ["bash", "-c", prepare_inventory_script()],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "FAKE_LOG": str(log)},
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        "COMPOSE up -d jht-telegram",
+        "REMEMBER legacy remember assistente bytes=0",
+        "REMEMBER legacy remember capitano bytes=0",
+        "REMEMBER legacy remember mentor bytes=0",
+    ]
+
+
+def test_legacy_inventory_read_failure_still_fails_closed(tmp_path: Path) -> None:
+    log = tmp_path / "calls.log"
+    done = subprocess.run(
+        ["bash", "-c", prepare_inventory_script(inventory_fails=True)],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "FAKE_LOG": str(log)},
+    )
+
+    assert done.returncode != 0
+    assert "REMEMBER" not in log.read_text(encoding="utf-8")
 
 
 def test_pairing_sends_new_token_only_to_isolated_admin(tmp_path: Path) -> None:
@@ -204,6 +251,16 @@ def _read_pty_until(fd: int, wanted: bytes, timeout: float = 5) -> bytes:
     return output
 
 
+def _wait_pty_no_echo(fd: int, timeout: float = 5) -> None:
+    """Wait until Bash has entered ``read -s``, not just printed its prompt."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not termios.tcgetattr(fd)[3] & termios.ECHO:
+            return
+        time.sleep(0.01)
+    raise AssertionError("the pairing prompt never disabled terminal echo")
+
+
 def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -231,6 +288,7 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
     os.close(slave)
     try:
         output = _read_pty_until(master, b"Token del bot (input nascosto): ")
+        _wait_pty_no_echo(master)
         os.write(master, (SECRET + "\n").encode())
         output += _read_pty_until(master, b"Chat ID dell'utente: ")
         os.write(master, b"42\n")
