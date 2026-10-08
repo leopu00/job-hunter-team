@@ -384,13 +384,14 @@ if [ "$ROLE" = "bridge" ]; then
   # qualunque processo innocente che nominasse il marker.
   # NB: il singleton VERO è il flock dentro sentinel-bridge.py (copre anche
   # l'entry point bridge-control.sh); questo kill serve al restart pulito.
-  jht_kill_by_marker "$BRIDGE_SCRIPT" 1 0.5
-  BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
-  setsid sh -c "
-    JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-      python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
-  " >/dev/null 2>&1 < /dev/null &
-  echo "✓ sentinel-bridge started (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
+  if jht_kill_by_marker "$BRIDGE_SCRIPT" 1 0.5; then
+    BRIDGE_LOG="$(jht_daemon_log sentinel-bridge.log)"
+    setsid sh -c "
+      JHT_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $BRIDGE_SCRIPT >> '$BRIDGE_LOG' 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ sentinel-bridge started (target=${JHT_TARGET_SESSION:-CAPITANO}, log $BRIDGE_LOG)"
+  fi
 
   # Pacing bridge — tick alla SENTINELLA (analista del pacing) sul ritmo del
   # team (2026-06-25 push→pull: NON più al Capitano, vedi bridge-to-sentinella
@@ -402,17 +403,18 @@ if [ "$ROLE" = "bridge" ]; then
   # manda un [BRIDGE PACING] alla Sentinella allineato a :00,:15,:30,:45 UTC.
   PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
   if [ -f "$PACING_SCRIPT" ]; then
-    jht_kill_by_marker "$PACING_SCRIPT" 1 0.5
-    PACING_LOG="$(jht_daemon_log pacing-bridge.log)"
-    # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
-    # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
-    # le env vars del parent. Setting PATH a single-quoted lo aveva
-    # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
-    setsid sh -c "
-      JHT_PACING_TARGET_SESSION='${JHT_PACING_TARGET_SESSION:-SENTINELLA}' \
-        python3 -u $PACING_SCRIPT >> '$PACING_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ pacing-bridge started (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
+    if jht_kill_by_marker "$PACING_SCRIPT" 1 0.5; then
+      PACING_LOG="$(jht_daemon_log pacing-bridge.log)"
+      # Niente PATH= esplicito: lo `export PATH` in cima a start-agent.sh
+      # (riga 18) include già /app/agents/_tools, e setsid sh -c eredita
+      # le env vars del parent. Setting PATH a single-quoted lo aveva
+      # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
+      setsid sh -c "
+        JHT_PACING_TARGET_SESSION='${JHT_PACING_TARGET_SESSION:-SENTINELLA}' \
+          python3 -u $PACING_SCRIPT >> '$PACING_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ pacing-bridge started (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log $PACING_LOG)"
+    fi
   else
     echo "⚠ $PACING_SCRIPT not found — pacing did NOT start (sentinel is OK)"
   fi
@@ -423,13 +425,14 @@ if [ "$ROLE" = "bridge" ]; then
   # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
   HEARTBEAT_SCRIPT="/app/.launcher/heartbeat-bridge.py"
   if [ -f "$HEARTBEAT_SCRIPT" ]; then
-    jht_kill_by_marker "$HEARTBEAT_SCRIPT" 0.5 0.5
-    HEARTBEAT_LOG="$(jht_daemon_log heartbeat-bridge.log)"
-    setsid sh -c "
-      JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-        python3 -u $HEARTBEAT_SCRIPT >> '$HEARTBEAT_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ heartbeat-bridge (hourly nudge to Capitano) started (log $HEARTBEAT_LOG)"
+    if jht_kill_by_marker "$HEARTBEAT_SCRIPT" 0.5 0.5; then
+      HEARTBEAT_LOG="$(jht_daemon_log heartbeat-bridge.log)"
+      setsid sh -c "
+        JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+          python3 -u $HEARTBEAT_SCRIPT >> '$HEARTBEAT_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ heartbeat-bridge (hourly nudge to Capitano) started (log $HEARTBEAT_LOG)"
+    fi
   else
     echo "⚠ $HEARTBEAT_SCRIPT not found — heartbeat did NOT start"
   fi
@@ -441,12 +444,13 @@ if [ "$ROLE" = "bridge" ]; then
   # comunque ma update_ratio scarta tutti i sample senza weekly_usage.
   WRM_SCRIPT="/app/shared/skills/window_ratio_meter.py"
   if [ -f "$WRM_SCRIPT" ]; then
-    jht_kill_by_marker "$WRM_SCRIPT" 0.5 0
-    WRM_LOG="$(jht_daemon_log window-ratio-meter.log)"
-    setsid sh -c "
-      python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ window-ratio-meter started (log $WRM_LOG)"
+    if jht_kill_by_marker "$WRM_SCRIPT" 0.5 0; then
+      WRM_LOG="$(jht_daemon_log window-ratio-meter.log)"
+      setsid sh -c "
+        python3 -u $WRM_SCRIPT --watch >> '$WRM_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ window-ratio-meter started (log $WRM_LOG)"
+    fi
   else
     echo "⚠ $WRM_SCRIPT not found — automatic calibration unavailable (seed only)"
   fi
@@ -456,13 +460,14 @@ if [ "$ROLE" = "bridge" ]; then
   # rimasto giù 6 giorni. Ora vive e muore con la bridge-suite.
   METER_SCRIPT="/app/shared/skills/token-meter.py"
   if [ -f "$METER_SCRIPT" ]; then
-    jht_kill_by_marker "$METER_SCRIPT" 0 0.5
-    METER_LOG="$(jht_daemon_log token-meter.log)"
-    setsid sh -c "
-      JHT_HOME='${JHT_HOME:-/jht_home}' \
-        python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ token-meter started (log $METER_LOG)"
+    if jht_kill_by_marker "$METER_SCRIPT" 0 0.5; then
+      METER_LOG="$(jht_daemon_log token-meter.log)"
+      setsid sh -c "
+        JHT_HOME='${JHT_HOME:-/jht_home}' \
+          python3 -u $METER_SCRIPT >> '$METER_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ token-meter started (log $METER_LOG)"
+    fi
   else
     echo "⚠ $METER_SCRIPT not found — token-meter unavailable"
   fi
@@ -473,13 +478,14 @@ if [ "$ROLE" = "bridge" ]; then
   # la scheda agente del gioco. Stesso pattern: setsid + singleton.
   AV_SCRIPT="/app/shared/skills/agent_vitals.py"
   if [ -f "$AV_SCRIPT" ]; then
-    jht_kill_by_marker "$AV_SCRIPT" 0 0.5
-    AV_LOG="$(jht_daemon_log agent-vitals.log)"
-    setsid sh -c "
-      JHT_HOME='${JHT_HOME:-/jht_home}' \
-        python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ agent-vitals started (per-agent CPU/RSS, log $AV_LOG)"
+    if jht_kill_by_marker "$AV_SCRIPT" 0 0.5; then
+      AV_LOG="$(jht_daemon_log agent-vitals.log)"
+      setsid sh -c "
+        JHT_HOME='${JHT_HOME:-/jht_home}' \
+          python3 -u $AV_SCRIPT >> '$AV_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ agent-vitals started (per-agent CPU/RSS, log $AV_LOG)"
+    fi
   else
     echo "⚠ $AV_SCRIPT not found — per-agent vitals unavailable"
   fi
@@ -491,12 +497,13 @@ if [ "$ROLE" = "bridge" ]; then
   # Stesso pattern: setsid + singleton via marker cmdline + cooldown anti-storm.
   HEALER_SCRIPT="/app/.launcher/codex-auth-healer.sh"
   if [ -f "$HEALER_SCRIPT" ]; then
-    jht_kill_by_marker "$HEALER_SCRIPT" 0 0.5
-    HEALER_LOG="$(jht_daemon_log codex-auth-healer.log)"
-    setsid sh -c "
-      JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
-    " >/dev/null 2>&1 < /dev/null &
-    echo "✓ codex-auth-healer started (#6, log $HEALER_LOG)"
+    if jht_kill_by_marker "$HEALER_SCRIPT" 0 0.5; then
+      HEALER_LOG="$(jht_daemon_log codex-auth-healer.log)"
+      setsid sh -c "
+        JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> '$HEALER_LOG' 2>&1
+      " >/dev/null 2>&1 < /dev/null &
+      echo "✓ codex-auth-healer started (#6, log $HEALER_LOG)"
+    fi
   fi
 
   exit 0
@@ -568,8 +575,11 @@ if [ "$ROLE" = "tg-bridge" ]; then
   # morte del mentor si portava dietro assistente e capitano. E il marker parte
   # dal path di QUESTO tg-bridge.py: un bridge con lo stesso nome lanciato da
   # un'altra installazione non è nostro e non si tocca (vedi daemon-lib.sh).
+  # Un ruolo il cui bridge vecchio sopravvive al segnale non ne riceve un
+  # secondo: due bridge sullo stesso bot si rubano gli update (409).
+  _tg_refused=" "
   for _role in $TG_ROLES; do
-    jht_kill_by_marker "$TG_SCRIPT --role $_role" 0 0
+    jht_kill_by_marker "$TG_SCRIPT --role $_role" 0 0 || _tg_refused="$_tg_refused$_role "
   done
   # UN solo settle per l'intera raffica, come quando il kill era uno solo:
   # tre attese da un secondo allungherebbero ogni boot senza motivo.
@@ -586,6 +596,7 @@ if [ "$ROLE" = "tg-bridge" ]; then
   # rimedio sarebbe stato peggiore del difetto — il watchdog non avrebbe più
   # potuto rianimare niente. Trovato dal test della race, non a occhio.
   for _role in $TG_ROLES; do
+    case "$_tg_refused" in *" $_role "*) continue ;; esac
     _target=$(echo "$_role" | tr '[:lower:]' '[:upper:]')
     _log="$(jht_daemon_log "tg-bridge-${_role}.log")"
     setsid sh -c "
@@ -614,7 +625,7 @@ if [ "$ROLE" = "token-meter" ]; then
     exit 1
   fi
   # Kill istanze preesistenti.
-  jht_kill_by_marker "$METER_SCRIPT" 0 1
+  jht_kill_by_marker "$METER_SCRIPT" 0 1 || exit 1
   METER_LOG="$(jht_daemon_log token-meter.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \
@@ -634,7 +645,7 @@ if [ "$ROLE" = "agent-vitals" ]; then
     echo "✗ $AV_SCRIPT not found — agent-vitals did NOT start"
     exit 1
   fi
-  jht_kill_by_marker "$AV_SCRIPT" 0 1
+  jht_kill_by_marker "$AV_SCRIPT" 0 1 || exit 1
   AV_LOG="$(jht_daemon_log agent-vitals.log)"
   setsid sh -c "
     JHT_HOME='${JHT_HOME:-/jht_home}' \

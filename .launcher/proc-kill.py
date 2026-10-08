@@ -23,16 +23,23 @@ scansionato salvo il target. In più escludiamo esplicitamente:
   • qualunque processo che stia eseguendo questo stesso script.
 
 Uso:
-  proc-kill.py <marker> [--grace SEC] [--settle SEC] [--verbose]
+  proc-kill.py <marker> [--grace SEC] [--settle SEC] [--verify SEC] [--verbose]
 
 Semantica (identica ai blocchi bash che sostituisce):
   • manda SIGTERM a tutti i match;
   • se --grace > 0: attende SEC, ri-scansiona e manda SIGKILL ai sopravvissuti;
   • se --settle > 0: attende SEC prima di uscire (finestra di quiescenza per
-    chi rispawna subito dopo).
+    chi rispawna subito dopo);
+  • poi VERIFICA: per al massimo --verify secondi (default 2) controlla che
+    ogni bersaglio sia davvero sparito.
 
-Exit code: sempre 0 (killare zero processi non è un errore — è il caso normale
-al primo avvio). Errori reali vanno su stderr.
+Exit code:
+  0  nessun bersaglio, o tutti spariti (killare zero processi non è un errore:
+     è il caso normale al primo avvio);
+  1  almeno un bersaglio è ancora vivo dopo il segnale: segnale rifiutato
+     (AppArmor nel container: «kill: Permission denied», apparmor=DENIED
+     operation=signal) oppure ignorato. Prima usciva 0 lo stesso, e chi
+     chiamava lanciava un doppione accanto al processo vecchio.
 """
 import argparse
 import glob
@@ -94,17 +101,40 @@ def find_targets(marker, protected):
     return targets
 
 
-def _signal(pids, sig):
+def _signal(pids, sig, refused):
+    """Manda `sig` a `pids`; chi lo rifiuta (EPERM) finisce in `refused`."""
     sent = []
     for pid in pids:
         try:
             os.kill(pid, sig)
             sent.append(pid)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError:
             pass
+        except PermissionError as e:
+            refused.add(pid)
+            print(f"[proc-kill] DENIED kill {pid}: {e}", file=sys.stderr)
         except OSError as e:
             print(f"[proc-kill] WARN kill {pid}: {e}", file=sys.stderr)
     return sent
+
+
+def _still_running(pid, marker):
+    """Il bersaglio c'è ancora: cmdline leggibile che contiene il marker.
+
+    Uno zombie ha il cmdline vuoto (è morto, aspetta solo il padre), e un pid
+    riusato da un altro processo non ha il marker: nessuno dei due conta.
+    """
+    cmd = _read_cmdline(pid)
+    return bool(cmd) and marker in cmd
+
+
+def _survivors(pids, marker, wait):
+    deadline = time.monotonic() + wait
+    while True:
+        alive = sorted(p for p in pids if _still_running(p, marker))
+        if not alive or time.monotonic() >= deadline:
+            return alive
+        time.sleep(0.05)
 
 
 def main():
@@ -114,24 +144,36 @@ def main():
                     help="seconds between SIGTERM and SIGKILL (0 = SIGTERM only)")
     ap.add_argument("--settle", type=float, default=0.0,
                     help="seconds to wait before exiting")
+    ap.add_argument("--verify", type=float, default=2.0,
+                    help="seconds to wait for the targets to be gone (exit 1 if not)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
     protected = _ancestors()
     protected.add(os.getpid())
 
-    termed = _signal(find_targets(args.marker, protected), signal.SIGTERM)
+    refused = set()
+    targets = set(find_targets(args.marker, protected))
+    termed = _signal(sorted(targets), signal.SIGTERM, refused)
     if args.verbose and termed:
         print(f"[proc-kill] SIGTERM {args.marker}: {termed}")
 
     if args.grace > 0:
         time.sleep(args.grace)
-        killed = _signal(find_targets(args.marker, protected), signal.SIGKILL)
+        late = find_targets(args.marker, protected)
+        targets.update(late)
+        killed = _signal(late, signal.SIGKILL, refused)
         if args.verbose and killed:
             print(f"[proc-kill] SIGKILL {args.marker}: {killed}")
 
     if args.settle > 0:
         time.sleep(args.settle)
+
+    alive = _survivors(targets, args.marker, args.verify)
+    if alive:
+        how = "signal refused" if set(alive) <= refused else "still running after the signal"
+        print(f"[proc-kill] FAIL {args.marker}: {how}: {alive}", file=sys.stderr)
+        return 1
     return 0
 
 

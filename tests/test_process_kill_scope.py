@@ -79,6 +79,30 @@ def _allowed(name: str, line: str) -> bool:
     return any(file == name and snippet in line for file, snippet in ALLOWED)
 
 
+UNCHECKED_KILL = re.compile(r"""^\s*jht_kill_by_marker\s""")
+
+
+def test_every_kill_by_marker_result_is_checked():
+    """Un kill che non riesce lo dice (exit 1): chi chiama non puo' ignorarlo.
+
+    Una chiamata nuda lancerebbe il daemon nuovo accanto a quello vecchio
+    sopravvissuto al segnale (AppArmor nel container). Si chiama dentro un
+    `if`, oppure con `|| ...` sulla stessa riga.
+    """
+    calls, unchecked = 0, []
+    for name in _code_files():
+        if not name.endswith(".sh"):
+            continue
+        for number, line in _code_lines(name):
+            if "jht_kill_by_marker" not in line or "jht_kill_by_marker()" in line:
+                continue
+            calls += 1
+            if UNCHECKED_KILL.match(line) and "||" not in line:
+                unchecked.append(f"{name}:{number}: {line.strip()}")
+    assert calls >= 10, "il gate non trova piu' le chiamate: struttura cambiata"
+    assert not unchecked, "esito di jht_kill_by_marker ignorato:\n" + "\n".join(unchecked)
+
+
 def test_the_gate_reads_the_launcher_and_the_scripts():
     """Senza questi file il gate sarebbe verde perche' non legge niente."""
     files = set(_code_files())

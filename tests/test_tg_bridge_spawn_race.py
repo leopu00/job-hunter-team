@@ -49,8 +49,14 @@ LAUNCHER = REPO_ROOT / ".launcher"
 ROLES = ("assistente", "capitano", "mentor")
 
 FAKE_BRIDGE = '''#!/usr/bin/env python3
-"""Finto tg-bridge: tiene vivo il processo con --role nel cmdline."""
-import sys, time
+"""Finto tg-bridge: tiene vivo il processo con --role nel cmdline.
+
+Con JHT_TEST_IGNORE_TERM=1 ignora SIGTERM: un bridge vecchio a cui il segnale
+non arriva (AppArmor nel container) o che non lo ascolta.
+"""
+import os, signal, sys, time
+if os.environ.get("JHT_TEST_IGNORE_TERM") == "1":
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
 role = ""
 for i, a in enumerate(sys.argv[1:]):
     if a == "--role" and i + 2 <= len(sys.argv):
@@ -157,6 +163,15 @@ if grace:
             pass
 if settle:
     time.sleep(settle)
+# Come proc-kill.py: un bersaglio ancora vivo dopo il segnale e' un fallimento.
+deadline = time.monotonic() + 2
+alive = targets()
+while alive and time.monotonic() < deadline:
+    time.sleep(0.05)
+    alive = targets()
+if alive:
+    print(f"[proc-kill] FAIL {marker}: still running after the signal: {alive}", file=sys.stderr)
+    sys.exit(1)
 '''
 
 
@@ -398,3 +413,28 @@ def test_a_bridge_this_launcher_did_not_start_survives_the_spawn(env, tmp_path):
     finally:
         decoy.kill()
         decoy.wait(timeout=10)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="ps POSIX")
+def test_a_bridge_that_survives_the_signal_gets_no_twin(env):
+    """Il kill non arriva (AppArmor) o non viene ascoltato: niente doppione.
+
+    Prima proc-kill usciva 0 lo stesso e lo spawn lanciava un secondo bridge
+    sullo stesso bot accanto a quello vecchio (409 da Telegram). Ora quel ruolo
+    resta col bridge vecchio, lo spawn lo dice, e gli altri ruoli partono.
+    """
+    old = subprocess.Popen(
+        [sys.executable, str(env["launcher"] / "tg-bridge.py"), "--role", "capitano"],
+        env={**env["environ"], "JHT_TEST_IGNORE_TERM": "1"},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        time.sleep(0.3)
+        boot = _spawn(env)
+        time.sleep(0.5)
+        assert old.poll() is None, "il bridge vecchio doveva sopravvivere al SIGTERM"
+        assert _alive(env) == {r: 1 for r in ROLES}, "un secondo bridge accanto a quello vecchio"
+        assert "not starting a second one" in boot.stderr
+    finally:
+        old.kill()
+        old.wait(timeout=10)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # bridge-control.sh — start/stop del sentinel-bridge.py.
 # Pensato per essere invocato dagli endpoint /api/bridge/{start,stop}.
-# Esce sempre con 0 a meno di errori veri (file mancanti); il "kill di
-# pid che non esistono" o "for loop vuoto" non è un errore.
+# Esce con 0 a meno di errori veri (file mancanti, o un bridge vecchio che
+# sopravvive al segnale); il "kill di pid che non esistono" non è un errore.
 #
 # Uso: bridge-control.sh start | stop
 
@@ -23,12 +23,14 @@ BRIDGE_PY="/app/.launcher/sentinel-bridge.py"
 LOG_FILE="$(jht_daemon_log sentinel-bridge.log)"
 
 kill_all_bridges() {
-  jht_kill_by_marker "$BRIDGE_PY" 1 0.5
+  jht_kill_by_marker "$BRIDGE_PY" 1 0.5 || return 1
 }
 
 case "$ACTION" in
   start)
-    kill_all_bridges
+    # Un bridge vecchio ancora vivo (segnale rifiutato) non ne riceve un
+    # secondo accanto: jht_kill_by_marker lo ha gia' detto e registrato.
+    kill_all_bridges || exit 1
     rm -f "$PID_FILE"
     if [ ! -f "$BRIDGE_PY" ]; then
       echo "bridge script not found: $BRIDGE_PY" >&2
@@ -50,7 +52,7 @@ case "$ACTION" in
     exit 0
     ;;
   stop)
-    kill_all_bridges
+    kill_all_bridges || exit 1
     rm -f "$PID_FILE"
     exit 0
     ;;

@@ -18,6 +18,10 @@
 #       i path sono quelli dell'immagine (/app/...), quindi gli orfani di un run
 #       precedente dello stesso container restano presi. tests/
 #       test_process_kill_scope.py rifiuta un marker che non parte da `"$`.
+#       Esce 1 se un bersaglio è ancora vivo dopo il segnale (rifiutato, per
+#       esempio da AppArmor nel container, oppure ignorato): lo scrive su
+#       stderr e in $JHT_HOME/logs/daemon-kill.log, e chi chiama NON lancia
+#       un secondo daemon accanto a quello vecchio.
 #
 #   jht_daemon_log <nome-file>
 #       Stampa il path del log del daemon sotto $JHT_HOME/logs (bind-mount,
@@ -97,6 +101,7 @@ jht_daemon_log() {
 # Fallback shell usato solo se python3 non è disponibile: scan di /proc con
 # esclusione esplicita del proprio PID e del parent (il pattern storico non le
 # faceva → si auto-matchava).
+# Con sig=0 non manda niente: stampa i pid ancora vivi (la verifica).
 _jht_kill_scan_fallback() {
   local marker="$1" sig="$2" f pid
   for f in /proc/[0-9]*/cmdline; do
@@ -105,26 +110,48 @@ _jht_kill_scan_fallback() {
     pid="${pid%/cmdline}"
     [ "$pid" = "$$" ] && continue
     [ "$pid" = "${PPID:-0}" ] && continue
-    grep -q "$marker" "$f" 2>/dev/null || continue
-    kill -"$sig" "$pid" 2>/dev/null || true
+    grep -qF -- "$marker" "$f" 2>/dev/null || continue
+    if [ "$sig" = "0" ]; then
+      echo "$pid"
+    else
+      kill -"$sig" "$pid" 2>/dev/null || true
+    fi
   done
 }
 
 jht_kill_by_marker() {
-  local marker="$1" grace="${2:-0}" settle="${3:-0}"
+  local marker="$1" grace="${2:-0}" settle="${3:-0}" detail=""
   [ -n "$marker" ] || return 0
   if command -v python3 >/dev/null 2>&1 && [ -f "$JHT_PROC_KILL_PY" ]; then
-    python3 "$JHT_PROC_KILL_PY" "$marker" --grace "$grace" --settle "$settle" \
-      >/dev/null 2>&1 || true
-    return 0
+    if detail="$(python3 "$JHT_PROC_KILL_PY" "$marker" --grace "$grace" \
+        --settle "$settle" 2>&1 >/dev/null)"; then
+      return 0
+    fi
+  else
+    _jht_kill_scan_fallback "$marker" TERM
+    if [ "$grace" != "0" ]; then
+      sleep "$grace" 2>/dev/null || true
+      _jht_kill_scan_fallback "$marker" KILL
+    fi
+    if [ "$settle" != "0" ]; then
+      sleep "$settle" 2>/dev/null || true
+    fi
+    sleep 1 2>/dev/null || true
+    [ -n "$(_jht_kill_scan_fallback "$marker" 0)" ] || return 0
+    detail="still running after the signal"
   fi
-  _jht_kill_scan_fallback "$marker" TERM
-  if [ "$grace" != "0" ]; then
-    sleep "$grace" 2>/dev/null || true
-    _jht_kill_scan_fallback "$marker" KILL
-  fi
-  if [ "$settle" != "0" ]; then
-    sleep "$settle" 2>/dev/null || true
-  fi
-  return 0
+  _jht_kill_refused "$marker" "$detail"
+  return 1
+}
+
+# Un kill che non riesce lo dice: su stderr (per chi guarda lo spawn) e in un
+# log durevole (per chi arriva dopo). Il daemon vecchio resta vivo e chi
+# chiama non ne lancia un secondo.
+_jht_kill_refused() {
+  local marker="$1" detail="$2" log
+  echo "✗ $marker: an old process is still running after the signal — not starting a second one (${detail:-no detail})" >&2
+  log="${JHT_HOME:-/jht_home}/logs/daemon-kill.log"
+  mkdir -p "$(dirname "$log")" 2>/dev/null || true
+  printf '%s refused marker=%s detail=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$marker" "${detail:-}" >>"$log" 2>/dev/null || true
 }
