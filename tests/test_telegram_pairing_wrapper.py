@@ -7,7 +7,9 @@ import os
 import pty
 import re
 import select
+import signal
 import subprocess
+import termios
 import time
 from pathlib import Path
 
@@ -59,7 +61,7 @@ def pair_script() -> str:
         'read_only_service_id() { [ "$1" = jht-telegram ] && echo telegram-id; }\n'
         'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
-        + functions("telegram_admin", "telegram_legacy", "telegram_pair")
+        + functions("telegram_admin", "telegram_legacy", "read_hidden_tty", "telegram_pair")
         + '\ntelegram_pair assistente\n'
     )
 
@@ -168,8 +170,18 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
     )
     os.close(slave)
     try:
-        output = _read_pty_until(master, b"Token del bot (input nascosto): ")
-        os.write(master, (SECRET + "\n").encode())
+        output = b""
+        token_sent = False
+        deadline = time.monotonic() + 5
+        while not token_sent and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], max(0, deadline - time.monotonic()))
+            if not ready:
+                break
+            output += os.read(master, 1)
+            if b"Token del bot" in output:
+                os.write(master, (SECRET + "\n").encode())
+                token_sent = True
+        assert token_sent, output.decode(errors="replace")
         output += _read_pty_until(master, b"Chat ID dell'utente: ")
         os.write(master, b"42\n")
         while process.poll() is None:
@@ -194,13 +206,50 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
             assert SECRET not in path.read_text(encoding="utf-8", errors="ignore")
 
 
+def test_interactive_pairing_restores_echo_after_ctrl_c(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(FAKE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    log = tmp_path / "calls.log"
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "FAKE_LOG": str(log),
+        "FAKE_DIGEST": DIGEST,
+    }
+    master, slave = pty.openpty()
+    process = subprocess.Popen(
+        ["bash", "-c", pair_script()],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=environment,
+        close_fds=True,
+        start_new_session=True,
+    )
+    try:
+        _read_pty_until(master, b"Token del bot")
+        assert not termios.tcgetattr(slave)[3] & termios.ECHO
+        os.killpg(process.pid, signal.SIGINT)
+        process.wait(timeout=5)
+        assert termios.tcgetattr(master)[3] & termios.ECHO
+    finally:
+        os.close(master)
+        os.close(slave)
+        if process.poll() is None:
+            process.kill()
+
+
 def test_both_wrappers_document_safe_interactive_and_noninteractive_pairing() -> None:
     shell = WRAPPER.read_text(encoding="utf-8")
     powershell = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
     shell_pair = functions("telegram_pair")
     ps_pair = re.search(r"function Invoke-TelegramPair \{\n.*?\n\}", powershell, re.S)
     assert ps_pair
-    assert "read -rs token" in shell_pair
+    assert "read_hidden_tty" in shell_pair
+    assert "stty -echo" in functions("read_hidden_tty")
     assert "Read-Host 'Token del bot (input nascosto)' -AsSecureString" in ps_pair.group(0)
     assert "[Console]::IsInputRedirected" in ps_pair.group(0)
     assert "mktemp" not in shell_pair
