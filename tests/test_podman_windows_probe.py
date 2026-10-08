@@ -105,7 +105,8 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "sudo systemctl restart jht-windows-egress-proxy.service" in source
     assert "https://ghcr.io/v2/" in source
     assert "--node" not in proxy
-    assert "[self.server.connector, host, str(port)]" in proxy
+    assert "[self.server.connector, resolved_ip, str(port)]" in proxy
+    assert "resolve_public_target(host, port" in proxy
 
 
 def test_interop_proxy_defaults_to_loopback_when_run_standalone():
