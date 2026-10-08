@@ -33,8 +33,12 @@ le aquela caixa e transforma os alertas em posicoes. E a fonte mais
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → a caixa nao existe: pula, faz web sourcing normal.
-`any_platform=true` significa que processamos **toda** a inbox dedicada (nenhum
-`from_filters` restrito) → cada remetente que o usuario encaminha e lido.
+`admission=whole_mailbox` significa que se le **toda** a inbox dedicada (cada
+remetente que o usuario encaminha); `admission=allowlist` so os remetentes que o
+usuario admitiu. Em ambos os casos a caixa esta no broker de segredos, nao num
+ficheiro que possas abrir: o correio de seguranca (resets de senha, codigos,
+avisos de acesso) e retido, e os links voltam sem tracking nem tokens. Uma linha
+`{"withheld": N}` no stderr depois do `poll` e normal, nao um erro.
 
 ### 2. Estime o VOLUME (economico, sem body fetch)
 ```bash
@@ -52,7 +56,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 Cada linha JSONL e um lead: `{"url","source","subject","sender","received_at"}`.
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` para os providers
   conhecidos, `email:<domain>` para qualquer outra plataforma (extracao generica).
-- A idempotencia (Message-ID em `state/email_monitor_seen.json`) garante que um
+- A idempotencia (Message-ID em o estado do broker) garante que um
   re-run **nao** reprocesse os mesmos alertas.
 
 ### 4. Para cada lead → os 5 gates de `position-insert`

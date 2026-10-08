@@ -49,9 +49,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **Never open, `cat`, `json.load` or print anything under `$JHT_HOME/credentials/`**,
 and never put a password in a script, a chat or a log: the script is the only
 thing that touches the account. `"reason": "not_configured"` means no mailbox is
-set up yet: tell the user it is configured in the desktop app's settings.
+set up yet: tell the user to save it with `jht mail setup` on the computer
+that runs the team.
 
-Then reply "Done, sent ✅" — never "go authorize Gmail".
+The answer says what happened:
+- `"status": "pending_user_approval"` — the email is a **draft** waiting for the
+  user: it leaves only when they approve it (`jht mail drafts`, then
+  `jht mail approve <id>`). Tell them exactly that, with the draft id; never say
+  it was sent.
+- `"status": "sent"` — only for a mail to the user's own mailbox: reply "Done, sent ✅".
+
+Never "go authorize Gmail".
 
 ### If you genuinely need a slash command / tool in YOUR session
 You can drive your own session — don't ask the user:

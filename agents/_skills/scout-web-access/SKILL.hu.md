@@ -100,7 +100,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 # → stdout JSONL: {"url":"https://linkedin.com/jobs/view/...","source":"linkedin-email"}
 ```
 
-Idempotencia: allapot a `$JHT_HOME/state/email_monitor_seen.json`-ban a mar
+Idempotencia: allapot a broker allapotaban (`jht-broker` kontener) a mar
 feldolgozott `Message-ID`-k halmazaval. Biztonsagos ujrafuttas 30 percenkent duplikaciok nelkul.
 
 Fo elony: az allasok mar **eloszurtek a felhasznaloi profil alapjan**

@@ -100,7 +100,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 # → stdout JSONL: {"url":"https://linkedin.com/jobs/view/...","source":"linkedin-email"}
 ```
 
-Idempotence : etat dans `$JHT_HOME/state/email_monitor_seen.json` avec un set
+Idempotence : etat dans l'etat du broker (conteneur `jht-broker`) avec un set
 de `Message-ID` deja traites. Re-run sur toutes les 30 min sans doublons.
 
 Avantage principal : les offres sont deja **pre-filtrees selon le profil utilisateur**

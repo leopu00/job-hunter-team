@@ -342,6 +342,19 @@ RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /app/web/.next \
     && chown jht:jht /app/web/.next
 
+# Broker of the portal secrets (P1 del 08/10): un secondo container della
+# stessa immagine, con un uid suo. I tre mount point nascono qui con il
+# proprietario giusto, perché un volume con nome vuoto ne copia proprietario e
+# permessi al primo mount. Segreti e stato: 0700 del broker. Socket: 0711, gli
+# agenti attraversano la cartella ma non la elencano; chi parla lo decide
+# SO_PEERCRED nel broker, non i permessi.
+RUN useradd --uid 1002 --user-group --no-create-home --home-dir /nonexistent \
+        --shell /usr/sbin/nologin jhtbroker \
+    && install -d -o jhtbroker -g jhtbroker -m 0700 /jht_secrets /jht_broker_state \
+    && install -d -o jhtbroker -g jhtbroker -m 0711 /run/jht-broker \
+    && ln -sf /app/shared/broker/bin/jht-broker.py /usr/local/bin/jht-broker \
+    && ln -sf /app/shared/broker/bin/jht-broker-admin.py /usr/local/bin/jht-broker-admin
+
 USER jht
 
 # GATE, come l'utente degli agenti: `sudo -n true` deve fallire. I setuid di

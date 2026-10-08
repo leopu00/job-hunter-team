@@ -38,6 +38,9 @@ $JHT_UPGRADE_PROTOCOL = 1
 $JHT_HOST_RUNTIME_PROTOCOL = 1
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
+# Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
+$BrokerContainer = 'jht-broker'
+$LegacySecretNames = @('email_monitor', 'email_transport')
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
 if (-not $env:HOME) { $env:HOME = $env:USERPROFILE }
@@ -354,6 +357,9 @@ jht - Job Hunter Team
     jht game start|stop    avvia o ferma il videogioco
     jht gui open           apre l'interfaccia grafica
     jht shell              shell dentro il container
+    jht mail setup         salva la casella di posta nel broker dei segreti
+    jht mail drafts        email scritte dagli agenti in attesa del tuo ok
+    jht mail approve <id>  le manda; jht mail discard <id> le scarta
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -379,7 +385,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download'
+    'setup', 'download', 'mail'
   )
 }
 
@@ -431,6 +437,119 @@ function Repair-MountOwnership {
   Write-Err "mount_repair_failed: le cartelle di Job Hunter Team ($homeMount, $userMount) non sono scrivibili dal container e non si sono potute sistemare."
   Write-Info "  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell'utente sia condivisa, poi rilancia 'jht up'."
   return $false
+}
+
+function Test-BrokerUp {
+  $running = & docker ps --format '{{.Names}}' 2>$null
+  return ($running -split "`n") -contains $BrokerContainer
+}
+
+# L'host amministra il broker con exec di jht-broker-admin; un segreto passa
+# solo su stdin ($InputText), mai negli argomenti.
+function Invoke-BrokerAdmin {
+  param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
+  if (-not (Test-BrokerUp)) {
+    Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
+    Write-Err 'Cosa fare: jht up'
+    return 1
+  }
+  # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
+  # ritorno della funzione (che e' solo il codice d'uscita).
+  if ($null -ne $InputText) {
+    # Una password con caratteri non ASCII arriverebbe come '?' con la
+    # codifica di default di Windows PowerShell 5.1.
+    $previousEncoding = $OutputEncoding
+    $OutputEncoding = [Text.UTF8Encoding]::new($false)
+    try {
+      $InputText | & docker exec -i $BrokerContainer jht-broker-admin @AdminArgs | Out-Host
+    } finally {
+      $OutputEncoding = $previousEncoding
+    }
+  } else {
+    & docker exec -i $BrokerContainer jht-broker-admin @AdminArgs | Out-Host
+  }
+  return $LASTEXITCODE
+}
+
+# I file vecchi in ~/.jht/credentials li legge legacy.py nel container jht e
+# li passa al broker in una busta (sha256 + base64). Il broker li importa una
+# volta sola; solo dopo il suo "ok" l'originale si cancella.
+function Invoke-BrokerMigrateLegacy {
+  if (-not (Test-ContainerUp) -or -not (Test-BrokerUp)) { return }
+  $migrated = $false
+  foreach ($name in $LegacySecretNames) {
+    & docker exec $Container python3 /app/shared/broker/legacy.py exists $name *> $null
+    if ($LASTEXITCODE -ne 0) { continue }
+    $envelope = (& docker exec $Container python3 /app/shared/broker/legacy.py read $name 2>$null | Select-Object -First 1)
+    $answer = ''
+    if ($envelope) { $answer = ($envelope | & docker exec -i $BrokerContainer jht-broker-admin secrets import-legacy $name 2>$null) -join '' }
+    if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
+      & docker exec $Container python3 /app/shared/broker/legacy.py remove $name *> $null
+      if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
+      $migrated = $true
+    } elseif ($answer -match '"ok": true' -and $answer -match '"state": "already_migrated"') {
+      & docker exec $Container python3 /app/shared/broker/legacy.py remove $name *> $null
+      Write-Warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json e' ricomparso dopo la migrazione; rimosso senza importarlo."
+    } else {
+      Write-Warn "legacy_migration_failed: $name resta in ~/.jht/credentials."
+    }
+  }
+  if ($migrated) {
+    Write-Warn 'La casella di posta ora sta nel broker dei segreti. La sua password era leggibile dagli agenti:'
+    Write-Warn 'genera una nuova password per app dal tuo provider e salvala con: jht mail setup'
+    Write-Warn "Fino ad allora gli agenti leggono la posta, ma l'invio resta fermo (mail_rotation_pending)."
+  }
+}
+
+function Invoke-MailSetup {
+  param([string[]]$MailArgs)
+  $user = ''; $imapHost = ''; $smtpHost = ''; $dedicated = ''
+  for ($i = 0; $i -lt $MailArgs.Count; $i++) {
+    switch ($MailArgs[$i]) {
+      '--user' { $user = $MailArgs[++$i] }
+      '--imap-host' { $imapHost = $MailArgs[++$i] }
+      '--smtp-host' { $smtpHost = $MailArgs[++$i] }
+      '--dedicated' { $dedicated = 'yes' }
+      '--not-dedicated' { $dedicated = 'no' }
+      default { Write-Err "mail setup: opzione sconosciuta $($MailArgs[$i])"; return 2 }
+    }
+  }
+  if (-not $user) { $user = Read-Host 'Indirizzo della casella' }
+  if (-not $dedicated) {
+    $answer = Read-Host "E' una casella DEDICATA agli avvisi di lavoro inoltrati? [s/N]"
+    $dedicated = if ($answer -match '^(s|si|y|yes)$') { 'yes' } else { 'no' }
+  }
+  $admission = if ($dedicated -eq 'yes') { 'whole_mailbox' } else { 'allowlist' }
+  $secure = Read-Host 'Password per app (non viene mostrata)' -AsSecureString
+  $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+  if (-not $password) { Write-Err 'mail setup: password vuota'; return 1 }
+  $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
+  if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
+  if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
+  $code = Invoke-BrokerAdmin -InputText $password @adminArgs
+  $password = $null
+  return $code
+}
+
+function Invoke-MailCommand {
+  param([string[]]$MailArgs)
+  $action = if ($MailArgs.Count -gt 0) { $MailArgs[0] } else { 'status' }
+  $rest = if ($MailArgs.Count -gt 1) { $MailArgs[1..($MailArgs.Count - 1)] } else { @() }
+  switch ($action) {
+    'setup' { return Invoke-MailSetup $rest }
+    'status' { $c = Invoke-BrokerAdmin secrets status; if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin mailbox show }
+    'admission' { return Invoke-BrokerAdmin mailbox admission @rest }
+    'allow' { return Invoke-BrokerAdmin mailbox allow @rest }
+    'drafts' { return Invoke-BrokerAdmin mail drafts }
+    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin mail $action @rest }
+    'journal' { return Invoke-BrokerAdmin mail journal @rest }
+    'delete' { return Invoke-BrokerAdmin secrets delete email_monitor }
+    'migrate' { Invoke-BrokerMigrateLegacy; return 0 }
+    default {
+      Write-Err 'uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate'
+      return 2
+    }
+  }
 }
 
 function Ensure-Up {
@@ -1299,6 +1418,15 @@ function Invoke-RuntimeUpgrade {
       $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
     }
     Remove-UpgradeTransaction
+    # Il broker dei segreti (P1 del 08/10) usa la stessa immagine del team:
+    # dopo il commit riparte con quella nuova. Non decide l'esito
+    # dell'upgrade; se non parte, la posta resta chiusa finche' `jht up`.
+    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $BrokerContainer)) {
+        Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
+      }
+      Invoke-BrokerMigrateLegacy
+    }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
     return 0
@@ -1385,6 +1513,7 @@ switch ($Sub) {
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
+    Invoke-BrokerMigrateLegacy
     break
   }
 
@@ -1408,12 +1537,19 @@ switch ($Sub) {
     Invoke-Compose down
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'
+    Invoke-BrokerMigrateLegacy
     break
   }
 
   'upgrade' {
     $code = Invoke-RuntimeUpgrade $Rest
     exit $code
+  }
+
+  'mail' {
+    Require-ComposeFile
+    Require-Docker
+    exit (Invoke-MailCommand $Rest)
   }
 
   'logs' {

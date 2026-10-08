@@ -50,10 +50,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **Öffne, `cat`e, `json.load`e oder drucke niemals etwas unter `$JHT_HOME/credentials/`**,
 und schreib nie ein Passwort in ein Skript, einen Chat oder ein Log: Das Skript
 ist das Einzige, das das Konto berührt. `"reason": "not_configured"` heißt, dass
-noch kein Postfach eingerichtet ist: Sag dem Nutzer, dass es in den
-Einstellungen der Desktop-App konfiguriert wird.
+noch kein Postfach eingerichtet ist: Sag dem Nutzer, dass er es mit
+`jht mail setup` auf dem Rechner speichert, auf dem das Team läuft.
 
-Dann antworte „Erledigt, gesendet ✅" — niemals „geh und autorisiere Gmail".
+Die Antwort sagt, was passiert ist:
+- `"status": "pending_user_approval"` — die E-Mail ist ein **Entwurf**, der auf den
+  Nutzer wartet: Sie geht erst raus, wenn er sie freigibt (`jht mail drafts`,
+  dann `jht mail approve <id>`). Sag ihm genau das, mit der Entwurfs-ID; sag nie,
+  sie sei gesendet.
+- `"status": "sent"` — nur für eine Mail an das eigene Postfach des Nutzers: antworte „Erledigt, gesendet ✅".
+
+Niemals „geh und autorisiere Gmail".
 
 ### Wenn du wirklich einen Slash-Command / ein Tool in DEINER Session brauchst
 Du kannst deine eigene Session steuern — frag nicht den Nutzer:

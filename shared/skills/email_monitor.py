@@ -15,46 +15,40 @@ Benefits:
   providers use precise extraction; unknown providers use bounded generic
   extraction that the Scout validates.
 
-Config (`$JHT_HOME/credentials/email_monitor.json`):
-{
-  "imap_host": "imap.gmail.com",
-  "imap_port": 993,
-  "user": "nome.jht@gmail.com",
-  "password": "<app-password>",
-  "folder": "INBOX",
-  "from_filters": []   # optional: empty/missing processes the whole dedicated
-                       # inbox; otherwise it is a sender allowlist
-}
+The mailbox account lives in the portal-secrets broker (container
+`jht-broker`, P1 of 08/10), never in `/jht_home`: the host saves it with
+`jht mail setup`. This file has two halves:
 
-Idempotency state lives in `$JHT_HOME/state/email_monitor_seen.json` as a set
-of processed Message-IDs, so a rerun does not create duplicates.
+- the IMAP/SMTP core (`poll_mailbox`, `count_mailbox`, `send_message`), which
+  takes the account as an argument and runs inside the broker;
+- the CLI the agents call, which only sends a request to the broker and
+  prints the answer. The broker filters and reduces what comes back (no
+  reset links, codes or sign-in mail), and the seen Message-IDs live in its
+  state.
 
-CLI:
-    python3 /app/shared/skills/email_monitor.py poll
+CLI (agents):
+    python3 /app/shared/skills/email_monitor.py poll [--since-days N]
     → stdout JSONL: one row per newly extracted job link
       {"url": "...", "source": "linkedin-email|email:<domain>", "subject": "...",
        "sender": "...", "received_at": "..."}
+      URLs come back without fragment, without query (except the offer id),
+      and without token-like path segments; codes in the subject are masked.
 
-    python3 /app/shared/skills/email_monitor.py poll --since-days 1
-    → restrict the search to messages from the last N days
-
-    python3 /app/shared/skills/email_monitor.py count
+    python3 /app/shared/skills/email_monitor.py count [--since-days N]
     → count new messages by sender WITHOUT downloading their bodies
 
     python3 /app/shared/skills/email_monitor.py status
-    → show configuration and the processed-message count
+    → whether a mailbox is configured, its address and its admission policy
 
     python3 /app/shared/skills/email_monitor.py send --to <addr> --subject <s> --body-file <f>
-    → send one email from the configured account over SMTP (TLS). The body
-      can also come from --body or stdin. stdout is one JSON line with ok,
-      the recipients and the subject; it never contains the password, and a
-      failure reports a fixed reason code, never the server's text.
+    → a draft the user approves in the desktop or with `jht mail approve`;
+      a mail to the mailbox's own address goes out at once. stdout is one
+      JSON line with ok, status (`pending_user_approval` or `sent`) and, on
+      failure, a fixed reason code.
 
-The credentials file is read only if it is a regular file (no symlink)
-owned by this uid; group/other permission bits are removed. Agents never
-open it themselves: they call this script (P1 portal secrets, phase 0 —
-this reduces the exposure, it does not close it: the agents still share
-the uid that owns the file).
+`_read_creds` below still reads the legacy file for verification_code.py
+until the broker takes over the application flows (phase 2); after the
+migration that file no longer exists.
 """
 from __future__ import annotations
 
@@ -82,7 +76,6 @@ from url_guard import is_fetchable  # noqa: E402  (dopo sys.path, per costruzion
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CREDS_PATH = JHT_HOME / "credentials" / "email_monitor.json"
-STATE_PATH = JHT_HOME / "state" / "email_monitor_seen.json"
 
 # Cap di link estratti da una singola email (una digest può contenerne molti):
 # evita che un solo messaggio gonfi la coda con decine di candidati.
@@ -127,24 +120,6 @@ def _read_creds() -> tuple[dict, str | None]:
 
 def _load_creds() -> dict:
     return _read_creds()[0]
-
-
-def _load_state() -> dict:
-    if not STATE_PATH.exists():
-        return {"seen_message_ids": []}
-    try:
-        with STATE_PATH.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {"seen_message_ids": []}
-
-
-def _save_state(state: dict) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_PATH.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
-    tmp.replace(STATE_PATH)
 
 
 # ── Pattern estrazione link per provider NOTO ──────────────────────────────
@@ -339,15 +314,16 @@ def _search_uids(M, from_filters: list[str], since_imap: str) -> list[bytes]:
     return sorted(set(uids))
 
 
-def poll(since_days: int = 3) -> list[dict]:
-    creds = _load_creds()
-    if not creds.get("user"):
-        return []
+def poll_mailbox(creds: dict, seen: set[str], since_days: int, gate=None) -> tuple[list[dict], list[str], int]:
+    """(jobs, newly seen Message-IDs, withheld count). The IMAP core, with the
+    account passed in: the broker calls it with the account from its own
+    volume and a `gate(msg, sender, subject, body) -> bool` that decides
+    whether a message may be opened for extraction (P1 portal secrets).
 
-    state = _load_state()
-    seen = set(state.get("seen_message_ids", []))
+    A withheld message is still marked as seen, so it is not fetched again."""
     new_jobs: list[dict] = []
     new_seen_msgids: list[str] = []
+    withheld = 0
 
     folder = creds.get("folder", "INBOX")
     from_filters = creds.get("from_filters") or []
@@ -371,6 +347,10 @@ def poll(since_days: int = 3) -> list[dict]:
             sender = msg.get("From", "")
             subject = (msg.get("Subject", "") or "").strip()
             body = _extract_email_body(msg)
+            if gate is not None and not gate(msg, sender, subject, body):
+                withheld += 1
+                new_seen_msgids.append(mid)
+                continue
             jobs = _extract_jobs(body, sender)
             received_at = (
                 parsedate_to_datetime(msg.get("Date", "")).isoformat()
@@ -387,26 +367,13 @@ def poll(since_days: int = 3) -> list[dict]:
             M.logout()
         except Exception:
             pass
-
-    # Idempotency: aggiungi solo i Message-ID processati con successo
-    if new_seen_msgids:
-        state.setdefault("seen_message_ids", []).extend(new_seen_msgids)
-        # Cap a 10000 per evitare crescita illimitata
-        state["seen_message_ids"] = state["seen_message_ids"][-10000:]
-        _save_state(state)
-
-    return new_jobs
+    return new_jobs, new_seen_msgids, withheld
 
 
-def count(since_days: int = 1) -> dict:
+def count_mailbox(creds: dict, seen: set[str], since_days: int = 1) -> dict:
     """Conta le NUOVE email (non ancora processate) per mittente SENZA scaricarne
-    il body. Serve al Capitano per stimare il volume e bilanciare il carico."""
-    creds = _load_creds()
-    if not creds.get("user"):
-        return {"configured": False, "new_total": 0, "by_sender": {}}
-
-    state = _load_state()
-    seen = set(state.get("seen_message_ids", []))
+    il body. Serve al Capitano per stimare il volume e bilanciare il carico.
+    Account passato dal chiamante (il broker)."""
     folder = creds.get("folder", "INBOX")
     from_filters = creds.get("from_filters") or []
     since_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
@@ -444,23 +411,6 @@ def count(since_days: int = 1) -> dict:
     }
 
 
-def status() -> dict:
-    creds, problem = _read_creds()
-    state = _load_state()
-    return {
-        "configured": bool(creds.get("user")),
-        "credentials_problem": problem,
-        "user": creds.get("user", ""),
-        "host": creds.get("imap_host", ""),
-        "from_filters": creds.get("from_filters", []),
-        "any_platform": not bool(creds.get("from_filters")),
-        "seen_count": len(state.get("seen_message_ids", [])),
-        "state_path": str(STATE_PATH),
-        "creds_path": str(CREDS_PATH),
-        "creds_exists": CREDS_PATH.exists(),
-    }
-
-
 MAX_RECIPIENTS = 10
 _ADDRESS = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
 MAX_BODY_BYTES = 200_000
@@ -476,12 +426,10 @@ def _smtp_endpoint(creds: dict) -> tuple[str, int]:
     return host, int(creds.get("smtp_port") or 465)
 
 
-def send(to: list[str], subject: str, body: str) -> dict:
-    """Send one plain-text email from the configured account. The result is
-    safe to print: no password, no server text, only a fixed reason code."""
-    creds, problem = _read_creds()
-    if problem:
-        return {"ok": False, "reason": problem}
+def send_message(creds: dict, to: list[str], subject: str, body: str) -> dict:
+    """Send one plain-text email from the account passed in (the broker's).
+    The result is safe to print: no password, no server text, only a fixed
+    reason code."""
     if not creds.get("user") or not creds.get("password"):
         return {"ok": False, "reason": "not_configured"}
     if not to or any(not _ADDRESS.match(addr) for addr in to):
@@ -536,7 +484,16 @@ def _is_secret_path(path: str) -> bool:
     )
 
 
+def _broker_call(op: str, args: dict) -> dict:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from broker.client import call
+
+    return call(op, args)
+
+
 def main(argv):
+    """Agent side (P1 portal secrets, phase 1a): every command is a request to
+    the broker, which holds the account. Nothing here reads credentials."""
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -558,25 +515,33 @@ def main(argv):
     args = p.parse_args(argv)
 
     if args.cmd == "poll":
-        try:
-            jobs = poll(args.since_days)
-        except CredentialsEncodingError as exc:
-            print(json.dumps({"ok": False, "reason": str(exc)}), file=sys.stderr)
+        answer = _broker_call("mail.poll", {"since_days": args.since_days})
+        if not answer.get("ok"):
+            print(json.dumps(answer), file=sys.stderr)
             return 1
-        for j in jobs:
+        for j in answer.get("jobs", []):
             print(json.dumps(j))
+        if answer.get("withheld"):
+            print(json.dumps({"withheld": answer["withheld"]}), file=sys.stderr)
         return 0
 
+    # status and count keep `configured` even when the broker refuses or is
+    # down: the Scout's and the Captain's prompts decide on that field
+    # (`configured=false` → source from the web).
     if args.cmd == "count":
-        try:
-            print(json.dumps(count(args.since_days), indent=2))
-        except CredentialsEncodingError as exc:
-            print(json.dumps({"ok": False, "reason": str(exc)}), file=sys.stderr)
-            return 1
-        return 0
+        answer = _broker_call("mail.count", {"since_days": args.since_days})
+        if not answer.get("ok"):
+            answer = {**answer, "configured": False, "new_total": 0, "by_sender": {}}
+        print(json.dumps(answer, indent=2))
+        return 0 if answer.get("ok") else 1
 
+    # status reports a state: a broker that is down or refuses is a mailbox
+    # that is not available, said with its reason, not a failed command.
     if args.cmd == "status":
-        print(json.dumps(status(), indent=2))
+        answer = _broker_call("mail.status", {})
+        if not answer.get("ok"):
+            answer = {"ok": True, "configured": False, "unavailable": answer.get("reason", "broker_unavailable")}
+        print(json.dumps(answer, indent=2))
         return 0
 
     if args.cmd == "send":
@@ -593,9 +558,10 @@ def main(argv):
                 return 1
         else:
             text = sys.stdin.read()
-        result = send(args.to, args.subject, text)
-        print(json.dumps(result, ensure_ascii=False))
-        return 0 if result["ok"] else 1
+        answer = _broker_call("mail.send", {"kind": "chat", "to": args.to, "subject": args.subject, "body": text})
+        print(json.dumps(answer, ensure_ascii=False))
+        return 0 if answer.get("ok") else 1
+    return 2
 
 
 if __name__ == "__main__":

@@ -50,10 +50,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **Non aprire, non fare `cat` né `json.load` e non stampare niente sotto `$JHT_HOME/credentials/`**,
 e non mettere mai una password in uno script, in chat o in un log: lo script è
 l'unico che tocca l'account. `"reason": "not_configured"` vuol dire che la
-casella non è ancora impostata: di' all'utente che si configura nelle
-impostazioni dell'app desktop.
+casella non è ancora impostata: di' all'utente di salvarla con `jht mail setup`
+sul computer dove gira il team.
 
-Poi rispondi "Fatto, inviata ✅" — mai "vai ad autorizzare Gmail".
+La risposta dice cosa è successo:
+- `"status": "pending_user_approval"` — l'email è una **bozza** in attesa
+  dell'utente: parte solo quando la approva (`jht mail drafts`, poi
+  `jht mail approve <id>`). Diglielo così, con l'id della bozza; non dire mai che
+  è stata inviata.
+- `"status": "sent"` — solo per una mail alla casella dell'utente stesso: rispondi "Fatto, inviata ✅".
+
+Mai "vai ad autorizzare Gmail".
 
 ### Se ti serve davvero uno slash-command / strumento nella TUA sessione
 Puoi guidare la tua sessione — non chiederlo all'utente:

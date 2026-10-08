@@ -33,8 +33,12 @@ leggi quella casella e trasformi gli alert in posizioni. È la sorgente più
 python3 /app/shared/skills/email_monitor.py status
 ```
 `configured=false` → la casella non c'è: salta, fai web sourcing normale.
-`any_platform=true` significa che processiamo **l'intera** inbox dedicata (nessun
-`from_filters` ristretto) → ogni mittente che l'utente inoltra viene letto.
+`admission=whole_mailbox` significa che si legge **l'intera** inbox dedicata (ogni
+mittente che l'utente inoltra); `admission=allowlist` solo i mittenti che l'utente
+ha ammesso. In entrambi i casi la casella sta nel broker dei segreti, non in un
+file che puoi aprire: la posta di sicurezza (reset di password, codici, avvisi di
+accesso) viene trattenuta, e i link tornano senza tracciamento né token. Una riga
+`{"withheld": N}` su stderr dopo `poll` è normale, non un errore.
 
 ### 2. Stima il VOLUME (economico, no body fetch)
 ```bash
@@ -52,7 +56,7 @@ python3 /app/shared/skills/email_monitor.py poll --since-days 1
 Ogni riga JSONL è un lead: `{"url","source","subject","sender","received_at"}`.
 - `source` = `linkedin-email` / `glassdoor-email` / `indeed-email` per i provider
   noti, `email:<domain>` per qualsiasi altra piattaforma (estrazione generica).
-- L'idempotency (Message-ID in `state/email_monitor_seen.json`) garantisce che un
+- L'idempotency (Message-ID in lo stato del broker) garantisce che un
   re-run **non** riprocessi gli stessi alert.
 
 ### 4. Per ogni lead → i 5 gate di `position-insert`

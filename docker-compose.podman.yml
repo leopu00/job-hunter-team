@@ -30,3 +30,12 @@ services:
       - https_proxy=${JHT_PODMAN_HTTPS_PROXY:-}
       - all_proxy=${JHT_PODMAN_ALL_PROXY:-}
       - no_proxy=${JHT_PODMAN_NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal,host.containers.internal}
+
+  # Broker dei segreti dei portali (P1 del 08/10). Stessa mappa degli uid di
+  # `jht`: con mappe diverse il broker vedrebbe il client degli agenti con un
+  # uid rimappato in SO_PEERCRED e lo rifiuterebbe. Con questa, l'uid 1001 del
+  # client resta 1001 anche per il broker, e il broker (1002) cade in un subuid
+  # che non e' l'utente dell'host. NIENTE `network_mode: host`: il broker non
+  # condivide il loopback con gli agenti.
+  jht-broker:
+    userns_mode: "keep-id:uid=1001,gid=1001"

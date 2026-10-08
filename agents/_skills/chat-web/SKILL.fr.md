@@ -50,10 +50,17 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<
 **N'ouvre jamais, ne fais jamais `cat` ou `json.load` et n'affiche rien sous `$JHT_HOME/credentials/`**,
 et ne mets jamais de mot de passe dans un script, un chat ou un log : le script
 est le seul à toucher le compte. `"reason": "not_configured"` signifie qu'aucune
-boîte n'est encore configurée : dis à l'utilisateur qu'elle se configure dans
-les réglages de l'app de bureau.
+boîte n'est encore configurée : dis à l'utilisateur de l'enregistrer avec
+`jht mail setup` sur l'ordinateur où tourne l'équipe.
 
-Puis réponds « C'est fait, envoyé ✅ » — jamais « va autoriser Gmail ».
+La réponse dit ce qui s'est passé :
+- `"status": "pending_user_approval"` — l'email est un **brouillon** qui attend
+  l'utilisateur : il ne part que quand il l'approuve (`jht mail drafts`, puis
+  `jht mail approve <id>`). Dis-le-lui ainsi, avec l'id du brouillon ; ne dis
+  jamais qu'il a été envoyé.
+- `"status": "sent"` — seulement pour un mail vers la boîte de l'utilisateur lui-même : réponds « C'est fait, envoyé ✅ ».
+
+Jamais « va autoriser Gmail ».
 
 ### Si tu as vraiment besoin d'une slash-command / d'un outil dans TA session
 Tu peux piloter ta propre session — ne le demande pas à l'utilisateur :

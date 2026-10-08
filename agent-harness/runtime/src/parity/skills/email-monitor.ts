@@ -1,24 +1,15 @@
 /**
- * `shared/skills/email_monitor.py` as a native tool, in its "not configured"
- * form.
+ * `shared/skills/email_monitor.py` as a native tool, in its "no broker" form.
  *
- * The script reads the team's dedicated mailbox over IMAP with a password
- * from `$JHT_HOME/credentials/email_monitor.json`. This runtime has no IMAP
- * client and does not read that file: a mailbox password is exactly what an
- * API agent must not hold. So the tool answers as the script answers when no
- * mailbox is set up — `status` says `configured: false`, `count` counts
- * nothing, `poll` finds no leads — and the Scout's prompt already knows what
- * to do then: skip email and source from the web. The cycle never breaks.
- *
- * When the credentials file does exist, `status` says so and adds a `note`, so
- * nobody mistakes "not available here" for "not set up".
- *
- * `send` (the chat skills' way to email someone) answers like the script with
- * no mailbox: `{"ok": false, "reason": "not_configured"}`. No SMTP here either.
+ * The mailbox account lives in the portal-secrets broker (container
+ * `jht-broker`, P1 of 08/10), and the script only talks to the broker's
+ * socket. This runtime has no broker socket, no IMAP and no SMTP, and it never
+ * reads a credentials file: a mailbox password is exactly what an API agent
+ * must not hold. So the tool answers as the script answers when the broker is
+ * unreachable — `status` succeeds with `configured: false` and the reason,
+ * `count`, `poll` and `send` refuse with `broker_unavailable` — and the Scout's prompt already
+ * knows what to do then: skip email and source from the web.
  */
-
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 
 import { z } from "zod";
 
@@ -26,7 +17,7 @@ import type { ToolHandler } from "../../tools/registry.ts";
 import { printed, pyJson } from "./py-compat.ts";
 
 export const EMAIL_MONITOR_TOOL = "email_monitor";
-export const IMAP_UNAVAILABLE_NOTE = "imap-unavailable-in-api-runtime";
+export const BROKER_UNAVAILABLE = "broker_unavailable";
 
 export interface EmailMonitorOptions {
   /** `$JHT_HOME` as the script reads it; `/jht_home` when unset, as in the script. */
@@ -43,19 +34,15 @@ const schema = z
   })
   .strict();
 
-export function createEmailMonitorTool(options: EmailMonitorOptions = {}): ToolHandler {
-  const home = options.jhtHome?.trim() || "/jht_home";
-  const credsPath = join(home, "credentials", "email_monitor.json");
-  const statePath = join(home, "state", "email_monitor_seen.json");
-
+export function createEmailMonitorTool(_options: EmailMonitorOptions = {}): ToolHandler {
   return {
     spec: {
       name: EMAIL_MONITOR_TOOL,
       description:
         "The team mailbox of forwarded job alerts (replaces `python3 …/email_monitor.py`). " +
         "status: is it configured. count: new messages by sender. poll: one JSON lead per line. " +
-        "send: email someone from the team mailbox. " +
-        "In this runtime the mailbox is never configured: when status says configured=false, source from the web.",
+        "send: an email from the team mailbox, as a draft the user approves. " +
+        "In this runtime the mailbox broker is never reachable: when status says configured=false, source from the web.",
       schema,
     },
 
@@ -65,53 +52,17 @@ export function createEmailMonitorTool(options: EmailMonitorOptions = {}): ToolH
 
     async execute(args) {
       const { command } = args as z.infer<typeof schema>;
-      if (command === "poll") return { ok: true, content: printed([]) };
-      if (command === "send") return { ok: false, content: pyJson({ ok: false, reason: "not_configured" }) };
+      const refusal = { ok: false, reason: BROKER_UNAVAILABLE };
+      if (command === "poll") return { ok: false, content: printed([]) };
+      if (command === "send") return { ok: false, content: pyJson(refusal) };
       if (command === "count") {
-        return { ok: true, content: pyJson({ configured: false, new_total: 0, by_sender: {} }, { indent: 2 }) };
+        return {
+          ok: false,
+          content: pyJson({ ...refusal, configured: false, new_total: 0, by_sender: {} }, { indent: 2 }),
+        };
       }
-      // Existence only: the file holds a password and is never opened.
-      const credsExists = exists(credsPath);
-      return {
-        ok: true,
-        content: pyJson(
-          {
-            configured: false,
-            // The script reports why a credentials file was refused; this
-            // runtime never opens it, so there is nothing to refuse.
-            credentials_problem: null,
-            user: "",
-            host: "",
-            from_filters: [],
-            any_platform: true,
-            seen_count: seenCount(statePath),
-            state_path: statePath,
-            creds_path: credsPath,
-            creds_exists: credsExists,
-            ...(credsExists ? { note: IMAP_UNAVAILABLE_NOTE } : {}),
-          },
-          { indent: 2 },
-        ),
-      };
+      // status reports a state, as the script does: not configured, and why.
+      return { ok: true, content: pyJson({ ok: true, configured: false, unavailable: BROKER_UNAVAILABLE }, { indent: 2 }) };
     },
   };
-}
-
-/** Message-IDs already processed, from the state file the TUI script keeps. Not a secret. */
-function seenCount(path: string): number {
-  try {
-    const state = JSON.parse(readFileSync(path, "utf8")) as { seen_message_ids?: unknown };
-    return Array.isArray(state.seen_message_ids) ? state.seen_message_ids.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function exists(path: string): boolean {
-  try {
-    statSync(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

@@ -249,13 +249,16 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     up, up_start, up_end = _case_arm(wrapper, up_label, lifecycle)
     chat_probe = _shell_function(wrapper, "desktop_chat_container_id")
     runtime_probe = _shell_function(wrapper, "read_only_container_id")
+    # The agents' container is one service of the compose: the probe delegates
+    # to the per-service attestation, and both bodies are the probe.
+    service_probe = _shell_function(wrapper, "read_only_service_id")
     onboarding_probe = _shell_function(wrapper, "onboarding_snapshot")
     reachable = _shell_function(wrapper, "docker_reachable")
     snapshot = _function(desktop, "snapshot_impl")
 
     for read_only in map(
         _without_shell_comments,
-        (status, chat_probe, runtime_probe, onboarding_probe, reachable),
+        (status, chat_probe, runtime_probe, service_probe, onboarding_probe, reachable),
     ):
         for mutator in (
             "require_docker",
@@ -268,7 +271,8 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
 
     assert "docker_reachable" in status
     assert "read_only_container_id" in chat_probe
-    assert "docker_reachable" in runtime_probe
+    assert "read_only_service_id" in _without_shell_comments(runtime_probe)
+    assert "docker_reachable" in _without_shell_comments(service_probe)
     assert "read_only_container_id" in onboarding_probe
     assert "LocalCliOperation::Snapshot" in snapshot
     assert "compose up -d" in up

@@ -1,13 +1,18 @@
-"""P1 portal secrets, phase 0: the mailbox password stays out of the agents' view.
+"""P1 portal secrets: the mailbox password stays out of the agents' view.
 
-The chat skill used to tell CAPITANO, MENTOR and ASSISTENTE to `json.load`
-`credentials/email_monitor.json` and log in to SMTP themselves: the password
-went through the model's context, the provider and the transcripts. Now they
-call `email_monitor.py send`, which reads the account by itself and prints
-only a result.
+Phase 0: the chat skill used to tell CAPITANO, MENTOR and ASSISTENTE to
+`json.load` `credentials/email_monitor.json` and log in to SMTP themselves.
+Phase 1a: the account lives in the broker container; the agents' CLI only
+sends requests to it and never opens a credentials file. What stays here:
 
-This reduces, it does not close: the agents still share the uid that owns the
-file. A canary stands in for the password; no real credential is read.
+- the IMAP/SMTP core the broker runs (`send_message`, `_imap_connect`) never
+  shows the password, in a result or in an exception;
+- the agents' CLI refuses a body file inside the portal secrets, and with no
+  broker it answers `broker_unavailable` without falling back to the file;
+- `_read_creds` (still used by verification_code.py until phase 2) refuses a
+  symlink or another uid's file.
+
+A canary stands in for the password; no real credential is read.
 
 Run with: pytest tests/test_email_monitor_secret_boundary.py -v
 """
@@ -69,6 +74,8 @@ def mailbox(tmp_path, monkeypatch):
     }))
     creds.chmod(0o600)
     monkeypatch.setenv("JHT_HOME", str(home))
+    # No broker in this test: the CLI must say so, never read the file.
+    monkeypatch.setenv("JHT_BROKER_SOCKET_DIR", str(tmp_path / "no-broker"))
     sys.modules.pop("email_monitor", None)
     import email_monitor
     monkeypatch.setattr(email_monitor.smtplib, "SMTP_SSL", FakeSmtp)
@@ -88,41 +95,42 @@ def files_without_the_secret_file(home: Path):
     return [p for p in home.rglob("*") if p.is_file() and p.name != "email_monitor.json"]
 
 
-def test_a_test_send_uses_the_password_and_never_shows_it(mailbox, tmp_path):
+def test_the_core_send_uses_the_password_and_never_shows_it(mailbox, tmp_path):
     home, em = mailbox
-    body = tmp_path / "body.txt"
-    body.write_text("Hello from the team")
-    code, out, err = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body-file", str(body)])
+    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "Hello from the team")
 
-    assert code == 0
     # The send really happened with the stored password...
     assert FakeSmtp.logins == [("team@example.invalid", CANARY)]
     assert FakeSmtp.sent[0]["To"] == "someone@example.com"
-    # ...derived from the IMAP host, as the old example did by hand.
-    result = json.loads(out)
     assert result["ok"] is True and result["to"] == ["someone@example.com"]
-    # ...and the canary is nowhere the agent sees: stdout, stderr, files it can list.
-    assert CANARY not in out and CANARY not in err
-    for path in files_without_the_secret_file(home):
-        assert CANARY.encode() not in path.read_bytes(), path
+    # ...and the canary is not in what the broker hands back.
+    assert CANARY not in json.dumps(result)
+
+
+def test_the_agents_cli_never_reads_the_file_and_has_no_fallback(mailbox):
+    home, em = mailbox
+    expected = {
+        "send": {"ok": False, "reason": "broker_unavailable"},
+        "poll": {"ok": False, "reason": "broker_unavailable"},
+        # status and count still say `configured: false`: the prompts read it.
+        "status": {"ok": True, "configured": False, "unavailable": "broker_unavailable"},
+        "count": {"ok": False, "reason": "broker_unavailable", "configured": False, "new_total": 0, "by_sender": {}},
+    }
+    for argv in (["send", "--to", "someone@example.com", "--subject", "Hi", "--body", "x"], ["status"], ["poll"], ["count"]):
+        code, out, err = run_cli(em, argv)
+        assert code == (0 if argv == ["status"] else 1), argv
+        assert json.loads((out or err).strip()) == expected[argv[0]], argv
+        assert CANARY not in out + err
+    assert run_cli(em, ["poll"])[1] == ""
+    assert FakeSmtp.logins == [] and FakeSmtp.sent == []
 
 
 def test_a_failed_login_reports_a_code_never_the_server_text(mailbox):
     home, em = mailbox
-    # A server that echoes what it got: its text must never reach stdout.
+    # A server that echoes what it got: its text must never reach the result.
     FakeSmtp.fail_with = smtplib.SMTPAuthenticationError(535, f"bad credentials {CANARY}".encode())
-    code, out, err = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body", "x"])
-    assert code == 1
-    assert json.loads(out) == {"ok": False, "reason": "auth_failed"}
-    assert CANARY not in out and CANARY not in err
-
-
-def test_status_never_shows_the_password(mailbox):
-    _, em = mailbox
-    code, out, err = run_cli(em, ["status"])
-    assert code == 0
-    assert json.loads(out)["credentials_problem"] is None
-    assert CANARY not in out and CANARY not in err
+    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "x")
+    assert result == {"ok": False, "reason": "auth_failed"}
 
 
 @pytest.mark.parametrize("to,subject,reason", [
@@ -132,7 +140,7 @@ def test_status_never_shows_the_password(mailbox):
 ])
 def test_header_injection_sends_nothing(mailbox, to, subject, reason):
     _, em = mailbox
-    assert em.send([to], subject, "x") == {"ok": False, "reason": reason}
+    assert em.send_message(em._load_creds(), [to], subject, "x") == {"ok": False, "reason": reason}
     assert FakeSmtp.logins == [] and FakeSmtp.sent == []
 
 
@@ -140,10 +148,8 @@ def test_a_file_of_another_uid_is_refused(mailbox, monkeypatch):
     _, em = mailbox
     real_uid = os.getuid()
     monkeypatch.setattr(em.os, "getuid", lambda: real_uid + 1)
-    assert em.send(["someone@example.com"], "Hi", "x") == {"ok": False, "reason": "credentials_foreign_owner"}
+    assert em._read_creds() == ({}, "credentials_foreign_owner")
     assert em._load_creds() == {}
-    assert em.status()["credentials_problem"] == "credentials_foreign_owner"
-    assert FakeSmtp.logins == []
 
 
 def test_a_symlink_is_refused(mailbox, tmp_path):
@@ -154,7 +160,7 @@ def test_a_symlink_is_refused(mailbox, tmp_path):
     target.chmod(0o600)
     creds.unlink()
     creds.symlink_to(target)
-    assert em.send(["someone@example.com"], "Hi", "x") == {"ok": False, "reason": "credentials_symlink"}
+    assert em._read_creds() == ({}, "credentials_symlink")
     assert em._load_creds() == {}
 
 
@@ -205,11 +211,10 @@ def write_password(home: Path, password: str) -> None:
 def test_a_non_ascii_password_never_leaks_through_an_encoding_error(mailbox):
     home, em = mailbox
     write_password(home, NON_ASCII_CANARY)
-    code, out, err = run_cli(em, ["send", "--to", "someone@example.com", "--subject", "Hi", "--body", "x"])
-    assert code == 1
-    assert json.loads(out) == {"ok": False, "reason": "encoding_unsupported"}
+    result = em.send_message(em._load_creds(), ["someone@example.com"], "Hi", "x")
+    assert result == {"ok": False, "reason": "encoding_unsupported"}
     for piece in pieces_of(NON_ASCII_CANARY):
-        assert piece not in out and piece not in err, piece
+        assert piece not in json.dumps(result), piece
     assert FakeSmtp.sent == []
 
 
@@ -235,9 +240,6 @@ def test_imap_login_with_a_non_ascii_password_raises_a_clean_error(mailbox, monk
     assert caught.value.__cause__ is None and caught.value.__suppress_context__
     for piece in pieces_of(NON_ASCII_CANARY):
         assert piece not in rendered, piece
-    code, out, err = run_cli(em, ["poll"])
-    assert code == 1 and out == ""
-    assert json.loads(err) == {"ok": False, "reason": "credentials_unsupported_characters"}
 
 
 @pytest.mark.parametrize("where", ["credentials/email_monitor.json", ".cache/linkedin/storage-state.json", "credentials/ats-accounts/x.json"])
@@ -263,6 +265,7 @@ def test_a_symlink_to_a_secret_is_refused_too(mailbox, tmp_path):
 
 def test_recipients_are_capped(mailbox):
     _, em = mailbox
+    creds = em._load_creds()
     many = [f"r{i}@example.com" for i in range(em.MAX_RECIPIENTS + 1)]
-    assert em.send(many, "Hi", "x") == {"ok": False, "reason": "too_many_recipients"}
-    assert em.send(many[: em.MAX_RECIPIENTS], "Hi", "x")["ok"] is True
+    assert em.send_message(creds, many, "Hi", "x") == {"ok": False, "reason": "too_many_recipients"}
+    assert em.send_message(creds, many[: em.MAX_RECIPIENTS], "Hi", "x")["ok"] is True

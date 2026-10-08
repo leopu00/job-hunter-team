@@ -62,7 +62,9 @@ UNTRUSTED_CONTAINER_CASES = (
     ("wrong-systemd-unit", True),
     ("wrong-config-hash", True),
     ("missing-config-hash", True),
-    ("duplicate", False),
+    # Two ids are legitimate since the broker (jht + jht-broker): the foreign
+    # one is refused by its inspect, after the hash probe like every other.
+    ("duplicate", True),
     ("stale", True),
     ("inspect-failure", True),
 )

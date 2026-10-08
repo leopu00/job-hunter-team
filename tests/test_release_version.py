@@ -44,12 +44,13 @@ def test_release_check_rejects_a_moving_compose_image(tmp_path: Path) -> None:
     shutil.copy2(ROOT / "docker-compose.yml", compose)
     manifest = json.loads((ROOT / "release/runtime-image.v1.json").read_text())
     immutable_ref = f'{manifest["repository"]}@{manifest["digest"]}'
-    compose.write_text(
-        compose.read_text().replace(
-            f"image: ${{JHT_IMAGE:-{immutable_ref}}}",
-            "image: ${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}",
-        )
-    )
+    # The compose names the image once (a YAML anchor reused by the broker):
+    # swap that one reference, and prove the swap happened, or the check
+    # below would pass on an untouched file.
+    original = compose.read_text()
+    pinned = f"${{JHT_IMAGE:-{immutable_ref}}}"
+    assert original.count(pinned) == 1
+    compose.write_text(original.replace(pinned, "${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"))
 
     result = run_release_check(sandbox)
     output = result.stdout + result.stderr

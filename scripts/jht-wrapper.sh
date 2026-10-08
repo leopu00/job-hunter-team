@@ -41,6 +41,8 @@ HOST_KERNEL="$(uname -s)"
 HOST_UID="$(id -u)"
 
 CONTAINER_SERVICE="jht"
+# I servizi del compose: jht (agenti) e jht-broker (segreti dei portali).
+COMPOSE_SERVICES="jht jht-broker"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -671,6 +673,130 @@ container_postcheck_running() {
   }
 }
 
+# ── Broker dei segreti dei portali (P1 del 08/10) ─────────────────────────
+# Il container `jht-broker` possiede l'account della posta. L'host lo
+# amministra con exec di `jht-broker-admin`, e il segreto passa solo su stdin.
+BROKER_SERVICE="jht-broker"
+LEGACY_SECRET_NAMES="email_monitor email_transport"
+
+broker_admin() {
+  local broker_id
+  broker_id="$(read_only_service_id "$BROKER_SERVICE")" || {
+    err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
+    err "Cosa fare: jht up"
+    return 1
+  }
+  docker exec -i "$broker_id" jht-broker-admin "$@"
+}
+
+# I file vecchi stanno in ~/.jht/credentials, dell'uid degli agenti: li legge
+# `legacy.py` dentro il container `jht` e li passa al broker in una busta
+# (sha256 + base64) senza toccare il disco dell'host. Il broker li importa una
+# volta sola; solo dopo il suo «ok» l'originale si cancella. Una migrazione
+# fallita lascia tutto com'era.
+broker_migrate_legacy() {
+  local agent_id broker_id name answer migrated=0 failed=0
+  agent_id="$(read_only_container_id)" || return 1
+  broker_id="$(read_only_service_id "$BROKER_SERVICE")" || return 1
+  for name in $LEGACY_SECRET_NAMES; do
+    docker exec "$agent_id" python3 /app/shared/broker/legacy.py exists "$name" >/dev/null 2>&1 || continue
+    answer="$(docker exec "$agent_id" python3 /app/shared/broker/legacy.py read "$name" 2>/dev/null \
+      | docker exec -i "$broker_id" jht-broker-admin secrets import-legacy "$name" 2>/dev/null)" || true
+    case "$answer" in
+      *'"ok": true'*'"state": "imported"'*)
+        docker exec "$agent_id" python3 /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 \
+          || warn "legacy_remove_failed: $name è nel broker ma la copia in ~/.jht/credentials è rimasta."
+        migrated=1
+        ;;
+      *'"ok": true'*'"state": "already_migrated"'*)
+        # Un file ricomparso dopo la migrazione non si importa: lo possono
+        # scrivere gli agenti. Si toglie e basta.
+        docker exec "$agent_id" python3 /app/shared/broker/legacy.py remove "$name" >/dev/null 2>&1 || true
+        warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json è ricomparso dopo la migrazione; rimosso senza importarlo."
+        ;;
+      *)
+        warn "legacy_migration_failed: $name resta in ~/.jht/credentials (risposta del broker: ${answer:-nessuna})."
+        failed=1
+        ;;
+    esac
+  done
+  if [ "$migrated" -eq 1 ]; then
+    warn "La casella di posta ora sta nel broker dei segreti. La sua password era leggibile dagli agenti:"
+    warn "genera una nuova password per app dal tuo provider e salvala con: jht mail setup"
+    warn "Fino ad allora gli agenti leggono la posta, ma l'invio resta fermo (mail_rotation_pending)."
+  fi
+  return "$failed"
+}
+
+# Dopo `up`: la migrazione gira finche' non riesce una volta, poi un
+# marcatore nel runtime protetto dell'host la spegne. Un runtime senza broker
+# nel compose non fa nessuna chiamata in piu'. `jht mail migrate` la rifa'
+# sempre, a richiesta.
+BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"
+broker_migrate_legacy_once() {
+  grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" 2>/dev/null || return 0
+  [ ! -e "$BROKER_LEGACY_MARKER" ] || return 0
+  if broker_migrate_legacy; then
+    : > "$BROKER_LEGACY_MARKER" 2>/dev/null || true
+  fi
+  return 0
+}
+
+mail_setup() {
+  local user="" imap_host="" smtp_host="" dedicated="" admission password
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --user) user="${2:-}"; shift 2 ;;
+      --imap-host) imap_host="${2:-}"; shift 2 ;;
+      --smtp-host) smtp_host="${2:-}"; shift 2 ;;
+      --dedicated) dedicated=yes; shift ;;
+      --not-dedicated) dedicated=no; shift ;;
+      *) err "mail setup: opzione sconosciuta $1"; return 2 ;;
+    esac
+  done
+  if [ -z "$user" ]; then
+    printf 'Indirizzo della casella: ' >&2
+    IFS= read -r user || return 1
+  fi
+  if [ -z "$dedicated" ]; then
+    printf 'È una casella DEDICATA agli avvisi di lavoro inoltrati? [s/N] ' >&2
+    IFS= read -r dedicated || return 1
+    case "$dedicated" in s|S|si|sì|y|Y|yes) dedicated=yes ;; *) dedicated=no ;; esac
+  fi
+  if [ "$dedicated" = yes ]; then admission=whole_mailbox; else admission=allowlist; fi
+  printf 'Password per app (non viene mostrata): ' >&2
+  IFS= read -rs password || return 1
+  printf '\n' >&2
+  [ -n "$password" ] || { err "mail setup: password vuota"; return 1; }
+  set -- mailbox setup --user "$user" --admission "$admission"
+  [ -z "$imap_host" ] || set -- "$@" --imap-host "$imap_host"
+  [ -z "$smtp_host" ] || set -- "$@" --smtp-host "$smtp_host"
+  printf '%s\n' "$password" | broker_admin "$@"
+  local rc=$?
+  unset password
+  return $rc
+}
+
+mail_command() {
+  local action="${1:-status}"
+  shift || true
+  case "$action" in
+    setup) mail_setup "$@" ;;
+    status) broker_admin secrets status && broker_admin mailbox show ;;
+    admission) broker_admin mailbox admission "$@" ;;
+    allow) broker_admin mailbox allow "$@" ;;
+    drafts) broker_admin mail drafts ;;
+    approve|discard) broker_admin mail "$action" "$@" ;;
+    journal) broker_admin mail journal "$@" ;;
+    delete) broker_admin secrets delete email_monitor ;;
+    migrate) broker_migrate_legacy && : > "$BROKER_LEGACY_MARKER" ;;
+    *)
+      err "uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate"
+      return 2
+      ;;
+  esac
+}
+
 # podman-compose 1.6.0 calcola la label dalla configurazione servizio risolta,
 # non dal digest dei byte YAML. La sua interfaccia pubblica dry-run applica lo
 # stesso resolver usato da `up`. Il provider puo' fare probe Podman read-only,
@@ -679,7 +805,7 @@ container_postcheck_running() {
 # L'output verbose puo' contenere variabili risolte: resta confinato in memoria
 # e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
 podman_expected_config_hash() {
-  local file="$1" podman_bin compose_bin resolved hashes hash
+  local file="$1" service="${2:-jht}" podman_bin compose_bin resolved hashes hash
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
@@ -688,7 +814,7 @@ podman_expected_config_hash() {
     CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
     PODMAN_COMPOSE_WARNING_LOGS=false \
       "$compose_bin" --verbose --dry-run --project-name jht \
-        --podman-path "$podman_bin" -f "$file" up -d --force-recreate jht
+        --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
   } 2>&1)" || return 1
   hashes="$(printf '%s\n' "$resolved" \
     | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p')"
@@ -699,38 +825,64 @@ podman_expected_config_hash() {
   printf '%s\n' "$hash"
 }
 
-# Risolve il container tramite l'esatto progetto Compose JHT senza bootstrap,
-# wake o auto-up. Un container omonimo non e' mai sufficiente.
-read_only_container_id() {
+# Risolve il container di un servizio tramite l'esatto progetto Compose JHT
+# senza bootstrap, wake o auto-up. Un container omonimo non e' mai sufficiente.
+# Il progetto ha due servizi: `jht` (agenti) e `jht-broker` (segreti dei
+# portali, P1 del 08/10). 3 = servizio assente, 1 = non attestabile.
+read_only_service_id() {
+  local service="$1"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local container_id details expected_hash expected_project expected_unit
+  local ids container_id details expected_hash expected_project expected_unit found="" seen_service
   if [ "$CONTAINER_RUNTIME" = podman ]; then
-    # podman-compose 1.6.0 non accetta un operando service su `ps`. Il
-    # controllo service resta sull'inspect attestato subito sotto.
-    container_id="$(compose_file "$COMPOSE_FILE" ps -q 2>/dev/null)" || return 1
+    # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
+    # tutti i container del progetto, e il servizio lo dice l'inspect
+    # attestato qui sotto.
+    ids="$(compose_file "$COMPOSE_FILE" ps -q 2>/dev/null)" || return 1
   else
-    container_id="$(compose_file "$COMPOSE_FILE" ps -q jht 2>/dev/null)" || return 1
+    ids="$(compose_file "$COMPOSE_FILE" ps -q "$service" 2>/dev/null)" || return 1
   fi
-  [ -n "$container_id" ] || return 3
-  case "$container_id" in *[!0-9a-fA-F]*) return 1 ;; esac
-  [ "${#container_id}" -ge 12 ] && [ "${#container_id}" -le 64 ] || return 1
+  [ -n "$ids" ] || return 3
+  for container_id in $ids; do
+    case "$container_id" in *[!0-9a-fA-F]*) return 1 ;; esac
+    [ "${#container_id}" -ge 12 ] && [ "${#container_id}" -le 64 ] || return 1
+  done
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     expected_project="$(compose_project_name)" || return 1
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
-    expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE")" || return 1
-    details="$(docker inspect --type container "$container_id" --format '{{.Name}}|{{.State.Running}}|{{index .Config.Labels "io.podman.compose.project"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "io.podman.compose.service"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.container-number"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "io.podman.compose.version"}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}|{{index .Config.Labels "io.podman.compose.config-hash"}}' 2>/dev/null)" \
-      || return 1
-    [ "$details" = "jht|true|$expected_project|$expected_project|jht|jht|1|$RUNTIME_DIR|$COMPOSE_FILE|1.6.0|$expected_unit|$expected_hash" ] \
-      || return 1
-  else
-    # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
-    # project/path/hash e' specifica del provider Podman 1.6.0 qui fissato.
-    details="$(docker inspect --type container "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
-      || return 1
-    [ "$details" = "true jht" ] || return 1
+    expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
   fi
-  printf '%s\n' "$container_id"
+  for container_id in $ids; do
+    if [ "$CONTAINER_RUNTIME" = podman ]; then
+      details="$(docker inspect --type container "$container_id" --format '{{.Name}}|{{.State.Running}}|{{index .Config.Labels "io.podman.compose.project"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "io.podman.compose.service"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.container-number"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "io.podman.compose.version"}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}|{{index .Config.Labels "io.podman.compose.config-hash"}}' 2>/dev/null)" \
+        || return 1
+      # Quinto campo: il servizio. Un altro servizio del compose (jht o
+      # jht-broker) si salta; un servizio che il compose non ha e' un
+      # container non nostro, e si rifiuta tutto.
+      seen_service="$(printf '%s' "$details" | cut -d'|' -f5)"
+      if [ "$seen_service" != "$service" ]; then
+        case " $COMPOSE_SERVICES " in *" $seen_service "*) continue ;; esac
+        return 1
+      fi
+      [ -z "$found" ] || return 1
+      [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$COMPOSE_FILE|1.6.0|$expected_unit|$expected_hash" ] \
+        || return 1
+    else
+      [ -z "$found" ] || return 1
+      # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
+      # project/path/hash e' specifica del provider Podman 1.6.0 qui fissato.
+      details="$(docker inspect --type container "$container_id" --format '{{.State.Running}} {{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null)" \
+        || return 1
+      [ "$details" = "true $service" ] || return 1
+    fi
+    found="$container_id"
+  done
+  [ -n "$found" ] || return 3
+  printf '%s\n' "$found"
+}
+
+read_only_container_id() {
+  read_only_service_id "$CONTAINER_SERVICE"
 }
 
 # Bridge interno del desktop. Non avvia runtime, container o team.
@@ -871,6 +1023,9 @@ jht — Job Hunter Team
     jht game start|stop    avvia o ferma il videogioco
     jht gui open           apre l'interfaccia grafica
     jht shell              shell dentro il container
+    jht mail setup         salva la casella di posta nel broker dei segreti
+    jht mail drafts        email scritte dagli agenti in attesa del tuo ok
+    jht mail approve <id>  le manda; jht mail discard <id> le scarta
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
@@ -903,7 +1058,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail)
       return 0
       ;;
   esac
@@ -1940,6 +2095,15 @@ handle_runtime_upgrade() {
   fi
 
   upgrade_remove_transaction
+  # Il broker dei segreti dei portali (P1 del 08/10) usa la stessa immagine
+  # del team: dopo il commit riparte con quella nuova. Non decide l'esito
+  # dell'upgrade (il team e' gia' verificato): se non parte, la posta resta
+  # chiusa (broker_unavailable) finche' un `jht up` non lo riaccende.
+  if grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE"; then
+    upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$BROKER_SERVICE" \
+      || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
+    broker_migrate_legacy_once
+  fi
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
   else
@@ -2073,6 +2237,7 @@ case "$SUB" in
     ensure_bind_owner
     compose up -d
     container_postcheck_running || exit 1
+    broker_migrate_legacy_once
     ;;
 
   start-container)
@@ -2082,6 +2247,7 @@ case "$SUB" in
     ensure_bind_owner
     compose up -d
     container_postcheck_running || exit 1
+    broker_migrate_legacy_once
     ;;
 
   down|stop-container)
@@ -2116,10 +2282,18 @@ case "$SUB" in
     compose down
     compose up -d
     container_postcheck_running || exit 1
+    broker_migrate_legacy_once
     ;;
 
   upgrade)
     handle_runtime_upgrade "${@:2}"
+    ;;
+
+  mail)
+    require_compose_file
+    require_docker
+    mail_command "${@:2}"
+    exit $?
     ;;
 
   logs)
