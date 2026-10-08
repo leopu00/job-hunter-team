@@ -11,9 +11,9 @@ import { salaryPreference } from "../../../web/lib/salary-source";
  * candidarsi guardando quel numero, e un numero sembra un fatto — nessuno va
  * a controllare l'annuncio.
  *
- * La regola giusta esisteva già nel prodotto
- * (`shared/skills/generate_dashboard.py`: has_declared prima di
- * has_estimated). Qui si difende che il web la applichi, e che la applichi in
+ * La regola giusta esisteva già nel prodotto, nella vecchia dashboard
+ * statica del box (generate_dashboard.py, tolta l'08/10: has_declared prima
+ * di has_estimated). Qui si difende che il web la applichi, e che la applichi in
  * TUTTI i punti: lista, dashboard e swipe, ramo cloud e ramo locale.
  */
 const ROOT = resolve(__dirname, "../../..");

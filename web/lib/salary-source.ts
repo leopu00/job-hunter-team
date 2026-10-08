@@ -7,8 +7,9 @@
 // offerte candidarsi guardando quel numero, e un numero sembra un fatto —
 // nessuno va a controllare l'annuncio.
 //
-// La regola non nasce qui: `shared/skills/generate_dashboard.py` la applica
-// da sempre (`has_declared` prima di `has_estimated`). Era il web a non
+// La regola non nasce qui: la vecchia dashboard statica del box
+// (generate_dashboard.py, tolta l'08/10 col suo server) la applicava da
+// sempre (`has_declared` prima di `has_estimated`). Era il web a non
 // distinguerli. Vive in un file suo perché serve a QUATTRO punti — lista e
 // dashboard, ramo cloud e ramo locale — e una regola copiata quattro volte
 // è una regola che fra un mese ne dice due cose diverse.

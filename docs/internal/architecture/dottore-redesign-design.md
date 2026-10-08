@@ -18,7 +18,7 @@ ESISTE:
 - `.launcher/doctor-watchdog.sh` — loop ogni 2h, gate working-hours/halt.
 - `.launcher/spawn-doctor.sh` — spawn idempotente (kill DOTTORE*, REPL-check, inietta prompt).
 - `.launcher/start-agent.sh` — kill+ricrea+avvia sessione (multi-provider, i18n, skill, kick-off). **È il meccanismo di refresh.**
-- `#{session_created}` letto in `dashboard_server.py:280-298` → età sessione.
+- (`#{session_created}` → età sessione lo leggeva `dashboard_server.py`, rimosso l'08/10: va riletto altrove.)
 - `agents/_skills/liveness-check` (capture-pane -S -200 + 10 pattern + respawn atomico), `daily-restart-wave` (restart 1×/giorno con capture→db-query→kill→start-agent→kick-off), `cache-prune`, `py-tools-audit`, `cv-disk-audit`.
 - Log: `dottore-actions.jsonl`, dir `dottore-captures/`, `messages.jsonl`, `throttle-events.jsonl`, `sentinel-data.jsonl`, DB jobs.db.
 - `working_hours.py` (gate ON/OFF, wrap-around mezzanotte).

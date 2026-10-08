@@ -100,7 +100,10 @@ def test_la_ricerca_non_e_vuota():
     """
     names = [name for name, _ in tracked_text_files()]
     assert len(names) > 500, f"perimetro sospetto: solo {len(names)} file letti"
-    assert "shared/skills/dashboard_server.py" in names
+    # Il file che parlava il vocabolario ritirato era shared/skills/
+    # dashboard_server.py, tolto l'08/10; la cartella resta, e qui si
+    # pretende che il gate la legga ancora.
+    assert "shared/skills/_db.py" in names
 
 
 def test_il_vocabolario_ritirato_non_torna():

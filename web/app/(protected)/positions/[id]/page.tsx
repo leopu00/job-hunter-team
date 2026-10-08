@@ -455,9 +455,9 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // nell'annuncio; la stima è un'ipotesi del team e vale solo dove il
   // dichiarato manca. Mostrare 35-60k su un annuncio che dichiara 12-24k fa
   // investire tempo su un'offerta che l'utente avrebbe scartato — e un
-  // numero sembra un fatto, quindi nessuno va a controllare. Stessa regola
-  // di `shared/skills/generate_dashboard.py` (has_declared prima di
-  // has_estimated), che la applica da sempre.
+  // numero sembra un fatto, quindi nessuno va a controllare. Era già la
+  // regola della vecchia dashboard statica del box (generate_dashboard.py,
+  // tolta l'08/10): has_declared prima di has_estimated.
   const salaryEst = formatSalary(
     position.salary_estimated_min,
     position.salary_estimated_max,

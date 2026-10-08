@@ -78,16 +78,12 @@ def test_agent_copy_budget_only_goes_down():
 
 def test_directly_rendered_shared_surfaces_default_to_english():
     plan = (SKILLS / "plan_registry.py").read_text(encoding="utf-8")
-    dashboard = (SKILLS / "generate_dashboard.py").read_text(encoding="utf-8")
     scraper = (SKILLS / "web_scrape_robust.py").read_text(encoding="utf-8")
 
     assert '"label": "Adagio (free)"' in plan
     assert "/month" in plan
     assert "gratuito" not in plan
     assert "/mese" not in plan
-    assert '<html lang="en">' in dashboard
-    for old_copy in ("Posizioni attive", "Valutate", "CV scritti", "Versione salvata"):
-        assert old_copy not in dashboard
     assert "playwright non installato" not in scraper.lower()
 
 
