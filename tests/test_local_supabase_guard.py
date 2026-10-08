@@ -60,4 +60,21 @@ def test_an_unset_url_skips_the_test(monkeypatch):
 def test_a_local_url_is_returned_as_it_is(monkeypatch):
     url = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
     monkeypatch.setenv(local_supabase.ENV, url)
+    for name in local_supabase.ENV_OVERRIDES:
+        monkeypatch.delenv(name, raising=False)
     assert local_supabase_db_url() == url
+
+
+@pytest.mark.parametrize("variable, value", [
+    ("PGHOSTADDR", "203.0.113.7"),
+    ("PGSERVICE", "production"),
+    ("PGSERVICEFILE", "/tmp/pg_service.conf"),
+])
+def test_libpq_variables_that_move_a_local_url_skip_the_test(monkeypatch, variable, value):
+    """libpq fills what the URL leaves out from the environment psql inherits."""
+    monkeypatch.setenv(local_supabase.ENV, "postgresql://postgres:postgres@127.0.0.1:54322/postgres")
+    for name in local_supabase.ENV_OVERRIDES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(variable, value)
+    with pytest.raises(pytest.skip.Exception, match=variable):
+        local_supabase_db_url()
