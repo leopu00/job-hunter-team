@@ -247,8 +247,12 @@ def _with_rotation_warning(answer: dict) -> dict:
 
 def mailbox_show() -> dict:
     box = store.read_state("mailbox", {})
+    account = store.read_secret("email_monitor") or {}
     return _with_rotation_warning({
         "ok": True,
+        # The address only, for the desktop's Mail screen; null when no
+        # mailbox is saved. Never the password.
+        "address": account.get("user") or None,
         "admission": box.get("admission", "allowlist"),
         "allow_addresses": box.get("allow_addresses", []),
         "allow_domains": box.get("allow_domains", []),
