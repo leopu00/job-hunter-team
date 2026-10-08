@@ -867,18 +867,47 @@ telegram_admin() {
     err "Cosa fare: jht up"
     return 1
   }
+  docker exec "$telegram_id" jht-telegram-admin "$@"
+}
+
+telegram_admin_input() {
+  local telegram_id
+  telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
+    err "Cosa fare: jht up"
+    return 1
+  }
   docker exec -i "$telegram_id" jht-telegram-admin "$@"
 }
 
+telegram_image() {
+  local images
+  images="$(compose config --images 2>/dev/null | sort -u)" || return 1
+  case "$images" in ''|*$'\n'*) return 1 ;; esac
+  printf '%s\n' "$images"
+}
+
 telegram_legacy() {
-  local agent_id
-  agent_id="$(read_only_container_id)" || return 1
-  docker exec -u 1001 "$agent_id" /usr/bin/python3 -I \
+  local command="${1:-}" image mode home_mount
+  local -a userns_args=()
+  case "$command" in inventory|remaining) mode=ro ;; remove) mode=rw ;; *) return 2 ;; esac
+  image="$(telegram_image)" || return 1
+  home_mount="${JHT_HOME_HOST:-$HOME/.jht}"
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    userns_args=(--userns keep-id:uid=1001,gid=1001)
+  fi
+  docker run --rm \
+    ${userns_args[@]+"${userns_args[@]}"} \
+    --user 1001:1001 --read-only --tmpfs /tmp:size=4m,mode=1777 \
+    --network none --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$home_mount:/jht_home:$mode" \
+    --entrypoint /usr/bin/python3 "$image" -I \
     /app/shared/telegram_service/bin/jht-telegram-legacy.py "$@"
 }
 
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
+  local agent_was_running=0 agent_status=0
   local token="" chat_id="" pair_rc=0
   local -a digest_args=()
   case "$role" in assistente|capitano|mentor) ;; *)
@@ -887,7 +916,21 @@ telegram_pair() {
     return 2
     ;;
   esac
+  if read_only_container_id >/dev/null 2>&1; then
+    agent_was_running=1
+    compose stop "$CONTAINER_SERVICE" >/dev/null || {
+      err "legacy_inventory_failed: non riesco a fermare gli agenti prima dell'inventario host."
+      return 1
+    }
+  else
+    agent_status=$?
+    if [ "$agent_status" -ne 3 ]; then
+      err "legacy_inventory_failed: lo stato del container agenti non è attestabile."
+      return 1
+    fi
+  fi
   digests="$(telegram_legacy inventory "$role")" || {
+    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
     err "legacy_inventory_failed: migrazione Telegram interrotta."
     return 1
   }
@@ -899,6 +942,17 @@ telegram_pair() {
       }
       digest_args+=(--legacy-digest "$digest")
     done <<< "$digests"
+  fi
+  if ! printf '%s' "$digests" | telegram_admin_input legacy remember "$role" >/dev/null; then
+    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
+    err "legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato."
+    return 1
+  fi
+  if [ "$agent_was_running" -eq 1 ]; then
+    compose start "$CONTAINER_SERVICE" >/dev/null || {
+      err "agent_restart_failed: inventario conservato, ma il team non è ripartito. Cosa fare: jht up"
+      return 1
+    }
   fi
 
   was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
@@ -927,14 +981,14 @@ telegram_pair() {
       return 1
     fi
     if printf '{"bot_token":"%s","chat_id":"%s"}' "$token" "$chat_id" \
-        | telegram_admin bots pair "$role" "${digest_args[@]}"; then
+        | telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
     else
       pair_rc=$?
     fi
     unset token chat_id
   else
-    if telegram_admin bots pair "$role" "${digest_args[@]}"; then
+    if telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
     else
       pair_rc=$?
@@ -953,7 +1007,7 @@ telegram_pair() {
     case "$was_enabled" in *'"enabled": true'*) ;; *) first_cutover=1 ;; esac
     telegram_admin cutover enable >/dev/null || return 1
     compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
-    if [ "$first_cutover" -eq 1 ]; then
+    if [ "$first_cutover" -eq 1 ] && [ "$agent_was_running" -eq 1 ]; then
       # Il riavvio spegne anche eventuali tg-bridge che conservavano il token
       # vecchio in memoria. Al boot pid1 vede il marker read-only.
       compose restart "$CONTAINER_SERVICE" >/dev/null || return 1

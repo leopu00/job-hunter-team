@@ -159,6 +159,23 @@ def test_host_admin_reads_secret_from_stdin_and_never_echoes_it(
         "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
         "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
     }
+    unseeded = subprocess.run(
+        [str(command), "bots", "pair", "assistente"],
+        input=json.dumps({"bot_token": token, "chat_id": "42"}),
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert unseeded.returncode == 1
+    assert json.loads(unseeded.stdout) == {"ok": False, "reason": "legacy_inventory_required"}
+    seeded = subprocess.run(
+        [str(command), "legacy", "remember", "assistente"],
+        input="",
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert seeded.returncode == 0
     saved = subprocess.run(
         [str(command), "bots", "pair", "assistente"],
         input=json.dumps({"bot_token": token, "chat_id": "42"}),
@@ -191,6 +208,14 @@ def test_admin_requires_a_rotated_token_before_cutover(telegram_store: dict[str,
         "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
     }
     digest = __import__("hashlib").sha256(old.encode()).hexdigest()
+    remembered = subprocess.run(
+        [str(command), "legacy", "remember", "assistente"],
+        input=digest,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert remembered.returncode == 0
     refused = subprocess.run(
         [str(command), "bots", "pair", "assistente", "--legacy-digest", digest],
         input=json.dumps({"bot_token": old, "chat_id": "42"}),
@@ -233,6 +258,21 @@ def test_admin_requires_a_rotated_token_before_cutover(telegram_store: dict[str,
     )
     assert deleted.returncode == 0
     assert store.cutover_status() == {"enabled": True, "paired": {}}
+    reused_after_delete = subprocess.run(
+        [str(command), "bots", "pair", "assistente"],
+        input=json.dumps({"bot_token": new, "chat_id": "42"}),
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert reused_after_delete.returncode == 1
+    assert json.loads(reused_after_delete.stdout) == {"ok": False, "reason": "rotation_required"}
+    history, complete = store.token_history("assistente")
+    assert complete is True
+    assert history == {
+        digest,
+        __import__("hashlib").sha256(new.encode()).hexdigest(),
+    }
 
 
 def test_enabled_flag_without_completed_pairing_fails_closed(
@@ -345,7 +385,7 @@ def test_inbound_attachment_type_is_allowlisted(
 
 
 def test_bad_update_advances_offset_and_does_not_pin_polling(
-    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     class PollAPI(FakeAPI):
         def get_updates(self, _offset: int) -> list[dict]:
@@ -361,6 +401,13 @@ def test_bad_update_advances_offset_and_does_not_pin_polling(
     monkeypatch.setattr(transport, "process_update", refuse)
     transport.poll_role("assistente")
     assert store.read_state("offsets", {})["assistente"] == 78
+    discarded = store.read_state("discarded-assistente", [])
+    assert len(discarded) == 1
+    assert discarded[0]["update_id"] == 77
+    assert discarded[0]["reason"] == "inbox_full"
+    assert isinstance(discarded[0]["at"], str)
+    assert "discarded role=assistente update_id=77 reason=inbox_full" in capsys.readouterr().err
+    assert transport.status()["discarded"] == {"assistente": 1}
 
 
 def test_event_state_is_partitioned_per_role(
@@ -453,7 +500,10 @@ def test_container_lifecycle_starts_telegram_and_host_pairing_is_exposed() -> No
     powershell_wrapper = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
     assert "['up', '-d', 'jht-telegram']" in container
     assert "['start', 'jht-telegram', 'jht']" in container
-    assert 'telegram_admin bots pair "$role"' in bash_wrapper
+    assert 'telegram_admin_input bots pair "$role"' in bash_wrapper
+    assert 'telegram_admin_input legacy remember "$role"' in bash_wrapper
+    assert "jht-telegram-legacy.py" in bash_wrapper
+    assert "docker run --rm" in bash_wrapper
     assert 'force-recreate "$TELEGRAM_SERVICE"' in bash_wrapper
     assert "'telegram' {" in powershell_wrapper
     assert "'--force-recreate' $TelegramContainer" in powershell_wrapper
@@ -533,13 +583,16 @@ def test_legacy_cleanup_hashes_then_removes_old_tokens(tmp_path: Path) -> None:
     credentials = home / "credentials"
     credentials.mkdir(parents=True)
     old = "123456:abcdefghijklmnopqrstuvwxyz"
-    (home / "jht.config.json").write_text(json.dumps({
+    config = {
         "channels": {"telegram": {"bots": {
             "assistente": {"bot_token": old, "chat_id": "42"},
             "mentor": {"bot_token": "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ", "chat_id": "43"},
         }}},
         "active_provider": "openai",
-    }), encoding="utf-8")
+    }
+    (home / "jht.config.json").write_text(json.dumps(config), encoding="utf-8")
+    backup = home / "jht.config.json.bak-model-pin-20261008-123-abcdef"
+    backup.write_text(json.dumps(config), encoding="utf-8")
     (credentials / "telegram_bot.json").write_text(json.dumps({"token": old}), encoding="utf-8")
     command = ROOT / "shared/telegram_service/bin/jht-telegram-legacy.py"
     environment = {**os.environ, "JHT_HOME": str(home)}
@@ -554,6 +607,8 @@ def test_legacy_cleanup_hashes_then_removes_old_tokens(tmp_path: Path) -> None:
     assert removed.returncode == 0
     after = (home / "jht.config.json").read_text(encoding="utf-8")
     assert old not in after and "active_provider" in after
+    backup_after = backup.read_text(encoding="utf-8")
+    assert old not in backup_after and "active_provider" in backup_after
     assert not (credentials / "telegram_bot.json").exists()
     remaining = subprocess.run(
         [str(command), "remaining"], env=environment, capture_output=True, text=True,
