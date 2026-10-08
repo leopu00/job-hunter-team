@@ -4,6 +4,7 @@ Test migrazione legacy → Job Hunter Team.
 Verifica:
 - Schema DB SQLite v2 (interview_round presente, PRAGMA user_version = 2)
 - db_init.py su un DB legacy tronca le righe oltre i limiti e attiva i CHECK
+- db_migrate_v2.py porta un DB V1 (schema ricostruito dalla storia) allo schema V2
 - Integrità file di setup (setup.sh, .env.example, docs/examples/candidate_profile.yml.example)
 
 Eseguire con:
@@ -175,6 +176,183 @@ class TestSchemaV2:
                 ('x', 'x', 'y' * 250)
             )
         conn.close()
+
+# ---------------------------------------------------------------------------
+# 1b. Un DB V1 vero portato a V2 da db_migrate_v2.py
+# ---------------------------------------------------------------------------
+
+# Lo schema V1 non è mai stato nel repo come file: il repo nasce già a V2
+# (a1b95001c). Si ricostruisce da tre fonti che ci sono:
+#   - le colonne che db_migrate_v2.py legge dalle tabelle *_old (step3);
+#   - le colonne che il suo verify() pretende SPARITE dopo la migrazione;
+#   - «CAMPI V1 RIMOSSI» in agents/capitano/capitano.md (3992daa12):
+#     company_hq, work_location, salary_type, salary_min/max/currency.
+# Le applications V1 non hanno written_at, response_at, interview_round né
+# i drive id: sono i campi che la V2 aggiunge.
+V1_SCHEMA = """
+CREATE TABLE companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+CREATE TABLE positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    company TEXT NOT NULL,
+    company_hq TEXT,
+    location TEXT,
+    work_location TEXT,
+    remote_type TEXT,
+    salary_type TEXT,
+    salary_min INTEGER,
+    salary_max INTEGER,
+    salary_currency TEXT,
+    url TEXT,
+    source TEXT,
+    jd_text TEXT,
+    requirements TEXT,
+    found_by TEXT,
+    found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deadline TEXT,
+    status TEXT DEFAULT 'new',
+    notes TEXT,
+    last_checked TIMESTAMP
+);
+CREATE TABLE position_highlights (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE TABLE scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id INTEGER NOT NULL UNIQUE,
+    total_score INTEGER NOT NULL,
+    stack_match INTEGER, remote_fit INTEGER, salary_fit INTEGER,
+    experience_fit INTEGER, strategic_fit INTEGER,
+    breakdown TEXT, notes TEXT, scored_by TEXT,
+    scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id INTEGER NOT NULL UNIQUE,
+    cv_path TEXT, cl_path TEXT, cv_pdf_path TEXT, cl_pdf_path TEXT,
+    critic_verdict TEXT, critic_score REAL, critic_notes TEXT,
+    status TEXT DEFAULT 'draft',
+    applied_at TIMESTAMP, applied_via TEXT,
+    response TEXT, written_by TEXT, reviewed_by TEXT,
+    critic_reviewed_at TIMESTAMP, applied BOOLEAN DEFAULT 0
+);
+PRAGMA user_version = 1;
+"""
+
+# Righe sintetiche, una per regola della migrazione.
+V1_ROWS = """
+INSERT INTO companies (id, name) VALUES (1, 'Acme'), (2, 'Globex'), (3, 'Orphan Ltd');
+INSERT INTO positions (id, title, company, company_hq, location, work_location, remote_type,
+                       salary_type, salary_min, salary_max, salary_currency, url, status, found_by)
+VALUES
+  (1, 'Backend dev', 'acme', 'Milano', 'Italia', 'Torino', 'hybrid',
+   'declared', 40000, 50000, NULL, 'https://jobs.example/1', 'scored', 'scout-1'),
+  (2, 'Data eng', 'Globex', NULL, 'Roma', NULL, 'remote',
+   'estimated', 30000, 45000, 'CHF', 'https://jobs.example/2', 'new', 'scout-1'),
+  (3, 'SRE', 'Initech', NULL, NULL, '', 'onsite',
+   NULL, 20000, 25000, NULL, 'https://jobs.example/3', 'checked', 'scout-2'),
+  (4, 'Dup kept', 'Acme', NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, 'https://jobs.example/dup', 'ready', 'scout-1'),
+  (5, 'Dup dropped', 'Acme', NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, 'https://jobs.example/dup', 'new', 'scout-2'),
+  (6, 'Dead', 'Acme', NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, 'https://jobs.example/6', 'excluded', 'scout-2');
+INSERT INTO position_highlights (id, position_id, type, text)
+VALUES (1, 1, 'pro', 'Python'), (2, 6, 'con', 'gone with its position');
+INSERT INTO scores (id, position_id, total_score, stack_match, breakdown, scored_by)
+VALUES (1, 1, 72, 30, 'stack 30', 'scorer'), (2, 4, 81, 35, 'stack 35', 'scorer');
+INSERT INTO applications (id, position_id, cv_path, critic_score, status, applied_at, applied_via, applied)
+VALUES (1, 4, 'cv/4.md', 7.5, 'ready', NULL, NULL, 0);
+"""
+
+
+class TestMigrationV1ToV2:
+    """db_migrate_v2.py su un DB V1: schema V2, dati spostati, ripulitura."""
+
+    @pytest.fixture()
+    def migrated(self, tmp_db, tmp_path):
+        conn = sqlite3.connect(tmp_db)
+        conn.executescript(V1_SCHEMA + V1_ROWS)
+        conn.close()
+        result = run_cli(DB_MIGRATE, [], tmp_db, tmp_path)
+        assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+        assert "CHECK PASSED" in result.stdout, result.stdout[-2000:]
+        conn = sqlite3.connect(tmp_db)
+        conn.row_factory = sqlite3.Row
+        yield conn
+        conn.close()
+
+    @staticmethod
+    def _cols(conn, table):
+        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+    def test_schema_is_v2(self, migrated):
+        assert migrated.execute("PRAGMA user_version").fetchone()[0] == 2
+        positions = self._cols(migrated, "positions")
+        assert {"company_id", "salary_declared_min", "salary_declared_max",
+                "salary_declared_currency", "salary_estimated_min",
+                "salary_estimated_max", "salary_estimated_currency",
+                "salary_estimated_source"} <= positions
+        assert not positions & {"company_hq", "work_location", "salary_type",
+                                "salary_min", "salary_max", "salary_currency"}
+        assert {"written_at", "response_at", "interview_round",
+                "cv_drive_id", "cl_drive_id"} <= self._cols(migrated, "applications")
+        tables = {row[0] for row in migrated.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert not {t for t in tables if t.endswith("_old")}
+
+    def test_salary_location_and_company_move_to_their_v2_columns(self, migrated):
+        rows = {r["id"]: r for r in migrated.execute("SELECT * FROM positions")}
+        declared, estimated, unknown = rows[1], rows[2], rows[3]
+        # declared: i numeri vanno nel dichiarato, valuta di default EUR
+        assert (declared["salary_declared_min"], declared["salary_declared_max"],
+                declared["salary_declared_currency"]) == (40000, 50000, "EUR")
+        assert declared["salary_estimated_min"] is None
+        # estimated: nella stima, con la sua valuta e la fonte "manual"
+        assert (estimated["salary_estimated_min"], estimated["salary_estimated_max"],
+                estimated["salary_estimated_currency"],
+                estimated["salary_estimated_source"]) == (30000, 45000, "CHF", "manual")
+        assert estimated["salary_declared_min"] is None
+        # senza tipo ma con numeri: dichiarato
+        assert (unknown["salary_declared_min"], unknown["salary_declared_max"]) == (20000, 25000)
+        # work_location vince su location; vuoto = assente
+        assert declared["location"] == "Torino"
+        assert estimated["location"] == "Roma"
+        assert unknown["location"] is None
+        # company_id dal nome, senza badare alle maiuscole; nessuna company = NULL
+        assert declared["company_id"] == 1
+        assert estimated["company_id"] == 2
+        assert unknown["company_id"] is None
+        assert declared["found_by"] == "scout-1" and declared["status"] == "scored"
+
+    def test_cleanup_keeps_the_richer_duplicate_and_drops_the_dead(self, migrated):
+        ids = {r[0] for r in migrated.execute("SELECT id FROM positions")}
+        # dup: resta quella con score e application; excluded senza score né app: via
+        assert ids == {1, 2, 3, 4}
+        assert [r[0] for r in migrated.execute("SELECT position_id FROM position_highlights")] == [1]
+        companies = {r[0] for r in migrated.execute("SELECT name FROM companies")}
+        assert companies == {"Acme", "Globex"}
+
+    def test_scores_and_applications_survive_with_the_new_fields_empty(self, migrated):
+        scores = {r["position_id"]: r for r in migrated.execute("SELECT * FROM scores")}
+        assert {pid: s["total_score"] for pid, s in scores.items()} == {1: 72, 4: 81}
+        assert scores[4]["breakdown"] == "stack 35"
+        app = migrated.execute("SELECT * FROM applications").fetchone()
+        assert (app["position_id"], app["cv_path"], app["critic_score"], app["status"]) == (4, "cv/4.md", 7.5, "ready")
+        assert app["written_at"] is None and app["response_at"] is None and app["interview_round"] is None
+
+    def test_a_second_run_does_nothing(self, migrated, tmp_db, tmp_path):
+        before = migrated.execute("SELECT count(*) FROM positions").fetchone()[0]
+        again = run_cli(DB_MIGRATE, [], tmp_db, tmp_path)
+        assert again.returncode == 0
+        assert "already at version 2" in again.stdout
+        assert migrated.execute("SELECT count(*) FROM positions").fetchone()[0] == before
+
 
 # ---------------------------------------------------------------------------
 # 2. Integrità file di setup
