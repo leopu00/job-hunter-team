@@ -1,12 +1,14 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { locales } from "@/i18n/config";
 import type {
   VoiceInputBridge,
   VoiceInputSnapshot,
   VoiceTranscriptEvent,
 } from "../../lib/voice-input";
 import AssistantOnboarding from "./AssistantOnboarding";
+import { PROFILE_OVERVIEW_COPY } from "./AssistantOnboarding.i18n";
 import type { AssistantOnboardingPath, AssistantOnboardingState } from "./contract";
 
 const PATHS: Array<{ button: string; path: AssistantOnboardingPath; finalTitle: string }> = [
@@ -54,6 +56,8 @@ function viewport(width: number, height: number, zoom: string) {
 
 afterEach(() => {
   document.documentElement.style.removeProperty("--zoom");
+  document.cookie = "NEXT_LOCALE=; Max-Age=0; Path=/";
+  localStorage.removeItem("jht-lang");
 });
 
 describe("AssistantOnboarding", () => {
@@ -131,6 +135,22 @@ describe("AssistantOnboarding", () => {
     expect(screen.getByRole("heading", { name: "Jeeves" })).toBeInTheDocument();
     expect(screen.getByText("3/4")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Indicazioni su ciò che cerchi" })).toHaveFocus();
+  });
+
+  it.each(locales)("names only the available Profile destination in %s", async (locale) => {
+    document.cookie = `NEXT_LOCALE=${locale}; Path=/`;
+
+    render(
+      <AssistantOnboarding
+        initialState={{ path: "explore", step: 4 }}
+        onComplete={complete()}
+      />,
+    );
+
+    expect(await screen.findByText(PROFILE_OVERVIEW_COPY[locale])).toBeInTheDocument();
+    expect(PROFILE_OVERVIEW_COPY[locale]).not.toMatch(
+      /\b(?:Budget|Presupuesto|Költségvetés|Orçamento)\b|\/budget/i,
+    );
   });
 
   it("waits for durable completion and retries safely after a rejection", async () => {

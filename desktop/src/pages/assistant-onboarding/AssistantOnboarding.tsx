@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import type { Locale } from "@/i18n/config";
+import type { LocaleDict } from "@/lib/i18n-dict";
+import { useLocale } from "@/lib/use-locale";
 import type {
   AssistantOnboardingPath,
   AssistantOnboardingProps,
@@ -6,13 +9,14 @@ import type {
   AssistantOnboardingStep,
 } from "./contract";
 import { INITIAL_ASSISTANT_ONBOARDING_STATE } from "./contract";
+import { PROFILE_OVERVIEW_COPY } from "./AssistantOnboarding.i18n";
 import { VoiceInputControl } from "../../voice-input";
 import "./assistant-onboarding.css";
 
 type GuideStep = {
   eyebrow: string;
   title: string;
-  message: string;
+  message: string | LocaleDict;
 };
 
 const PATH_LABELS: Record<AssistantOnboardingPath, string> = {
@@ -96,11 +100,14 @@ const GUIDES: Record<AssistantOnboardingPath, readonly GuideStep[]> = {
     {
       eyebrow: "Tappa 04 · strumenti personali",
       title: "Completa il giro a modo tuo",
-      message:
-        "Profilo e Budget completano la panoramica. Quando hai una domanda, passa alla chat libera.",
+      message: PROFILE_OVERVIEW_COPY,
     },
   ],
 };
+
+function guideMessage(step: GuideStep, locale: Locale): string {
+  return typeof step.message === "string" ? step.message : step.message[locale];
+}
 
 function validInitialState(state: AssistantOnboardingState | undefined): AssistantOnboardingState {
   if (!state?.path || !Object.hasOwn(GUIDES, state.path)) return INITIAL_ASSISTANT_ONBOARDING_STATE;
@@ -116,6 +123,7 @@ export default function AssistantOnboarding({
   onComplete,
   voiceInputBridge,
 }: AssistantOnboardingProps) {
+  const locale = useLocale();
   const [state, setState] = useState<AssistantOnboardingState>(() => validInitialState(initialState));
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState(false);
@@ -244,7 +252,7 @@ export default function AssistantOnboarding({
               </div>
               <p className="assistant-onboarding__speaker">{assistantName} · {guide.eyebrow}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{guide.title}</h2>
-              <p className="assistant-onboarding__message" aria-live="polite">{guide.message}</p>
+              <p className="assistant-onboarding__message" aria-live="polite">{guideMessage(guide, locale)}</p>
               {state.step === 4 && (
                 <div className="assistant-onboarding__composer">
                   <label htmlFor="assistant-first-message">Il tuo primo messaggio all’Assistente</label>
