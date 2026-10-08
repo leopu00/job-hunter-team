@@ -215,6 +215,69 @@ exit /b 0
   }
   Write-Host 'E03 CLEAN_START installer-helper-smoke PASS'
 
+  # E04 MANIFEST: the desktop app trusts the runtime only when
+  # .runtime-integrity has EXACTLY these keys (windows_runtime.rs,
+  # wrapper_bundle_valid; runtime-image only in the test channel, absent here).
+  # Checked twice: on the manifest the app reads after `up`, and on the one
+  # Write-RuntimeManifest of the installed wrapper writes, which is the step
+  # `upgrade` and the release bootstrap use to rewrite it. The rewrite goes to a
+  # scratch file, so the attested manifest stays untouched.
+  $appManifestFiles = [ordered]@{
+    'docker-compose.yml' = (Join-Path $RuntimeDir 'docker-compose.yml')
+    'docker-compose.podman.yml' = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
+    'container-runtime' = (Join-Path $RuntimeDir 'container-runtime')
+    'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
+    'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
+    'jht-wrapper.ps1' = $installedWrapper
+    'windows-private-acl.ps1' = $installedHelper
+    'docker.exe' = (Join-Path $BinDir 'docker.exe')
+  }
+  function Assert-AppManifest {
+    param([string]$Path, [string]$Stage)
+    $entries = [ordered]@{}
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+      if (-not $line) { continue }
+      $pair = $line -split '=', 2
+      if ($pair.Count -ne 2 -or -not $pair[1]) { throw "$Stage manifest line is not key=value: $line" }
+      if ($entries.Contains($pair[0])) { throw "$Stage manifest repeats $($pair[0])" }
+      $entries[$pair[0]] = $pair[1]
+    }
+    $expected = @('version') + @($appManifestFiles.Keys)
+    $missing = @($expected | Where-Object { -not $entries.Contains($_) })
+    $extra = @($entries.Keys | Where-Object { $expected -notcontains $_ })
+    if ($missing.Count -or $extra.Count) {
+      throw "$Stage manifest is not the set the app accepts: missing [$($missing -join ', ')] extra [$($extra -join ', ')]"
+    }
+    if ($entries['version'] -ne '1') { throw "$Stage manifest version is $($entries['version'])" }
+    foreach ($name in $appManifestFiles.Keys) {
+      $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $appManifestFiles[$name]).Hash.ToLowerInvariant()
+      if ($entries[$name] -ne $actual) { throw "$Stage manifest digest of $name does not match the file" }
+    }
+    if (([IO.File]::ReadAllText($appManifestFiles['container-runtime'])).Trim() -ne 'podman') {
+      throw "$Stage container-runtime does not select podman"
+    }
+  }
+  Assert-AppManifest -Path $manifest -Stage 'after up'
+
+  $writerAst = $wrapperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeManifest' }, $true)
+  if (-not $writerAst) { throw 'installed wrapper Write-RuntimeManifest missing' }
+  . ([scriptblock]::Create($writerAst.Extent.Text))
+  $ContainerRuntime = 'podman'
+  $ComposeFile = $appManifestFiles['docker-compose.yml']
+  $WrapperPath = $installedWrapper
+  $AclHelperPath = $installedHelper
+  $PodmanComposeFile = $appManifestFiles['docker-compose.podman.yml']
+  $DockerShim = $appManifestFiles['docker.exe']
+  $RuntimeSelectionFile = $appManifestFiles['container-runtime']
+  $PodmanMachineFile = $appManifestFiles['podman-machine']
+  $ContainerUnitFile = $appManifestFiles['jht-container.service']
+  $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+  $RuntimeManifest = Join-Path $cleanRoot 'rewritten.runtime-integrity'
+  Write-RuntimeManifest
+  Assert-AppManifest -Path $RuntimeManifest -Stage 'after upgrade rewrite'
+  $RuntimeManifest = $manifest
+  Write-Host 'E04 MANIFEST app-accepted-keys PASS'
+
   $acl = Get-Acl $root
   $acl.SetAccessRuleProtection($true, $false)
   $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')))
