@@ -1,0 +1,63 @@
+name: Windows WSL2 probe
+
+# Do GitHub's hosted Windows runners run WSL2 (and so a Podman machine)?
+# The documentation does not agree with itself, so this answers on our own
+# runners instead of assuming. Manual only: it decides where the Windows
+# Podman-in-WSL tests can live (CI or the collaudo), it is not a gate.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: WSL2 on ${{ matrix.image }}
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [windows-2022, windows-2025]
+    env:
+      WSL_UTF8: "1"
+    steps:
+      - name: Virtualization the VM exposes
+        shell: pwsh
+        run: |
+          $cs = Get-CimInstance Win32_ComputerSystem
+          "hypervisor_present=$($cs.HypervisorPresent)"
+          foreach ($feature in 'Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform') {
+            $state = (Get-WindowsOptionalFeature -Online -FeatureName $feature -ErrorAction SilentlyContinue).State
+            "$feature=$state"
+          }
+      - name: WSL as installed on the image
+        shell: pwsh
+        run: |
+          foreach ($wslArgs in @('--version'), @('--status'), @('--list', '--verbose')) {
+            "> wsl $($wslArgs -join ' ')"
+            & wsl.exe @wslArgs 2>&1 | ForEach-Object { "  $_" }
+            "  exit=$LASTEXITCODE"
+          }
+      - name: A WSL2 distribution boots
+        id: wsl2
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & wsl.exe --set-default-version 2 2>&1 | ForEach-Object { "  $_" }
+          & wsl.exe --install --distribution Ubuntu-24.04 --no-launch --web-download 2>&1 | ForEach-Object { "  $_" }
+          "install exit=$LASTEXITCODE"
+          & wsl.exe --list --verbose 2>&1 | ForEach-Object { "  $_" }
+          $kernel = (& wsl.exe --distribution Ubuntu-24.04 --user root -- uname -r 2>&1 | Out-String).Trim()
+          "kernel=$kernel"
+          if ($kernel -notmatch 'WSL2') { throw "no WSL2 kernel answered: $kernel" }
+      - name: Verdict
+        shell: pwsh
+        env:
+          WSL2_OUTCOME: ${{ steps.wsl2.outcome }}
+          RUNNER_IMAGE: ${{ matrix.image }}
+        run: |
+          $verdict = if ($env:WSL2_OUTCOME -eq 'success') { 'wsl2_runs' } else { 'wsl2_unavailable' }
+          "WSL2_PROBE $env:RUNNER_IMAGE verdict=$verdict"
