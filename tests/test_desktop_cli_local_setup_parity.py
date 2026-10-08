@@ -8,6 +8,8 @@ orchestrators drift, or when the desktop starts owning a second Podman setup.
 import re
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI_SETUP = ROOT / "cli" / "wizard" / "setup.js"
@@ -66,7 +68,7 @@ def _shell_function_spans(source: str) -> dict[str, tuple[int, int]]:
 def _assert_shell_helper_only_reachable_from(
     source: str,
     helper: str,
-    allowed: tuple[int, int],
+    allowed: tuple[tuple[int, int], ...],
     spans: dict[str, tuple[int, int]],
     visiting: frozenset[str] = frozenset(),
 ) -> None:
@@ -76,7 +78,7 @@ def _assert_shell_helper_only_reachable_from(
     )
     assert calls, f"unreachable mutator helper: {helper}"
     for call in calls:
-        if allowed[0] <= call.start() < allowed[1]:
+        if any(start <= call.start() < end for start, end in allowed):
             continue
         callers = [
             name for name, span in spans.items() if span[0] <= call.start() < span[1]
@@ -88,6 +90,38 @@ def _assert_shell_helper_only_reachable_from(
             allowed,
             spans,
             visiting | {helper},
+        )
+
+
+def _assert_podman_wake_reachability(wrapper: str) -> None:
+    lifecycle = "# ── Lifecycle: parlano direttamente al daemon Docker"
+    podman_lifecycle = "# ── Machine Podman confinata (macOS)"
+    up_label = (
+        "up" if re.search(r"^  up\)$", wrapper[wrapper.index(lifecycle) :], re.M)
+        else "up|start-container"
+    )
+    _, up_start, up_end = _case_arm(wrapper, up_label, lifecycle)
+    _, recreate_start, recreate_end = _case_arm(
+        wrapper, "podman-machine-recreate", podman_lifecycle
+    )
+    allowed = ((up_start, up_end), (recreate_start, recreate_end))
+    spans = _shell_function_spans(wrapper)
+    for machine_start in re.finditer(
+        r"^[^#\n]*\bmachine[ \t]+start\b", wrapper, re.M
+    ):
+        if any(start <= machine_start.start() < end for start, end in allowed):
+            continue
+        owners = [
+            name
+            for name, span in spans.items()
+            if span[0] <= machine_start.start() < span[1]
+        ]
+        assert len(owners) == 1, "Podman wake is outside an explicit mutating command"
+        _assert_shell_helper_only_reachable_from(
+            wrapper,
+            owners[0],
+            allowed,
+            spans,
         )
 
 
@@ -277,24 +311,28 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     assert "LocalCliOperation::Snapshot" in snapshot
     assert "compose up -d" in up
 
-    # If the wrapper can wake Podman, that mutator must be called directly and
-    # exclusively by the explicit `up` arm.  A status/probe fallback through a
-    # shared helper would add another call site and fail this reachability gate.
-    spans = _shell_function_spans(wrapper)
-    for machine_start in re.finditer(
-        r"^[^#\n]*\bmachine[ \t]+start\b", wrapper, re.M
-    ):
-        if up_start <= machine_start.start() < up_end:
-            continue
-        owners = [
-            name
-            for name, span in spans.items()
-            if span[0] <= machine_start.start() < span[1]
-        ]
-        assert len(owners) == 1, "Podman wake is outside the explicit up path"
-        _assert_shell_helper_only_reachable_from(
-            wrapper,
-            owners[0],
-            (up_start, up_end),
-            spans,
-        )
+    # Only two explicit mutators may wake Podman: `up`, and the destructive
+    # machine recreation after its --confirm gate. Read-only paths stay cold.
+    _assert_podman_wake_reachability(wrapper)
+
+
+@pytest.mark.parametrize("target", ["status", "gui", "probe"])
+def test_podman_wake_gate_still_rejects_read_only_paths(target: str):
+    wrapper = _source(WRAPPER)
+    lifecycle = "# ── Lifecycle: parlano direttamente al daemon Docker"
+    dispatcher = "# ── Dispatcher"
+    injected = "    podman machine start jht-podman\n"
+
+    if target == "status":
+        _, start, _ = _case_arm(wrapper, "status", lifecycle)
+        insert_at = wrapper.index("\n", start) + 1
+    elif target == "gui":
+        _, start, _ = _case_arm(wrapper, "gui", dispatcher)
+        insert_at = wrapper.index("\n", start) + 1
+    else:
+        _, end = _shell_function_spans(wrapper)["docker_reachable"]
+        insert_at = end - 1
+
+    broken = wrapper[:insert_at] + injected + wrapper[insert_at:]
+    with pytest.raises(AssertionError):
+        _assert_podman_wake_reachability(broken)

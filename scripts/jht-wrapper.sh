@@ -470,6 +470,18 @@ wake_container_runtime_for_up() {
     || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
 }
 
+# `podman-machine-recreate --confirm` deve leggere lo stato del broker prima
+# di cancellare la VM. E' l'unico mutatore, oltre a `up`, autorizzato ad
+# accendere una machine spenta; status, GUI e probe restano osservativi.
+start_podman_for_recreate() {
+  local podman_bin="$1"
+  if "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1; then
+    return 0
+  fi
+  "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
+    || { err "Non riesco ad avviare la macchina Podman per salvare lo stato del broker."; return 1; }
+}
+
 # ── Cartelle del Mac visibili alla machine Podman di JHT ─────────────────
 # Le sole due che il compose monta. Senza --volume, `podman machine init` su
 # macOS monta /Users (le home di tutti gli utenti), /private, /var/folders e
@@ -2457,10 +2469,7 @@ case "$SUB" in
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
     ensure_podman_mount_dirs \
       || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
-    if ! "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1; then
-      "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
-        || { err "Non riesco ad avviare la macchina Podman per salvare lo stato del broker."; exit 1; }
-    fi
+    start_podman_for_recreate "$podman_bin" || exit 1
     broker_state_image="$(compose config --images 2>/dev/null | sort -u)" \
       || { err "Non riesco a determinare l'immagine attestata del broker."; exit 1; }
     case "$broker_state_image" in ''|*$'\n'*)
