@@ -555,7 +555,7 @@ fi
 # partite, cosi' i primi messaggi trovano gia' sessione pronta a ricevere.
 if [ "$ROLE" = "tg-bridge" ]; then
   _spawn_stage="tg_bridge_preflight"
-  if [ "${JHT_TELEGRAM_SERVICE_ENABLED:-0}" = "1" ]; then
+  if [ -f /run/jht-telegram/cutover ] || [ -f /run/jht-telegram/cutover-required ]; then
     echo "tg-bridge disabled: isolated Telegram service owns polling"
     exit 0
   fi

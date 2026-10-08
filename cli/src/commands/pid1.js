@@ -57,8 +57,9 @@ const LIVE_SCREEN_SCRIPT = '/app/.launcher/live-screen.sh';
 // riempirebbe il log senza mai accendere lo schermo.
 const LIVE_SCREEN_FATAL_EXIT_CODES = new Set([2, 3]);
 
-export function telegramServiceEnabled(env = process.env) {
-  return String(env.JHT_TELEGRAM_SERVICE_ENABLED ?? '').trim() === '1';
+export function telegramServiceEnabled(markerExists = existsSync) {
+  return markerExists('/run/jht-telegram/cutover')
+    || markerExists('/run/jht-telegram/cutover-required');
 }
 
 /**

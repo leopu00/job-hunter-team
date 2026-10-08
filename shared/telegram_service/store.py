@@ -16,6 +16,7 @@ from .protocol import BOT_ROLES
 
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+CUTOVER_STATE = "cutover"
 
 
 class StoreError(Exception):
@@ -143,6 +144,66 @@ def delete_bot(role: str) -> bool:
         return True
     except FileNotFoundError:
         return False
+
+
+def record_pairing(role: str, rotation: str) -> None:
+    if role not in BOT_ROLES or rotation not in {"fresh", "rotated"}:
+        raise StoreError("pairing_invalid")
+    with locked(CUTOVER_STATE):
+        state = read_state(CUTOVER_STATE, {})
+        if state.get("enabled") is True:
+            # Cutover is deliberately one-way. Pairing a replacement bot is
+            # allowed, but it must not clear the boundary back to legacy.
+            enabled = True
+        else:
+            enabled = False
+        paired = state.setdefault("paired", {})
+        paired[role] = rotation
+        state["enabled"] = enabled
+        write_state(CUTOVER_STATE, state)
+
+
+def forget_pairing(role: str) -> None:
+    if role not in BOT_ROLES:
+        raise StoreError("bot_role_unknown")
+    with locked(CUTOVER_STATE):
+        state = read_state(CUTOVER_STATE, {})
+        paired = state.get("paired")
+        if isinstance(paired, dict):
+            paired.pop(role, None)
+        # Never clear enabled: removing a bot cannot restore legacy access.
+        write_state(CUTOVER_STATE, state)
+
+
+def enable_cutover() -> None:
+    with locked(CUTOVER_STATE):
+        state = read_state(CUTOVER_STATE, {})
+        paired = state.get("paired")
+        if not isinstance(paired, dict) or not paired:
+            raise StoreError("pairing_required")
+        if any(role not in BOT_ROLES or mode not in {"fresh", "rotated"} for role, mode in paired.items()):
+            raise StoreError("pairing_invalid")
+        for role in paired:
+            if not read_bot(role):
+                raise StoreError("bot_not_configured")
+        state["enabled"] = True
+        write_state(CUTOVER_STATE, state)
+
+
+def cutover_enabled() -> bool:
+    with locked(CUTOVER_STATE):
+        state = read_state(CUTOVER_STATE, {})
+    return state.get("enabled") is True
+
+
+def cutover_status() -> dict[str, Any]:
+    with locked(CUTOVER_STATE):
+        state = read_state(CUTOVER_STATE, {})
+    paired = state.get("paired") if isinstance(state.get("paired"), dict) else {}
+    return {
+        "enabled": state.get("enabled") is True,
+        "paired": {role: paired[role] for role in BOT_ROLES if paired.get(role) in {"fresh", "rotated"}},
+    }
 
 
 def read_state(name: str, default: Any) -> Any:

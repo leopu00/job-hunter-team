@@ -38,9 +38,6 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
-      # Opt-in di cutover: 0 mantiene il tg-bridge corrente; 1 usa il socket
-      # del container isolato. La rotazione dei token avviene solo al cutover.
-      - JHT_TELEGRAM_SERVICE_ENABLED=${JHT_TELEGRAM_SERVICE_ENABLED:-0}
       # JHT_HOST_TYPE letto da pid1 dispatcher. Default `local` per
       # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
       # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
@@ -133,6 +130,8 @@ services:
       # entry. Gli allegati inbound sono copiabili, mai modificabili in loco.
       - jht-telegram-sock:/run/jht-telegram:ro
       - jht-telegram-inbox:/jht_telegram_inbox:ro
+    depends_on:
+      - jht-telegram
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -207,6 +206,8 @@ services:
       - JHT_TELEGRAM_SOCKET_DIR=/run/jht-telegram
       - JHT_TELEGRAM_INBOX=/jht_telegram_inbox
       - JHT_TELEGRAM_CLIENT_UID=1001
+      - JHT_TELEGRAM_BURST_LIMIT=${JHT_TELEGRAM_BURST_LIMIT:-10}
+      - JHT_TELEGRAM_DAILY_LIMIT=${JHT_TELEGRAM_DAILY_LIMIT:-300}
     volumes:
       - jht-telegram-secrets:/jht_telegram_secrets
       - jht-telegram-state:/jht_telegram_state

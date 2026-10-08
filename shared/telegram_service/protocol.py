@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Any
 
 BOT_ROLES = ("assistente", "capitano", "mentor")
@@ -27,6 +28,7 @@ RESERVED_CHALLENGE_MARKERS = (
     "🔐 jht · autorizzazione candidatura",
     "[jht-auth]",
     "sì, candidati",
+    "si, candidati",
 )
 SOURCE_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,180}\Z")
 EVENT_ID_RE = re.compile(r"telegram:(?:assistente|capitano|mentor):[0-9]{1,20}\Z")
@@ -53,6 +55,11 @@ def _typed(value: object, expected: type) -> bool:
     if expected is int:
         return isinstance(value, int) and not isinstance(value, bool)
     return isinstance(value, expected)
+
+
+def _security_fold(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return "".join(char for char in normalized if unicodedata.category(char) != "Cf")
 
 
 def parse_request(raw: bytes) -> dict[str, Any]:
@@ -101,7 +108,7 @@ def parse_request(raw: bytes) -> dict[str, Any]:
         kind = args.setdefault("kind", "notification")
         if kind not in MESSAGE_KINDS:
             raise ProtocolError("kind_unknown")
-        folded = text.casefold()
+        folded = _security_fold(text)
         if any(marker in folded for marker in RESERVED_CHALLENGE_MARKERS):
             raise ProtocolError("challenge_format_reserved")
     elif operation == "telegram.inbox.pull":

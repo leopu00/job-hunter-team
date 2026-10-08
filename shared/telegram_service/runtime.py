@@ -9,6 +9,7 @@ import re
 import subprocess
 import threading
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -24,9 +25,22 @@ DAY_SECONDS = 86_400
 QUESTION_TTL_SECONDS = 7 * DAY_SECONDS
 LEASE_SECONDS = 30
 MAX_EVENTS = 1_000
-MAX_CHUNK_CHARS = 3_900
+MAX_TELEGRAM_UTF16 = 4_096
 OTP_NUMERIC = re.compile(r"[0-9]{4,8}\Z")
 OTP_SHORT_TOKEN = re.compile(r"(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9_-]{6,12}\Z")
+ALLOWED_ATTACHMENT_MIME = frozenset({
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.text",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+})
 
 
 class TransportRefusal(Exception):
@@ -40,17 +54,32 @@ def _now_iso(unix: int | float | None = None) -> str:
     return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _utf16_units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _prefix_index(text: str, budget: int) -> int:
+    used = 0
+    for index, char in enumerate(text):
+        units = _utf16_units(char)
+        if used + units > budget:
+            return index
+        used += units
+    return len(text)
+
+
 def _chunks(text: str) -> list[str]:
-    size = MAX_CHUNK_CHARS - len(AGENT_PREFIX) - 1
+    size = MAX_TELEGRAM_UTF16 - _utf16_units(AGENT_PREFIX) - 1
     remaining = text
     chunks: list[str] = []
     while remaining:
-        if len(remaining) <= size:
+        if _utf16_units(remaining) <= size:
             chunks.append(remaining)
             break
-        split = max(remaining.rfind("\n", 0, size + 1), remaining.rfind(" ", 0, size + 1))
-        if split < size // 2:
-            split = size
+        hard_split = _prefix_index(remaining, size)
+        split = max(remaining.rfind("\n", 0, hard_split + 1), remaining.rfind(" ", 0, hard_split + 1))
+        if split < hard_split // 2:
+            split = hard_split
         chunks.append(remaining[:split].rstrip())
         remaining = remaining[split:].lstrip()
     if len(chunks) > 3:
@@ -94,6 +123,16 @@ class Runtime:
         self.api_factory = api_factory
         self.enabled = enabled
         self.stop_event = threading.Event()
+        self.burst_limit = self._limit("JHT_TELEGRAM_BURST_LIMIT", BURST_LIMIT, 1, 100)
+        self.daily_limit = self._limit("JHT_TELEGRAM_DAILY_LIMIT", DAILY_LIMIT, 1, 2_000)
+
+    @staticmethod
+    def _limit(name: str, default: int, minimum: int, maximum: int) -> int:
+        try:
+            value = int(os.environ.get(name, str(default)))
+        except ValueError:
+            return default
+        return value if minimum <= value <= maximum else default
 
     def status(self) -> dict:
         configured = []
@@ -126,12 +165,23 @@ class Runtime:
                     return previous["result"]
                 if previous.get("pending_until", 0) > now:
                     raise TransportRefusal("send_in_progress")
+            # Expired reservations have no useful idempotency result and must
+            # not accumulate until the 4 MiB state cap blocks all sends.
+            for key, value in list(sent.items()):
+                if not isinstance(value, dict) or (
+                    "result" not in value and value.get("pending_until", 0) <= now
+                ):
+                    sent.pop(key, None)
             rates = state.setdefault("rates", {}).setdefault(role, [])
             rates[:] = [stamp for stamp in rates if isinstance(stamp, int) and stamp > now - DAY_SECONDS]
-            if sum(stamp > now - BURST_SECONDS for stamp in rates) >= BURST_LIMIT:
+            if sum(stamp > now - BURST_SECONDS for stamp in rates) >= self.burst_limit:
                 raise TransportRefusal("rate_limited_burst")
-            if len(rates) >= DAILY_LIMIT:
+            if len(rates) >= self.daily_limit:
                 raise TransportRefusal("rate_limited_daily")
+            # Every accepted attempt consumes quota, including Telegram or
+            # redaction refusals. Otherwise a failing caller can retry without
+            # bound and fill the reservation file.
+            rates.append(now)
             # A reservation closes concurrent duplicate sends.  Stale pending
             # entries are retryable after the network timeout window.
             sent[source_id] = {"digest": digest, "pending_until": now + 90}
@@ -148,8 +198,16 @@ class Runtime:
                 ordered = sorted(sent.items(), key=lambda item: item[1].get("at", 0))
                 for key, _value in ordered[: len(sent) - 5_000]:
                     sent.pop(key, None)
-            state.setdefault("rates", {}).setdefault(role, []).append(now)
             store.write_state("outbound", state)
+
+    def _cancel_send(self, source_id: str, digest: str) -> None:
+        with store.locked("outbound"):
+            state = store.read_state("outbound", {})
+            sent = state.setdefault("sent", {})
+            current = sent.get(source_id)
+            if isinstance(current, dict) and current.get("digest") == digest and "result" not in current:
+                sent.pop(source_id, None)
+                store.write_state("outbound", state)
 
     def send(self, args: dict) -> dict:
         role = args["bot_role"]
@@ -158,14 +216,18 @@ class Runtime:
         previous = self._reserve_send(role, args["source_id"], digest, now)
         if previous is not None:
             return previous
-        secret, api = self._bot(role)
-        text = _redact(args["text"])
-        message_ids = []
         try:
+            secret, api = self._bot(role)
+            text = _redact(args["text"])
+            message_ids = []
             for chunk in _chunks(text):
                 message_ids.append(api.send_message(secret["chat_id"], f"{AGENT_PREFIX}\n{chunk}"))
         except TelegramError as exc:
+            self._cancel_send(args["source_id"], digest)
             raise TransportRefusal(exc.code) from None
+        except BaseException:
+            self._cancel_send(args["source_id"], digest)
+            raise
         result = {"ok": True, "status": "sent", "chunks": len(message_ids)}
         self._finish_send(role, args["source_id"], digest, result, now)
         if args.get("kind") == "question" and message_ids:
@@ -179,9 +241,9 @@ class Runtime:
     def pull(self, args: dict) -> dict:
         role = args["bot_role"]
         now = int(time.time())
-        with store.locked("events"):
-            state = store.read_state("events", {})
-            events = state.get(role, [])
+        name = f"events-{role}"
+        with store.locked(name):
+            events = store.read_state(name, [])
             selected = []
             for event in events:
                 if event.get("lease_until", 0) > now:
@@ -190,26 +252,25 @@ class Runtime:
                 selected.append({key: value for key, value in event.items() if key != "lease_until"})
                 if len(selected) >= args["limit"]:
                     break
-            state[role] = events
-            store.write_state("events", state)
+            store.write_state(name, events)
         return {"ok": True, "events": selected}
 
     def ack(self, args: dict) -> dict:
         role = args["bot_role"]
         wanted = set(args["event_ids"])
         attachments: list[str] = []
-        with store.locked("events"):
-            state = store.read_state("events", {})
+        name = f"events-{role}"
+        with store.locked(name):
+            events = store.read_state(name, [])
             kept = []
-            for event in state.get(role, []):
+            for event in events:
                 if event.get("event_id") in wanted:
                     opaque = (event.get("attachment") or {}).get("opaque")
                     if isinstance(opaque, str):
                         attachments.append(opaque)
                 else:
                     kept.append(event)
-            state[role] = kept
-            store.write_state("events", state)
+            store.write_state(name, kept)
         for opaque in attachments:
             try:
                 store.delete_inbox_file(opaque)
@@ -281,6 +342,9 @@ class Runtime:
         declared = candidate.get("file_size")
         if not isinstance(file_id, str):
             raise TransportRefusal("attachment_invalid")
+        mime = unicodedata.normalize("NFKC", mime).casefold().strip()
+        if mime not in ALLOWED_ATTACHMENT_MIME:
+            raise TransportRefusal("attachment_type_not_allowed")
         if isinstance(declared, int) and declared > store.MAX_ATTACHMENT_BYTES:
             raise TransportRefusal("attachment_too_large")
         try:
@@ -310,14 +374,14 @@ class Runtime:
         }
         if attachment:
             event["attachment"] = attachment
-        with store.locked("events"):
-            state = store.read_state("events", {})
-            events = state.setdefault(role, [])
+        name = f"events-{role}"
+        with store.locked(name):
+            events = store.read_state(name, [])
             if not any(item.get("event_id") == event_id for item in events):
                 if len(events) >= MAX_EVENTS:
                     raise TransportRefusal("inbox_full")
                 events.append(event)
-                store.write_state("events", state)
+                store.write_state(name, events)
 
     def process_update(self, role: str, update: dict, secret: dict[str, str], api: BotAPI) -> None:
         update_id = update.get("update_id")
@@ -339,7 +403,15 @@ class Runtime:
             return
         attachment = self._attachment(api, message)
         if text or attachment:
-            self._enqueue(role, update_id, message, attachment)
+            try:
+                self._enqueue(role, update_id, message, attachment)
+            except BaseException:
+                if attachment:
+                    try:
+                        store.delete_inbox_file(attachment["opaque"])
+                    except (KeyError, store.StoreError):
+                        pass
+                raise
 
     def poll_role(self, role: str) -> None:
         backoff = 1
@@ -351,12 +423,18 @@ class Runtime:
                 updates = api.get_updates(offset)
                 for update in updates:
                     update_id = update.get("update_id")
-                    self.process_update(role, update, secret, api)
-                    if isinstance(update_id, int) and not isinstance(update_id, bool):
-                        with store.locked("offsets"):
-                            offsets = store.read_state("offsets", {})
-                            offsets[role] = max(int(offsets.get(role, 0)), update_id + 1)
-                            store.write_state("offsets", offsets)
+                    try:
+                        self.process_update(role, update, secret, api)
+                    except Exception:
+                        # A permanently bad update must not pin getUpdates.
+                        # Its id is consumed below; later updates continue.
+                        pass
+                    finally:
+                        if isinstance(update_id, int) and not isinstance(update_id, bool):
+                            with store.locked("offsets"):
+                                offsets = store.read_state("offsets", {})
+                                offsets[role] = max(int(offsets.get(role, 0)), update_id + 1)
+                                store.write_state("offsets", offsets)
                 backoff = 1
             except TransportRefusal as exc:
                 if exc.code == "bot_not_configured":

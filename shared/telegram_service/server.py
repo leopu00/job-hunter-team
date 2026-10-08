@@ -6,17 +6,21 @@ import os
 import signal
 import socket
 import socketserver
+import stat
 import struct
 import sys
 import threading
 from pathlib import Path
 
+from . import store
 from .protocol import MAX_REQUEST_BYTES, SOCKET_NAME, ProtocolError, encode, parse_request
 from .runtime import Runtime, TransportRefusal
 
 CLIENT_UID = int(os.environ.get("JHT_TELEGRAM_CLIENT_UID", "1001"))
 MAX_CONCURRENT = 8
 READ_TIMEOUT = 15
+CUTOVER_MARKER = "cutover"
+CUTOVER_REQUIRED_MARKER = "cutover-required"
 
 
 def socket_dir() -> Path:
@@ -27,6 +31,32 @@ def peer_uid(conn: socket.socket) -> int:
     raw = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
     _pid, uid, _gid = struct.unpack("3i", raw)
     return uid
+
+
+def publish_boundary_marker(directory: Path, name: str) -> None:
+    """Publish an irreversible, agent-read-only indication of cutover."""
+    path = directory / name
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o444)
+    except FileExistsError:
+        info = os.lstat(path)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) & 0o222
+        ):
+            raise RuntimeError("cutover_marker_unsafe") from None
+        return
+    try:
+        os.write(fd, b"isolated-telegram\n")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    dfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
 
 
 def handle(raw: bytes, runtime: Runtime) -> dict:
@@ -82,7 +112,13 @@ def serve() -> int:
         os.unlink(path)
     except FileNotFoundError:
         pass
-    enabled = os.environ.get("JHT_TELEGRAM_SERVICE_ENABLED", "0") == "1"
+    enabled = store.cutover_enabled()
+    if os.environ.get("JHT_TELEGRAM_SERVICE_ENABLED", "0") == "1" and not enabled:
+        publish_boundary_marker(directory, CUTOVER_REQUIRED_MARKER)
+        print("[jht-telegram] refusing enabled startup: host pairing and rotation are incomplete", file=sys.stderr)
+        return 1
+    if enabled:
+        publish_boundary_marker(directory, CUTOVER_MARKER)
     runtime = Runtime(enabled=enabled)
     _Handler.runtime = runtime
     old_umask = os.umask(0o111)

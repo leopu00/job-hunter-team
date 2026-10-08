@@ -129,6 +129,11 @@ async function upAction() {
   }
 
   if (containerRunning()) {
+    if (!dockerCompose(['up', '-d', 'jht-telegram'])) {
+      console.error(c.red('docker compose up failed for jht-telegram'));
+      process.exitCode = 1;
+      return;
+    }
     console.log(c.yellow(`Container '${CONTAINER_NAME}' is already active.`));
     return;
   }
@@ -143,7 +148,7 @@ async function upAction() {
   console.log(c.dim('  Fix ownership /app/web/.next...'));
   fixNextOwnership();
   // Passo 3: start
-  if (!dockerCompose(['start', 'jht'])) {
+  if (!dockerCompose(['start', 'jht-telegram', 'jht'])) {
     console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
     return;

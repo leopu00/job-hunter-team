@@ -41,8 +41,8 @@ HOST_KERNEL="$(uname -s)"
 HOST_UID="$(id -u)"
 
 CONTAINER_SERVICE="jht"
-# I servizi del compose: jht (agenti) e jht-broker (segreti dei portali).
-COMPOSE_SERVICES="jht jht-broker"
+# I servizi del compose: agenti e i due servizi isolati.
+COMPOSE_SERVICES="jht jht-broker jht-telegram"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -855,6 +855,99 @@ broker_admin() {
   docker exec -i "$broker_id" jht-broker-admin "$@"
 }
 
+# Telegram isolato: il token nuovo va dallo stdin dell'host direttamente al
+# container uid 1003. Il container agenti vede soltanto gli hash dei token
+# legacy necessari a imporre la rotazione, mai il token nuovo.
+TELEGRAM_SERVICE="jht-telegram"
+
+telegram_admin() {
+  local telegram_id
+  telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
+    err "Cosa fare: jht up"
+    return 1
+  }
+  docker exec -i "$telegram_id" jht-telegram-admin "$@"
+}
+
+telegram_legacy() {
+  local agent_id
+  agent_id="$(read_only_container_id)" || return 1
+  docker exec -u 1001 "$agent_id" /usr/bin/python3 -I \
+    /app/shared/telegram_service/bin/jht-telegram-legacy.py "$@"
+}
+
+telegram_pair() {
+  local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
+  local -a digest_args=()
+  case "$role" in assistente|capitano|mentor) ;; *)
+    err "uso: jht telegram pair <assistente|capitano|mentor> < bot.json"
+    return 2
+    ;;
+  esac
+  digests="$(telegram_legacy inventory "$role")" || {
+    err "legacy_inventory_failed: migrazione Telegram interrotta."
+    return 1
+  }
+  if [ -n "$digests" ]; then
+    while IFS= read -r digest; do
+      printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$' || {
+        err "legacy_inventory_invalid: migrazione Telegram interrotta."
+        return 1
+      }
+      digest_args+=(--legacy-digest "$digest")
+    done <<< "$digests"
+  fi
+
+  was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
+  telegram_admin bots pair "$role" "${digest_args[@]}" || {
+    err "Abbinamento rifiutato. Se esisteva già un bot, revoca il token da BotFather e usa quello nuovo."
+    return 1
+  }
+  telegram_legacy remove "$role" || {
+    err "legacy_cleanup_failed: il nuovo token è al sicuro, ma il token vecchio è ancora in ~/.jht; cutover negato."
+    return 1
+  }
+
+  if telegram_legacy remaining >/dev/null; then
+    case "$was_enabled" in *'"enabled": true'*) ;; *) first_cutover=1 ;; esac
+    telegram_admin cutover enable >/dev/null || return 1
+    compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
+    if [ "$first_cutover" -eq 1 ]; then
+      # Il riavvio spegne anche eventuali tg-bridge che conservavano il token
+      # vecchio in memoria. Al boot pid1 vede il marker read-only.
+      compose restart "$CONTAINER_SERVICE" >/dev/null || return 1
+    fi
+    info "Telegram isolato attivo; il bridge legacy non può più essere riabilitato dagli agenti."
+  else
+    remaining_rc=$?
+    if [ "$remaining_rc" -eq 1 ]; then
+      warn "Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell'ambiente del container: rimuovili e completa la rotazione prima del cutover."
+    else
+      err "legacy_inventory_failed: non posso provare che ~/.jht sia privo di token Telegram."
+      return 1
+    fi
+  fi
+}
+
+telegram_command() {
+  local action="${1:-status}"
+  shift || true
+  case "$action" in
+    status) telegram_admin bots status ;;
+    pair) telegram_pair "$@" ;;
+    remove)
+      case "${1:-}" in assistente|capitano|mentor) telegram_admin bots delete "$1" ;; *)
+        err "uso: jht telegram remove <assistente|capitano|mentor>"; return 2 ;;
+      esac
+      ;;
+    *)
+      err "uso: jht telegram status|pair <ruolo>|remove <ruolo>"
+      return 2
+      ;;
+  esac
+}
+
 # I file vecchi stanno in ~/.jht/credentials, dell'uid degli agenti: li legge
 # `legacy.py` dentro il container `jht` e li passa al broker in una busta
 # (sha256 + base64) senza toccare il disco dell'host. Il broker li importa una
@@ -1283,6 +1376,8 @@ jht — Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht telegram status    stato del servizio Telegram isolato
+    jht telegram pair ROLE abbina un token nuovo via stdin, fuori dagli agenti
     jht reset              cancella configurazione e volumi del broker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
@@ -1316,7 +1411,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|reset)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset)
       return 0
       ;;
   esac
@@ -2362,6 +2457,10 @@ handle_runtime_upgrade() {
       || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
     broker_migrate_legacy_once
   fi
+  if grep -q "^  $TELEGRAM_SERVICE:" "$COMPOSE_FILE"; then
+    upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$TELEGRAM_SERVICE" \
+      || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
+  fi
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
   else
@@ -2576,6 +2675,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     mail_command "${@:2}"
+    exit $?
+    ;;
+
+  telegram)
+    require_compose_file
+    require_docker
+    ensure_up
+    telegram_command "${@:2}"
     exit $?
     ;;
 

@@ -15,7 +15,7 @@ from .client import call
 from .protocol import BOT_ROLES
 from .store import MAX_ATTACHMENT_BYTES, re_full_opaque
 
-FORGED_ENVELOPE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I)
+FORGED_ENVELOPE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I | re.M)
 
 
 def db_path() -> Path:

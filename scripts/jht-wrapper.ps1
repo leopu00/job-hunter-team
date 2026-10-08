@@ -40,6 +40,7 @@ $JHT_HOST_RUNTIME_PROTOCOL = 1
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
 $BrokerContainer = 'jht-broker'
+$TelegramContainer = 'jht-telegram'
 $LegacySecretNames = @('email_monitor', 'email_transport')
 $BrokerVolumeNames = @('jht-secrets', 'jht-broker-state', 'jht-broker-sock')
 $HostResetConfirmedExit = 20
@@ -363,6 +364,8 @@ jht - Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht telegram status    stato del servizio Telegram isolato
+    jht telegram pair ROLE abbina un token nuovo via stdin, fuori dagli agenti
     jht reset              cancella configurazione e volumi del broker
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
@@ -389,7 +392,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'reset'
+    'setup', 'download', 'mail', 'telegram', 'reset'
   )
 }
 
@@ -471,7 +474,7 @@ function Get-RunningComposeServiceId {
     $parts = $details.Trim().Split('|')
     if ($parts.Count -ne 3 -or $parts[1] -ne $expectedProject) { return $null }
     if ($parts[2] -ne $Service) {
-      if ($ContainerRuntime -eq 'podman' -and $parts[2] -in @($Container, $BrokerContainer)) { continue }
+      if ($ContainerRuntime -eq 'podman' -and $parts[2] -in @($Container, $BrokerContainer, $TelegramContainer)) { continue }
       return $null
     }
     if ($parts[0] -ne 'true' -or $found) { return $null }
@@ -510,6 +513,90 @@ function Invoke-BrokerAdmin {
     & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
   }
   return $LASTEXITCODE
+}
+
+function Invoke-TelegramAdmin {
+  param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
+  $telegramId = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $telegramId) {
+    Write-Err 'telegram_unavailable: il servizio Telegram isolato non e'' attivo.'
+    Write-Err 'Cosa fare: jht up'
+    return 1
+  }
+  if ($null -ne $InputText) {
+    $previousEncoding = $OutputEncoding
+    $OutputEncoding = [Text.UTF8Encoding]::new($false)
+    try { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
+    finally { $OutputEncoding = $previousEncoding }
+  } else {
+    & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host
+  }
+  return $LASTEXITCODE
+}
+
+function Invoke-TelegramPair {
+  param([string]$Role)
+  if ($Role -notin @('assistente', 'capitano', 'mentor')) {
+    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor> < bot.json'
+    return 2
+  }
+  $agentId = Get-RunningComposeServiceId $Container
+  $telegramId = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $agentId -or -not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  $digests = @(& docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py inventory $Role 2>$null)
+  if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
+    Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
+    return 1
+  }
+  $status = ((& docker exec -i $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
+  $wasEnabled = $status -match '"enabled"\s*:\s*true'
+  $adminArgs = @('bots', 'pair', $Role)
+  foreach ($digest in $digests) { $adminArgs += @('--legacy-digest', $digest) }
+  $payload = [Console]::In.ReadToEnd()
+  if (-not $payload) { Write-Err 'input_not_json: passa bot_token e chat_id come JSON su stdin.'; return 2 }
+  $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
+  $payload = $null
+  if ($code -ne 0) {
+    Write-Err 'Abbinamento rifiutato. Revoca il token precedente da BotFather e usa quello nuovo.'
+    return $code
+  }
+  & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py remove $Role
+  if ($LASTEXITCODE -ne 0) {
+    Write-Err 'legacy_cleanup_failed: il token vecchio e'' ancora in ~/.jht; cutover negato.'
+    return 1
+  }
+  $null = & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/telegram_service/bin/jht-telegram-legacy.py remaining
+  $remainingCode = $LASTEXITCODE
+  if ($remainingCode -eq 0) {
+    if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
+    Invoke-Compose restart $TelegramContainer
+    if (-not $wasEnabled) { Invoke-Compose restart $Container }
+    Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
+    return 0
+  }
+  if ($remainingCode -eq 1) {
+    Write-Warn 'Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell''ambiente del container: rimuovili e completa la rotazione prima del cutover.'
+    return 0
+  }
+  Write-Err 'legacy_inventory_failed: non posso provare che ~/.jht sia privo di token Telegram.'
+  return 1
+}
+
+function Invoke-TelegramCommand {
+  param([string[]]$TelegramArgs)
+  $action = if ($TelegramArgs.Count -gt 0) { $TelegramArgs[0] } else { 'status' }
+  $role = if ($TelegramArgs.Count -gt 1) { $TelegramArgs[1] } else { '' }
+  switch ($action) {
+    'status' { return Invoke-TelegramAdmin -AdminArgs @('bots', 'status') }
+    'pair' { return Invoke-TelegramPair $role }
+    'remove' {
+      if ($role -notin @('assistente', 'capitano', 'mentor')) {
+        Write-Err 'uso: jht telegram remove <assistente|capitano|mentor>'; return 2
+      }
+      return Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $role)
+    }
+    default { Write-Err 'uso: jht telegram status|pair <ruolo>|remove <ruolo>'; return 2 }
+  }
 }
 
 # I file vecchi in ~/.jht/credentials li legge legacy.py nel container jht e
@@ -1570,6 +1657,11 @@ function Invoke-RuntimeUpgrade {
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
+    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($TelegramContainer)):") {
+      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $TelegramContainer)) {
+        Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
+      }
+    }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
     return 0
@@ -1693,6 +1785,13 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-MailCommand $Rest)
+  }
+
+  'telegram' {
+    Require-ComposeFile
+    Require-Docker
+    Ensure-Up
+    exit (Invoke-TelegramCommand $Rest)
   }
 
   'reset' {

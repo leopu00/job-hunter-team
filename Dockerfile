@@ -324,6 +324,7 @@ RUN useradd --create-home --shell /bin/bash jht \
     && ln -sf /app/shared/telegram_service/bin/jht-telegram-service.py /usr/local/bin/jht-telegram-service \
     && ln -sf /app/shared/telegram_service/bin/jht-telegram-admin.py /usr/local/bin/jht-telegram-admin \
     && ln -sf /app/shared/telegram_service/bin/jht-telegram-client.py /usr/local/bin/jht-telegram-client \
+    && ln -sf /app/shared/telegram_service/bin/jht-telegram-legacy.py /usr/local/bin/jht-telegram-legacy \
     # Skill discovery: per-agente, popolato dal launcher.
     # `agents/_skills/` è la library (single source of truth). Il manifest
     # `agents/<role>/skills.list` dichiara quali skill l'agente consuma;

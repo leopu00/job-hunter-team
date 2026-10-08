@@ -134,11 +134,10 @@ if ! text=$(node "$redactor" --secrets <<<"$text"); then
   exit 6
 fi
 
-# Cutover opt-in: finche' l'host non abilita questo interruttore, il bridge
-# esistente e la sua configurazione restano invariati. In modalita' isolata
-# questo wrapper invia solo dati sul socket: non apre jht.config.json e non
-# puo' vedere token o chat id.
-if [ "${JHT_TELEGRAM_SERVICE_ENABLED:-0}" = "1" ]; then
+# Il marker e' scritto dal servizio uid 1003 in un volume montato read-only
+# negli agenti. Non e' una variabile del chiamante: dopo il cutover un agente
+# non puo' impostarla a 0 per tornare al token legacy.
+if [ -f /run/jht-telegram/cutover ] || [ -f /run/jht-telegram/cutover-required ]; then
   if [ -n "$parse_mode" ] || [ -n "$chat_id_override" ] || [ -n "$photo_path" ]; then
     echo "jht-telegram-send: isolated Telegram accepts plain text only; formatting, chat overrides and outbound attachments are unavailable" >&2
     exit 1
