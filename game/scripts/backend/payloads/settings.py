@@ -41,7 +41,7 @@ out['email'] = [
 ]
 try:
     email_status_result = subprocess.run(
-        ['python3', '/app/shared/skills/email_monitor.py', 'status'],
+        ['/usr/bin/python3', '-I', '/app/shared/skills/email_monitor.py', 'status'],
         capture_output=True, text=True, timeout=8, check=False)
     if email_status_result.returncode != 0:
         raise RuntimeError('email_status_failed')

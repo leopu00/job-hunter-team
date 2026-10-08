@@ -6,7 +6,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PAYLOAD = ROOT / "game" / "scripts" / "backend" / "payloads" / "settings.py"
-STATUS_COMMAND = ["python3", "/app/shared/skills/email_monitor.py", "status"]
+STATUS_COMMAND = [
+    "/usr/bin/python3",
+    "-I",
+    "/app/shared/skills/email_monitor.py",
+    "status",
+]
 
 
 def run_payload(monkeypatch, capsys, status):
@@ -51,6 +56,7 @@ def test_settings_reads_mailbox_address_and_policy_from_the_broker(monkeypatch, 
             },
         )
     ]
+    assert calls[0][0][0] != "python3"
 
 
 def test_settings_reports_an_unavailable_broker_as_not_configured(monkeypatch, capsys):
