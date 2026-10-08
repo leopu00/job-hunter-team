@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -119,9 +120,12 @@ describe("OnboardingFlow technical setup", () => {
     renderFlow({ account: { displayName: "Ada", identity: "local" }, platform: "windows", previousLocalData: true });
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-    const note = screen.getByRole("note");
+    const note = screen.getByRole("note", { name: /versione precedente/i });
     expect(note).toHaveTextContent(/riutilizziamo configurazione, profilo, accesso al provider e documenti/i);
     expect(note).toHaveTextContent(/cambia la password per app/i);
+    // The v0.3.9 team may still run in Docker Desktop on the same data.
+    expect(note).toHaveTextContent(/lascia Docker Desktop spento/i);
+    expect(note).toHaveTextContent(/fermalo ed eliminalo da Docker Desktop/i);
   });
 
   it("tells an account that only a local profile takes an earlier version's data", async () => {
@@ -129,7 +133,34 @@ describe("OnboardingFlow technical setup", () => {
     renderFlow({ account: { displayName: "Ada", identity: "google" }, previousLocalData: true });
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-    expect(screen.getByRole("note")).toHaveTextContent(/lo riprende solo un profilo locale/i);
+    expect(screen.getByRole("note", { name: /versione precedente/i })).toHaveTextContent(/lo riprende solo un profilo locale/i);
+  });
+
+  it("lists, before the Windows setup starts, what it installs: the numbers are the script's", async () => {
+    const script = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
+    const init = script.match(/'machine' 'init' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
+    expect(init, "podman machine init not found in the script").not.toBeNull();
+    const [, cpus, memoryMb, diskGb] = init!;
+    const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
+    expect(packages).toEqual(["Podman.CLI", "Docker.DockerCompose"]);
+
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows" });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
+    expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
+    for (const id of packages) expect(installs).toHaveTextContent(id);
+    expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
+    expect(installs).toHaveTextContent(/PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman/i);
+  });
+
+  it("lists nothing to install for Windows on a Mac", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note", { name: /cosa installa l’app/i })).not.toBeInTheDocument();
   });
 
   it("says nothing about earlier data when there is none", async () => {

@@ -491,6 +491,15 @@
   line-height: 1.5;
 }
 
+.onboarding-review-note p,
+.onboarding-review-note ul {
+  margin: 0;
+}
+
+.onboarding-review-note ul {
+  padding-left: 16px;
+}
+
 .onboarding-error {
   margin: 13px 0 -8px;
   padding: 11px 12px;

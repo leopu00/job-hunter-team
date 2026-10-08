@@ -20,6 +20,16 @@ function emptyVpsHost(): ExecutionHost {
   return { kind: "vps", address: "", user: "root", port: 22, keyPath: "" };
 }
 const COLLECTION_STEPS = ["Benvenuto", "Ambiente", "Provider", "Conferma"] as const;
+// What the Windows setup puts on this computer (enable-podman-windows-runtime.ps1,
+// checked against it by the tests): the review step lists it before the
+// person starts the setup, which is their consent.
+const WINDOWS_INSTALLS = [
+  "Podman e Docker Compose, con winget (pacchetti Podman.CLI e Docker.DockerCompose)",
+  "una macchina Podman in WSL: 2 CPU, 3 GB di memoria, fino a 30 GB di disco",
+  "un servizio in quella macchina che tiene acceso il team anche ad app chiusa",
+  "docker.exe nella cartella .local\\bin, aggiunta al PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman",
+];
+
 // Codex is the provider the onboarding proposes: first, and already chosen.
 const PROPOSED_PROVIDER: SubscriptionProvider = "codex";
 const PROVIDERS: Array<{ value: SubscriptionProvider; label: string; vendor: string; mark: string }> = [
@@ -434,8 +444,12 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <dl className="onboarding-review">
               <div><dt>Ambiente</dt><dd>{hostName(host)}</dd></div><div><dt>Provider</dt><dd>{providerName(provider)}<small>Accesso tramite abbonamento</small></dd></div>
             </dl>
-            {host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note">{account.identity === "local"
-              ? "Su questo computer c’è già Job Hunter Team di una versione precedente: riutilizziamo configurazione, profilo, accesso al provider e documenti, così come sono. Se avevi configurato la posta nel vecchio gioco, dopo l’avvio cambia la password per app della casella."
+            {host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label="Cosa installa l’app">
+              <p>Su questo computer l’app installa, se mancano:</p>
+              <ul>{WINDOWS_INSTALLS.map((item) => <li key={item}>{item}</li>)}</ul>
+            </div>}
+            {host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label="Versione precedente">{account.identity === "local"
+              ? "Su questo computer c’è già Job Hunter Team di una versione precedente: riutilizziamo configurazione, profilo, accesso al provider e documenti, così come sono. Lascia Docker Desktop spento: se lo riapri, il team di quella versione (il container «jht») riparte da solo sugli stessi dati, e due team sugli stessi dati si intralciano. Se è già acceso, fermalo ed eliminalo da Docker Desktop: i dati restano. Se avevi configurato la posta nel vecchio gioco, dopo l’avvio cambia la password per app della casella."
               : "Su questo computer c’è già Job Hunter Team di una versione precedente: lo riprende solo un profilo locale, e con un account il team su questo computer non parte. Per continuare da lì entra con un profilo locale, oppure scegli un server VPS."}</p>}
             {submitError && <p className="onboarding-error" role="alert">Il setup non è partito. Nessun dato è andato perso: controlla la connessione e riprova.</p>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => { setSubmitError(false); setStep(2); }} disabled={submitting}>Modifica</button><button className="onboarding-primary" type="submit" disabled={submitting}>{submitting ? "Avvio del setup…" : "Prepara la squadra"}<span aria-hidden="true">→</span></button></div>
