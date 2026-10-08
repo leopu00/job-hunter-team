@@ -144,6 +144,10 @@ def _read_pty_until(fd: int, wanted: bytes, timeout: float = 5) -> bytes:
     return output
 
 
+def _restore_default_sigint() -> None:
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -227,6 +231,7 @@ def test_interactive_pairing_restores_echo_after_ctrl_c(tmp_path: Path) -> None:
         stderr=slave,
         env=environment,
         close_fds=True,
+        preexec_fn=_restore_default_sigint,
         start_new_session=True,
     )
     try:
