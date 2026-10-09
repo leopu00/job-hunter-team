@@ -35,6 +35,14 @@
 # ║    --expected-compose-sha256 <hex>   Required with the mode above.       ║
 # ║    --expected-host-setup-sha256 <hex> Required with the mode above.      ║
 # ║    --expected-runtime-version <ver>  Required with the mode above.       ║
+# ║    --source-sha <40 hex>   Test channel: compose, wrapper and host-setup ║
+# ║                            of exactly this commit (no API lookup)        ║
+# ║    --image <ref>           Test channel: ghcr.io/leopu00/jht@sha256:<64> ║
+# ║                            or ghcr.io/leopu00/jht:<tag>                  ║
+# ║    --expected-image-digest sha256:<64>  Test channel: the image is pulled║
+# ║                            and published only if its RepoDigests carry   ║
+# ║                            this digest; `jht up` then runs exactly it.   ║
+# ║                            The three go together, or none of them.       ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
 # ║                            production). Example to test dev-1:           ║
@@ -104,6 +112,11 @@ EXPECTED_WRAPPER_SHA256=""
 EXPECTED_COMPOSE_SHA256=""
 EXPECTED_HOST_SETUP_SHA256=""
 EXPECTED_RUNTIME_VERSION=""
+# Test channel (desktop test builds): one commit's files and one image digest.
+SOURCE_SHA=""
+TEST_IMAGE=""
+EXPECTED_IMAGE_DIGEST=""
+TEST_CHANNEL=0
 RUNTIME_PUBLISH_FAILPOINT="${JHT_RUNTIME_PUBLISH_FAILPOINT:-}"
 RUNTIME_PUBLISH_FAILURE="${JHT_RUNTIME_PUBLISH_FAILURE:-error}"
 # macOS container runtime: '' (= colima default) | colima | podman |
@@ -158,6 +171,18 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --expected-runtime-version=*) EXPECTED_RUNTIME_VERSION="${1#*=}"; shift ;;
+    --source-sha|--image|--expected-image-digest)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      case "$1" in
+        --source-sha) SOURCE_SHA="$2" ;;
+        --image) TEST_IMAGE="$2" ;;
+        --expected-image-digest) EXPECTED_IMAGE_DIGEST="$2" ;;
+      esac
+      shift 2
+      ;;
+    --source-sha=*) SOURCE_SHA="${1#*=}"; shift ;;
+    --image=*) TEST_IMAGE="${1#*=}"; shift ;;
+    --expected-image-digest=*) EXPECTED_IMAGE_DIGEST="${1#*=}"; shift ;;
     --branch)
       # Explicit branch override, same as JHT_BRANCH=<name>.
       # Useful to test dev-N branches without setting the env var
@@ -179,7 +204,7 @@ while [ $# -gt 0 ]; do
       ;;
     --pairing-token=*) PAIRING_TOKEN="${1#*=}"; shift ;;
     -h|--help)
-      sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -195,6 +220,32 @@ case "$RUNTIME_CHOICE" in
   colima|podman|docker-desktop) ;;
   *) printf "Invalid --runtime value: %s (use colima|podman|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
 esac
+
+# The test channel is all three coordinates or none: a half-given channel
+# would install one commit's files with another image, or the reverse.
+if [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ]; then
+  printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$' \
+    || { printf '%s\n' "--source-sha needs 40 lowercase hex (with --image and --expected-image-digest)" >&2; exit 2; }
+  printf '%s' "$EXPECTED_IMAGE_DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$' \
+    || { printf '%s\n' "--expected-image-digest needs sha256:<64 lowercase hex>" >&2; exit 2; }
+  case "$TEST_IMAGE" in
+    ghcr.io/leopu00/jht@sha256:*)
+      [ "${TEST_IMAGE#ghcr.io/leopu00/jht@}" = "$EXPECTED_IMAGE_DIGEST" ] \
+        || { printf '%s\n' "--image is pinned to another digest than --expected-image-digest" >&2; exit 2; }
+      ;;
+    ghcr.io/leopu00/jht:*)
+      printf '%s' "${TEST_IMAGE#ghcr.io/leopu00/jht:}" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$' \
+        || { printf '%s\n' "--image has an invalid tag" >&2; exit 2; }
+      ;;
+    *) printf '%s\n' "--image must be ghcr.io/leopu00/jht@sha256:<64> or ghcr.io/leopu00/jht:<tag>" >&2; exit 2 ;;
+  esac
+  [ "$USE_DOCKER" -eq 1 ] && [ "$PUBLISH_RUNTIME_BUNDLE" -eq 0 ] \
+    || { printf '%s\n' "the test channel installs the container runtime only" >&2; exit 2; }
+  TEST_CHANNEL=1
+  BRANCH="$SOURCE_SHA"
+  IMAGE="$TEST_IMAGE"
+  export JHT_IMAGE="$IMAGE"
+fi
 
 if [ "$PUBLISH_RUNTIME_BUNDLE" -eq 1 ]; then
   for expected_digest_name in EXPECTED_INSTALLER_SHA256 EXPECTED_WRAPPER_SHA256 \
@@ -236,6 +287,12 @@ fi
 RAW_BASE_OVERRIDE="${JHT_RAW_BASE:-}"
 
 attested_raw_base() {
+  # Test channel: the commit is given, already immutable; no API lookup, and
+  # no JHT_RAW_BASE from the environment can move it to other files.
+  if [ "$TEST_CHANNEL" -eq 1 ]; then
+    printf 'https://raw.githubusercontent.com/leopu00/job-hunter-team/%s\n' "$SOURCE_SHA"
+    return 0
+  fi
   if [ -n "$RAW_BASE_OVERRIDE" ]; then
     printf '%s\n' "${RAW_BASE_OVERRIDE%/}"
     return 0
@@ -697,7 +754,7 @@ download_runtime_files() {
   step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
 
   local release_base
-  if [ "$DRY_RUN" -eq 1 ]; then
+  if [ "$DRY_RUN" -eq 1 ] && [ "$TEST_CHANNEL" -eq 0 ]; then
     release_base="${RAW_BASE_OVERRIDE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
   else
     release_base="$(attested_raw_base)" \
@@ -800,6 +857,17 @@ download_runtime_files() {
     chmod 600 "$selection_publish"
     selection_source="$selection_publish"
   fi
+  # The test channel's image, canonical (by digest), for every later `jht up`:
+  # host runtime only, outside the container-writable mounts. A production
+  # install drops a pin left by an earlier test install.
+  local image_pin="$RUNTIME_DIR/runtime-image" image_pin_publish="" image_pin_sha=""
+  if [ "$TEST_CHANNEL" -eq 1 ]; then
+    image_pin_publish="$(mktemp "$RUNTIME_DIR/.runtime-image.XXXXXX")"
+    printf 'ghcr.io/leopu00/jht@%s\n' "$EXPECTED_IMAGE_DIGEST" > "$image_pin_publish"
+    chmod 600 "$image_pin_publish"
+  elif [ -e "$image_pin" ] || [ -L "$image_pin" ]; then
+    rm -f "$image_pin"
+  fi
   local compose_sha hostsetup_sha wrapper_sha selection_sha="" machine_sha="" shim_sha=""
   if command -v sha256sum >/dev/null 2>&1; then
     compose_sha="$(sha256sum "$compose_dest" | awk '{print $1}')"
@@ -812,6 +880,9 @@ download_runtime_files() {
       machine_sha="$(sha256sum "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
       shim_sha="$(sha256sum "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
     fi
+    if [ -n "$image_pin_publish" ]; then
+      image_pin_sha="$(sha256sum "$image_pin_publish" | awk '{print $1}')"
+    fi
   else
     compose_sha="$(shasum -a 256 "$compose_dest" | awk '{print $1}')"
     hostsetup_sha="$(shasum -a 256 "$hostsetup_dest" | awk '{print $1}')"
@@ -822,6 +893,9 @@ download_runtime_files() {
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
       machine_sha="$(shasum -a 256 "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
       shim_sha="$(shasum -a 256 "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
+    fi
+    if [ -n "$image_pin_publish" ]; then
+      image_pin_sha="$(shasum -a 256 "$image_pin_publish" | awk '{print $1}')"
     fi
   fi
   {
@@ -836,11 +910,18 @@ download_runtime_files() {
       printf 'podman-machine=%s\n' "$machine_sha"
       printf 'docker-shim=%s\n' "$shim_sha"
     fi
+    if [ -n "$image_pin_sha" ]; then
+      printf 'runtime-image=%s\n' "$image_pin_sha"
+    fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"
   # Publish manifest first: a crash between the two renames fails closed
   # (hash mismatch) instead of routing Docker commands to the wrong engine.
   mv -f "$manifest_tmp" "$manifest_dest"
+  if [ -n "$image_pin_publish" ]; then
+    mv -f "$image_pin_publish" "$image_pin"
+    ok "runtime image pinned: $(cat "$image_pin")"
+  fi
   if [ -n "$selection_publish" ]; then
     mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
     ok "JHT container runtime selected: docker (private Podman artifacts kept inert)"
@@ -1718,10 +1799,30 @@ maybe_onboard() {
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────
+# Test channel: pull the image and refuse it unless its RepoDigests carry the
+# expected digest, before anything of the runtime is published. A tag can
+# move; the digest cannot.
+verify_test_image() {
+  [ "$TEST_CHANNEL" -eq 1 ] || return 0
+  local wanted="ghcr.io/leopu00/jht@$EXPECTED_IMAGE_DIGEST" digests
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would pull %s and require %s\n" "$IMAGE" "$wanted"
+    return 0
+  fi
+  info "Pulling the test image $IMAGE..."
+  "$DOCKER_CLI" pull "$IMAGE" >/dev/null || fail "Cannot pull the test image $IMAGE."
+  digests="$("$DOCKER_CLI" image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null)" \
+    || fail "Cannot inspect the test image $IMAGE."
+  printf '%s\n' "$digests" | grep -Fqx "$wanted" \
+    || fail "The test image $IMAGE is not $EXPECTED_IMAGE_DIGEST: nothing was installed."
+  ok "test image: $wanted"
+}
+
 main_docker() {
   detect_system "$TOTAL_STEPS_DOCKER"
   install_container_runtime
   verify_docker_works
+  verify_test_image
   download_runtime_files
 }
 

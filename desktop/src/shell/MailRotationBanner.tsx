@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Locale } from "@/i18n/config";
+import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
+import { MAIL_TEXT } from "../pages/mail/mail.i18n";
 import { MAIL_SAVED_EVENT, mailStatus, type MailStatus } from "../lib/mail";
 import { navigate, useLocation, useRefresh } from "./router";
 
@@ -9,7 +12,8 @@ import { navigate, useLocation, useRefresh } from "./router";
  * new password is saved on the Mail page. With no data (no broker, an old
  * broker, a broker that is down) there is no warning.
  */
-export function MailRotationBanner({ loadStatus = mailStatus }: { loadStatus?: () => Promise<MailStatus> }) {
+export function MailRotationBanner({ loadStatus = mailStatus, locale: localeOverride }: { loadStatus?: () => Promise<MailStatus>; locale?: Locale }) {
+  const locale = localeOverride ?? appLocale();
   const [pending, setPending] = useState(false);
   const { path } = useLocation();
 
@@ -31,7 +35,7 @@ export function MailRotationBanner({ loadStatus = mailStatus }: { loadStatus?: (
   useRefresh(read);
 
   if (!pending) return null;
-  const copy = describeError("mail_rotation_pending");
+  const copy = describeError("mail_rotation_pending", { locale });
   return (
     <div
       role="alert"
@@ -47,7 +51,7 @@ export function MailRotationBanner({ loadStatus = mailStatus }: { loadStatus?: (
           className="ml-auto px-3 py-1 rounded border border-[var(--color-border)] text-[11px] font-semibold"
           onClick={() => navigate("/mail")}
         >
-          Apri Posta
+          {MAIL_TEXT[locale].openMail}
         </button>
       )}
     </div>

@@ -481,6 +481,25 @@
   font-size: 8px;
 }
 
+.onboarding-review-note {
+  margin: 11px 0 0;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-card);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.onboarding-review-note p,
+.onboarding-review-note ul {
+  margin: 0;
+}
+
+.onboarding-review-note ul {
+  padding-left: 16px;
+}
+
 .onboarding-error {
   margin: 13px 0 -8px;
   padding: 11px 12px;

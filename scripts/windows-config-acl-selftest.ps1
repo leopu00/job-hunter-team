@@ -39,6 +39,7 @@ try {
   if (-not $getRuntimeFiles) { throw 'standalone Get-RuntimeFiles function missing' }
   . ([scriptblock]::Create($getRuntimeFiles.Extent.Text))
   function Write-Step { param([int]$N, [int]$Total, [string]$Title) }
+  function Write-JhtPhase { param([string]$Id) }
   function Write-Info { param([string]$Msg) }
   function Write-Ok { param([string]$Msg) }
   function Write-Dry { param([string]$Cmd) throw "unexpected dry run: $Cmd" }
@@ -51,11 +52,44 @@ try {
     param([string]$Url, [string]$Dest)
     $source = switch -Wildcard ($Url) {
       '*/docker-compose.yml' { Join-Path $PSScriptRoot '..\docker-compose.yml'; break }
+      '*/docker-compose.podman.yml' { Join-Path $PSScriptRoot '..\docker-compose.podman.yml'; break }
       '*/scripts/jht-wrapper.ps1' { Join-Path $PSScriptRoot 'jht-wrapper.ps1'; break }
       '*/scripts/windows-private-acl.ps1' { Join-Path $PSScriptRoot 'windows-private-acl.ps1'; break }
+      '*/scripts/enable-podman-windows-runtime.ps1' { Join-Path $PSScriptRoot 'enable-podman-windows-runtime.ps1'; break }
+      '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
+      '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
     Copy-Item -LiteralPath $source -Destination $Dest
+  }
+  function Invoke-PodmanRuntimeEnabler {
+    param([Parameter(Mandatory)][string]$ScriptPath)
+    $scripts = Split-Path -Parent $ScriptPath
+    $stage = Split-Path -Parent $scripts
+    Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.yml') -Force
+    Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.podman.yml') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir 'jht-container.service'), "fixture`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllBytes((Join-Path $BinDir 'docker.exe'), [byte[]](0))
+    $entries = [ordered]@{
+      'docker-compose.yml' = (Join-Path $RuntimeDir 'docker-compose.yml')
+      'jht-wrapper.ps1' = (Join-Path $BinDir 'jht.ps1')
+      'docker-compose.podman.yml' = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
+      'docker.exe' = (Join-Path $BinDir 'docker.exe')
+      'container-runtime' = (Join-Path $RuntimeDir 'container-runtime')
+      'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
+      'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
+      'windows-private-acl.ps1' = (Join-Path $BinDir 'windows-private-acl.ps1')
+    }
+    $manifestText = "version=1`n"
+    foreach ($name in $entries.Keys) {
+      $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $entries[$name]).Hash.ToLowerInvariant()
+      $manifestText += "$name=$digest`n"
+    }
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifestText, [Text.UTF8Encoding]::new($false))
   }
 
   $cleanRoot = Join-Path $root 'clean-start'
@@ -66,6 +100,9 @@ try {
   $JhtHome = Join-Path $cleanProfile '.jht'
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
+  $TestChannel = $false
+  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
+  $RuntimeImageDigest = 'sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
   $DryRun = $false
   $env:USERPROFILE = $cleanProfile
   $env:JHT_USER_DIR_HOST = $cleanUserData
@@ -123,6 +160,12 @@ try {
   $dockerCmd = @"
 @echo off
 >>"$dockerLog" echo %*
+if "%~1"=="run" (
+  if not "%JHT_FAKE_REPAIR_EMPTY%"=="1" (
+    echo mount_repaired /jht_home
+    echo mount_repaired /jht_user
+  )
+)
 exit /b 0
 "@
   Set-Content -LiteralPath (Join-Path $fakeBin 'docker.cmd') -Value $dockerCmd -Encoding ASCII
@@ -131,12 +174,109 @@ exit /b 0
   $env:JHT_RUNTIME_DIR = $RuntimeDir
   $env:JHT_COMPOSE_FILE = Join-Path $RuntimeDir 'docker-compose.yml'
   $env:JHT_WRAPPER_PATH = $installedWrapper
-  $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
+  # Exercise the legacy Docker ACL branch explicitly. The production Windows
+  # selection installed above is Podman and therefore never chowns DrvFS.
+  $env:JHT_CONTAINER_RUNTIME = 'docker'
+  $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $installerOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $standalone -DryRun -SkipOnboard 2>&1
+  if ($LASTEXITCODE -ne 0) { throw "desktop noninteractive installer contract failed: $($installerOutput | Out-String)" }
+  if (($installerOutput | Out-String) -match 'Launching the setup wizard') { throw 'desktop installer unexpectedly launched onboarding' }
+
+  $env:JHT_FAKE_REPAIR_EMPTY = '1'
+  $emptyRepairOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
+  $emptyRepairExit = $LASTEXITCODE
+  Remove-Item Env:JHT_FAKE_REPAIR_EMPTY
+  if ($emptyRepairExit -eq 0) { throw 'empty mount-repair output was accepted' }
+  $emptyRepairCalls = Get-Content -LiteralPath $dockerLog -Raw
+  if ($emptyRepairCalls -match '(?m)^compose .* up -d\s*$') { throw 'empty mount-repair output reached compose up' }
+  Clear-Content -LiteralPath $dockerLog
+
+  $output = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up 2>&1
   $wrapperExit = $LASTEXITCODE
   if ($wrapperExit -ne 0) { throw "E03 clean-start wrapper failed before Docker: $($output | Out-String)" }
   $dockerCalls = Get-Content -LiteralPath $dockerLog -Raw
+  # A mount whose host path has a space (Documents\Job Hunter Team) is quoted
+  # whole, so the fake docker logs -v "...:/jht_user" with the quote last.
+  $repairCall = [regex]::Match($dockerCalls, '(?m)^run .*--user 0:0 .*--cap-drop ALL .*--cap-add CHOWN .*--network none .*--security-opt no-new-privileges .*:/jht_home"? .*:/jht_user"? .*$')
+  if (-not $repairCall.Success) { throw "E03 clean-start did not use the confined mount repair: $dockerCalls" }
   if ($dockerCalls -notmatch '(?m)^compose .* up -d\s*$') { throw "E03 clean-start did not reach docker compose up -d: $dockerCalls" }
+  if ($repairCall.Index -gt $dockerCalls.IndexOf(' up -d')) { throw 'E03 clean-start reached compose up before mount repair' }
+
+  # The fake compose deliberately returns no service id: the desktop must get
+  # the exact eight-line, exit-zero inactive snapshot without starting again.
+  $snapshotOutput = @(& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper onboarding-snapshot 2>&1)
+  if ($LASTEXITCODE -ne 0) { throw "desktop onboarding snapshot failed: $($snapshotOutput | Out-String)" }
+  $expectedSnapshot = @(
+    'runtimeInstalled=1', 'containerRunning=0', 'providerConfigured=0', 'providerAuthenticated=0',
+    'assistantWelcomed=0', 'assistantRunning=0', 'captainRunning=0', 'profileReady=0'
+  )
+  if (($snapshotOutput -join "`n") -ne ($expectedSnapshot -join "`n")) {
+    throw "desktop onboarding snapshot schema changed: $($snapshotOutput | Out-String)"
+  }
   Write-Host 'E03 CLEAN_START installer-helper-smoke PASS'
+
+  # E04 MANIFEST: the desktop app trusts the runtime only when
+  # .runtime-integrity has EXACTLY these keys (windows_runtime.rs,
+  # wrapper_bundle_valid; runtime-image only in the test channel, absent here).
+  # Checked twice: on the manifest the app reads after `up`, and on the one
+  # Write-RuntimeManifest of the installed wrapper writes, which is the step
+  # `upgrade` and the release bootstrap use to rewrite it. The rewrite goes to a
+  # scratch file, so the attested manifest stays untouched.
+  $appManifestFiles = [ordered]@{
+    'docker-compose.yml' = (Join-Path $RuntimeDir 'docker-compose.yml')
+    'docker-compose.podman.yml' = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
+    'container-runtime' = (Join-Path $RuntimeDir 'container-runtime')
+    'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
+    'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
+    'jht-wrapper.ps1' = $installedWrapper
+    'windows-private-acl.ps1' = $installedHelper
+    'docker.exe' = (Join-Path $BinDir 'docker.exe')
+  }
+  function Assert-AppManifest {
+    param([string]$Path, [string]$Stage)
+    $entries = [ordered]@{}
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+      if (-not $line) { continue }
+      $pair = $line -split '=', 2
+      if ($pair.Count -ne 2 -or -not $pair[1]) { throw "$Stage manifest line is not key=value: $line" }
+      if ($entries.Contains($pair[0])) { throw "$Stage manifest repeats $($pair[0])" }
+      $entries[$pair[0]] = $pair[1]
+    }
+    $expected = @('version') + @($appManifestFiles.Keys)
+    $missing = @($expected | Where-Object { -not $entries.Contains($_) })
+    $extra = @($entries.Keys | Where-Object { $expected -notcontains $_ })
+    if ($missing.Count -or $extra.Count) {
+      throw "$Stage manifest is not the set the app accepts: missing [$($missing -join ', ')] extra [$($extra -join ', ')]"
+    }
+    if ($entries['version'] -ne '1') { throw "$Stage manifest version is $($entries['version'])" }
+    foreach ($name in $appManifestFiles.Keys) {
+      $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $appManifestFiles[$name]).Hash.ToLowerInvariant()
+      if ($entries[$name] -ne $actual) { throw "$Stage manifest digest of $name does not match the file" }
+    }
+    if (([IO.File]::ReadAllText($appManifestFiles['container-runtime'])).Trim() -ne 'podman') {
+      throw "$Stage container-runtime does not select podman"
+    }
+  }
+  Assert-AppManifest -Path $manifest -Stage 'after up'
+
+  $writerAst = $wrapperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeManifest' }, $true)
+  if (-not $writerAst) { throw 'installed wrapper Write-RuntimeManifest missing' }
+  . ([scriptblock]::Create($writerAst.Extent.Text))
+  $ContainerRuntime = 'podman'
+  $ComposeFile = $appManifestFiles['docker-compose.yml']
+  $WrapperPath = $installedWrapper
+  $AclHelperPath = $installedHelper
+  $PodmanComposeFile = $appManifestFiles['docker-compose.podman.yml']
+  $DockerShim = $appManifestFiles['docker.exe']
+  $RuntimeSelectionFile = $appManifestFiles['container-runtime']
+  $PodmanMachineFile = $appManifestFiles['podman-machine']
+  $ContainerUnitFile = $appManifestFiles['jht-container.service']
+  $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+  $RuntimeManifest = Join-Path $cleanRoot 'rewritten.runtime-integrity'
+  Write-RuntimeManifest
+  Assert-AppManifest -Path $RuntimeManifest -Stage 'after upgrade rewrite'
+  $RuntimeManifest = $manifest
+  Write-Host 'E04 MANIFEST app-accepted-keys PASS'
 
   $acl = Get-Acl $root
   $acl.SetAccessRuleProtection($true, $false)

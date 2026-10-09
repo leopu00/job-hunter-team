@@ -273,26 +273,21 @@ pub(crate) fn validate_local_runtime(
     if !local_runtime_allowed(std::env::consts::OS) {
         return Err("local_runtime_unsupported");
     }
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scope);
-        unreachable!("Windows is denied before local runtime access")
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let home = local_owner_marker_path(app)?
-            .parent()
-            .ok_or("local_account_owner_unavailable")?
-            .to_path_buf();
-        validate_or_claim_local_owner(&home, scope)
-    }
+    let home = local_owner_marker_path(app)?
+        .parent()
+        .ok_or("local_account_owner_unavailable")?
+        .to_path_buf();
+    validate_or_claim_local_owner(&home, scope)
 }
 
+/// The team runs on this computer on macOS (Podman), Linux and Windows
+/// (Podman inside WSL, through install.ps1 and jht-wrapper.ps1). Windows was
+/// refused until 09/10/2026; the account's ownership of ~/.jht applies on
+/// every system alike.
 fn local_runtime_allowed(target_os: &str) -> bool {
-    target_os != "windows"
+    matches!(target_os, "macos" | "linux" | "windows")
 }
 
-#[cfg(not(target_os = "windows"))]
 pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .home_dir()
@@ -300,7 +295,6 @@ pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf,
         .map_err(|_| "local_account_owner_unavailable")
 }
 
-#[cfg(not(target_os = "windows"))]
 pub(crate) fn verify_local_runtime_owner(
     marker: &Path,
     scope: &AccountScope,
@@ -308,7 +302,6 @@ pub(crate) fn verify_local_runtime_owner(
     verify_local_owner_marker(marker, scope)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     let marker = home.join(".desktop-account-scope");
     if marker.exists() {
@@ -340,7 +333,29 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
     verify_local_owner_marker(&marker, scope)
 }
 
-#[cfg(not(target_os = "windows"))]
+/// Whether ~/.jht holds the data of a version before this app (the game, up
+/// to v0.3.9) that no profile of this app has taken yet. The onboarding says
+/// so before the setup: a local profile then takes that home as it is, on
+/// purpose (configuration, profile, provider login, documents), never a copy
+/// and never in silence.
+#[tauri::command]
+pub(crate) fn onboarding_previous_local_data(app: tauri::AppHandle) -> bool {
+    local_owner_marker_path(&app)
+        .ok()
+        .and_then(|marker| marker.parent().map(Path::to_path_buf))
+        .is_some_and(|home| previous_local_data_at(&home))
+}
+
+fn previous_local_data_at(home: &Path) -> bool {
+    let unowned = matches!(
+        fs::symlink_metadata(home.join(".desktop-account-scope")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    );
+    unowned
+        && fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_dir())
+        && recognized_legacy_local_home(home) == Ok(true)
+}
+
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     // These are durable artifacts written by the Electron local flow or by
     // the authoritative installer it invoked. Merely finding an arbitrary
@@ -382,7 +397,6 @@ fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     Ok(false)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn verify_local_owner_marker(marker: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     let metadata = fs::symlink_metadata(marker).map_err(|_| "local_account_owner_unavailable")?;
     if !metadata.file_type().is_file() || metadata.len() > 80 {
@@ -396,7 +410,6 @@ fn verify_local_owner_marker(marker: &Path, scope: &AccountScope) -> Result<(), 
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 fn create_private_dir(path: &Path) -> Result<(), &'static str> {
     #[cfg(unix)]
     {
@@ -408,11 +421,15 @@ fn create_private_dir(path: &Path) -> Result<(), &'static str> {
             .and_then(|_| fs::set_permissions(path, fs::Permissions::from_mode(0o700)))
             .map_err(|_| "local_account_owner_unavailable")
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        fs::create_dir_all(path).map_err(|_| "local_account_owner_unavailable")?;
+        crate::private_acl::protect_dir(path).map_err(|_| "local_account_owner_unavailable")
+    }
+    #[cfg(not(any(unix, windows)))]
     fs::create_dir_all(path).map_err(|_| "local_account_owner_unavailable")
 }
 
-#[cfg(not(target_os = "windows"))]
 fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'static str> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
@@ -422,11 +439,16 @@ fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'st
         options.mode(0o600);
     }
     match options.open(marker) {
-        Ok(mut file) => file
-            .write_all(scope.digest().as_bytes())
-            .and_then(|_| file.write_all(b"\n"))
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "local_account_owner_unavailable"),
+        Ok(mut file) => {
+            file.write_all(scope.digest().as_bytes())
+                .and_then(|_| file.write_all(b"\n"))
+                .and_then(|_| file.sync_all())
+                .map_err(|_| "local_account_owner_unavailable")?;
+            #[cfg(windows)]
+            crate::private_acl::protect_file(marker)
+                .map_err(|_| "local_account_owner_unavailable")?;
+            Ok(())
+        }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(_) => Err("local_account_owner_unavailable"),
     }
@@ -654,7 +676,6 @@ fn playground_reset_enabled(debug_build: bool) -> Result<(), &'static str> {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 fn orphaned_local_scope_at(
     profiles_root: &Path,
     owner_marker: &Path,
@@ -704,7 +725,6 @@ fn orphaned_local_scope_at(
     matched.ok_or("playground_reset_owner_unattested")
 }
 
-#[cfg(not(target_os = "windows"))]
 fn recover_playground_orphan_at(
     debug_build: bool,
     profiles_root: &Path,
@@ -734,7 +754,6 @@ fn recover_playground_orphan_at(
     Ok(true)
 }
 
-#[cfg(not(target_os = "windows"))]
 fn reset_playground_scope_at(
     profiles_root: &Path,
     owner_marker: &Path,
@@ -786,12 +805,6 @@ pub(crate) fn runtime_playground_local_reset(
     profile_id: String,
 ) -> Result<(), AccountScopeError> {
     playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scopes, chat, onboarding, profile_id);
-        return Err(failure("local_runtime_unsupported"));
-    }
-    #[cfg(not(target_os = "windows"))]
     {
         let profiles = local_profiles_dir(&app).map_err(failure)?;
         let marker = local_owner_marker_path(&app).map_err(failure)?;
@@ -799,7 +812,7 @@ pub(crate) fn runtime_playground_local_reset(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
-    crate::broker_view::teardown(&app);
+            crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
@@ -816,12 +829,6 @@ pub(crate) fn runtime_playground_local_orphan_recover(
     onboarding: State<'_, onboarding::OnboardingNativeState>,
 ) -> Result<bool, AccountScopeError> {
     playground_reset_enabled(cfg!(debug_assertions)).map_err(failure)?;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (app, scopes, chat, onboarding);
-        return Err(failure("local_runtime_unsupported"));
-    }
-    #[cfg(not(target_os = "windows"))]
     {
         let app_data = app
             .path()
@@ -833,7 +840,7 @@ pub(crate) fn runtime_playground_local_orphan_recover(
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
-    crate::broker_view::teardown(&app);
+            crate::broker_view::teardown(&app);
         })
         .map_err(failure)
     }
@@ -876,10 +883,13 @@ mod tests {
     }
 
     #[test]
-    fn windows_local_runtime_is_unconditionally_denied() {
-        assert!(!local_runtime_allowed("windows"));
+    fn windows_runs_the_team_locally_like_macos_and_linux() {
+        // Red if the Windows block of 03/10 (66e744298) comes back.
+        assert!(local_runtime_allowed("windows"));
         assert!(local_runtime_allowed("macos"));
         assert!(local_runtime_allowed("linux"));
+        assert!(!local_runtime_allowed("ios"));
+        assert!(!local_runtime_allowed(""));
     }
 
     #[test]
@@ -1341,5 +1351,113 @@ mod tests {
         assert_eq!(fs::read(&owner).unwrap(), marker_before);
         assert_eq!(fs::read(&host_path).unwrap(), host_before);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn previous_local_data_is_a_recognised_home_no_profile_has_taken() {
+        let root = std::env::temp_dir().join(format!(
+            "jht-previous-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = root.join(".jht");
+        // Nothing there: a first install.
+        assert!(!super::previous_local_data_at(&home));
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        // A folder the game never wrote is not its data.
+        std::fs::write(home.join("notes.txt"), "x").unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        // The game's config and Codex login.
+        std::fs::write(home.join("jht.config.json"), "{}").unwrap();
+        std::fs::create_dir_all(home.join(".codex")).unwrap();
+        assert!(super::previous_local_data_at(&home));
+        // Already taken by a profile of this app: nothing to say any more.
+        std::fs::write(home.join(".desktop-account-scope"), "x").unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The upgrade the end-to-end tester runs on Windows: the v0.3.9 game
+    /// left ~/.jht full (configuration, profile, Codex login, the database,
+    /// logs). The onboarding says it will reuse it; a local profile then
+    /// takes it exactly as it is (only the owner marker is added, nothing is
+    /// moved, rewritten or removed), an account takes nothing. Synthetic
+    /// fixture, no real data. Runs on every system, Windows included.
+    #[test]
+    fn a_v039_home_is_announced_then_taken_as_it_is_by_a_local_profile_only() {
+        use std::{collections::BTreeMap, fs, path::Path};
+
+        fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
+            let mut files = BTreeMap::new();
+            let mut pending = vec![root.to_path_buf()];
+            while let Some(dir) = pending.pop() {
+                for entry in fs::read_dir(&dir).unwrap() {
+                    let path = entry.unwrap().path();
+                    let name = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                    if path.is_dir() {
+                        files.insert(format!("{name}/"), Vec::new());
+                        pending.push(path);
+                    } else {
+                        files.insert(name, fs::read(&path).unwrap());
+                    }
+                }
+            }
+            files
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "jht-v039-upgrade-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = root.join(".jht");
+        for (file, content) in [
+            ("jht.config.json", "{\"version\":\"0.3.9\",\"active_provider\":\"codex\"}\n"),
+            ("profile/candidate_profile.yml", "name: Synthetic Candidate\nlocation: Example City\n"),
+            (".codex/auth.json", "{\"auth_mode\":\"chatgpt\",\"tokens\":\"synthetic-fixture\"}\n"),
+            (".codex/config.toml", "model = \"synthetic\"\n"),
+            ("jobs.db", "SQLite format 3\u{0}synthetic"),
+            ("logs/team.log", "synthetic log line\n"),
+        ] {
+            let path = home.join(file);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, content).unwrap();
+        }
+        let before = snapshot(&home);
+
+        // The review step announces the reuse.
+        assert!(super::previous_local_data_at(&home));
+
+        // A signed-in account takes nothing and changes nothing.
+        let google = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &google),
+            Err("local_account_owner_missing")
+        );
+        assert_eq!(snapshot(&home), before);
+        assert!(super::previous_local_data_at(&home));
+
+        // A local profile takes the home as it is: every file of v0.3.9
+        // byte for byte, and only the owner marker added.
+        let local = derive_local_scope(b"local-profile-upgrade");
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        let mut after = snapshot(&home);
+        assert!(after.remove(".desktop-account-scope").is_some());
+        assert_eq!(after, before);
+        // Taken: nothing to announce on the next run, and it stays its own.
+        assert!(!super::previous_local_data_at(&home));
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &derive_local_scope(b"another-profile")),
+            Err("local_account_owner_mismatch")
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 }

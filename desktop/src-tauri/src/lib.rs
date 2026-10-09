@@ -15,8 +15,11 @@ mod podman;
 mod private_acl;
 mod profile_import;
 mod profile_migration;
+mod release_channel;
+mod release_channel_rules;
 mod runtime_host;
 mod voice_input;
+mod windows_runtime;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +37,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            account_scope::onboarding_previous_local_data,
             account_scope::runtime_account_scope_reset,
             account_scope::runtime_account_scope_set,
             account_scope::runtime_account_scope_set_local,

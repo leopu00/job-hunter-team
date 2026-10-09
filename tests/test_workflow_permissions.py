@@ -61,6 +61,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "windows-config-acl.yml": {"acl": READ_CONTENTS},
     "windows-dev-smoke.yml": {"next-dev": READ_CONTENTS},
     "windows-installer-smoke.yml": {"nsis": READ_CONTENTS},
+    "windows-wsl2-probe.yml": {"probe": READ_CONTENTS},
 }
 
 

@@ -36,6 +36,224 @@ $ErrorActionPreference = 'Stop'
 # wrapper production con WrapperPath ancorato al comando host originale.
 $JHT_UPGRADE_PROTOCOL = 1
 $JHT_HOST_RUNTIME_PROTOCOL = 1
+$JHT_DESKTOP_CHAT_PROTOCOL = 1
+$JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
+$JHT_UNINSTALL_PROTOCOL = 1
+
+# `uninstall` deve funzionare anche quando il runtime e' gia' parzialmente
+# rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
+# I target ricevuti dal dispatcher sono cartelle standard calcolate dalle API
+# Windows, mai override d'ambiente o valori letti dal runtime da cancellare.
+function Write-JhtUninstallPhase {
+  param([Parameter(Mandatory)][ValidateSet(
+    'uninstall_machine', 'uninstall_runtime', 'uninstall_commands'
+  )][string]$Id)
+  [Console]::Out.WriteLine("JHT_PHASE $Id")
+}
+
+function Write-JhtUninstallLeft {
+  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id)
+  [Console]::Out.WriteLine("JHT_LEFT $Id")
+}
+
+function Get-JhtNormalizedWindowsPath {
+  param([string]$Path)
+  if (-not $Path) { return $null }
+  try {
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))
+    return [IO.Path]::GetFullPath($expanded).TrimEnd('\', '/')
+  } catch { return $null }
+}
+
+function Get-JhtPodmanMachineState {
+  param(
+    [string]$PodmanPath,
+    [string]$WslPath,
+    [string]$MachineName
+  )
+  if ($PodmanPath) {
+    try {
+      $raw = ((& $PodmanPath machine list --format json 2>$null) -join '')
+      if ($LASTEXITCODE -eq 0 -and $raw) {
+        $machines = @($raw | ConvertFrom-Json)
+        if (@($machines | Where-Object { ([string]$_.Name) -ceq $MachineName }).Count -gt 0) { return 'present' }
+        return 'absent'
+      }
+    } catch {}
+  }
+  if ($WslPath) {
+    try {
+      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      if ($LASTEXITCODE -eq 0) {
+        if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
+        return 'absent'
+      }
+    } catch {}
+  }
+  return 'unknown'
+}
+
+function Remove-JhtUserEnvironment {
+  param(
+    [string]$BinPath,
+    [System.EnvironmentVariableTarget]$Target = [System.EnvironmentVariableTarget]::User
+  )
+  try {
+    foreach ($name in @('JHT_CONTAINER_RUNTIME', 'JHT_PODMAN_MACHINE')) {
+      [Environment]::SetEnvironmentVariable($name, $null, $Target)
+      if ([Environment]::GetEnvironmentVariable($name, $Target)) { return $false }
+    }
+    $userPath = [Environment]::GetEnvironmentVariable('Path', $Target)
+    if ($userPath) {
+      $normalizedBin = Get-JhtNormalizedWindowsPath $BinPath
+      $kept = @($userPath -split ';' | Where-Object {
+        $candidate = Get-JhtNormalizedWindowsPath $_
+        $_ -and (-not $candidate -or -not $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase))
+      })
+      [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), $Target)
+      $remaining = @(([Environment]::GetEnvironmentVariable('Path', $Target)) -split ';' | Where-Object {
+        $candidate = Get-JhtNormalizedWindowsPath $_
+        $_ -and $candidate -and $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase)
+      })
+      if ($remaining.Count -gt 0) { return $false }
+    }
+    return $true
+  } catch { return $false }
+}
+
+function Invoke-JhtWindowsUninstall {
+  param(
+    [string[]]$UninstallArgs,
+    [Parameter(Mandatory)][string]$ProfilePath,
+    [Parameter(Mandatory)][string]$LocalAppDataPath,
+    [string]$PodmanPath,
+    [string]$WslPath,
+    [System.EnvironmentVariableTarget]$EnvironmentTarget = [System.EnvironmentVariableTarget]::User
+  )
+  if ($UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm') {
+    [Console]::Error.WriteLine('uso: jht uninstall --confirm')
+    return 2
+  }
+
+  $machineName = 'jht-podman'
+  $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
+  $binPath = [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.local', 'bin')
+  $selectionPath = Join-Path $runtimePath 'container-runtime'
+  $knownCommands = @(
+    (Join-Path $binPath 'jht.ps1'),
+    (Join-Path $binPath 'jht.cmd'),
+    (Join-Path $binPath 'windows-private-acl.ps1'),
+    (Join-Path $binPath 'docker.exe')
+  )
+
+  # Un wrapper nuovo puo' essere arrivato anche sopra una vecchia installazione
+  # Docker. In quel caso non cancelliamo i file host lasciando il container
+  # legacy attivo sugli stessi dati: solo il runtime Podman ha questo comando.
+  if (Test-Path -LiteralPath $runtimePath) {
+    try {
+      if (-not (Test-Path -LiteralPath $selectionPath -PathType Leaf) -or
+          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') {
+        Write-JhtUninstallLeft runtime
+        Write-JhtUninstallLeft commands
+        return 24
+      }
+    } catch {
+      Write-JhtUninstallLeft runtime
+      Write-JhtUninstallLeft commands
+      return 24
+    }
+  }
+
+  Write-JhtUninstallPhase uninstall_machine
+  $machineState = Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
+  if ($machineState -eq 'present') {
+    if (-not $PodmanPath -or -not $WslPath) {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+    & $WslPath --status *> $null
+    if ($LASTEXITCODE -ne 0) {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+    & $PodmanPath machine rm --force $machineName *> $null
+    if ($LASTEXITCODE -ne 0 -or
+        (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
+      Write-JhtUninstallLeft machine
+      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+      return 24
+    }
+  } elseif ($machineState -ne 'absent') {
+    Write-JhtUninstallLeft machine
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    return 24
+  }
+
+  Write-JhtUninstallPhase uninstall_runtime
+  if (Test-Path -LiteralPath $runtimePath) {
+    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch {}
+  }
+  if (Test-Path -LiteralPath $runtimePath) {
+    Write-JhtUninstallLeft runtime
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    return 24
+  }
+
+  Write-JhtUninstallPhase uninstall_commands
+  $foreignCommands = @()
+  if (Test-Path -LiteralPath $binPath -PathType Container) {
+    $knownFullPaths = @($knownCommands | ForEach-Object { [IO.Path]::GetFullPath($_) })
+    $foreignCommands = @(Get-ChildItem -LiteralPath $binPath -Force | Where-Object {
+      $knownFullPaths -notcontains [IO.Path]::GetFullPath($_.FullName)
+    })
+  }
+  $commandFailure = $false
+  foreach ($path in $knownCommands | Where-Object { $_ -notlike '*\jht.ps1' }) {
+    if (-not (Test-Path -LiteralPath $path)) { continue }
+    try { Remove-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $commandFailure = $true }
+  }
+  if (-not $commandFailure) {
+    # Se la cartella ospita altri programmi non togliamo dal PATH la loro casa.
+    # Le due variabili JHT invece appartengono sempre a questa installazione.
+    if ($foreignCommands.Count -eq 0) {
+      $commandFailure = -not (Remove-JhtUserEnvironment -BinPath $binPath -Target $EnvironmentTarget)
+    } else {
+      try {
+        foreach ($name in @('JHT_CONTAINER_RUNTIME', 'JHT_PODMAN_MACHINE')) {
+          [Environment]::SetEnvironmentVariable($name, $null, $EnvironmentTarget)
+          if ([Environment]::GetEnvironmentVariable($name, $EnvironmentTarget)) { $commandFailure = $true }
+        }
+      } catch { $commandFailure = $true }
+    }
+  }
+  $wrapperPath = Join-Path $binPath 'jht.ps1'
+  if (-not $commandFailure -and (Test-Path -LiteralPath $wrapperPath)) {
+    try { Remove-Item -LiteralPath $wrapperPath -Force -ErrorAction Stop } catch { $commandFailure = $true }
+  }
+  if ($commandFailure -or @($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
+    Write-JhtUninstallLeft commands
+    return 24
+  }
+  return 0
+}
+
+if ($args.Count -ge 1 -and $args[0] -ceq 'uninstall') {
+  [string[]]$uninstallArgs = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
+  $fixedProfile = [Environment]::GetFolderPath('UserProfile')
+  $fixedLocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
+  $podmanCommand = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  $wslCommand = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  exit (Invoke-JhtWindowsUninstall -UninstallArgs $uninstallArgs `
+    -ProfilePath $fixedProfile -LocalAppDataPath $fixedLocalAppData `
+    -PodmanPath $(if ($podmanCommand) { $podmanCommand.Source } else { '' }) `
+    -WslPath $(if ($wslCommand) { $wslCommand.Source } else { '' }))
+}
 
 $Container   = if ($env:JHT_CONTAINER_NAME) { $env:JHT_CONTAINER_NAME } else { 'jht' }
 # Broker dei segreti dei portali (P1 del 08/10): possiede l'account della posta.
@@ -80,6 +298,7 @@ if ($ContainerRuntime -eq 'podman') {
   $env:PODMAN_COMPOSE_WARNING_LOGS = 'false'
 }
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
+$RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
@@ -90,7 +309,8 @@ $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } e
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
-. (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
+$AclHelperPath = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
+. $AclHelperPath
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
 # Formato file: VAR=value per riga, ignora # e righe vuote.
@@ -194,8 +414,9 @@ function Test-RuntimePathAuthority {
 function Write-RuntimeManifest {
   $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
   $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
+  $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $AclHelperPath).Hash.ToLowerInvariant()
   $temp = "$RuntimeManifest.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
-  $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`n"
+  $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n"
   if ($ContainerRuntime -eq 'podman') {
     $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanComposeFile).Hash.ToLowerInvariant()
     $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DockerShim).Hash.ToLowerInvariant()
@@ -205,11 +426,16 @@ function Write-RuntimeManifest {
     $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
     $content += "container-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`n"
   }
+  if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
+    $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
+    $content += "runtime-image=$runtimeImageHash`n"
+  }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
 
 function Test-RuntimeBundleTrusted {
+  $script:TrustedRuntimeImage = $null
   if (-not (Test-RuntimePathAuthority)) { return $false }
   if (-not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir)) { return $false }
   if (-not (Test-RuntimeAncestorsWithoutReparsePoint $WrapperPath)) { return $false }
@@ -218,12 +444,31 @@ function Test-RuntimeBundleTrusted {
   if (-not (Test-ProtectedRuntimeNode $ComposeFile)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $RuntimeManifest)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $WrapperPath)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $AclHelperPath)) { return $false }
   try {
     $values = ConvertFrom-StringData (Get-Content -LiteralPath $RuntimeManifest -Raw)
     if ($values.version -ne '1') { return $false }
+    $expectedKeys = @('version', 'docker-compose.yml', 'jht-wrapper.ps1', 'windows-private-acl.ps1')
+    if ($ContainerRuntime -eq 'podman') {
+      $expectedKeys += @('docker-compose.podman.yml', 'docker.exe', 'container-runtime', 'podman-machine', 'jht-container.service')
+    }
+    $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
+    if ($pinPresent) { $expectedKeys += 'runtime-image' }
+    if ($values.Count -ne $expectedKeys.Count -or @($values.Keys | Where-Object { $_ -notin $expectedKeys }).Count -ne 0) { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
-    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual) { return $false }
+    $helperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $AclHelperPath).Hash.ToLowerInvariant()
+    if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual -or $values.'windows-private-acl.ps1' -ne $helperActual) { return $false }
+    $pinDeclared = $values.ContainsKey('runtime-image')
+    if ($pinDeclared -ne $pinPresent) { return $false }
+    if ($pinDeclared) {
+      if (-not (Test-ProtectedRuntimeNode $RuntimeImageFile)) { return $false }
+      $pinHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
+      $pinBytes = [IO.File]::ReadAllText($RuntimeImageFile)
+      $pin = $pinBytes.TrimEnd("`n")
+      if ($values.'runtime-image' -ne $pinHash -or $pin -notmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' -or $pinBytes -ne "$pin`n") { return $false }
+      $script:TrustedRuntimeImage = $pin
+    }
     if ($ContainerRuntime -eq 'podman') {
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineFile)) { return $false }
@@ -236,11 +481,12 @@ function Test-RuntimeBundleTrusted {
       $machineActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
       $containerUnitActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
       if ($values.'docker-compose.podman.yml' -ne $podmanActual -or $values.'docker.exe' -ne $shimActual -or $values.'container-runtime' -ne $selectionActual -or $values.'podman-machine' -ne $machineActual -or $values.'jht-container.service' -ne $containerUnitActual) { return $false }
-      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: host' -Quiet)) { return $false }
+      if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"' -Quiet)) { return $false }
       if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { return $false }
     }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { return $false }
     if (-not (Select-String -LiteralPath $ComposeFile -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { return $false }
+    if ($script:TrustedRuntimeImage) { $env:JHT_IMAGE = $script:TrustedRuntimeImage }
     return $true
   } catch { return $false }
 }
@@ -308,13 +554,28 @@ function Require-PrivateJhtHomeAcl {
 function Require-Docker {
   Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Err "docker non trovato nel PATH. Installa Docker Desktop per Windows."
+    Write-Err "client Podman JHT non trovato nel PATH. Reinstalla il runtime locale."
     exit 127
   }
   $null = docker info 2>&1
   if ($LASTEXITCODE -ne 0) {
-    Write-Err "Docker daemon non risponde. Avvia Docker Desktop."
+    Write-Err "La macchina Podman JHT non risponde. Esegui 'jht up'."
     exit 1
+  }
+}
+
+# Solo l'azione esplicita `up` può risvegliare la machine. Status, snapshot e
+# desktop-chat restano osservativi e non tengono in vita WSL quando l'utente
+# non ha chiesto di avviare il team.
+function Start-PodmanMachineForUp {
+  if ($ContainerRuntime -ne 'podman') { return }
+  if (Test-DockerReachable) { return }
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $podman) { Write-Err 'podman_not_installable: podman.exe non disponibile.'; exit 21 }
+  & $podman.Source machine start --update-connection=false $env:CONTAINER_CONNECTION 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not (Test-DockerReachable)) {
+    Write-Err 'podman_machine_unavailable: la macchina Podman JHT non si avvia.'
+    exit 22
   }
 }
 
@@ -370,6 +631,8 @@ jht - Job Hunter Team
                            in ~/.jht; cancella subito file usati fuori da li'.
     jht reset              cancella configurazione e volumi del broker
     jht linkedin login     apre il login LinkedIn nel broker (lo mostra l'app)
+    jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,
+                            documenti, Podman e Compose
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -441,8 +704,21 @@ function Repair-MountOwnership {
       -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
       --entrypoint /bin/sh $Image -c $MountRepairDispatch 2>$null)
   $code = $LASTEXITCODE
-  $failed = @($out | Where-Object { "$_" -like 'mount_repair_failed*' })
-  if ($code -eq 0 -and $failed.Count -eq 0) { return $true }
+  $receipts = @($out | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  $expected = @('/jht_home', '/jht_user')
+  $confirmed = @{}
+  $invalid = $false
+  foreach ($receipt in $receipts) {
+    if ($receipt -notmatch '^mount_(?:ok|repaired) (/jht_home|/jht_user)$') {
+      $invalid = $true
+      continue
+    }
+    $confirmed[$Matches[1]] = $true
+  }
+  if ($code -eq 0 -and -not $invalid -and $receipts.Count -eq $expected.Count -and
+      @($expected | Where-Object { -not $confirmed.ContainsKey($_) }).Count -eq 0) {
+    return $true
+  }
   # Codice, frase, azione: mai un avvio che si ferma in silenzio.
   Write-Err "mount_repair_failed: le cartelle di Job Hunter Team ($homeMount, $userMount) non sono scrivibili dal container e non si sono potute sistemare."
   Write-Info "  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell'utente sia condivisa, poi rilancia 'jht up'."
@@ -484,6 +760,122 @@ function Get-RunningComposeServiceId {
     $found = $id
   }
   return $found
+}
+
+function Write-InactiveOnboardingSnapshot {
+  param([ValidateSet(0, 1)][int]$RuntimeInstalled)
+  foreach ($line in @(
+    "runtimeInstalled=$RuntimeInstalled",
+    'containerRunning=0',
+    'providerConfigured=0',
+    'providerAuthenticated=0',
+    'assistantWelcomed=0',
+    'assistantRunning=0',
+    'captainRunning=0',
+    'profileReady=0'
+  )) { [Console]::Out.WriteLine($line) }
+}
+
+# Read-only bridge used by the desktop onboarding state machine. It never
+# starts Docker, Compose, the container or the team, and always emits exactly
+# the eight protocol lines so a strict parser cannot inherit incidental host
+# output.
+function Write-OnboardingSnapshot {
+  $runtimeInstalled = 0
+  try {
+    if (-not (Test-RuntimeBundleTrusted)) {
+      Write-InactiveOnboardingSnapshot 0
+      return
+    }
+    $runtimeInstalled = 1
+    $containerId = Get-RunningComposeServiceId $Container
+    if (-not $containerId) {
+      Write-InactiveOnboardingSnapshot 1
+      return
+    }
+
+  $metadataScript = @'
+const fs=require("fs"); let config={};
+try { config=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
+const provider=String(config.active_provider||"").toLowerCase();
+const providers=config.providers||{}; const entry=providers[provider]||{};
+const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
+  && (entry.auth_method||"subscription")==="subscription";
+const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
+process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+'@
+    $metadata = ((& docker exec $containerId node -e $metadataScript 2>$null | Select-Object -First 1) -as [string])
+    $metadataCode = $LASTEXITCODE
+    $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
+    if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
+      $values = @('0', '0', '0')
+    }
+
+    $null = & docker exec $containerId tmux has-session -t ASSISTENTE 2>$null
+    $assistantRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    $null = & docker exec $containerId tmux has-session -t CAPITANO 2>$null
+    $captainRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    $null = & docker exec $containerId test -f /jht_home/profile/ready.flag 2>$null
+    $profileReady = if ($LASTEXITCODE -eq 0) { 1 } else {
+      $null = & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null
+      if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
+    }
+    $finalRunning = ((& docker inspect $containerId --format '{{.State.Running}}' 2>$null | Select-Object -First 1) -as [string])
+    $finalInspectCode = $LASTEXITCODE
+    if ($finalInspectCode -ne 0 -or -not $finalRunning -or $finalRunning.Trim() -ne 'true') {
+      Write-InactiveOnboardingSnapshot 1
+      return
+    }
+
+    foreach ($line in @(
+      'runtimeInstalled=1',
+      'containerRunning=1',
+      "providerConfigured=$($values[0])",
+      "providerAuthenticated=$($values[1])",
+      "assistantWelcomed=$($values[2])",
+      "assistantRunning=$assistantRunning",
+      "captainRunning=$captainRunning",
+      "profileReady=$profileReady"
+    )) { [Console]::Out.WriteLine($line) }
+  } catch {
+    Write-InactiveOnboardingSnapshot $runtimeInstalled
+  }
+}
+
+$script:DesktopChatExitCode = 1
+function Invoke-DesktopChat {
+  param([string[]]$ChatArgs)
+  $script:DesktopChatExitCode = 1
+  if (-not (Test-RuntimeBundleTrusted)) {
+    Write-Err 'runtime o container JHT non disponibile'
+    return
+  }
+  $containerId = Get-RunningComposeServiceId $Container
+  if (-not $containerId) {
+    Write-Err 'runtime o container JHT non disponibile'
+    return
+  }
+  $action = if ($ChatArgs.Count -gt 0) { $ChatArgs[0] } else { '' }
+  switch ($action) {
+    'probe' {
+      if ($ChatArgs.Count -ne 1) { $script:DesktopChatExitCode = 2; return }
+      [Console]::Out.WriteLine('true')
+      $script:DesktopChatExitCode = 0
+    }
+    'python' {
+      if ($ChatArgs.Count -ne 1) { $script:DesktopChatExitCode = 2; return }
+      & docker exec -i $containerId python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'
+      $script:DesktopChatExitCode = $LASTEXITCODE
+    }
+    'send' {
+      if ($ChatArgs.Count -ne 2 -or $ChatArgs[1] -notin @(
+        'CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO'
+      )) { $script:DesktopChatExitCode = 2; return }
+      & docker exec -i $containerId sh -c 'msg=$(cat); exec jht-tmux-send "$1" "$msg"' sh $ChatArgs[1]
+      $script:DesktopChatExitCode = $LASTEXITCODE
+    }
+    default { $script:DesktopChatExitCode = 2 }
+  }
 }
 
 function Test-BrokerUp {
@@ -1655,6 +2047,10 @@ function Invoke-RuntimeUpgrade {
     elseif ($arg -eq '--check') { $checkOnly = $true }
     elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Opzione upgrade non supportata' $false; return 2 }
   }
+  if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
+    Write-UpgradeResult $false $false 'preflight' 'pinned' 'none' 'pinned' 'none' $false 'Canale di test: si aggiorna reinstallando dalla build di test' $false
+    return 1
+  }
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
     if (-not (Install-ProtectedRuntimeFromRelease)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host protetto non installabile' $false; return 1 }
   }
@@ -1801,6 +2197,16 @@ switch ($Sub) {
     exit 0
   }
 
+  'onboarding-snapshot' {
+    Write-OnboardingSnapshot
+    exit 0
+  }
+
+  'desktop-chat' {
+    Invoke-DesktopChat $Rest
+    exit $script:DesktopChatExitCode
+  }
+
   'game' {
     $code = Invoke-GameCommand $Rest
     exit $code
@@ -1813,6 +2219,7 @@ switch ($Sub) {
 
   { $_ -in @('up', 'start-container') } {
     Require-ComposeFile
+    Start-PodmanMachineForUp
     Require-Docker
     if (-not (Repair-MountOwnership)) { exit 1 }
     Invoke-Compose 'up' '-d'

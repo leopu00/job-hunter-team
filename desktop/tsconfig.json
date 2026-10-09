@@ -24,6 +24,7 @@
       "@/lib/local-queries": ["./src/web-shims/server/local-queries.ts"],
       "@/lib/demo/mode": ["./src/web-shims/server/demo-mode.ts"],
       "@/lib/server-locale": ["./src/web-shims/server/server-locale.ts"],
+      "@/lib/use-locale": ["./src/web-shims/use-locale.ts"],
       "@/lib/position-document-file.server": ["./src/web-shims/server/position-document-file.ts"],
       "@/lib/deploy-mode": ["./src/web-shims/server/deploy-mode.ts"],
       "@/lib/local-token": ["./src/web-shims/server/local-token.ts"],

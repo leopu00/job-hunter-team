@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
 import { describeError, ERROR_LOCALES } from "../lib/error-catalog";
 import { OnboardingFlow } from "./OnboardingFlow";
+import { WINDOWS_SETUP } from "./windows-setup";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange }: { value: string; onChange: (path: string) => void }) => (
@@ -97,6 +99,124 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("button", { name: /importa profilo/i })).not.toBeInTheDocument();
   });
 
+  it("proposes Codex: first and already chosen, so going on submits it", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow();
+    await reachProviderLocal(user);
+    const providers = screen.getAllByRole("radio");
+    expect(providers[0]).toHaveTextContent("Codex");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
+      host: { kind: "local" },
+      provider: "codex",
+    }));
+  });
+
+  it("says before the setup that a local profile takes an earlier version's data as it is", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" }, platform: "windows", previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const note = screen.getByRole("note", { name: /versione precedente/i });
+    expect(note).toHaveTextContent(/riutilizziamo configurazione, profilo, accesso al provider e documenti/i);
+    expect(note).toHaveTextContent(/cambia la password per app/i);
+    // The v0.3.9 team may still run in Docker Desktop on the same data.
+    expect(note).toHaveTextContent(/lascia Docker Desktop spento/i);
+    expect(note).toHaveTextContent(/fermalo ed eliminalo da Docker Desktop/i);
+  });
+
+  it("tells an account that only a local profile takes an earlier version's data", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "google" }, previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.getByRole("note", { name: /versione precedente/i })).toHaveTextContent(/lo riprende solo un profilo locale/i);
+  });
+
+  it("lists, before the Windows setup starts, what it installs: the values are the script's", async () => {
+    const script = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
+    const init = script.match(/'machine' 'init' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
+    expect(init, "podman machine init not found in the script").not.toBeNull();
+    const [, cpus, memoryMb, diskGb] = init!;
+    expect(WINDOWS_SETUP).toMatchObject({ cpus: Number(cpus), memoryGb: Number(memoryMb) / 1024, diskGb: Number(diskGb) });
+    expect(script).toContain(`$PodmanCliVersion = '${WINDOWS_SETUP.podmanVersion}'`);
+    expect(script).toContain(`$ComposeProviderVersion = '${WINDOWS_SETUP.composeVersion}'`);
+    const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
+    expect(packages).toEqual(["Podman.CLI", "Docker.DockerCompose"]);
+
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows" });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion} e Docker Compose ${WINDOWS_SETUP.composeVersion}`);
+    expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
+    for (const id of packages) expect(installs).toHaveTextContent(id);
+    expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
+    expect(installs).toHaveTextContent(/PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman/i);
+    // How they are removed, and what the app cannot remove yet.
+    expect(installs).toHaveTextContent(/si disinstallano da Impostazioni › App › App installate/);
+    expect(installs).toHaveTextContent(/per ora, non si tolgono dall’app/);
+  });
+
+  it("asks for the consent in the language of Windows when the person chose none", async () => {
+    const navigator = window.navigator;
+    const languages = Object.getOwnPropertyDescriptor(navigator, "languages");
+    const language = Object.getOwnPropertyDescriptor(navigator, "language");
+    Object.defineProperty(navigator, "languages", { configurable: true, get: () => ["de-DE", "en-US"] });
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "de-DE" });
+    try {
+      const user = userEvent.setup();
+      renderFlow({ platform: "windows" });
+      await user.click(screen.getByRole("button", { name: /einrichtung starten/i }));
+      await user.click(screen.getByRole("button", { name: /^weiter/i }));
+      await user.click(screen.getByRole("button", { name: /einrichtung prüfen/i }));
+      const installs = screen.getByRole("note", { name: /was die app installiert/i });
+      expect(installs).toHaveTextContent(`eine Podman-Maschine in WSL: ${WINDOWS_SETUP.cpus} CPUs, ${WINDOWS_SETUP.memoryGb} GB Arbeitsspeicher`);
+      expect(installs).toHaveTextContent(/auch bei geschlossener App laufen lässt/);
+      expect(installs).toHaveTextContent(/Einstellungen › Apps › Installierte Apps/);
+      expect(screen.getByRole("button", { name: /team vorbereiten/i })).toBeInTheDocument();
+    } finally {
+      if (languages) Object.defineProperty(navigator, "languages", languages);
+      if (language) Object.defineProperty(navigator, "language", language);
+    }
+  });
+
+  it.each(["en", "es", "fr", "hu", "pt"] as const)("shows the Windows consent in %s with the script's values", async (locale) => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows", locale });
+    for (let step = 0; step < 3; step += 1) {
+      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
+      await user.click(buttons[buttons.length - 1]);
+    }
+    const installs = screen.getAllByRole("note")[0];
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}`);
+    expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}`);
+    expect(installs).toHaveTextContent(`${WINDOWS_SETUP.diskGb}`);
+    expect(installs).toHaveTextContent("winget");
+    expect(installs).not.toHaveTextContent(/installa|macchina|servizio/);
+  });
+
+  it("lists nothing to install for Windows on a Mac", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note", { name: /cosa installa l’app/i })).not.toBeInTheDocument();
+  });
+
+  it("says nothing about earlier data when there is none", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" } });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
@@ -130,9 +250,9 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("heading", { name: /scegli il provider/i })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("restores focus to the greeting when navigating back", async () => {
@@ -169,9 +289,22 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
-  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+  it("offers this computer on Windows, with Podman in WSL installed by the app", async () => {
+    // Red if the Windows block of 03/10 (66e744298) comes back.
     const user = userEvent.setup();
     renderFlow({ platform: "windows" });
+    await begin(user);
+    const local = screen.getByRole("radio", { name: /questo computer/i });
+    expect(local).toHaveAttribute("aria-checked", "true");
+    expect(local).toHaveTextContent(/installa Podman e la sua macchina in WSL/i);
+    expect(local).not.toHaveTextContent(/docker/i);
+    expect(screen.queryByText(/VPS Linux/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
+  });
+
+  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "other" });
     await begin(user);
     expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
@@ -262,7 +395,7 @@ describe("OnboardingFlow technical setup", () => {
     unmount();
 
     renderFlow({
-      platform: "windows",
+      platform: "other",
       runtime: { status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false, message: "Macchina." },
       onRecreatePodmanMachine,
     });

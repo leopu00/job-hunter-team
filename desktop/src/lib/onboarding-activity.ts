@@ -7,6 +7,7 @@ import type {
   OnboardingNativeProgress,
   OnboardingNativeProgressStage,
 } from "./onboarding-runtime";
+import { appLocale } from "./app-locale";
 import { describeError } from "./error-catalog";
 
 const STAGE_VIEW: Record<OnboardingNativeProgressStage, {
@@ -55,7 +56,7 @@ export function applyOnboardingProgress(
   // A failed step is told by the app's catalog from its code, not by the
   // native message.
   const description = progress.status === "error" && progress.code
-    ? describeError(progress.code).text
+    ? describeError(progress.code, { locale: appLocale() }).text
     : progress.message;
   const base: OnboardingActivityEntry = existingIndex >= 0
     ? initial.events[existingIndex]

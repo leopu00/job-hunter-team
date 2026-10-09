@@ -1,4 +1,6 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
+use crate::release_channel;
+use crate::windows_runtime::exit_failure;
 use crate::runtime_host::{
     run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -21,7 +23,6 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
-const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
@@ -743,6 +744,10 @@ fn failure(code: &'static str) -> OnboardingError {
             "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
             true,
         ),
+        "wsl_not_ready" => (
+            "WSL non risponde: su Windows fa girare la macchina Podman del team.",
+            true,
+        ),
         // Retrying cannot help: the machine has to be recreated, and only after
         // the person confirms it (onboarding_podman_machine_recreate).
         PODMAN_MACHINE_MOUNTS_HOME => (
@@ -915,6 +920,10 @@ fn trace_local_runtime(_stage: &'static str, _event: &'static str) {}
 struct ProgressReporter {
     emit: Arc<dyn Fn(OnboardingProgress) + Send + Sync>,
     sequence: Arc<AtomicU64>,
+    /// The step running now and the phase it last reported (install.ps1's
+    /// JHT_PHASE): the heartbeat repeats the phase instead of its generic
+    /// message, so the screen keeps saying what is happening.
+    current: Arc<Mutex<Option<(OnboardingProgressStage, Instant, &'static str)>>>,
 }
 
 impl ProgressReporter {
@@ -928,6 +937,22 @@ impl ProgressReporter {
         Self {
             emit: Arc::new(emit),
             sequence: Arc::new(AtomicU64::new(1)),
+            current: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// A phase of the running step, shown at once with the step's elapsed
+    /// time and repeated by its heartbeat. Outside a step it is dropped.
+    fn phase(&self, message: &'static str) {
+        let running = {
+            let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_mut().map(|(stage, started, shown)| {
+                *shown = message;
+                (*stage, *started)
+            })
+        };
+        if let Some((stage, started)) = running {
+            self.send(stage, OnboardingProgressStatus::Progress, message, started, None);
         }
     }
 
@@ -986,6 +1011,8 @@ impl ProgressReporter {
             started,
             None,
         );
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some((stage, started, heartbeat_message));
         let stopped = Arc::new(AtomicBool::new(false));
         let heartbeat_stopped = Arc::clone(&stopped);
         let heartbeat_reporter = self.clone();
@@ -994,16 +1021,22 @@ impl ProgressReporter {
             if heartbeat_stopped.load(Ordering::Acquire) {
                 break;
             }
+            let message = heartbeat_reporter
+                .current
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .map_or(heartbeat_message, |(_, _, shown)| shown);
             heartbeat_reporter.send(
                 stage,
                 OnboardingProgressStatus::Progress,
-                heartbeat_message,
+                message,
                 started,
                 None,
             );
         });
 
         let result = operation();
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) = None;
         stopped.store(true, Ordering::Release);
         heartbeat.thread().unpark();
         let _ = heartbeat.join();
@@ -1040,12 +1073,19 @@ fn valid_team_id(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
-fn wrapper_candidates(home: &Path) -> [PathBuf; 3] {
-    [
+#[cfg(not(windows))]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![
         home.join(".local/bin/jht"),
         PathBuf::from("/usr/local/bin/jht"),
         PathBuf::from("/opt/homebrew/bin/jht"),
     ]
+}
+
+/// Where install.ps1 publishes the PowerShell wrapper.
+#[cfg(windows)]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join(".local").join("bin").join("jht.ps1")]
 }
 
 fn wrapper_path_from_home(home: &Path) -> Option<PathBuf> {
@@ -1092,12 +1132,24 @@ fn valid_host_wrapper_file(path: &Path) -> bool {
         .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
 }
 
+#[cfg(not(windows))]
 fn valid_wrapper_file(path: &Path) -> bool {
     wrapper_source(path).is_some_and(|source| {
         wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     })
+}
+
+/// jht.ps1 with the desktop's protocol lines, exactly as install.ps1 recorded
+/// it in the runtime's integrity manifest (with the compose file and the ACL
+/// helper it dot-sources).
+#[cfg(windows)]
+fn valid_wrapper_file(path: &Path) -> bool {
+    use crate::windows_runtime::{runtime_dir, wrapper_bundle_valid, wrapper_has_protocols};
+    wrapper_source(path).is_some_and(|source| wrapper_has_protocols(&source))
+        && runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|runtime| wrapper_bundle_valid(path, &runtime))
 }
 
 #[cfg(target_os = "macos")]
@@ -1321,19 +1373,29 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
             return false;
         }
     }
-    let expected_keys = [
+    // A test-channel install also pins its image (install.sh --image):
+    // the file and its manifest line come together, or neither does.
+    let image_pin = runtime_dir.join("runtime-image");
+    let pinned = entries.contains_key("runtime-image");
+    if !pinned && fs::symlink_metadata(&image_pin).is_ok() {
+        return false;
+    }
+    let mut expected_keys = vec![
         "container-runtime",
         "docker-compose.yml",
         "docker-shim",
         "host-setup.sh",
         "jht-wrapper.sh",
         "podman-machine",
-        "version",
     ];
+    if pinned {
+        expected_keys.push("runtime-image");
+    }
+    expected_keys.push("version");
     if entries.keys().copied().collect::<Vec<_>>() != expected_keys || entries["version"] != "1" {
         return false;
     }
-    let artifacts = [
+    let mut artifacts = vec![
         ("docker-compose.yml", runtime_dir.join("docker-compose.yml")),
         ("host-setup.sh", runtime_dir.join("host-setup.sh")),
         ("jht-wrapper.sh", wrapper.to_path_buf()),
@@ -1341,6 +1403,9 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
         ("podman-machine", runtime_dir.join("podman-machine")),
         ("docker-shim", runtime_dir.join("bin/docker")),
     ];
+    if pinned {
+        artifacts.push(("runtime-image", image_pin));
+    }
     if fs::read_to_string(runtime_dir.join("container-runtime"))
         .ok()
         .is_none_or(|value| value.trim() != "podman")
@@ -1357,6 +1422,20 @@ fn bundled_wrapper_published(runtime_dir: &Path, wrapper: &Path) -> bool {
     valid_wrapper_file(wrapper)
         && fs::read(wrapper).is_ok_and(|bytes| bytes == BUNDLED_LOCAL_WRAPPER)
         && runtime_bundle_manifest_valid(runtime_dir, wrapper)
+}
+
+/// Linux: the host runtime dir of scripts/jht-wrapper.sh and install.sh.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    let data = match std::env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()) {
+        Some(value) => PathBuf::from(value),
+        None => app
+            .path()
+            .home_dir()
+            .map(|home| home.join(".local").join("share"))
+            .map_err(|_| failure("storage_failed"))?,
+    };
+    Ok(data.join("job-hunter-team").join("host-runtime"))
 }
 
 #[cfg(target_os = "macos")]
@@ -1385,8 +1464,9 @@ fn local_podman_install_required(
     wrapper_present: bool,
     marker_selected: bool,
     podman_present: bool,
+    channel_reusable: bool,
 ) -> bool {
-    !(wrapper_present && marker_selected && podman_present)
+    !(wrapper_present && marker_selected && podman_present && channel_reusable)
 }
 
 #[cfg(target_os = "macos")]
@@ -1457,7 +1537,7 @@ pub(crate) fn attest_then<T>(
     })
 }
 
-fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
     // Refuse a release without a compiled-in digest before touching the network.
     expected_installer_digest(expected_digest)?;
     let target = std::env::temp_dir().join(format!(
@@ -1468,7 +1548,7 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     let result = (|| {
         let curl_args = [
             "-fsSL",
-            INSTALL_URL,
+            url,
             "-o",
             target.to_str().ok_or_else(|| failure("storage_failed"))?,
         ];
@@ -1488,36 +1568,187 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     result
 }
 
+/// Downloads install.sh of the channel this app was built for, checks it
+/// against that channel's digest and hands it over with the channel's
+/// installer arguments (none in production).
 fn with_downloaded_installer<T>(
+    execute: impl FnOnce(&VerifiedInstaller, &[String]) -> Result<T, OnboardingError>,
+) -> Result<T, OnboardingError> {
+    let channel = release_channel::current().map_err(failure)?;
+    let expected = expected_installer_digest(release_channel::install_digest(
+        channel.as_ref(),
+        INSTALL_SHA256,
+    ))?;
+    let args = release_channel::installer_args(channel.as_ref());
+    download_then_attest(
+        &release_channel::install_url(channel.as_ref()),
+        expected,
+        |installer| execute(installer, &args),
+    )
+}
+
+/// Downloads the installer from `url` and runs `execute` only on bytes with
+/// `expected_digest`: a commit that does not exist, a network that is down or
+/// different bytes stop here, before anything runs.
+fn download_then_attest<T>(
+    url: &str,
+    expected_digest: &str,
     execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
 ) -> Result<T, OnboardingError> {
-    let expected = expected_installer_digest(INSTALL_SHA256)?;
-    let bytes = download_installer_bytes(expected)?;
-    attest_then(bytes, expected, execute)
+    let bytes = download_installer_bytes(url, expected_digest)?;
+    attest_then(bytes, expected_digest, execute)
+}
+
+/// A local install command line: the fixed part, then the channel's
+/// installer arguments after `bash -s --`.
+fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
+    base.iter()
+        .map(|arg| (*arg).to_owned())
+        .chain(channel_args.iter().cloned())
+        .collect()
+}
+
+/// Windows: WSL first (the Podman machine runs in it), then the runtime that
+/// install.ps1 publishes, installed only when no verified wrapper is there:
+/// install.ps1 installs Podman when missing and creates the JHT machine.
+/// install.ps1 runs only if it has the compiled digest, from a private
+/// temporary file, through Windows PowerShell by its absolute path; each
+/// `JHT_PHASE` line it prints goes to the screen through `phase`.
+#[cfg(windows)]
+fn install_local_windows(
+    app: &tauri::AppHandle,
+    phase: &dyn Fn(&'static str),
+) -> Result<PathBuf, OnboardingError> {
+    use crate::windows_runtime::{
+        installer_invocation, installer_outcome, phase_message, powershell_path, wsl_path,
+        wsl_state, INSTALL_PS1_SHA256,
+    };
+    let wsl = wsl_path(std::env::var_os("SystemRoot"));
+    wsl_state(run_program(
+        wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?,
+        ["--status"],
+        None,
+        Duration::from_secs(30),
+    ))
+    .map_err(failure)?;
+    let channel = release_channel::current().map_err(failure)?;
+    // A runtime already there is reused only by a production build, and only
+    // when it is a production one: a test build always installs its own.
+    if let Some(wrapper) = wrapper_path(app) {
+        if crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
+        {
+            trace_local_runtime("runtime", "install_reused");
+            return Ok(wrapper);
+        }
+    }
+    let expected = expected_installer_digest(release_channel::install_ps1_digest(
+        channel.as_ref(),
+        INSTALL_PS1_SHA256,
+    ))?;
+    let bytes = download_verified_bytes(
+        &release_channel::install_ps1_url(channel.as_ref()),
+        expected,
+    )?;
+    let channel_args = release_channel::install_ps1_args(channel.as_ref());
+    attest_then(bytes, expected, |installer| {
+        let dir = std::env::temp_dir().join(format!(
+            "jht-install-{}-{}",
+            std::process::id(),
+            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).map_err(|_| failure("storage_failed"))?;
+        let result = (|| {
+            crate::private_acl::protect_dir(&dir).map_err(|_| failure("permissions_failed"))?;
+            let script = dir.join("install.ps1");
+            fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
+            crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
+            let shell = powershell_path(std::env::var_os("SystemRoot"));
+            installer_outcome(crate::runtime_host::run_program_lines(
+                shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
+                installer_invocation(&script, &channel_args),
+                PREPARE_TIMEOUT,
+                |line| {
+                    if let Some(message) = phase_message(line) {
+                        phase(message);
+                    }
+                },
+            ))
+            .map_err(failure)
+        })();
+        let _ = fs::remove_dir_all(&dir);
+        result
+    })?;
+    wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+}
+
+/// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
+/// when no digest was compiled in.
+#[cfg(windows)]
+fn download_verified_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+    expected_installer_digest(expected_digest)?;
+    let target = std::env::temp_dir().join(format!(
+        "jht-download-{}-{}.ps1",
+        std::process::id(),
+        SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let target_text = target.to_str().ok_or_else(|| failure("storage_failed"))?;
+        let downloaded = run_program(
+            "curl.exe",
+            ["-fsSL", url, "-o", target_text],
+            None,
+            Duration::from_secs(90),
+        )
+        .map_err(failure)?;
+        if !downloaded.success() {
+            return Err(failure("runtime_download_failed"));
+        }
+        let metadata = fs::metadata(&target).map_err(|_| failure("runtime_download_failed"))?;
+        if metadata.len() == 0 || metadata.len() > MAX_INSTALLER_BYTES as u64 {
+            return Err(failure("installer_payload_invalid"));
+        }
+        fs::read(&target).map_err(|_| failure("runtime_download_failed"))
+    })();
+    let _ = fs::remove_file(&target);
+    result
 }
 
 fn install_local(
     app: &tauri::AppHandle,
     diagnostics: Option<&OnboardingDiagnosticSink>,
+    phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        let _ = diagnostics;
+        return install_local_windows(app, phase);
+    }
+    #[cfg(not(windows))]
+    let _ = phase;
+    #[cfg(not(any(unix, windows)))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
     {
         #[cfg(target_os = "macos")]
         {
+            let channel = release_channel::current().map_err(failure)?;
             let install_required = local_podman_install_required(
                 host_wrapper_path(app).is_some(),
                 podman_runtime_selected(app),
                 podman_path().is_some(),
+                release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                ),
             );
             if install_required {
                 trace_local_runtime("runtime", "install_required");
-                let installed = with_downloaded_installer(|installer| {
+                let installed = with_downloaded_installer(|installer, channel_args| {
                     ensure_success(
                         run_program(
                             "/usr/bin/env",
-                            LOCAL_PODMAN_INSTALL_ARGS,
+                            local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
                             Some(installer.bytes()),
                             PREPARE_TIMEOUT,
                         ),
@@ -1583,9 +1814,18 @@ fn install_local(
         }
         #[cfg(not(target_os = "macos"))]
         {
-            if wrapper_path(app).is_none() {
-                with_downloaded_installer(|installer| {
-                    let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
+            let channel = release_channel::current().map_err(failure)?;
+            let reusable = wrapper_path(app).is_some()
+                && release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                );
+            if !reusable {
+                with_downloaded_installer(|installer, channel_args| {
+                    let args = local_install_args(
+                        &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+                        channel_args,
+                    );
                     ensure_success(
                         run_program(
                             "/usr/bin/env",
@@ -1619,6 +1859,27 @@ else
 fi
 [ "$jht_actual_sha256" = "$JHT_INSTALL_SHA256" ] || exit 87
 /bin/bash "$jht_installer" --pairing-token "$JHT_PAIRING_TOKEN""#;
+
+/// REMOTE_INSTALL with the channel's installer arguments appended, each in
+/// single quotes. They are public build coordinates (commit, image ref,
+/// digest), never a secret, and only a closed character set is accepted, so
+/// the quoting cannot be broken; production appends nothing.
+fn remote_install_command(channel_args: &[String]) -> Result<String, OnboardingError> {
+    let mut command = REMOTE_INSTALL.to_owned();
+    for arg in channel_args {
+        if arg.is_empty()
+            || !arg
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_.:/@".contains(&byte))
+        {
+            return Err(failure("installer_digest_invalid"));
+        }
+        command.push_str(" '");
+        command.push_str(arg);
+        command.push('\'');
+    }
+    Ok(command)
+}
 
 pub(crate) fn remote_install_input(
     installer: &VerifiedInstaller,
@@ -1856,7 +2117,18 @@ pub(crate) fn run_verified_local_wrapper(
             timeout,
         );
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        use crate::windows_runtime::{powershell_path, script_invocation};
+        let shell = powershell_path(std::env::var_os("SystemRoot"));
+        return run_program(
+            shell.to_str().ok_or("runtime_missing")?,
+            script_invocation(wrapper, args),
+            input,
+            timeout,
+        );
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     run_program(
         wrapper.to_str().ok_or("runtime_missing")?,
         args,
@@ -1877,6 +2149,13 @@ fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingErro
     )
 }
 
+/// jht.ps1 up wakes the Podman machine in WSL and says with its exit code
+/// what did not start (windows_runtime::exit_failure); the sh wrapper's exit
+/// codes mean other things.
+fn up_exit_failure(code: i32, windows: bool) -> Option<&'static str> {
+    windows.then(|| exit_failure(code)).flatten()
+}
+
 fn start_and_verify_local_container_with(
     mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
     mut pause: impl FnMut(Duration),
@@ -1884,6 +2163,10 @@ fn start_and_verify_local_container_with(
 ) -> Result<(), OnboardingError> {
     let requested = match run(LocalCliOperation::Up, PREPARE_TIMEOUT) {
         Ok(result) if result.success() => Ok(()),
+        Ok(result) => match up_exit_failure(result.code, cfg!(windows)) {
+            Some(code) => return Err(failure(code)),
+            None => Err("container_start_failed"),
+        },
         Err("process_timeout") => Err("container_timeout"),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err("container_start_failed"),
@@ -1943,7 +2226,11 @@ fn prepare_impl(
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(install_local(&app, diagnostics.as_ref())?),
+                ValidatedHost::Local => Some(install_local(
+                    &app,
+                    diagnostics.as_ref(),
+                    &|message| reporter.phase(message),
+                )?),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -1951,12 +2238,13 @@ fn prepare_impl(
                     if !valid_pairing_token(token) {
                         return Err(failure("pairing_token_invalid"));
                     }
-                    with_downloaded_installer(|installer| {
+                    with_downloaded_installer(|installer, channel_args| {
+                        let command = remote_install_command(channel_args)?;
                         let mut input = remote_install_input(installer, token)?;
                         let result = ensure_success(
-                            run_ssh(
+                            crate::runtime_host::run_ssh_command(
                                 &validated,
-                                REMOTE_INSTALL,
+                                &command,
                                 Some(&input),
                                 PREPARE_TIMEOUT,
                                 None,
@@ -3044,7 +3332,14 @@ pub(crate) fn onboarding_provider_login(
                     cmd.arg("-q").arg("/dev/null").arg(program).args(invocation);
                     cmd
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(windows)]
+                {
+                    use crate::windows_runtime::{powershell_path, script_invocation};
+                    let mut cmd = Command::new(powershell_path(std::env::var_os("SystemRoot")));
+                    cmd.args(script_invocation(&wrapper, &LocalCliOperation::OauthLogin.argv()));
+                    cmd
+                }
+                #[cfg(not(any(target_os = "macos", windows)))]
                 {
                     let mut cmd = Command::new(wrapper);
                     cmd.args(LocalCliOperation::OauthLogin.argv());
@@ -3704,6 +3999,155 @@ mod tests {
         );
     }
 
+    const CHANNEL_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+    const CHANNEL_DIGEST: &str =
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn channel_args() -> Vec<String> {
+        [
+            "--source-sha",
+            CHANNEL_SHA,
+            "--image",
+            "ghcr.io/leopu00/jht:master-arthur",
+            "--expected-image-digest",
+            CHANNEL_DIGEST,
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    }
+
+    #[test]
+    fn production_install_commands_are_unchanged() {
+        assert_eq!(super::remote_install_command(&[]).unwrap(), REMOTE_INSTALL);
+        assert_eq!(
+            super::local_install_args(&["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"], &[]),
+            ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
+        );
+    }
+
+    #[test]
+    fn test_channel_coordinates_reach_the_installer_as_arguments() {
+        let local = super::local_install_args(
+            &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+            &channel_args(),
+        );
+        assert_eq!(local[..4], ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
+        assert_eq!(local[4..], channel_args()[..]);
+
+        // The fixed remote script, then each argument in single quotes.
+        let command = super::remote_install_command(&channel_args()).unwrap();
+        let quoted: String = channel_args()
+            .iter()
+            .map(|arg| format!(" '{arg}'"))
+            .collect();
+        assert_eq!(command, format!("{REMOTE_INSTALL}{quoted}"));
+    }
+
+    /// The fixed remote script, run for real by the shell that runs it on
+    /// the VPS: the attested installer gets the pairing token and then
+    /// exactly the channel's arguments, while stdin keeps its contract
+    /// (digest, token, installer bytes). /bin/bash exists only on unix.
+    #[cfg(unix)]
+    #[test]
+    fn the_remote_script_hands_the_channel_arguments_to_the_installer() {
+        let command = super::remote_install_command(&channel_args()).unwrap();
+        let installer = b"printf '%s\\n' \"$@\"\n";
+        let digest = format!("{:x}", Sha256::digest(installer));
+        let output = super::attest_then(installer.to_vec(), &digest, |verified| {
+            let input = super::remote_install_input(verified, &"t".repeat(32))?;
+            let mut child = std::process::Command::new("/bin/bash")
+                .args(["-c", &command])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            {
+                use std::io::Write;
+                child.stdin.take().unwrap().write_all(&input).unwrap();
+            }
+            Ok(child.wait_with_output().unwrap())
+        })
+        .unwrap();
+        assert!(output.status.success());
+        let mut expected = vec!["--pairing-token".to_owned(), "t".repeat(32)];
+        expected.extend(channel_args());
+        assert_eq!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    /// The test channel's download, where it can go wrong: install.sh of a
+    /// commit that does not exist (raw answers 404), a network that is down,
+    /// bytes that are not the ones the build expects. Each stops before the
+    /// installer runs, with its own code.
+    #[cfg(unix)]
+    #[test]
+    fn a_missing_commit_a_dead_network_or_other_bytes_never_run_the_installer() {
+        use std::{fs, net::TcpListener};
+
+        let root = std::env::temp_dir().join(format!(
+            "jht-channel-download-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let installer = root.join("install.sh");
+        fs::write(&installer, b"echo the installer\n").unwrap();
+        let digest = format!("{:x}", Sha256::digest(b"echo the installer\n"));
+        let url = format!("file://{}", installer.display());
+        let ran = std::cell::Cell::new(0);
+        let execute = |_: &super::VerifiedInstaller| {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+
+        // The right bytes run, once.
+        super::download_then_attest(&url, &digest, execute).unwrap();
+        assert_eq!(ran.get(), 1);
+
+        // A commit that does not exist: nothing to download.
+        let missing = format!("file://{}", root.join("no-such-commit/install.sh").display());
+        let error = super::download_then_attest(&missing, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // The network is down: nobody listens on the port.
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let down = format!("http://127.0.0.1:{port}/install.sh");
+        let error = super::download_then_attest(&down, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // Other bytes than the build's digest (another commit, a tampered file).
+        fs::write(&installer, b"echo someone else\n").unwrap();
+        let error = super::download_then_attest(&url, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_mismatch");
+
+        // A build without a digest refuses before touching the network.
+        let error = super::download_then_attest(&down, "", execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_missing");
+
+        assert_eq!(ran.get(), 1, "the installer ran on a failed download");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn remote_install_command_refuses_arguments_that_could_break_quoting() {
+        for bad in ["", "a'b", "a b", "$(id)", "a\nb", "a;b", "`id`"] {
+            let error = super::remote_install_command(&[bad.to_owned()]).unwrap_err();
+            assert_eq!(error.code, "installer_digest_invalid", "{bad:?}");
+        }
+    }
+
     fn outcome(success: bool) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult {
             code: if success { 0 } else { 1 },
@@ -3712,11 +4156,46 @@ mod tests {
     }
 
     #[test]
+    fn windows_up_exit_codes_name_wsl_podman_or_the_machine() {
+        assert_eq!(super::up_exit_failure(20, true), Some("wsl_not_ready"));
+        assert_eq!(super::up_exit_failure(21, true), Some("podman_missing"));
+        assert_eq!(super::up_exit_failure(22, true), Some("podman_start_failed"));
+        assert_eq!(super::up_exit_failure(1, true), None);
+        // The sh wrapper's 20 means something else.
+        assert_eq!(super::up_exit_failure(20, false), None);
+        let code = |code| {
+            Ok(ProcessResult {
+                code,
+                stdout: Vec::new(),
+            })
+        };
+        if cfg!(windows) {
+            let mut calls = Vec::new();
+            let error = start_and_verify_local_container_with(
+                |operation, _| {
+                    calls.push(operation.argv()[0]);
+                    code(22)
+                },
+                |_| {},
+                3,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "podman_start_failed");
+            assert_eq!(calls, ["up"]);
+        } else {
+            let error =
+                start_and_verify_local_container_with(|_, _| code(22), |_| {}, 1).unwrap_err();
+            assert_eq!(error.code, "container_start_failed");
+        }
+    }
+
+    #[test]
     fn local_runtime_prepare_errors_preserve_sanitized_contract() {
         for code in [
             "podman_missing",
             "podman_start_failed",
             "podman_not_ready",
+            "wsl_not_ready",
             "runtime_download_failed",
             "runtime_install_failed",
             "runtime_missing",
@@ -4130,6 +4609,72 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
+    fn mac_test_channel_keeps_the_podman_path_and_adds_the_coordinates() {
+        let args = super::local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, &channel_args());
+        assert_eq!(args[..6], LOCAL_PODMAN_INSTALL_ARGS.map(str::to_owned)[..]);
+        assert_eq!(args[6..], channel_args()[..]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_manifest_accepts_the_image_pin_only_with_its_digest() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-image-pin-{nonce}"));
+        let runtime = root.join("runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        let wrapper = root.join("jht");
+        let files = [
+            (wrapper.clone(), "#!/bin/sh\n"),
+            (runtime.join("docker-compose.yml"), "services: {}\n"),
+            (runtime.join("host-setup.sh"), "#!/bin/sh\n"),
+            (runtime.join("container-runtime"), "podman\n"),
+            (runtime.join("podman-machine"), "jht-podman\n"),
+            (runtime.join("bin/docker"), "#!/bin/sh\n"),
+        ];
+        for (path, content) in &files {
+            fs::write(path, content).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let digest =
+            |path: &std::path::Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
+        let base = format!(
+            "version=1\ndocker-compose.yml={}\nhost-setup.sh={}\njht-wrapper.sh={}\ncontainer-runtime={}\npodman-machine={}\ndocker-shim={}\n",
+            digest(&runtime.join("docker-compose.yml")),
+            digest(&runtime.join("host-setup.sh")),
+            digest(&wrapper),
+            digest(&runtime.join("container-runtime")),
+            digest(&runtime.join("podman-machine")),
+            digest(&runtime.join("bin/docker")),
+        );
+        let manifest = runtime.join(".runtime-integrity");
+        fs::write(&manifest, &base).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+
+        let pin = runtime.join("runtime-image");
+        fs::write(&pin, format!("ghcr.io/leopu00/jht@{CHANNEL_DIGEST}\n")).unwrap();
+        // A pin the manifest does not attest is refused.
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::write(&manifest, format!("{base}runtime-image={}\n", digest(&pin))).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        // A changed pin, or one that went missing, is refused too.
+        fs::write(&pin, "ghcr.io/leopu00/jht:latest\n").unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::remove_file(&pin).unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
     fn local_installer_explicitly_selects_the_attested_podman_path() {
         assert_eq!(
             LOCAL_PODMAN_INSTALL_ARGS,
@@ -4142,11 +4687,14 @@ mod tests {
                 "podman",
             ]
         );
-        assert!(local_podman_install_required(false, false, false));
-        assert!(local_podman_install_required(false, true, true));
-        assert!(local_podman_install_required(true, false, true));
-        assert!(local_podman_install_required(true, true, false));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(local_podman_install_required(false, false, false, true));
+        assert!(local_podman_install_required(false, true, true, true));
+        assert!(local_podman_install_required(true, false, true, true));
+        assert!(local_podman_install_required(true, true, false, true));
+        assert!(!local_podman_install_required(true, true, true, true));
+        // A complete runtime of the other channel (or any runtime, in a test
+        // build) is installed again, not reused.
+        assert!(local_podman_install_required(true, true, true, false));
     }
 
     #[cfg(target_os = "macos")]
@@ -4236,7 +4784,7 @@ mod tests {
 
         assert!(super::valid_host_wrapper_file(&wrapper));
         assert!(!valid_wrapper_file(&wrapper));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(!local_podman_install_required(true, true, true, true));
         assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
 
         fs::create_dir(runtime.join(".upgrade.lock")).unwrap();

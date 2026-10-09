@@ -105,7 +105,8 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "sudo systemctl restart jht-windows-egress-proxy.service" in source
     assert "https://ghcr.io/v2/" in source
     assert "--node" not in proxy
-    assert "[self.server.connector, host, str(port)]" in proxy
+    assert "[self.server.connector, resolved_ip, str(port)]" in proxy
+    assert "resolve_public_target(host, port" in proxy
 
 
 def test_interop_proxy_defaults_to_loopback_when_run_standalone():
@@ -120,7 +121,18 @@ def test_podman_compose_preserves_private_bind_mount_ownership():
     source = PODMAN_COMPOSE.read_text(encoding="utf-8")
 
     assert 'userns_mode: "keep-id:uid=1001,gid=1001"' in source
-    assert "network_mode: host" in source
+    assert 'network_mode: "pasta:' in source
+
+
+def test_probe_closes_the_atomic_config_rename_and_signal_regressions():
+    source = PROBE.read_text(encoding="utf-8")
+
+    assert 'fs.renameSync(t,p)' in source
+    assert 'stat -c %u /jht_home/jht.config.json' in source
+    assert 'test ! -e /jht_home/.jht.config.tmp' in source
+    assert "Assert-FileContains -Path (Join-Path $probeJhtHome 'jht.config.json')" in source
+    assert 'kill -TERM "$p"' in source
+    assert "/sys/module/apparmor/parameters/enabled" in source
 
 
 def test_private_config_atomic_rename_tolerates_host_acl_filesystems():
@@ -181,7 +193,7 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "Requires=jht-windows-egress-proxy.service" in source
     assert "After=jht-windows-egress-proxy.service" in source
     assert "Requires=jht-rootless-podman.service" in source
-    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start jht" in source
+    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht" in source
     assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht" in source
     assert "WantedBy=multi-user.target" in source
     assert "sudo systemctl enable jht-container.service" in source

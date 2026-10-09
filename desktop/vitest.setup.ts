@@ -32,3 +32,13 @@ if (dom) {
 // shell's router scrolls to the top on every navigation.
 // (Guarded: a test may run in the node environment, without window.)
 if (typeof window !== "undefined") window.scrollTo = () => undefined;
+
+// The desktop speaks the system language when the person chose none
+// (src/lib/app-locale.ts). jsdom reports en-US; the tests run as the Italian
+// system the app was written on, and a test that wants another language
+// says so.
+if (dom) {
+  for (const [key, value] of [["language", "it-IT"], ["languages", ["it-IT", "it"]]] as const) {
+    Object.defineProperty(dom.window.navigator, key, { configurable: true, get: () => value });
+  }
+}

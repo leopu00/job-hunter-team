@@ -321,6 +321,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The container engine (Podman) was not installed.",
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
   ),
+  wsl_not_ready: copy(
+    "WSL non è pronto: su Windows è lui a far girare la macchina Podman del team.",
+    "Apri il Microsoft Store, installa o aggiorna «Sottosistema Windows per Linux», riavvia il computer e premi Riprova.",
+    "WSL is not ready: on Windows it runs the team’s Podman machine.",
+    "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
+  ),
   podman_not_ready: copy(
     "Il motore dei container è installato ma non risponde.",
     "Riprova. Se si ripete, riavvia il computer.",
@@ -999,7 +1005,6 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
  */
 export const NOT_EMITTED: ReadonlySet<string> = new Set([
   // Rust: only in the message table of onboarding::failure().
-  "podman_start_failed",
   "runtime_wrapper_install_failed",
   "command_timeout",
   // TS: handled by the UI, produced by no backend.

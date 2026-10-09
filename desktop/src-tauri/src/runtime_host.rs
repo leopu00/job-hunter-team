@@ -544,6 +544,98 @@ fn read_capped(mut reader: impl Read) -> Vec<u8> {
     output
 }
 
+/// On Windows a console program started by the app (PowerShell, wsl.exe,
+/// curl.exe, ssh.exe) would open its own console window: the user must never
+/// see a terminal.
+#[cfg(windows)]
+fn hide_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+#[cfg(not(windows))]
+fn hide_console(_command: &mut Command) {}
+
+/// The longest stdout line run_program_lines hands over whole; a longer one
+/// arrives in pieces.
+const MAX_LINE_BYTES: u64 = 4096;
+/// After the program exits, how long its last lines may take to arrive. A
+/// process it left running in the background can hold its stdout open for
+/// ever (a Podman machine started by an installer): the app does not wait
+/// for that one.
+const LINES_DRAIN_GRACE: Duration = Duration::from_secs(2);
+
+/// run_program for a long installer that says what it is doing: stdin
+/// closed, each stdout line handed to `on_line` while the program runs, the
+/// exit code returned. stdout is not kept and stderr is drained unread, as
+/// in run_program.
+pub(crate) fn run_program_lines<I, S>(
+    program: &str,
+    args: I,
+    timeout: Duration,
+    mut on_line: impl FnMut(&str),
+) -> Result<i32, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    use std::io::BufRead;
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console(&mut command);
+    let mut child = command.spawn().map_err(|_| "process_start_failed")?;
+    let stdout = child.stdout.take().ok_or("process_pipe_failed")?;
+    let stderr = child.stderr.take().ok_or("process_pipe_failed")?;
+    let (lines, received) = std::sync::mpsc::channel::<String>();
+    // Neither reader is joined: see LINES_DRAIN_GRACE.
+    thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match (&mut reader).take(MAX_LINE_BYTES).read_until(b'\n', &mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if lines.send(String::from_utf8_lossy(&line).into_owned()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    thread::spawn(move || read_capped(stderr));
+    let started = Instant::now();
+    let tick = Duration::from_millis(50);
+    let code = loop {
+        match received.recv_timeout(tick) {
+            Ok(line) => on_line(&line),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            // stdout closed: recv_timeout no longer waits, so this does.
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => thread::sleep(tick),
+        }
+        if let Some(status) = child.try_wait().map_err(|_| "process_wait_failed")? {
+            break status.code().unwrap_or(-1);
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("process_timeout");
+        }
+    };
+    let exited = Instant::now();
+    while let Some(left) = LINES_DRAIN_GRACE.checked_sub(exited.elapsed()) {
+        match received.recv_timeout(left) {
+            Ok(line) => on_line(&line),
+            Err(_) => break,
+        }
+    }
+    Ok(code)
+}
+
 pub(crate) fn run_program<I, S>(
     program: &str,
     args: I,
@@ -559,6 +651,7 @@ where
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    hide_console(&mut command);
     if input.is_some() {
         command.stdin(Stdio::piped());
     } else {
@@ -732,5 +825,71 @@ mod tests {
         );
 
         fs::remove_dir_all(destination.parent().unwrap()).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn lines_of(script: &str, timeout: std::time::Duration) -> (Result<i32, &'static str>, Vec<String>) {
+        let mut seen = Vec::new();
+        let result = super::run_program_lines("/bin/sh", ["-c", script], timeout, |line| {
+            seen.push(line.to_owned())
+        });
+        (result, seen)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_installer_s_lines_arrive_in_order_with_its_exit_code() {
+        let (result, seen) = lines_of(
+            "echo 'JHT_PHASE wsl_check'; echo noise >&2; printf 'JHT_PHASE podman_install\\r\\n'; printf 'last'; exit 21",
+            std::time::Duration::from_secs(20),
+        );
+        assert_eq!(result, Ok(21));
+        assert_eq!(seen, ["JHT_PHASE wsl_check\n", "JHT_PHASE podman_install\r\n", "last"]);
+    }
+
+    /// Each line reaches the caller while the program still runs, not at the
+    /// end: the onboarding shows the phase as it starts.
+    #[cfg(unix)]
+    #[test]
+    fn a_line_arrives_before_the_program_ends() {
+        let started = std::time::Instant::now();
+        let mut first_at = None;
+        let result = super::run_program_lines(
+            "/bin/sh",
+            ["-c", "echo first; sleep 2; echo second"],
+            std::time::Duration::from_secs(20),
+            |_| {
+                first_at.get_or_insert_with(|| started.elapsed());
+            },
+        );
+        assert_eq!(result, Ok(0));
+        assert!(first_at.unwrap() < std::time::Duration::from_millis(1500), "{first_at:?}");
+    }
+
+    /// A background process the installer leaves running keeps stdout open:
+    /// the app returns anyway, shortly after the installer exits.
+    #[cfg(unix)]
+    #[test]
+    fn a_process_left_running_does_not_hold_the_app() {
+        let started = std::time::Instant::now();
+        let (result, seen) = lines_of(
+            "echo 'JHT_PHASE podman_machine_start'; sleep 30 & exit 0",
+            std::time::Duration::from_secs(60),
+        );
+        assert_eq!(result, Ok(0));
+        assert_eq!(seen, ["JHT_PHASE podman_machine_start\n"]);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_silent_installer_times_out_and_a_missing_one_does_not_start() {
+        let started = std::time::Instant::now();
+        let (result, _) = lines_of("exec sleep 30", std::time::Duration::from_millis(300));
+        assert_eq!(result, Err("process_timeout"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        let missing =
+            super::run_program_lines("/nonexistent/jht-installer", ["x"], std::time::Duration::from_secs(1), |_| {});
+        assert_eq!(missing, Err("process_start_failed"));
     }
 }

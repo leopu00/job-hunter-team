@@ -20,9 +20,9 @@ Quello schermo mostra CV e form di candidatura. Cosa questa suite tiene fermo:
      - porta o display non validi e binari assenti escono con i codici che pid1
        considera non riparabili (2, 3);
   2. **i compose non espongono lo stream alla rete**: nel file base ogni porta è
-     legata a 127.0.0.1; nell'override Podman (network_mode: host, dove il
-     container vede le interfacce dell'host) le porte sono azzerate e il bind
-     dello stream è 127.0.0.1;
+     legata a 127.0.0.1; l'override Podman tiene il container nel suo spazio
+     di rete (pasta) e ripubblica la stessa porta del file base, senza
+     cambiare il bind dello stream;
   3. **l'immagine ha davvero lo schermo**: pacchetti X, Chromium completo
      (Playwright lancia quello quando headless=False), DISPLAY=:99 esportato e
      un gate di build che apre un Chromium headed su Xvfb.
@@ -314,11 +314,15 @@ def test_base_compose_publishes_only_on_host_loopback():
     assert any(entry.endswith(":6080") for entry in ports)
 
 
-def test_podman_host_network_resets_ports_and_binds_loopback():
+def test_podman_override_keeps_the_base_loopback_port_in_its_own_network():
+    # pasta gives the container its own namespace: the base file's
+    # 127.0.0.1-only port is what reaches the stream, and the stream keeps
+    # its 0.0.0.0 default inside the namespace (on 127.0.0.1 pasta's
+    # forwarding gets a reset: measured).
     service = _service(PODMAN_COMPOSE)
-    assert service["network_mode"] == "host"
-    assert service["ports"] == {"__reset__": []}
-    assert "JHT_LIVE_SCREEN_BIND=127.0.0.1" in service["environment"]
+    assert service["network_mode"].startswith("pasta:")
+    assert "ports" not in service
+    assert not any(entry.startswith("JHT_LIVE_SCREEN_") for entry in service["environment"])
 
 
 def _compose_command():
@@ -338,7 +342,7 @@ def _compose_command():
 
 
 @pytest.mark.skipif(_compose_command() is None, reason="docker compose not available")
-def test_podman_override_merges_to_no_published_port(tmp_path):
+def test_podman_override_merges_to_the_base_loopback_port_only(tmp_path):
     """Il merge vero di Compose, non la lettura dei due file separati."""
     result = subprocess.run(
         [*_compose_command(), "-f", str(COMPOSE), "-f", str(PODMAN_COMPOSE), "config", "--format", "json"],
@@ -348,8 +352,9 @@ def test_podman_override_merges_to_no_published_port(tmp_path):
     assert result.returncode == 0, result.stderr
 
     service = json.loads(result.stdout)["services"]["jht"]
-    assert not service.get("ports")
-    assert service["environment"]["JHT_LIVE_SCREEN_BIND"] == "127.0.0.1"
+    assert service["network_mode"].startswith("pasta:")
+    assert [(port["host_ip"], int(port["target"])) for port in service["ports"]] == [("127.0.0.1", 6080)]
+    assert "JHT_LIVE_SCREEN_BIND" not in service["environment"]
 
 
 # ── 2b. La morte dello schermo non è invisibile ────────────────────────────
