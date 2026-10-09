@@ -826,6 +826,41 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
+  it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "runtime_install_failed",
+        message: "runtime_install_failed",
+        retryable: true,
+        detail: "winget could not install Podman.CLI (0x8a15000f)",
+      });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(describeError("runtime_install_failed").text)).toBeInTheDocument();
+    expect(screen.getByText(
+      "Cosa fare: Causa: winget could not install Podman.CLI (0x8a15000f). Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).not.toBeInTheDocument();
+  });
+
+  it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-no-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({ code: "runtime_install_failed", message: "x", retryable: true, detail: " \u0007 " })
+      .mockRejectedValueOnce({ code: "wsl_not_ready", message: "x", retryable: true, detail: "WSL is not usable" });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    expect(await screen.findByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "retry-runtime" }));
+    expect(await screen.findByText(`Cosa fare: ${describeError("wsl_not_ready").action} Causa: WSL is not usable.`)).toBeInTheDocument();
+  });
+
   it("a failed setup step shows where the runtime log is, and opens it", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-log-account"));
     requireOnboarding();

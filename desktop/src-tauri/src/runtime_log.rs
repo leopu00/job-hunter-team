@@ -23,6 +23,8 @@ const STREAM_TAIL_BYTES: usize = 16 * 1024;
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
     path: PathBuf,
+    /// The cause read from the last step, when it failed (failure_cause).
+    cause: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl RuntimeLog {
@@ -31,7 +33,10 @@ impl RuntimeLog {
     }
 
     pub(crate) fn in_dir(dir: &Path) -> Self {
-        Self { path: dir.join("runtime.log") }
+        Self {
+            path: dir.join("runtime.log"),
+            cause: Default::default(),
+        }
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -41,8 +46,17 @@ impl RuntimeLog {
     /// One step: its name, how it ended, its output. A log that cannot be
     /// written never stops the step it describes.
     pub(crate) fn record(&self, step: &str, ended: Result<i32, &str>, stdout: &[u8], stderr: &[u8], elapsed: Duration) {
+        let cause = (ended != Ok(0)).then(|| failure_cause(stdout, stderr)).flatten();
+        if let Ok(mut last) = self.cause.lock() {
+            *last = cause;
+        }
         let entry = entry(step, ended, stdout, stderr, elapsed, SystemTime::now());
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// The cause of the last step, if it failed and said why; read once.
+    pub(crate) fn take_cause(&self) -> Option<String> {
+        self.cause.lock().ok().and_then(|mut last| last.take())
     }
 
     pub(crate) fn record_result(&self, step: &str, result: &Result<ProcessResult, &'static str>, stderr: &[u8], elapsed: Duration) {
@@ -51,6 +65,62 @@ impl RuntimeLog {
             Err(error) => self.record(step, Err(error), &[], stderr, elapsed),
         }
     }
+}
+
+/// Longest cause shown on the error screen; the log has the rest.
+const CAUSE_MAX_CHARS: usize = 240;
+
+/// Why a step failed, in one line: the last useful line of its stderr, or
+/// else the last failure line of its stdout (install.ps1's Write-Fail prints
+/// «  x <message>» there). PowerShell's error decoration («At line:…»,
+/// «+ CategoryInfo…»), the script's own path and the phase lines are not a
+/// cause. Redacted like the log.
+pub(crate) fn failure_cause(stdout: &[u8], stderr: &[u8]) -> Option<String> {
+    let text = |bytes: &[u8]| crate::onboarding::redact(String::from_utf8_lossy(bytes).replace("\r\n", "\n"));
+    text(stderr)
+        .lines()
+        .rev()
+        .find_map(cause_line)
+        .or_else(|| {
+            text(stdout).lines().rev().find_map(|line| {
+                let line = line.trim_start();
+                ["x ", "✗ ", "ERROR: ", "Error: "]
+                    .iter()
+                    .find_map(|marker| line.strip_prefix(marker))
+                    .and_then(cause_line)
+            })
+        })
+}
+
+fn cause_line(line: &str) -> Option<String> {
+    let line = line.trim();
+    let decoration = line.is_empty()
+        || line.starts_with('+')
+        || line.starts_with('~')
+        || line.starts_with("At line:")
+        || (line.starts_with("At ") && line.contains(" char:"))
+        || line.starts_with("CategoryInfo")
+        || line.starts_with("FullyQualifiedErrorId")
+        || line.starts_with("JHT_PHASE ")
+        || line.starts_with("JHT_LEFT ");
+    if decoration {
+        return None;
+    }
+    // «C:\…\install.ps1 : message» → «message».
+    let line = match line.split_once(" : ") {
+        Some((script, message)) if script.ends_with(".ps1") => message,
+        _ => line,
+    };
+    let line = line.trim_start_matches(|character: char| matches!(character, '✗' | '!' | '*') || character.is_whitespace());
+    let line = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    if !line.chars().any(char::is_alphanumeric) {
+        return None;
+    }
+    Some(if line.chars().count() > CAUSE_MAX_CHARS {
+        format!("{}…", line.chars().take(CAUSE_MAX_CHARS).collect::<String>())
+    } else {
+        line
+    })
 }
 
 fn entry(step: &str, ended: Result<i32, &str>, stdout: &[u8], stderr: &[u8], elapsed: Duration, at: SystemTime) -> String {
@@ -178,7 +248,7 @@ fn reveal(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{append, entry, utc, RuntimeLog};
+    use super::{append, entry, failure_cause, utc, RuntimeLog};
     use std::{
         fs,
         time::{Duration, UNIX_EPOCH},
@@ -250,6 +320,41 @@ mod tests {
         std::os::unix::fs::symlink(&target, root.join("runtime.log")).unwrap();
         assert_eq!(append(&root.join("runtime.log"), "entry\n", 1024), Err("runtime_log_invalid"));
         assert_eq!(fs::read(&target).unwrap(), b"keep");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_cause_is_the_last_useful_line_of_stderr_without_powershell_decoration() {
+        let powershell = b"C:\\Users\\prova\\AppData\\Local\\Temp\\jht-install-1\\install.ps1 : Access to the path 'C:\\Users\\prova\\.jht\\.codex' is denied.\r\nAt line:1 char:1\r\n+ & 'C:\\Users\\prova\\install.ps1'\r\n+ ~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException\r\n    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,install.ps1\r\n";
+        assert_eq!(
+            failure_cause(b"JHT_PHASE wsl_check\n", powershell).as_deref(),
+            Some("Access to the path 'C:\\Users\\prova\\.jht\\.codex' is denied.")
+        );
+        // install.ps1's Write-Fail prints on stdout.
+        assert_eq!(
+            failure_cause(b"JHT_PHASE podman_install\n  x winget could not install Podman.CLI (0x8a15000f)\n", b"").as_deref(),
+            Some("winget could not install Podman.CLI (0x8a15000f)")
+        );
+        assert_eq!(failure_cause(b"  \xe2\x9c\x97 Podman machine non avviabile\n", b"\n").as_deref(), Some("Podman machine non avviabile"));
+        // A secret never reaches the screen; nothing useful is no cause.
+        assert_eq!(failure_cause(b"", b"login failed: api_key=sk-abc123\n").as_deref(), Some("login failed: api_key=[REDACTED]"));
+        assert_eq!(failure_cause(b"JHT_PHASE image_pull\nall good\n", b"+ ~~~\n\n"), None);
+        let long = format!("{}\n", "y".repeat(400));
+        assert_eq!(failure_cause(b"", long.as_bytes()).unwrap().chars().count(), 241);
+    }
+
+    #[test]
+    fn the_log_keeps_the_cause_of_a_failed_step_only_until_it_is_read() {
+        let root = dir("cause");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record("install.ps1", Ok(1), b"", b"install.ps1 : boom\n", Duration::ZERO);
+        assert_eq!(log.take_cause().as_deref(), Some("boom"));
+        assert_eq!(log.take_cause(), None);
+        log.record("install.ps1", Ok(1), b"", b"install.ps1 : boom\n", Duration::ZERO);
+        log.record("jht status", Ok(0), b"", b"warning\n", Duration::ZERO);
+        assert_eq!(log.take_cause(), None, "a later step that worked clears it");
+        log.record("jht up", Err("process_timeout"), b"", b"still pulling the image\n", Duration::ZERO);
+        assert_eq!(log.take_cause().as_deref(), Some("still pulling the image"));
         let _ = fs::remove_dir_all(&root);
     }
 

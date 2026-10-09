@@ -18,6 +18,9 @@ const it = {
   versionIncompatibleMessage: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
   containerStartTitle: "Avvio del container non riuscito",
   containerStartMessage: "Il container del team non risulta pronto. Il team non è stato avviato.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Causa: {cause}",
+  failureCauseRetry: "Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
   hostKeyChangedTitle: "Chiave del server cambiata",
   failure: {
     "provider-login": "L’accesso al provider non è stato verificato. Riprova.",
@@ -78,6 +81,9 @@ const en: StateCopy = {
   versionIncompatibleMessage: "The installed version does not match the one this app needs. The team was not started.",
   containerStartTitle: "Container start failed",
   containerStartMessage: "The team’s container is not ready. The team was not started.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Cause: {cause}",
+  failureCauseRetry: "Try again; if it happens again, open the log below and send it to support.",
   hostKeyChangedTitle: "Server key changed",
   failure: {
     "provider-login": "The provider login was not verified. Try again.",
@@ -136,6 +142,9 @@ const de: StateCopy = {
   versionIncompatibleMessage: "Die installierte Version entspricht nicht der, die diese App braucht. Das Team wurde nicht gestartet.",
   containerStartTitle: "Containerstart fehlgeschlagen",
   containerStartMessage: "Der Container des Teams ist nicht bereit. Das Team wurde nicht gestartet.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Ursache: {cause}",
+  failureCauseRetry: "Versuche es erneut; wenn es wieder passiert, öffne das Protokoll unten und schicke es an den Support.",
   hostKeyChangedTitle: "Server-Schlüssel geändert",
   failure: {
     "provider-login": "Die Anmeldung beim Anbieter wurde nicht bestätigt. Versuche es erneut.",
@@ -194,6 +203,9 @@ const es: StateCopy = {
   versionIncompatibleMessage: "La versión instalada no coincide con la que necesita esta aplicación. El equipo no se ha iniciado.",
   containerStartTitle: "No se ha podido iniciar el contenedor",
   containerStartMessage: "El contenedor del equipo no está listo. El equipo no se ha iniciado.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Causa: {cause}",
+  failureCauseRetry: "Vuelve a intentarlo; si se repite, abre el registro de abajo y envíalo al soporte.",
   hostKeyChangedTitle: "La clave del servidor ha cambiado",
   failure: {
     "provider-login": "No se ha verificado el acceso al proveedor. Vuelve a intentarlo.",
@@ -252,6 +264,9 @@ const fr: StateCopy = {
   versionIncompatibleMessage: "La version installée ne correspond pas à celle requise par cette application. L’équipe n’a pas été lancée.",
   containerStartTitle: "Échec du démarrage du conteneur",
   containerStartMessage: "Le conteneur de l’équipe n’est pas prêt. L’équipe n’a pas été lancée.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Cause : {cause}",
+  failureCauseRetry: "Réessaie ; si cela se reproduit, ouvre le journal ci-dessous et envoie-le au support.",
   hostKeyChangedTitle: "Clé du serveur modifiée",
   failure: {
     "provider-login": "La connexion au fournisseur n’a pas été vérifiée. Réessaie.",
@@ -310,6 +325,9 @@ const hu: StateCopy = {
   versionIncompatibleMessage: "A telepített verzió nem egyezik azzal, amelyre az alkalmazásnak szüksége van. A csapat nem indult el.",
   containerStartTitle: "A konténer nem indult el",
   containerStartMessage: "A csapat konténere nem áll készen. A csapat nem indult el.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Ok: {cause}",
+  failureCauseRetry: "Próbáld újra; ha megismétlődik, nyisd meg a lenti naplót, és küldd el a támogatásnak.",
   hostKeyChangedTitle: "Megváltozott a szerver kulcsa",
   failure: {
     "provider-login": "A szolgáltatói bejelentkezés nincs ellenőrizve. Próbáld újra.",
@@ -368,6 +386,9 @@ const pt: StateCopy = {
   versionIncompatibleMessage: "A versão instalada não corresponde à que esta aplicação precisa. A equipa não foi iniciada.",
   containerStartTitle: "Falha ao iniciar o contentor",
   containerStartMessage: "O contentor da equipa não está pronto. A equipa não foi iniciada.",
+  /** Why a local step failed, as it said (detail of the native error). */
+  failureCause: "Causa: {cause}",
+  failureCauseRetry: "Tenta novamente; se voltar a acontecer, abre o registo abaixo e envia-o ao suporte.",
   hostKeyChangedTitle: "A chave do servidor mudou",
   failure: {
     "provider-login": "O acesso ao fornecedor não foi verificado. Tenta novamente.",

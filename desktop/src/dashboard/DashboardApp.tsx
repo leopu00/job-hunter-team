@@ -106,9 +106,38 @@ const PROVIDER_RUNTIME_ERRORS = new Set([
   "provider_timeout",
 ]);
 
+/**
+ * The cause a failed local step printed (the native error's `detail`, one
+ * redacted line: src-tauri/src/runtime_log.rs failure_cause), when it has one.
+ */
+function failureDetail(detail: unknown): string | null {
+  if (typeof detail !== "string") return null;
+  const line = detail.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return line ? line.slice(0, 300) : null;
+}
+
+/** The codes whose catalog action is only a guess (the network, a retry): the cause replaces it. */
+const CAUSE_REPLACES_ACTION = new Set([
+  "runtime_install_failed",
+  "container_start_failed",
+  "container_not_ready",
+  "runtime_wrapper_probe_failed",
+  "timeout",
+  "container_timeout",
+]);
+
+/** «Cause: …», then what to do: the catalog's own action, or retry and the log. */
+function actionWithCause(code: string, action: string, cause: string | null): string {
+  if (!cause) return action;
+  const text = stateText();
+  const said = text.failureCause.replace("{cause}", cause);
+  const sentence = /[.!?…]$/.test(said) ? said : `${said}.`;
+  return CAUSE_REPLACES_ACTION.has(code) ? `${sentence} ${text.failureCauseRetry}` : `${action} ${sentence}`;
+}
+
 function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
-    ? error as { code?: unknown; message?: unknown; retryable?: unknown }
+    ? error as { code?: unknown; message?: unknown; retryable?: unknown; detail?: unknown }
     : {};
   if (typeof value.code !== "string" || !SAFE_RUNTIME_ERROR_CODE.test(value.code) ||
       typeof value.message !== "string" || !value.message.trim() ||
@@ -141,24 +170,26 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       retryable: false,
     };
   }
+  const cause = failureDetail(value.detail);
   if (stage === "container") {
     return {
       status: "failed",
       stage,
       title: stateText().containerStartTitle,
       message: stateText().containerStartMessage,
-      action: describeError(value.code, { locale: appLocale() }).action,
+      action: actionWithCause(value.code, describeError(value.code, { locale: appLocale() }).action, cause),
       code: value.code,
       retryable: value.retryable,
     };
   }
-  // The sentence comes from the app's catalog, never from the native message.
+  // The sentence comes from the app's catalog, never from the native message;
+  // the cause is the step's own line, redacted on the native side.
   const described = describeError(value.code, { locale: appLocale() });
   return {
     status: "failed",
     stage,
     message: described.text,
-    action: described.action,
+    action: actionWithCause(value.code, described.action, cause),
     code: value.code,
     retryable: value.retryable,
   };

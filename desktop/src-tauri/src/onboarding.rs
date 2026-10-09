@@ -656,6 +656,10 @@ pub(crate) struct OnboardingError {
     /// `provider_limits_exhausted`.
     #[serde(skip_serializing_if = "Option::is_none")]
     resets_at: Option<i64>,
+    /// Why a local runtime step failed, in its own words (one line, redacted:
+    /// runtime_log::failure_cause), when it said so.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -770,6 +774,15 @@ fn failure(code: &'static str) -> OnboardingError {
         message: code,
         retryable,
         resets_at: None,
+        detail: None,
+    }
+}
+
+/// A local runtime step's error, with the cause the step printed.
+fn with_cause(error: OnboardingError, log: Option<&RuntimeLog>) -> OnboardingError {
+    OnboardingError {
+        detail: log.and_then(RuntimeLog::take_cause),
+        ..error
     }
 }
 
@@ -2179,12 +2192,15 @@ fn prepare_impl(
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(install_local(
-                    &app,
-                    diagnostics.as_ref(),
-                    runtime_log.as_ref(),
-                    &|message| reporter.phase(message),
-                )?),
+                ValidatedHost::Local => Some(
+                    install_local(
+                        &app,
+                        diagnostics.as_ref(),
+                        runtime_log.as_ref(),
+                        &|message| reporter.phase(message),
+                    )
+                    .map_err(|error| with_cause(error, runtime_log.as_ref()))?,
+                ),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -2257,6 +2273,7 @@ fn prepare_impl(
                     thread::sleep,
                     LOCAL_CONTAINER_VERIFY_ATTEMPTS,
                 )
+                .map_err(|error| with_cause(error, runtime_log.as_ref()))
             }
             ValidatedHost::Vps { .. } => ensure_success(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
@@ -5506,6 +5523,23 @@ esac
             "{text}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A failed local step gives its error the cause it printed, once; the
+    /// screen reads it as `detail`, and an error without one has no field.
+    #[test]
+    fn a_local_step_error_carries_the_cause_it_printed() {
+        let dir = std::env::temp_dir().join(format!("jht-runtime-cause-{}", std::process::id()));
+        let log = super::RuntimeLog::in_dir(&dir.join("logs"));
+        log.record("install.ps1", Ok(1), b"  x winget could not install Podman.CLI\n", b"", std::time::Duration::ZERO);
+        let error = super::with_cause(failure("runtime_install_failed"), Some(&log));
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["code"], "runtime_install_failed");
+        assert_eq!(json["detail"], "winget could not install Podman.CLI");
+        let again = serde_json::to_value(super::with_cause(failure("runtime_install_failed"), Some(&log))).unwrap();
+        assert!(again.get("detail").is_none());
+        assert!(serde_json::to_value(super::with_cause(failure("timeout"), None)).unwrap().get("detail").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
