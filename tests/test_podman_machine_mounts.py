@@ -75,6 +75,10 @@ fi
 case "$1:$2" in
   machine:start)
     [ "${JHT_TEST_WAKE_SUCCESS:-0}" = 1 ] || exit 93
+    case " $* " in
+      *" --update-connection=false "*) ;;
+      *) printf '%s\n' jht-podman > "$JHT_TEST_DEFAULT_CONNECTION" ;;
+    esac
     for dir in "$HOME/.jht" "$HOME/Documents/Job Hunter Team"; do
       [ -d "$dir" ] || { printf 'missing %s\\n' "$dir" >> "$JHT_TEST_DOCKER_LOG"; exit 125; }
     done
@@ -86,6 +90,10 @@ case "$1:$2" in
     : > "$JHT_TEST_BROKER_SECRETS"
     exit 0 ;;
   machine:init)
+    case " $* " in
+      *" --update-connection=false "*) ;;
+      *) printf '%s\n' jht-podman > "$JHT_TEST_DEFAULT_CONNECTION" ;;
+    esac
     shift 2
     mounts=""
     while [ $# -gt 1 ]; do
@@ -230,6 +238,8 @@ def test_a_confined_machine_is_used_and_up_creates_both_folders_before_starting(
     assert not any(line.startswith("missing ") for line in calls), calls
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
     assert oct((home / ".jht").stat().st_mode & 0o777) == "0o700"
+    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
+    assert not any("system connection default" in line for line in calls)
     assert result.returncode != 78
 
 
@@ -364,12 +374,16 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log = tmp_path / "calls.log"
+    default = tmp_path / "default-connection"
+    default.write_text("personal-podman\n", encoding="utf-8")
     fakes = {
         "brew": "exit 0",
         "podman": (
             'printf "podman %s\\n" "$*" >> "$LOG"\n'
             'case "$1" in --version) echo "podman version 6.1.3"; exit 0 ;; esac\n'
-            'case "$1:$2" in machine:inspect) exit 125 ;; machine:init) exit 0 ;; esac\n'
+            'case "$1:$2" in machine:inspect) exit 125 ;; machine:init) '
+            'case " $* " in *" --update-connection=false "*) ;; '
+            '*) echo jht-podman > "$DEFAULT_CONNECTION" ;; esac; exit 0 ;; esac\n'
             'exit 0'
         ),
         "podman-compose": 'echo "podman-compose version 1.6.0"',
@@ -382,6 +396,7 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
         "HOME": str(home),
         "PATH": f"{bin_dir}:/usr/bin:/bin",
         "LOG": str(log),
+        "DEFAULT_CONNECTION": str(default),
         "JHT_INSTALLER_SOURCE_ONLY": "1",
     }
     script = f'. "{INSTALLER}"; DRY_RUN=0; PODMAN_MACHINE_NAME=jht-podman; install_podman_macos'
@@ -398,6 +413,8 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     assert "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer" in log.read_text(
         encoding="utf-8"
     ).splitlines()
+    assert default.read_text(encoding="utf-8").strip() == "personal-podman"
+    assert "system connection default" not in log.read_text(encoding="utf-8")
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
 
 
