@@ -62,12 +62,20 @@ S = {
         "agent_socket": [{"path": "/run/jht-broker/broker.sock", "error": "FileNotFoundError"}],
         "websockify_no_token": DEAD, "websockify_wrong_token": DEAD,
         "mountinfo": TWIN_MOUNTINFO, "unshare_user": True,
+        # The twin's x11vnc on a random port, with a password; websockify and
+        # the launcher do not speak RFB.
+        "vnc": [{"local": "127.0.0.1:41234", "rfb": True, "version": "RFB 003.008", "types": [2]},
+                {"local": "0.0.0.0:6081", "rfb": False}, {"local": "127.0.0.1:6082", "rfb": False}],
     },
     "broker_side": {"uid": 1002, "canaries": {"/jht_secrets/.isolation-canary": True,
                                               "/jht_broker_state/.isolation-canary": True},
-                    "sockets": {"/run/jht-broker": True}, "unshare_user": False, "mountinfo": BROKER_MOUNTINFO},
+                    "sockets": {"/run/jht-broker": True}, "unshare_user": False, "mountinfo": BROKER_MOUNTINFO,
+                    "legacy_profile": False},
     "broker_listeners": [], "unattributed_listeners": [],
     "websockify_listening": True, "websockify_control": RFB,
+    "declared_vnc": "127.0.0.1:41234",
+    "browser_profile": {"volume": "jhtisolation_jht-browser-profile", "marker": gate.MARKER_TEXT,
+                        "files": ["Default/Cookies", "Default/jht-gate-marker", "Local State"]},
 }
 
 # Today's design: Chromium is uid 1002 in the broker's own container.
@@ -82,6 +90,14 @@ TODAY["attack"].update(
     mountinfo=BROKER_MOUNTINFO,
 )
 TODAY["broker_side"]["unshare_user"] = True
+TODAY["broker_side"]["legacy_profile"] = True
+# x11vnc -nopw on 127.0.0.1:5901, and on ::1 too (measured, run 37924134385).
+TODAY["attack"]["vnc"] = [{"local": "127.0.0.1:5901", "rfb": True, "types": [1]},
+                          {"local": "[::1]:5900", "rfb": True, "types": [1]},
+                          {"local": "[::1]:5901", "rfb": True, "types": [1]},
+                          {"local": "0.0.0.0:6081", "rfb": False}]
+TODAY["declared_vnc"] = "127.0.0.1:5901"
+TODAY["browser_profile"] = {"volume": None}
 TODAY["broker_listeners"] = ["tcp LISTEN 0 32 127.0.0.1:5901 0.0.0.0:* users:((\"x11vnc\",pid=60,fd=7))",
                              "u_str LISTEN 0 4096 @/tmp/.X11-unix/X101 31 * 0 users:((\"Xvfb\",pid=40,fd=5))"]
 
@@ -138,6 +154,20 @@ def _broken(path, value):
     (("broker_side", "canaries"), {"/jht_secrets/.isolation-canary": "PermissionError"}, "canary"),
     (("broker_side", "sockets"), {"/run/jht-broker": False}, "socket-control"),
     (("attack", "uid"), 1002, "attacker"),
+    (("attack", "vnc"), [{"local": "[::1]:41234", "rfb": True, "types": [2]}], "vnc-address"),
+    (("attack", "vnc"), [{"local": "0.0.0.0:41234", "rfb": True, "types": [2]}], "vnc-address"),
+    (("attack", "vnc"), [{"local": "127.0.0.1:41234", "rfb": True, "types": [2]},
+                         {"local": "127.0.0.1:5900", "rfb": True, "types": [2]}], "vnc-port"),
+    (("attack", "vnc"), [{"local": "127.0.0.1:41234", "rfb": True, "types": [1, 2]}], "vnc-nopw"),
+    (("attack", "vnc"), [{"local": "127.0.0.1:41234", "rfb": True, "types": None}], "vnc-nopw"),
+    (("attack", "vnc"), [{"local": "127.0.0.1:41234", "rfb": False}], "vnc-control"),
+    (("declared_vnc",), None, "vnc-control"),
+    (("browser_profile",), {"volume": None}, "browser-profile"),
+    (("browser_profile", "files"), ["Default/Login Data-journal", "Default/jht-gate-marker"], "profile-copy"),
+    (("browser_profile", "files"), ["Default/Account Web Data", "Default/jht-gate-marker"], "profile-copy"),
+    (("browser_profile", "files"), ["Default/Login Data For Account-wal"], "profile-copy"),
+    (("browser_profile", "marker"), None, "profile-copy-control"),
+    (("broker_side", "legacy_profile"), True, "profile-left"),
 ])
 def test_every_broken_fact_fails_with_its_tag(path, value, tag):
     assert tag in _tags(_broken(path, value))
@@ -254,3 +284,33 @@ def test_the_workflow_runs_the_gate_under_docker_and_rootless_podman():
     # fixed red on master or master-arthur.
     assert workflow["on"]["push"]["branches"] == ["ci-**"]
     assert "workflow_dispatch" in workflow["on"]
+
+
+def test_the_declared_vnc_is_websockify_s_live_peer():
+    rows = gate.parse_ss(
+        'tcp   ESTAB 0 0 127.0.0.1:6081 127.0.0.1:50000 users:(("python3",pid=58,fd=9))\n'
+        'tcp   ESTAB 0 0 127.0.0.1:50122 127.0.0.1:41234 users:(("python3",pid=58,fd=10))\n'
+        'tcp   ESTAB 0 0 127.0.0.1:41234 127.0.0.1:50122 users:(("x11vnc",pid=60,fd=8))\n'
+        'u_str ESTAB 0 0 * 31 * 32 users:(("python3",pid=58,fd=4))\n'
+    )
+    assert gate.declared_vnc(rows, lambda pid: pid == 58, 6081) == "127.0.0.1:41234"
+    assert gate.declared_vnc(rows, lambda pid: False, 6081) is None
+
+
+def test_addresses_and_profile_files():
+    assert gate.split_address("[::1]:5900") == ("::1", 5900)
+    assert gate.split_address("127.0.0.1:5901") == ("127.0.0.1", 5901)
+    assert gate.split_address("*:5900") == ("*", 5900)
+    for name in ("Default/Login Data", "Default/Login Data-journal", "Default/Login Data For Account-wal",
+                 "Default/Web Data", "Default/Account Web Data", "Default/Account Web Data-wal"):
+        assert gate.excluded_profile_file(name), name
+    for name in ("Default/Cookies", "Local State", "Default/Preferences", "Default/jht-gate-marker"):
+        assert not gate.excluded_profile_file(name), name
+
+
+def test_the_seed_and_the_listing_compile_and_seed_what_the_copy_must_drop():
+    compile(gate.SEED, "seed", "exec")
+    compile(gate.LIST_PROFILE, "list", "exec")
+    for name in ("Login Data", "Login Data For Account", "Web Data", "Account Web Data",
+                 "Login Data-journal", "Login Data For Account-wal", "Web Data-journal", "Account Web Data-wal"):
+        assert f'"{name}"' in gate.SEED, name

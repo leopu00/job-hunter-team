@@ -46,6 +46,21 @@ profile, same no-new-privileges. It FAILS unless:
 8. Podman only: [uid-map] the uid maps of the broker and of Chromium differ,
    and the broker's host uid is printed with whether Chromium's namespace
    maps it.
+9. VNC: every TCP listener of the shared network namespace is probed for an
+   RFB greeting. The declared VNC is the one websockify really connects to
+   while the host's token connection is open (ss on the websockify
+   process). [vnc-address] no VNC on anything but 127.0.0.1 (::1 included);
+   [vnc-port] no VNC on another port; [vnc-nopw] no VNC that offers the
+   security type None. [vnc-control] at least one VNC found, and the
+   declared one known.
+10. The LinkedIn profile: before the stack starts, a profile is seeded in
+   jht-secrets as an existing user has it (Login Data, Web Data, Account Web
+   Data, their -journal and -wal, and a marker file). After the view:
+   [browser-profile] a jht-browser-profile volume exists (on today's design
+   it does not: not applicable, red); [profile-copy] it holds no *Login
+   Data* or *Web Data* file; [profile-copy-control] it holds the marker,
+   so the copy happened; [profile-left] the profile is gone from
+   jht-secrets.
 
 On today's design (Chromium uid 1002 in the broker's container) the gate is
 RED by design; the expected checks are declared in EXPECTED_RED_TODAY and
@@ -78,6 +93,10 @@ AGENT_SIDE = ("jht", "jht-telegram")
 BROKER_VOLUMES = ("jht-secrets", "jht-broker-state", "jht-broker-sock")
 SECRET_VOLUMES = {"jht-secrets": "secrets", "jht-broker-state": "broker-state"}
 CANARY = ".isolation-canary"
+PROFILE_VOLUME = "jht-browser-profile"
+LEGACY_PROFILE = "linkedin-profile"
+MARKER = "Default/jht-gate-marker"
+MARKER_TEXT = "seeded by the P2-3 isolation gate"
 CHROMIUM_PROGRAMS = ("chrome", "chromium", "chromium-browser")
 
 # Today's design (Chromium is uid 1002 in the broker's container). Kept by
@@ -87,11 +106,14 @@ CHROMIUM_PROGRAMS = ("chrome", "chromium", "chromium-browser")
 #   even with the same uid; the jht-broker profile alone would allow it;
 # - agent-socket: the broker refuses every peer uid but 1001 already;
 # - websockify: a wrong token already gets a dead target.
+# Red today in 9 and 10: x11vnc runs with -nopw and listens on ::1 too (5900
+# and 5901); no jht-browser-profile volume, the profile stays in jht-secrets.
 EXPECTED_RED_TODAY = {
     "docker": {"secrets", "broker-state", "chromium-uid", "proc", "signal", "loopback", "mounts",
-               "broker-userns"},
+               "broker-userns", "vnc-address", "vnc-port", "vnc-nopw", "browser-profile", "profile-left"},
     "podman": {"secrets", "broker-state", "chromium-uid", "proc", "signal", "loopback", "mounts",
-               "broker-userns", "uid-map"},
+               "broker-userns", "uid-map", "vnc-address", "vnc-port", "vnc-nopw", "browser-profile",
+               "profile-left"},
 }
 
 # Runs in Chromium's container with Chromium's uid. argv[1]: the context.
@@ -238,6 +260,39 @@ if ctx.get("ws_port"):
     out["websockify_no_token"] = websocket(ctx["ws_port"], "")
     out["websockify_wrong_token"] = websocket(ctx["ws_port"], "?token=" + base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))
 
+def recv_exact(conn, size):
+    data = b""
+    while len(data) < size:
+        chunk = conn.recv(size - len(data))
+        if not chunk:
+            break
+        data += chunk
+    return data
+
+def rfb_probe(local):
+    host, _, port = local.rpartition(":")
+    host = host.strip("[]")
+    host = {"*": "127.0.0.1", "0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as conn:
+            conn.settimeout(3)
+            conn.connect((host, int(port)))
+            hello = recv_exact(conn, 12)
+            if not hello.startswith(b"RFB "):
+                return {"local": local, "rfb": False}
+            conn.sendall(hello)
+            if hello[4:11] == b"003.003":
+                types = [int.from_bytes(recv_exact(conn, 4), "big")]
+            else:
+                count = recv_exact(conn, 1)
+                types = list(recv_exact(conn, count[0])) if count else None
+            return {"local": local, "rfb": True, "version": hello.decode(errors="replace").strip(), "types": types}
+    except (OSError, ValueError) as exc:
+        return {"local": local, "error": type(exc).__name__}
+
+out["vnc"] = [rfb_probe(local) for local in ctx.get("tcp_listeners") or []]
+
 try:
     out["mountinfo"] = open("/proc/self/mountinfo").read().splitlines()
 except OSError as exc:
@@ -276,12 +331,58 @@ for kind, dests in ctx["secret_dirs"].items():
             placed[path] = type(exc).__name__
 out["canaries"] = placed
 out["sockets"] = {d: os.path.exists(f"{d}/broker.sock") for d in ctx["sock_dirs"]}
+out["legacy_profile"] = any(os.path.lexists(f"{d}/{ctx['legacy_profile']}") for d in ctx["secret_dirs"]["jht-secrets"])
 pid = os.fork()
 if pid == 0:
     os._exit(0 if libc.unshare(0x10000000) == 0 else 1)
 out["unshare_user"] = os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0
 out["mountinfo"] = open("/proc/self/mountinfo").read().splitlines()
 print(json.dumps(out))
+'''
+
+
+# Runs as root in a throwaway container with jht-secrets on /jht_secrets,
+# before the stack starts: the profile an existing user has (the broker's
+# Chromium wrote it), with the files the copy must leave behind.
+SEED = r'''
+import json, os, sqlite3, sys
+ctx = json.loads(sys.argv[1])
+root = "/jht_secrets"
+profile = os.path.join(root, ctx["legacy_profile"])
+default = os.path.join(profile, "Default")
+os.makedirs(default, exist_ok=True)
+for name in ("Login Data", "Login Data For Account", "Web Data", "Account Web Data", "Cookies"):
+    db = sqlite3.connect(os.path.join(default, name))
+    db.execute("CREATE TABLE IF NOT EXISTS jht_gate (x INTEGER)")
+    db.commit()
+    db.close()
+for name in ("Login Data-journal", "Login Data For Account-wal", "Web Data-journal", "Account Web Data-wal"):
+    open(os.path.join(default, name), "wb").close()
+with open(os.path.join(profile, ctx["marker"]), "w") as handle:
+    handle.write(ctx["marker_text"])
+if os.stat(root).st_uid == 0:
+    os.chown(root, 1002, 1002)
+    os.chmod(root, 0o700)
+for top, dirs, files in os.walk(profile):
+    for name in [top] + [os.path.join(top, n) for n in dirs + files]:
+        os.chown(name, 1002, 1002)
+os.chmod(profile, 0o700)
+print(json.dumps({"seeded": sorted(os.path.relpath(os.path.join(t, f), profile) for t, _, fs in os.walk(profile) for f in fs)}))
+'''
+
+# Runs as root in a throwaway container with the browser's profile volume
+# read-only on /p.
+LIST_PROFILE = r'''
+import json, os, sys
+marker = os.path.join("/p", sys.argv[1])
+files = []
+for top, dirs, names in os.walk("/p"):
+    for name in names + [d for d in dirs if os.path.islink(os.path.join(top, d))]:
+        files.append(os.path.relpath(os.path.join(top, name), "/p"))
+text = None
+if os.path.isfile(marker):
+    text = open(marker).read()
+print(json.dumps({"files": sorted(files)[:2000], "marker": text}))
 '''
 
 
@@ -330,7 +431,8 @@ def parse_ss(text: str) -> list[dict]:
         fields = line.split()
         if len(fields) < 5:
             continue
-        rows.append({"netid": fields[0], "local": fields[4],
+        rows.append({"netid": fields[0], "state": fields[1], "local": fields[4],
+                     "peer": fields[5] if len(fields) > 5 else "",
                      "pids": sorted({int(p) for p in re.findall(r"pid=(\d+)", line)}),
                      "line": line.strip()})
     return rows
@@ -362,6 +464,30 @@ def volume_mounts(mountinfo: list[str], volumes: list[dict]) -> list[str]:
             if (source and root == source) or root.endswith(f"/{volume['name']}/_data"):
                 hits.append(f"{volume['name']} on {fields[4]}")
     return sorted(set(hits))
+
+
+def split_address(local: str) -> tuple[str, int]:
+    """`127.0.0.1:5901`, `[::1]:5900`, `*:5900` -> (host, port)."""
+    host, _, port = local.rpartition(":")
+    return host.strip("[]"), int(port)
+
+
+def excluded_profile_file(path: str) -> bool:
+    """What the copy of the profile must leave behind: the password manager
+    and autofill databases, with their -journal and -wal."""
+    name = os.path.basename(path)
+    return "Login Data" in name or "Web Data" in name
+
+
+def declared_vnc(rows: list[dict], is_websockify, ws_port: int) -> str | None:
+    """The VNC websockify really talks to: the peer of its established TCP
+    connection that is not its own listening port."""
+    for row in rows:
+        if row["netid"] != "tcp" or row["state"] != "ESTAB" or not any(is_websockify(p) for p in row["pids"]):
+            continue
+        if split_address(row["local"])[1] != ws_port:
+            return row["peer"]
+    return None
 
 
 def rfb(answer: dict | None) -> bool:
@@ -453,6 +579,35 @@ def verdict(facts: dict, engine: str) -> list[tuple[str, str]]:
         fail("broker-userns", "the broker's Python created a user namespace")
     if attack.get("unshare_user") is not True:
         fail("userns-control", "Chromium's uid cannot create a user namespace: its sandbox would not start")
+
+    # 9. VNC
+    declared = facts.get("declared_vnc")
+    found = [v for v in attack.get("vnc") or [] if v.get("rfb")]
+    if not found or not declared:
+        fail("vnc-control", f"VNC listeners found {found}, declared {declared}: the scan proves nothing")
+    else:
+        want_host, want_port = split_address(declared)
+        for vnc in found:
+            host, port = split_address(vnc["local"])
+            if host != "127.0.0.1":
+                fail("vnc-address", f"VNC on {vnc['local']}: only 127.0.0.1 may carry it")
+            if port != want_port:
+                fail("vnc-port", f"VNC on {vnc['local']}, the declared one is {declared}")
+            if vnc.get("types") is None or 1 in vnc["types"]:
+                fail("vnc-nopw", f"VNC on {vnc['local']} offers no password (security types {vnc.get('types')})")
+
+    # 10. The profile
+    profile = facts.get("browser_profile") or {}
+    if not profile.get("volume"):
+        fail("browser-profile", f"no {PROFILE_VOLUME} volume in the project (today's design: not applicable)")
+    else:
+        copied = [f for f in profile.get("files") or [] if excluded_profile_file(f)]
+        if copied:
+            fail("profile-copy", f"{PROFILE_VOLUME} holds {copied[:8]}")
+        if profile.get("marker") != MARKER_TEXT:
+            fail("profile-copy-control", f"the seeded profile was not copied: no {MARKER} in {PROFILE_VOLUME}")
+    if broker.get("legacy_profile") is not False:
+        fail("profile-left", f"the profile is still in jht-secrets ({LEGACY_PROFILE})")
 
     # 8. Podman: the uid maps
     if engine == "podman":
@@ -572,7 +727,7 @@ def broker_volumes(engine: str, cid: str) -> list[dict]:
     return found
 
 
-def websocket_with_token(port: int, token: str) -> dict:
+def websocket_with_token(port: int, token: str, while_open=None) -> tuple[dict, str]:
     key = base64.b64encode(secrets.token_bytes(16)).decode()
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
@@ -588,11 +743,12 @@ def websocket_with_token(port: int, token: str) -> dict:
                 if not chunk:
                     break
                 data += chunk
+            seen = while_open() if while_open else ""
     except OSError as exc:
-        return {"error": type(exc).__name__}
+        return {"error": type(exc).__name__}, ""
     head, _, body = data.partition(b"\r\n\r\n")
     return {"status": head.split(b"\r\n", 1)[0].decode(errors="replace"),
-            "body_b64": base64.b64encode(body[:64]).decode()}
+            "body_b64": base64.b64encode(body[:64]).decode()}, seen
 
 
 def wait_for(what, timeout: float, step: float = 1.0):
@@ -607,6 +763,16 @@ def wait_for(what, timeout: float, step: float = 1.0):
 
 def collect(engine: str, image: str, files: list[str]) -> dict:
     env = {**os.environ, "JHT_IMAGE": image}
+    # 10: the existing user's profile, in place before anything starts.
+    created = sh([*compose_cmd(engine, files), "up", "--no-start", *services(files)], timeout=600, env=env)
+    if created.returncode != 0:
+        return {"error": f"compose up --no-start failed: {(created.stderr or created.stdout)[-800:]}"}
+    seeded = sh([engine, "run", "--rm", "--user", "0", "--network", "none", "-v", f"{PROJECT}_jht-secrets:/jht_secrets",
+                 "--entrypoint", "python3", image, "-c", SEED,
+                 json.dumps({"legacy_profile": LEGACY_PROFILE, "marker": MARKER, "marker_text": MARKER_TEXT})])
+    print(f"MEASURE seed exit={seeded.returncode} {seeded.stdout.strip()[-600:]}")
+    if seeded.returncode != 0:
+        return {"error": f"the profile could not be seeded: {seeded.stderr[-600:]}"}
     up = sh([*compose_cmd(engine, files), "up", "-d", *services(files)], timeout=600, env=env)
     print(f"MEASURE compose-up exit={up.returncode} services={services(files)}")
     if up.returncode != 0:
@@ -626,7 +792,7 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
     if len({v["volume"] for v in broker["volumes"]}) != len(BROKER_VOLUMES):
         return {"error": f"the broker does not mount its three volumes: {broker['volumes']}"}
     dirs = {v["volume"]: v["destination"] for v in broker["volumes"]}
-    ctx = {"canary": CANARY, "sock_dirs": [dirs["jht-broker-sock"]],
+    ctx = {"canary": CANARY, "sock_dirs": [dirs["jht-broker-sock"]], "legacy_profile": LEGACY_PROFILE,
            "secret_dirs": {name: [dirs[name]] for name in SECRET_VOLUMES}}
     if not wait_for(lambda: exec_json(engine, broker_cid, str(broker["uid"]), BROKER_SIDE, ctx)
                     .get("sockets", {}).get(dirs["jht-broker-sock"]), 60, 2):
@@ -663,8 +829,15 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
     unattributed = [r["line"] for r in rows if not r["pids"]]
 
     # The host's own connection, with the issued token, before it expires.
-    control = websocket_with_token(int(view.get("port") or 6081), view["token"])
-    print("MEASURE websockify-control " + json.dumps(control))
+    # While it is open, websockify's own connection to the VNC server is the
+    # declared VNC (9).
+    def established() -> str:
+        return sh(["sudo", "nsenter", "-t", str(chromium["pid"]), "-n", "ss", "-H", "-t", "-x", "-n", "-p"]).stdout
+
+    control, live = websocket_with_token(int(view.get("port") or 6081), view["token"], while_open=established)
+    vnc_target = declared_vnc(parse_ss(live), lambda p: websockify(host_argv(p)), ws_port)
+    print("MEASURE websockify-control " + json.dumps(control) + f" declared-vnc={vnc_target}")
+    ctx["tcp_listeners"] = sorted({r["local"] for r in rows if r["netid"] == "tcp"})
 
     ctx["ws_port"] = ws_port
     user = f"{chromium['uid']}:{chromium['gid']}"
@@ -677,9 +850,21 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
               f"{inside_id(broker['host_uid'], chromium['uid_map'])}")
     yama = Path("/proc/sys/kernel/yama/ptrace_scope")
     print(f"MEASURE yama-ptrace-scope={yama.read_text().strip() if yama.exists() else 'absent'}")
+    profile = {"volume": None}
+    names = sh([engine, "volume", "ls", "-q"]).stdout.split()
+    volume = next((n for n in names if n == f"{PROJECT}_{PROFILE_VOLUME}"), None)
+    if volume:
+        listed = sh([engine, "run", "--rm", "--user", "0", "--network", "none", "-v", f"{volume}:/p:ro",
+                     "--entrypoint", "python3", image, "-c", LIST_PROFILE, MARKER])
+        try:
+            profile = {"volume": volume, **json.loads(listed.stdout.strip().splitlines()[-1])}
+        except (IndexError, json.JSONDecodeError):
+            profile = {"volume": volume, "files": [], "marker": None, "error": listed.stderr[-400:]}
+    print("MEASURE browser-profile " + json.dumps({**profile, "files": (profile.get("files") or [])[:40]}))
     return {"broker": broker, "chromium": chromium, "attack": attack, "broker_side": broker_side,
             "broker_listeners": broker_listeners, "unattributed_listeners": unattributed,
-            "websockify_listening": bool(ws_rows), "websockify_control": control}
+            "websockify_listening": bool(ws_rows), "websockify_control": control,
+            "declared_vnc": vnc_target, "browser_profile": profile}
 
 
 def main(argv: list[str]) -> int:
