@@ -9,6 +9,15 @@
 import type { Dictionary } from "@/lib/i18n-dict";
 
 export const T = {
+  not_toggled: {
+    it: "Canale NON aggiornato:",
+    en: "Channel NOT updated:",
+    hu: "A csatorna NEM frissült:",
+    es: "Canal NO actualizado:",
+    de: "Kanal NICHT aktualisiert:",
+    fr: "Canal NON mis à jour :",
+    pt: "Canal NÃO atualizado:",
+  },
   title: {
     it: "Canali",
     en: "Channels",

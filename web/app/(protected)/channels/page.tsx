@@ -6,6 +6,7 @@ import { useLocale } from "@/lib/use-locale";
 import { intlTag } from "@/lib/locale-tag";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import { attemptWrite } from "@/lib/write-failure";
 
 type ChannelId = "web" | "cli" | "telegram" | "email" | "slack" | "webhook";
 type Caps = {
@@ -187,12 +188,21 @@ export default function ChannelsPage() {
     return () => clearInterval(id);
   }, [fetchChannels]);
 
+  // The list is reloaded from the route either way; a refused toggle also
+  // says so, instead of passing in silence.
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const toggleChannel = async (id: ChannelId, enabled: boolean) => {
-    await fetch("/api/channels", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, enabled }),
-    }).catch(() => null);
+    const result = await attemptWrite(
+      locale,
+      "/api/channels",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      },
+      { expectOk: true },
+    );
+    setToggleError(result.ok ? null : `${tr("not_toggled")} ${result.reason}`);
     fetchChannels();
   };
 
@@ -231,6 +241,15 @@ export default function ChannelsPage() {
             .replace("{a}", String(channels.filter((c) => c.enabled).length))
             .replace("{t}", String(channels.length))}
         </p>
+        {toggleError && (
+          <p
+            role="alert"
+            className="mt-2 text-[11px]"
+            style={{ color: "var(--color-red)" }}
+          >
+            {toggleError}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-1 mb-6">

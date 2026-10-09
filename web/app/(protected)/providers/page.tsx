@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { writeFailureReason } from "@/lib/write-failure";
 
 const T: Record<
   Locale,
   {
     confirmUpdate: (count: number, sessions: string) => string;
     updatedTo: (ver: string) => string;
-    unknownError: string;
+    notUpdated: string;
     configured: string;
     notConfigured: string;
     updateBadge: string;
@@ -37,7 +38,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `Il provider è attivo. Update richiede di stoppare ${count} sessioni (${sessions}). Continuare?`,
     updatedTo: (ver) => `aggiornato a ${ver}`,
-    unknownError: "errore sconosciuto",
+    notUpdated: "CLI NON aggiornata:",
     configured: "configurato",
     notConfigured: "non configurato",
     updateBadge: "update",
@@ -64,7 +65,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `The provider is active. Update requires stopping ${count} sessions (${sessions}). Continue?`,
     updatedTo: (ver) => `updated to ${ver}`,
-    unknownError: "unknown error",
+    notUpdated: "CLI NOT updated:",
     configured: "configured",
     notConfigured: "not configured",
     updateBadge: "update",
@@ -91,7 +92,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `El proveedor está activo. Update requiere detener ${count} sesiones (${sessions}). ¿Continuar?`,
     updatedTo: (ver) => `actualizado a ${ver}`,
-    unknownError: "error desconocido",
+    notUpdated: "CLI NO actualizada:",
     configured: "configurado",
     notConfigured: "no configurado",
     updateBadge: "update",
@@ -118,7 +119,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `Le fournisseur est actif. Update nécessite d'arrêter ${count} sessions (${sessions}). Continuer ?`,
     updatedTo: (ver) => `mis à jour vers ${ver}`,
-    unknownError: "erreur inconnue",
+    notUpdated: "CLI NON mise à jour :",
     configured: "configuré",
     notConfigured: "non configuré",
     updateBadge: "update",
@@ -145,7 +146,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `Der Anbieter ist aktiv. Update erfordert das Stoppen von ${count} Sitzungen (${sessions}). Fortfahren?`,
     updatedTo: (ver) => `aktualisiert auf ${ver}`,
-    unknownError: "unbekannter Fehler",
+    notUpdated: "CLI NICHT aktualisiert:",
     configured: "konfiguriert",
     notConfigured: "nicht konfiguriert",
     updateBadge: "update",
@@ -172,7 +173,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `A szolgáltató aktív. Az Update ${count} munkamenet leállítását igényli (${sessions}). Folytatja?`,
     updatedTo: (ver) => `frissítve erre: ${ver}`,
-    unknownError: "ismeretlen hiba",
+    notUpdated: "A CLI NEM frissült:",
     configured: "beállítva",
     notConfigured: "nincs beállítva",
     updateBadge: "update",
@@ -199,7 +200,7 @@ const T: Record<
     confirmUpdate: (count, sessions) =>
       `O provedor está ativo. Update exige parar ${count} sessões (${sessions}). Continuar?`,
     updatedTo: (ver) => `atualizado para ${ver}`,
-    unknownError: "erro desconhecido",
+    notUpdated: "CLI NÃO atualizada:",
     configured: "configurado",
     notConfigured: "não configurado",
     updateBadge: "update",
@@ -262,7 +263,8 @@ function ProviderCard({
   provider: ProviderInfo;
   onUpdated: () => void;
 }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const icon = PROVIDER_ICONS[provider.id] ?? "◆";
   const [updating, setUpdating] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -275,14 +277,28 @@ function ProviderCard({
     async (force: boolean) => {
       setUpdating(true);
       setFeedback(null);
-      try {
-        const res = await fetch("/api/providers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ providerId: provider.id, force }),
+      // Updated only with the route's { ok: true }. A failure says what did
+      // NOT happen and why, from the status: the installer's stderr is not
+      // shown, it is not written for the person and not translated.
+      const fail = (status: number | null) =>
+        setFeedback({
+          kind: "err",
+          msg: `${t.notUpdated} ${writeFailureReason(locale, status)}`,
         });
-        const data = await res.json();
-        if (res.status === 409 && data.runningSessions?.length) {
+      try {
+        let res: Response;
+        try {
+          res = await fetch("/api/providers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ providerId: provider.id, force }),
+          });
+        } catch {
+          fail(null);
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        if (res.status === 409 && data?.runningSessions?.length) {
           setFeedback({
             kind: "confirm",
             msg: t.confirmUpdate(
@@ -291,29 +307,20 @@ function ProviderCard({
             ),
             pendingForce: true,
           });
-        } else if (data.ok) {
+        } else if (res.ok && data?.ok === true) {
           setFeedback({
             kind: "ok",
             msg: t.updatedTo(data.installedVersion || "?"),
           });
           onUpdated();
         } else {
-          const err = (data.stderr || data.error || t.unknownError)
-            .split("\n")
-            .slice(-3)
-            .join(" ");
-          setFeedback({ kind: "err", msg: err });
+          fail(res.ok ? 500 : res.status);
         }
-      } catch (e) {
-        setFeedback({
-          kind: "err",
-          msg: e instanceof Error ? e.message : String(e),
-        });
       } finally {
         setUpdating(false);
       }
     },
-    [provider.id, onUpdated, t],
+    [provider.id, onUpdated, t, locale],
   );
 
   return (
@@ -520,7 +527,9 @@ function ProviderCard({
                     : "#f59e0b",
             }}
           >
-            <div>{feedback.msg}</div>
+            <div role={feedback.kind === "err" ? "alert" : undefined}>
+              {feedback.msg}
+            </div>
             {feedback.pendingForce && (
               <div className="mt-2 flex gap-2">
                 <button

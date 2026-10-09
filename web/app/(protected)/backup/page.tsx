@@ -6,6 +6,7 @@ import { useLocale } from "@/lib/use-locale";
 import { intlTag } from "@/lib/locale-tag";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import { attemptWrite, writeFailureReason } from "@/lib/write-failure";
 
 type Backup = {
   id: string;
@@ -104,6 +105,13 @@ function BackupRow({
 export default function BackupPage() {
   const locale = useLocale();
   const tr = makeT(T, locale);
+  // What did NOT happen, and why: the route's reason, or a server error when
+  // a 2xx did not carry the answer of the write.
+  const notDone = (
+    key: "err_create" | "err_restore" | "err_delete",
+    result: Awaited<ReturnType<typeof attemptWrite>>,
+  ) =>
+    `${tr(key)} ${result.ok ? writeFailureReason(locale, 500) : result.reason}`;
   const [backups, setBackups] = useState<Backup[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [creating, setCreating] = useState(false);
@@ -129,7 +137,7 @@ export default function BackupPage() {
   const createBackup = async () => {
     setCreating(true);
     setMsg(null);
-    const res = await fetch("/api/backup", {
+    const result = await attemptWrite(locale, "/api/backup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -138,46 +146,46 @@ export default function BackupPage() {
           new Date().toLocaleDateString(intlTag(locale)),
         ),
       }),
-    }).catch(() => null);
+    });
     setCreating(false);
-    if (res?.ok) {
+    // Done only with the route's answer (it names the new backup).
+    if (result.ok && result.body.backup) {
       setMsg({ text: tr("created_ok"), ok: true });
       fetchBackups();
     } else {
-      const err = await res?.json().catch(() => ({}));
-      setMsg({ text: err?.error || tr("err_create"), ok: false });
+      setMsg({ text: notDone("err_create", result), ok: false });
     }
   };
 
   const restoreBackup = async (id: string) => {
     if (!confirm(tr("confirm_restore").replace("{id}", id.slice(0, 20))))
       return;
-    const res = await fetch(`/api/backup?id=${id}`, { method: "PATCH" }).catch(
-      () => null,
-    );
-    if (res?.ok) {
-      const data = await res.json();
+    const result = await attemptWrite(locale, `/api/backup?id=${id}`, {
+      method: "PATCH",
+    });
+    if (result.ok && Array.isArray(result.body.restored)) {
+      const data = result.body as { targetDir?: string; restored?: unknown[] };
       setMsg({
         text: tr("restored_ok")
-          .replace("{dir}", data.targetDir)
+          .replace("{dir}", data.targetDir ?? "")
           .replace("{n}", String(data.restored?.length ?? 0)),
         ok: true,
       });
     } else {
-      setMsg({ text: tr("err_restore"), ok: false });
+      setMsg({ text: notDone("err_restore", result), ok: false });
     }
   };
 
   const deleteBackup = async (id: string) => {
     if (!confirm(tr("confirm_delete").replace("{id}", id.slice(0, 20)))) return;
-    const res = await fetch(`/api/backup?id=${id}`, { method: "DELETE" }).catch(
-      () => null,
-    );
-    if (res?.ok) {
+    const result = await attemptWrite(locale, `/api/backup?id=${id}`, {
+      method: "DELETE",
+    });
+    if (result.ok && result.body.deleted === id) {
       setMsg({ text: tr("deleted_ok"), ok: true });
       fetchBackups();
     } else {
-      setMsg({ text: tr("err_delete"), ok: false });
+      setMsg({ text: notDone("err_delete", result), ok: false });
     }
   };
 

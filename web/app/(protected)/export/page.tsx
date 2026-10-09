@@ -5,6 +5,7 @@ import { useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import { writeFailureReason } from "@/lib/write-failure";
 
 type DataSource =
   | "sessions"
@@ -109,10 +110,11 @@ export default function ExportPage() {
       const url = `/api/export?source=${source}&format=${format}&from=${from}&to=${to}`;
       const res = await fetch(url);
       if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: tr("err_unknown") }));
-        setResult({ ok: false, msg: err.error ?? tr("err_generic") });
+        // The reason from the status, never the route's own text.
+        setResult({
+          ok: false,
+          msg: `${tr("err_generic")} ${writeFailureReason(locale, res.status)}`,
+        });
         return;
       }
       const blob = await res.blob();
@@ -129,7 +131,10 @@ export default function ExportPage() {
         msg: tr("downloaded").replace("{file}", filename),
       });
     } catch {
-      setResult({ ok: false, msg: tr("err_network") });
+      setResult({
+        ok: false,
+        msg: `${tr("err_generic")} ${writeFailureReason(locale, null)}`,
+      });
     } finally {
       setExporting(false);
     }

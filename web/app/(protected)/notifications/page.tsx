@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import type { Locale } from "@/i18n/config";
+import { attemptWrite } from "@/lib/write-failure";
 
 type Priority = "low" | "normal" | "high" | "urgent";
 type NType = "info" | "warning" | "success" | "error";
@@ -43,6 +44,8 @@ const T: Record<
     deleteRead: (n: number) => string;
     markAllRead: string;
     empty: string;
+    notMarked: string;
+    notDeleted: string;
   }
 > = {
   it: {
@@ -65,6 +68,8 @@ const T: Record<
     deleteRead: (n) => `elimina lette (${n})`,
     markAllRead: "segna tutte lette",
     empty: "Nessuna notifica trovata.",
+    notMarked: "Notifica NON segnata come letta:",
+    notDeleted: "Notifica NON eliminata:",
   },
   en: {
     type: { info: "info", warning: "warning", success: "ok", error: "error" },
@@ -86,6 +91,8 @@ const T: Record<
     deleteRead: (n) => `delete read (${n})`,
     markAllRead: "mark all read",
     empty: "No notifications found.",
+    notMarked: "Notification NOT marked as read:",
+    notDeleted: "Notification NOT deleted:",
   },
   es: {
     type: { info: "info", warning: "aviso", success: "ok", error: "error" },
@@ -107,6 +114,8 @@ const T: Record<
     deleteRead: (n) => `eliminar leídas (${n})`,
     markAllRead: "marcar todas leídas",
     empty: "No se encontraron notificaciones.",
+    notMarked: "Notificación NO marcada como leída:",
+    notDeleted: "Notificación NO eliminada:",
   },
   fr: {
     type: { info: "info", warning: "alerte", success: "ok", error: "erreur" },
@@ -128,6 +137,8 @@ const T: Record<
     deleteRead: (n) => `supprimer les lues (${n})`,
     markAllRead: "tout marquer comme lu",
     empty: "Aucune notification trouvée.",
+    notMarked: "Notification NON marquée comme lue :",
+    notDeleted: "Notification NON supprimée :",
   },
   de: {
     type: {
@@ -159,6 +170,8 @@ const T: Record<
     deleteRead: (n) => `gelesene löschen (${n})`,
     markAllRead: "alle als gelesen markieren",
     empty: "Keine Benachrichtigungen gefunden.",
+    notMarked: "Benachrichtigung NICHT als gelesen markiert:",
+    notDeleted: "Benachrichtigung NICHT gelöscht:",
   },
   hu: {
     type: { info: "info", warning: "figyelm.", success: "ok", error: "hiba" },
@@ -185,6 +198,8 @@ const T: Record<
     deleteRead: (n) => `olvasottak törlése (${n})`,
     markAllRead: "mind olvasottnak jelöl",
     empty: "Nincs értesítés.",
+    notMarked: "Az értesítés NEM lett olvasottnak jelölve:",
+    notDeleted: "Az értesítés NEM lett törölve:",
   },
   pt: {
     type: { info: "info", warning: "aviso", success: "ok", error: "erro" },
@@ -206,6 +221,8 @@ const T: Record<
     deleteRead: (n) => `excluir lidas (${n})`,
     markAllRead: "marcar todas como lidas",
     empty: "Nenhuma notificação encontrada.",
+    notMarked: "Notificação NÃO marcada como lida:",
+    notDeleted: "Notificação NÃO eliminada:",
   },
 };
 
@@ -346,7 +363,9 @@ type FilterType = "all" | NType;
 type FilterRead = "all" | "unread" | "read";
 
 export default function NotificationsPage() {
-  const tr = T[useLocale()];
+  const locale = useLocale();
+  const tr = T[locale];
+  const [writeError, setWriteError] = useState<string | null>(null);
   const [items, setItems] = useState<Notif[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -386,22 +405,26 @@ export default function NotificationsPage() {
     return () => clearInterval(id);
   }, [fetchNotifs, isCloud]);
 
-  const markRead = async (id: string) => {
-    await fetch(`/api/notifications?id=${id}`, { method: "PATCH" });
+  // The list is reloaded from the route either way; a write it refused also
+  // says so, instead of passing in silence.
+  const write = async (url: string, method: string, failed: string) => {
+    const result = await attemptWrite(
+      locale,
+      url,
+      { method },
+      { expectOk: true },
+    );
+    setWriteError(result.ok ? null : `${failed} ${result.reason}`);
     fetchNotifs();
   };
-  const markAllRead = async () => {
-    await fetch("/api/notifications?all=true", { method: "PATCH" });
-    fetchNotifs();
-  };
-  const deleteOne = async (id: string) => {
-    await fetch(`/api/notifications?id=${id}`, { method: "DELETE" });
-    fetchNotifs();
-  };
-  const deleteRead = async () => {
-    await fetch("/api/notifications?read=true", { method: "DELETE" });
-    fetchNotifs();
-  };
+  const markRead = (id: string) =>
+    write(`/api/notifications?id=${id}`, "PATCH", tr.notMarked);
+  const markAllRead = () =>
+    write("/api/notifications?all=true", "PATCH", tr.notMarked);
+  const deleteOne = (id: string) =>
+    write(`/api/notifications?id=${id}`, "DELETE", tr.notDeleted);
+  const deleteRead = () =>
+    write("/api/notifications?read=true", "DELETE", tr.notDeleted);
 
   const TYPE_FILTERS: Array<{
     key: FilterType;
@@ -481,6 +504,16 @@ export default function NotificationsPage() {
           </div>
         </div>
       </div>
+
+      {writeError && (
+        <p
+          role="alert"
+          className="mb-4 text-[11px]"
+          style={{ color: "var(--color-red)" }}
+        >
+          {writeError}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-4 mb-4">
         <div className="flex gap-1">
