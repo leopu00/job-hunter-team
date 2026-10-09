@@ -136,3 +136,22 @@ describe("the Windows consent says where JHT is removed", () => {
     expect(removal).toContain("Docker Compose");
   });
 });
+
+describe("the Windows consent names the scheduled task the setup registers", () => {
+  // The task's name as Windows shows it, read from the script that registers it.
+  const enabler = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
+  const taskName = /^\s*\$taskName = '([^']+)'/m.exec(enabler)?.[1];
+  const TASK = { it: "attività pianificata", en: "scheduled task", de: "geplante Aufgabe", es: "tarea programada", fr: "tâche planifiée", hu: "ütemezett feladat", pt: "tarefa agendada" };
+
+  it("finds the task's name in the script", () => {
+    expect(taskName).toBe("Job Hunter Team - Start runtime");
+  });
+
+  it.each(locales)("%s: it lists the task by name, and says the removal takes it away", (locale) => {
+    const text = ONBOARDING_TEXT[locale];
+    const listed = text.installs(WINDOWS_SETUP).filter((item) => item.includes(taskName ?? "<no task in the script>"));
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toContain(TASK[locale]);
+    expect(text.installsRemoval).toContain(TASK[locale]);
+  });
+});
