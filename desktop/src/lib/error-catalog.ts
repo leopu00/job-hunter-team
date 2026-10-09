@@ -327,6 +327,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "WSL is not ready: on Windows it runs the team’s Podman machine.",
     "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
   ),
+  // Not an error: why Kimi cannot be chosen at the setup on Windows (its CLI
+  // ignores the Windows proxy for login, usage, web and updates).
+  kimi_unavailable_windows: copy(
+    "Kimi non è ancora disponibile su Windows.",
+    "Scegli Codex o Claude.",
+    "Kimi is not available on Windows yet.",
+    "Choose Codex or Claude.",
+  ),
   // ── «Remove JHT from this computer» (Windows) ─────────────────────────────
   uninstall_unavailable: copy(
     "La rimozione da questo computer non è disponibile con il runtime installato.",

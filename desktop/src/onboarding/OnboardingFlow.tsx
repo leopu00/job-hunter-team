@@ -34,7 +34,16 @@ function providers(t: OnboardingCopy): Array<{ value: SubscriptionProvider; labe
     { value: "kimi", label: "Kimi", vendor: t.kimiVendor, mark: "KM" },
   ];
 }
-const PROVIDER_VALUES: SubscriptionProvider[] = ["codex", "claude", "kimi"];
+
+/**
+ * Providers that cannot be chosen on this platform. On Windows, Kimi's CLI
+ * (1.36) uses aiohttp without trust_env for its login, usage, web and
+ * updates, so behind the Windows proxy it fails: it stays visible, disabled,
+ * with the catalog's reason (kimi_unavailable_windows).
+ */
+function unavailableProviders(platform: string): ReadonlySet<SubscriptionProvider> {
+  return new Set<SubscriptionProvider>(platform === "windows" ? ["kimi"] : []);
+}
 const RUNTIME_STAGE_ORDER: OperationalStage[] = ["ssh-host-key", "runtime", "container", "provider", "provider-login", "team-start", "assistant"];
 
 function runtimeStages(host: ExecutionHost, t: OnboardingCopy): Array<{ value: OperationalStage; label: string; detail: string }> {
@@ -328,6 +337,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
+  const unavailable = unavailableProviders(platform);
+  const selectableProviders = providerChoices.map(({ value }) => value).filter((value) => !unavailable.has(value));
+  const kimiReason = unavailable.has("kimi") ? describeError("kimi_unavailable_windows", { locale }) : null;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
   const [step, setStep] = useState(0);
@@ -426,10 +438,11 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">{t.providerEyebrow}</p><h2 ref={headingRef} tabIndex={-1}>{t.providerTitle}</h2><p className="onboarding-lede">{t.providerLede}</p>
             <div className="onboarding-choice-grid onboarding-choice-grid--providers" role="radiogroup" aria-label={t.providerGroupAria}>
-              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} onKeyDown={(event) => moveRadio(event, PROVIDER_VALUES, provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
+              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} disabled={unavailable.has(item.value)} aria-describedby={unavailable.has(item.value) ? "onboarding-provider-unavailable" : undefined} onKeyDown={(event) => moveRadio(event, selectableProviders, provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
             </div>
+            {kimiReason && <p className="onboarding-subscription-note" id="onboarding-provider-unavailable">{kimiReason.text} {kimiReason.action}</p>}
             <p className="onboarding-subscription-note"><strong>{t.subscriptionStrong}</strong> {t.subscriptionText}</p>
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(1)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(1)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || unavailable.has(provider)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
           </form>}
 
           {step === 3 && provider && <form onSubmit={finish} className="onboarding-panel">

@@ -217,6 +217,49 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
+  it("keeps Kimi visible but not selectable on Windows, with the catalog's reason", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows" });
+    await reachProviderLocal(user);
+    const kimi = screen.getByRole("radio", { name: /Kimi/i });
+    expect(kimi).toBeDisabled();
+    await user.click(kimi);
+    expect(kimi).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    const reason = describeError("kimi_unavailable_windows", { locale: "it" });
+    expect(reason.known).toBe(true);
+    expect(kimi).toHaveAccessibleDescription(`${reason.text} ${reason.action}`);
+    // The arrows skip it: from Claude Code they go back to Codex.
+    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(kimi).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("says why Kimi is not available on Windows in the language of the app", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows", locale: "en" });
+    for (let step = 0; step < 2; step += 1) {
+      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
+      await user.click(buttons[buttons.length - 1]);
+    }
+    expect(screen.getByText("Kimi is not available on Windows yet. Choose Codex or Claude.")).toBeInTheDocument();
+  });
+
+  it("lets Kimi be chosen on a Mac", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow({ platform: "macos" });
+    await reachProviderLocal(user);
+    const kimi = screen.getByRole("radio", { name: /Kimi/i });
+    expect(kimi).toBeEnabled();
+    expect(screen.queryByText(/Kimi non è ancora disponibile/)).not.toBeInTheDocument();
+    await user.click(kimi);
+    expect(kimi).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "kimi" }));
+  });
+
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();

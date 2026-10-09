@@ -379,6 +379,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A JHT eltávolítása erről a számítógépről nem sikerült.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet, és próbáld újra: a ~/.jht mappában és a dokumentumokban lévő adataidhoz nem nyúltunk."],
     pt: ["Não foi possível remover o JHT deste computador.", "Tenta novamente. Se voltar a acontecer, reinicia o computador e tenta de novo: os teus dados em ~/.jht e nos documentos não foram tocados."],
   },
+  "Kimi is not available on Windows yet.": {
+    de: ["Kimi ist unter Windows noch nicht verfügbar.", "Wähle Codex oder Claude."],
+    es: ["Kimi todavía no está disponible en Windows.", "Elige Codex o Claude."],
+    fr: ["Kimi n’est pas encore disponible sous Windows.", "Choisis Codex ou Claude."],
+    hu: ["A Kimi Windowson még nem érhető el.", "Válaszd a Codexet vagy a Claude-ot."],
+    pt: ["O Kimi ainda não está disponível no Windows.", "Escolhe o Codex ou o Claude."],
+  },
   "The installed team version does not match the one this app needs.": {
     de: ["Die installierte Teamversion entspricht nicht der von dieser App benötigten Version.", "Aktualisiere Job Hunter Team auf die neueste Version und wiederhole die Einrichtung."],
     es: ["La versión instalada del equipo no coincide con la que necesita esta aplicación.", "Actualiza Job Hunter Team a la última versión y repite la configuración."],
@@ -641,6 +648,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_missing: translated("The container engine (Podman) was not installed."),
   podman_not_ready: translated("The container engine is installed but does not answer."),
   wsl_not_ready: translated("WSL is not ready: on Windows it runs the team’s Podman machine."),
+  kimi_unavailable_windows: translated("Kimi is not available on Windows yet."),
   uninstall_unavailable: translated("Removing JHT from this computer is not available with the installed runtime."),
   uninstall_unsupported: translated("For now, removing JHT from the app is only available on Windows."),
   uninstall_failed: translated("Removing JHT from this computer did not succeed."),
