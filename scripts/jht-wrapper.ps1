@@ -365,9 +365,12 @@ jht - Job Hunter Team
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
     jht telegram status    stato del servizio Telegram isolato
-    jht telegram pair ROLE chiede il token senza eco sul computer host
+    jht telegram pair ROLE chiede il token senza eco sul computer host, poi
+                           mostra un codice da mandare al bot dal tuo Telegram
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da li'.
+    jht telegram pair --all abbina in una seduta tutti i ruoli legacy
+    jht telegram chat-id ROLE sposta il bot su un'altra chat, con lo stesso codice
     jht reset              cancella configurazione e volumi del broker
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
@@ -606,11 +609,83 @@ function Initialize-TelegramLegacyInventory {
   return $true
 }
 
+# Inventario host di un ruolo, conservato dal servizio isolato. Restituisce
+# @{ Ok; Digests } per il successivo `bots pair`; gli agenti li ferma il chiamante.
+function Get-TelegramPairInventory {
+  param([string]$Role)
+  $digests = @(Invoke-TelegramLegacy inventory $Role 2>$null)
+  if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
+    Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
+    return @{ Ok = $false; Digests = @() }
+  }
+  if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $Role)) -ne 0) {
+    Write-Err 'legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato.'
+    return @{ Ok = $false; Digests = @() }
+  }
+  return @{ Ok = $true; Digests = $digests }
+}
+
+# Il token nuovo va al servizio isolato e basta. Il chat id non si scrive: il
+# servizio mostra un codice monouso e lo prende dal messaggio con cui la
+# persona lo manda al bot nuovo dal suo Telegram.
+function Send-TelegramPairToken {
+  param([string]$Role, [string[]]$Digests)
+  $adminArgs = @('bots', 'pair', $Role)
+  foreach ($digest in $Digests) { if ($digest) { $adminArgs += @('--legacy-digest', $digest) } }
+  $token = $null
+  if ([Console]::IsInputRedirected) {
+    $payload = [Console]::In.ReadToEnd()
+  } else {
+    $secureToken = Read-Host "Token del bot $Role (input nascosto)" -AsSecureString
+    $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer) }
+    $secureToken = $null
+    if ($token -notmatch '^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$') {
+      $token = $null
+      Write-Err 'bot_token_invalid: controlla il token generato da BotFather.'
+      return 1
+    }
+    $payload = @{ bot_token = $token } | ConvertTo-Json -Compress
+    $token = $null
+  }
+  if (-not $payload) { Write-Err 'input_not_json: passa bot_token come JSON su stdin.'; return 2 }
+  $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
+  $payload = $null
+  if ($code -ne 0) {
+    Write-Err 'Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova.'
+    return $code
+  }
+  return 0
+}
+
+# Dopo l'ultima copia legacy tolta il servizio isolato si accende (una volta
+# sola, irreversibile) e il team riparte senza il bridge legacy.
+function Complete-TelegramPair {
+  param([bool]$WasEnabled, [bool]$AgentWasRunning)
+  $null = Invoke-TelegramLegacy remaining
+  $remainingCode = $LASTEXITCODE
+  if ($remainingCode -eq 0) {
+    if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
+    Invoke-Compose restart $TelegramContainer
+    if (-not $WasEnabled -and $AgentWasRunning) { Invoke-Compose restart $Container }
+    Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
+    return 0
+  }
+  if ($remainingCode -eq 1) {
+    Write-Warn 'Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell''ambiente del container: rimuovili e completa la rotazione prima del cutover.'
+    return 0
+  }
+  Write-Err 'legacy_inventory_failed: non posso provare che ~/.jht sia privo di token Telegram.'
+  return 1
+}
+
 function Invoke-TelegramPair {
   param([string]$Role)
+  if ($Role -eq '--all') { return Invoke-TelegramPairAll }
   if ($Role -notin @('assistente', 'capitano', 'mentor')) {
-    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor>'
-    Write-Err 'Interattivo: il token viene chiesto senza eco. Automazioni: JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da li''.'
+    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor>|--all'
+    Write-Err 'Interattivo: il token viene chiesto senza eco, poi il bot nuovo riceve un codice monouso dal tuo Telegram. Automazioni: {"bot_token": ...} come JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da li''.'
     return 2
   }
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
@@ -621,7 +696,7 @@ function Invoke-TelegramPair {
   if ($LASTEXITCODE -eq 1) {
     $others = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') -and $_ -ne $Role })
     if ($others.Count -gt 0) {
-      Write-Warn "Restano token legacy per: $($others -join ' '). Finche' non abbini anche questi ruoli, $Role resta muto su Telegram: abbinali tutti in questa seduta."
+      Write-Warn "Restano token legacy per: $($others -join ' '). Finche' non abbini anche questi ruoli, $Role resta muto su Telegram: abbinali tutti in questa seduta (jht telegram pair --all)."
       if (-not [Console]::IsInputRedirected) {
         $answer = Read-Host "Abbinare $Role adesso? [s/N]"
         if ($answer -notmatch '^(s|si)$') { Write-Info 'Abbinamento annullato: nessuna modifica.'; return 1 }
@@ -636,16 +711,63 @@ function Invoke-TelegramPair {
       return 1
     }
   }
-  $digests = @(Invoke-TelegramLegacy inventory $Role 2>$null)
-  if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
-    if ($agentWasRunning) { Invoke-Compose start $Container | Out-Null }
-    Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
+  $inventory = Get-TelegramPairInventory $Role
+  if ($agentWasRunning) {
+    Invoke-Compose start $Container | Out-Null
+    if ($inventory.Ok -and $LASTEXITCODE -ne 0) {
+      Write-Err 'agent_restart_failed: inventario conservato, ma il team non e'' ripartito. Cosa fare: jht up'
+      return 1
+    }
+  }
+  if (-not $inventory.Ok) { return 1 }
+  $status = ((& docker exec $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
+  $wasEnabled = $status -match '"enabled"\s*:\s*true'
+  # Anche quando l'inventario non trova niente: un agente di una versione
+  # precedente puo' aver tolto il token dalla config prima dell'aggiornamento.
+  Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
+  $code = Send-TelegramPairToken $Role $inventory.Digests
+  if ($code -ne 0) { return $code }
+  Invoke-TelegramLegacy remove $Role | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Err 'legacy_cleanup_failed: il token vecchio e'' ancora in ~/.jht; cutover negato.'
     return 1
   }
-  if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $Role)) -ne 0) {
-    if ($agentWasRunning) { Invoke-Compose start $Container | Out-Null }
-    Write-Err 'legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato.'
-    return 1
+  return Complete-TelegramPair -WasEnabled $wasEnabled -AgentWasRunning $agentWasRunning
+}
+
+# Tutti i ruoli con un token legacy, in una seduta. Le copie legacy si tolgono
+# solo quando tutti gli abbinamenti sono riusciti: nessun ruolo resta muto a
+# meta' strada, e la storia delle impronte rifiuta comunque quei token.
+function Invoke-TelegramPairAll {
+  if ([Console]::IsInputRedirected) {
+    Write-Err 'jht telegram pair --all e'' interattivo: per le automazioni abbina un ruolo alla volta.'
+    return 2
+  }
+  $telegramId = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  $remainingOut = @(Invoke-TelegramLegacy remaining 2>$null)
+  $remainingCode = $LASTEXITCODE
+  if ($remainingCode -eq 0) { Write-Info 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.'; return 0 }
+  if ($remainingCode -ne 1) { Write-Err 'legacy_inventory_failed: non riesco a leggere i token legacy in ~/.jht.'; return 1 }
+  $roles = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') })
+  if ($roles.Count -eq 0) { Write-Err 'legacy_inventory_failed: ruoli legacy non riconosciuti.'; return 1 }
+  Write-Info "Ruoli da abbinare in questa seduta: $($roles -join ' ')"
+  $agentWasRunning = Test-ContainerUp
+  if ($agentWasRunning) {
+    Invoke-Compose stop $Container | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Err 'legacy_inventory_failed: non riesco a fermare gli agenti prima dell''inventario host.'
+      return 1
+    }
+  }
+  $digestsByRole = @{}
+  foreach ($role in $roles) {
+    $inventory = Get-TelegramPairInventory $role
+    if (-not $inventory.Ok) {
+      if ($agentWasRunning) { Invoke-Compose start $Container | Out-Null }
+      return 1
+    }
+    $digestsByRole[$role] = $inventory.Digests
   }
   if ($agentWasRunning) {
     Invoke-Compose start $Container | Out-Null
@@ -656,62 +778,27 @@ function Invoke-TelegramPair {
   }
   $status = ((& docker exec $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
-  $adminArgs = @('bots', 'pair', $Role)
-  foreach ($digest in $digests) { $adminArgs += @('--legacy-digest', $digest) }
-  $token = $null
-  $chatId = $null
-  # Anche quando l'inventario non trova niente: un agente di una versione
-  # precedente puo' aver tolto il token dalla config prima dell'aggiornamento.
+  $bots = ((& docker exec $telegramId jht-telegram-admin bots status 2>$null) -join "`n")
   Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
-  if ([Console]::IsInputRedirected) {
-    $payload = [Console]::In.ReadToEnd()
-  } else {
-    $secureToken = Read-Host 'Token del bot (input nascosto)' -AsSecureString
-    $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
-    try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer) }
-    $secureToken = $null
-    $chatId = Read-Host 'Chat ID dell''utente'
-    if ($token -notmatch '^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$') {
-      $token = $null; $chatId = $null
-      Write-Err 'bot_token_invalid: controlla il token generato da BotFather.'
+  foreach ($role in $roles) {
+    if ($bots -match ('"' + $role + '"\s*:\s*"present"')) {
+      Write-Info "$role ha gia' un bot abbinato: tolgo solo la sua copia legacy."
+      continue
+    }
+    $code = Send-TelegramPairToken $role $digestsByRole[$role]
+    if ($code -ne 0) {
+      Write-Err "Abbinamento di $role non riuscito: le copie legacy restano tutte. Rilancia jht telegram pair --all: i ruoli gia' abbinati non chiedono un altro token."
+      return $code
+    }
+  }
+  foreach ($role in $roles) {
+    Invoke-TelegramLegacy remove $role | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Err "legacy_cleanup_failed: i token nuovi sono al sicuro, ma la copia legacy di $role e' ancora in ~/.jht; cutover negato."
       return 1
     }
-    if ($chatId -notmatch '^-?[0-9]{1,20}$') {
-      $token = $null; $chatId = $null
-      Write-Err 'chat_id_invalid: inserisci l''identificativo numerico della chat.'
-      return 1
-    }
-    $payload = @{ bot_token = $token; chat_id = $chatId } | ConvertTo-Json -Compress
-    $token = $null; $chatId = $null
   }
-  if (-not $payload) { Write-Err 'input_not_json: passa bot_token e chat_id come JSON su stdin.'; return 2 }
-  $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
-  $payload = $null
-  if ($code -ne 0) {
-    Write-Err 'Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova.'
-    return $code
-  }
-  Invoke-TelegramLegacy remove $Role | Out-Null
-  if ($LASTEXITCODE -ne 0) {
-    Write-Err 'legacy_cleanup_failed: il token vecchio e'' ancora in ~/.jht; cutover negato.'
-    return 1
-  }
-  $null = Invoke-TelegramLegacy remaining
-  $remainingCode = $LASTEXITCODE
-  if ($remainingCode -eq 0) {
-    if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
-    Invoke-Compose restart $TelegramContainer
-    if (-not $wasEnabled -and $agentWasRunning) { Invoke-Compose restart $Container }
-    Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
-    return 0
-  }
-  if ($remainingCode -eq 1) {
-    Write-Warn 'Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell''ambiente del container: rimuovili e completa la rotazione prima del cutover.'
-    return 0
-  }
-  Write-Err 'legacy_inventory_failed: non posso provare che ~/.jht sia privo di token Telegram.'
-  return 1
+  return Complete-TelegramPair -WasEnabled $wasEnabled -AgentWasRunning $agentWasRunning
 }
 
 function Invoke-TelegramCommand {
@@ -721,13 +808,19 @@ function Invoke-TelegramCommand {
   switch ($action) {
     'status' { return Invoke-TelegramAdmin -AdminArgs @('bots', 'status') }
     'pair' { return Invoke-TelegramPair $role }
+    'chat-id' {
+      if ($role -notin @('assistente', 'capitano', 'mentor')) {
+        Write-Err 'uso: jht telegram chat-id <assistente|capitano|mentor>'; return 2
+      }
+      return Invoke-TelegramAdmin -AdminArgs @('bots', 'chat-id', $role)
+    }
     'remove' {
       if ($role -notin @('assistente', 'capitano', 'mentor')) {
         Write-Err 'uso: jht telegram remove <assistente|capitano|mentor>'; return 2
       }
       return Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $role)
     }
-    default { Write-Err 'uso: jht telegram status|pair <ruolo>|remove <ruolo>'; return 2 }
+    default { Write-Err 'uso: jht telegram status|pair <ruolo>|pair --all|chat-id <ruolo>|remove <ruolo>'; return 2 }
   }
 }
 

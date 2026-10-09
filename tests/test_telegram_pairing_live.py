@@ -92,19 +92,18 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
         )
         paired = subprocess.run(
             ["/bin/bash", "-c", script],
-            input=json.dumps({"bot_token": TOKEN, "chat_id": "42"}),
+            input=json.dumps({"bot_token": TOKEN}),
             capture_output=True,
             text=True,
             timeout=60,
             env={**os.environ, **engine_env(engine), "JHT_LIVE_ENGINE": shutil.which(engine) or engine},
         )
-        assert paired.returncode == 0, paired.stderr
-        assert json.loads(paired.stdout.strip()) == {
-            "ok": True,
-            "bot": "assistente",
-            "state": "present",
-            "rotation": "fresh",
-        }
+        # The container has no network, so the chat verification cannot reach
+        # Telegram. That is the proof wanted here: the admin read the JSON
+        # (a drained stdin would answer input_not_json) and got as far as
+        # asking the Bot API who the bot is, after recording the token.
+        assert paired.returncode == 1, paired.stderr
+        assert json.loads(paired.stdout.strip()) == {"ok": False, "reason": "telegram_unreachable"}
         assert TOKEN not in paired.stdout + paired.stderr
     finally:
         run(engine, "rm", "-f", "-v", container, check=False)

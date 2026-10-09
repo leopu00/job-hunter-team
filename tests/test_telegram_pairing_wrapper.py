@@ -45,7 +45,8 @@ printf 'ARGV %s\n' "$*" >> "$FAKE_LOG"
 [ "$1" = run ] && {
   case "$*" in
     *"jht-telegram-legacy.py inventory assistente") [ -z "$FAKE_DIGEST" ] || printf '%s\n' "$FAKE_DIGEST" ;;
-    *"jht-telegram-legacy.py remove assistente") printf 'REMOVED\n' >> "$FAKE_LOG" ;;
+    *"jht-telegram-legacy.py inventory "*) ;;
+    *"jht-telegram-legacy.py remove "*) printf 'REMOVED %s\n' "$(printf '%s' "$*" | awk '{print $NF}')" >> "$FAKE_LOG" ;;
     *"jht-telegram-legacy.py remaining")
       [ -z "${FAKE_REMAINING_ROLES:-}" ] || printf '%s\n' "$FAKE_REMAINING_ROLES"
       exit "${FAKE_REMAINING_RC:-0}" ;;
@@ -65,14 +66,37 @@ case "$target:$*" in
     value=$(cat)
     [ "$value" = "$FAKE_DIGEST" ] || { printf 'LEGACY_STDIN_MISMATCH\n' >> "$FAKE_LOG"; exit 99; }
     printf '{"ok":true,"legacy":"assistente","state":"remembered"}\n' ;;
+  telegram-id:"jht-telegram-admin legacy remember "*)
+    value=$(cat)
+    [ -z "$value" ] || { printf 'LEGACY_STDIN_MISMATCH\n' >> "$FAKE_LOG"; exit 99; }
+    printf '{"ok":true,"state":"remembered"}\n' ;;
   telegram-id:"jht-telegram-admin cutover status")
     [ "$interactive" -eq 0 ] || cat >/dev/null
     printf '{"ok":true,"cutover":{"enabled":false}}\n' ;;
-  telegram-id:"jht-telegram-admin bots pair assistente"*)
+  telegram-id:"jht-telegram-admin bots status")
+    [ "$interactive" -eq 0 ] || cat >/dev/null
+    bots=""
+    for role in ${FAKE_PRESENT:-}; do bots="$bots\"$role\": \"present\", "; done
+    printf '{"ok": true, "bots": {%s"x": "absent"}}\n' "$bots" ;;
+  telegram-id:"jht-telegram-admin bots pair "*)
+    role=$(printf '%s' "$*" | cut -d' ' -f4)
     value=$(cat)
-    [ "$value" = "$EXPECTED_PAYLOAD" ] || { printf 'TELEGRAM_STDIN_MISMATCH\n' >> "$FAKE_LOG"; exit 98; }
+    if [ "$role" = assistente ] && [ -n "${EXPECTED_PAYLOAD:-}" ]; then
+      [ "$value" = "$EXPECTED_PAYLOAD" ] || { printf 'TELEGRAM_STDIN_MISMATCH\n' >> "$FAKE_LOG"; exit 98; }
+    fi
+    case "$value" in '{"bot_token":"'*'"}') ;; *) printf 'TELEGRAM_STDIN_MISMATCH\n' >> "$FAKE_LOG"; exit 98 ;; esac
+    case "$value" in *chat_id*) printf 'CHAT_ID_SENT\n' >> "$FAKE_LOG"; exit 98 ;; esac
+    if [ "$role" = "${FAKE_PAIR_FAIL_ROLE:-}" ]; then
+      printf 'PAIR_FAILED %s\n' "$role" >> "$FAKE_LOG"
+      printf '{"ok": false, "reason": "verification_timeout"}\n'
+      exit 1
+    fi
     printf 'TELEGRAM_STDIN_OK\n' >> "$FAKE_LOG"
-    printf '{"ok":true,"bot":"assistente","state":"present","rotation":"rotated"}\n' ;;
+    printf 'PAIRED %s\n' "$role" >> "$FAKE_LOG"
+    printf '{"ok":true,"bot":"%s","state":"present","rotation":"rotated"}\n' "$role" ;;
+  telegram-id:"jht-telegram-admin bots chat-id "*)
+    printf 'CHATID %s interactive=%s\n' "$(printf '%s' "$*" | awk '{print $NF}')" "$interactive" >> "$FAKE_LOG"
+    printf '{"ok": true, "chat": "verified"}\n' ;;
   telegram-id:"jht-telegram-admin cutover enable") printf '{"ok":true,"cutover":"enabled"}\n' ;;
   *) exit 97 ;;
 esac
@@ -99,7 +123,7 @@ def powershell_functions(*names: str) -> str:
     return "\n".join(found)
 
 
-def pair_script() -> str:
+def pair_script(command: str = "telegram_pair assistente", home: str = "/host-home") -> str:
     return (
         'set -u\nerr() { echo "error: $*" >&2; }\nwarn() { echo "warn: $*" >&2; }\n'
         'info() { echo "info: $*" >&2; }\n'
@@ -107,10 +131,19 @@ def pair_script() -> str:
         'read_only_service_id() { [ "$1" = jht-telegram ] && echo telegram-id; }\n'
         'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
-        'CONTAINER_RUNTIME=docker\nHOME=/host-home\n'
-        + functions("host_data_dir_same", "host_data_dirs_supported", "telegram_admin", "telegram_admin_input", "telegram_legacy", "read_hidden_tty", "telegram_pair_other_legacy_roles", "telegram_pair")
+        f'CONTAINER_RUNTIME=docker\nHOME={home}\n'
+        + "\n".join(line for line in WRAPPER.read_text(encoding="utf-8").splitlines()
+                    if line.startswith(("TELEGRAM_NEW_TOKEN_NOTE=", "TELEGRAM_PAIR_AGENTS_STOPPED=")))
+        + "\n"
+        + functions(
+            "host_data_dir_same", "host_data_dirs_supported", "telegram_admin", "telegram_admin_input",
+            "telegram_legacy", "read_hidden_tty", "telegram_pair_other_legacy_roles",
+            "telegram_pair_stop_agents", "telegram_pair_start_agents", "telegram_pair_inventory",
+            "telegram_pair_submit", "telegram_pair_finish", "telegram_pair_usage", "telegram_pair_all",
+            "telegram_pair", "telegram_command",
+        )
         + '\ntelegram_image() { printf "fake-image\\n"; }\n'
-        + '\ntelegram_pair assistente\n'
+        + f'\n{command}\n'
     )
 
 
@@ -224,7 +257,7 @@ def test_pairing_sends_new_token_only_to_isolated_admin(tmp_path: Path) -> None:
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
     script = pair_script()
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     done = subprocess.run(
         ["bash", "-c", script],
         input=payload,
@@ -262,7 +295,7 @@ def test_pairing_does_not_cut_over_while_another_legacy_bot_remains(tmp_path: Pa
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
     script = pair_script()
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     done = subprocess.run(
         ["bash", "-c", script],
         input=payload,
@@ -290,7 +323,7 @@ def test_pairing_with_empty_inventory_works_under_bash_3_2_and_nounset(tmp_path:
     docker.write_text(FAKE_DOCKER, encoding="utf-8")
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     done = subprocess.run(
         ["/bin/bash", "-c", pair_script()],
         input=payload,
@@ -349,7 +382,7 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
     docker.write_text(FAKE_DOCKER, encoding="utf-8")
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     environment = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -368,12 +401,10 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
     )
     os.close(slave)
     try:
-        output = _read_pty_until(master, b"Token del bot (input nascosto): ")
+        output = _read_pty_until(master, b"Token del bot assistente (input nascosto): ")
         assert NEW_TOKEN_REMINDER.encode() in output
         _wait_pty_no_echo(master)
         os.write(master, (SECRET + "\n").encode())
-        output += _read_pty_until(master, b"Chat ID dell'utente: ")
-        os.write(master, b"42\n")
         while process.poll() is None:
             ready, _, _ = select.select([master], [], [], 0.2)
             if ready:
@@ -436,17 +467,24 @@ def test_interactive_pairing_restores_echo_after_ctrl_c(tmp_path: Path) -> None:
 def test_both_wrappers_document_safe_interactive_and_noninteractive_pairing() -> None:
     shell = WRAPPER.read_text(encoding="utf-8")
     powershell = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
-    shell_pair = functions("telegram_pair")
-    ps_pair = re.search(r"function Invoke-TelegramPair \{\n.*?\n\}", powershell, re.S)
-    assert ps_pair
-    assert "read_hidden_tty" in shell_pair
+    shell_submit = functions("telegram_pair_submit")
+    ps_submit = re.search(r"function Send-TelegramPairToken \{\n.*?\n\}", powershell, re.S)
+    assert ps_submit
+    assert "read_hidden_tty" in shell_submit
     assert "stty -echo" in functions("read_hidden_tty")
-    assert "Read-Host 'Token del bot (input nascosto)' -AsSecureString" in ps_pair.group(0)
-    assert "[Console]::IsInputRedirected" in ps_pair.group(0)
-    assert "mktemp" not in shell_pair
-    assert all(word not in ps_pair.group(0) for word in ("Set-Content", "Add-Content", "New-Item"))
+    assert 'Read-Host "Token del bot $Role (input nascosto)" -AsSecureString' in ps_submit.group(0)
+    assert "[Console]::IsInputRedirected" in ps_submit.group(0)
+    for source in (shell_submit, functions("telegram_pair"), functions("telegram_pair_all")):
+        assert "mktemp" not in source
+    assert all(word not in ps_submit.group(0) for word in ("Set-Content", "Add-Content", "New-Item"))
     assert "bot.json" not in shell + powershell
+    # The chat id is never typed or sent from the host: the service takes it
+    # from the message that carries the one-time code (security review, 09/10).
+    assert """printf '{"bot_token":"%s"}' "$token\"""" in shell_submit
+    assert "@{ bot_token = $token }" in ps_submit.group(0)
     for source in (shell, powershell):
+        assert "Chat ID dell" not in source
+        assert "chat_id = " not in source
         assert "non salvare il token in ~/.jht" in source
         assert "JSON su stdin" in source
 
@@ -470,7 +508,7 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
     docker.write_text(FAKE_DOCKER, encoding="utf-8")
     docker.chmod(0o755)
     log = tmp_path / "calls.log"
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     script = tmp_path / "pair.ps1"
     script.write_text(
         "$ErrorActionPreference = 'Stop'\n"
@@ -481,7 +519,7 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
         "function Test-ContainerUp { return $false }\n"
         "function Invoke-Compose { param([Parameter(ValueFromRemainingArguments)] $Args) }\n"
         "$TelegramContainer = 'jht-telegram'\n$Container = 'jht'\n"
-        + powershell_functions("Invoke-TelegramAdmin", "Invoke-TelegramPair")
+        + powershell_functions("Invoke-TelegramAdmin", "Get-TelegramPairInventory", "Send-TelegramPairToken", "Complete-TelegramPair", "Invoke-TelegramPair")
         + "\nfunction Invoke-TelegramLegacy {\n"
         + "  param([string]$Command, [string]$Role = '')\n"
         # The real helper ends in `docker run`, which sets $LASTEXITCODE; a
@@ -587,7 +625,7 @@ def _pair_env(tmp_path: Path, **extra: str) -> dict[str, str]:
     docker = bin_dir / "docker"
     docker.write_text(FAKE_DOCKER, encoding="utf-8")
     docker.chmod(0o755)
-    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    payload = f'{{"bot_token":"{SECRET}"}}'
     return {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -656,9 +694,9 @@ def test_interactive_pairing_can_stop_before_touching_anything(tmp_path: Path) -
 def test_interactive_pairing_goes_on_after_yes(tmp_path: Path) -> None:
     env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1")
 
-    _code, output = _interactive_pair(env, b"s\n", b"Token del bot (input nascosto): ")
+    _code, output = _interactive_pair(env, b"s\n", b"Token del bot assistente (input nascosto): ")
 
-    assert b"Token del bot (input nascosto): " in output
+    assert b"Token del bot assistente (input nascosto): " in output
     assert "COMPOSE stop jht" in (tmp_path / "calls.log").read_text(encoding="utf-8")
 
 
@@ -675,7 +713,7 @@ def test_powershell_pairing_warns_when_other_roles_still_have_legacy_tokens(tmp_
         "function Test-ContainerUp { return $false }\n"
         "function Invoke-Compose { param([Parameter(ValueFromRemainingArguments)] $Args) }\n"
         "$TelegramContainer = 'jht-telegram'\n$Container = 'jht'\n"
-        + powershell_functions("Invoke-TelegramAdmin", "Invoke-TelegramPair")
+        + powershell_functions("Invoke-TelegramAdmin", "Get-TelegramPairInventory", "Send-TelegramPairToken", "Complete-TelegramPair", "Invoke-TelegramPair")
         + "\nfunction Invoke-TelegramLegacy {\n"
         + "  param([string]$Command, [string]$Role = '')\n"
         + "  if ($Command -eq 'remaining') { Write-Output 'assistente capitano'; Write-Output 'mentor'; $global:LASTEXITCODE = 1; return }\n"
@@ -692,6 +730,162 @@ def test_powershell_pairing_warns_when_other_roles_still_have_legacy_tokens(tmp_
 
     assert OTHER_ROLES_WARNING + "." in done.stderr
     assert "TELEGRAM_STDIN_OK" in (tmp_path / "calls.log").read_text(encoding="utf-8")
+
+
+def test_a_chat_id_planted_in_jht_home_never_reaches_the_service(tmp_path: Path) -> None:
+    """An agent can write ~/.jht; the wrapper never reads a chat id from it,
+    and the service only ever gets the token."""
+    home = tmp_path / "host-home"
+    (home / ".jht").mkdir(parents=True)
+    (home / ".jht" / "jht.config.json").write_text(
+        '{"channels": {"telegram": {"bots": {"assistente": {"bot_token": "1:x", "chat_id": "666"}}}}}',
+        encoding="utf-8",
+    )
+    env = _pair_env(tmp_path)
+    done = subprocess.run(
+        ["bash", "-c", pair_script(home=str(home))], input=env["EXPECTED_PAYLOAD"], text=True,
+        capture_output=True, env=env,
+    )
+
+    calls = (tmp_path / "calls.log").read_text(encoding="utf-8")
+    assert done.returncode == 0, done.stderr
+    assert "TELEGRAM_STDIN_OK" in calls and "CHAT_ID_SENT" not in calls
+    assert "666" not in calls + done.stdout + done.stderr
+
+
+def test_pair_all_is_interactive_only(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="assistente capitano", FAKE_REMAINING_RC="1")
+    done = subprocess.run(
+        ["bash", "-c", pair_script("telegram_pair --all")], input="", text=True, capture_output=True, env=env,
+    )
+
+    assert done.returncode == 2
+    assert "pair --all è interattivo" in done.stderr
+    log = tmp_path / "calls.log"
+    assert not log.exists() or "bots pair" not in log.read_text(encoding="utf-8")
+
+
+def _pair_all(env: dict[str, str], tokens: list[str]) -> tuple[int, bytes]:
+    master, slave = pty.openpty()
+    process = subprocess.Popen(
+        ["bash", "-c", pair_script("telegram_pair --all")], stdin=slave, stdout=slave, stderr=slave,
+        env=env, close_fds=True, preexec_fn=_restore_default_sigint,
+    )
+    os.close(slave)
+    output = b""
+    try:
+        for token in tokens:
+            output += _read_pty_until(master, b"(input nascosto): ")
+            _wait_pty_no_echo(master)
+            os.write(master, (token + "\n").encode())
+        deadline = time.monotonic() + 10
+        while process.poll() is None and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if ready:
+                try:
+                    output += os.read(master, 4096)
+                except OSError as exc:
+                    if exc.errno != errno.EIO:
+                        raise
+        process.wait(timeout=5)
+    finally:
+        os.close(master)
+        if process.poll() is None:
+            process.kill()
+    return process.returncode, output
+
+
+def test_pair_all_removes_legacy_copies_only_after_every_role_is_paired(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1", EXPECTED_PAYLOAD="")
+    code, output = _pair_all(env, [SECRET, SECRET.replace("987654", "987655")])
+
+    lines = (tmp_path / "calls.log").read_text(encoding="utf-8").splitlines()
+    assert b"Token del bot capitano" in output and b"Token del bot mentor" in output
+    paired = [i for i, line in enumerate(lines) if line.startswith("PAIRED ")]
+    removed = [i for i, line in enumerate(lines) if line.startswith("REMOVED ")]
+    assert [lines[i] for i in paired] == ["PAIRED capitano", "PAIRED mentor"]
+    assert [lines[i] for i in removed] == ["REMOVED capitano", "REMOVED mentor"]
+    assert max(paired) < min(removed)
+    assert lines.count("COMPOSE stop jht") == 1  # one inventory pass for every role
+    assert SECRET.encode() not in output
+    assert code == 0, output.decode(errors="replace")
+
+
+def test_pair_all_keeps_every_legacy_copy_when_a_role_fails(tmp_path: Path) -> None:
+    env = _pair_env(
+        tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1",
+        EXPECTED_PAYLOAD="", FAKE_PAIR_FAIL_ROLE="mentor",
+    )
+    code, output = _pair_all(env, [SECRET, SECRET.replace("987654", "987655")])
+
+    calls = (tmp_path / "calls.log").read_text(encoding="utf-8")
+    assert code != 0
+    assert "PAIRED capitano" in calls and "PAIR_FAILED mentor" in calls
+    assert "REMOVED" not in calls and "cutover enable" not in calls
+    assert b"le copie legacy restano tutte" in output
+
+
+def test_pair_all_skips_the_token_of_a_role_already_paired(tmp_path: Path) -> None:
+    env = _pair_env(
+        tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1",
+        EXPECTED_PAYLOAD="", FAKE_PRESENT="capitano",
+    )
+    code, output = _pair_all(env, [SECRET])
+
+    calls = (tmp_path / "calls.log").read_text(encoding="utf-8")
+    assert code == 0, output.decode(errors="replace")
+    assert "PAIRED capitano" not in calls and "PAIRED mentor" in calls
+    assert "REMOVED capitano" in calls and "REMOVED mentor" in calls
+    assert b"Token del bot capitano" not in output
+
+
+def test_chat_id_command_goes_to_the_service_without_stdin(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path)
+    done = subprocess.run(
+        ["bash", "-c", pair_script("telegram_command chat-id capitano")],
+        input="", text=True, capture_output=True, env=env,
+    )
+    bad = subprocess.run(
+        ["bash", "-c", pair_script("telegram_command chat-id root")],
+        input="", text=True, capture_output=True, env=env,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert "CHATID capitano interactive=0" in (tmp_path / "calls.log").read_text(encoding="utf-8")
+    assert bad.returncode == 2 and "uso: jht telegram chat-id" in bad.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")
+def test_powershell_pair_all_and_chat_id(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path)
+    script = tmp_path / "commands.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        "function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
+        "function Write-Info { param([string]$Message) }\n"
+        "function Write-Warn { param([string]$Message) }\n"
+        "function Get-RunningComposeServiceId { param([string]$Service) if ($Service -eq 'jht-telegram') { 'telegram-id' } }\n"
+        "function Test-ContainerUp { return $false }\n"
+        "function Invoke-Compose { param([Parameter(ValueFromRemainingArguments)] $Args) }\n"
+        "function Invoke-TelegramLegacy { param([string]$Command, [string]$Role = '') throw 'not reached' }\n"
+        "$TelegramContainer = 'jht-telegram'\n$Container = 'jht'\n"
+        + powershell_functions(
+            "Invoke-TelegramAdmin", "Get-TelegramPairInventory", "Send-TelegramPairToken",
+            "Complete-TelegramPair", "Invoke-TelegramPair", "Invoke-TelegramPairAll", "Invoke-TelegramCommand",
+        )
+        + "\n$all = Invoke-TelegramCommand @('pair', '--all')\n"
+        + "$chat = Invoke-TelegramCommand @('chat-id', 'mentor')\n"
+        + "$bad = Invoke-TelegramCommand @('chat-id', 'root')\n"
+        + "Write-Output \"all=$all chat=$chat bad=$bad\"\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-File", str(script)], input="", text=True, capture_output=True, env=env,
+    )
+
+    assert "all=2 chat=0 bad=2" in done.stdout, done.stderr
+    assert "pair --all e' interattivo" in done.stderr
+    assert "CHATID mentor interactive=0" in (tmp_path / "calls.log").read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")

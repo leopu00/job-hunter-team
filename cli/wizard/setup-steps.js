@@ -39,7 +39,7 @@ export async function promptTelegramOptional(prompter) {
     '  jht telegram pair assistente\n' +
     '  jht telegram pair capitano\n' +
     '  jht telegram pair mentor\n\n' +
-    'Each command reads bot_token and chat_id from JSON on stdin. An older token may already have been read by the agents, even if it no longer appears in ~/.jht; a token the service has already seen is refused with rotation_required.\n\n' +
+    'Each command asks for the token without echo (automation: {"bot_token": ...} as JSON on stdin), then shows a one-time code you send to the bot from your Telegram: the chat id is never typed. An older token may already have been read by the agents, even if it no longer appears in ~/.jht; a token the service has already seen is refused with rotation_required.\n\n' +
     'Check the result with: jht telegram status',
     'Telegram pairing runs on the host',
   );

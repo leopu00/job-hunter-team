@@ -54,3 +54,5 @@ def test_game_catalog_documents_safe_host_pairing(locale, catalog):
     # bot already existed: an earlier release's agent may have removed an
     # exposed token from the config before the inventory could record it.
     assert "/revoke" in guide, locale
+    # The chat id is no longer typed: a one-time code goes to the bot instead.
+    assert "/start" in guide, locale

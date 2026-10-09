@@ -149,153 +149,134 @@ def configured_runtime(
     return transport, api
 
 
+PAIRING_CODE = "ABCDEFGH23"
+
+
+class PairingAPI(FakeAPI):
+    """getMe plus the one message that carries the code, as Telegram would
+    deliver it after the person sends `/start <code>` to the new bot."""
+
+    def __init__(self, messages: list[dict] | None = None) -> None:
+        super().__init__()
+        self.messages = messages
+        self.served = False
+
+    def get_me(self) -> str:
+        return "jht_test_bot"
+
+    def get_updates(self, _offset: int, timeout: int = 25) -> list[dict]:
+        if self.served:
+            raise AssertionError("verification kept polling after its answer")
+        self.served = True
+        messages = self.messages if self.messages is not None else [
+            {"chat": {"id": 42, "type": "private"}, "from": {"id": 42, "is_bot": False},
+             "text": f"/start {PAIRING_CODE}"},
+        ]
+        return [
+            {"update_id": 500 + index, "message": {"date": int(time.time()), **message}}
+            for index, message in enumerate(messages)
+        ]
+
+
+@pytest.fixture()
+def admin_cli(telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """Run jht-telegram-admin in-process against a fake Bot API."""
+    import io
+
+    from shared.telegram_service import admin, verify
+
+    monkeypatch.setattr(verify, "new_code", lambda: PAIRING_CODE)
+    apis: list[PairingAPI] = []
+    messages: list[list[dict] | None] = [None]
+
+    def factory(token: str) -> PairingAPI:
+        api = PairingAPI(messages[0])
+        api.token = token
+        apis.append(api)
+        return api
+
+    monkeypatch.setattr(admin, "API_FACTORY", factory)
+
+    def run(*argv: str, stdin: str = "") -> subprocess.CompletedProcess[str]:
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(stdin.encode())))
+        capsys.readouterr()
+        code = admin.main(list(argv))
+        out = capsys.readouterr()
+        return subprocess.CompletedProcess(list(argv), code, out.out, out.err)
+
+    run.apis = apis
+    run.messages = messages
+    return run
+
+
+def complete_inventory(admin_cli, **digests: str) -> None:
+    for role in ("assistente", "capitano", "mentor"):
+        assert admin_cli("legacy", "remember", role, stdin=digests.get(role, "")).returncode == 0
+
+
 def test_host_admin_reads_secret_from_stdin_and_never_echoes_it(
-    telegram_store: dict[str, Path]
+    telegram_store: dict[str, Path], admin_cli
 ) -> None:
     token = "123456:abcdefghijklmnopqrstuvwxyz"
-    command = ROOT / "shared/telegram_service/bin/jht-telegram-admin.py"
-    environment = {
-        **os.environ,
-        "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
-        "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
-    }
-    unseeded = subprocess.run(
-        [str(command), "bots", "pair", "assistente"],
-        input=json.dumps({"bot_token": token, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
+    unseeded = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": token}))
     assert unseeded.returncode == 1
     assert json.loads(unseeded.stdout) == {"ok": False, "reason": "legacy_inventory_required"}
-    seeded = subprocess.run(
-        [str(command), "legacy", "remember", "assistente"],
-        input="",
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert seeded.returncode == 0
-    incomplete = subprocess.run(
-        [str(command), "legacy", "complete"],
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert incomplete.returncode == 1
+    assert admin_cli("legacy", "remember", "assistente").returncode == 0
+    assert admin_cli("legacy", "complete").returncode == 1
     for role in ("capitano", "mentor"):
-        subprocess.run(
-            [str(command), "legacy", "remember", role],
-            input="",
-            env=environment,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    complete = subprocess.run(
-        [str(command), "legacy", "complete"],
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert complete.returncode == 0
-    saved = subprocess.run(
-        [str(command), "bots", "pair", "assistente"],
-        input=json.dumps({"bot_token": token, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert saved.returncode == 0
+        assert admin_cli("legacy", "remember", role).returncode == 0
+    assert admin_cli("legacy", "complete").returncode == 0
+
+    # The chat id is never typed any more: a JSON that carries one is refused.
+    typed = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": token, "chat_id": "42"}))
+    assert json.loads(typed.stdout) == {"ok": False, "reason": "input_fields_invalid"}
+
+    saved = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": token}))
+    assert saved.returncode == 0, saved.stdout
     assert token not in saved.stdout + saved.stderr
+    assert f"/start {PAIRING_CODE}" in saved.stderr and "@jht_test_bot" in saved.stderr
     assert json.loads(saved.stdout) == {
         "ok": True, "bot": "assistente", "state": "present", "rotation": "fresh",
     }
+    assert store.read_bot("assistente") == {"bot_token": token, "chat_id": "42"}
+    assert store.read_state("offsets", {})["assistente"] == 501
+    assert admin_cli.apis[-1].sent == [("42", "JHT: il bot assistente è abbinato a questa chat.")]
     secret_path = telegram_store["secrets"] / "bots" / "assistente.json"
     assert stat.S_IMODE(secret_path.stat().st_mode) == 0o600
-    status = subprocess.run(
-        [str(command), "bots", "status"],
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
+    status = admin_cli("bots", "status")
     assert status.returncode == 0 and token not in status.stdout + status.stderr
 
 
-def test_admin_requires_a_rotated_token_before_cutover(telegram_store: dict[str, Path]) -> None:
+def test_admin_requires_a_rotated_token_before_cutover(telegram_store: dict[str, Path], admin_cli) -> None:
     old = "123456:abcdefghijklmnopqrstuvwxyz"
-    command = ROOT / "shared/telegram_service/bin/jht-telegram-admin.py"
-    environment = {
-        **os.environ,
-        "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
-        "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
-    }
     digest = __import__("hashlib").sha256(old.encode()).hexdigest()
-    remembered = subprocess.run(
-        [str(command), "legacy", "remember", "assistente"],
-        input=digest,
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert remembered.returncode == 0
-    refused = subprocess.run(
-        [str(command), "bots", "pair", "assistente", "--legacy-digest", digest],
-        input=json.dumps({"bot_token": old, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
+    assert admin_cli("legacy", "remember", "assistente", stdin=digest).returncode == 0
+    refused = admin_cli(
+        "bots", "pair", "assistente", "--legacy-digest", digest, stdin=json.dumps({"bot_token": old}),
     )
     assert refused.returncode == 1
     assert json.loads(refused.stdout) == {"ok": False, "reason": "rotation_required"}
     assert not store.read_bot("assistente")
+    assert admin_cli.apis == []  # refused before the token is used at all
 
     new = "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    paired = subprocess.run(
-        [str(command), "bots", "pair", "assistente", "--legacy-digest", digest],
-        input=json.dumps({"bot_token": new, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
+    paired = admin_cli(
+        "bots", "pair", "assistente", "--legacy-digest", digest, stdin=json.dumps({"bot_token": new}),
     )
-    assert paired.returncode == 0
-    repeated = subprocess.run(
-        [str(command), "bots", "pair", "assistente"],
-        input=json.dumps({"bot_token": new, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
+    assert paired.returncode == 0, paired.stdout
+    repeated = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": new}))
     assert repeated.returncode == 1
     assert json.loads(repeated.stdout) == {"ok": False, "reason": "rotation_required"}
-    enabled = subprocess.run(
-        [str(command), "cutover", "enable"], env=environment, capture_output=True, text=True,
-    )
-    assert enabled.returncode == 0
+    assert admin_cli("cutover", "enable").returncode == 0
     assert store.cutover_status() == {"enabled": True, "paired": {"assistente": "rotated"}}
-    deleted = subprocess.run(
-        [str(command), "bots", "delete", "assistente"],
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
-    assert deleted.returncode == 0
+    assert admin_cli("bots", "delete", "assistente").returncode == 0
     assert store.cutover_status() == {"enabled": True, "paired": {}}
-    reused_after_delete = subprocess.run(
-        [str(command), "bots", "pair", "assistente"],
-        input=json.dumps({"bot_token": new, "chat_id": "42"}),
-        env=environment,
-        capture_output=True,
-        text=True,
-    )
+    reused_after_delete = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": new}))
     assert reused_after_delete.returncode == 1
     assert json.loads(reused_after_delete.stdout) == {"ok": False, "reason": "rotation_required"}
     history, complete = store.token_history("assistente")
     assert complete is True
-    assert history == {
-        digest,
-        __import__("hashlib").sha256(new.encode()).hexdigest(),
-    }
+    assert history == {digest, __import__("hashlib").sha256(new.encode()).hexdigest()}
 
 
 def test_enabled_flag_without_completed_pairing_fails_closed(
@@ -661,41 +642,24 @@ def test_legacy_environment_token_cannot_be_cleaned_or_cut_over(tmp_path: Path) 
 
 @pytest.mark.parametrize("seen_as", ["legacy", "paired", "deleted"])
 def test_a_token_seen_under_another_role_is_never_accepted(
-    telegram_store: dict[str, Path], seen_as: str
+    telegram_store: dict[str, Path], admin_cli, seen_as: str
 ) -> None:
     """Token history is kept per role, but reuse is checked across all roles."""
     captain = "123456:abcdefghijklmnopqrstuvwxyz"
-    command = ROOT / "shared/telegram_service/bin/jht-telegram-admin.py"
-    environment = {
-        **os.environ,
-        "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
-        "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
-    }
-
-    def admin(*args: str, stdin: str = "") -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [str(command), *args], input=stdin, env=environment, capture_output=True, text=True,
-        )
-
     captain_digest = __import__("hashlib").sha256(captain.encode()).hexdigest()
-    for role in ("assistente", "capitano", "mentor"):
-        inventory = captain_digest if seen_as == "legacy" and role == "capitano" else ""
-        assert admin("legacy", "remember", role, stdin=inventory).returncode == 0
+    complete_inventory(admin_cli, **({"capitano": captain_digest} if seen_as == "legacy" else {}))
     if seen_as in {"paired", "deleted"}:
-        assert admin("bots", "pair", "capitano", stdin=json.dumps({"bot_token": captain, "chat_id": "42"})).returncode == 0
+        assert admin_cli("bots", "pair", "capitano", stdin=json.dumps({"bot_token": captain})).returncode == 0
     if seen_as == "deleted":
-        assert admin("bots", "delete", "capitano").returncode == 0
+        assert admin_cli("bots", "delete", "capitano").returncode == 0
 
-    reused = admin("bots", "pair", "assistente", stdin=json.dumps({"bot_token": captain, "chat_id": "42"}))
+    reused = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": captain}))
 
     assert reused.returncode == 1
     assert json.loads(reused.stdout) == {"ok": False, "reason": "rotation_required"}
     assert not store.read_bot("assistente")
     # The assistant's own history stays its own: a fresh token still pairs.
-    fresh = admin(
-        "bots", "pair", "assistente",
-        stdin=json.dumps({"bot_token": "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ", "chat_id": "42"}),
-    )
+    fresh = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ"}))
     assert json.loads(fresh.stdout) == {"ok": True, "bot": "assistente", "state": "present", "rotation": "fresh"}
 
 
@@ -795,3 +759,175 @@ def test_a_role_without_a_bot_is_idle_not_an_error(
     assert store.poller_states()["mentor"]["state"] == "idle"
     assert store.poller_states()["mentor"]["reason"] == "bot_not_configured"
     assert "poller role=mentor state=idle reason=bot_not_configured" in capsys.readouterr().err
+
+
+# ── Chat verification (security review, 09/10: the inverse flow) ───────────
+
+def _message(text: str, *, chat: int = 42, sender: int | None = 42, chat_type: str = "private",
+             is_bot: bool = False, age: int = 0) -> dict:
+    message = {"date": int(time.time()) - age, "chat": {"id": chat, "type": chat_type}, "text": text}
+    if sender is not None:
+        message["from"] = {"id": sender, "is_bot": is_bot}
+    return message
+
+
+class ScriptedAPI:
+    # Telegram long-polls; this fake answers at once.  A verification that
+    # keeps polling past its script would spin until the real 300 s TTL.
+    MAX_EMPTY_POLLS = 10
+
+    def __init__(self, batches: list[list[dict]]) -> None:
+        self.batches = batches
+        self.offsets: list[int] = []
+        self.empty_polls = 0
+
+    def get_updates(self, offset: int, timeout: int = 25) -> list[dict]:
+        self.offsets.append(offset)
+        if not self.batches:
+            self.empty_polls += 1
+            assert self.empty_polls <= self.MAX_EMPTY_POLLS, "verification kept polling past the script"
+        batch = self.batches.pop(0) if self.batches else []
+        return [{"update_id": 900 + len(self.offsets) * 10 + index, "message": message}
+                for index, message in enumerate(batch)]
+
+
+@pytest.mark.parametrize(
+    "where",
+    [
+        {"chat": -1001, "chat_type": "group"},
+        {"chat": -1002, "chat_type": "supergroup"},
+        {"chat": 42, "sender": 666},
+        {"chat": 42, "sender": None},
+        {"chat": 42, "sender": 42, "is_bot": True},
+        # Same id on both sides, so only the chat type can refuse it.
+        {"chat": 42, "sender": 42, "chat_type": "group"},
+        {"chat": 42, "sender": 42, "chat_type": "channel"},
+    ],
+    ids=["group", "supergroup", "other-sender", "no-sender", "bot-sender", "group-same-id", "channel-same-id"],
+)
+def test_the_right_code_from_the_wrong_place_is_refused(where: dict) -> None:
+    from shared.telegram_service import verify
+
+    # Built here, not at collection: the message date must be newer than the code.
+    attempt = _message(f"/start {PAIRING_CODE}", **where)
+    api = ScriptedAPI([[attempt] * verify.MAX_WRONG_ATTEMPTS])
+    with pytest.raises(verify.VerificationError) as caught:
+        verify.wait_for_code(api, PAIRING_CODE, time.time())
+    assert caught.value.code == "verification_failed"
+
+
+def test_the_code_from_the_persons_private_chat_gives_its_chat_id() -> None:
+    from shared.telegram_service import verify
+
+    api = ScriptedAPI([
+        [_message("/start", chat=7, sender=7)],                       # START button: not an attempt
+        [_message(f"/start {PAIRING_CODE}", chat=7, sender=7, age=600)],  # older than the code: ignored
+        [_message("ciao", chat=7, sender=7), _message(PAIRING_CODE.lower(), chat=7, sender=7)],
+    ])
+    chat_id, offset = verify.wait_for_code(api, PAIRING_CODE, time.time())
+    assert chat_id == "7"
+    # Three polls: ids 910, 920, then 930-931; the next offset skips them all.
+    assert api.offsets == [0, 911, 921]
+    assert offset == 932
+
+
+def test_five_wrong_codes_end_the_verification() -> None:
+    from shared.telegram_service import verify
+
+    api = ScriptedAPI([[_message(f"/start WRONG{n}", chat=7, sender=7) for n in range(5)],
+                       [_message(f"/start {PAIRING_CODE}", chat=7, sender=7)]])
+    with pytest.raises(verify.VerificationError) as caught:
+        verify.wait_for_code(api, PAIRING_CODE, time.time())
+    assert caught.value.code == "verification_failed"
+
+
+def test_an_unanswered_code_expires() -> None:
+    from shared.telegram_service import verify
+
+    now = [1_000.0]
+
+    def clock() -> float:
+        now[0] += 100
+        return now[0]
+
+    with pytest.raises(verify.VerificationError) as caught:
+        verify.wait_for_code(ScriptedAPI([]), PAIRING_CODE, 1_000.0, clock=clock)
+    assert caught.value.code == "verification_timeout"
+
+
+def test_codes_are_long_unambiguous_and_single_use() -> None:
+    from shared.telegram_service import verify
+
+    codes = {verify.new_code() for _ in range(200)}
+    assert len(codes) == 200
+    assert all(len(code) >= 8 and set(code) <= set(verify.CODE_ALPHABET) for code in codes)
+    assert not set("01OIL") & set(verify.CODE_ALPHABET)
+    assert verify.CODE_TTL_SECONDS == 300 and verify.MAX_WRONG_ATTEMPTS == 5
+
+
+def test_a_planted_or_relayed_code_never_pairs_the_bot(telegram_store: dict[str, Path], admin_cli) -> None:
+    """An agent that relays the code through a group, or from its own account,
+    gets nothing: the token is recorded, no bot is published."""
+    token = "123456:abcdefghijklmnopqrstuvwxyz"
+    complete_inventory(admin_cli)
+    admin_cli.messages[0] = [
+        {"chat": {"id": -1001, "type": "group"}, "from": {"id": 42, "is_bot": False}, "text": f"/start {PAIRING_CODE}"},
+        {"chat": {"id": 666, "type": "private"}, "from": {"id": 777, "is_bot": False}, "text": f"/start {PAIRING_CODE}"},
+    ] * 3
+
+    result = admin_cli("bots", "pair", "assistente", stdin=json.dumps({"bot_token": token}))
+
+    assert json.loads(result.stdout) == {"ok": False, "reason": "verification_failed"}
+    assert store.read_bot("assistente") is None
+    assert __import__("hashlib").sha256(token.encode()).hexdigest() in store.known_token_digests()
+    assert not store.pairing_active("assistente", time.time())
+    assert admin_cli.apis[-1].sent == []
+
+
+def test_chat_id_moves_a_paired_bot_without_rotating_its_token(telegram_store: dict[str, Path], admin_cli) -> None:
+    token = "123456:abcdefghijklmnopqrstuvwxyz"
+    assert json.loads(admin_cli("bots", "chat-id", "assistente").stdout) == {"ok": False, "reason": "bot_not_configured"}
+    store.write_bot("assistente", {"bot_token": token, "chat_id": "42"})
+    admin_cli.messages[0] = [
+        {"chat": {"id": 43, "type": "private"}, "from": {"id": 43, "is_bot": False}, "text": f"/start {PAIRING_CODE}"},
+    ]
+
+    moved = admin_cli("bots", "chat-id", "assistente")
+
+    assert json.loads(moved.stdout) == {"ok": True, "bot": "assistente", "state": "present", "chat": "verified"}
+    assert store.read_bot("assistente") == {"bot_token": token, "chat_id": "43"}
+    assert token not in moved.stdout + moved.stderr
+    assert admin_cli.apis[-1].token == token
+    assert admin_cli.apis[-1].sent == [
+        ("42", "JHT: il bot assistente ora parla con un'altra chat."),
+        ("43", "JHT: il bot assistente è abbinato a questa chat."),
+    ]
+
+
+def test_the_service_poller_leaves_a_pairing_alone(telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    store.write_bot("assistente", {"bot_token": "123456:abcdefghijklmnopqrstuvwxyz", "chat_id": "42"})
+    polls: list[int] = []
+
+    class CodeAPI(FakeAPI):
+        def get_updates(self, offset: int) -> list[dict]:
+            polls.append(offset)
+            # The host starts verifying while this long poll is in flight.
+            store.begin_pairing("assistente", time.time() + 60)
+            return [{"update_id": 10, "message": {"chat": {"id": 42}, "text": f"/start {PAIRING_CODE}"}}]
+
+    transport = runtime.Runtime(api_factory=lambda _token: CodeAPI())
+    waits: list[float | None] = []
+
+    def wait(timeout: float | None = None) -> bool:
+        waits.append(timeout)
+        if len(waits) >= 2:
+            transport.stop_event.set()
+        return transport.stop_event.is_set()
+
+    monkeypatch.setattr(transport.stop_event, "wait", wait)
+    transport.poll_role("assistente")
+
+    assert polls == [0]  # one poll, then paused
+    assert store.read_state("offsets", {}).get("assistente", 0) == 0  # the code was not consumed
+    assert store.read_state("events-assistente", []) == []
+    assert store.poller_states()["assistente"]["reason"] == "pairing"

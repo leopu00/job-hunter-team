@@ -1099,36 +1099,19 @@ telegram_pair_other_legacy_roles() {
   printf '%s' "$listed"
 }
 
-telegram_pair() {
-  local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
-  local others="" answer=""
-  local agent_was_running=0 agent_status=0
-  local token="" chat_id="" pair_rc=0
-  local -a digest_args=()
-  case "$role" in assistente|capitano|mentor) ;; *)
-    err "uso: jht telegram pair <assistente|capitano|mentor>"
-    err "Interattivo: il token viene chiesto senza eco. Automazioni: JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da lì."
-    return 2
-    ;;
-  esac
-  others="$(telegram_pair_other_legacy_roles "$role")"
-  if [ -n "$others" ]; then
-    warn "Restano token legacy per: $others. Finché non abbini anche questi ruoli, $role resta muto su Telegram: abbinali tutti in questa seduta."
-    if [ -t 0 ]; then
-      printf 'Abbinare %s adesso? [s/N] ' "$role" >&2
-      IFS= read -r answer || answer=""
-      case "$answer" in
-        s|S|si|Si|SI|sì|Sì) ;;
-        *) info "Abbinamento annullato: nessuna modifica."; return 1 ;;
-      esac
-    fi
-  fi
+# Agenti fermi durante l'inventario host: un agente non deve poter togliere un
+# token legacy dalla config proprio mentre lo si conta.
+TELEGRAM_PAIR_AGENTS_STOPPED=0
+
+telegram_pair_stop_agents() {
+  local agent_status=0
+  TELEGRAM_PAIR_AGENTS_STOPPED=0
   if read_only_container_id >/dev/null 2>&1; then
-    agent_was_running=1
     compose stop "$CONTAINER_SERVICE" >/dev/null || {
       err "legacy_inventory_failed: non riesco a fermare gli agenti prima dell'inventario host."
       return 1
     }
+    TELEGRAM_PAIR_AGENTS_STOPPED=1
   else
     agent_status=$?
     if [ "$agent_status" -ne 3 ]; then
@@ -1136,8 +1119,21 @@ telegram_pair() {
       return 1
     fi
   fi
+}
+
+telegram_pair_start_agents() {
+  [ "$TELEGRAM_PAIR_AGENTS_STOPPED" -eq 1 ] || return 0
+  compose start "$CONTAINER_SERVICE" >/dev/null || {
+    err "agent_restart_failed: inventario conservato, ma il team non è ripartito. Cosa fare: jht up"
+    return 1
+  }
+}
+
+# Inventario host di un ruolo, conservato dal servizio isolato. Stampa le
+# impronte legacy (una per riga) per il successivo `bots pair`.
+telegram_pair_inventory() {
+  local role="$1" digests digest
   digests="$(telegram_legacy inventory "$role")" || {
-    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
     err "legacy_inventory_failed: migrazione Telegram interrotta."
     return 1
   }
@@ -1147,54 +1143,43 @@ telegram_pair() {
         err "legacy_inventory_invalid: migrazione Telegram interrotta."
         return 1
       }
-      digest_args+=(--legacy-digest "$digest")
     done <<< "$digests"
   fi
   if ! printf '%s' "$digests" | telegram_admin_input legacy remember "$role" >/dev/null; then
-    [ "$agent_was_running" -eq 0 ] || compose start "$CONTAINER_SERVICE" >/dev/null 2>&1 || true
     err "legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato."
     return 1
   fi
-  if [ "$agent_was_running" -eq 1 ]; then
-    compose start "$CONTAINER_SERVICE" >/dev/null || {
-      err "agent_restart_failed: inventario conservato, ma il team non è ripartito. Cosa fare: jht up"
-      return 1
-    }
-  fi
+  printf '%s' "$digests"
+}
 
-  was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
-  # Anche quando l'inventario non trova niente: un agente di una versione
-  # precedente può aver tolto il token dalla config prima dell'aggiornamento,
-  # e allora un token esposto risulterebbe «fresh».
-  info "Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token già esistente può essere stato letto dagli agenti anche se oggi non compare in ~/.jht."
+# Il token nuovo va al servizio isolato e basta. Il chat id non si scrive: il
+# servizio mostra un codice monouso e lo prende dal messaggio con cui la
+# persona lo manda al bot nuovo dal suo Telegram.
+telegram_pair_submit() {
+  local role="$1" digests="$2" digest token="" pair_rc=0
+  local -a digest_args=()
+  if [ -n "$digests" ]; then
+    while IFS= read -r digest; do
+      digest_args+=(--legacy-digest "$digest")
+    done <<< "$digests"
+  fi
   if [ -t 0 ]; then
-    if ! token="$(read_hidden_tty 'Token del bot (input nascosto): ')"; then
+    if ! token="$(read_hidden_tty "Token del bot $role (input nascosto): ")"; then
       err "input_interrotto: token non letto."
       return 1
     fi
-    printf "\nChat ID dell'utente: " >&2
-    if ! IFS= read -r chat_id; then
-      unset token
-      err "input_interrotto: chat id non letto."
-      return 1
-    fi
     if [[ ! "$token" =~ ^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$ ]]; then
-      unset token chat_id
+      unset token
       err "bot_token_invalid: controlla il token generato da BotFather."
       return 1
     fi
-    if [[ ! "$chat_id" =~ ^-?[0-9]{1,20}$ ]]; then
-      unset token chat_id
-      err "chat_id_invalid: inserisci l'identificativo numerico della chat."
-      return 1
-    fi
-    if printf '{"bot_token":"%s","chat_id":"%s"}' "$token" "$chat_id" \
+    if printf '{"bot_token":"%s"}' "$token" \
         | telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
     else
       pair_rc=$?
     fi
-    unset token chat_id
+    unset token
   else
     if telegram_admin_input bots pair "$role" ${digest_args[@]+"${digest_args[@]}"}; then
       pair_rc=0
@@ -1206,16 +1191,17 @@ telegram_pair() {
     err "Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova."
     return "$pair_rc"
   fi
-  telegram_legacy remove "$role" || {
-    err "legacy_cleanup_failed: il nuovo token è al sicuro, ma il token vecchio è ancora in ~/.jht; cutover negato."
-    return 1
-  }
+}
 
+# Dopo l'ultima copia legacy tolta il servizio isolato si accende (una volta
+# sola, irreversibile) e il team riparte senza il bridge legacy.
+telegram_pair_finish() {
+  local was_enabled="$1" remaining_rc=0 first_cutover=0
   if telegram_legacy remaining >/dev/null; then
     case "$was_enabled" in *'"enabled": true'*) ;; *) first_cutover=1 ;; esac
     telegram_admin cutover enable >/dev/null || return 1
     compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
-    if [ "$first_cutover" -eq 1 ] && [ "$agent_was_running" -eq 1 ]; then
+    if [ "$first_cutover" -eq 1 ] && [ "$TELEGRAM_PAIR_AGENTS_STOPPED" -eq 1 ]; then
       # Il riavvio spegne anche eventuali tg-bridge che conservavano il token
       # vecchio in memoria. Al boot pid1 vede il marker read-only.
       compose restart "$CONTAINER_SERVICE" >/dev/null || return 1
@@ -1232,19 +1218,132 @@ telegram_pair() {
   fi
 }
 
+telegram_pair_usage() {
+  err "uso: jht telegram pair <assistente|capitano|mentor>|--all"
+  err "Interattivo: il token viene chiesto senza eco, poi il bot nuovo riceve un codice monouso dal tuo Telegram. Automazioni: {\"bot_token\": ...} come JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da lì."
+}
+
+TELEGRAM_NEW_TOKEN_NOTE="Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token già esistente può essere stato letto dagli agenti anche se oggi non compare in ~/.jht."
+
+telegram_pair() {
+  local role="${1:-}" digests="" was_enabled="" others="" answer=""
+  [ "$role" != "--all" ] || { telegram_pair_all; return $?; }
+  case "$role" in assistente|capitano|mentor) ;; *) telegram_pair_usage; return 2 ;; esac
+  others="$(telegram_pair_other_legacy_roles "$role")"
+  if [ -n "$others" ]; then
+    warn "Restano token legacy per: $others. Finché non abbini anche questi ruoli, $role resta muto su Telegram: abbinali tutti in questa seduta (jht telegram pair --all)."
+    if [ -t 0 ]; then
+      printf 'Abbinare %s adesso? [s/N] ' "$role" >&2
+      IFS= read -r answer || answer=""
+      case "$answer" in
+        s|S|si|Si|SI|sì|Sì) ;;
+        *) info "Abbinamento annullato: nessuna modifica."; return 1 ;;
+      esac
+    fi
+  fi
+  telegram_pair_stop_agents || return 1
+  digests="$(telegram_pair_inventory "$role")" || {
+    telegram_pair_start_agents >/dev/null 2>&1 || true
+    return 1
+  }
+  telegram_pair_start_agents || return 1
+
+  was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
+  # Anche quando l'inventario non trova niente: un agente di una versione
+  # precedente può aver tolto il token dalla config prima dell'aggiornamento,
+  # e allora un token esposto risulterebbe «fresh».
+  info "$TELEGRAM_NEW_TOKEN_NOTE"
+  telegram_pair_submit "$role" "$digests" || return $?
+  telegram_legacy remove "$role" || {
+    err "legacy_cleanup_failed: il nuovo token è al sicuro, ma il token vecchio è ancora in ~/.jht; cutover negato."
+    return 1
+  }
+  telegram_pair_finish "$was_enabled"
+}
+
+# Tutti i ruoli con un token legacy, in una seduta. Le copie legacy si tolgono
+# solo quando tutti gli abbinamenti sono riusciti: nessun ruolo resta muto a
+# meta' strada, e la storia delle impronte rifiuta comunque quei token.
+telegram_pair_all() {
+  local roles="" role rc=0 was_enabled="" status="" digests=""
+  local d_assistente="" d_capitano="" d_mentor=""
+  if [ ! -t 0 ]; then
+    err "jht telegram pair --all è interattivo: per le automazioni abbina un ruolo alla volta."
+    return 2
+  fi
+  roles="$(telegram_legacy remaining 2>/dev/null)" || rc=$?
+  case "$rc" in
+    0) info "Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>."; return 0 ;;
+    1) ;;
+    *) err "legacy_inventory_failed: non riesco a leggere i token legacy in ~/.jht."; return 1 ;;
+  esac
+  roles="$(printf '%s\n' $roles | grep -Ex 'assistente|capitano|mentor' | tr '\n' ' ' || true)"
+  roles="${roles% }"
+  [ -n "$roles" ] || { err "legacy_inventory_failed: ruoli legacy non riconosciuti."; return 1; }
+  info "Ruoli da abbinare in questa seduta: $roles"
+
+  telegram_pair_stop_agents || return 1
+  for role in $roles; do
+    digests="$(telegram_pair_inventory "$role")" || {
+      telegram_pair_start_agents >/dev/null 2>&1 || true
+      return 1
+    }
+    case "$role" in
+      assistente) d_assistente="$digests" ;;
+      capitano) d_capitano="$digests" ;;
+      mentor) d_mentor="$digests" ;;
+    esac
+  done
+  telegram_pair_start_agents || return 1
+
+  was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
+  status="$(telegram_admin bots status 2>/dev/null || true)"
+  info "$TELEGRAM_NEW_TOKEN_NOTE"
+  for role in $roles; do
+    case "$status" in
+      *"\"$role\": \"present\""*)
+        info "$role ha già un bot abbinato: tolgo solo la sua copia legacy."
+        continue
+        ;;
+    esac
+    case "$role" in
+      assistente) digests="$d_assistente" ;;
+      capitano) digests="$d_capitano" ;;
+      mentor) digests="$d_mentor" ;;
+    esac
+    telegram_pair_submit "$role" "$digests" || {
+      rc=$?
+      err "Abbinamento di $role non riuscito: le copie legacy restano tutte. Rilancia jht telegram pair --all: i ruoli già abbinati non chiedono un altro token."
+      return "$rc"
+    }
+  done
+  for role in $roles; do
+    telegram_legacy remove "$role" || {
+      err "legacy_cleanup_failed: i token nuovi sono al sicuro, ma la copia legacy di $role è ancora in ~/.jht; cutover negato."
+      return 1
+    }
+  done
+  telegram_pair_finish "$was_enabled"
+}
+
 telegram_command() {
   local action="${1:-status}"
   shift || true
   case "$action" in
     status) telegram_admin bots status ;;
     pair) telegram_pair "$@" ;;
+    chat-id)
+      case "${1:-}" in assistente|capitano|mentor) telegram_admin bots chat-id "$1" ;; *)
+        err "uso: jht telegram chat-id <assistente|capitano|mentor>"; return 2 ;;
+      esac
+      ;;
     remove)
       case "${1:-}" in assistente|capitano|mentor) telegram_admin bots delete "$1" ;; *)
         err "uso: jht telegram remove <assistente|capitano|mentor>"; return 2 ;;
       esac
       ;;
     *)
-      err "uso: jht telegram status|pair <ruolo>|remove <ruolo>"
+      err "uso: jht telegram status|pair <ruolo>|pair --all|chat-id <ruolo>|remove <ruolo>"
       return 2
       ;;
   esac
@@ -1731,9 +1830,12 @@ jht — Job Hunter Team
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
     jht telegram status    stato del servizio Telegram isolato
-    jht telegram pair ROLE chiede il token senza eco sul computer host
+    jht telegram pair ROLE chiede il token senza eco sul computer host, poi
+                           mostra un codice da mandare al bot dal tuo Telegram
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da lì.
+    jht telegram pair --all abbina in una seduta tutti i ruoli legacy
+    jht telegram chat-id ROLE sposta il bot su un'altra chat, con lo stesso codice
     jht reset              cancella configurazione e volumi del broker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo

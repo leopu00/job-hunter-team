@@ -465,11 +465,20 @@ class Runtime:
         backoff = 1
         while not self.stop_event.is_set():
             try:
+                if store.pairing_active(role, time.time()):
+                    # The host is reading this bot's updates to verify a chat.
+                    self._poller_state(role, "idle", "pairing")
+                    self.stop_event.wait(2)
+                    continue
                 secret, api = self._bot(role)
                 offsets = store.read_state("offsets", {})
                 offset = int(offsets.get(role, 0))
                 updates = api.get_updates(offset)
                 self._poller_state(role, "ok", "polling")
+                if store.pairing_active(role, time.time()):
+                    # A pairing started during the long poll: leave these
+                    # updates unconsumed, the code may be among them.
+                    continue
                 for update in updates:
                     update_id = update.get("update_id")
                     try:

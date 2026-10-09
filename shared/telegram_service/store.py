@@ -200,6 +200,46 @@ def known_token_digests() -> set[str]:
     return set().union(*(token_history(role)[0] for role in BOT_ROLES))
 
 
+PAIRING_STATE = "pairing"
+
+
+def begin_pairing(role: str, until: float) -> None:
+    """Pause the service poller of a role while the host verifies its chat.
+
+    Otherwise the running poller could consume the message that carries the
+    code (same bot, same getUpdates queue) before the pairing reads it.
+    """
+    if role not in BOT_ROLES:
+        raise StoreError("bot_role_unknown")
+    with locked(PAIRING_STATE):
+        state = read_state(PAIRING_STATE, {})
+        state[role] = float(until)
+        write_state(PAIRING_STATE, state)
+
+
+def end_pairing(role: str) -> None:
+    with locked(PAIRING_STATE):
+        state = read_state(PAIRING_STATE, {})
+        state.pop(role, None)
+        write_state(PAIRING_STATE, state)
+
+
+def pairing_active(role: str, now: float) -> bool:
+    with locked(PAIRING_STATE):
+        state = read_state(PAIRING_STATE, {})
+    until = state.get(role)
+    return isinstance(until, (int, float)) and not isinstance(until, bool) and until > now
+
+
+def set_offset(role: str, offset: int) -> None:
+    if role not in BOT_ROLES:
+        raise StoreError("bot_role_unknown")
+    with locked("offsets"):
+        offsets = read_state("offsets", {})
+        offsets[role] = int(offset)
+        write_state("offsets", offsets)
+
+
 POLLER_STATE = "pollers"
 POLLER_STATES = frozenset({"ok", "idle", "error"})
 

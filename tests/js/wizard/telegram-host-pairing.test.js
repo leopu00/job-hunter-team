@@ -38,6 +38,9 @@ describe("host-owned Telegram pairing", () => {
     // Asked even when nothing legacy is found: an earlier release's agent may
     // have removed an exposed token from the config before the inventory.
     expect(note).toContain("Always pair a freshly generated token");
+    // The chat id comes from the message that carries the one-time code.
+    expect(note).toContain("the chat id is never typed");
+    expect(note).not.toContain("bot_token and chat_id");
     expect(ui.text).not.toHaveBeenCalled();
   });
 

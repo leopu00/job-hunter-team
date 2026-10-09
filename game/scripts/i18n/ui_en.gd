@@ -952,7 +952,7 @@ const S := {
 
 	"tg.intro": "Connect the three private bots the team uses. Tokens go straight to the isolated Telegram service and are never saved in the agents' home.",
 	"tg.botfather": "OPEN BOTFATHER  ↗",
-	"tg.guide": "Always use a token freshly generated in BotFather (/revoke on the existing bot, or a new bot): an older token may have been read by the agents. On the host computer, run jht telegram pair assistente|capitano|mentor: the token is requested without echo. For automation, you can pass JSON on stdin; do not save the token in ~/.jht and, if you use a file outside it, delete it immediately afterward.",
+	"tg.guide": "Always use a token freshly generated in BotFather (/revoke on the existing bot, or a new bot): an older token may have been read by the agents. On the host computer, run jht telegram pair assistente|capitano|mentor: the token is requested without echo, then a one-time code appears that you send to the bot from your Telegram (/start CODE): the chat id is no longer typed. For automation, you can pass JSON on stdin; do not save the token in ~/.jht and, if you use a file outside it, delete it immediately afterward.",
 	"tg.role_assistente": "profile onboarding and documents",
 	"tg.role_capitano": "team direction and ready positions",
 	"tg.role_mentor": "coaching and career strategy",

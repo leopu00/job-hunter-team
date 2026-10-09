@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -77,10 +78,17 @@ class BotAPI:
             raise TelegramError("telegram_bad_response")
         return message_id
 
-    def get_updates(self, offset: int) -> list[dict]:
+    def get_me(self) -> str:
+        """The bot's username, to tell the person where to send the code."""
+        username = self.call("getMe", {}).get("username")
+        if not isinstance(username, str) or not re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
+            raise TelegramError("telegram_bad_response")
+        return username
+
+    def get_updates(self, offset: int, timeout: int = 25) -> list[dict]:
         result = self.call(
             "getUpdates",
-            {"offset": offset, "timeout": 25, "allowed_updates": ["message", "edited_message"]},
+            {"offset": offset, "timeout": timeout, "allowed_updates": ["message", "edited_message"]},
         )
         value = result.get("value")
         if not isinstance(value, list):
