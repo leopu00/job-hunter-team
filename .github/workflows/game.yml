@@ -215,6 +215,57 @@ jobs:
           while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
           if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry in App e funzionalità' }
 
+      # Next to the v0.3.9 game (a stand-in with its uninstall entry, folder and
+      # desktop shortcut): silent, the setup keeps it untouched and names its
+      # own shortcuts «Job Hunter Team App»; its uninstaller removes only those.
+      - name: Install and uninstall the NSIS setup next to the v0.3.9 game
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          $gameKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
+          $gameDir = Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team'
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+          New-Item -ItemType Directory -Force -Path $gameDir, $desktop | Out-Null
+          Set-Content -LiteralPath (Join-Path $gameDir 'Uninstall.exe') -Value 'stand-in, never run' -NoNewline
+          $gameLink = Join-Path $desktop 'Job Hunter Team.lnk'
+          Set-Content -LiteralPath $gameLink -Value 'the game shortcut' -NoNewline
+          New-Item -Force -Path $gameKey | Out-Null
+          Set-ItemProperty -Path $gameKey -Name DisplayName -Value 'Job Hunter Team'
+          Set-ItemProperty -Path $gameKey -Name DisplayVersion -Value '0.3.9'
+          Set-ItemProperty -Path $gameKey -Name InstallLocation -Value $gameDir
+          Set-ItemProperty -Path $gameKey -Name UninstallString -Value "`"$gameDir\Uninstall.exe`""
+          $before = (Get-FileHash -LiteralPath $gameLink).Hash
+          function Assert-GameUntouched {
+            if ((Get-FileHash -LiteralPath $gameLink).Hash -ne $before) { throw 'the game desktop shortcut was changed' }
+            if (-not (Test-Path -LiteralPath $gameKey)) { throw 'the game uninstall entry is gone' }
+            if (-not (Test-Path -LiteralPath (Join-Path $gameDir 'Uninstall.exe'))) { throw 'the game uninstaller is gone' }
+          }
+
+          $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+          Assert-GameUntouched
+          foreach ($link in @((Join-Path $desktop 'Job Hunter Team App.lnk'), (Join-Path $programs 'Job Hunter Team App.lnk'))) {
+            if (-not (Test-Path -LiteralPath $link)) { throw "missing: $link" }
+          }
+          if (Test-Path -LiteralPath (Join-Path $programs 'Job Hunter Team.lnk')) { throw 'the app took the game Start menu name' }
+
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+          Start-Process -FilePath (Join-Path $location 'uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry' }
+          Assert-GameUntouched
+          foreach ($link in @((Join-Path $desktop 'Job Hunter Team App.lnk'), (Join-Path $programs 'Job Hunter Team App.lnk'))) {
+            if (Test-Path -LiteralPath $link) { throw "left behind: $link" }
+          }
+          Remove-Item -LiteralPath $gameKey -Recurse -Force
+          Remove-Item -LiteralPath $gameDir -Recurse -Force
+          Remove-Item -LiteralPath $gameLink -Force
+
       - name: Collect bundle outputs
         run: |
           mkdir -p gate-assets
