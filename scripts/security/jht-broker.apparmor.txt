@@ -3,18 +3,10 @@
 # The container default of github.com/moby/profiles apparmor/v0.2.3
 # (Apache-2.0, rendered with Name=jht-broker), with what the broker's login
 # browser needs to run Chromium's own sandbox:
-#   - `userns,` ONLY for Chromium: on Ubuntu >= 23.10 only a confined process
-#     whose profile says so may create a user namespace
-#     (kernel.apparmor_restrict_unprivileged_userns). The broker's Python and
-#     every other process stay in `jht-broker`, which has no `userns,`; the
-#     exec of Chromium's binary moves to the child profile `chromium`. The
-#     image keeps that binary at one exact path (Dockerfile), because only an
-#     exact path takes precedence over the `file,` rule's inherited exec;
+#   - `userns,`: on Ubuntu >= 23.10 only a confined process whose profile says
+#     so may create a user namespace (kernel.apparmor_restrict_unprivileged_userns);
 #   - signal and ptrace among the container's own processes also under
 #     Podman + crun, whose label is stacked (`jht-broker//&crun`).
-# Where the host has no AppArmor (SELinux, the Mac's Podman machine) only the
-# seccomp profile applies, and seccomp cannot tell binaries apart: there any
-# process of the container may create user, PID and network namespaces.
 # ABI 4.0 is needed for `userns`; under it `network` no longer includes unix
 # sockets, so `unix,` is written out.
 # Kept as .txt in the repo; installed by the installer as /etc/apparmor.d/jht-broker and loaded with
@@ -35,8 +27,8 @@ profile jht-broker flags=(attach_disconnected,mediate_deleted) {
   file,
   umount,
 
-  # Chromium's namespace sandbox (R3): only its binary, in the child profile.
-  /opt/playwright/chromium-jht/chrome-linux/chrome cx -> chromium,
+  # Chromium's namespace sandbox (R3).
+  userns,
 
   # Host (privileged) processes and the runtimes may signal the container.
   signal (receive) peer=unconfined,
@@ -45,9 +37,6 @@ profile jht-broker flags=(attach_disconnected,mediate_deleted) {
   # Container processes may signal each other, with the label alone or stacked.
   signal (send,receive) peer=jht-broker,
   signal (send,receive) peer="jht-broker//&crun",
-  # Playwright stops the browser it started.
-  signal (send) peer=jht-broker//chromium,
-  signal (send) peer="jht-broker//chromium//&crun",
 
   deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
   # deny write to files not in /proc/<number>/** or /proc/sys/**
@@ -72,48 +61,4 @@ profile jht-broker flags=(attach_disconnected,mediate_deleted) {
   # crash handling), with the label alone or stacked.
   ptrace (trace,tracedby,read,readby) peer=jht-broker,
   ptrace (trace,tracedby,read,readby) peer="jht-broker//&crun",
-
-  # Chromium's browser, zygote and renderers: the container default plus
-  # `userns,`, which nothing else in the container has.
-  profile chromium flags=(attach_disconnected,mediate_deleted) {
-    network,
-    unix,
-    deny network alg,
-    deny network vsock,
-    capability,
-    file,
-    umount,
-
-    userns,
-
-    signal (receive) peer=unconfined,
-    signal (receive) peer=runc,
-    signal (receive) peer=crun,
-    signal (receive) peer=jht-broker,
-    signal (receive) peer="jht-broker//&crun",
-    signal (send,receive) peer=jht-broker//chromium,
-    signal (send,receive) peer="jht-broker//chromium//&crun",
-
-    deny @{PROC}/* w,
-    deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
-    deny @{PROC}/sys/[^k]** w,
-    deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,
-    deny @{PROC}/sysrq-trigger rwklx,
-    deny @{PROC}/kcore rwklx,
-
-    deny mount,
-
-    deny /sys/[^f]*/** wklx,
-    deny /sys/f[^s]*/** wklx,
-    deny /sys/fs/[^c]*/** wklx,
-    deny /sys/fs/c[^g]*/** wklx,
-    deny /sys/fs/cg[^r]*/** wklx,
-    deny /sys/firmware/** rwklx,
-    deny /sys/devices/virtual/powercap/** rwklx,
-    deny /sys/kernel/security/** rwklx,
-
-    # The zygote and crash handling trace the browser's own processes.
-    ptrace (trace,tracedby,read,readby) peer=jht-broker//chromium,
-    ptrace (trace,tracedby,read,readby) peer="jht-broker//chromium//&crun",
-  }
 }

@@ -56,6 +56,10 @@ jobs:
           sudo cp scripts/security/jht-broker.apparmor.txt /etc/apparmor.d/jht-broker
           sudo apparmor_parser -r /etc/apparmor.d/jht-broker
           sudo grep -x 'jht-broker (enforce)' /sys/kernel/security/apparmor/profiles
+          # The journal control: a profile without userns, for the job only.
+          sudo cp scripts/ci/jht-journal-control.apparmor.txt /etc/apparmor.d/jht-journal-control
+          sudo apparmor_parser -r /etc/apparmor.d/jht-journal-control
+          sudo grep -x 'jht-journal-control (enforce)' /sys/kernel/security/apparmor/profiles
 
       - name: Chromium's sandbox runs, and the broker fails closed without the profiles
         run: python3 scripts/ci/broker_sandbox.py jht:broker-sandbox scripts/security/jht-broker.seccomp.json

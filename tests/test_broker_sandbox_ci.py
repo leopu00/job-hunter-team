@@ -28,15 +28,16 @@ GOOD = {
     "own_userns": "user:[4026531837]",
     "renderer_userns": ["user:[4026532300]"],
     "renderer_in_own_userns": True,
-    "python_unshare_user": False,
+    "python_unshare_user": True,
     "python_unshare_mount": False,
 }
 BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "python_unshare_mount": False}
-CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-broker" pid=7 comm="python3"'
+CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-journal-control" pid=7 comm="python3"'
 
 
-def _verdict(monkeypatch, capsys, good=GOOD, bare=BARE, denied=(CONTROL,), sysctl="1"):
+def _verdict(monkeypatch, capsys, good=GOOD, bare=BARE, denied=(CONTROL,), sysctl="1", checked=None):
     monkeypatch.setattr(gate, "run", lambda image, extra: dict(good) if extra else dict(bare))
+    monkeypatch.setattr(gate, "control", lambda image, seccomp: dict(checked or {"unshare_user": False}))
     monkeypatch.setattr(gate, "denials", lambda since: list(denied))
     monkeypatch.setattr(gate.time, "sleep", lambda s: None)
     real_run = subprocess.run
@@ -62,7 +63,6 @@ def test_a_good_run_passes(monkeypatch, capsys):
     ({"no_sandbox_flag": True}, "flag"),
     ({"sandboxed": False, "sandbox_text": "You are not adequately sandboxed!"}, "chrome-sandbox"),
     ({"renderer_in_own_userns": False}, "renderer-userns"),
-    ({"python_unshare_user": True}, "python-userns"),
     ({"python_unshare_mount": True}, "python-mountns"),
 ])
 def test_each_broken_fact_with_the_profiles_fails(monkeypatch, capsys, change, tag):
@@ -128,4 +128,23 @@ def test_a_probe_that_prints_nothing_is_reported_as_such(monkeypatch, capsys):
 
 def test_an_exec_refused_is_an_answer_of_the_probe():
     assert "except OSError as refused:" in gate.PROBE
+
+
+def test_the_broker_python_creating_a_user_namespace_is_declared_not_failed(monkeypatch, capsys):
+    # userns is in the whole jht-broker profile: no-new-privileges forbids
+    # the transition to a Chromium-only child profile (measured in CI).
+    code, out = _verdict(monkeypatch, capsys)
+    assert code == 0 and "MEASURE broker-python-userns=allowed" in out
+
+
+def test_a_control_profile_that_allows_user_namespaces_fails(monkeypatch, capsys):
+    code, out = _verdict(monkeypatch, capsys, checked={"unshare_user": True})
+    assert code == 1 and "FAIL [control]" in out
+
+
+def test_the_control_profile_has_no_userns_and_is_loaded_by_the_job():
+    control = (ROOT / "scripts" / "ci" / "jht-journal-control.apparmor.txt").read_text()
+    assert "profile jht-journal-control" in control and "userns" not in control.split("profile jht-journal-control", 1)[1]
+    workflow = (ROOT / ".github" / "workflows" / "broker-sandbox.yml").read_text()
+    assert "apparmor_parser -r /etc/apparmor.d/jht-journal-control" in workflow
 

@@ -1,0 +1,19 @@
+# A control profile for the broker-sandbox CI job only (never installed on a
+# user's host). It has no `userns,`: on a runner that restricts unprivileged
+# user namespaces, an unshare(CLONE_NEWUSER) under it is refused and logged.
+# The job requires that line in the kernel journal before it trusts "0
+# denials" for jht-broker: a journal reader that sees nothing would report 0
+# for anything.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile jht-journal-control flags=(attach_disconnected,mediate_deleted) {
+  network,
+  unix,
+  capability,
+  file,
+  signal,
+  ptrace,
+}

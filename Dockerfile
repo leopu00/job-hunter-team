@@ -174,19 +174,6 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # shell cannot draw to a display, and Playwright launches the full build
     # whenever headless=False. linkedin_check.py keeps using the shell.
     && playwright install chromium \
-    # One exact path for the full Chromium: the broker's AppArmor profile
-    # (scripts/security/jht-broker.apparmor.txt) lets only this binary create
-    # user namespaces, and only an exact path takes precedence over its
-    # `file,` rule. The revisioned directory stays as a link, so Playwright
-    # finds the browser as before; AppArmor sees the resolved path.
-    && revisioned="$(ls -d /opt/playwright/chromium-[0-9]*)" \
-    && mv "$revisioned" /opt/playwright/chromium-jht \
-    && ln -s chromium-jht "$revisioned" \
-    && if [ -d /opt/playwright/chromium-jht/chrome-linux64 ] && [ ! -e /opt/playwright/chromium-jht/chrome-linux ]; then \
-         mv /opt/playwright/chromium-jht/chrome-linux64 /opt/playwright/chromium-jht/chrome-linux \
-         && ln -s chrome-linux /opt/playwright/chromium-jht/chrome-linux64; \
-       fi \
-    && test -x /opt/playwright/chromium-jht/chrome-linux/chrome \
     # Drop the C toolchain: it only existed to compile the wheels installed
     # above (nothing in the runtime image compiles anything), and it is ~250MB.
     # The purge MUST live in this same RUN: in a separate one the files would

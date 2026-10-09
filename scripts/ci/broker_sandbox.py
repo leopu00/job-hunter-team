@@ -13,12 +13,15 @@ capabilities, no new privileges, no network), twice:
   - chrome://sandbox says the namespace sandbox and seccomp-bpf are on, with
     the positive verdict (`view.sandboxed()`);
   - a renderer runs in a user namespace of its own, not the browser's;
-  - the broker's own Python cannot create a user namespace (only Chromium's
-    binary, in the child profile, may) nor a mount namespace;
-  - the kernel logged the denial of that unshare (the control: a journal
-    reader that sees nothing would report 0 denials for anything) and no
-    other `apparmor="DENIED"` for the profile meanwhile (userns, signal,
-    ptrace: the Podman plan's risk too).
+  - the broker's own Python cannot create a mount namespace (a user
+    namespace it may, as Chromium may: `userns,` is in the whole profile,
+    see scripts/security/README.md; the job prints it);
+  - the kernel logged no `apparmor="DENIED"` for the profile meanwhile
+    (userns, signal, ptrace: the Podman plan's risk too). That "no" is
+    trusted only after the control: under the job's own profile
+    jht-journal-control (no `userns,`, scripts/ci), an unshare of a user
+    namespace must be refused and logged, or a journal reader that sees
+    nothing would report 0 denials for anything.
   If Chromium does not start, Chromium's own log and the binary's stderr
   are printed.
 - WITHOUT them (the runtime's defaults). It FAILS unless the broker refuses
@@ -140,15 +143,40 @@ def run(image: str, extra: list[str]) -> dict:
         return {"error": (result.stderr or result.stdout)[-800:]}
 
 
+CONTROL_PROFILE = "jht-journal-control"
+
+# Runs inside the control container: an unshare of a user namespace, which
+# the control profile (no `userns,`) must refuse, and log.
+CONTROL_PROBE = r'''
+import ctypes, json, os
+pid = os.fork()
+if pid == 0:
+    libc = ctypes.CDLL(None, use_errno=True)
+    os._exit(0 if libc.unshare(0x10000000) == 0 else 1)
+print(json.dumps({"unshare_user": os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0}))
+'''
+
+
 def expected_denial(line: str) -> bool:
-    """The denial the probe provokes on purpose: the broker's Python asking
-    for a user namespace under jht-broker, which has no `userns,`."""
-    return 'operation="userns_create"' in line and 'profile="jht-broker"' in line and 'comm="python3"' in line
+    """The denial the control provokes on purpose."""
+    return 'operation="userns_create"' in line and f'profile="{CONTROL_PROFILE}"' in line
 
 
 def denials(since: str) -> list[str]:
     log = subprocess.run(["sudo", "journalctl", "-k", "--since", since, "--no-pager"], capture_output=True, text=True)
-    return [line for line in log.stdout.splitlines() if 'apparmor="DENIED"' in line and "jht-broker" in line]
+    return [line for line in log.stdout.splitlines()
+            if 'apparmor="DENIED"' in line and ("jht-broker" in line or CONTROL_PROFILE in line)]
+
+
+def control(image: str, seccomp: str) -> dict:
+    result = subprocess.run(["docker", "run", "--rm", *HARDENING, "--security-opt", f"apparmor={CONTROL_PROFILE}",
+                             "--security-opt", f"seccomp={seccomp}", "--entrypoint", "python3", image,
+                             "-c", CONTROL_PROBE], capture_output=True, text=True, timeout=120)
+    lines = result.stdout.strip().splitlines()
+    try:
+        return json.loads(lines[-1]) if lines else {"error": result.stderr[-800:]}
+    except json.JSONDecodeError:
+        return {"error": (result.stderr or result.stdout)[-800:]}
 
 
 def main(argv: list[str]) -> int:
@@ -171,6 +199,10 @@ def main(argv: list[str]) -> int:
 
     since = time.strftime("%Y-%m-%d %H:%M:%S")
     time.sleep(1)
+    checked = control(image, seccomp)
+    print("MEASURE journal-control " + json.dumps(checked))
+    if checked.get("unshare_user") is not False:
+        fail("control", f"the control profile did not refuse a user namespace: {checked}")
     good = run(image, ["--security-opt", "apparmor=jht-broker", "--security-opt", f"seccomp={seccomp}"])
     print("MEASURE with-profiles " + json.dumps(good))
     if "error" in good:
@@ -194,20 +226,21 @@ def main(argv: list[str]) -> int:
             fail("chrome-sandbox", f"chrome://sandbox: {good.get('sandbox_text')}")
         if good.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {good.get('renderer_userns')} vs own {good.get('own_userns')}")
-    if "error" not in good and good.get("python_unshare_user") is not False:
-        fail("python-userns", "the broker's Python created a user namespace: userns is not limited to Chromium")
+    # Declared, not a failure: userns is in the whole jht-broker profile,
+    # because no-new-privileges forbids a transition to a Chromium-only child.
+    print(f"MEASURE broker-python-userns={'allowed' if good.get('python_unshare_user') else 'refused'}")
     if "error" not in good and good.get("python_unshare_mount") is not False:
         fail("python-mountns", "the broker's Python created a mount namespace under the profiles")
     denied = denials(since)
-    control = [line for line in denied if expected_denial(line)]
+    controls = [line for line in denied if expected_denial(line)]
     unexpected = [line for line in denied if not expected_denial(line)]
-    print(f"MEASURE apparmor-denials={len(unexpected)} control-denials={len(control)}")
+    print(f"MEASURE apparmor-denials={len(unexpected)} control-denials={len(controls)}")
     for line in unexpected[:20]:
         print("  " + line)
-    if not control:
-        # The probe's own unshare must show up: if it does not, the journal
+    if not controls:
+        # The control's unshare must show up: if it does not, the journal
         # reader would miss real denials too, and "0" would prove nothing.
-        fail("journal", "no DENIED line for the broker's own unshare: the journal reader sees nothing")
+        fail("journal", f"no DENIED line for the {CONTROL_PROFILE} unshare: the journal reader sees nothing")
     if unexpected:
         fail("apparmor-denied", f"{len(unexpected)} DENIED lines for jht-broker")
 
