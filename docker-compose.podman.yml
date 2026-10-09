@@ -3,7 +3,8 @@
 # The agent container does not use Netavark's custom rootless bridge, which
 # can fail on Podman Machine 6 / Netavark 2 while applying nftables rules: it
 # runs on pasta (userspace, no nftables) with no way out but the egress proxy.
-# Isolated services remain on a bridge.
+# The broker and the Telegram service run the same way, each with its own
+# proxy instance and port (the policy differs per service).
 
 services:
   jht:
@@ -54,8 +55,22 @@ services:
   # condivide il loopback con gli agenti.
   jht-broker:
     userns_mode: "keep-id:uid=1001,gid=1001"
+    # Come gli agenti: nessuna strada verso fuori se non il SUO proxy, la
+    # porta 3129 del loopback della VM (posta: 993, 465, 587, e 443). Dal
+    # bridge usciva diretto e vedeva la LAN. IMAP e SMTP non leggono le
+    # variabili del proxy: passano dal tunnel CONNECT di mail_egress.py.
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3129"
+    environment:
+      - HTTPS_PROXY=http://127.0.0.1:3129
+      - https_proxy=http://127.0.0.1:3129
 
   jht-telegram:
     # SO_PEERCRED è tradotto nel namespace del server. Client e server devono
     # quindi usare la stessa mappa: uid 1001 deve restare 1001 su entrambi.
     userns_mode: "keep-id:uid=1001,gid=1001"
+    # Solo il SUO proxy, la porta 3130 della VM, che ammette soltanto
+    # api.telegram.org:443. urllib legge HTTPS_PROXY da sé.
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3130"
+    environment:
+      - HTTPS_PROXY=http://127.0.0.1:3130
+      - https_proxy=http://127.0.0.1:3130
