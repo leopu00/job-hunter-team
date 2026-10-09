@@ -287,6 +287,7 @@ $BrokerContainer = 'jht-broker'
 $TelegramContainer = 'jht-telegram'
 $LegacySecretNames = @('email_monitor', 'email_transport')
 $BrokerVolumeNames = @('jht-secrets', 'jht-broker-state', 'jht-broker-sock')
+$RuntimeMigrationVolumes = @('jht-broker-state', 'jht-secrets', 'jht-telegram-secrets', 'jht-telegram-state')
 $HostResetConfirmedExit = 20
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
@@ -296,6 +297,7 @@ $RuntimeDir  = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Pa
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
 $RuntimeSelectionFile = Join-Path $RuntimeDir 'container-runtime'
+$RuntimeMigrationMarker = Join-Path $RuntimeDir '.runtime-migrated-podman'
 $PodmanMachineFile = Join-Path $RuntimeDir 'podman-machine'
 $ContainerRuntime = if ($env:JHT_CONTAINER_RUNTIME) {
   $env:JHT_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
@@ -307,6 +309,18 @@ $PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
 $ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
 $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $DockerShim = Join-Path $RuntimeShimDir 'docker.exe'
+$MigrationDockerCommand = if ($env:JHT_MIGRATION_DOCKER) {
+  $env:JHT_MIGRATION_DOCKER
+} else {
+  $candidate = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($candidate) { $candidate.Source } else { '' }
+}
+$MigrationPodmanCommand = if ($env:JHT_MIGRATION_PODMAN) {
+  $env:JHT_MIGRATION_PODMAN
+} else {
+  $candidate = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($candidate) { $candidate.Source } else { '' }
+}
 if ($ContainerRuntime -eq 'podman') {
   # Compose otherwise derives the project from the protected runtime directory
   # ("host-runtime"), while development runs derive it from the checkout. A
@@ -661,6 +675,9 @@ jht - Job Hunter Team
                            Per automazioni: JSON su stdin. Non salvare il token
                            in ~/.jht; cancella subito file usati fuori da li'.
     jht reset              cancella configurazione e volumi del broker
+    jht migrate-runtime podman
+                           copia/verifica i volumi Docker in Podman senza
+                           selezionare il nuovo runtime o cancellare Docker
     jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,
                             documenti, Podman e Compose
 
@@ -688,7 +705,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'reset'
+    'setup', 'download', 'mail', 'telegram', 'reset', 'migrate-runtime'
   )
 }
 
@@ -1175,6 +1192,253 @@ function Invoke-ResetCommand {
   $code = $LASTEXITCODE
   if ($code -ne $HostResetConfirmedExit) { return $code }
   return (Remove-BrokerResetData)
+}
+
+$script:RuntimeVolumeManifestPython = @'
+import hashlib,os,stat,sys
+root=sys.argv[1]
+root_stat=os.lstat(root)
+entries=[("D",".",str(root_stat.st_uid)+":"+str(root_stat.st_gid)+":"+format(stat.S_IMODE(root_stat.st_mode),"o"),"")]
+count=0
+for base,dirs,files in os.walk(root,topdown=True,followlinks=False):
+    dirs.sort(); files.sort()
+    for name in list(dirs):
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISDIR(mode): raise SystemExit(41)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("D",os.path.relpath(path,root),owner,""))
+    for name in files:
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISREG(mode): raise SystemExit(42)
+        digest=hashlib.sha256()
+        with open(path,"rb") as stream:
+            for block in iter(lambda:stream.read(1024*1024),b""): digest.update(block)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("F",os.path.relpath(path,root),owner,digest.hexdigest())); count+=1
+aggregate=hashlib.sha256()
+for kind,path,owner,digest in entries:
+    aggregate.update(kind.encode()+b"\0"+path.encode("utf-8")+b"\0"+owner.encode()+b"\0"+digest.encode()+b"\0")
+print(str(count)+" "+aggregate.hexdigest())
+'@
+
+function Write-RuntimeMigrationLeft {
+  param([Collections.Generic.HashSet[string]]$Verified)
+  foreach ($logical in $RuntimeMigrationVolumes) {
+    if (-not $Verified.Contains($logical)) { [Console]::Out.WriteLine("JHT_LEFT $logical") }
+  }
+}
+
+function Get-RuntimeMigrationPodmanArgs {
+  param([string]$Machine, [object[]]$Arguments)
+  return @('--connection', $Machine) + @($Arguments)
+}
+
+function Get-RuntimeMigrationVolumeId {
+  param(
+    [ValidateSet('docker', 'podman')][string]$Engine,
+    [string]$DockerPath,
+    [string]$PodmanPath,
+    [string]$Machine,
+    [string]$Project,
+    [string]$Logical
+  )
+  $arguments = @('volume', 'ls', '-q', '--filter', "label=com.docker.compose.project=$Project", '--filter', "label=com.docker.compose.volume=$Logical")
+  if ($Engine -eq 'docker') {
+    $ids = @(& $DockerPath @arguments 2>$null)
+  } else {
+    $ids = @(& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null)
+  }
+  if ($LASTEXITCODE -ne 0) { throw "volume_list_failed:${Engine}:$Logical" }
+  $ids = @($ids | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+  if ($ids.Count -gt 1) { throw "volume_ambiguous:${Engine}:$Logical" }
+  if ($ids.Count -eq 1) { return $ids[0] }
+  return $null
+}
+
+function Get-RuntimeMigrationVolumeManifest {
+  param(
+    [ValidateSet('docker', 'podman')][string]$Engine,
+    [string]$DockerPath,
+    [string]$PodmanPath,
+    [string]$Machine,
+    [string]$Image,
+    [string]$Volume
+  )
+  $arguments = @(
+    'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', '--volume', "${Volume}:/volume:ro",
+    '--entrypoint', '/usr/bin/python3', $Image, '-I', '-c',
+    $script:RuntimeVolumeManifestPython, '/volume'
+  )
+  if ($Engine -eq 'docker') {
+    $result = ((& $DockerPath @arguments 2>$null) -join '').Trim()
+  } else {
+    $result = ((& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null) -join '').Trim()
+  }
+  if ($LASTEXITCODE -ne 0 -or $result -notmatch '^\d+ [0-9a-f]{64}$') {
+    throw "volume_manifest_failed:${Engine}:$Volume"
+  }
+  return $result
+}
+
+function Start-RuntimeMigrationProcess {
+  param([string]$Path, [string[]]$Arguments, [bool]$Input, [bool]$Output)
+  $start = [Diagnostics.ProcessStartInfo]::new()
+  $start.FileName = $Path
+  # Migration arguments are fixed tokens, canonical image references and
+  # engine-generated volume ids; none may contain whitespace or quotes.
+  foreach ($argument in $Arguments) {
+    if ($argument -match '[\s"]') { throw 'unsafe_binary_pipe_argument' }
+  }
+  $start.Arguments = ($Arguments -join ' ')
+  $start.UseShellExecute = $false
+  $start.CreateNoWindow = $true
+  $start.RedirectStandardInput = $Input
+  $start.RedirectStandardOutput = $Output
+  $process = [Diagnostics.Process]::new()
+  $process.StartInfo = $start
+  if (-not $process.Start()) { throw 'migration_process_start_failed' }
+  return $process
+}
+
+function Copy-RuntimeMigrationVolume {
+  param(
+    [string]$DockerPath,
+    [string]$PodmanPath,
+    [string]$Machine,
+    [string]$Image,
+    [string]$Source,
+    [string]$Target
+  )
+  $sourceArgs = @(
+    'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', '--volume', "${Source}:/volume:ro",
+    '--entrypoint', '/bin/tar', $Image, '-C', '/volume', '-cf', '-', '.'
+  )
+  $targetArgs = Get-RuntimeMigrationPodmanArgs $Machine @(
+    'run', '--rm', '-i', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', '--volume', "${Target}:/volume",
+    '--entrypoint', '/bin/tar', $Image, '-C', '/volume', '-xf', '-'
+  )
+  $targetProcess = $null
+  $sourceProcess = $null
+  try {
+    $targetProcess = Start-RuntimeMigrationProcess $PodmanPath $targetArgs $true $false
+    $sourceProcess = Start-RuntimeMigrationProcess $DockerPath $sourceArgs $false $true
+    $sourceProcess.StandardOutput.BaseStream.CopyTo($targetProcess.StandardInput.BaseStream)
+    $targetProcess.StandardInput.Close()
+    $sourceProcess.WaitForExit()
+    $targetProcess.WaitForExit()
+    return ($sourceProcess.ExitCode -eq 0 -and $targetProcess.ExitCode -eq 0)
+  } catch {
+    return $false
+  } finally {
+    if ($targetProcess) { $targetProcess.Dispose() }
+    if ($sourceProcess) { $sourceProcess.Dispose() }
+  }
+}
+
+function Invoke-RuntimeMigrationPodman {
+  param(
+    [string]$DockerPath,
+    [string]$PodmanPath,
+    [string]$Machine,
+    [string]$Image,
+    [string]$MarkerPath = $RuntimeMigrationMarker
+  )
+  $verified = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  if (-not $DockerPath -or -not (Test-Path -LiteralPath $DockerPath -PathType Leaf)) {
+    Write-Err 'runtime_migration_docker_missing: il client Docker originale non e'' disponibile.'
+    Write-RuntimeMigrationLeft $verified; return 24
+  }
+  if (-not $PodmanPath -or -not (Test-Path -LiteralPath $PodmanPath -PathType Leaf)) {
+    Write-Err 'runtime_migration_podman_missing: Podman non e'' disponibile.'
+    Write-RuntimeMigrationLeft $verified; return 24
+  }
+  if ($Image -notmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$') {
+    Write-Err 'runtime_migration_image_invalid: serve l''immagine JHT fissata per digest.'
+    Write-RuntimeMigrationLeft $verified; return 24
+  }
+  & $DockerPath image inspect $Image *> $null
+  if ($LASTEXITCODE -ne 0) { Write-RuntimeMigrationLeft $verified; return 24 }
+  & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('image', 'inspect', $Image)) *> $null
+  if ($LASTEXITCODE -ne 0) { Write-RuntimeMigrationLeft $verified; return 24 }
+  $running = @(& $DockerPath ps -q --filter 'label=com.docker.compose.project=host-runtime' 2>$null)
+  if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
+    Write-Err 'runtime_migration_team_running: ferma prima il team Docker.'
+    Write-RuntimeMigrationLeft $verified; return 24
+  }
+  $running = @(& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('ps', '-q', '--filter', 'label=com.docker.compose.project=jht')) 2>$null)
+  if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
+    Write-Err 'runtime_migration_team_running: ferma prima il team Podman.'
+    Write-RuntimeMigrationLeft $verified; return 24
+  }
+
+  $completed = Test-Path -LiteralPath $MarkerPath -PathType Leaf
+  $markerLines = if ($completed) { @(Get-Content -LiteralPath $MarkerPath) } else { @() }
+  $records = [Collections.Generic.List[string]]::new()
+  foreach ($logical in $RuntimeMigrationVolumes) {
+    try {
+      $source = Get-RuntimeMigrationVolumeId docker $DockerPath $PodmanPath $Machine host-runtime $logical
+      $target = Get-RuntimeMigrationVolumeId podman $DockerPath $PodmanPath $Machine jht $logical
+      if (-not $source) {
+        if ($target) { throw "runtime_migration_source_missing:$logical" }
+        if ($completed -and $markerLines -notcontains "$logical=absent") { throw "runtime_migration_changed:$logical" }
+        $records.Add("$logical=absent")
+        $null = $verified.Add($logical)
+        continue
+      }
+      $sourceManifest = Get-RuntimeMigrationVolumeManifest docker $DockerPath $PodmanPath $Machine $Image $source
+      if ($completed) {
+        if (-not $target) { throw "runtime_migration_changed:$logical" }
+        $targetManifest = Get-RuntimeMigrationVolumeManifest podman $DockerPath $PodmanPath $Machine $Image $target
+        if ($sourceManifest -cne $targetManifest -or $markerLines -notcontains "$logical=$sourceManifest") {
+          throw "runtime_migration_changed:$logical"
+        }
+        $null = $verified.Add($logical)
+        continue
+      }
+      if ($target) {
+        & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('volume', 'rm', '-f', $target)) *> $null
+        if ($LASTEXITCODE -ne 0) { throw "volume_remove_failed:$logical" }
+      }
+      $target = "jht_$logical"
+      & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @(
+        'volume', 'create', '--label', 'com.docker.compose.project=jht',
+        '--label', "com.docker.compose.volume=$logical", '--label',
+        'io.podman.compose.project=jht', '--label',
+        "io.podman.compose.volume=$logical", $target
+      )) *> $null
+      if ($LASTEXITCODE -ne 0) { throw "volume_create_failed:$logical" }
+      if (-not (Copy-RuntimeMigrationVolume $DockerPath $PodmanPath $Machine $Image $source $target)) {
+        throw "runtime_migration_interrupted:$logical"
+      }
+      $targetManifest = Get-RuntimeMigrationVolumeManifest podman $DockerPath $PodmanPath $Machine $Image $target
+      if ($sourceManifest -cne $targetManifest) { throw "runtime_migration_checksum_mismatch:$logical" }
+      $records.Add("$logical=$sourceManifest")
+      $null = $verified.Add($logical)
+    } catch {
+      Write-Err $_.Exception.Message
+      Write-RuntimeMigrationLeft $verified
+      return 24
+    }
+  }
+  if (-not $completed) {
+    $temp = "$MarkerPath.tmp-$PID-$([guid]::NewGuid().ToString('N'))"
+    try {
+      $content = @('version=1', 'source=docker:host-runtime', 'target=podman:jht') + @($records)
+      [IO.File]::WriteAllText($temp, (($content -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
+      Move-Item -LiteralPath $temp -Destination $MarkerPath -Force
+    } catch {
+      Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+      Write-RuntimeMigrationLeft $verified
+      return 24
+    }
+  }
+  Write-Info 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e richiedono una futura conferma esplicita per la rimozione.'
+  return 0
 }
 
 # `jht mail setup --password-stdin --user U --dedicated|--not-dedicated`: the
@@ -2282,6 +2546,24 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-ResetCommand $Rest)
+  }
+
+  'migrate-runtime' {
+    Require-ComposeFile
+    if ($Rest.Count -ne 1 -or $Rest[0] -cne 'podman') {
+      Write-Err 'uso: jht migrate-runtime podman'
+      exit 2
+    }
+    $migrationImage = if ($env:JHT_MIGRATION_IMAGE) {
+      $env:JHT_MIGRATION_IMAGE
+    } elseif ($env:JHT_IMAGE) {
+      $env:JHT_IMAGE
+    } else {
+      $DefaultRuntimeImage
+    }
+    exit (Invoke-RuntimeMigrationPodman `
+      -DockerPath $MigrationDockerCommand -PodmanPath $MigrationPodmanCommand `
+      -Machine $env:CONTAINER_CONNECTION -Image $migrationImage)
   }
 
   'logs' {
