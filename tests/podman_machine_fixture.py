@@ -19,8 +19,19 @@ from pathlib import Path
 MACOS_DEFAULT_SOURCES = ("/Users", "/private", "/var/folders")
 
 
-def write_macos_host_tools(bin_dir: Path) -> None:
-    """Make a Podman-machine fixture independent of the CI host kernel."""
+def write_macos_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> None:
+    """Emulate macOS tools only when the test host is not already macOS.
+
+    The Python ``stat`` adapter is intentionally absent on a Mac: the wrapper
+    calls ``stat`` many times while attesting its runtime, and starting a
+    Python interpreter for every native probe more than doubles this suite.
+    """
+    if host_kernel is None:
+        import platform
+
+        host_kernel = platform.system()
+    if host_kernel == "Darwin":
+        return
     uname = bin_dir / "uname"
     uname.write_text("#!/bin/sh\nprintf '%s\\n' Darwin\n", encoding="utf-8")
     uname.chmod(0o700)

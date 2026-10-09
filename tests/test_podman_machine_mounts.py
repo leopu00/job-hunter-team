@@ -30,13 +30,31 @@ import subprocess
 
 import pytest
 
-from podman_machine_fixture import MACOS_DEFAULT_SOURCES, jht_mount_sources, write_machine_config
+from podman_machine_fixture import (
+    MACOS_DEFAULT_SOURCES,
+    jht_mount_sources,
+    write_machine_config,
+    write_macos_host_tools,
+)
 from test_desktop_chat_wrapper import _runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install.sh"
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="the wrapper is a POSIX script")
+
+
+def test_macos_fixture_uses_the_native_fast_host_tools_on_a_mac(tmp_path: Path):
+    write_macos_host_tools(tmp_path, host_kernel="Darwin")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_macos_fixture_emulates_uname_and_stat_on_a_non_macos_runner(tmp_path: Path):
+    write_macos_host_tools(tmp_path, host_kernel="Linux")
+
+    assert {path.name for path in tmp_path.iterdir()} == {"stat", "uname"}
+
 
 RICH_PODMAN = """#!/bin/sh
 if [ "$1" = --version ]; then printf '%s\\n' 'podman version 6.1.3'; exit 0; fi
