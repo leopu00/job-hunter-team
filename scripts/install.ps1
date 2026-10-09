@@ -321,12 +321,25 @@ function Get-RuntimeFiles {
   $wrapperDest = Join-Path $BinDir 'jht.ps1'
   $helperDest = Join-Path $BinDir 'windows-private-acl.ps1'
   $shimDest = Join-Path $BinDir 'jht.cmd'
+  $publishedNodes = @(
+    (Join-Path $RuntimeDir 'docker-compose.yml'),
+    (Join-Path $RuntimeDir 'docker-compose.podman.yml'),
+    (Join-Path $RuntimeDir 'container-runtime'),
+    (Join-Path $RuntimeDir 'podman-machine'),
+    (Join-Path $RuntimeDir 'jht-container.service'),
+    (Join-Path $RuntimeDir '.runtime-integrity'),
+    $wrapperDest,
+    $helperDest,
+    (Join-Path $BinDir 'docker.exe')
+  )
+  $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
+  if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }
+  foreach ($published in $publishedNodes) {
+    if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" }
+    Set-JhtNodeOwner -Path $published
+  }
   . $helperDest
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome" }
-  foreach ($published in @(
-    (Join-Path $RuntimeDir 'docker-compose.yml'), (Join-Path $RuntimeDir 'docker-compose.podman.yml'),
-    (Join-Path $RuntimeDir '.runtime-integrity'), $wrapperDest, $helperDest
-  )) { if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" } }
 
   $shimContent = @"
 @echo off
@@ -339,6 +352,7 @@ powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 "@
   Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
+  Set-JhtNodeOwner -Path $shimDest
   Write-Ok "Podman runtime: $RuntimeDir"
   Write-Ok "wrapper: $wrapperDest"
 }

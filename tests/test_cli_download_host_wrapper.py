@@ -212,6 +212,24 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
     )
     assert "Remove-Item -LiteralPath $stage -Recurse -Force" in runtime_files
     assert "Set-JhtNodeOwner -Path $RuntimeDir" in runtime_files
+    for protected_node in (
+        "docker-compose.yml",
+        "docker-compose.podman.yml",
+        "container-runtime",
+        "podman-machine",
+        "jht-container.service",
+        ".runtime-integrity",
+        "$wrapperDest",
+        "$helperDest",
+        "docker.exe",
+        "runtime-image",
+    ):
+        assert protected_node in runtime_files
+    assert "Set-JhtNodeOwner -Path $published" in runtime_files
+    assert runtime_files.index("Set-JhtNodeOwner -Path $published") < runtime_files.index(
+        ". $helperDest"
+    )
+    assert "Set-JhtNodeOwner -Path $shimDest" in runtime_files
 
 
 def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():

@@ -150,6 +150,13 @@ try {
     compose_node = (Test-ProtectedRuntimeNode $ComposeFile)
     manifest_node = (Test-ProtectedRuntimeNode $RuntimeManifest)
     wrapper_node = (Test-ProtectedRuntimeNode $WrapperPath)
+    helper_node = (Test-ProtectedRuntimeNode $installedHelper)
+    podman_compose_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'docker-compose.podman.yml'))
+    runtime_selection_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'container-runtime'))
+    podman_machine_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'podman-machine'))
+    container_unit_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'jht-container.service'))
+    docker_shim_node = (Test-ProtectedRuntimeNode (Join-Path $BinDir 'docker.exe'))
+    command_shim_node = (Test-ProtectedRuntimeNode (Join-Path $BinDir 'jht.cmd'))
   }
   $failedTrustChecks = @($trustChecks.Keys | Where-Object { -not $trustChecks[$_] })
   if ($failedTrustChecks.Count) { throw "clean-start trust predicate failed: $($failedTrustChecks -join ', ')" }
