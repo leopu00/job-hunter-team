@@ -46,6 +46,11 @@ services:
       - https_proxy=${JHT_PODMAN_HTTPS_PROXY:-}
       - all_proxy=${JHT_PODMAN_ALL_PROXY:-}
       - no_proxy=${JHT_PODMAN_NO_PROXY:-localhost,127.0.0.1,::1,host.docker.internal,host.containers.internal}
+      # The proxy above is the confined one (the -T port of network_mode):
+      # safe_fetch.py lets it resolve and check addresses (no DNS here) only
+      # when HTTP(S)_PROXY say exactly this. Fixed, not taken from the host:
+      # a different proxy keeps safe_fetch's own resolution, failing closed.
+      - JHT_EGRESS_PROXY=http://127.0.0.1:3128
 
   # Broker dei segreti dei portali (P1 del 08/10). Stessa mappa degli uid di
   # `jht`: con mappe diverse il broker vedrebbe il client degli agenti con un
