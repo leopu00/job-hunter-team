@@ -151,6 +151,21 @@ def test_the_podman_override_never_reaches_linux_or_a_vps():
 CONNECTION = os.environ.get("JHT_PODMAN_EGRESS_CONNECTION", "")
 IMAGE = os.environ.get("JHT_PODMAN_EGRESS_IMAGE", "docker.io/library/python:3.11-slim-bookworm")
 VM_SERVICE_PORT = 46081  # a stand-in for the VM's loopback services (the broker view)
+VM_WIDE_SERVICE_PORT = 46082  # a stand-in for a VM service on 0.0.0.0 (sshd and the like)
+
+# The VM's own non-loopback IPv4 addresses, read from a container on the host
+# network: a service the VM runs on 0.0.0.0 answers on each of them.
+VM_ADDRESSES = r"""
+import json
+addresses, last = set(), None
+for line in open("/proc/net/fib_trie"):
+    parts = line.split()
+    if len(parts) >= 2 and parts[0] in ("|--", "+--"):
+        last = parts[1].split("/")[0]
+    elif "/32 host LOCAL" in line and last and not last.startswith("127."):
+        addresses.add(last)
+print(json.dumps(sorted(addresses)))
+"""
 
 LISTENER = r"""
 import socket, threading, time
@@ -190,8 +205,14 @@ def serve(port, handle):
 for proxy_port in %r:
     threading.Thread(target=serve, args=(proxy_port, tunnel), daemon=True).start()
 threading.Thread(target=serve, args=(%d, lambda c: c.close()), daemon=True).start()
+def serve_everywhere(port):
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("0.0.0.0", port)); s.listen()
+    while True:
+        c, _ = s.accept(); c.close()
+threading.Thread(target=serve_everywhere, args=(%d,), daemon=True).start()
 time.sleep(300)
-""" % (tuple(port for port, _, _ in SERVICES.values()), VM_SERVICE_PORT)
+""" % (tuple(port for port, _, _ in SERVICES.values()), VM_SERVICE_PORT, VM_WIDE_SERVICE_PORT)
 
 PROBE = r"""
 import json, socket, ssl, struct, sys
@@ -241,6 +262,7 @@ def through_the_proxy():
         return type(error).__name__
 reach = {
     "VM loopback service": tcp("127.0.0.1", %d),
+    "VM service on 0.0.0.0, through the VM's own addresses": any(tcp(a, %d) for a in targets["vm_addresses"]),
     "another service's proxy": any(tcp("127.0.0.1", port) for port in %r if port != proxy_port),
     "Internet, direct": tcp(targets["internet4"], 443),
     "DNS over UDP": udp_dns(),
@@ -253,7 +275,7 @@ if gateway:
 if targets["lan"]:
     reach["LAN address on 80"] = tcp(targets["lan"], 80)
 print(json.dumps({"proxy": through_the_proxy(), "reach": reach}))
-""" % (VM_SERVICE_PORT, tuple(port for port, _, _ in SERVICES.values()))
+""" % (VM_SERVICE_PORT, VM_WIDE_SERVICE_PORT, tuple(port for port, _, _ in SERVICES.values()))
 
 
 def _public_targets() -> dict[str, str]:
@@ -295,8 +317,15 @@ def test_from_each_container_only_its_proxy_answers_and_forwards(service):
         "allowed_host": allowed_host,
         "allowed_port": allowed_port,
     }
+    targets["vm_addresses"] = json.loads(
+        _podman("run", "--rm", "--network", "host", "--entrypoint", "python3", IMAGE, "-c", VM_ADDRESSES)
+        .stdout.strip().splitlines()[-1]
+    )
     listener = f"jht-egress-listener-{os.getpid()}"
-    _podman("run", "-d", "--rm", "--name", listener, "--network", "host", IMAGE, "python3", "-c", LISTENER)
+    _podman(
+        "run", "-d", "--rm", "--name", listener, "--network", "host",
+        "--entrypoint", "python3", IMAGE, "-c", LISTENER,
+    )
     try:
         # Each answer is measured three times: a single run of a network
         # probe can time out by chance.
@@ -304,8 +333,8 @@ def test_from_each_container_only_its_proxy_answers_and_forwards(service):
         for _ in range(3):
             network_args = ["--network", network] if network.startswith("pasta:") else []
             result = _podman(
-                "run", "--rm", *network_args, IMAGE,
-                "python3", "-c", PROBE, json.dumps(targets),
+                "run", "--rm", *network_args, "--entrypoint", "python3", IMAGE,
+                "-c", PROBE, json.dumps(targets),
             )
             runs.append(json.loads(result.stdout.strip().splitlines()[-1]))
     finally:
