@@ -43,17 +43,6 @@ pub(crate) fn command(
     command_inner(args, timeout, stdin, capture_stdout, None)
 }
 
-pub(crate) fn command_with_stderr_lines<F>(
-    args: &[OsString],
-    timeout: Duration,
-    on_stderr_line: F,
-) -> Result<CommandOutcome, CommandFailure>
-where
-    F: Fn(&str) + Send + 'static,
-{
-    command_inner(args, timeout, None, true, Some(Box::new(on_stderr_line)))
-}
-
 type StderrLineCallback = Box<dyn Fn(&str) + Send + 'static>;
 
 fn command_inner(

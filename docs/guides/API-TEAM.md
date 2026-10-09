@@ -21,6 +21,12 @@ Every limit on this page exists because of that.
 > held to the TUI team's behaviour with [parity rounds](PARITY-ROUND.md). The
 > TUI team remains the product's supported path.
 
+> 🗂️ **Runs from the old desktop API mode.** The desktop app no longer starts
+> the API team (retired with 0.4.0). Runs made from it earlier stay where it
+> wrote them: `~/Library/Application Support/ai.jobhunterteam.desktop/api-team`
+> on macOS, `%LOCALAPPDATA%\ai.jobhunterteam.desktop\api-team` on Windows
+> (the run database is `data/team.db` there).
+
 ## 🧩 The pieces
 
 On a VPS the API team is one podman pod and its host. Five pieces, each with one job and
