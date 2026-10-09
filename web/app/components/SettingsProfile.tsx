@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
+import { attemptWrite } from "@/lib/write-failure";
 import { T } from "./SettingsProfile.i18n";
 
 type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
@@ -128,6 +129,7 @@ export default function SettingsProfile() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
 
   const [cvFiles, setCvFiles] = useState<CvFile[]>([]);
@@ -186,13 +188,18 @@ export default function SettingsProfile() {
       const fd = new FormData();
       fd.append("avatar", file);
       try {
-        const res = await fetch("/api/profile/avatar", {
-          method: "POST",
-          body: fd,
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          setAvatarError(data.error ?? t("avatar_error"));
+        const result = await attemptWrite(
+          lang,
+          "/api/profile/avatar",
+          { method: "POST", body: fd },
+          { expectOk: true },
+        );
+        if (!result.ok) {
+          // Il 400 della route è il file (formato o dimensione): la regola,
+          // tradotta, al posto del suo messaggio in italiano.
+          const reason =
+            result.status === 400 ? t("avatar_rule") : result.reason;
+          setAvatarError(`${t("avatar_not_uploaded")} ${reason}`);
         } else {
           const r2 = await fetch("/api/profile/avatar");
           if (r2.ok && r2.status !== 204) {
@@ -210,17 +217,21 @@ export default function SettingsProfile() {
     [lang],
   );
 
+  // La foto sparisce solo se la route l'ha tolta: prima spariva a schermo
+  // anche quando restava sul disco (web in sola lettura, sessione scaduta).
   const handleAvatarDelete = useCallback(async () => {
     setAvatarBusy(true);
-    try {
-      await fetch("/api/profile/avatar", { method: "DELETE" });
-      setAvatarUrl(null);
-    } catch {
-      /* ignore */
-    } finally {
-      setAvatarBusy(false);
-    }
-  }, []);
+    setAvatarError(null);
+    const result = await attemptWrite(
+      lang,
+      "/api/profile/avatar",
+      { method: "DELETE" },
+      { expectOk: true },
+    );
+    if (result.ok) setAvatarUrl(null);
+    else setAvatarError(`${t("avatar_not_removed")} ${result.reason}`);
+    setAvatarBusy(false);
+  }, [lang]);
 
   /* ── CV handlers ───────────────────────────────────────────────── */
 
@@ -229,10 +240,30 @@ export default function SettingsProfile() {
       const files = e.target.files;
       if (!files?.length) return;
       setCvBusy(true);
+      setCvError(null);
       const fd = new FormData();
       for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
       try {
-        await fetch("/api/profile/upload", { method: "POST", body: fd });
+        const result = await attemptWrite(
+          lang,
+          "/api/profile/upload",
+          { method: "POST", body: fd },
+          { expectOk: true },
+        );
+        if (!result.ok) {
+          setCvError(`${t("cv_not_uploaded")} ${result.reason}`);
+        } else if (
+          Array.isArray(result.body.errors) &&
+          result.body.errors.length > 0
+        ) {
+          // La route salva quello che può e rifiuta il resto, file per file.
+          setCvError(
+            t("cv_some_not_uploaded").replace(
+              "{n}",
+              String(result.body.errors.length),
+            ),
+          );
+        }
         const r = await fetch("/api/profile/files");
         const d = await r.json();
         if (Array.isArray(d.files))
@@ -248,21 +279,32 @@ export default function SettingsProfile() {
         e.target.value = "";
       }
     },
-    [],
+    [lang],
   );
 
-  const handleCvDelete = useCallback(async (name: string) => {
-    try {
-      await fetch("/api/profile/files", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
+  // Il documento esce dalla lista solo se la route l'ha cancellato: chi
+  // toglie il proprio CV deve sapere se è ancora sul disco.
+  const handleCvDelete = useCallback(
+    async (name: string) => {
+      setCvError(null);
+      const result = await attemptWrite(
+        lang,
+        "/api/profile/files",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        },
+        { expectOk: true },
+      );
+      if (!result.ok) {
+        setCvError(`${t("cv_not_deleted")} ${result.reason}`);
+        return;
+      }
       setCvFiles((prev) => prev.filter((f) => f.name !== name));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    },
+    [lang],
+  );
 
   /* ── Derived stats ─────────────────────────────────────────────── */
 
@@ -447,6 +489,7 @@ export default function SettingsProfile() {
             </div>
             {avatarError && (
               <p
+                role="alert"
                 className="mt-2 text-[9px]"
                 style={{ color: "var(--color-red)" }}
               >
@@ -625,6 +668,15 @@ export default function SettingsProfile() {
           className="hidden"
           onChange={handleCvUpload}
         />
+        {cvError && (
+          <p
+            role="alert"
+            className="mb-3 text-[10px]"
+            style={{ color: "var(--color-red)" }}
+          >
+            {cvError}
+          </p>
+        )}
 
         {cvFiles.length > 0 ? (
           <div className="flex flex-col gap-2">

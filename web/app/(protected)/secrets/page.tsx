@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { intlTag } from "@/lib/locale-tag";
 import { makeT } from "@/lib/i18n-dict";
+import { attemptWrite } from "@/lib/write-failure";
 import { T } from "./page.i18n";
 
 type SecretType = "api_key" | "token" | "password" | "webhook" | "other";
@@ -51,6 +52,7 @@ export default function SecretsPage() {
   const [value, setValue] = useState("");
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchSecrets = useCallback(async () => {
     const res = await fetch("/api/secrets").catch(() => null);
@@ -108,21 +110,45 @@ export default function SecretsPage() {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  // Un secret sparisce dalla lista solo se la route l'ha cancellato: prima
+  // la riga veniva tolta comunque, anche quando il web in sola lettura
+  // rispondeva 403 e il secret restava sul disco.
   const del = async (id: string) => {
-    await fetch(`/api/secrets?id=${id}`, { method: "DELETE" }).catch(
-      () => null,
+    setError(null);
+    const result = await attemptWrite(
+      locale,
+      `/api/secrets?id=${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+      { expectOk: true },
     );
+    if (!result.ok) {
+      setError(`${tr("err_not_deleted")} ${result.reason}`);
+      return;
+    }
     setSecrets((prev) => prev.filter((s) => s.id !== id));
   };
 
+  // Il modulo si svuota solo a salvataggio fatto: prima un errore cancellava
+  // anche il valore digitato, senza dire che non era stato salvato.
   const create = async () => {
     if (!name.trim() || !value.trim()) return;
+    setError(null);
     setCreating(true);
-    await fetch("/api/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), type, value: value.trim() }),
-    }).catch(() => null);
+    const result = await attemptWrite(
+      locale,
+      "/api/secrets",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), type, value: value.trim() }),
+      },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setCreating(false);
+      setError(`${tr("err_not_saved")} ${result.reason}`);
+      return;
+    }
     setName("");
     setValue("");
     setType("api_key");
@@ -175,6 +201,16 @@ export default function SecretsPage() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 text-[11px]"
+          style={{ color: "var(--color-red)" }}
+        >
+          {error}
+        </div>
+      )}
 
       {showForm && (
         <div

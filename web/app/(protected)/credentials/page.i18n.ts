@@ -189,4 +189,22 @@ export const T = {
     fr: "Les clés API ne sont jamais exposées dans l'interface. Les identifiants issus de variables d'environnement ne peuvent pas être retirés ici.",
     pt: "As API keys nunca são exibidas na interface. As credenciais de variáveis de ambiente não podem ser removidas aqui.",
   },
+  err_not_saved: {
+    it: "Chiave NON salvata.",
+    en: "Key NOT saved.",
+    hu: "A kulcs NEM lett mentve.",
+    es: "Clave NO guardada.",
+    de: "Schlüssel NICHT gespeichert.",
+    fr: "Clé NON enregistrée.",
+    pt: "Chave NÃO guardada.",
+  },
+  err_not_deleted: {
+    it: "Chiave NON rimossa: è ancora salvata.",
+    en: "Key NOT removed: it is still stored.",
+    hu: "A kulcs NEM lett eltávolítva: még mindig tárolva van.",
+    es: "Clave NO eliminada: sigue guardada.",
+    de: "Schlüssel NICHT entfernt: Er ist weiterhin gespeichert.",
+    fr: "Clé NON supprimée : elle est toujours enregistrée.",
+    pt: "Chave NÃO removida: continua guardada.",
+  },
 } satisfies Dictionary;

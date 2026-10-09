@@ -171,4 +171,22 @@ export const T = {
     fr: 'Afficher la valeur en clair de "{name}" ?',
     pt: 'Mostrar o valor em claro de "{name}"?',
   },
+  err_not_saved: {
+    it: "Secret NON salvato.",
+    en: "Secret NOT saved.",
+    hu: "A titok NEM lett mentve.",
+    es: "Secreto NO guardado.",
+    de: "Secret NICHT gespeichert.",
+    fr: "Secret NON enregistré.",
+    pt: "Segredo NÃO guardado.",
+  },
+  err_not_deleted: {
+    it: "Secret NON cancellato: è ancora salvato.",
+    en: "Secret NOT deleted: it is still stored.",
+    hu: "A titok NEM lett törölve: még mindig tárolva van.",
+    es: "Secreto NO eliminado: sigue guardado.",
+    de: "Secret NICHT gelöscht: Es ist weiterhin gespeichert.",
+    fr: "Secret NON supprimé : il est toujours enregistré.",
+    pt: "Segredo NÃO eliminado: continua guardado.",
+  },
 } satisfies Dictionary;

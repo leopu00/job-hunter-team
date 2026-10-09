@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
+import { attemptWrite } from "@/lib/write-failure";
 import { T } from "./page.i18n";
 
 type ProviderInfo = {
@@ -107,11 +108,13 @@ function AddForm({
   type,
   onDone,
   tr,
+  locale,
 }: {
   provider: string;
   type: string;
   onDone: () => void;
   tr: (k: string) => string;
+  locale: string;
 }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
@@ -125,19 +128,21 @@ function AddForm({
     const body = isApiKey
       ? { provider, apiKey: value }
       : { provider, accessToken: value };
-    const res = await fetch("/api/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).catch(() => null);
-    if (!res) {
-      setError(tr("err_network"));
-      setSaving(false);
-      return;
-    }
-    const data = await res.json();
-    if (!data.ok) {
-      setError(data.error ?? tr("err_unknown"));
+    // Mai il corpo della route (in italiano, o il testo di un'eccezione):
+    // la frase dice che la chiave NON è salvata, e perché. Il 400 è la
+    // chiave stessa (vuota o di formato sbagliato).
+    const result = await attemptWrite(
+      locale,
+      "/api/credentials",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setError(`${tr("err_not_saved")} ${result.reason}`);
       setSaving(false);
       return;
     }
@@ -200,6 +205,7 @@ export default function CredentialsPage() {
     provider: string;
     type: string;
   } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchProviders = useCallback(async () => {
     const res = await fetch("/api/credentials").catch(() => null);
@@ -214,11 +220,21 @@ export default function CredentialsPage() {
     fetchProviders();
   }, [fetchProviders]);
 
+  // Una rimozione che non riesce lo dice: prima la pagina restava zitta e
+  // la chiave restava salvata.
   async function handleDelete(provider: string) {
-    const res = await fetch(`/api/credentials?provider=${provider}`, {
-      method: "DELETE",
-    }).catch(() => null);
-    if (res?.ok) fetchProviders();
+    setDeleteError(null);
+    const result = await attemptWrite(
+      locale,
+      `/api/credentials?provider=${encodeURIComponent(provider)}`,
+      { method: "DELETE" },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setDeleteError(`${tr("err_not_deleted")} ${result.reason}`);
+      return;
+    }
+    fetchProviders();
   }
 
   function handleSelect(provider: string) {
@@ -265,11 +281,22 @@ export default function CredentialsPage() {
           provider={adding.provider}
           type={adding.type}
           tr={tr}
+          locale={locale}
           onDone={() => {
             setAdding(null);
             fetchProviders();
           }}
         />
+      )}
+
+      {deleteError && (
+        <p
+          role="alert"
+          className="mb-4 text-[11px]"
+          style={{ color: "var(--color-red)" }}
+        >
+          {deleteError}
+        </p>
       )}
 
       {loading ? (

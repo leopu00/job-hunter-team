@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { SyncCounts } from "@/lib/types";
+import { isSyncResult, syncFailureMessage } from "@/lib/sync-failure";
 
 interface SyncStatus {
   local: boolean;
@@ -30,7 +31,6 @@ const T: Record<
     neverSynced: string;
     syncing: string;
     syncNow: string;
-    networkError: string;
   }
 > = {
   it: {
@@ -46,7 +46,6 @@ const T: Record<
     neverSynced: "Mai sincronizzato",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Errore di rete",
   },
   en: {
     inFuture: "in the future",
@@ -61,7 +60,6 @@ const T: Record<
     neverSynced: "Never synced",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Network error",
   },
   es: {
     inFuture: "en el futuro",
@@ -76,7 +74,6 @@ const T: Record<
     neverSynced: "Nunca sincronizado",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Error de red",
   },
   fr: {
     inFuture: "dans le futur",
@@ -91,7 +88,6 @@ const T: Record<
     neverSynced: "Jamais synchronisé",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Erreur réseau",
   },
   de: {
     inFuture: "in der Zukunft",
@@ -106,7 +102,6 @@ const T: Record<
     neverSynced: "Nie synchronisiert",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Netzwerkfehler",
   },
   hu: {
     inFuture: "a jövőben",
@@ -121,7 +116,6 @@ const T: Record<
     neverSynced: "Soha nem szinkronizált",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Hálózati hiba",
   },
   pt: {
     inFuture: "no futuro",
@@ -136,7 +130,6 @@ const T: Record<
     neverSynced: "Nunca sincronizado",
     syncing: "Sync…",
     syncNow: "Sync now",
-    networkError: "Erro de rede",
   },
 };
 
@@ -162,7 +155,8 @@ export default function CloudSyncStatusBanner() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
 
   async function refresh() {
     try {
@@ -199,14 +193,14 @@ export default function CloudSyncStatusBanner() {
     setSyncing(true);
     try {
       const res = await fetch("/api/local/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || `HTTP ${res.status}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !isSyncResult(data)) {
+        setError(syncFailureMessage(locale, res.ok ? 500 : res.status));
         return;
       }
       await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.networkError);
+    } catch {
+      setError(syncFailureMessage(locale, null));
     } finally {
       setSyncing(false);
     }
@@ -283,6 +277,7 @@ export default function CloudSyncStatusBanner() {
 
       {error && (
         <span
+          role="alert"
           className="w-full text-[10px]"
           style={{ color: "var(--color-red)" }}
         >

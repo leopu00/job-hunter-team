@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/lib/use-locale";
 import type { SyncCounts } from "@/lib/types";
 import { makeT } from "@/lib/i18n-dict";
+import { isSyncResult, syncFailureMessage } from "@/lib/sync-failure";
 import { T } from "./CloudSyncClient.i18n";
 
 interface LocalHealth {
@@ -146,11 +147,13 @@ export default function CloudSyncClient() {
     setSyncState({ status: "syncing" });
     try {
       const res = await fetch("/api/local/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      // Riuscita solo con la risposta della route (ha sempre `empty`): mai il
+      // suo corpo grezzo, mai un 200 qualunque scambiato per un sync fatto.
+      if (!res.ok || !isSyncResult(data)) {
         setSyncState({
           status: "error",
-          message: data.error || `HTTP ${res.status}`,
+          message: syncFailureMessage(locale, res.ok ? 500 : res.status),
         });
         return;
       }
@@ -161,10 +164,10 @@ export default function CloudSyncClient() {
       });
       // Aggiorna stato dopo successo per riflettere "ultimo sync = ora".
       await refreshStatus();
-    } catch (err) {
+    } catch {
       setSyncState({
         status: "error",
-        message: err instanceof Error ? err.message : tr("net_error"),
+        message: syncFailureMessage(locale, null),
       });
     }
   }
@@ -331,6 +334,7 @@ export default function CloudSyncClient() {
 
           {syncState.status === "error" && (
             <div
+              role="alert"
               className="mt-3 text-[11px]"
               style={{ color: "var(--color-red)" }}
             >
