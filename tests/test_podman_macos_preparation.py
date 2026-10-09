@@ -98,6 +98,24 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
     ).replace("'podman machine stop <nome>'", "")
 
 
+def test_macos_uses_the_stock_weekly_trim_timer_without_starting_a_machine_for_it():
+    installer = _source(INSTALLER)
+    wrapper = _source(WRAPPER)
+
+    for source in (installer, wrapper):
+        trim = source[
+            source.index("enable_podman_trim_timer()") : source.index(
+                "}", source.index("enable_podman_trim_timer()")
+            )
+        ]
+        assert "machine ssh" in trim
+        assert "sudo systemctl enable --now fstrim.timer" in trim
+        assert "machine start" not in trim
+        assert "machine stop" not in trim
+    assert "weekly disk trim timer" in installer
+    assert "trim settimanale del disco" in wrapper
+
+
 def test_jht_scoped_shim_and_runtime_selection_are_attested():
     installer = _source(INSTALLER)
     wrapper = _source(WRAPPER)

@@ -444,6 +444,12 @@ report_podman_machine_conflict() {
   return 0
 }
 
+enable_podman_trim_timer() {
+  local podman_bin="$1"
+  "$podman_bin" machine ssh "$PODMAN_MACHINE_NAME" \
+    sudo systemctl enable --now fstrim.timer >/dev/null 2>&1
+}
+
 install_podman_macos() {
   # Preview non distruttiva: non ferma e non rimuove Colima. La macchina e la
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
@@ -521,6 +527,11 @@ install_podman_macos() {
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
+  # Fedora CoreOS ships this weekly timer. Enabling the stock unit is
+  # idempotent and lets applehv reclaim unused blocks from its sparse .raw;
+  # do not start or stop a machine solely for trimming.
+  enable_podman_trim_timer "$podman_bin" \
+    || warn "Podman is ready, but its weekly disk trim timer could not be enabled."
   ok "Podman ready (Colima retained)"
 }
 

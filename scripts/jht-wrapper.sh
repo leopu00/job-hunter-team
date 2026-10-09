@@ -520,6 +520,12 @@ start_podman_for_recreate() {
     || return $?
 }
 
+enable_podman_trim_timer() {
+  local podman_bin="$1"
+  "$podman_bin" machine ssh "$PODMAN_MACHINE_NAME" \
+    sudo systemctl enable --now fstrim.timer >/dev/null 2>&1
+}
+
 # ── Cartelle del Mac visibili alla machine Podman di JHT ─────────────────
 # Le sole due che il compose monta. Senza --volume, `podman machine init` su
 # macOS monta /Users (le home di tutti gli utenti), /private, /var/folders e
@@ -2878,6 +2884,10 @@ case "$SUB" in
       "$podman_bin" system connection default "$default_connection" >/dev/null 2>&1 \
         || warn "Non ho potuto rimettere '$default_connection' come connessione Podman predefinita."
     fi
+    # The stock Fedora CoreOS timer trims weekly. Re-enable it after replacing
+    # the VM so applehv can deallocate unused blocks in the sparse disk image.
+    enable_podman_trim_timer "$podman_bin" \
+      || warn "La macchina e' pronta, ma non ho potuto abilitare il trim settimanale del disco."
     podman_import_broker_state "$podman_bin" \
       || { err "La macchina e' stata ricreata, ma lo stato del broker non ha superato la verifica/importazione."; exit 1; }
     require_confined_podman_machine

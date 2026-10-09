@@ -96,6 +96,10 @@ case "$1:$2" in
     done
     printf '{"Mounts":[%s],"Name":"%s"}' "${mounts%,}" "$1" > "$JHT_TEST_MACHINE_CONFIG"
     : > "$JHT_TEST_RUNTIME_STATE"; exit 0 ;;
+  machine:ssh)
+    [ "$3:$4:$5:$6:$7" = "jht-podman:sudo:systemctl:enable:--now" ] || exit 126
+    [ "$8" = fstrim.timer ] || exit 126
+    exit 0 ;;
   system:connection)
     case "$3" in
       list) printf '%s\\n' "$(cat "$JHT_TEST_DEFAULT_CONNECTION") true" "jht-podman false" ;;
@@ -270,6 +274,7 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
         "podman machine rm -f jht-podman",
         f"podman machine init --now --update-connection=false --volume {jht_home}:{jht_home} "
         f"--volume {jht_docs}:{jht_docs} jht-podman",
+        "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer",
     ]
     assert [m["Source"] for m in json.loads(config.read_text(encoding="utf-8"))["Mounts"]] == [jht_home, jht_docs]
     all_calls = _calls(log)
@@ -280,7 +285,11 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
         i for i, line in enumerate(all_calls)
         if "jht_jht-broker-state:/jht_broker_state" in line and ":ro" not in line
     )
-    assert export < remove < create < imported
+    trim = all_calls.index(
+        "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer"
+    )
+    init = next(i for i, line in enumerate(all_calls) if line.startswith("podman machine init "))
+    assert export < remove < init < trim < create < imported
     assert not any("jht-secrets:" in line for line in all_calls)
     # The person's default connection (another project's machine) is put back.
     assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
@@ -386,6 +395,9 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
         f"podman machine init --now --update-connection=false --volume {jht_home}:{jht_home} "
         f"--volume {jht_docs}:{jht_docs} jht-podman"
     ]
+    assert "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer" in log.read_text(
+        encoding="utf-8"
+    ).splitlines()
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
 
 
