@@ -19,7 +19,16 @@ const T: Record<
   Locale,
   {
     errMalformed: string;
-    errHttp: string; // {status}
+    // Un abbinamento non riuscito: mai il corpo grezzo della route (in
+    // italiano, o `internal`), sempre la frase che dice che il dispositivo
+    // NON è collegato e perché.
+    errNotLinked: string;
+    errSession: string;
+    errCodeInvalid: string;
+    errExpired: string;
+    errAlreadyConfirmed: string;
+    errRateLimit: string;
+    errServer: string;
     errNetwork: string;
     successTitle: string;
     successBody1: string; // prima di <code>jht cloud login</code>
@@ -49,8 +58,16 @@ const T: Record<
 > = {
   it: {
     errMalformed: "Codice malformato. Atteso formato AAAA-1234.",
-    errHttp: "Errore HTTP {status}",
-    errNetwork: "Errore di rete",
+    errNotLinked: "Dispositivo NON collegato.",
+    errSession: "Sessione scaduta: ricarica la pagina e accedi di nuovo.",
+    errCodeInvalid:
+      "Codice non valido o già usato: riavvia jht cloud login dal terminale.",
+    errExpired: "Codice scaduto: riavvia jht cloud login dal terminale.",
+    errAlreadyConfirmed:
+      "Codice già confermato da un'altra finestra: riavvia jht cloud login dal terminale.",
+    errRateLimit: "Troppi tentativi: riprova fra qualche minuto.",
+    errServer: "Errore del server, riprova tra poco.",
+    errNetwork: "Errore di rete: controlla la connessione.",
     successTitle: "Pairing completato",
     successBody1:
       "Il tuo VPS o PC ora è collegato a questo account. Torna al terminale —",
@@ -82,8 +99,16 @@ const T: Record<
   },
   en: {
     errMalformed: "Malformed code. Expected format: AAAA-1234.",
-    errHttp: "HTTP error {status}",
-    errNetwork: "Network error",
+    errNotLinked: "Device NOT linked.",
+    errSession: "Session expired: reload the page and sign in again.",
+    errCodeInvalid:
+      "Invalid or already used code: run jht cloud login again in the terminal.",
+    errExpired: "Code expired: run jht cloud login again in the terminal.",
+    errAlreadyConfirmed:
+      "Code already confirmed in another window: run jht cloud login again in the terminal.",
+    errRateLimit: "Too many attempts: try again in a few minutes.",
+    errServer: "Server error, try again shortly.",
+    errNetwork: "Network error: check your connection.",
     successTitle: "Pairing complete",
     successBody1:
       "Your VPS or PC is now linked to this account. Go back to the terminal —",
@@ -115,8 +140,17 @@ const T: Record<
   },
   es: {
     errMalformed: "Código mal formado. Formato esperado: AAAA-1234.",
-    errHttp: "Error HTTP {status}",
-    errNetwork: "Error de red",
+    errNotLinked: "Dispositivo NO vinculado.",
+    errSession: "Sesión caducada: recarga la página e inicia sesión de nuevo.",
+    errCodeInvalid:
+      "Código no válido o ya usado: vuelve a ejecutar jht cloud login en la terminal.",
+    errExpired:
+      "Código caducado: vuelve a ejecutar jht cloud login en la terminal.",
+    errAlreadyConfirmed:
+      "Código ya confirmado en otra ventana: vuelve a ejecutar jht cloud login en la terminal.",
+    errRateLimit: "Demasiados intentos: inténtalo de nuevo en unos minutos.",
+    errServer: "Error del servidor, inténtalo de nuevo en un momento.",
+    errNetwork: "Error de red: comprueba la conexión.",
     successTitle: "Emparejamiento completado",
     successBody1:
       "Tu VPS o PC ya está vinculado a esta cuenta. Vuelve a la terminal —",
@@ -148,8 +182,16 @@ const T: Record<
   },
   fr: {
     errMalformed: "Code mal formé. Format attendu : AAAA-1234.",
-    errHttp: "Erreur HTTP {status}",
-    errNetwork: "Erreur réseau",
+    errNotLinked: "Appareil NON relié.",
+    errSession: "Session expirée : rechargez la page et reconnectez-vous.",
+    errCodeInvalid:
+      "Code invalide ou déjà utilisé : relancez jht cloud login dans le terminal.",
+    errExpired: "Code expiré : relancez jht cloud login dans le terminal.",
+    errAlreadyConfirmed:
+      "Code déjà confirmé dans une autre fenêtre : relancez jht cloud login dans le terminal.",
+    errRateLimit: "Trop de tentatives : réessayez dans quelques minutes.",
+    errServer: "Erreur du serveur, réessayez dans un instant.",
+    errNetwork: "Erreur réseau : vérifiez votre connexion.",
     successTitle: "Appairage terminé",
     successBody1:
       "Votre VPS ou PC est maintenant relié à ce compte. Retournez au terminal —",
@@ -181,8 +223,17 @@ const T: Record<
   },
   de: {
     errMalformed: "Ungültiger Code. Erwartetes Format: AAAA-1234.",
-    errHttp: "HTTP-Fehler {status}",
-    errNetwork: "Netzwerkfehler",
+    errNotLinked: "Gerät NICHT verbunden.",
+    errSession:
+      "Sitzung abgelaufen: Lade die Seite neu und melde dich erneut an.",
+    errCodeInvalid:
+      "Ungültiger oder bereits verwendeter Code: Starte jht cloud login im Terminal neu.",
+    errExpired: "Code abgelaufen: Starte jht cloud login im Terminal neu.",
+    errAlreadyConfirmed:
+      "Code wurde bereits in einem anderen Fenster bestätigt: Starte jht cloud login im Terminal neu.",
+    errRateLimit: "Zu viele Versuche: Versuche es in ein paar Minuten erneut.",
+    errServer: "Serverfehler, versuche es gleich noch einmal.",
+    errNetwork: "Netzwerkfehler: Prüfe deine Verbindung.",
     successTitle: "Kopplung abgeschlossen",
     successBody1:
       "Dein VPS oder PC ist jetzt mit diesem Konto verbunden. Geh zurück zum Terminal —",
@@ -214,8 +265,18 @@ const T: Record<
   },
   hu: {
     errMalformed: "Hibás formátumú kód. Elvárt formátum: AAAA-1234.",
-    errHttp: "HTTP {status} hiba",
-    errNetwork: "Hálózati hiba",
+    errNotLinked: "Az eszköz NINCS összekapcsolva.",
+    errSession:
+      "A munkamenet lejárt: töltsd újra az oldalt, és jelentkezz be újra.",
+    errCodeInvalid:
+      "Érvénytelen vagy már felhasznált kód: futtasd újra a jht cloud login parancsot a terminálban.",
+    errExpired:
+      "A kód lejárt: futtasd újra a jht cloud login parancsot a terminálban.",
+    errAlreadyConfirmed:
+      "A kódot már megerősítették egy másik ablakban: futtasd újra a jht cloud login parancsot a terminálban.",
+    errRateLimit: "Túl sok próbálkozás: próbáld újra néhány perc múlva.",
+    errServer: "Szerverhiba, próbáld újra kicsit később.",
+    errNetwork: "Hálózati hiba: ellenőrizd a kapcsolatot.",
     successTitle: "Párosítás kész",
     successBody1:
       "A VPS-ed vagy PC-d mostantól ehhez a fiókhoz kapcsolódik. Térj vissza a terminálba — a",
@@ -247,8 +308,19 @@ const T: Record<
   },
   pt: {
     errMalformed: "Código mal formado. Formato esperado: AAAA-1234.",
-    errHttp: "Erro HTTP {status}",
-    errNetwork: "Erro de rede",
+    errNotLinked: "Dispositivo NÃO ligado.",
+    errSession:
+      "Sessão expirada: recarrega a página e inicia sessão novamente.",
+    errCodeInvalid:
+      "Código inválido ou já usado: volta a executar jht cloud login no terminal.",
+    errExpired:
+      "Código expirado: volta a executar jht cloud login no terminal.",
+    errAlreadyConfirmed:
+      "Código já confirmado noutra janela: volta a executar jht cloud login no terminal.",
+    errRateLimit:
+      "Demasiadas tentativas: tenta novamente daqui a alguns minutos.",
+    errServer: "Erro do servidor, tenta novamente daqui a pouco.",
+    errNetwork: "Erro de rede: verifica a ligação.",
     successTitle: "Emparelhamento concluído",
     successBody1:
       "O teu VPS ou PC está agora ligado a esta conta. Volta ao terminal — o",
@@ -279,6 +351,19 @@ const T: Record<
     li4After: "; podes revogá-lo aí a qualquer momento.",
   },
 };
+
+type Strings = (typeof T)[Locale];
+
+/** Perché l'abbinamento non è riuscito, dagli status della route. */
+function failureReason(t: Strings, status: number): string {
+  if (status === 400) return t.errMalformed;
+  if (status === 401) return t.errSession;
+  if (status === 404) return t.errCodeInvalid;
+  if (status === 409) return t.errAlreadyConfirmed;
+  if (status === 410) return t.errExpired;
+  if (status === 429) return t.errRateLimit;
+  return t.errServer;
+}
 
 function normalizeForDisplay(raw: string): string {
   // Accetta input parziali, mostra in formato AAAA-1234. Aggiunge il dash
@@ -325,11 +410,13 @@ export default function CliLinkClient() {
         }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      // Collegato solo se la route lo dice ({ ok: true }): un 200 che non
+      // viene da lei (una pagina di un proxy, un corpo vuoto) non è un
+      // abbinamento, e la schermata verde direbbe il falso.
+      if (!res.ok || body?.ok !== true) {
         setState({
           kind: "error",
-          message:
-            body.error || t.errHttp.replace("{status}", String(res.status)),
+          message: `${t.errNotLinked} ${failureReason(t, res.status)}`,
         });
         return;
       }
@@ -338,9 +425,11 @@ export default function CliLinkClient() {
         tokenName: body.token_name ?? tokenName,
         tokenPrefix: body.token_prefix ?? "",
       });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t.errNetwork;
-      setState({ kind: "error", message });
+    } catch {
+      setState({
+        kind: "error",
+        message: `${t.errNotLinked} ${t.errNetwork}`,
+      });
     }
   }
 
@@ -449,7 +538,10 @@ export default function CliLinkClient() {
         </div>
 
         {state.kind === "error" && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+          <div
+            role="alert"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+          >
             {state.message}
           </div>
         )}
