@@ -44,6 +44,8 @@ import {
   postChat,
   postReply,
   retryChatSignal,
+  threadWriteReason,
+  ThreadWriteError,
   unreadIdsOf,
   withAgentAcked,
   withConfirmedTurn,
@@ -329,7 +331,7 @@ export default function MessagesDrawer() {
     } catch (e) {
       setMessages((ms) => withoutTurn(ms, optimistic.id));
       setReplyText(text);
-      setError((e as Error).message);
+      setError(`${tr("not_sent")} ${threadWriteReason(locale, e)}`);
     } finally {
       setSending(false);
     }
@@ -350,11 +352,11 @@ export default function MessagesDrawer() {
         return next;
       });
     } catch (e) {
-      const errorMessage = (e as Error).message;
       setError(
-        errorMessage === "closer_answer_not_exact_option"
+        e instanceof ThreadWriteError &&
+          e.code === "closer_answer_not_exact_option"
           ? tr("answer_invalid")
-          : errorMessage,
+          : `${tr("reply_not_sent")} ${threadWriteReason(locale, e)}`,
       );
     } finally {
       setSendingAnswerId(null);

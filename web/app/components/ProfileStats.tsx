@@ -5,6 +5,7 @@ import type { CandidateProfile } from "@/lib/types";
 import { openProfileAssistant } from "@/lib/profile-assistant-bus";
 import { useLocale } from "@/lib/use-locale";
 import { getProfileT } from "@/lib/profile-i18n";
+import { attemptWrite } from "@/lib/write-failure";
 import {
   weightedCompletion,
   isTeamUnlocked,
@@ -277,23 +278,29 @@ export default function ProfileStats({ profile }: Props) {
       const fd = new FormData();
       fd.append("avatar", file);
       try {
-        const res = await fetch("/api/profile/avatar", {
-          method: "POST",
-          body: fd,
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          setAvatarError(data.error ?? t("ps_error"));
+        // Uploaded only with the route's { ok: true }. A 400 is the photo
+        // rule (format or size); any other refusal says why, never with the
+        // route's own text.
+        const result = await attemptWrite(
+          locale,
+          "/api/profile/avatar",
+          { method: "POST", body: fd },
+          { expectOk: true },
+        );
+        if (!result.ok) {
+          setAvatarError(
+            `${t("ps_avatar_error")} ${
+              result.status === 400 ? t("ps_avatar_rule") : result.reason
+            }`,
+          );
         } else {
           // Refresh avatar
-          const r2 = await fetch("/api/profile/avatar");
-          if (r2.ok && r2.status !== 204) {
+          const r2 = await fetch("/api/profile/avatar").catch(() => null);
+          if (r2?.ok && r2.status !== 204) {
             const blob = await r2.blob();
             setAvatarUrl(URL.createObjectURL(blob));
           }
         }
-      } catch {
-        setAvatarError(t("ps_avatar_error"));
       } finally {
         setAvatarUploading(false);
         e.target.value = "";
@@ -397,7 +404,10 @@ export default function ProfileStats({ profile }: Props) {
             </div>
           )}
           {avatarError && (
-            <p className="absolute -bottom-5 left-0 text-[9px] text-[var(--color-red)] whitespace-nowrap">
+            <p
+              role="alert"
+              className="absolute -bottom-5 left-0 text-[9px] text-[var(--color-red)] whitespace-nowrap"
+            >
               {avatarError}
             </p>
           )}

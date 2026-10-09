@@ -14,6 +14,8 @@
 import type { PendingMessage } from "@/lib/types";
 import { noteServerTimeFromResponse } from "@/lib/server-clock";
 import { isApplicationAnswerRequestBody } from "@/lib/application-answer-request";
+import { writeFailureReason } from "@/lib/write-failure";
+import type { Locale } from "@/i18n/config";
 
 /**
  * Voci di dizionario usate identiche da entrambe le viste. Ogni componente
@@ -41,6 +43,24 @@ export const THREAD_T: Record<string, Record<string, string>> = {
     de: "Senden",
     fr: "Envoyer",
     pt: "Enviar",
+  },
+  not_sent: {
+    it: "Messaggio NON inviato:",
+    en: "Message NOT sent:",
+    hu: "Az üzenet NEM lett elküldve:",
+    es: "Mensaje NO enviado:",
+    de: "Nachricht NICHT gesendet:",
+    fr: "Message NON envoyé :",
+    pt: "Mensagem NÃO enviada:",
+  },
+  reply_not_sent: {
+    it: "Risposta NON inviata:",
+    en: "Reply NOT sent:",
+    hu: "A válasz NEM lett elküldve:",
+    es: "Respuesta NO enviada:",
+    de: "Antwort NICHT gesendet:",
+    fr: "Réponse NON envoyée :",
+    pt: "Resposta NÃO enviada:",
   },
   delivery_signal_failed: {
     it: "Il messaggio è salvato, ma il team non è stato avvisato. Controlla che sia online e riprova.",
@@ -71,20 +91,62 @@ export const THREAD_T: Record<string, Record<string, string>> = {
   },
 };
 
+// The route's codes a caller may turn into its own sentence. Any other text
+// of the route stays out of the page.
+const KNOWN_CODES = new Set(["closer_answer_not_exact_option"]);
+
 /**
- * Invia la risposta dell'utente a un messaggio. Rilancia con il messaggio
- * d'errore dell'API (o `HTTP <status>`) perché il chiamante lo mostri.
+ * A post the route did not take: its status (`null` = the network fell) and,
+ * when it is one of KNOWN_CODES, the route's code. Never the route's text.
+ */
+export class ThreadWriteError extends Error {
+  constructor(
+    readonly status: number | null,
+    readonly code: string | null = null,
+  ) {
+    super(code ?? (status === null ? "network" : `HTTP ${status}`));
+    this.name = "ThreadWriteError";
+  }
+}
+
+/** Why a post did not happen, in the page's language. */
+export function threadWriteReason(locale: Locale | string, error: unknown) {
+  return writeFailureReason(
+    locale,
+    error instanceof ThreadWriteError ? error.status : null,
+  );
+}
+
+async function postOrThrow(url: string, payload: unknown): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new ThreadWriteError(null);
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: unknown;
+    } | null;
+    const code =
+      typeof body?.error === "string" && KNOWN_CODES.has(body.error)
+        ? body.error
+        : null;
+    throw new ThreadWriteError(res.status, code);
+  }
+  return res;
+}
+
+/**
+ * Invia la risposta dell'utente a un messaggio. Se la route non la prende
+ * rilancia un ThreadWriteError (status e, se noto, il codice).
  */
 export async function postReply(id: string, reply: string): Promise<void> {
-  const res = await fetch(`/api/pending-messages/${id}/reply`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reply }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
-  }
+  await postOrThrow(`/api/pending-messages/${id}/reply`, { reply });
 }
 
 /**
@@ -101,21 +163,15 @@ export async function postChat(
   agent: string,
   message: string,
 ): Promise<PostChatResult> {
-  const res = await fetch("/api/pending-messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agent, message }),
-  });
+  const res = await postOrThrow("/api/pending-messages", { agent, message });
   // Lo scarto fra gli orologi si rinfresca qui perché è il momento esatto
   // in cui nasce un turno da misurare: la bolla appena creata verrà
   // confrontata con timestamp scritti da questo stesso server.
   noteServerTimeFromResponse(res);
   const body = (await res.json().catch(() => ({}))) as {
-    error?: string;
     message?: PendingMessage;
     signalled?: boolean;
   };
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return {
     message: body.message ?? null,
     // Compatibilita' con server precedenti che non restituivano il campo:

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./FloatingChat.i18n";
+import { writeFailureReason } from "@/lib/write-failure";
 import {
   AI_ASSISTANT_SUGGESTIONS,
   loadStoredAssistantHistory,
@@ -87,19 +88,20 @@ export default function FloatingChat() {
         path: window.location.pathname,
       }),
     }).catch(() => null);
-    if (res?.ok) {
-      const data = await res.json();
+    const data = await res?.json().catch(() => null);
+    if (res?.ok && typeof data?.reply === "string") {
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.reply, timestamp: data.timestamp },
       ]);
     } else {
-      const data = await res?.json().catch(() => null);
+      // The reason from the status, never the route's own text.
+      const status = res ? (res.ok ? 500 : res.status) : null;
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: data?.error ?? tr("reply_error"),
+          content: `${tr("reply_error")} ${writeFailureReason(locale, status)}`,
           timestamp: Date.now(),
         },
       ]);

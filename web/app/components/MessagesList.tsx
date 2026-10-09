@@ -42,6 +42,7 @@ import {
   postAcks,
   postChat,
   retryChatSignal,
+  threadWriteReason,
   unreadIdsOf,
   withAgentAcked,
   withConfirmedTurn,
@@ -430,7 +431,7 @@ export default function MessagesList({ initialMessages, serverNowIso }: Props) {
     } catch (e) {
       setMessages((ms) => withoutTurn(ms, optimistic.id));
       setReplyText(text);
-      setError((e as Error).message);
+      setError(`${tr("not_sent")} ${threadWriteReason(locale, e)}`);
     } finally {
       setSending(false);
     }
