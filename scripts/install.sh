@@ -334,6 +334,31 @@ detect_os() {
   esac
 }
 
+# ── The runtime already chosen (macOS) ────────────────────────────────────
+# The marker container-runtime says which engine holds this computer's
+# container and volumes. A re-run without --runtime keeps it: podman stays
+# podman (it used to be rewritten to docker, i.e. Colima with empty volumes).
+# An explicit --runtime for the other engine is refused, because nothing
+# carries the volumes across yet. Colima and Docker Desktop are both docker.
+keep_chosen_runtime() {
+  [ -n "${OS:-}" ] || detect_os
+  [ "$OS" = "macos" ] || return 0
+  local marker="$RUNTIME_DIR/container-runtime" current wanted
+  [ -e "$marker" ] || [ -L "$marker" ] || return 0
+  [ -f "$marker" ] && [ ! -L "$marker" ] \
+    || fail "Unsafe JHT runtime selection marker: $marker"
+  current="$(tr -d '\r\n' < "$marker")"
+  case "$current" in docker|podman) ;; *) fail "Invalid JHT runtime selection marker" ;; esac
+  if [ -z "$RUNTIME_CHOICE" ]; then
+    [ "$current" = "podman" ] && RUNTIME_CHOICE="podman"
+    return 0
+  fi
+  wanted="docker"
+  [ "$RUNTIME_CHOICE" = "podman" ] && wanted="podman"
+  [ "$wanted" = "$current" ] && return 0
+  fail "runtime_change_requires_migration: this Mac runs JHT on $current. --runtime $RUNTIME_CHOICE would start it on $wanted, where its volumes are empty: the provider logins and tools (jht-deps), the secrets and the broker and Telegram state would stay behind on $current. Moving them is not available yet: re-run without --runtime to keep $current. Your profile and documents in ~/.jht and ~/Documents/Job Hunter Team are not affected."
+}
+
 # ── Package manager detection (Linux) ─────────────────────────────────────
 detect_pkg_mgr() {
   if command -v apt-get &>/dev/null; then PKG="apt"
@@ -1798,6 +1823,7 @@ main() {
     publish_runtime_candidate_bundle
     return 0
   fi
+  [ "$USE_DOCKER" -eq 1 ] && keep_chosen_runtime
   header
   if [ "$USE_DOCKER" -eq 1 ]; then
     main_docker
