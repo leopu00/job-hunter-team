@@ -54,13 +54,18 @@ profile, same no-new-privileges. It FAILS unless:
    security type None. [vnc-control] at least one VNC found, and the
    declared one known.
 10. The LinkedIn profile: before the stack starts, a profile is seeded in
-   jht-secrets as an existing user has it (Login Data, Web Data, Account Web
-   Data, their -journal and -wal, and a marker file). After the view:
+   jht-secrets as an existing user has it: Cookies (with a row unique to
+   this run) and Cookies-journal, Login Data, Login Data For Account, Web
+   Data, Account Web Data with their -journal and -wal, and a file that
+   must stay behind. The copy is an allow-list (design S: Default/Cookies
+   and Default/Cookies-journal into linkedin/ of the twin's volume) and
+   starts at the broker's first `view status`; the volume is read after it
+   and before `view start`, so Chromium has not touched the copy yet.
    [browser-profile] a jht-browser-profile volume exists (on today's design
    it does not: not applicable, red); [profile-copy] it holds no *Login
-   Data* or *Web Data* file; [profile-copy-control] it holds the marker,
-   so the copy happened; [profile-left] the profile is gone from
-   jht-secrets.
+   Data* or *Web Data* file and no other file of the old profile;
+   [profile-copy-control] Cookies and Cookies-journal arrived byte for byte;
+   [profile-left] the profile is gone from jht-secrets.
 
 On today's design (Chromium uid 1002 in the broker's container) the gate is
 RED by design; the expected checks are declared in EXPECTED_RED_TODAY and
@@ -95,8 +100,9 @@ SECRET_VOLUMES = {"jht-secrets": "secrets", "jht-broker-state": "broker-state"}
 CANARY = ".isolation-canary"
 PROFILE_VOLUME = "jht-browser-profile"
 LEGACY_PROFILE = "linkedin-profile"
-MARKER = "Default/jht-gate-marker"
-MARKER_TEXT = "seeded by the P2-3 isolation gate"
+# Design S: where the twin keeps the copy, and the only files it copies.
+COPY_DIR = "linkedin"
+COPIED = ("Default/Cookies", "Default/Cookies-journal")
 CHROMIUM_PROGRAMS = ("chrome", "chromium", "chromium-browser")
 
 # Today's design (Chromium is uid 1002 in the broker's container). Kept by
@@ -345,7 +351,7 @@ print(json.dumps(out))
 # before the stack starts: the profile an existing user has (the broker's
 # Chromium wrote it), with the files the copy must leave behind.
 SEED = r'''
-import json, os, sqlite3, sys
+import hashlib, json, os, sqlite3, sys
 ctx = json.loads(sys.argv[1])
 root = "/jht_secrets"
 profile = os.path.join(root, ctx["legacy_profile"])
@@ -353,36 +359,46 @@ default = os.path.join(profile, "Default")
 os.makedirs(default, exist_ok=True)
 for name in ("Login Data", "Login Data For Account", "Web Data", "Account Web Data", "Cookies"):
     db = sqlite3.connect(os.path.join(default, name))
-    db.execute("CREATE TABLE IF NOT EXISTS jht_gate (x INTEGER)")
+    db.execute("CREATE TABLE IF NOT EXISTS jht_gate (x TEXT)")
+    if name == "Cookies":
+        db.execute("INSERT INTO jht_gate VALUES (?)", (ctx["run"],))  # this run's own bytes
     db.commit()
     db.close()
+with open(os.path.join(default, "Cookies-journal"), "w") as handle:
+    handle.write("jht gate " + ctx["run"] + "\n")
 for name in ("Login Data-journal", "Login Data For Account-wal", "Web Data-journal", "Account Web Data-wal"):
     open(os.path.join(default, name), "wb").close()
-with open(os.path.join(profile, ctx["marker"]), "w") as handle:
-    handle.write(ctx["marker_text"])
+with open(os.path.join(default, "jht-gate-left-behind"), "w") as handle:
+    handle.write("must not be copied\n")
 if os.stat(root).st_uid == 0:
     os.chown(root, 1002, 1002)
     os.chmod(root, 0o700)
+seeded = {}
 for top, dirs, files in os.walk(profile):
     for name in [top] + [os.path.join(top, n) for n in dirs + files]:
         os.chown(name, 1002, 1002)
+    for name in files:
+        path = os.path.join(top, name)
+        seeded[os.path.relpath(path, profile)] = hashlib.sha256(open(path, "rb").read()).hexdigest()
 os.chmod(profile, 0o700)
-print(json.dumps({"seeded": sorted(os.path.relpath(os.path.join(t, f), profile) for t, _, fs in os.walk(profile) for f in fs)}))
+print(json.dumps({"seeded": seeded}))
 '''
 
 # Runs as root in a throwaway container with the browser's profile volume
-# read-only on /p.
+# read-only on /p: every file, with its sha256 (links are listed, never
+# followed).
 LIST_PROFILE = r'''
-import json, os, sys
-marker = os.path.join("/p", sys.argv[1])
-files = []
+import hashlib, json, os
+files = {}
 for top, dirs, names in os.walk("/p"):
-    for name in names + [d for d in dirs if os.path.islink(os.path.join(top, d))]:
-        files.append(os.path.relpath(os.path.join(top, name), "/p"))
-text = None
-if os.path.isfile(marker):
-    text = open(marker).read()
-print(json.dumps({"files": sorted(files)[:2000], "marker": text}))
+    for name in names + dirs:
+        path = os.path.join(top, name)
+        rel = os.path.relpath(path, "/p")
+        if os.path.islink(path):
+            files[rel] = "symlink"
+        elif os.path.isfile(path):
+            files[rel] = hashlib.sha256(open(path, "rb").read()).hexdigest()
+print(json.dumps({"files": dict(sorted(files.items())[:2000])}))
 '''
 
 
@@ -601,11 +617,15 @@ def verdict(facts: dict, engine: str) -> list[tuple[str, str]]:
     if not profile.get("volume"):
         fail("browser-profile", f"no {PROFILE_VOLUME} volume in the project (today's design: not applicable)")
     else:
-        copied = [f for f in profile.get("files") or [] if excluded_profile_file(f)]
-        if copied:
-            fail("profile-copy", f"{PROFILE_VOLUME} holds {copied[:8]}")
-        if profile.get("marker") != MARKER_TEXT:
-            fail("profile-copy-control", f"the seeded profile was not copied: no {MARKER} in {PROFILE_VOLUME}")
+        files = profile.get("files") or {}
+        seeded = facts.get("seeded") or {}
+        old = [f"{COPY_DIR}/{path}" for path in seeded if path not in COPIED]
+        wrong = sorted({f for f in files if excluded_profile_file(f)} | {f for f in old if f in files})
+        if wrong:
+            fail("profile-copy", f"{PROFILE_VOLUME} holds {wrong[:8]}")
+        for path in COPIED:
+            if path not in seeded or files.get(f"{COPY_DIR}/{path}") != seeded[path]:
+                fail("profile-copy-control", f"{path} did not arrive byte for byte in {PROFILE_VOLUME}/{COPY_DIR}")
     if broker.get("legacy_profile") is not False:
         fail("profile-left", f"the profile is still in jht-secrets ({LEGACY_PROFILE})")
 
@@ -761,6 +781,19 @@ def wait_for(what, timeout: float, step: float = 1.0):
     return what()
 
 
+def read_profile(engine: str, image: str) -> dict:
+    names = sh([engine, "volume", "ls", "-q"]).stdout.split()
+    volume = next((n for n in names if n == f"{PROJECT}_{PROFILE_VOLUME}"), None)
+    if not volume:
+        return {"volume": None}
+    listed = sh([engine, "run", "--rm", "--user", "0", "--network", "none", "-v", f"{volume}:/p:ro",
+                 "--entrypoint", "python3", image, "-c", LIST_PROFILE])
+    try:
+        return {"volume": volume, **json.loads(listed.stdout.strip().splitlines()[-1])}
+    except (IndexError, json.JSONDecodeError):
+        return {"volume": volume, "files": {}, "error": listed.stderr[-400:]}
+
+
 def collect(engine: str, image: str, files: list[str]) -> dict:
     env = {**os.environ, "JHT_IMAGE": image}
     # 10: the existing user's profile, in place before anything starts.
@@ -769,9 +802,11 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
         return {"error": f"compose up --no-start failed: {(created.stderr or created.stdout)[-800:]}"}
     seeded = sh([engine, "run", "--rm", "--user", "0", "--network", "none", "-v", f"{PROJECT}_jht-secrets:/jht_secrets",
                  "--entrypoint", "python3", image, "-c", SEED,
-                 json.dumps({"legacy_profile": LEGACY_PROFILE, "marker": MARKER, "marker_text": MARKER_TEXT})])
-    print(f"MEASURE seed exit={seeded.returncode} {seeded.stdout.strip()[-600:]}")
-    if seeded.returncode != 0:
+                 json.dumps({"legacy_profile": LEGACY_PROFILE, "run": secrets.token_hex(16)})])
+    print(f"MEASURE seed exit={seeded.returncode} {seeded.stdout.strip()[-900:]}")
+    try:
+        seed = json.loads(seeded.stdout.strip().splitlines()[-1])["seeded"]
+    except (IndexError, KeyError, json.JSONDecodeError):
         return {"error": f"the profile could not be seeded: {seeded.stderr[-600:]}"}
     up = sh([*compose_cmd(engine, files), "up", "-d", *services(files)], timeout=600, env=env)
     print(f"MEASURE compose-up exit={up.returncode} services={services(files)}")
@@ -797,6 +832,20 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
     if not wait_for(lambda: exec_json(engine, broker_cid, str(broker["uid"]), BROKER_SIDE, ctx)
                     .get("sockets", {}).get(dirs["jht-broker-sock"]), 60, 2):
         return {"error": "the broker's socket never appeared"}
+
+    # 10: the first view status starts the copy (design S); the volume is
+    # read now, before Chromium opens the copy.
+    status = sh([engine, "exec", "-i", broker_cid, "jht-broker-admin", "view", "status"], timeout=90)
+    print("MEASURE view-status " + status.stdout.strip()[-300:])
+    # The copy may finish after status answers: wait for both files (only
+    # while there is a volume), still before view start.
+    def copied() -> dict:
+        got = read_profile(engine, image)
+        done = got.get("volume") is None or all(f"{COPY_DIR}/{f}" in (got.get("files") or {}) for f in COPIED)
+        return got if done else {}
+
+    profile = wait_for(copied, 30, 2) or read_profile(engine, image)
+    print("MEASURE browser-profile " + json.dumps(profile))
 
     started = sh([engine, "exec", "-i", broker_cid, "jht-broker-admin", "view", "start", "linkedin-login"], timeout=90)
     try:
@@ -850,21 +899,10 @@ def collect(engine: str, image: str, files: list[str]) -> dict:
               f"{inside_id(broker['host_uid'], chromium['uid_map'])}")
     yama = Path("/proc/sys/kernel/yama/ptrace_scope")
     print(f"MEASURE yama-ptrace-scope={yama.read_text().strip() if yama.exists() else 'absent'}")
-    profile = {"volume": None}
-    names = sh([engine, "volume", "ls", "-q"]).stdout.split()
-    volume = next((n for n in names if n == f"{PROJECT}_{PROFILE_VOLUME}"), None)
-    if volume:
-        listed = sh([engine, "run", "--rm", "--user", "0", "--network", "none", "-v", f"{volume}:/p:ro",
-                     "--entrypoint", "python3", image, "-c", LIST_PROFILE, MARKER])
-        try:
-            profile = {"volume": volume, **json.loads(listed.stdout.strip().splitlines()[-1])}
-        except (IndexError, json.JSONDecodeError):
-            profile = {"volume": volume, "files": [], "marker": None, "error": listed.stderr[-400:]}
-    print("MEASURE browser-profile " + json.dumps({**profile, "files": (profile.get("files") or [])[:40]}))
     return {"broker": broker, "chromium": chromium, "attack": attack, "broker_side": broker_side,
             "broker_listeners": broker_listeners, "unattributed_listeners": unattributed,
             "websockify_listening": bool(ws_rows), "websockify_control": control,
-            "declared_vnc": vnc_target, "browser_profile": profile}
+            "declared_vnc": vnc_target, "browser_profile": profile, "seeded": seed}
 
 
 def main(argv: list[str]) -> int:

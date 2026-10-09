@@ -49,6 +49,12 @@ def _frame(payload: bytes) -> str:
 RFB = {"status": "HTTP/1.1 101 Switching Protocols", "body_b64": _frame(b"RFB 003.008\n")}
 DEAD = {"status": "HTTP/1.1 101 Switching Protocols", "body_b64": base64.b64encode(b"\x88\x02\x03\xe8").decode()}
 
+SEEDED = {"Default/Cookies": "c" * 64, "Default/Cookies-journal": "d" * 64, "Default/Login Data": "1" * 64,
+          "Default/Login Data-journal": "2" * 64, "Default/Login Data For Account": "3" * 64,
+          "Default/Login Data For Account-wal": "4" * 64, "Default/Web Data": "5" * 64,
+          "Default/Web Data-journal": "6" * 64, "Default/Account Web Data": "7" * 64,
+          "Default/Account Web Data-wal": "8" * 64, "Default/jht-gate-left-behind": "9" * 64}
+
 # Design S: Chromium uid 1004 in the twin, its own pid namespace, nothing of
 # the broker's mounted, the broker on the engine's profiles.
 S = {
@@ -74,8 +80,10 @@ S = {
     "broker_listeners": [], "unattributed_listeners": [],
     "websockify_listening": True, "websockify_control": RFB,
     "declared_vnc": "127.0.0.1:41234",
-    "browser_profile": {"volume": "jhtisolation_jht-browser-profile", "marker": gate.MARKER_TEXT,
-                        "files": ["Default/Cookies", "Default/jht-gate-marker", "Local State"]},
+    # Design S: an allow-list copy of Cookies and Cookies-journal into linkedin/.
+    "seeded": SEEDED,
+    "browser_profile": {"volume": "jhtisolation_jht-browser-profile",
+                        "files": {"linkedin/Default/Cookies": "c" * 64, "linkedin/Default/Cookies-journal": "d" * 64}},
 }
 
 # Today's design: Chromium is uid 1002 in the broker's own container.
@@ -163,10 +171,14 @@ def _broken(path, value):
     (("attack", "vnc"), [{"local": "127.0.0.1:41234", "rfb": False}], "vnc-control"),
     (("declared_vnc",), None, "vnc-control"),
     (("browser_profile",), {"volume": None}, "browser-profile"),
-    (("browser_profile", "files"), ["Default/Login Data-journal", "Default/jht-gate-marker"], "profile-copy"),
-    (("browser_profile", "files"), ["Default/Account Web Data", "Default/jht-gate-marker"], "profile-copy"),
-    (("browser_profile", "files"), ["Default/Login Data For Account-wal"], "profile-copy"),
-    (("browser_profile", "marker"), None, "profile-copy-control"),
+    (("browser_profile", "files", "linkedin/Default/Login Data-journal"), "2" * 64, "profile-copy"),
+    (("browser_profile", "files", "linkedin/Default/Account Web Data"), "7" * 64, "profile-copy"),
+    (("browser_profile", "files", "other/Web Data"), "0" * 64, "profile-copy"),
+    (("browser_profile", "files", "linkedin/Default/jht-gate-left-behind"), "9" * 64, "profile-copy"),
+    (("browser_profile", "files", "linkedin/Default/Cookies"), "e" * 64, "profile-copy-control"),
+    (("browser_profile", "files"), {"linkedin/Default/Cookies": "c" * 64}, "profile-copy-control"),
+    (("browser_profile", "files", "linkedin/Default/Cookies-journal"), "symlink", "profile-copy-control"),
+    (("seeded",), {}, "profile-copy-control"),
     (("broker_side", "legacy_profile"), True, "profile-left"),
 ])
 def test_every_broken_fact_fails_with_its_tag(path, value, tag):
@@ -312,5 +324,13 @@ def test_the_seed_and_the_listing_compile_and_seed_what_the_copy_must_drop():
     compile(gate.SEED, "seed", "exec")
     compile(gate.LIST_PROFILE, "list", "exec")
     for name in ("Login Data", "Login Data For Account", "Web Data", "Account Web Data",
-                 "Login Data-journal", "Login Data For Account-wal", "Web Data-journal", "Account Web Data-wal"):
+                 "Login Data-journal", "Login Data For Account-wal", "Web Data-journal", "Account Web Data-wal",
+                 "Cookies-journal", "jht-gate-left-behind"):
         assert f'"{name}"' in gate.SEED, name
+    assert gate.COPIED == ("Default/Cookies", "Default/Cookies-journal")
+
+
+def test_the_volume_is_read_before_view_start():
+    source = Path(gate.__file__).read_text()
+    body = source[source.index("def collect("):]
+    assert body.index('"view", "status"') < body.index("read_profile(engine, image)") < body.index('"view", "start"')
