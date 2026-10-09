@@ -112,6 +112,9 @@ RUNTIME_PUBLISH_FAILURE="${JHT_RUNTIME_PUBLISH_FAILURE:-error}"
 # detect-first still reuses an already running Docker. Ignored on Linux. (ADR-0006)
 RUNTIME_CHOICE=""
 PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-jht-podman}"
+PODMAN_MACHINE_CPUS=2
+PODMAN_MACHINE_MEMORY_MIB=3072
+PODMAN_MACHINE_DISK_GIB=30
 DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
 # key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
@@ -497,7 +500,8 @@ install_podman_macos() {
   if [ "$DRY_RUN" -eq 1 ]; then
     jht_phase machine_create
     jht_phase machine_start
-    printf "  ${DIM}[dry-run]${RESET} would initialize/start Podman machine: %s\n" "$PODMAN_MACHINE_NAME"
+    printf "  ${DIM}[dry-run]${RESET} would initialize/start Podman machine: %s (%s CPU, %s MiB RAM, %s GiB disk)\n" \
+      "$PODMAN_MACHINE_NAME" "$PODMAN_MACHINE_CPUS" "$PODMAN_MACHINE_MEMORY_MIB" "$PODMAN_MACHINE_DISK_GIB"
     jht_phase image_pull
     printf "  ${DIM}[dry-run]${RESET} would pull image: %s\n" "$IMAGE"
     printf "  ${DIM}[dry-run]${RESET} would leave Colima installed and untouched\n"
@@ -531,6 +535,13 @@ install_podman_macos() {
   fi
   mkdir -p "$jht_docs_dir" || fail "Cannot create $jht_docs_dir for the Podman machine."
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
+    local machine_resources
+    machine_resources="$("$podman_bin" machine inspect \
+      --format '{{.Resources.CPUs}} {{.Resources.Memory}} {{.Resources.DiskSize}}' \
+      "$PODMAN_MACHINE_NAME" 2>/dev/null || true)"
+    if [ "$machine_resources" != "$PODMAN_MACHINE_CPUS $PODMAN_MACHINE_MEMORY_MIB $PODMAN_MACHINE_DISK_GIB" ]; then
+      warn "Existing Podman machine '$PODMAN_MACHINE_NAME' has resources '${machine_resources:-unknown}'; JHT recommends $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB RAM and $PODMAN_MACHINE_DISK_GIB GiB disk. The existing machine was not changed."
+    fi
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       jht_phase machine_start
       info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
@@ -550,6 +561,9 @@ install_podman_macos() {
     info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
     local init_error init_status
     init_error="$("$podman_bin" machine init --now --update-connection=false \
+      --cpus "$PODMAN_MACHINE_CPUS" \
+      --memory "$PODMAN_MACHINE_MEMORY_MIB" \
+      --disk-size "$PODMAN_MACHINE_DISK_GIB" \
       --volume "$jht_home_dir:$jht_home_dir" \
       --volume "$jht_docs_dir:$jht_docs_dir" \
       "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" && init_status=0 || init_status=$?

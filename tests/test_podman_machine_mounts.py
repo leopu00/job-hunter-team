@@ -431,7 +431,8 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     init = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("podman machine init")]
     jht_home, jht_docs = jht_mount_sources(home)
     assert init == [
-        f"podman machine init --now --update-connection=false --volume {jht_home}:{jht_home} "
+        f"podman machine init --now --update-connection=false --cpus 2 --memory 3072 "
+        f"--disk-size 30 --volume {jht_home}:{jht_home} "
         f"--volume {jht_docs}:{jht_docs} jht-podman"
     ]
     assert "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer" in log.read_text(
@@ -440,6 +441,57 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     assert default.read_text(encoding="utf-8").strip() == "personal-podman"
     assert "system connection default" not in log.read_text(encoding="utf-8")
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
+
+
+def test_the_installer_reports_but_never_resizes_an_existing_machine(tmp_path: Path):
+    home = tmp_path / "home"
+    home.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "calls.log"
+    fakes = {
+        "brew": "exit 0",
+        "podman": (
+            'printf "podman %s\\n" "$*" >> "$LOG"\n'
+            'case "$1" in --version) echo "podman version 6.1.3"; exit 0 ;; esac\n'
+            'case "$1:$2:$3" in machine:inspect:--format) echo "4 4096 100"; exit 0 ;; esac\n'
+            'case "$1:$2" in machine:inspect) exit 0 ;; machine:ssh) exit 0 ;; esac\n'
+            'case "$1:$2:$3" in --connection:jht-podman:info|--connection:jht-podman:pull) exit 0 ;; esac\n'
+            'exit 93'
+        ),
+        "podman-compose": 'echo "podman-compose version 1.6.0"',
+    }
+    for name, body in fakes.items():
+        path = bin_dir / name
+        path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+        path.chmod(0o700)
+    env = {
+        "HOME": str(home),
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "LOG": str(log),
+        "JHT_INSTALLER_SOURCE_ONLY": "1",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'. "{INSTALLER}"; DRY_RUN=0; PODMAN_MACHINE_NAME=jht-podman; install_podman_macos',
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert "has resources '4 4096 100'" in output
+    assert "The existing machine was not changed" in output
+    calls = log.read_text(encoding="utf-8")
+    assert "machine init" not in calls
+    assert "machine set" not in calls
 
 
 def test_upgrade_refuses_a_machine_that_sees_the_whole_mac_in_its_own_json(tmp_path: Path):
