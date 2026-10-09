@@ -19,7 +19,8 @@ SPEC.loader.exec_module(PROXY)
 
 
 def answers(*addresses: str):
-    def resolve(_host, port, *, type, proto):
+    def resolve(_host, port, *, family, type, proto):
+        assert family == socket.AF_INET
         assert type == socket.SOCK_STREAM
         assert proto == socket.IPPROTO_TCP
         result = []
@@ -274,3 +275,33 @@ def test_telegram_proxy_connects_to_the_verified_api_ip(tmp_path):
 
     assert response.startswith(b"HTTP/1.1 200 Connection Established\r\n")
     assert marker.read_text(encoding="utf-8") == "192.0.2.10 443"
+
+
+# A global IPv6 address can still be the user's home: SLAAC gives the LAN's
+# devices and the PC addresses on the home /64, and no fixed range tells them
+# apart from the Internet. The containers are IPv4-only (pasta -4), so the
+# proxy asks DNS for IPv4 only and refuses any IPv6 destination.
+@pytest.mark.parametrize("answer", [("2001:db8:1:2::10",), ("192.0.2.10", "2001:db8:1:2::10")])
+def test_a_global_ipv6_answer_is_refused(answer):
+    with pytest.raises(PROXY.PolicyDenied):
+        PROXY.resolve_public_target("nas.example", 443, answers(*answer))
+
+
+@pytest.mark.parametrize("host", ["2001:db8:1:2::10", "[2001:db8:1:2::10]"])
+def test_an_ipv6_literal_is_refused_without_dns(host):
+    def must_not_resolve(*_args, **_kwargs):
+        raise AssertionError("an IPv6 literal reached DNS")
+
+    with pytest.raises(PROXY.PolicyDenied):
+        PROXY.resolve_public_target(host, 443, must_not_resolve)
+
+
+def test_dns_is_asked_for_ipv4_only():
+    asked = []
+
+    def resolve(host, port, **kwargs):
+        asked.append(kwargs.get("family"))
+        return answers("192.0.2.10")(host, port, **kwargs)
+
+    assert PROXY.resolve_public_target("example.com", 443, resolve) == "192.0.2.10"
+    assert asked == [socket.AF_INET]

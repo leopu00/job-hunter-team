@@ -258,3 +258,33 @@ def test_native_shim_compiles_and_propagates_backend_exit_code(shell, tmp_path):
         timeout=60,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _connector_source() -> str:
+    source = NETWORK.read_text(encoding="utf-8")
+    start = source.index("$source = @'\n") + len("$source = @'\n")
+    return source[start : source.index("\n'@", start)]
+
+
+def test_the_native_connector_takes_only_a_numeric_ipv4_that_is_not_the_pc():
+    # The proxy hands over the verified address; the connector must not
+    # resolve a name again, must not reach IPv6 (a global IPv6 can be the
+    # home /64) and must not reach the PC's own addresses, even public ones.
+    connector = _connector_source()
+    parse = connector.index("IPAddress.TryParse(args[0], out target)")
+    assert "target.AddressFamily != AddressFamily.InterNetwork" in connector
+    own = connector.index("if (IsOwnAddress(target))")
+    connect = connector.index("client.BeginConnect(target, port, null, null)")
+    assert parse < own < connect
+    assert "BeginConnect(args[0]" not in connector
+    assert "NetworkInterface.GetAllNetworkInterfaces()" in connector
+
+
+def test_a_changed_connector_gets_a_new_binary_name():
+    # New-NativeConnector never overwrites an existing binary (a tunnel may
+    # hold it open), so the name carries the source's digest: a change of
+    # the source without a new name would never reach an existing install.
+    import hashlib
+
+    digest = hashlib.sha256(_connector_source().encode("utf-8")).hexdigest()[:12]
+    assert f"'jht-windows-connect-{digest}.exe'" in NETWORK.read_text(encoding="utf-8")
