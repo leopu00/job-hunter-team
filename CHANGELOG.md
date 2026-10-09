@@ -41,6 +41,14 @@ account-backed onboarding and subscription-provider access.**
   what to do.
 - Not yet supported when the team runs on Windows: Kimi, sending applications
   by email from the team, and the local scorer (Ollama).
+- **This computer › Remove JHT from this computer** takes the team off a
+  Windows computer after a confirmation, without a terminal. It deletes the
+  JHT Podman machine in WSL with everything inside it (the team container, the
+  provider CLIs, and the mail password and portal logins kept by the broker),
+  the JHT runtime and the `jht` commands. Your `.jht` folder (settings,
+  profile, CV, provider login), `Documents\Job Hunter Team`, Podman, Docker
+  Compose and your other WSL distributions stay. Then the app goes back to its
+  first run.
 
 ### Explicit limits
 
