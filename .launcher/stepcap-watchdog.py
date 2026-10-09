@@ -389,6 +389,11 @@ USAGE_LIMIT_MARKERS = (
     "429",
     "quota exceeded",
     "upgrade your plan",
+    # Codex non dice «limit reached»: «■ You've hit your usage limit. Upgrade
+    # to Plus …, or try again at 6:12 PM.» (stringhe del binario 0.161).
+    # Nessuna delle voci sopra lo prende, e un worker Codex a quota esaurita
+    # finiva al Capitano come vicolo cieco da ispezionare.
+    "hit your usage limit",
 )
 
 
