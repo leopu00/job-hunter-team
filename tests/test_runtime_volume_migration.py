@@ -164,6 +164,11 @@ def _run(wrapper: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]
     )
 
 
+SECRETS_LEFT_NOTICE = (
+    "contengono ancora le password della posta, gli accessi ai portali e i token di Telegram"
+)
+
+
 def test_posix_migration_streams_verifies_marks_and_is_idempotent(tmp_path: Path):
     wrapper, env, log = _migration_runtime(tmp_path)
     marker = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-migrated-podman"
@@ -176,12 +181,15 @@ def test_posix_migration_streams_verifies_marks_and_is_idempotent(tmp_path: Path
     assert "source=docker:host-runtime" in marker_text
     assert "target=podman:jht" in marker_text
     assert all(f"{logical}=1 " in marker_text for logical in VOLUMES)
+    # The kept Docker volumes still hold the broker and Telegram secrets.
+    assert SECRETS_LEFT_NOTICE in first.stdout + first.stderr
     calls_before = log.read_text(encoding="utf-8")
     assert "--entrypoint /bin/tar" in calls_before
     assert "not-in-log" not in calls_before
 
     second = _run(wrapper, env)
     assert second.returncode == 0, second.stderr
+    assert SECRETS_LEFT_NOTICE in second.stdout + second.stderr
     calls_after = log.read_text(encoding="utf-8")
     assert calls_after.count("--entrypoint /bin/tar") == calls_before.count(
         "--entrypoint /bin/tar"
@@ -245,6 +253,7 @@ def test_powershell_uses_a_binary_stream_and_the_same_volume_contract():
     assert "JHT_LEFT $logical" in source
     assert "source=docker:host-runtime" in source
     assert "target=podman:jht" in source
+    assert SECRETS_LEFT_NOTICE in source
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell unavailable")

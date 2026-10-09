@@ -1437,7 +1437,7 @@ function Invoke-RuntimeMigrationPodman {
       return 24
     }
   }
-  Write-Info 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e richiedono una futura conferma esplicita per la rimozione.'
+  Write-Info 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: richiedono una futura conferma esplicita per la rimozione.'
   return 0
 }
 

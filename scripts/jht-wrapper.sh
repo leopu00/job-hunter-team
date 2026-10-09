@@ -1342,7 +1342,7 @@ migrate_runtime_podman() {
         }
       verified="$verified $logical"
     done
-    info "Migrazione Docker -> Podman gia' verificata; i volumi Docker restano intatti."
+    info "Migrazione Docker -> Podman gia' verificata; i volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram."
     return 0
   fi
 
@@ -1399,7 +1399,7 @@ migrate_runtime_podman() {
   chmod 600 "$tmp_marker" && mv -f "$tmp_marker" "$RUNTIME_MIGRATION_MARKER" || {
     rm -f "$tmp_marker"; migration_left "$verified"; return 24
   }
-  info "Migrazione Docker -> Podman verificata. I volumi Docker non sono stati rimossi: cancellali solo con una conferma esplicita nel futuro comando di pulizia."
+  info "Migrazione Docker -> Podman verificata. I volumi Docker non sono stati rimossi e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: cancellali solo con una conferma esplicita nel futuro comando di pulizia."
 }
 
 # `jht mail setup --password-stdin --user U --dedicated|--not-dedicated` e' il
