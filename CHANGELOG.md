@@ -24,7 +24,7 @@ account-backed onboarding and subscription-provider access.**
 - Desktop sign-in uses Google through a PKCE browser flow and restores the
   account session before opening protected application surfaces.
 - First-run setup collects the profile and environment, then connects a
-  supported Claude Code, Codex or Kimi subscription through that provider's
+  supported Codex (recommended), Claude Code or Kimi subscription through that provider's
   login flow (Kimi is not supported yet when the team runs on this computer on
   Windows). Completion waits for the native snapshot and direct chat to be
   ready instead of reporting success optimistically.

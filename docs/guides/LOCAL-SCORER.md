@@ -59,7 +59,7 @@ docker exec jht python3 /app/shared/skills/local_scorer.py once
 ```
 
 The launcher checks `team.local_scorer.enabled` only when starting a Scorer.
-Other roles continue to launch the configured Claude, Codex, or Kimi CLI.
+Other roles continue to launch the configured Codex, Claude, or Kimi CLI.
 
 ## Shadow, then write
 

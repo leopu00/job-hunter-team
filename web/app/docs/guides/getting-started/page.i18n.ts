@@ -73,8 +73,9 @@ export const T: Record<Locale, Dict> = {
       ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
     subEmphOne: "one",
     subIntroD: " of three providers:",
-    kimi: " (Moonshot) — the simplest tier to start with.",
-    codex: " (OpenAI) — a balance of quality and cost.",
+    kimi: " (Moonshot) — the most affordable tier.",
+    codex:
+      " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
     claude:
       " (Anthropic) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
@@ -130,8 +131,9 @@ export const T: Record<Locale, Dict> = {
       ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
-    kimi: " (Moonshot) — la fascia più semplice da cui partire.",
-    codex: " (OpenAI) — un equilibrio tra qualità e costo.",
+    kimi: " (Moonshot) — la fascia più economica.",
+    codex:
+      " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
     claude:
       " (Anthropic) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
@@ -188,8 +190,9 @@ export const T: Record<Locale, Dict> = {
       ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
-    kimi: " (Moonshot) — el nivel más sencillo para empezar.",
-    codex: " (OpenAI) — un equilibrio entre calidad y coste.",
+    kimi: " (Moonshot) — el nivel más económico.",
+    codex:
+      " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
     claude:
       " (Anthropic) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
@@ -246,8 +249,9 @@ export const T: Record<Locale, Dict> = {
       ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
-    kimi: " (Moonshot) — la formule la plus simple pour débuter.",
-    codex: " (OpenAI) — un équilibre entre qualité et coût.",
+    kimi: " (Moonshot) — la formule la plus abordable.",
+    codex:
+      " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
     claude:
       " (Anthropic) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
@@ -305,8 +309,9 @@ export const T: Record<Locale, Dict> = {
       ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
-    kimi: " (Moonshot) — die einfachste Stufe für den Einstieg.",
-    codex: " (OpenAI) — ein Gleichgewicht aus Qualität und Kosten.",
+    kimi: " (Moonshot) — die günstigste Stufe.",
+    codex:
+      " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
     claude:
       " (Anthropic) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
@@ -364,8 +369,9 @@ export const T: Record<Locale, Dict> = {
       " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
     subEmphOne: "egyikénél",
     subIntroD: ":",
-    kimi: " (Moonshot) — a legegyszerűbb szint a kezdéshez.",
-    codex: " (OpenAI) — egyensúly a minőség és a költség között.",
+    kimi: " (Moonshot) — a legkedvezőbb árú szint.",
+    codex:
+      " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
     claude:
       " (Anthropic) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
@@ -424,8 +430,9 @@ export const T: Record<Locale, Dict> = {
       ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
-    kimi: " (Moonshot) — o nível mais simples para começar.",
-    codex: " (OpenAI) — um equilíbrio entre qualidade e custo.",
+    kimi: " (Moonshot) — o nível mais económico.",
+    codex:
+      " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
     claude: " (Anthropic) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:

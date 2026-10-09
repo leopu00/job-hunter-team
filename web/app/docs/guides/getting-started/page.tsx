@@ -39,16 +39,16 @@ export default async function GettingStartedPage() {
       </P>
       <UL>
         <LI>
-          🌙 <strong>Kimi</strong>
-          {t.kimi}
-        </LI>
-        <LI>
           🔵 <strong>Codex</strong>
           {t.codex}
         </LI>
         <LI>
           🟠 <strong>Claude</strong>
           {t.claude}
+        </LI>
+        <LI>
+          🌙 <strong>Kimi</strong>
+          {t.kimi}
         </LI>
       </UL>
       <Callout>
@@ -70,7 +70,7 @@ export default async function GettingStartedPage() {
       <Pre>
         {`"Set up Job Hunter Team from
 github.com/leopu00/job-hunter-team for my profile.
-I have a [Kimi Pro / Codex / Claude Max] subscription.
+I have a [Codex / Claude Max / Kimi Pro] subscription.
 Walk me through what you need."`}
       </Pre>
       <P>

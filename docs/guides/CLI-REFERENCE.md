@@ -93,7 +93,7 @@ be copied with credential values into shell history, issues or logs.
 
 | Command                       | Layer | What it does                                                       |
 |-------------------------------|-------|--------------------------------------------------------------------|
-| `jht providers list`          | Node  | List supported providers (claude, codex, kimi).                    |
+| `jht providers list`          | Node  | List supported providers (codex, claude, kimi).                    |
 | `jht providers current`       | Node  | Show the currently active provider + model.                        |
 | `jht providers use <id>`      | Node  | Set `active_provider` in `jht.config.json`.                        |
 | `jht providers update [id]`   | Node  | `npm install -g` (or `uv tool install` for Kimi) inside the container. Without `id`, updates **every** supported provider. |

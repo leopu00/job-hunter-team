@@ -15,8 +15,8 @@ You need an active subscription to **one** of:
 
 |     | Provider   | Plan       | Cost/mo | Status                                                                                    |
 | --- | ---------- | ---------- | ------- | ----------------------------------------------------------------------------------------- |
+| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
 | 🟠  | **Claude** | Max x20    | ~€200   | ✅ Production-ready, best precision                                                       |
-| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
 | 🌙  | **Kimi**   | Pro        | ~€40    | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing). Not supported yet when the team runs on this computer on Windows |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
@@ -133,7 +133,7 @@ Keep the wizard open when it reaches provider login. As instructed on screen,
 open a second terminal and run `jht oauth-login`; complete the provider's
 browser flow, then exit its terminal interface. The wizard detects the saved
 credentials and runs `jht team start`. To switch provider later:
-`jht providers use claude` (or `codex` / `kimi`), followed by
+`jht providers use codex` (or `claude` / `kimi`), followed by
 `jht providers update <id>` to install or update that CLI.
 
 > 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
@@ -179,8 +179,8 @@ Podman command above again.
 If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
 Cursor), tell it:
 
-> _"Set up Job Hunter Team for me. I have a [Claude Max x20 / Kimi Pro /
-> Codex Pro] subscription. Walk me through what you need."_
+> _"Set up Job Hunter Team for me. I have a [Codex Plus or Pro / Claude Max x20 /
+> Kimi Pro] subscription. Walk me through what you need."_
 
 The `jht` CLI is designed for this use. Follow
 [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for the exact runbook and
@@ -249,7 +249,7 @@ If you chose the native app:
    provider, and set search preferences.
 3. **Complete the native checklist.** On macOS or Linux, bring up the local
    container or connect a VPS. On Windows 0.4, the local container runs in
-   Podman inside WSL, or connect a VPS. Authorize Codex, Claude or Kimi (Kimi is
+   Podman inside WSL, or connect a VPS. Authorize Codex (recommended), Claude or Kimi (Kimi is
    not supported yet when the team runs on Windows) in the embedded
    console and select its plan, fill the Profile page, and configure working
    hours. Provider links may open in your browser, but codes and terminal
