@@ -73,6 +73,15 @@ def chromium_program(cmd):
     first = cmd[0].decode(errors="replace").split(" ", 1)[0] if cmd and cmd[0] else ""
     return os.path.basename(first).startswith("chrom")
 
+def label_of(pid):
+    # The AppArmor label the kernel gives the process (stacked labels too).
+    for name in ("attr/apparmor/current", "attr/current"):
+        try:
+            return open(f"/proc/{pid}/{name}").read().strip("\x00\n ")
+        except OSError:
+            continue
+    return None
+
 KEEP = ("FATAL", "ERROR", "Check failed", "sandbox", "zygote", "namespace", "clone", "unshare",
         "denied", "not permitted", "No such", "error while loading", "Missing X")
 
@@ -87,7 +96,11 @@ out = {"confinement": view.confinement()}
 out["python_unshare_user"] = unshare_works(0x10000000)
 out["python_unshare_mount"] = unshare_works(0x00020000)
 out["python_chroot"] = chroot_works()
-if not out["confinement"]["ready"]:
+out["own_label"] = label_of("self")
+# The product never opens a browser the broker does not see confined. The
+# Podman measure (broker_sandbox_podman.py) asks, on top, whether Chromium's
+# sandbox could start at all there, and sets this for that run only.
+if not out["confinement"]["ready"] and os.environ.get("JHT_PROBE_LAUNCH_ANYWAY") != "1":
     print(json.dumps(out)); sys.exit(0)
 xvfb = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -125,7 +138,7 @@ out["sandbox_text"] = " | ".join(line.strip() for line in text.splitlines() if l
 out["sandboxed"] = view.sandboxed(text)
 page.goto("about:blank")
 mine = os.readlink("/proc/self/ns/user")
-browsers, renderers, cmdlines = [], [], []
+browsers, renderers, cmdlines, labels = [], [], [], []
 for pid in os.listdir("/proc"):
     if not pid.isdigit():
         continue
@@ -141,6 +154,7 @@ for pid in os.listdir("/proc"):
     if int(pid) == os.getpid() or not chromium_program(cmd):
         continue
     cmdlines.append(joined)
+    labels.append(label_of(pid) or "unreadable")
     try:
         ns = os.readlink(f"/proc/{pid}/ns/user")
     except OSError as exc:
@@ -148,6 +162,7 @@ for pid in os.listdir("/proc"):
     (renderers if "--type=renderer" in joined else browsers).append(ns)
 out["no_sandbox_flag"] = any("--no-sandbox" in c for c in cmdlines)
 out["own_userns"] = mine
+out["chromium_labels"] = sorted(set(labels))
 out["renderer_userns"] = sorted(set(renderers))
 out["renderer_in_own_userns"] = bool(renderers) and all(ns != mine and not ns.startswith("unreadable") for ns in renderers)
 context.close(); pw.stop(); xvfb.terminate()
@@ -155,14 +170,18 @@ print(json.dumps(out))
 '''
 
 
-def run(image: str, extra: list[str]) -> dict:
-    result = subprocess.run(["docker", "run", "--rm", *HARDENING, *extra, "--entrypoint", "python3", image, "-c", PROBE],
+def run(image: str, extra: list[str], engine: str = "docker") -> dict:
+    result = subprocess.run([engine, "run", "--rm", *HARDENING, *extra, "--entrypoint", "python3", image, "-c", PROBE],
                             capture_output=True, text=True, timeout=300)
     lines = result.stdout.strip().splitlines()
     try:
-        return json.loads(lines[-1]) if lines else {"error": f"the probe printed nothing (exit {result.returncode}): {result.stderr[-800:]}"}
+        answer = json.loads(lines[-1]) if lines else {"error": f"the probe printed nothing (exit {result.returncode}): {result.stderr[-800:]}"}
     except json.JSONDecodeError:
         return {"error": (result.stderr or result.stdout)[-800:]}
+    if result.stderr.strip():
+        # What the engine said on the way (a refused or ignored option).
+        answer["engine_stderr"] = result.stderr.strip()[-600:]
+    return answer
 
 
 CONTROL_PROFILE = "jht-journal-control"

@@ -15,7 +15,11 @@ READ_CONTENTS = {"contents": "read"}
 # its token contract explicit here before it can enter the repository.
 EXPECTED_EFFECTIVE_PERMISSIONS = {
     # Chromium's sandbox in the broker (R3): builds locally, publishes nothing.
-    "broker-sandbox.yml": {"broker-sandbox": READ_CONTENTS},
+    "broker-sandbox.yml": {
+        "broker-sandbox": READ_CONTENTS,
+        # The same broker under rootless Podman: a measure, ci-** and dispatch.
+        "broker-sandbox-podman": READ_CONTENTS,
+    },
     "ci.yml": {
         "lint-typecheck": READ_CONTENTS,
         "build": READ_CONTENTS,
