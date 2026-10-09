@@ -27,8 +27,12 @@ export function ensurePrivateDir(dir) {
  *
  * In v0.3.9 the working hours never saved on Windows: a `.bak-*` appeared at
  * every attempt and `jht.config.json` never changed, with a truncated
- * traceback as the only trace. When the folder refuses the temp file or the
- * rename, the save must neither vanish nor fail when it can still succeed:
+ * traceback as the only trace. Measured on the Windows test machine (09/10):
+ * `~/.jht` held only `jht.config.json` and the `.bak-*` files, no temp file of
+ * the write, so it died at the chmod after the backup, not at the rename. The
+ * chmod is tolerated below (the EPERM that DrvFS/9p returns). When the folder
+ * refuses the temp file or the rename, the other way it can fail, the save
+ * must neither vanish nor fail when it can still succeed:
  *  - a refused rename is retried (a Windows sharing violation passes);
  *  - if the folder keeps refusing and the file already exists, the file is
  *    rewritten in place, and the fact goes to stderr;
