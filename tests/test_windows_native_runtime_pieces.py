@@ -10,9 +10,10 @@ programs. Two pieces cannot be faked there:
 - `ConvertTo-WslPath`, which leans on `[IO.Path]::GetFullPath`: on Linux a
   `C:\\...` path is just a relative file name, so only Windows answers.
 
-Both run under Windows PowerShell 5.1 (`powershell`, what the installer uses)
-and PowerShell 7 (`pwsh`), because .NET Framework and .NET resolve paths
-differently. The Windows config ACL gate runs this file; with
+The paths are mapped under Windows PowerShell 5.1 (`powershell`, what the
+installer uses) and PowerShell 7 (`pwsh`), because .NET Framework and .NET
+resolve paths differently; the shim is compiled only under 5.1, the one
+PowerShell the product compiles it with (see SHIM_SHELLS). The Windows config ACL gate runs this file; with
 `JHT_REQUIRE_WINDOWS_SHELLS=1` a missing shell is a failure, not a skip.
 """
 
@@ -142,7 +143,19 @@ def _call_shim(
     return result.returncode, out.read_text(encoding="utf-8"), seen.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("shell_name", SHELLS)
+# The shim is compiled only by Windows PowerShell 5.1: install.ps1 runs the
+# enabler through Invoke-PodmanRuntimeEnabler with
+# %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe by absolute path
+# (even when install.ps1 itself runs in pwsh), and the desktop app starts
+# install.ps1 with the same powershell.exe (windows_runtime.rs, powershell_path).
+# Add-Type under pwsh builds against .NET, and that executable dies at start
+# with an unhandled CLR exception (0xE0434352, gate run 37890142762): a road
+# the product never takes, so it is not measured here.
+# tests/test_windows_podman_wsl_branches.py keeps the enabler on powershell.exe.
+SHIM_SHELLS = ("powershell",)
+
+
+@pytest.mark.parametrize("shell_name", SHIM_SHELLS)
 def test_the_enabler_docker_shim_forwards_every_argument_and_the_exit_code(shell_name, tmp_path):
     shim = _shim(_shell(shell_name), tmp_path)
 

@@ -42,8 +42,8 @@ jobs:
       - name: Install pytest
         run: pip install --require-hashes -r tests/requirements-ci.txt
       # A skip here is a failure: with a shell missing the step would be green
-      # having proved nothing. 44 = 42 cases of the native file + the probe's
-      # shim under powershell and pwsh; the count may grow, never shrink.
+      # having proved nothing. 43 = 41 cases of the native file (its shim only
+      # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh; the count may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
@@ -57,4 +57,4 @@ jobs:
           if ($code -ne 0) { exit $code }
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
-          if ([int]$Matches[1] -lt 44) { throw "only $($Matches[1]) native Windows tests ran, expected at least 44" }
+          if ([int]$Matches[1] -lt 43) { throw "only $($Matches[1]) native Windows tests ran, expected at least 43" }

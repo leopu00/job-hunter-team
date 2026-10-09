@@ -593,3 +593,38 @@ def test_the_manifest_keys_are_the_same_in_the_app_the_installer_the_wrapper_and
     assert _powershell_written_keys(enabler_line) == app, "the enabler (installer)"
     assert "runtime-image=$runtimeImageHash" in writer
     assert gate == app, "the ACL gate's E04 list"
+
+
+# ── Which PowerShell compiles the docker.exe shim ────────────────────────────
+#
+# The enabler compiles the shim with Add-Type, and an executable built by
+# Add-Type under pwsh (.NET) dies at start with an unhandled CLR exception
+# (0xE0434352, ACL gate run 37890142762); built under Windows PowerShell 5.1
+# (.NET Framework) it works. The product is safe only because the enabler always
+# runs in powershell.exe 5.1: install.ps1 starts it by absolute path even when
+# install.ps1 itself runs in pwsh, nothing else runs it, and nothing else
+# compiles the shim. That is what this test holds, in both copies of the
+# installer; test_windows_native_runtime_pieces.py compiles the shim only
+# under 5.1 because of it.
+POWERSHELL_51 = "$powerShell = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+
+
+@pytest.mark.parametrize("installer", [INSTALLER, ROOT / "web" / "public" / "install.ps1"], ids=["scripts", "web"])
+def test_the_enabler_and_so_the_shim_always_run_in_windows_powershell_51(installer):
+    text = installer.read_text(encoding="utf-8")
+    start = text.index("function Invoke-PodmanRuntimeEnabler")
+    function = text[start:text.index("\nfunction ", start + 1)]
+    assert POWERSHELL_51 in function
+    assert "& $powerShell @enablerArgs" in function
+    assert "pwsh" not in function
+    # The enabler is run only through that function, once.
+    assert len(re.findall(r"(?m)^\s*Invoke-PodmanRuntimeEnabler\b", text)) == 1
+    runs = [line for line in text.splitlines()
+            if "enable-podman-windows-runtime.ps1" in line and re.search(r"(^|\s)(&|\.)\s|-File\b|Invoke-Expression", line)]
+    assert runs == [], runs
+
+
+def test_only_the_enabler_and_the_opt_in_probe_compile_a_docker_shim():
+    compilers = sorted(path.name for path in SCRIPTS.glob("*.ps1")
+                       if re.search(r"(?m)^\s*New-DockerShim\b", path.read_text(encoding="utf-8")))
+    assert compilers == ["enable-podman-windows-runtime.ps1", "podman-windows-probe.ps1"]
