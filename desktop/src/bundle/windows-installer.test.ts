@@ -71,7 +71,12 @@ describe("the Windows installer's languages", () => {
   it("brings Hungarian, which Tauri does not ship, with every string Tauri's template uses", () => {
     expect(Object.keys(nsis.customLanguageFiles ?? {})).toEqual(["Hungarian"]);
     const file = readFileSync(new URL(nsis.customLanguageFiles!.Hungarian, TAURI));
-    expect([...file.subarray(0, 3)], "UTF-8 with BOM").toEqual([0xef, 0xbb, 0xbf]);
+    // Tauri copies a language file next to the installer script and writes
+    // its own UTF-8 BOM in front: one of ours too, and makensis reads the
+    // second as part of the first command («Invalid command: ";"»). The hooks
+    // file is included where it is, so it keeps its BOM (test above).
+    expect([...file.subarray(0, 3)], "no UTF-8 BOM: Tauri adds it").not.toEqual([0xef, 0xbb, 0xbf]);
+    expect(() => new TextDecoder("utf-8", { fatal: true }).decode(file), "valid UTF-8").not.toThrow();
     const lines = file.toString("utf8").split(/\r?\n/).filter((line) => line.startsWith("LangString "));
     const strings = lines.map((line) => /^LangString (\w+) \$\{LANG_HUNGARIAN\} "(.+)"$/.exec(line));
     expect(strings.every(Boolean), "every LangString is Hungarian and has a text").toBe(true);

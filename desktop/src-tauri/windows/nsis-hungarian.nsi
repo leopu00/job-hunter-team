@@ -1,7 +1,9 @@
-﻿; Hungarian for Tauri's NSIS template (bundle.windows.nsis.customLanguageFiles):
+; Hungarian for Tauri's NSIS template (bundle.windows.nsis.customLanguageFiles):
 ; Tauri 2.11 ships its LangStrings in six of the app's seven languages, not
 ; in Hungarian. Same ids as its English file; ${PRODUCTNAME} where Tauri's
-; own files say {{product_name}}. UTF-8 with BOM, as NSIS reads it in Unicode.
+; own files say {{product_name}}. UTF-8 WITHOUT a BOM: Tauri copies this file
+; next to the installer script and writes its own BOM in front, and a second
+; one becomes part of the first command («Invalid command: ";"»).
 
 LangString addOrReinstall ${LANG_HUNGARIAN} "Összetevők hozzáadása/újratelepítése"
 LangString alreadyInstalled ${LANG_HUNGARIAN} "Már telepítve"
