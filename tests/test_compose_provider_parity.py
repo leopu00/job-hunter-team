@@ -104,7 +104,22 @@ def test_ci_runs_the_exact_distributed_providers_on_windows():
     job = workflow["jobs"]["compose-provider-parity"]
     assert job["runs-on"] == "windows-2022"
     commands = "\n".join(str(step.get("run", "")) for step in job["steps"])
-    assert "podman-compose==1.6.0" in commands
-    assert "Docker.DockerCompose" in commands
-    assert "--version 5.1.2" in commands
+    # Exact bytes, not whatever the runner or an index serves that day.
+    requirements = (
+        ROOT / "scripts" / "ci" / "compose-providers-requirements.txt"
+    ).read_text(encoding="utf-8")
+    assert "podman-compose==1.6.0 \\\n" in requirements
+    assert "--require-hashes -r scripts/ci/compose-providers-requirements.txt" in commands
+    # The asset and SHA-256 of winget's Docker.DockerCompose 5.1.2 manifest,
+    # the version the Windows enabler installs.
+    enabler = (ROOT / "scripts" / "enable-podman-windows-runtime.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "$ComposeProviderVersion = '5.1.2'" in enabler
+    assert (
+        "https://github.com/docker/compose/releases/download/v5.1.2/"
+        "docker-compose-windows-x86_64.exe" in commands
+    )
+    assert "00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255" in commands
+    assert "winget" not in commands
     assert "scripts/ci/compose_provider_parity.py" in commands
