@@ -697,3 +697,101 @@ def test_a_token_seen_under_another_role_is_never_accepted(
         stdin=json.dumps({"bot_token": "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ", "chat_id": "42"}),
     )
     assert json.loads(fresh.stdout) == {"ok": True, "bot": "assistente", "state": "present", "rotation": "fresh"}
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (401, "telegram_unauthorized"),
+        (404, "telegram_unauthorized"),
+        (409, "telegram_conflict"),
+        (429, "telegram_rate_limited"),
+        (400, "telegram_refused"),
+        (502, "telegram_unreachable"),
+    ],
+)
+def test_bot_api_names_http_refusals_without_the_token(
+    monkeypatch: pytest.MonkeyPatch, status: int, code: str
+) -> None:
+    import io
+    import urllib.error
+
+    from shared.telegram_service import api as bot_api
+
+    token = "123456:abcdefghijklmnopqrstuvwxyz"
+
+    def refuse(request: object, timeout: int) -> None:
+        raise urllib.error.HTTPError(request.full_url, status, "nope", {}, io.BytesIO(b"{}"))
+
+    monkeypatch.setattr(bot_api.urllib.request, "urlopen", refuse)
+    with pytest.raises(bot_api.TelegramError) as caught:
+        bot_api.BotAPI(token).get_updates(0)
+    assert caught.value.code == code
+    assert token not in repr(caught.value) + str(caught.value)
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+
+
+def test_a_refused_token_is_logged_once_per_change_and_shown_in_status(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from shared.telegram_service import api as bot_api
+
+    token = "123456:abcdefghijklmnopqrstuvwxyz"
+    store.write_bot("assistente", {"bot_token": token, "chat_id": "42"})
+    answers = ["telegram_unauthorized", "telegram_unauthorized", "telegram_unauthorized", [], []]
+
+    class SequenceAPI(FakeAPI):
+        def get_updates(self, _offset: int) -> list[dict]:
+            answer = answers.pop(0)
+            if not answers:
+                transport.stop_event.set()
+            if isinstance(answer, str):
+                raise bot_api.TelegramError(answer)
+            return answer
+
+    transport = runtime.Runtime(api_factory=lambda _token: SequenceAPI())
+    monkeypatch.setattr(transport.stop_event, "wait", lambda _timeout=None: transport.stop_event.is_set())
+    transport.poll_role("assistente")
+
+    lines = [line for line in capsys.readouterr().err.splitlines() if " poller " in line]
+    assert lines == [
+        "[jht-telegram] poller role=assistente state=error reason=telegram_unauthorized",
+        "[jht-telegram] poller role=assistente state=ok reason=polling",
+    ]
+    assert token not in "\n".join(lines)
+    pollers = store.poller_states()
+    assert pollers["assistente"]["state"] == "ok" and pollers["assistente"]["reason"] == "polling"
+
+    command = ROOT / "shared/telegram_service/bin/jht-telegram-admin.py"
+    status = subprocess.run(
+        [str(command), "bots", "status"],
+        env={
+            **os.environ,
+            "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
+            "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
+        },
+        capture_output=True,
+        text=True,
+    )
+    reported = json.loads(status.stdout)
+    assert reported["pollers"]["assistente"]["state"] == "ok"
+    assert token not in status.stdout + status.stderr
+
+
+def test_a_role_without_a_bot_is_idle_not_an_error(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport = runtime.Runtime(api_factory=lambda _token: FakeAPI())
+    waits = []
+
+    def wait(timeout: float | None = None) -> bool:
+        waits.append(timeout)
+        transport.stop_event.set()
+        return True
+
+    monkeypatch.setattr(transport.stop_event, "wait", wait)
+    transport.poll_role("mentor")
+
+    assert store.poller_states()["mentor"]["state"] == "idle"
+    assert store.poller_states()["mentor"]["reason"] == "bot_not_configured"
+    assert "poller role=mentor state=idle reason=bot_not_configured" in capsys.readouterr().err

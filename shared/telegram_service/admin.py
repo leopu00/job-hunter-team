@@ -80,6 +80,9 @@ def main(argv: list[str]) -> int:
                 "ok": True,
                 "bots": {role: "present" if store.read_bot(role) else "absent" for role in BOT_ROLES},
                 "cutover": store.cutover_status(),
+                # Last state change of each poller (ok / idle / error + code),
+                # so a refused token is not mistaken for a quiet chat.
+                "pollers": store.poller_states(),
             }
         elif args.area == "legacy" and args.command == "remember":
             store.remember_token_digests(args.role, _read_digests(), inventory_complete=True)

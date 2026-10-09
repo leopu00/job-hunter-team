@@ -45,6 +45,9 @@ ALLOWED_ATTACHMENT_MIME = frozenset({
 })
 
 
+POLLER_REASON = re.compile(r"[a-z0-9_]{1,64}\Z")
+
+
 class TransportRefusal(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -125,6 +128,7 @@ class Runtime:
         self.api_factory = api_factory
         self.enabled = enabled
         self.stop_event = threading.Event()
+        self._poller_states: dict[str, tuple[str, str]] = {}
         self.burst_limit = self._limit("JHT_TELEGRAM_BURST_LIMIT", BURST_LIMIT, 1, 100)
         self.daily_limit = self._limit("JHT_TELEGRAM_DAILY_LIMIT", DAILY_LIMIT, 1, 2_000)
 
@@ -439,6 +443,24 @@ class Runtime:
                         pass
                 raise
 
+    def _poller_state(self, role: str, state: str, reason: str) -> None:
+        """Log and persist a poller's state only when it changes.
+
+        A refused token, a conflicting consumer and a network problem must be
+        told apart in the field, and `bots status` must show it; the line
+        carries the role and a fixed code, never the token or the URL.
+        """
+        if not POLLER_REASON.fullmatch(reason):
+            reason = "telegram_internal_error"
+        if self._poller_states.get(role) == (state, reason):
+            return
+        self._poller_states[role] = (state, reason)
+        try:
+            store.record_poller_state(role, state, reason, _now_iso())
+        except store.StoreError:
+            pass
+        print(f"[jht-telegram] poller role={role} state={state} reason={reason}", file=sys.stderr, flush=True)
+
     def poll_role(self, role: str) -> None:
         backoff = 1
         while not self.stop_event.is_set():
@@ -447,6 +469,7 @@ class Runtime:
                 offsets = store.read_state("offsets", {})
                 offset = int(offsets.get(role, 0))
                 updates = api.get_updates(offset)
+                self._poller_state(role, "ok", "polling")
                 for update in updates:
                     update_id = update.get("update_id")
                     try:
@@ -467,11 +490,18 @@ class Runtime:
                 backoff = 1
             except TransportRefusal as exc:
                 if exc.code == "bot_not_configured":
+                    self._poller_state(role, "idle", exc.code)
                     self.stop_event.wait(5)
                 else:
+                    self._poller_state(role, "error", exc.code)
                     self.stop_event.wait(backoff)
                     backoff = min(backoff * 2, 30)
+            except TelegramError as exc:
+                self._poller_state(role, "error", exc.code)
+                self.stop_event.wait(backoff)
+                backoff = min(backoff * 2, 30)
             except Exception:  # keep one malformed update from killing a role poller
+                self._poller_state(role, "error", "telegram_internal_error")
                 self.stop_event.wait(backoff)
                 backoff = min(backoff * 2, 30)
 

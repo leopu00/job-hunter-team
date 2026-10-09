@@ -15,6 +15,24 @@ class TelegramError(Exception):
         self.code = code
 
 
+# Telegram answers a bad token with 401 (404 when the token is malformed), a
+# second getUpdates consumer or a webhook with 409 and flood control with 429.
+# Each becomes a fixed code, so a log line can tell a refused token from a
+# network problem without ever carrying the token-bearing URL.
+HTTP_CODES = {
+    401: "telegram_unauthorized",
+    404: "telegram_unauthorized",
+    409: "telegram_conflict",
+    429: "telegram_rate_limited",
+}
+
+
+def _http_error_code(status: int) -> str:
+    if status in HTTP_CODES:
+        return HTTP_CODES[status]
+    return "telegram_refused" if 400 <= status < 500 else "telegram_unreachable"
+
+
 class BotAPI:
     def __init__(self, token: str, *, timeout: int = 35) -> None:
         self._base = f"https://api.telegram.org/bot{token}/"
@@ -32,6 +50,10 @@ class BotAPI:
         try:
             with urllib.request.urlopen(request, timeout=self._timeout) as response:
                 raw = response.read(2 * 1024 * 1024 + 1)
+        except urllib.error.HTTPError as exc:
+            code = _http_error_code(exc.code)
+            exc.close()
+            raise TelegramError(code) from None
         except (urllib.error.URLError, TimeoutError, OSError):
             raise TelegramError("telegram_unreachable") from None
         if len(raw) > 2 * 1024 * 1024:

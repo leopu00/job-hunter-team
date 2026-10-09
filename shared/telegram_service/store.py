@@ -200,6 +200,35 @@ def known_token_digests() -> set[str]:
     return set().union(*(token_history(role)[0] for role in BOT_ROLES))
 
 
+POLLER_STATE = "pollers"
+POLLER_STATES = frozenset({"ok", "idle", "error"})
+
+
+def record_poller_state(role: str, state: str, reason: str, at: str) -> None:
+    if role not in BOT_ROLES or state not in POLLER_STATES:
+        raise StoreError("poller_state_invalid")
+    with locked(POLLER_STATE):
+        pollers = read_state(POLLER_STATE, {})
+        pollers[role] = {"state": state, "reason": reason, "since": at}
+        write_state(POLLER_STATE, pollers)
+
+
+def poller_states() -> dict[str, dict[str, str]]:
+    """Last state change of each role's poller; written only on change."""
+    with locked(POLLER_STATE):
+        pollers = read_state(POLLER_STATE, {})
+    result = {}
+    for role in BOT_ROLES:
+        entry = pollers.get(role)
+        if (
+            isinstance(entry, dict)
+            and entry.get("state") in POLLER_STATES
+            and all(isinstance(entry.get(key), str) for key in ("reason", "since"))
+        ):
+            result[role] = {key: entry[key] for key in ("state", "reason", "since")}
+    return result
+
+
 def legacy_inventory_complete() -> bool:
     return all(token_history(role)[1] for role in BOT_ROLES)
 
