@@ -70,15 +70,16 @@ try {
     Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.podman.yml') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
+    New-Item -ItemType Directory -Path $RuntimeShimDir -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'jht-container.service'), "fixture`n", [Text.UTF8Encoding]::new($false))
-    [IO.File]::WriteAllBytes((Join-Path $BinDir 'docker.exe'), [byte[]](0))
+    [IO.File]::WriteAllBytes((Join-Path $RuntimeShimDir 'docker.exe'), [byte[]](0))
     $entries = [ordered]@{
       'docker-compose.yml' = (Join-Path $RuntimeDir 'docker-compose.yml')
       'jht-wrapper.ps1' = (Join-Path $BinDir 'jht.ps1')
       'docker-compose.podman.yml' = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
-      'docker.exe' = (Join-Path $BinDir 'docker.exe')
+      'docker.exe' = (Join-Path $RuntimeShimDir 'docker.exe')
       'container-runtime' = (Join-Path $RuntimeDir 'container-runtime')
       'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
       'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
@@ -96,6 +97,7 @@ try {
   $cleanProfile = Join-Path $cleanRoot 'profile'
   $cleanUserData = Join-Path $cleanProfile 'Documents\Job Hunter Team'
   $RuntimeDir = Join-Path $cleanRoot 'host-runtime'
+  $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
   $BinDir = Join-Path $cleanRoot 'bin'
   $JhtHome = Join-Path $cleanProfile '.jht'
   $RawBaseOverride = 'https://clean-start.invalid/revision'
@@ -114,6 +116,12 @@ try {
   $manifest = Join-Path $RuntimeDir '.runtime-integrity'
   foreach ($installed in @($installedWrapper, $installedHelper, $manifest, (Join-Path $RuntimeDir 'docker-compose.yml'))) {
     if (-not (Test-Path -LiteralPath $installed -PathType Leaf)) { throw "clean-start artifact missing: $installed" }
+  }
+  if (Test-Path -LiteralPath (Join-Path $BinDir 'docker.exe')) {
+    throw 'clean-start published the private docker shim on the user PATH'
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $RuntimeShimDir 'docker.exe') -PathType Leaf)) {
+    throw 'clean-start private docker shim is missing from host-runtime'
   }
   $sourceHelperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'windows-private-acl.ps1')).Hash.ToLowerInvariant()
   $installedHelperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedHelper).Hash.ToLowerInvariant()
@@ -155,7 +163,7 @@ try {
     runtime_selection_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'container-runtime'))
     podman_machine_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'podman-machine'))
     container_unit_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir 'jht-container.service'))
-    docker_shim_node = (Test-ProtectedRuntimeNode (Join-Path $BinDir 'docker.exe'))
+    docker_shim_node = (Test-ProtectedRuntimeNode (Join-Path $RuntimeShimDir 'docker.exe'))
     command_shim_node = (Test-ProtectedRuntimeNode (Join-Path $BinDir 'jht.cmd'))
   }
   $failedTrustChecks = @($trustChecks.Keys | Where-Object { -not $trustChecks[$_] })
@@ -237,7 +245,7 @@ exit /b 0
     'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
     'jht-wrapper.ps1' = $installedWrapper
     'windows-private-acl.ps1' = $installedHelper
-    'docker.exe' = (Join-Path $BinDir 'docker.exe')
+    'docker.exe' = (Join-Path $RuntimeShimDir 'docker.exe')
   }
   function Assert-AppManifest {
     param([string]$Path, [string]$Stage)

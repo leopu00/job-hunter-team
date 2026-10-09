@@ -330,7 +330,7 @@ function Get-RuntimeFiles {
     (Join-Path $RuntimeDir '.runtime-integrity'),
     $wrapperDest,
     $helperDest,
-    (Join-Path $BinDir 'docker.exe')
+    (Join-Path $RuntimeDir 'bin\docker.exe')
   )
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
   if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }

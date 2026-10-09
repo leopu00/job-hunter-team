@@ -479,6 +479,36 @@ def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
     assert "registration failed" in result.stderr
 
 
+LEGACY_SHIM_BODY = r"""
+$owned = Test-AttestedLegacyDockerShim `
+  -ManifestPath $env:TEST_MANIFEST -LegacyShimPath $env:TEST_LEGACY_SHIM
+[Console]::Out.WriteLine("OWNED=$owned")
+"""
+
+
+def test_only_an_attested_legacy_path_shim_is_owned_by_jht(tmp_path):
+    shim = tmp_path / "docker.exe"
+    shim.write_bytes(b"old-jht-shim")
+    import hashlib
+    digest = hashlib.sha256(shim.read_bytes()).hexdigest()
+    manifest = tmp_path / ".runtime-integrity"
+    manifest.write_text(f"version=1\ndocker.exe={digest}\n", encoding="utf-8")
+    env = {"TEST_MANIFEST": str(manifest), "TEST_LEGACY_SHIM": str(shim)}
+
+    owned, _ = _run(
+        tmp_path, ENABLER, ["Test-AttestedLegacyDockerShim"], LEGACY_SHIM_BODY, env,
+    )
+    assert owned.returncode == 0, owned.stderr
+    assert "OWNED=True" in owned.stdout
+
+    shim.write_bytes(b"the-user-replaced-this-file")
+    foreign, _ = _run(
+        tmp_path, ENABLER, ["Test-AttestedLegacyDockerShim"], LEGACY_SHIM_BODY, env,
+    )
+    assert foreign.returncode == 0, foreign.stderr
+    assert "OWNED=False" in foreign.stdout
+
+
 REMOVE_STARTUP_TASK_BODY = r"""
 $script:Present = $true
 function Get-ScheduledTask {

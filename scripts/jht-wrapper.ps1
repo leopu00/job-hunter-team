@@ -297,13 +297,16 @@ $ContainerRuntime = if ($env:JHT_CONTAINER_RUNTIME) {
 if ($ContainerRuntime -notin @('docker', 'podman')) { throw "runtime container non supportato: $ContainerRuntime" }
 $PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
 $ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
-$DockerShim = Join-Path (Split-Path -Parent $WrapperPath) 'docker.exe'
+$RuntimeShimDir = Join-Path $RuntimeDir 'bin'
+$DockerShim = Join-Path $RuntimeShimDir 'docker.exe'
 if ($ContainerRuntime -eq 'podman') {
   # Compose otherwise derives the project from the protected runtime directory
   # ("host-runtime"), while development runs derive it from the checkout. A
   # stable project name makes an installed container manageable after migration.
   $env:COMPOSE_PROJECT_NAME = 'jht'
-  $env:PATH = "$(Split-Path -Parent $WrapperPath)$([IO.Path]::PathSeparator)$env:PATH"
+  # docker.exe is private to this wrapper. Only this process sees it before
+  # the user's PATH; other applications keep resolving their real Docker CLI.
+  $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
   $env:CONTAINER_CONNECTION = if ($env:JHT_PODMAN_MACHINE) {
     $env:JHT_PODMAN_MACHINE
   } elseif (Test-Path -LiteralPath $PodmanMachineFile -PathType Leaf) {

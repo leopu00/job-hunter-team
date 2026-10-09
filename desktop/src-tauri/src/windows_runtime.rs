@@ -108,7 +108,7 @@ const MANIFEST_FILES: [(&str, Place, &str); 8] = [
     ("jht-container.service", Place::Runtime, "jht-container.service"),
     ("jht-wrapper.ps1", Place::Bin, "jht.ps1"),
     ("windows-private-acl.ps1", Place::Bin, "windows-private-acl.ps1"),
-    ("docker.exe", Place::Bin, "docker.exe"),
+    ("docker.exe", Place::Runtime, "bin/docker.exe"),
 ];
 /// A test-channel install also pins its image: the file and its manifest
 /// line come together, or neither does.
@@ -461,7 +461,8 @@ mod tests {
 
     /// The layout install.ps1 writes on the Podman runtime, on disk: the
     /// compose files and the Podman selection under host-runtime, the wrapper
-    /// with its helper and docker.exe shim in .local\bin.
+    /// with its helper in .local\bin; docker.exe stays under host-runtime so
+    /// other programs never resolve the JHT shim from the user's PATH.
     #[test]
     fn the_podman_bundle_is_checked_file_by_file() {
         use sha2::{Digest, Sha256};
@@ -476,7 +477,7 @@ mod tests {
         ));
         let runtime = root.join("host-runtime");
         let bin = root.join("bin");
-        fs::create_dir_all(&runtime).unwrap();
+        fs::create_dir_all(runtime.join("bin")).unwrap();
         fs::create_dir_all(&bin).unwrap();
         let wrapper = bin.join("jht.ps1");
         let files = [
@@ -487,7 +488,7 @@ mod tests {
             ("jht-container.service", runtime.join("jht-container.service"), "[Unit]\n"),
             ("jht-wrapper.ps1", wrapper.clone(), "$JHT_HOST_RUNTIME_PROTOCOL = 1\n"),
             ("windows-private-acl.ps1", bin.join("windows-private-acl.ps1"), "param()\n"),
-            ("docker.exe", bin.join("docker.exe"), "MZ shim"),
+            ("docker.exe", runtime.join("bin").join("docker.exe"), "MZ shim"),
         ];
         let digest = |path: &Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
         let mut manifest = String::from("version=1\n");

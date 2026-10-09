@@ -157,7 +157,8 @@ describe("OnboardingFlow technical setup", () => {
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
     expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
-    expect(installs).toHaveTextContent(/PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman/i);
+    expect(installs).toHaveTextContent(/comando jht nel PATH del tuo utente/i);
+    expect(installs).toHaveTextContent(/docker\.exe compatibile resta privato nel runtime e non cambia Docker per gli altri programmi/i);
     // How they are removed: JHT's own part from the app, Podman and Compose from Windows.
     expect(installs).toHaveTextContent(/si tolgono dall’app, da «Questo computer › Rimuovi JHT da questo computer»/);
     expect(installs).toHaveTextContent(/Podman e Docker Compose restano: si disinstallano da Impostazioni › App › App installate/);

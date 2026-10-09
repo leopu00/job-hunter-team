@@ -257,6 +257,39 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     assert "Job Hunter Team - Start runtime" in _wrapper()
 
 
+def test_podman_docker_shim_is_private_and_does_not_touch_docker_desktop():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    wrapper = _wrapper()
+    installer = INSTALLER.read_text(encoding="utf-8")
+    app_runtime = WINDOWS_RUNTIME.read_text(encoding="utf-8")
+
+    assert "$RuntimeShimDir = Join-Path $RuntimeDir 'bin'" in enabler
+    assert "$shim = Join-Path $RuntimeShimDir 'docker.exe'" in enabler
+    assert "$RuntimeShimDir = Join-Path $RuntimeDir 'bin'" in wrapper
+    assert "$DockerShim = Join-Path $RuntimeShimDir 'docker.exe'" in wrapper
+    assert '$env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"' in wrapper
+    assert "(Join-Path $RuntimeDir 'bin\\docker.exe')" in installer
+    assert '("docker.exe", Place::Runtime, "bin/docker.exe")' in app_runtime
+    assert "(Join-Path $BinDir 'docker.exe')" not in installer
+
+    # A healthy older install is migrated, but an unattested file with that
+    # generic name is never deleted.
+    assert "Test-AttestedLegacyDockerShim" in enabler
+    assert "if ($legacyShimOwned)" in enabler
+    assert "Remove-Item -LiteralPath $legacyShim" in enabler
+
+    windows_podman = "\n".join((enabler, installer))
+    for forbidden in (
+        "Docker.DockerDesktop",
+        "docker-desktop",
+        "docker context",
+        "DOCKER_HOST",
+        "wsl --terminate",
+        "wsl --unregister",
+    ):
+        assert forbidden not in windows_podman
+
+
 def test_declining_dependency_installation_cannot_run_winget():
     """The desktop owns consent; without its opt-in flag scripts install nothing."""
     enabler = ENABLER.read_text(encoding="utf-8")

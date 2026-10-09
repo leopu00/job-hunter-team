@@ -17,6 +17,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
+$RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
 $PodmanCliVersion = '6.0.2'
 $ComposeProviderVersion = '5.1.2'
@@ -87,6 +88,7 @@ public static class JhtPodmanDockerShim {
     using (var process = Process.Start(start)) { process.WaitForExit(); return process.ExitCode; }
   }
 }
+
 "@
   $sourcePath = [IO.Path]::ChangeExtension($Destination, '.cs')
   try {
@@ -98,6 +100,23 @@ public static class JhtPodmanDockerShim {
     if ($LASTEXITCODE -ne 0) { throw "Native docker shim compiler exited with $LASTEXITCODE." }
   } finally { Remove-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue }
   if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) { throw "docker.exe shim was not created: $Destination" }
+}
+
+function Test-AttestedLegacyDockerShim {
+  param(
+    [Parameter(Mandatory)][string]$ManifestPath,
+    [Parameter(Mandatory)][string]$LegacyShimPath
+  )
+  try {
+    if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $LegacyShimPath -PathType Leaf)) { return $false }
+    $item = Get-Item -LiteralPath $LegacyShimPath -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+    $values = ConvertFrom-StringData (Get-Content -LiteralPath $ManifestPath -Raw)
+    if ($values.version -ne '1' -or -not $values.ContainsKey('docker.exe')) { return $false }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $LegacyShimPath).Hash.ToLowerInvariant()
+    return $values.'docker.exe' -eq $actual
+  } catch { return $false }
 }
 
 function Copy-NodeWithoutWslMetadata {
@@ -303,8 +322,11 @@ if ($legacyInstallDetected) {
 
 $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman
 
-New-Item -ItemType Directory -Path $RuntimeDir, $BinDir, $JhtHome -Force | Out-Null
+New-Item -ItemType Directory -Path $RuntimeDir, $RuntimeShimDir, $BinDir, $JhtHome -Force | Out-Null
 Protect-OwnerOnlyDirectory -Path $RuntimeDir
+$legacyShim = Join-Path $BinDir 'docker.exe'
+$legacyShimOwned = Test-AttestedLegacyDockerShim `
+  -ManifestPath (Join-Path $RuntimeDir '.runtime-integrity') -LegacyShimPath $legacyShim
 $helperSource = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
 . $helperSource
 if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Protect-JhtHomeAcl -Path $JhtHome }
@@ -348,7 +370,7 @@ TimeoutStopSec=45
 WantedBy=multi-user.target
 '@
 [IO.File]::WriteAllText($containerUnitFile, ($containerUnit.Trim() + "`n"), [Text.UTF8Encoding]::new($false))
-$shim = Join-Path $BinDir 'docker.exe'
+$shim = Join-Path $RuntimeShimDir 'docker.exe'
 New-DockerShim -Destination $shim -PodmanPath $Podman
 
 $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml')).Hash.ToLowerInvariant()
@@ -370,12 +392,15 @@ if ($PersistImagePin) {
 }
 $manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
+if ($legacyShimOwned) {
+  Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
+}
 
 [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')
 [Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', $MachineName, 'User')
 $env:JHT_CONTAINER_RUNTIME = 'podman'
 $env:JHT_PODMAN_MACHINE = $MachineName
-$env:PATH = "$BinDir$([IO.Path]::PathSeparator)$env:PATH"
+$env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 
 [string]$existingProject = (& $Podman --connection $MachineName inspect jht --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>$null | Select-Object -First 1)
 $existingProject = $existingProject.Trim()
