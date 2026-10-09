@@ -30,11 +30,32 @@ def _ours(profile):
     return [rule for rule in profile["syscalls"] if str(rule.get("comment", "")).startswith("jht-broker")]
 
 
-def test_the_seccomp_profile_is_upstream_plus_our_three_rules():
+# What we took away from upstream, and put back to compare: the 32-bit
+# sub-architectures of x86_64 and aarch64, and socketcall from the big allow
+# list (code of those architectures, and socketcall, reach socket families
+# no rule can read: AF_ALG and AF_VSOCK).
+REMOVED_SUB_ARCHITECTURES = {
+    "SCMP_ARCH_X86_64": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"],
+    "SCMP_ARCH_AARCH64": ["SCMP_ARCH_ARM"],
+}
+
+
+def _as_upstream(profile):
+    ours = _ours(profile)
+    syscalls = [dict(rule) for rule in profile["syscalls"] if rule not in ours]
+    syscalls[0] = dict(syscalls[0], names=syscalls[0]["names"][:])
+    names = syscalls[0]["names"]
+    names.insert(names.index("socketpair"), "socketcall")
+    arch_map = [dict(entry, subArchitectures=REMOVED_SUB_ARCHITECTURES.get(entry["architecture"], entry["subArchitectures"]))
+                for entry in profile["archMap"]]
+    return dict(profile, archMap=arch_map, syscalls=syscalls)
+
+
+def test_the_seccomp_profile_is_upstream_plus_our_rules_minus_the_32_bit_paths():
     profile = json.loads(SECCOMP.read_text())
     ours = _ours(profile)
-    assert [rule["names"] for rule in ours] == [["clone"], ["unshare"], ["chroot"]]
-    upstream = dict(profile, syscalls=[rule for rule in profile["syscalls"] if rule not in ours])
+    assert [rule["names"] for rule in ours] == [["clone"], ["unshare"], ["chroot"], ["socketcall"]]
+    upstream = _as_upstream(profile)
     canonical = json.dumps(upstream, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(canonical).hexdigest() == UPSTREAM_SECCOMP_CANONICAL
 
@@ -155,3 +176,17 @@ def test_no_rule_lets_an_af_alg_or_af_vsock_socket_through():
 
     assert allowed(2) and allowed(1) and allowed(16)    # inet, unix, netlink: the broker's own
     assert not allowed(38) and not allowed(40)          # AF_ALG, AF_VSOCK
+
+
+def test_no_32_bit_architecture_and_no_socketcall_reach_the_broker():
+    # The security review (09/10): with AppArmor gone under rootless Podman,
+    # 32-bit code (int 0x80 on x86_64, AArch32 on arm64) and socketcall
+    # opened AF_ALG and AF_VSOCK past the socket() rules. The image and
+    # Chromium are 64-bit (checked in CI); a 32-bit syscall now meets the
+    # wrong-architecture action, and socketcall is refused everywhere.
+    profile = json.loads(SECCOMP.read_text())
+    arch = {entry["architecture"]: entry["subArchitectures"] for entry in profile["archMap"]}
+    assert arch["SCMP_ARCH_X86_64"] is None and arch["SCMP_ARCH_AARCH64"] is None
+    for rule in profile["syscalls"]:
+        if "socketcall" in rule["names"]:
+            assert rule["action"] == "SCMP_ACT_ERRNO" and rule["names"] == ["socketcall"], rule

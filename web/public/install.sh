@@ -1000,7 +1000,7 @@ APPARMOR_ENABLED_FILE="/sys/module/apparmor/parameters/enabled"
 # desktop pins this file's digest (installer.sha256), so it pins these too.
 # tests/test_broker_security_install.py fails when scripts/security changes
 # without them.
-BROKER_SECCOMP_SHA256="a83590d674139ff8f9b7e33e57832570c33bf93b02c30eae135a50e342e88986"
+BROKER_SECCOMP_SHA256="7dd70e2ec8628efecf7dbb96abe371e2c02e8522e963193e48061e3c03701dbe"
 BROKER_APPARMOR_SHA256="63cc02c525c03607a2d55102ca2d530c98b975478cc282344b6140f2bd6eb396"
 
 file_sha256() {

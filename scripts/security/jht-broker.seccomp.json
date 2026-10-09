@@ -4,16 +4,11 @@
   "archMap": [
     {
       "architecture": "SCMP_ARCH_X86_64",
-      "subArchitectures": [
-        "SCMP_ARCH_X86",
-        "SCMP_ARCH_X32"
-      ]
+      "subArchitectures": null
     },
     {
       "architecture": "SCMP_ARCH_AARCH64",
-      "subArchitectures": [
-        "SCMP_ARCH_ARM"
-      ]
+      "subArchitectures": null
     },
     {
       "architecture": "SCMP_ARCH_MIPS64",
@@ -371,7 +366,6 @@
         "signalfd4",
         "sigprocmask",
         "sigreturn",
-        "socketcall",
         "socketpair",
         "splice",
         "stat",
@@ -973,6 +967,14 @@
       ],
       "action": "SCMP_ACT_ALLOW",
       "comment": "jht-broker (R3): Chromium's sandbox chroots into an empty directory inside its own user namespace; outside one, with no capability, the kernel still refuses"
+    },
+    {
+      "names": [
+        "socketcall"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "jht-broker (R3): socketcall hides the socket family behind a pointer, where no rule can read it; 32-bit code would open AF_ALG or AF_VSOCK through it"
     }
   ]
 }

@@ -19,6 +19,8 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "broker-sandbox": READ_CONTENTS,
         # The broker under rootless Podman: the gate of the security review's decision (a).
         "broker-sandbox-podman": READ_CONTENTS,
+        # 32-bit ARM code against the seccomp profile, on a native arm64 runner.
+        "broker-seccomp-compat32-arm": READ_CONTENTS,
     },
     "ci.yml": {
         "lint-typecheck": READ_CONTENTS,

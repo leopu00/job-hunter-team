@@ -6,7 +6,7 @@ only when they are loaded, so a missing profile never stops mail.
 
 | File | Derived from | What is added |
 | --- | --- | --- |
-| `jht-broker.seccomp.json` | `github.com/moby/profiles` `seccomp/v0.2.4` `default.json` (Apache-2.0) | `clone` and `unshare` may create user, PID and network namespaces; mount, cgroup, UTS and IPC stay denied; `clone3` stays ENOSYS; `chroot` without the `CAP_SYS_CHROOT` condition |
+| `jht-broker.seccomp.json` | `github.com/moby/profiles` `seccomp/v0.2.4` `default.json` (Apache-2.0) | `clone` and `unshare` may create user, PID and network namespaces; mount, cgroup, UTS and IPC stay denied; `clone3` stays ENOSYS; `chroot` without the `CAP_SYS_CHROOT` condition. Taken away: the 32-bit sub-architectures of x86_64 and aarch64, and `socketcall` (now refused) |
 | `jht-broker.apparmor.txt` | `github.com/moby/profiles` `apparmor/v0.2.3` template (Apache-2.0) | `userns,`; signal and ptrace among the container's processes also with Podman's stacked label; ABI 4.0 with `unix,` |
 
 `tests/test_broker_security_profiles.py` checks that nothing else differs from
@@ -82,7 +82,15 @@ profile only, and the broker accepts it, by the security review's decision (a) o
 What AppArmor's `deny network alg` and `deny network vsock` gave, seccomp
 gives here: upstream's profile allows `socket` for families below 38 and
 39, 41-45 only, so AF_ALG (38) and AF_VSOCK (40) are refused (pinned by a
-test). Rootful Docker without the `jht-broker` label stays off. The
+test). That rule reads the family of `socket()` only: 32-bit code (int 0x80
+on x86_64, AArch32 on arm64) and `socketcall`, whose family sits behind a
+pointer, went past it. The profile therefore has no 32-bit sub-architecture
+on x86_64 and aarch64 (a 32-bit call meets the wrong-architecture action),
+and refuses `socketcall`; the image's Chromium and Python are 64-bit, and CI
+checks it. A static 32-bit probe (`scripts/ci/compat32_socket.c.txt`) must open
+nothing under the profile, under Docker and rootless Podman on x86_64, and
+on a native arm64 runner (qemu-user would turn its calls into 64-bit ones
+before seccomp sees them). Rootful Docker without the `jht-broker` label stays off. The
 `broker-sandbox-podman` CI job is the gate: under rootless Podman the broker
 ready and Chromium sandboxed, no mount namespace, chroot, AF_ALG or AF_VSOCK
 from the broker's Python, and a rootful container without the label off.
