@@ -25,9 +25,9 @@ account-backed onboarding and subscription-provider access.**
   account session before opening protected application surfaces.
 - First-run setup collects the profile and environment, then connects a
   supported Claude Code, Codex or Kimi subscription through that provider's
-  login flow (Kimi is not available on Windows yet). Completion waits for the
-  native snapshot and direct chat to be ready instead of reporting success
-  optimistically.
+  login flow (Kimi is not supported yet when the team runs on this computer on
+  Windows). Completion waits for the native snapshot and direct chat to be
+  ready instead of reporting success optimistically.
 - The Assistant has a resumable guided introduction with tour, requirements
   and exploration paths, followed by an editable first message for the free
   chat. On macOS, on-device dictation can fill supported composers without
@@ -36,9 +36,11 @@ account-backed onboarding and subscription-provider access.**
 ### Windows: the team runs locally
 
 - On Windows the team now runs on your computer, in Podman inside WSL. The app
-  installs everything it needs. Docker Desktop is not required.
-- Not yet available on Windows: Kimi, sending applications by email from the
-  team, and the local scorer (Ollama).
+  installs Podman and everything else it needs; Docker Desktop is not
+  required. WSL must be enabled on Windows: if it is not ready, the app says
+  what to do.
+- Not yet supported when the team runs on Windows: Kimi, sending applications
+  by email from the team, and the local scorer (Ollama).
 
 ### Explicit limits
 
