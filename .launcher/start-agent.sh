@@ -1480,7 +1480,10 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   # scrive a mano, per l'agente Windows non esiste (issue #132).
   send_optional_env powershell
   jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" Enter
-  if [ "$CLI_BIN" != "python3" ]; then
+  # Su Codex il workspace e' gia' pre-autorizzato nella config: un Enter
+  # cieco dopo 8 secondi puo' invece cadere nel turno operativo dell'agente.
+  # Gli altri provider conservano il comportamento precedente.
+  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then
     # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
     sleep 8
     jht_spawn_tmux send-keys -t "$SESSION" Enter
@@ -1620,7 +1623,12 @@ else
   # Loop: 60 iterazioni × 2s = 120s totali. Il dialog appare 5-30s dopo il
   # CLI start; 120s copre anche partenze lente (rete, immagine grossa).
   # Exit immediato appena uno dei pattern matcha → no overhead a regime.
-  if [ "$CLI_BIN" != "python3" ]; then
+  # Questi pattern appartengono a Claude; soprattutto, armarne il fallback
+  # per Codex significa lasciare un processo in background che, dopo
+  # 120 secondi, preme Enter nel turno corrente dell'agente: non sblocca un
+  # prompt noto e può invece inviare input mentre Codex sta già lavorando. Gli
+  # altri provider conservano il comportamento precedente.
+  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then
     setsid sh -c '
     _sess="'"$SESSION"'"
     _i=0
@@ -1674,8 +1682,9 @@ else
   # e' in background: se il boot si fermasse su un dialog, l'attesa e la
   # risposta al dialog devono poter correre insieme.
   #
-  # `python3` escluso come per il watcher: non e' una TUI e il suo pane non
-  # segue le stesse regole.
+  # `python3` escluso: non e' una TUI e il suo pane non segue le stesse
+  # regole. Codex e Kimi restano invece coperti dalla sonda del REPL anche se
+  # non usano il watcher dei dialog Claude qui sopra.
   if [ "$CLI_BIN" != "python3" ]; then
     _spawn_stage="repl_wait"
     jht_spawn_wait_repl "$SESSION" "$FULL_CMD" "start-agent" "$ROLE" \

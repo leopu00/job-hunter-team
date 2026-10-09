@@ -312,6 +312,29 @@ def test_the_repl_check_runs_after_the_auto_enter_watcher():
     assert watcher < check
 
 
+def test_the_auto_enter_watcher_is_never_armed_for_codex():
+    """Il fallback del watcher non deve mai essere armato per Codex.
+
+    Su Codex un Enter cieco dopo 120 secondi cade nel turno gia' operativo e
+    altera il lavoro invece di confermare un dialog noto. La sonda REPL che
+    segue resta invece provider-neutral.
+    """
+    guard = 'if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then'
+    assert f"{guard}\n    setsid sh -c" in SOURCE
+
+    windows_spawn = SOURCE.index(
+        'jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" Enter'
+    )
+    windows_guard = SOURCE.index(
+        guard, windows_spawn
+    )
+    windows_enter = SOURCE.index(
+        'jht_spawn_tmux send-keys -t "$SESSION" Enter', windows_guard
+    )
+    windows_else = SOURCE.index("\nelse\n", windows_guard)
+    assert windows_spawn < windows_guard < windows_enter < windows_else
+
+
 def test_the_repl_check_gates_the_success_report_and_the_roster():
     """`✓ started` e il record del roster non devono poter certificare un
     guscio vuoto."""
