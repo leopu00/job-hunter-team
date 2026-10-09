@@ -11,8 +11,9 @@ name: Broker — login browser isolation
 on:
   push:
     branches:
-      - master
-      - master-arthur
+      # Only the integrator's trial branches while the gate is red by design:
+      # no fixed red on master or master-arthur. The commit that brings
+      # design S must add master and master-arthur back here.
       - "ci-**"
     paths:
       - "Dockerfile"

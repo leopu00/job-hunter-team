@@ -250,3 +250,7 @@ def test_the_workflow_runs_the_gate_under_docker_and_rootless_podman():
     assert "podman-compose==1.6.0" in runs["browser-isolation-podman"]
     for path in ("scripts/ci/browser_isolation.py", "docker-compose.yml", "shared/broker/**"):
         assert path in workflow["on"]["push"]["paths"]
+    # Red by design until S: only the trial branches and dispatch, never a
+    # fixed red on master or master-arthur.
+    assert workflow["on"]["push"]["branches"] == ["ci-**"]
+    assert "workflow_dispatch" in workflow["on"]
