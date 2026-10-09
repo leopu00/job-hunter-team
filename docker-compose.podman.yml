@@ -17,19 +17,17 @@ services:
     # proxy (`curl --noproxy '*'`) and reach the LAN, the Windows host and the
     # VM's loopback (the proxy itself, the broker's login view on 6081).
     # pasta options:
-    #   -o 127.0.0.1    every connection pasta opens on the container's behalf
-    #                   leaves from the VM's loopback, which has no route out:
-    #                   LAN, gateway and Internet are refused;
+    #   --splice-only   no tap device at all: the container has only its
+    #                   loopback, so no route, gateway, UDP, ICMP or IPv6 to
+    #                   leave by, and no path to the VM's own addresses
+    #                   (`-o 127.0.0.1` still delivered connections to those:
+    #                   a VM service on 0.0.0.0 stayed reachable);
     #   -T 3128         the one way out: the container's 127.0.0.1:3128 is the
     #                   VM's 127.0.0.1:3128, the egress proxy, which filters
-    #                   what may be reached (wsl-interop-connect-proxy.py);
-    #   --no-udp, --no-icmp  no DNS or tunnel over UDP/ICMP (behind a CONNECT
-    #                   proxy the proxy resolves the names);
-    #   --no-map-gw     the gateway address is not the VM's loopback;
-    #   -4              no IPv6, so no second source address to leave from.
+    #                   what may be reached (wsl-interop-connect-proxy.py).
     # tests/test_podman_network_egress.py checks the line, and on a real
     # Podman machine what the container can reach.
-    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"
+    network_mode: "pasta:--splice-only,-T,3128"
     # The live-screen port of the base file (127.0.0.1:6080 of the VM) is
     # published again: pasta forwards it to the container's own address, so
     # the stream keeps the 0.0.0.0 default of .launcher/live-screen.sh,
@@ -59,7 +57,7 @@ services:
     # porta 3129 del loopback della VM (posta: 993, 465, 587, e 443). Dal
     # bridge usciva diretto e vedeva la LAN. IMAP e SMTP non leggono le
     # variabili del proxy: passano dal tunnel CONNECT di mail_egress.py.
-    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3129"
+    network_mode: "pasta:--splice-only,-T,3129"
     # Il file base gli dà la rete `broker`; con network_mode le due chiavi si
     # escludono e il progetto non sarebbe valido. La porta della vista di
     # login (127.0.0.1:6081 della VM) resta quella del file base: pasta la
@@ -75,7 +73,7 @@ services:
     userns_mode: "keep-id:uid=1001,gid=1001"
     # Solo il SUO proxy, la porta 3130 della VM, che ammette soltanto
     # api.telegram.org:443. urllib legge HTTPS_PROXY da sé.
-    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3130"
+    network_mode: "pasta:--splice-only,-T,3130"
     environment:
       - HTTPS_PROXY=http://127.0.0.1:3130
       - https_proxy=http://127.0.0.1:3130

@@ -4,8 +4,9 @@ With `network_mode: host` the container shared the VM's network: the proxy
 was only an environment variable, and an agent could skip it (`curl
 --noproxy '*'`) to reach the LAN, the Windows host and the VM's loopback (the
 proxy itself, the broker's login view on 6081). docker-compose.podman.yml now
-runs the container on pasta with no route out and one forwarded port, the
-VM's 127.0.0.1:3128 where the egress proxy listens. The broker (3129) and the
+runs the container on pasta with no network device at all (--splice-only)
+and one forwarded port, the VM's 127.0.0.1:3128 where the egress proxy
+listens. The broker (3129) and the
 Telegram service (3130) left directly from the compose bridge, LAN included:
 they run the same way, each with its own proxy instance and policy
 (configure-podman-windows-network.ps1).
@@ -49,7 +50,7 @@ PROXY_PORT = 3128
 
 
 def _pasta(port: int) -> str:
-    return f"pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,{port}"
+    return f"pasta:--splice-only,-T,{port}"
 
 
 class _ComposeLoader(yaml.SafeLoader):
@@ -75,15 +76,14 @@ def test_each_service_runs_on_pasta_with_its_proxy_as_the_only_way_out(service):
     network = _services(OVERRIDE)[service]["network_mode"]
     assert network == _pasta(port)
     options = _pasta_options(network)
-    # What each option buys (see the override's comment).
-    for flag in ("--no-udp", "--no-icmp", "--no-map-gw", "-4"):
-        assert flag in options, flag
-    assert options[options.index("-o") + 1] == "127.0.0.1"
+    # No tap device: the container has only its loopback. `-o 127.0.0.1`
+    # left one, and pasta delivered connections to the VM's own addresses.
+    assert "--splice-only" in options
     # One forwarded port out of the namespace, the proxy's; nothing that
     # widens it (port ranges, `all`, a second -T, a mapped host loopback).
     forwards = [options[i + 1] for i, flag in enumerate(options) if flag in ("-T", "--tcp-ns")]
     assert forwards == [str(port)]
-    for widening in ("-U", "--udp-ns", "--map-host-loopback", "--freebind", "--outbound-if4"):
+    for widening in ("-U", "--udp-ns", "--map-host-loopback", "--freebind", "--outbound-if4", "-t", "--tcp-ports"):
         assert widening not in options, widening
 
 
