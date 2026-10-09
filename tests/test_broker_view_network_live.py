@@ -107,5 +107,5 @@ def test_the_view_port_is_reachable_only_from_the_hosts_loopback(engine):
         answers = json.loads(probe.stdout.strip().splitlines()[-1])
         assert all(v.startswith("refused:") for v in answers.values()), answers
     finally:
-        run(engine, "rm", "-f", broker, check=False)
+        run(engine, "rm", "-f", "-v", broker, check=False)
         run(engine, "network", "rm", broker_net, agent_net, check=False)
