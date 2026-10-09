@@ -32,7 +32,13 @@ def test_uninstall_is_an_early_fixed_scope_protocol():
     assert "GetFolderPath('UserProfile')" in uninstall
     assert "GetFolderPath('LocalApplicationData')" in uninstall
     assert "$machineName = 'jht-podman'" in uninstall
-    assert "podman-machine-$MachineName" in uninstall
+    assert '"podman-$MachineName"' in uninstall
+    # Leftovers go after the machine, before the runtime; podman-network with it.
+    machine_rm = uninstall.index("machine rm --force $machineName")
+    leftovers = uninstall.index("Remove-JhtPodmanLeftovers -ProfilePath", machine_rm)
+    assert leftovers < uninstall.index("Write-JhtUninstallPhase uninstall_runtime", machine_rm)
+    assert "'Job Hunter Team', 'podman-network')" in uninstall
+    assert "foreach ($path in @($runtimePath, $networkPath))" in uninstall
     assert "machine rm --force $machineName" in uninstall
     assert "Remove-JhtStartupTask" in uninstall
     assert "Job Hunter Team - Start runtime" in uninstall
@@ -126,9 +132,15 @@ def test_confirm_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Path):
     tools = tmp_path / "tools"
     state = tmp_path / "jht-machine-present"
     log = tmp_path / "podman.log"
-    for directory in (runtime, bin_dir, data, documents, tools):
+    network = local / "Job Hunter Team" / "podman-network"
+    lock = profile / ".config" / "containers" / "podman" / "machine" / "wsl" / "jht-podman.lock"
+    key = profile / ".local" / "share" / "containers" / "podman" / "machine" / "machine"
+    for directory in (runtime, bin_dir, data, documents, tools, network, lock.parent, key.parent):
         directory.mkdir(parents=True, exist_ok=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
+    (network / "jht-windows-egress-proxy.service").write_text("unit\n", encoding="utf-8")
+    lock.write_text("", encoding="utf-8")
+    key.write_text("key\n", encoding="utf-8")
     for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
     (data / "profile.json").write_text("keep\n", encoding="utf-8")
@@ -158,7 +170,7 @@ exit /b 0
         wsl,
         f"""@echo off
 if "%1"=="--status" exit /b 0
-if "%1"=="--list" if exist "{state}" echo podman-machine-jht-podman
+if "%1"=="--list" if exist "{state}" echo podman-jht-podman
 exit /b 0
 """,
     )
@@ -173,6 +185,9 @@ $first = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath $
 if ($first -ne 0) {{ throw "first uninstall returned $first" }}
 if (Test-Path -LiteralPath {_ps_literal(state)}) {{ throw 'JHT machine remained' }}
 if (Test-Path -LiteralPath {_ps_literal(runtime)}) {{ throw 'runtime remained' }}
+if (Test-Path -LiteralPath {_ps_literal(network)}) {{ throw 'podman-network remained' }}
+if (Test-Path -LiteralPath {_ps_literal(lock)}) {{ throw 'JHT machine lock remained' }}
+if (-not (Test-Path -LiteralPath {_ps_literal(key)})) {{ throw 'the SSH key of another Podman machine was removed' }}
 foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','docker.exe')) {{ if (Test-Path -LiteralPath (Join-Path $bin $name)) {{ throw "command remained: $name" }} }}
 if (-not (Test-Path -LiteralPath {_ps_literal(data / 'profile.json')})) {{ throw 'user data was removed' }}
 if (-not (Test-Path -LiteralPath {_ps_literal(documents / 'cv.txt')})) {{ throw 'documents were removed' }}

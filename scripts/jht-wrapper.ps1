@@ -89,9 +89,11 @@ function Get-JhtPodmanMachineState {
   }
   if ($WslPath) {
     try {
-      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace("`0", '').Trim() })
       if ($LASTEXITCODE -eq 0) {
-        if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
+        # Podman names a machine's distro podman-<name> (podman-jht-podman);
+        # the older podman-machine-<name> is still recognised.
+        if ($distros -ccontains "podman-$MachineName" -or $distros -ccontains "podman-machine-$MachineName") { return 'present' }
         return 'absent'
       }
     } catch {}
@@ -137,6 +139,56 @@ function Remove-JhtStartupTask {
   } catch { return $false }
 }
 
+# What `podman machine rm` leaves behind. The machine's lock is JHT's. The
+# SSH key, port allocations and the machine-os image cache (~250 MB) serve
+# every Podman machine of this user, so they go only when no other machine
+# is left: Podman recreates them for the next one. Best effort, never a
+# reason to fail the removal.
+function Remove-JhtPodmanLeftovers {
+  param(
+    [Parameter(Mandatory)][string]$ProfilePath,
+    [string]$PodmanPath,
+    [string]$WslPath,
+    [Parameter(Mandatory)][string]$MachineName
+  )
+  $configMachines = [IO.Path]::Combine($ProfilePath, '.config', 'containers', 'podman', 'machine')
+  $dataMachines = [IO.Path]::Combine($ProfilePath, '.local', 'share', 'containers', 'podman', 'machine')
+  $lock = [IO.Path]::Combine($configMachines, 'wsl', "$MachineName.lock")
+  try { Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue } catch {}
+  $otherMachines = $true
+  if ($PodmanPath) {
+    try {
+      $raw = ((& $PodmanPath machine list --format json 2>$null) -join '')
+      if ($LASTEXITCODE -eq 0 -and $raw) { $otherMachines = @($raw | ConvertFrom-Json).Count -gt 0 }
+    } catch {}
+  } elseif ($WslPath) {
+    try {
+      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace("`0", '').Trim() })
+      if ($LASTEXITCODE -eq 0) { $otherMachines = @($distros | Where-Object { $_ -like 'podman-*' }).Count -gt 0 }
+    } catch {}
+  }
+  if ($otherMachines) { return }
+  foreach ($path in @($dataMachines, $configMachines)) {
+    try { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+  }
+  # Only folders this left empty; ~\.config\containers can hold the user's
+  # own registries.conf or policy.json.
+  foreach ($path in @(
+    [IO.Path]::Combine($ProfilePath, '.local', 'share', 'containers', 'podman'),
+    [IO.Path]::Combine($ProfilePath, '.local', 'share', 'containers', 'cache'),
+    [IO.Path]::Combine($ProfilePath, '.local', 'share', 'containers'),
+    [IO.Path]::Combine($ProfilePath, '.config', 'containers', 'podman'),
+    [IO.Path]::Combine($ProfilePath, '.config', 'containers')
+  )) {
+    try {
+      if ((Test-Path -LiteralPath $path -PathType Container) -and
+          @(Get-ChildItem -LiteralPath $path -Force -ErrorAction Stop).Count -eq 0) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+      }
+    } catch {}
+  }
+}
+
 function Invoke-JhtWindowsUninstall {
   param(
     [string[]]$UninstallArgs,
@@ -155,6 +207,8 @@ function Invoke-JhtWindowsUninstall {
 
   $machineName = 'jht-podman'
   $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
+  # The egress proxies' units and native connector (configure-podman-windows-network.ps1).
+  $networkPath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'podman-network')
   $binPath = [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.local', 'bin')
   $selectionPath = Join-Path $runtimePath 'container-runtime'
   $knownCommands = @(
@@ -221,11 +275,15 @@ function Invoke-JhtWindowsUninstall {
     return 24
   }
 
+  Remove-JhtPodmanLeftovers -ProfilePath ([IO.Path]::GetFullPath($ProfilePath)) -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
+
   Write-JhtUninstallPhase uninstall_runtime
-  if (Test-Path -LiteralPath $runtimePath) {
-    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch {}
+  foreach ($path in @($runtimePath, $networkPath)) {
+    if (Test-Path -LiteralPath $path) {
+      try { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop } catch {}
+    }
   }
-  if (Test-Path -LiteralPath $runtimePath) {
+  if ((Test-Path -LiteralPath $runtimePath) -or (Test-Path -LiteralPath $networkPath)) {
     Write-JhtUninstallLeft runtime
     if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
     return 24

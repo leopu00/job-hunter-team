@@ -483,6 +483,9 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
     runtime = local / "Job Hunter Team" / "host-runtime"
     runtime.mkdir(parents=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
+    network = local / "Job Hunter Team" / "podman-network"
+    network.mkdir(parents=True)
+    (network / "jht-rootless-podman.service").write_text("unit\n", encoding="utf-8")
 
     result, calls = _run(
         tmp_path,
@@ -491,7 +494,7 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
             "Write-JhtUninstallPhase", "Write-JhtUninstallLeft",
             "Get-JhtNormalizedWindowsPath", "Get-JhtPodmanMachineState",
             "Remove-JhtUserEnvironment", "Remove-JhtStartupTask",
-            "Invoke-JhtWindowsUninstall",
+            "Remove-JhtPodmanLeftovers", "Invoke-JhtWindowsUninstall",
         ],
         UNINSTALL_BODY,
         {
@@ -508,6 +511,7 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
     assert not any("system connection" in call for call in calls)
     assert not (tmp_path / "state").exists()
     assert not runtime.exists()
+    assert not network.exists()
 
 
 @pytest.mark.parametrize(
@@ -741,3 +745,92 @@ def test_only_the_enabler_and_the_opt_in_probe_compile_a_docker_shim():
     compilers = sorted(path.name for path in SCRIPTS.glob("*.ps1")
                        if re.search(r"(?m)^\s*New-DockerShim\b", path.read_text(encoding="utf-8")))
     assert compilers == ["enable-podman-windows-runtime.ps1", "podman-windows-probe.ps1"]
+
+
+# ---------------------------------------------------------------------------
+# jht-wrapper.ps1: `jht uninstall` and what Podman leaves behind
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("distros", "expected"),
+    [("podman-jht-podman", "present"), ("podman-machine-jht-podman", "present"), ("Ubuntu", "absent")],
+)
+def test_without_podman_the_wsl_fallback_knows_the_real_distro_name(tmp_path, distros, expected):
+    # Podman names the distro podman-<machine>. Looking only for
+    # podman-machine-jht-podman, a removal without podman.exe called the
+    # machine absent and left it, secrets volumes included.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "wsl.exe", f"  \"--list --quiet\") printf '%s\\n' Ubuntu {distros} ;;")
+    result, _ = _run(
+        tmp_path,
+        WRAPPER,
+        ["Get-JhtPodmanMachineState"],
+        "[Console]::Out.WriteLine((Get-JhtPodmanMachineState -PodmanPath '' "
+        "-WslPath $env:FAKE_WSL -MachineName 'jht-podman'))",
+        {"FAKE_WSL": str(bin_dir / "wsl.exe")},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+def _podman_leftovers(profile: Path) -> dict[str, Path]:
+    config = profile / ".config" / "containers"
+    data = profile / ".local" / "share" / "containers"
+    paths = {
+        "lock": config / "podman" / "machine" / "wsl" / "jht-podman.lock",
+        "key": data / "podman" / "machine" / "machine",
+        "cache": data / "podman" / "machine" / "wsl" / "cache" / "machine-os.tar.zst",
+        "port_alloc": data / "podman" / "machine" / "port-alloc.dat",
+        "registries": config / "registries.conf",
+    }
+    for path in paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    (data / "cache").mkdir(parents=True, exist_ok=True)
+    return paths
+
+
+@pytest.mark.parametrize(
+    ("podman_list", "wsl_list", "shared_removed"),
+    [
+        ("[]", None, True),
+        ('[{"Name":"someone-else"}]', None, False),
+        ("FAIL", None, False),
+        (None, "Ubuntu", True),
+        (None, "podman-someone-else", False),
+    ],
+    ids=["no-machine-left", "another-machine", "list-fails", "wsl-no-podman-distro", "wsl-another-podman-distro"],
+)
+def test_uninstall_removes_podman_leftovers_only_when_no_machine_is_left(
+    tmp_path, podman_list, wsl_list, shared_removed
+):
+    profile = tmp_path / "profile"
+    paths = _podman_leftovers(profile)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    env = {"PROFILE": str(profile), "FAKE_PODMAN": "", "FAKE_WSL": ""}
+    if podman_list is not None:
+        answer = "exit 1" if podman_list == "FAIL" else f"printf '%s\\n' '{podman_list}'"
+        _fake(bin_dir, "podman.exe", f'  "machine list --format json") {answer} ;;')
+        env["FAKE_PODMAN"] = str(bin_dir / "podman.exe")
+    if wsl_list is not None:
+        _fake(bin_dir, "wsl.exe", f"  \"--list --quiet\") printf '%s\\n' {wsl_list} ;;")
+        env["FAKE_WSL"] = str(bin_dir / "wsl.exe")
+    result, _ = _run(
+        tmp_path,
+        WRAPPER,
+        ["Remove-JhtPodmanLeftovers"],
+        "Remove-JhtPodmanLeftovers -ProfilePath $env:PROFILE -PodmanPath $env:FAKE_PODMAN "
+        "-WslPath $env:FAKE_WSL -MachineName 'jht-podman'",
+        env,
+    )
+    assert result.returncode == 0, result.stderr
+    # The JHT machine's lock always goes; the user's own Podman config stays.
+    assert not paths["lock"].exists()
+    assert paths["registries"].exists()
+    for name in ("key", "cache", "port_alloc"):
+        assert paths[name].exists() != shared_removed, name
+    data = profile / ".local" / "share" / "containers"
+    assert data.exists() != shared_removed
