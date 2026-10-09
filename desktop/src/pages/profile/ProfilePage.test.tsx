@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeSupabase, type FakeQuery } from "../../test-support/fake-supabase";
 import { ProfilePage } from ".";
 import { loadProfile, openContacts, profileExport } from "./load-profile";
+import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
 
 // Profilo sintetico: nessun dato vero.
 const PROFILE = {
@@ -71,5 +72,30 @@ describe("ProfilePage", () => {
     const exportLink = document.querySelector('a[download="profilo-candidato-' + new Date().toISOString().slice(0, 10) + '.json"]');
     expect(exportLink).toHaveAttribute("href", "blob:profile");
     expect(screen.getByText(/sono cifrati sul server/)).toHaveTextContent("phone");
+  });
+});
+
+describe("language levels", () => {
+  it("tells a stored level in the app's language, not as the English word the CV gave", async () => {
+    const withLanguages = { ...PROFILE, languages: [{ language: "Italiano", level: "native" }, { language: "Inglese", level: "c1" }] };
+    const { client } = fakeSupabase((query) =>
+      query.table === "candidate_profiles" ? { data: withLanguages, error: null } : respond(query),
+    );
+    render(<ProfilePage client={client} />);
+    expect(await screen.findByText("madrelingua")).toBeInTheDocument();
+    expect(screen.queryByText("native")).toBeNull();
+    expect(screen.getByText("C1")).toBeInTheDocument();
+  });
+
+  it("knows the levels in English and Italian in every language, and leaves an unknown one as stored", () => {
+    for (const locale of ["it", "en", "de", "es", "fr", "hu", "pt"] as const) {
+      const t = getProfileT(locale);
+      for (const [stored, key] of [["Native", "lvl_native"], ["madrelingua", "lvl_native"], ["fluent", "lvl_fluent"], ["Avanzato", "lvl_advanced"], ["intermediate", "lvl_intermediate"], ["base", "lvl_basic"]]) {
+        expect(languageLevelLabel(stored, t)).toBe(t(key));
+        expect(t(key)).not.toBe(key);
+      }
+      expect(languageLevelLabel("Professionale", t)).toBe("Professionale");
+      expect(languageLevelLabel(undefined, t)).toBe("");
+    }
   });
 });

@@ -789,6 +789,52 @@ export const T: Record<string, Entry> = {
     fr: "Reconnectez-vous",
     pt: "Entrar novamente",
   },
+  // ── Livelli delle lingue (il profilo li salva come parole inglesi o italiane) ──
+  lvl_native: {
+    it: "madrelingua",
+    en: "native",
+    hu: "anyanyelvi",
+    es: "nativo",
+    de: "Muttersprache",
+    fr: "langue maternelle",
+    pt: "nativo",
+  },
+  lvl_fluent: {
+    it: "fluente",
+    en: "fluent",
+    hu: "folyékony",
+    es: "fluido",
+    de: "fließend",
+    fr: "courant",
+    pt: "fluente",
+  },
+  lvl_advanced: {
+    it: "avanzato",
+    en: "advanced",
+    hu: "haladó",
+    es: "avanzado",
+    de: "fortgeschritten",
+    fr: "avancé",
+    pt: "avançado",
+  },
+  lvl_intermediate: {
+    it: "intermedio",
+    en: "intermediate",
+    hu: "középhaladó",
+    es: "intermedio",
+    de: "mittel",
+    fr: "intermédiaire",
+    pt: "intermédio",
+  },
+  lvl_basic: {
+    it: "base",
+    en: "basic",
+    hu: "alapfokú",
+    es: "básico",
+    de: "Grundkenntnisse",
+    fr: "notions",
+    pt: "básico",
+  },
   aria_breadcrumb: {
     it: "Breadcrumb",
     en: "Breadcrumb",
@@ -817,4 +863,35 @@ export function getProfileT(locale: Locale): ProfileT {
     if (!entry) return key as string;
     return entry[locale] ?? entry.it;
   };
+}
+
+// The words a profile stores as a language's level, in English or Italian,
+// and the key they are told with. A CEFR level (A1…C2) is the same in every
+// language; anything else is shown as stored.
+const LEVEL_KEYS: Record<string, string> = {
+  native: "lvl_native",
+  "mother tongue": "lvl_native",
+  madrelingua: "lvl_native",
+  nativo: "lvl_native",
+  fluent: "lvl_fluent",
+  fluente: "lvl_fluent",
+  advanced: "lvl_advanced",
+  avanzato: "lvl_advanced",
+  intermediate: "lvl_intermediate",
+  intermedio: "lvl_intermediate",
+  basic: "lvl_basic",
+  beginner: "lvl_basic",
+  base: "lvl_basic",
+  elementare: "lvl_basic",
+};
+
+export function languageLevelLabel(
+  level: string | null | undefined,
+  t: ProfileT,
+): string {
+  if (!level) return "";
+  const word = level.trim().toLowerCase();
+  if (/^[abc][12]$/.test(word)) return word.toUpperCase();
+  const key = LEVEL_KEYS[word];
+  return key ? t(key) : level;
 }
