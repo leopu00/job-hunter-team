@@ -106,19 +106,32 @@ def prepare_inventory_script(*, inventory_fails: bool = False) -> str:
         'telegram_legacy() { ' + legacy + '; }\n'
         'read_only_container_id() { return 3; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
-        + functions("telegram_prepare_legacy_inventory")
+        + functions("telegram_legacy_sources_present", "telegram_prepare_legacy_inventory")
         + "\ntelegram_prepare_legacy_inventory\n"
+    )
+
+
+def legacy_home(tmp_path: Path, config: str | None = '{"channels": {"telegram": {"bots": {}}}}') -> Path:
+    home = tmp_path / "jht-home"
+    home.mkdir()
+    if config is not None:
+        (home / "jht.config.json").write_text(config, encoding="utf-8")
+    return home
+
+
+def run_prepare_inventory(home: Path, log: Path, **kwargs: bool) -> subprocess.CompletedProcess[str]:
+    log.touch()
+    return subprocess.run(
+        ["bash", "-c", prepare_inventory_script(**kwargs)],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "FAKE_LOG": str(log), "JHT_HOME_HOST": str(home)},
     )
 
 
 def test_empty_legacy_inventory_is_persisted_before_agent_start(tmp_path: Path) -> None:
     log = tmp_path / "calls.log"
-    done = subprocess.run(
-        ["bash", "-c", prepare_inventory_script()],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "FAKE_LOG": str(log)},
-    )
+    done = run_prepare_inventory(legacy_home(tmp_path), log)
 
     assert done.returncode == 0, done.stderr
     assert log.read_text(encoding="utf-8").splitlines() == [
@@ -131,15 +144,56 @@ def test_empty_legacy_inventory_is_persisted_before_agent_start(tmp_path: Path) 
 
 def test_legacy_inventory_read_failure_still_fails_closed(tmp_path: Path) -> None:
     log = tmp_path / "calls.log"
-    done = subprocess.run(
-        ["bash", "-c", prepare_inventory_script(inventory_fails=True)],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "FAKE_LOG": str(log)},
-    )
+    done = run_prepare_inventory(legacy_home(tmp_path), log, inventory_fails=True)
 
     assert done.returncode != 0
     assert "REMEMBER" not in log.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "config",
+    [None, '{"model": "x", "channels": {}}'],
+    ids=["clean-install", "config-without-telegram"],
+)
+def test_install_without_telegram_starts_without_the_isolated_service(tmp_path: Path, config: str | None) -> None:
+    log = tmp_path / "calls.log"
+    done = run_prepare_inventory(legacy_home(tmp_path, config), log, inventory_fails=True)
+
+    assert done.returncode == 0, done.stderr
+    assert log.read_text(encoding="utf-8") == ""
+
+
+def test_missing_jht_home_starts_without_the_isolated_service(tmp_path: Path) -> None:
+    log = tmp_path / "calls.log"
+    done = run_prepare_inventory(tmp_path / "absent", log, inventory_fails=True)
+
+    assert done.returncode == 0, done.stderr
+    assert log.read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.parametrize(
+    "layout",
+    ["escaped-key", "model-pin-backup", "credential-file", "unreadable-config"],
+)
+def test_any_possible_legacy_source_still_requires_the_inventory(tmp_path: Path, layout: str) -> None:
+    home = legacy_home(tmp_path, '{"model": "x"}')
+    if layout == "escaped-key":
+        (home / "jht.config.json").write_text('{"channels": {"\\u0074elegram": {}}}', encoding="utf-8")
+    elif layout == "model-pin-backup":
+        (home / "jht.config.json.bak-model-pin-1").write_text('{"channels": {"telegram": {}}}', encoding="utf-8")
+    elif layout == "credential-file":
+        (home / "credentials").mkdir()
+        (home / "credentials" / "telegram_bot.json").write_text("{}", encoding="utf-8")
+    else:
+        (home / "jht.config.json").chmod(0)
+    log = tmp_path / "calls.log"
+    try:
+        done = run_prepare_inventory(home, log, inventory_fails=True)
+    finally:
+        (home / "jht.config.json").chmod(0o600)
+
+    assert done.returncode != 0
+    assert log.read_text(encoding="utf-8").splitlines() == ["COMPOSE up -d jht-telegram"]
 
 
 def test_pairing_sends_new_token_only_to_isolated_admin(tmp_path: Path) -> None:
@@ -407,7 +461,9 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
         + powershell_functions("Invoke-TelegramAdmin", "Invoke-TelegramPair")
         + "\nfunction Invoke-TelegramLegacy {\n"
         + "  param([string]$Command, [string]$Role = '')\n"
-        + "  if ($Command -eq 'inventory') { if ($env:FAKE_DIGEST) { Write-Output $env:FAKE_DIGEST }; return }\n"
+        # The real helper ends in `docker run`, which sets $LASTEXITCODE; a
+        # fresh pwsh has none, and Invoke-TelegramPair reads it.
+        + "  if ($Command -eq 'inventory') { if ($env:FAKE_DIGEST) { Write-Output $env:FAKE_DIGEST }; $global:LASTEXITCODE = 0; return }\n"
         + "  & docker legacy $Command $Role | Out-Null\n"
         + "}\n"
         + "$code = Invoke-TelegramPair 'assistente'\nexit $code\n",
@@ -431,3 +487,64 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
     assert "TELEGRAM_STDIN_OK" in calls
     status = next(line for line in calls.splitlines() if "cutover status" in line)
     assert " -i " not in f" {status} "
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")
+@pytest.mark.parametrize(
+    ("layout", "inventoried"),
+    [
+        ("absent", False),
+        ("clean-install", False),
+        ("config-without-telegram", False),
+        ("legacy-config", True),
+        ("escaped-key", True),
+        ("model-pin-backup", True),
+        ("credential-file", True),
+    ],
+)
+def test_powershell_start_skips_the_inventory_only_without_legacy_sources(
+    tmp_path: Path, layout: str, inventoried: bool
+) -> None:
+    home = tmp_path / "jht-home"
+    if layout != "absent":
+        home.mkdir()
+    configs = {
+        "config-without-telegram": '{"model": "x", "channels": {}}',
+        "legacy-config": '{"channels": {"telegram": {"bots": {}}}}',
+        "escaped-key": '{"channels": {"\\u0074elegram": {}}}',
+    }
+    if layout in configs:
+        (home / "jht.config.json").write_text(configs[layout], encoding="utf-8")
+    elif layout == "model-pin-backup":
+        (home / "jht.config.json.bak-model-pin-1").write_text('{"channels": {"telegram": {}}}', encoding="utf-8")
+    elif layout == "credential-file":
+        (home / "credentials").mkdir()
+        (home / "credentials" / "telegram_bot.json").write_text("{}", encoding="utf-8")
+    log = tmp_path / "calls.log"
+    script = tmp_path / "start.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$JhtHome = '{home}'\n"
+        "$TelegramContainer = 'jht-telegram'\n$Container = 'jht'\n"
+        "function Invoke-Compose { Add-Content -LiteralPath $env:FAKE_LOG -Value ('COMPOSE ' + ($args -join ' ')); $global:LASTEXITCODE = 0 }\n"
+        "function Invoke-TelegramAdmin { return 1 }\n"
+        "function Test-ContainerUp { return $false }\n"
+        "function Invoke-TelegramLegacy { $global:LASTEXITCODE = 42 }\n"
+        + powershell_functions("Test-TelegramLegacySource", "Initialize-TelegramLegacyInventory")
+        + "\nif (Initialize-TelegramLegacyInventory) { exit 0 } else { exit 1 }\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-File", str(script)],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "FAKE_LOG": str(log)},
+    )
+
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    if inventoried:
+        assert done.returncode == 1, done.stderr
+        assert calls == ["COMPOSE up -d jht-telegram"]
+    else:
+        assert done.returncode == 0, done.stderr
+        assert calls == []

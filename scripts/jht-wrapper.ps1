@@ -554,7 +554,32 @@ function Invoke-TelegramLegacy {
   & docker @runArgs
 }
 
+# Come telegram_legacy_sources_present nel wrapper Bash: senza file legacy
+# l'avvio non passa dal servizio isolato. In JSON la chiave «telegram» compare
+# solo scritta così o con un escape \u; nel dubbio l'inventario parte.
+function Test-TelegramLegacySource {
+  if (-not (Test-Path -LiteralPath $JhtHome)) { return $false }
+  try {
+    $credentials = Get-Item -LiteralPath (Join-Path $JhtHome 'credentials') -Force -ErrorAction SilentlyContinue
+    if ($credentials) {
+      if (-not $credentials.PSIsContainer -or $credentials.LinkType) { return $true }
+      if (@(Get-ChildItem -LiteralPath $credentials.FullName -Filter 'telegram*' -Force -ErrorAction Stop).Count) { return $true }
+    }
+    $paths = @(Join-Path $JhtHome 'jht.config.json')
+    $paths += @(Get-ChildItem -LiteralPath $JhtHome -Filter 'jht.config.json.bak-model-pin-*' -Force -ErrorAction Stop | ForEach-Object { $_.FullName })
+    foreach ($path in $paths) {
+      $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+      if (-not $item) { continue }
+      if ($item.PSIsContainer -or $item.LinkType) { return $true }
+      $raw = [IO.File]::ReadAllText($path)
+      if ($raw.Contains('telegram') -or $raw.Contains('\u')) { return $true }
+    }
+  } catch { return $true }
+  return $false
+}
+
 function Initialize-TelegramLegacyInventory {
+  if (-not (Test-TelegramLegacySource)) { return $true }
   Invoke-Compose up '-d' $TelegramContainer | Out-Null
   if ($LASTEXITCODE -ne 0) { return $false }
   if ((Invoke-TelegramAdmin -AdminArgs @('legacy', 'complete')) -eq 0) { return $true }

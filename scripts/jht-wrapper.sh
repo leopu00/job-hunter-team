@@ -927,8 +927,35 @@ read_hidden_tty() {
   )
 }
 
+# Un'installazione che non ha mai usato Telegram non ha niente da inventariare:
+# senza file legacy l'avvio non passa dal servizio isolato. La prova è sui byte
+# grezzi: `legacy.py` legge solo channels.telegram.bots dei config e il file
+# Telegram in credentials/, e in JSON la chiave «telegram» può comparire
+# soltanto scritta così o con un escape \u. Nel dubbio (file illeggibile, non
+# regolare, cartella non leggibile) l'inventario parte e decide lui.
+telegram_legacy_sources_present() {
+  local root="${JHT_HOME_HOST:-$HOME/.jht}" path rc=0
+  [ -e "$root" ] || [ -L "$root" ] || return 1
+  [ -d "$root" ] && [ -r "$root" ] && [ -x "$root" ] || return 0
+  if [ -e "$root/credentials" ] || [ -L "$root/credentials" ]; then
+    [ -d "$root/credentials" ] && [ -r "$root/credentials" ] && [ -x "$root/credentials" ] || return 0
+    for path in "$root"/credentials/telegram*; do
+      [ -e "$path" ] || [ -L "$path" ] && return 0
+    done
+  fi
+  for path in "$root/jht.config.json" "$root"/jht.config.json.bak-model-pin-*; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    [ -f "$path" ] && [ ! -L "$path" ] && [ -r "$path" ] || return 0
+    LC_ALL=C grep -q -e 'telegram' -e '\\u' "$path" && return 0
+    rc=$?
+    [ "$rc" -eq 1 ] || return 0
+  done
+  return 1
+}
+
 telegram_prepare_legacy_inventory() {
   local role digests digest agent_status=0
+  telegram_legacy_sources_present || return 0
   compose up -d "$TELEGRAM_SERVICE" >/dev/null || return 1
   if telegram_admin legacy complete >/dev/null 2>&1; then
     return 0
