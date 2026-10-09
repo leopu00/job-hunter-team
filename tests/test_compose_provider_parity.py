@@ -25,7 +25,8 @@ PODMAN_PROJECT = {
             "userns_mode": "keep-id:uid=1001,gid=1001",
             "depends_on": {"broker": {"condition": "service_started"}},
             "extra_hosts": ["host.docker.internal:host-gateway"],
-            "volumes": ["state:/state:ro", "C:\\JHT User\\.jht:/jht_home"],
+            # podman-compose runs on Linux and macOS: HOME is a POSIX path.
+            "volumes": ["state:/state:ro", "/home/jht-parity/JHT User/.jht:/jht_home"],
         },
         "broker": {"networks": ["default"]},
     },
@@ -67,8 +68,27 @@ DOCKER_PROJECT = {
 }
 
 
+HOMES = {"podman_home": "/home/jht-parity/JHT User", "docker_home": "C:\\JHT User"}
+
+
 def test_provider_syntax_differences_normalize_to_one_project():
-    assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT)
+    assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT, **HOMES)
+
+
+def test_each_provider_s_home_prefix_is_the_only_tolerated_host_difference():
+    # Without the two HOMEs the POSIX and the Windows host paths differ.
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT)
+    # Under the same HOME, a bind that points elsewhere is still drift.
+    drifted = deepcopy(DOCKER_PROJECT)
+    drifted["services"]["jht"]["volumes"][1]["source"] = "C:\\JHT User\\Documents"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, drifted, **HOMES)
+    # A path that only starts with the same letters is not under HOME.
+    lookalike = deepcopy(DOCKER_PROJECT)
+    lookalike["services"]["jht"]["volumes"][1]["source"] = "C:\\JHT Users\\.jht"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, lookalike, **HOMES)
 
 
 @pytest.mark.parametrize(
@@ -94,7 +114,7 @@ def test_network_volume_mount_and_override_drift_are_red(case, mutate):
     drifted = deepcopy(DOCKER_PROJECT)
     mutate(drifted)
     with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
-        assert_projects_equal(PODMAN_PROJECT, drifted)
+        assert_projects_equal(PODMAN_PROJECT, drifted, **HOMES)
 
 
 def test_ci_runs_the_exact_distributed_providers_on_windows():
@@ -127,3 +147,16 @@ def test_ci_runs_the_exact_distributed_providers_on_windows():
     assert url.group(1) not in commands and sha.group(1) not in commands
     assert "winget" not in commands
     assert "scripts/ci/compose_provider_parity.py" in commands
+
+
+def test_short_and_long_port_forms_normalize_to_one_project_and_drift_stays_red():
+    podman = deepcopy(PODMAN_PROJECT)
+    docker = deepcopy(DOCKER_PROJECT)
+    podman["services"]["jht"]["ports"] = ["127.0.0.1:6080:6080"]
+    docker["services"]["jht"]["ports"] = [
+        {"host_ip": "127.0.0.1", "mode": "ingress", "protocol": "tcp", "published": "6080", "target": 6080}
+    ]
+    assert_projects_equal(podman, docker, **HOMES)
+    docker["services"]["jht"]["ports"][0]["host_ip"] = "0.0.0.0"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(podman, docker, **HOMES)
