@@ -127,22 +127,46 @@ VM_SERVICE_PORT = 46081  # a stand-in for the VM's loopback services (the broker
 
 LISTENER = r"""
 import socket, threading, time
-def serve(port):
+def pipe(a, b):
+    try:
+        while (data := a.recv(65536)):
+            b.sendall(data)
+    except OSError:
+        pass
+    finally:
+        for end in (a, b):
+            try:
+                end.close()
+            except OSError:
+                pass
+def tunnel(client):
+    # A stand-in CONNECT proxy, used only where nothing holds the proxy port
+    # (on Windows the real filtering proxy does).
+    request = b""
+    while b"\r\n\r\n" not in request:
+        request += client.recv(4096)
+    host, port = request.split()[1].decode().rsplit(":", 1)
+    upstream = socket.create_connection((host, int(port)), timeout=10)
+    client.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+    threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+    pipe(upstream, client)
+def serve(port, handle):
     s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         s.bind(("127.0.0.1", port))
     except OSError:
-        return  # already taken: on Windows the real proxy holds 3128
+        return  # already taken: on Windows the real proxy holds it
     s.listen()
     while True:
-        c, _ = s.accept(); c.close()
-for port in (%d, %d):
-    threading.Thread(target=serve, args=(port,), daemon=True).start()
+        c, _ = s.accept()
+        threading.Thread(target=handle, args=(c,), daemon=True).start()
+threading.Thread(target=serve, args=(%d, tunnel), daemon=True).start()
+threading.Thread(target=serve, args=(%d, lambda c: c.close()), daemon=True).start()
 time.sleep(300)
 """ % (PROXY_PORT, VM_SERVICE_PORT)
 
 PROBE = r"""
-import json, socket, struct, sys
+import http.client, json, socket, ssl, struct, sys
 targets = json.loads(sys.argv[1])
 gateway = None
 for line in open("/proc/net/route").read().splitlines()[1:]:
@@ -164,21 +188,35 @@ def udp_dns():
         u.sendto(query, (targets["dns"], 53)); u.recv(512); return True
     except OSError:
         return False
+def through_the_proxy():
+    # The positive check: a real CONNECT to example.com:443 through the
+    # proxy, then TLS and a request. A proxy that answers but does not
+    # forward fails here.
+    connection = http.client.HTTPSConnection(
+        "127.0.0.1", %d, timeout=20, context=ssl.create_default_context()
+    )
+    connection.set_tunnel("example.com", 443)
+    try:
+        connection.request("HEAD", "/")
+        return connection.getresponse().status
+    except Exception as error:
+        return type(error).__name__
+    finally:
+        connection.close()
 reach = {
-    "proxy 127.0.0.1:%d": tcp("127.0.0.1", %d),
-    "VM loopback service 127.0.0.1:%d": tcp("127.0.0.1", %d),
-    f"Internet {targets['internet4']}:443": tcp(targets["internet4"], 443),
-    f"DNS over UDP {targets['dns']}:53": udp_dns(),
+    "VM loopback service": tcp("127.0.0.1", %d),
+    "Internet, direct": tcp(targets["internet4"], 443),
+    "DNS over UDP": udp_dns(),
 }
 if targets["internet6"]:
-    reach[f"IPv6 [{targets['internet6']}]:443"] = tcp(targets["internet6"], 443, socket.AF_INET6)
+    reach["IPv6, direct"] = tcp(targets["internet6"], 443, socket.AF_INET6)
 if gateway:
-    reach[f"gateway (Windows host on WSL NAT) {gateway}:445"] = tcp(gateway, 445)
-    reach[f"gateway {gateway}:80"] = tcp(gateway, 80)
+    reach["gateway on 445 (the Windows host on WSL NAT)"] = tcp(gateway, 445)
+    reach["gateway on 80"] = tcp(gateway, 80)
 if targets["lan"]:
-    reach[f"LAN {targets['lan']}:80"] = tcp(targets["lan"], 80)
-print(json.dumps(reach))
-""" % (PROXY_PORT, PROXY_PORT, VM_SERVICE_PORT, VM_SERVICE_PORT)
+    reach["LAN address on 80"] = tcp(targets["lan"], 80)
+print(json.dumps({"proxy": through_the_proxy(), "reach": reach}))
+""" % (PROXY_PORT, VM_SERVICE_PORT)
 
 
 def _public_targets() -> dict[str, str]:
@@ -209,7 +247,7 @@ def _podman(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 @pytest.mark.skipif(not CONNECTION, reason="live: set JHT_PODMAN_EGRESS_CONNECTION")
 @pytest.mark.skipif(shutil.which("podman") is None, reason="podman not installed")
-def test_from_the_container_only_the_proxy_answers():
+def test_from_the_container_only_the_proxy_answers_and_forwards():
     override = Path(os.environ.get("JHT_PODMAN_EGRESS_COMPOSE", OVERRIDE))
     network = _services(override)["jht"]["network_mode"]
     targets = _public_targets()
@@ -228,7 +266,7 @@ def test_from_the_container_only_the_proxy_answers():
     finally:
         _podman("rm", "-f", listener, check=False)
 
-    for reach in runs:
-        proxy = f"proxy 127.0.0.1:{PROXY_PORT}"
-        assert reach.pop(proxy), f"{network}: the proxy is not reachable"
-        assert not any(reach.values()), f"{network}: reachable besides the proxy: {[k for k, v in reach.items() if v]}"
+    for run in runs:
+        assert run["proxy"] == 200, f"{network}: example.com through the proxy: {run['proxy']}"
+        open_ways = [way for way, reached in run["reach"].items() if reached]
+        assert not open_ways, f"{network}: reachable besides the proxy: {open_ways}"
