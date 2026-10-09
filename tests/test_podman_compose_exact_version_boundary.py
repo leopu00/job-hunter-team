@@ -16,7 +16,7 @@ import shutil
 import subprocess
 
 import pytest
-from podman_machine_fixture import write_machine_config
+from podman_machine_fixture import write_machine_config, write_macos_host_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +94,7 @@ def _runtime(tmp_path: Path) -> tuple[Path, dict[str, str], Path, Path]:
     runtime.mkdir(mode=0o700)
     bin_dir.mkdir()
     adapter.parent.mkdir()
+    write_macos_host_tools(bin_dir)
     shutil.copy2(WRAPPER, wrapper)
     wrapper.chmod(0o700)
 

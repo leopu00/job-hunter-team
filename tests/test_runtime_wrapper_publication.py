@@ -9,7 +9,7 @@ import shutil
 import subprocess
 
 import pytest
-from podman_machine_fixture import write_machine_config
+from podman_machine_fixture import write_machine_config, write_macos_host_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,7 @@ def _sandbox(tmp_path: Path, *, wrapper_exists: bool = True) -> dict[str, object
     bin_dir.mkdir(mode=0o700)
     (source / "scripts").mkdir(parents=True)
     spy_bin.mkdir(mode=0o700)
+    write_macos_host_tools(spy_bin)
     shutil.copy2(INSTALLER, source / "scripts" / "install.sh")
     shutil.copy2(CANDIDATE_WRAPPER, source / "scripts" / "jht-wrapper.sh")
     shutil.copy2(CANDIDATE_COMPOSE, source / "docker-compose.yml")

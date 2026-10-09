@@ -9,7 +9,7 @@ import shutil
 import subprocess
 
 import pytest
-from podman_machine_fixture import write_machine_config
+from podman_machine_fixture import write_machine_config, write_macos_host_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +31,7 @@ def _runtime(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
     runtime.mkdir(mode=0o700)
     binary.parent.mkdir()
     adapter.parent.mkdir()
+    write_macos_host_tools(binary.parent)
     shutil.copy2(WRAPPER, binary)
     binary.chmod(0o700)
 
@@ -179,6 +180,129 @@ esac
     }
     write_machine_config(home, env)
     return binary, env, log
+
+
+def _native_linux_runtime(
+    tmp_path: Path, *, rootless: bool = True
+) -> tuple[Path, dict[str, str], Path]:
+    wrapper, env, log = _runtime(tmp_path)
+    runtime = Path(env["JHT_RUNTIME_DIR"])
+    binary_dir = wrapper.parent
+
+    # The test runs on every CI host, so expose Linux's uname/stat contract
+    # without requiring a nested VM.
+    uname = binary_dir / "uname"
+    uname.write_text("#!/bin/sh\nprintf '%s\\n' Linux\n", encoding="utf-8")
+    uname.chmod(0o700)
+    machine = runtime / "podman-machine"
+    machine.unlink()
+    manifest = runtime / ".runtime-integrity"
+    manifest.write_text(
+        "\n".join(
+            line
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("podman-machine=")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    podman = binary_dir / "podman"
+    podman.write_text(
+        """#!/bin/sh
+printf 'podman %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+if [ "${1:-}" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
+case "$*" in
+  *machine*|*--connection*) exit 97 ;;
+  "info --format {{.Host.Security.Rootless}}")
+    printf '%s\n' "$JHT_TEST_PODMAN_ROOTLESS"
+    exit 0 ;;
+  info) exit 0 ;;
+esac
+exit 93
+""",
+        encoding="utf-8",
+    )
+    podman.chmod(0o700)
+
+    provider = binary_dir / "podman-compose"
+    provider.write_text(
+        """#!/bin/sh
+if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit 0; fi
+printf 'podman-compose connection=%s argv=%s\n' "${CONTAINER_CONNECTION-}" "$*" >> "$JHT_TEST_DOCKER_LOG"
+case "$*" in
+  *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
+    printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
+      "$JHT_TEST_CONFIG_HASH" >&2 ;;
+  *" ps -q") printf '%s\n' aaaaaaaaaaaa ;;
+  *" up -d") exit 0 ;;
+  *) exit 90 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    provider.chmod(0o700)
+    sudo = binary_dir / "sudo"
+    sudo.write_text(
+        "#!/bin/sh\nprintf 'sudo %s\\n' \"$*\" >> \"$JHT_TEST_DOCKER_LOG\"\nexit 99\n",
+        encoding="utf-8",
+    )
+    sudo.chmod(0o700)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_PODMAN_ROOTLESS"] = "true" if rootless else "false"
+    env["JHT_BIND_OWNER"] = "424242:424242"
+    env["CONTAINER_CONNECTION"] = "user-default-machine"
+    return wrapper, env, log
+
+
+def test_native_linux_podman_up_uses_rootless_local_socket_without_a_machine(
+    tmp_path: Path,
+):
+    wrapper, env, log = _native_linux_runtime(tmp_path)
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman info --format {{.Host.Security.Rootless}}" in calls
+    assert "podman info\n" in calls
+    assert "podman-compose connection= argv=" in calls
+    assert " up -d" in calls
+    assert "machine" not in calls
+    assert "--connection" not in calls
+    assert "user-default-machine" not in calls
+    assert "sudo " not in calls
+
+
+def test_native_linux_podman_refuses_rootful_before_runtime_mutation(tmp_path: Path):
+    wrapper, env, log = _native_linux_runtime(tmp_path, rootless=False)
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "podman_rootful_refused" in result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman info --format {{.Host.Security.Rootless}}" in calls
+    assert "podman-compose" not in calls
+    assert "docker info" not in calls
+
+    source = WRAPPER.read_text(encoding="utf-8")
+    assert '[ "$HOST_UID" -ne 0 ] || return 1' in source
+    assert "info --format '{{.Host.Security.Rootless}}'" in source
 
 
 def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: Path):

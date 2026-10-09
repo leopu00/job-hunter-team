@@ -19,6 +19,28 @@ from pathlib import Path
 MACOS_DEFAULT_SOURCES = ("/Users", "/private", "/var/folders")
 
 
+def write_macos_host_tools(bin_dir: Path) -> None:
+    """Make a Podman-machine fixture independent of the CI host kernel."""
+    uname = bin_dir / "uname"
+    uname.write_text("#!/bin/sh\nprintf '%s\\n' Darwin\n", encoding="utf-8")
+    uname.chmod(0o700)
+    stat = bin_dir / "stat"
+    stat.write_text(
+        """#!/usr/bin/env python3
+import os
+import sys
+
+if len(sys.argv) == 4 and sys.argv[1:3] in (["-f", "%u %Lp"], ["-c", "%u %a"]):
+    metadata = os.stat(sys.argv[3], follow_symlinks=False)
+    print(f"{metadata.st_uid} {metadata.st_mode & 0o777:o}")
+    raise SystemExit(0)
+os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
+""",
+        encoding="utf-8",
+    )
+    stat.chmod(0o700)
+
+
 def jht_mount_sources(home: Path) -> tuple[str, str]:
     return (str(home / ".jht"), str(home / "Documents" / "Job Hunter Team"))
 

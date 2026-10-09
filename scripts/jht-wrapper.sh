@@ -77,16 +77,26 @@ fi
 case "$CONTAINER_RUNTIME" in docker|podman) ;; *) err_runtime="unsupported container runtime: $CONTAINER_RUNTIME" ;; esac
 PODMAN_MACHINE_OVERRIDE="${JHT_PODMAN_MACHINE:-}"
 PODMAN_MACHINE_NAME=""
-if [ -f "$PODMAN_MACHINE_FILE" ]; then
-  PODMAN_MACHINE_NAME="$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")"
-fi
+PODMAN_RUNTIME_MODE=""
 if [ "$CONTAINER_RUNTIME" = "podman" ]; then
-  case "$PODMAN_MACHINE_NAME" in
-    ''|*[!A-Za-z0-9_.-]*) err_runtime="invalid attested Podman machine" ;;
+  case "$HOST_KERNEL" in
+    Darwin) PODMAN_RUNTIME_MODE="machine" ;;
+    Linux) PODMAN_RUNTIME_MODE="native" ;;
+    *) err_runtime="Podman runtime is unsupported on this host" ;;
   esac
-  if [ -n "$PODMAN_MACHINE_OVERRIDE" ] \
-      && [ "$PODMAN_MACHINE_OVERRIDE" != "$PODMAN_MACHINE_NAME" ]; then
-    err_runtime="Podman machine override does not match the attested runtime"
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+    if [ -f "$PODMAN_MACHINE_FILE" ]; then
+      PODMAN_MACHINE_NAME="$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")"
+    fi
+    case "$PODMAN_MACHINE_NAME" in
+      ''|*[!A-Za-z0-9_.-]*) err_runtime="invalid attested Podman machine" ;;
+    esac
+    if [ -n "$PODMAN_MACHINE_OVERRIDE" ] \
+        && [ "$PODMAN_MACHINE_OVERRIDE" != "$PODMAN_MACHINE_NAME" ]; then
+      err_runtime="Podman machine override does not match the attested runtime"
+    fi
+  elif [ -n "$PODMAN_MACHINE_OVERRIDE" ]; then
+    err_runtime="Podman machine override is invalid for native Linux"
   fi
   export PATH="$PODMAN_ADAPTER_BIN:$PATH"
   unset CONTAINER_CONNECTION
@@ -260,7 +270,9 @@ runtime_write_manifest() {
       printf 'container-runtime=%s\n' "$(runtime_sha256 "$RUNTIME_SELECTION_FILE")"
     fi
     if [ "$CONTAINER_RUNTIME" = "podman" ]; then
-      printf 'podman-machine=%s\n' "$(runtime_sha256 "$PODMAN_MACHINE_FILE")"
+      if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+        printf 'podman-machine=%s\n' "$(runtime_sha256 "$PODMAN_MACHINE_FILE")"
+      fi
       printf 'docker-shim=%s\n' "$(runtime_sha256 "$DOCKER_SHIM")"
     fi
   } > "$tmp" || return 1
@@ -316,13 +328,18 @@ runtime_bundle_trusted() {
     return 1
   fi
   if [ "$CONTAINER_RUNTIME" = "podman" ]; then
-    runtime_node_safe "$PODMAN_MACHINE_FILE" file || return 1
     runtime_node_safe "$DOCKER_SHIM" file || return 1
     [ "$(tr -d '\r\n' < "$RUNTIME_SELECTION_FILE")" = "podman" ] || return 1
-    case "$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")" in
-      ''|*[!A-Za-z0-9_.-]*) return 1 ;;
-    esac
-    [ "$(runtime_manifest_value podman-machine)" = "$(runtime_sha256 "$PODMAN_MACHINE_FILE")" ] || return 1
+    if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+      runtime_node_safe "$PODMAN_MACHINE_FILE" file || return 1
+      case "$(tr -d '\r\n' < "$PODMAN_MACHINE_FILE")" in
+        ''|*[!A-Za-z0-9_.-]*) return 1 ;;
+      esac
+      [ "$(runtime_manifest_value podman-machine)" = "$(runtime_sha256 "$PODMAN_MACHINE_FILE")" ] || return 1
+    else
+      [ ! -e "$PODMAN_MACHINE_FILE" ] && [ ! -L "$PODMAN_MACHINE_FILE" ] || return 1
+      [ -z "$(runtime_manifest_value podman-machine)" ] || return 1
+    fi
     [ "$(runtime_manifest_value docker-shim)" = "$(runtime_sha256 "$DOCKER_SHIM")" ] || return 1
     grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$DOCKER_SHIM" || return 1
   fi
@@ -422,9 +439,12 @@ require_docker() {
     exit 127
   fi
   require_confined_podman_machine
+  require_rootless_podman_native
   if ! docker info >/dev/null 2>&1; then
-    if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+    if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
       err "Podman machine JHT non attiva. Esegui 'jht up' per avviarla."
+    elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+      err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
     elif [ "$(uname)" = "Darwin" ]; then
       err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
     else
@@ -479,10 +499,11 @@ wake_container_runtime_for_up() {
     exit 127
   fi
   require_confined_podman_machine
+  require_rootless_podman_native
   if docker info >/dev/null 2>&1; then
     return 0
   fi
-  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     local podman_bin
     podman_bin="$(podman_binary)" || podman_bin=""
     [ -n "$podman_bin" ] || { err "Podman non trovato: reinstalla il runtime JHT."; exit 127; }
@@ -497,6 +518,9 @@ wake_container_runtime_for_up() {
       err "Podman machine non avviabile; Colima non e' stato modificato."
       exit 1
     fi
+  elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+    err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
+    exit 1
   elif [ "$(uname)" = "Darwin" ]; then
     err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
     exit 1
@@ -585,7 +609,7 @@ EOF_FILES
 }
 
 require_confined_podman_machine() {
-  [ "$CONTAINER_RUNTIME" = "podman" ] || return 0
+  [ "$PODMAN_RUNTIME_MODE" = "machine" ] || return 0
   local status=0
   podman_machine_confined || status=$?
   case "$status" in
@@ -600,6 +624,23 @@ require_confined_podman_machine() {
       exit 1
       ;;
   esac
+}
+
+podman_native_rootless() {
+  [ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0
+  [ "$HOST_UID" -ne 0 ] || return 1
+  local podman_bin rootless
+  podman_bin="$(podman_binary)" || return 1
+  rootless="$("$podman_bin" info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" || return 1
+  [ "$rootless" = "true" ]
+}
+
+require_rootless_podman_native() {
+  [ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0
+  podman_native_rootless && return 0
+  err "podman_rootful_refused: JHT su Linux richiede Podman rootless eseguito da un utente non root."
+  err "Accedi con l'utente JHT rootless configurato dall'installazione e riprova."
+  exit 1
 }
 
 # Una cartella dichiarata con --volume che non esiste impedisce l'avvio della
@@ -640,8 +681,12 @@ podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
   podman_version="$("$podman_bin" --version 2>/dev/null)" || return 1
   [ "$podman_version" = 'podman version 6.1.3' ] || return 1
-  compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-    "$compose_bin" --version 2>/dev/null)" || return 1
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+    compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+      "$compose_bin" --version 2>/dev/null)" || return 1
+  else
+    compose_version="$("$compose_bin" --version 2>/dev/null)" || return 1
+  fi
   printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0'
 }
 
@@ -829,17 +874,25 @@ compose_file() {
       || { err "Provider Podman Compose non trovato: reinstalla il runtime JHT."; return 127; }
     podman_compose_pair_supported "$podman_bin" "$compose_bin" \
       || { err "Versione Podman Compose non supportata dal runtime JHT."; return 1; }
-    "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1 \
-      || { err "La connessione Podman JHT non supporta il dispatcher Compose."; return 1; }
-    (
-      cd "$RUNTIME_DIR" || return 1
-      CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-      PODMAN_COMPOSE_WARNING_LOGS=false \
-        "$compose_bin" \
-          --podman-path "$podman_bin" \
-          -p "$project" \
-          -f "$file" "$@"
-    )
+    if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+      "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1 \
+        || { err "La connessione Podman JHT non supporta il dispatcher Compose."; return 1; }
+      (
+        cd "$RUNTIME_DIR" || return 1
+        CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+        PODMAN_COMPOSE_WARNING_LOGS=false \
+          "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
+      )
+    else
+      "$podman_bin" info >/dev/null 2>&1 \
+        || { err "Il runtime Podman rootless locale non risponde."; return 1; }
+      (
+        cd "$RUNTIME_DIR" || return 1
+        unset CONTAINER_CONNECTION
+        PODMAN_COMPOSE_WARNING_LOGS=false \
+          "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
+      )
+    fi
     return $?
   fi
   # Il project Docker/VPS storico deriva da --project-directory. Non migrarlo
@@ -1399,13 +1452,23 @@ podman_expected_config_hash() {
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
-  resolved="$({
-    cd "$RUNTIME_DIR" || return 1
-    CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-    PODMAN_COMPOSE_WARNING_LOGS=false \
-      "$compose_bin" --verbose --dry-run --project-name jht \
-        --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
-  } 2>&1)" || return 1
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+    resolved="$({
+      cd "$RUNTIME_DIR" || return 1
+      CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+      PODMAN_COMPOSE_WARNING_LOGS=false \
+        "$compose_bin" --verbose --dry-run --project-name jht \
+          --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
+    } 2>&1)" || return 1
+  else
+    resolved="$({
+      cd "$RUNTIME_DIR" || return 1
+      unset CONTAINER_CONNECTION
+      PODMAN_COMPOSE_WARNING_LOGS=false \
+        "$compose_bin" --verbose --dry-run --project-name jht \
+          --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
+    } 2>&1)" || return 1
+  fi
   hashes="$(printf '%s\n' "$resolved" \
     | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p')"
   unset resolved
@@ -1608,8 +1671,10 @@ docker_reachable() {
   # Una machine Podman che vede piu' del Mac di ~/.jht e dei documenti JHT non
   # e' "raggiungibile": i probe non la usano, e i comandi che la pretendono
   # (up, status, require_docker, upgrade) escono spiegando il motivo.
-  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     podman_machine_confined || return 1
+  elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+    podman_native_rootless || return 1
   fi
   docker info >/dev/null 2>&1
 }
@@ -1712,6 +1777,10 @@ ensure_bind_owner() {
   # Prima di ogni avvio (ensure_up, up, upgrade) e su ogni sistema: il
   # disaccordo sulle cartelle dati vale anche dove l'owner non si tocca.
   host_data_dirs_supported || exit 1
+  # Con Podman rootless + keep-id l'utente dell'host resta proprietario dei
+  # bind mount. Un chown a 1001 qui romperebbe proprio l'isolamento che il
+  # namespace utente deve garantire.
+  [ "$PODMAN_RUNTIME_MODE" != "native" ] || return 0
   [ "$(uname -s)" = "Linux" ] || return 0
   local target="${JHT_BIND_OWNER:-1001:1001}"
   local target_uid="${target%%:*}"
@@ -2581,7 +2650,7 @@ handle_runtime_upgrade() {
     upgrade_result false false preflight unknown none unknown none false "Runtime host fuori authority" false
     return 1
   }
-  if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     local machine_status=0
     podman_machine_confined || machine_status=$?
     if [ "$machine_status" -eq 1 ]; then
@@ -3211,7 +3280,7 @@ case "$SUB" in
   # di prima viene rimessa, perche' e' condivisa con altri progetti.
   podman-machine-recreate)
     require_compose_file
-    if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    if [ "$PODMAN_RUNTIME_MODE" != "machine" ]; then
       err "Questo runtime non usa una macchina Podman: non c'e' niente da ricreare."
       exit 1
     fi
