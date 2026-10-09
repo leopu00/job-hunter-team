@@ -257,7 +257,7 @@ def test_an_unrelated_podman_machine_does_not_replace_the_jht_machine():
     enabler = ENABLER.read_text(encoding="utf-8")
     machine = enabler[enabler.index("$machines =") : enabler.index("} catch {", enabler.index("$machines ="))]
     assert "$machines | Where-Object Name -eq $MachineName" in machine
-    assert "'machine' 'init' '--provider' 'wsl'" in machine
+    assert "'machine' 'init' '--update-connection=false' '--provider' 'wsl'" in machine
     assert "'--disk-size' '30' $MachineName" in machine
     assert "machine reset" not in machine
     assert "'machine' 'rm'" not in machine

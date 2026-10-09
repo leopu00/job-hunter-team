@@ -93,6 +93,7 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
         "HOME": str(tmp_path),
         "FAKE_LOG": str(log),
         "FAKE_STATE": str(tmp_path / "state"),
+        "FAKE_DEFAULT": str(tmp_path / "default-connection"),
         "JHT_UNDER_TEST": str(script),
         "JHT_IMPORT": ",".join(imports),
         "JHT_CASE_BODY": body,
@@ -124,11 +125,11 @@ $InitializeMachine = ($env:INITIALIZE -eq '1')
 """
 
 PODMAN_CASES = """  "machine list --format json") printf '%s' "$FAKE_MACHINES"; exit "${FAKE_LIST_EXIT:-0}" ;;
-  "machine init "*) [ "$FAKE_FAIL" = init ] && exit 125 ;;
-  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125 ;;
+  "machine init "*) [ "$FAKE_FAIL" = init ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
+  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
   "--connection jht-podman info") [ "$FAKE_FAIL" = info ] && exit 125 ;;"""
 
-INIT = "machine init --provider wsl --cpus 2 --memory 3072 --disk-size 30 jht-podman"
+INIT = "machine init --update-connection=false --provider wsl --cpus 2 --memory 3072 --disk-size 30 jht-podman"
 START = "machine start --update-connection=false jht-podman"
 INFO = "--connection jht-podman info"
 
@@ -163,6 +164,18 @@ def test_another_machine_with_a_different_name_is_not_ours(tmp_path):
     result, calls = _enabler(tmp_path, machines=_machines(("podman-machine-default", True)))
     assert result.returncode == 0, result.stderr
     assert INIT in calls and START in calls
+
+
+def test_install_preserves_an_existing_machine_and_default_connection(tmp_path):
+    default = tmp_path / "default-connection"
+    default.write_text("user-podman", encoding="utf-8")
+    result, calls = _enabler(tmp_path, machines=_machines(("user-podman", True)))
+    assert result.returncode == 0, result.stderr
+    assert calls == ["machine list --format json", INIT, START, INFO]
+    assert default.read_text(encoding="utf-8") == "user-podman"
+    assert not any("system connection" in call for call in calls)
+    assert not any("machine rm" in call for call in calls)
+    assert not any(call.endswith(" user-podman") for call in calls[1:])
 
 
 def test_a_stopped_machine_is_started_not_recreated(tmp_path):
@@ -260,7 +273,7 @@ Start-PodmanMachineForUp
 
 # docker answers only once the machine started (the state file), unless told otherwise.
 DOCKER_CASES = """  "info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-start ] && [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;"""
-UP_PODMAN_CASES = """  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125; : > "$FAKE_STATE" ;;"""
+UP_PODMAN_CASES = """  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
 
 
 def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail=""):
@@ -291,6 +304,71 @@ def test_an_unreachable_machine_is_started_with_the_named_connection(tmp_path):
     result, calls = _up(tmp_path)
     assert result.returncode == 0, result.stderr
     assert calls == ["info", START, "info"]
+
+
+def test_up_does_not_replace_the_users_default_connection(tmp_path):
+    default = tmp_path / "default-connection"
+    default.write_text("user-podman", encoding="utf-8")
+    result, calls = _up(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert calls == ["info", START, "info"]
+    assert default.read_text(encoding="utf-8") == "user-podman"
+    assert not any("system connection" in call for call in calls)
+
+
+UNINSTALL_BODY = r"""
+function Get-ScheduledTask { param($TaskName, $ErrorAction) return $null }
+$code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') `
+  -ProfilePath $env:TEST_PROFILE -LocalAppDataPath $env:TEST_LOCAL `
+  -PodmanPath $env:FAKE_PODMAN -WslPath $env:FAKE_WSL -EnvironmentTarget Process
+[Console]::Out.WriteLine("CODE=$code")
+"""
+
+
+UNINSTALL_PODMAN_CASES = """  "machine list --format json") if [ -f "$FAKE_STATE" ]; then printf '%s' '[{"Name":"jht-podman"},{"Name":"user-podman"}]'; else printf '%s' '[{"Name":"user-podman"}]'; fi ;;
+  "machine rm --force jht-podman") rm -f "$FAKE_STATE" ;;
+  "system connection "*) printf '%s' changed > "$FAKE_DEFAULT" ;;
+  "machine rm "*) exit 125 ;;"""
+
+
+def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "podman.exe", UNINSTALL_PODMAN_CASES)
+    _fake(bin_dir, "wsl.exe", '  "--status") exit 0 ;;')
+    (tmp_path / "state").write_text("present", encoding="utf-8")
+    default = tmp_path / "default-connection"
+    default.write_text("user-podman", encoding="utf-8")
+    profile = tmp_path / "profile"
+    local = tmp_path / "local"
+    runtime = local / "Job Hunter Team" / "host-runtime"
+    runtime.mkdir(parents=True)
+    (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
+
+    result, calls = _run(
+        tmp_path,
+        WRAPPER,
+        [
+            "Write-JhtUninstallPhase", "Write-JhtUninstallLeft",
+            "Get-JhtNormalizedWindowsPath", "Get-JhtPodmanMachineState",
+            "Remove-JhtUserEnvironment", "Remove-JhtStartupTask",
+            "Invoke-JhtWindowsUninstall",
+        ],
+        UNINSTALL_BODY,
+        {
+            "TEST_PROFILE": str(profile), "TEST_LOCAL": str(local),
+            "FAKE_PODMAN": str(bin_dir / "podman.exe"),
+            "FAKE_WSL": str(bin_dir / "wsl.exe"),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CODE=0" in result.stdout
+    assert default.read_text(encoding="utf-8") == "user-podman"
+    assert "machine rm --force jht-podman" in calls
+    assert not any(call.endswith(" user-podman") for call in calls)
+    assert not any("system connection" in call for call in calls)
+    assert not (tmp_path / "state").exists()
+    assert not runtime.exists()
 
 
 @pytest.mark.parametrize(

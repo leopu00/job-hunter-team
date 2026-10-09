@@ -249,7 +249,7 @@ try {
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
     Write-JhtPhase podman_machine_init
-    Invoke-Checked $Podman 'machine' 'init' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
+    Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
     Write-JhtPhase podman_machine_start
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
   } elseif (-not [bool]$machine.Running) {
