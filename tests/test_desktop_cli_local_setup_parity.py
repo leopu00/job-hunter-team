@@ -216,9 +216,13 @@ def test_desktop_delegates_podman_machine_orchestration_to_host_entrypoints():
         'podman machine inspect "$PODMAN_MACHINE_NAME"',
         '"$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME"',
     )
-    # Only the two folders the compose binds are mounted into the machine.
+    # Only the two folders the compose binds are mounted into the machine,
+    # which is created with the runtime budget shared with Windows.
     assert (
         '"$podman_bin" machine init --now --update-connection=false \\\n'
+        '      --cpus "$PODMAN_MACHINE_CPUS" \\\n'
+        '      --memory "$PODMAN_MACHINE_MEMORY_MIB" \\\n'
+        '      --disk-size "$PODMAN_MACHINE_DISK_GIB" \\\n'
         '      --volume "$jht_home_dir:$jht_home_dir" \\\n'
         '      --volume "$jht_docs_dir:$jht_docs_dir" \\\n'
         '      "$PODMAN_MACHINE_NAME"'

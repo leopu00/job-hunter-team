@@ -19,22 +19,22 @@ from pathlib import Path
 MACOS_DEFAULT_SOURCES = ("/Users", "/private", "/var/folders")
 
 
-def write_macos_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> None:
-    """Emulate macOS tools only when the test host is not already macOS.
-
-    The Python ``stat`` adapter is intentionally absent on a Mac: the wrapper
-    calls ``stat`` many times while attesting its runtime, and starting a
-    Python interpreter for every native probe more than doubles this suite.
-    """
+def _host_kernel(host_kernel: str | None) -> str:
     if host_kernel is None:
         import platform
 
         host_kernel = platform.system()
-    if host_kernel == "Darwin":
-        return
+    return host_kernel
+
+
+def _write_uname(bin_dir: Path, kernel: str) -> None:
     uname = bin_dir / "uname"
-    uname.write_text("#!/bin/sh\nprintf '%s\\n' Darwin\n", encoding="utf-8")
+    uname.write_text(f"#!/bin/sh\nprintf '%s\\n' {kernel}\n", encoding="utf-8")
     uname.chmod(0o700)
+
+
+def _write_stat_adapter(bin_dir: Path) -> None:
+    """Answer both the BSD (`-f '%u %Lp'`) and GNU (`-c '%u %a'`) probes."""
     stat = bin_dir / "stat"
     stat.write_text(
         """#!/usr/bin/env python3
@@ -50,6 +50,30 @@ os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
         encoding="utf-8",
     )
     stat.chmod(0o700)
+
+
+def write_macos_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> None:
+    """Emulate macOS tools only when the test host is not already macOS.
+
+    The Python ``stat`` adapter is intentionally absent on a Mac: the wrapper
+    calls ``stat`` many times while attesting its runtime, and starting a
+    Python interpreter for every native probe more than doubles this suite.
+    """
+    if _host_kernel(host_kernel) == "Darwin":
+        return
+    _write_uname(bin_dir, "Darwin")
+    _write_stat_adapter(bin_dir)
+
+
+def write_linux_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> None:
+    """Make the wrapper see Linux; emulate GNU ``stat`` only off Linux.
+
+    The wrapper's Linux branch probes ``stat -c '%u %a'``, which the BSD
+    ``stat`` of a macOS runner rejects: there the adapter answers it.
+    """
+    _write_uname(bin_dir, "Linux")
+    if _host_kernel(host_kernel) != "Linux":
+        _write_stat_adapter(bin_dir)
 
 
 def jht_mount_sources(home: Path) -> tuple[str, str]:

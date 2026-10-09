@@ -33,6 +33,7 @@ import pytest
 from podman_machine_fixture import (
     MACOS_DEFAULT_SOURCES,
     jht_mount_sources,
+    write_linux_host_tools,
     write_machine_config,
     write_macos_host_tools,
 )
@@ -54,6 +55,27 @@ def test_macos_fixture_emulates_uname_and_stat_on_a_non_macos_runner(tmp_path: P
     write_macos_host_tools(tmp_path, host_kernel="Linux")
 
     assert {path.name for path in tmp_path.iterdir()} == {"stat", "uname"}
+
+
+def test_linux_fixture_keeps_the_native_stat_on_a_linux_runner(tmp_path: Path):
+    write_linux_host_tools(tmp_path, host_kernel="Linux")
+
+    assert {path.name for path in tmp_path.iterdir()} == {"uname"}
+
+
+def test_linux_fixture_answers_the_gnu_stat_probe_on_a_mac(tmp_path: Path):
+    write_linux_host_tools(tmp_path, host_kernel="Darwin")
+    probed = tmp_path / "probed"
+    probed.write_text("", encoding="utf-8")
+    probed.chmod(0o640)
+
+    result = subprocess.run(
+        [str(tmp_path / "stat"), "-c", "%u %a", str(probed)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout == f"{os.getuid()} 640\n"
 
 
 RICH_PODMAN = """#!/bin/sh

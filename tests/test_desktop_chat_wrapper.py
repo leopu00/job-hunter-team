@@ -9,7 +9,11 @@ import shutil
 import subprocess
 
 import pytest
-from podman_machine_fixture import write_machine_config, write_macos_host_tools
+from podman_machine_fixture import (
+    write_linux_host_tools,
+    write_machine_config,
+    write_macos_host_tools,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -191,9 +195,7 @@ def _native_linux_runtime(
 
     # The test runs on every CI host, so expose Linux's uname/stat contract
     # without requiring a nested VM.
-    uname = binary_dir / "uname"
-    uname.write_text("#!/bin/sh\nprintf '%s\\n' Linux\n", encoding="utf-8")
-    uname.chmod(0o700)
+    write_linux_host_tools(binary_dir)
     machine = runtime / "podman-machine"
     machine.unlink()
     manifest = runtime / ".runtime-integrity"
