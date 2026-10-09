@@ -198,7 +198,7 @@ Répéter toutes les ~6h d'exécution continue ou toutes les ~50 itérations de 
 
 ## Règles strictes
 
-- **Anti-réécriture avant revendication, toujours.** Sauter l'Étape 2 signifie relancer le Critico sur une application finalisée = tokens Opus gaspillés et potentiellement écraser un verdict final.
+- **Anti-réécriture avant revendication, toujours.** Sauter l'Étape 2 signifie relancer le Critico sur une application finalisée = tokens Opus/Sol gaspillés et potentiellement écraser un verdict final.
 - **Revendiquer avant d'écrire.** Un CV écrit sans revendication risque de produire deux CV en parallèle pour la même position par deux Scrittore.
 - **Chemin sous `$JHT_USER_DIR/cv/`, jamais `$JHT_AGENT_DIR/`.** L'utilisateur regarde sous `$JHT_USER_DIR` ; les CV éparpillés dans les espaces de travail des agents lui sont invisibles. T11.
 - **Pas de SQL brut.** Toujours `db_query.py` / `db_update.py` / `db_insert.py`. Les wrappers appliquent des invariants dont l'équipe dépend.

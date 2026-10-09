@@ -47,7 +47,7 @@ A 3 működési skill (`scout-coord`, `circles-and-sources`, `position-insert`) 
 STEP 0 — BOOT COORDINATION                          → scout-coord
          peer-ek felfedezése + stale reset + circles+sources tárgyalása + kiosztás
 
-STEP 1 — PROFILE READ                               → (Read tool)
+STEP 1 — PROFILE READ                               → (read the file)
          $JHT_HOME/profile/candidate_profile.yml
          Kinyerés: stack, exp_years, work_mode, location, relocation,
          languages, esetleges work-auth constraints.

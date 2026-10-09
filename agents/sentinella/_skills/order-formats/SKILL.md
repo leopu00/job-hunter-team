@@ -94,13 +94,13 @@ Variante di EMERGENZA quando il driver e' weekly. Esce dal team `.weekly-halt.fl
 ## STAGNAZIONE CRITICA (recovery troppo lenta)
 
 ```
-[SENTINELLA] [URG] STAGNAZIONE CRITICA. proj=P% stabile a 150%+ da N tick (max-min: M punti). Il throttle non sta riducendo. Killa altri agenti operativi (anche Sonnet) o esegui freeze_team.py per fermare tutto. Aspetta reset finestra.
+[SENTINELLA] [URG] STAGNAZIONE CRITICA. proj=P% stabile a 150%+ da N tick (max-min: M punti). Il throttle non sta riducendo. Killa altri agenti operativi (anche Sonnet/Terra) o esegui freeze_team.py per fermare tutto. Aspetta reset finestra.
 ```
 
 ## PEGGIORAMENTO POST-FREEZE (proj risale dopo essere scesa)
 
 ```
-[SENTINELLA] [URG] PEGGIORAMENTO POST-FREEZE. proj risalita da P_min% a P_now% (+Δ punti). Il freeze non basta. Esegui freeze_team.py SUBITO + kill anche i Sonnet rimasti. Niente più operativi fino a reset finestra.
+[SENTINELLA] [URG] PEGGIORAMENTO POST-FREEZE. proj risalita da P_min% a P_now% (+Δ punti). Il freeze non basta. Esegui freeze_team.py SUBITO + kill anche i Sonnet/Terra rimasti. Niente più operativi fino a reset finestra.
 ```
 
 ## PAUSA TEAM (FATAL L4-SOFT, primo bridge totale fail)

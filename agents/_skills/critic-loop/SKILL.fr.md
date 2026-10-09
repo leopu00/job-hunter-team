@@ -76,7 +76,7 @@ Répéter le cycle throttle+capture jusqu'à ce que le Critico ait publié sa re
 
 ### Étape 6 — Lire la revue
 
-Le Critico sauvegarde la revue sous `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (sa skill, voir `agents/critico/critico.md`). La lire avec `Read`. Extraire :
+Le Critico sauvegarde la revue sous `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (sa skill, voir `agents/critico/critico.md`). La lire (`cat`). Extraire :
 - Score numérique `X.X/10`
 - Puces "Ce qui NE fonctionne PAS"
 - Liste "Actions concrètes (par priorité)"

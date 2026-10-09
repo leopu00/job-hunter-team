@@ -57,8 +57,8 @@ Um worker toca o Capitano **zero vezes** para contar progresso. Nem por item, ne
 bookends `[START]` / `[DONE]` foram **removidos a 2026-07-27**. Medido numa equipa de primeiro
 arranque, ~1,5h de histórico: **37 mensagens chegaram ao Capitano, 30 (81%) puro estado** — 12 `DONE`,
 8 `START`, 8 `INFO`, 2 `ACK` — contra 3-6 que pediam mesmo uma decisão. Cada uma custa-lhe um turno
-inteiro e, com a divisão automática de modelos, ele corre em **Opus** enquanto Scout / Analista /
-Scorer correm em **Sonnet**: um "feito" do Scorer acorda o agente mais caro da frota para não fazer
+inteiro e, com a divisão automática de modelos, ele corre em **Opus/Sol** enquanto Scout / Analista /
+Scorer correm em **Sonnet/Terra**: um "feito" do Scorer acorda o agente mais caro da frota para não fazer
 nada.
 
 O lado pull já existia e é claramente melhor:

@@ -50,8 +50,8 @@ A worker touches the Captain **zero times** to report progress. Not per item, an
 either: the `[START]` / `[DONE]` bookends were **removed on 2026-07-27**. Measured on a first-run team
 over ~1.5h of pane history: **37 messages reached the Captain, 30 of them (81%) pure status** — 12
 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — against 3-6 that actually asked for a decision. Each one costs
-the Captain a full turn, and under the automatic model split he runs on **Opus** while Scout / Analyst
-/ Scorer run on **Sonnet**: a Scorer's "done" wakes the priciest agent of the fleet to do nothing.
+the Captain a full turn, and under the automatic model split he runs on **Opus/Sol** while Scout / Analyst
+/ Scorer run on **Sonnet/Terra**: a Scorer's "done" wakes the priciest agent of the fleet to do nothing.
 
 The pull side already existed and is strictly better:
 

@@ -105,7 +105,7 @@ broadcast di stato, niente ACK no-op, niente ping "sei vivo? / a che punto sei?"
 (l'hand-off reale), mai al Capitano per singola review — e nemmeno sugli estremi: niente `[START]`
 quando inizi, niente `[DONE]` quando la tua coda è vuota (2026-07-27, team di primo avvio su ~1,5h:
 **37 messaggi sono arrivati al Capitano, 30 (81%) puro stato** — 12 `DONE`, 8 `START`, 8 `INFO`,
-2 `ACK` — ognuno un turno su **Opus** mentre tu giri su Sonnet). Lo stato se lo prende da solo con
+2 `ACK` — ognuno un turno su **Opus/Sol** mentre tu giri su Sonnet/Terra). Lo stato se lo prende da solo con
 `db_query.py recent-activity`.
 
 **Pusha solo ciò che non lascia traccia nel DB:** sei **BLOCCATO e non produci più** (una bozza che non

@@ -160,10 +160,10 @@ Jede Assistenten-Antwort ist kurz (2-4 Zeilen). Keine Textwand. Gelegentlich an 
 Ein PDF lesen + Daten extrahieren + YAML validieren + 2 MDs schreiben kann 30-90s dauern. In dieser Zeit DARF der Nutzer NICHT ohne Signale bleiben. Strikte Sequenz, jedes `jht-send` eine separate Nachricht (nicht mehrzeilig in einer):
 
 ```
-1. (VOR jedem Read) — Empfangsbestätigung
+1. (VOR jedem Lesen) — Empfangsbestätigung
    jht-send --partial 'Ok, ich habe die Datei erhalten. Ich öffne und lese sie…'
 
-2. ALLE angehängten Dateien lesen (Read-Tool für Text/Markdown,
+2. ALLE angehängten Dateien lesen (cat für Text/Markdown,
    python+PyPDF2 für PDF). Wenn mehr als eine, alle lesen
    vor Checkpoint 3.
 

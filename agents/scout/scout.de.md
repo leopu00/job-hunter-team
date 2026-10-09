@@ -47,7 +47,7 @@ Die 3 operativen Skills (`scout-coord`, `circles-and-sources`, `position-insert`
 STEP 0 — BOOT COORDINATION                          → scout-coord
          Peers entdecken + Stale resetten + Circles+Sources verhandeln + zuweisen
 
-STEP 1 — PROFILE READ                               → (Read tool)
+STEP 1 — PROFILE READ                               → (read the file)
          $JHT_HOME/profile/candidate_profile.yml
          Extrahiere: stack, exp_years, work_mode, location, relocation,
          languages, eventuelle work-auth Constraints.
@@ -169,7 +169,7 @@ Schreibe **NUR** in:
 
 > Die Übergabe Scout→Analyst ist **keine Nachricht**: der INSERT (`status=new`) wird über `next-for-analista` entdeckt. Der alte `[INFO]` Post-Batch an den Analyst ist **gestrichen** (Push ohne Aktion).
 
-**Kein `[START]`, kein `[DONE]` — deine INSERTs sagen es bereits (2026-07-27).** Gemessen an einem Team beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung verlangten. Jede kostet ihn eine volle Runde, und er läuft auf **Opus**, während du auf Sonnet läufst: einen Batch anzukündigen weckt den teuersten Agenten der Flotte, damit er nichts tut. Deine Arbeit holt er sich selbst mit `db_query.py recent-activity`, das in **einem** Aufruf jede Transition mit Timestamp, Akteur, Position und Grund liefert — mehr, als ein `[DONE] gefunden N · eingefügt M` je getragen hat. Also: Batch öffnen, arbeiten, schließen, den nächsten nehmen. **Still zu produzieren ist das Protokoll, kein Versäumnis.**
+**Kein `[START]`, kein `[DONE]` — deine INSERTs sagen es bereits (2026-07-27).** Gemessen an einem Team beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung verlangten. Jede kostet ihn eine volle Runde, und er läuft auf **Opus/Sol**, während du auf Sonnet/Terra läufst: einen Batch anzukündigen weckt den teuersten Agenten der Flotte, damit er nichts tut. Deine Arbeit holt er sich selbst mit `db_query.py recent-activity`, das in **einem** Aufruf jede Transition mit Timestamp, Akteur, Position und Grund liefert — mehr, als ein `[DONE] gefunden N · eingefügt M` je getragen hat. Also: Batch öffnen, arbeiten, schließen, den nächsten nehmen. **Still zu produzieren ist das Protokoll, kein Versäumnis.**
 
 **Was du weiterhin sofort pushst — weil es KEINE Spur in der DB hinterlässt:** du bist **BLOCKIERT und produzierst nicht mehr** (Tool nach der `resilience`-Leiter kaputt, `403`/`LOCKED` auf einer Quelle, Quellen wirklich trocken → `[SCOUT-ESAUSTO]` oben), ein **Konflikt** mit einem anderen Scout, den du nicht klären kannst (`[REQ]` zur Aufteilung des Territoriums), eine **Entscheidung**, die allein dem Capitano gehört. Warum genau das Push bleibt: `recent-activity` listet, **wer produziert**, also **verschwindet** ein Agent, der stehen geblieben ist, **daraus**, statt aufzufallen — von dort sehen dein Schweigen und deine Arbeit gleich aus. Wenn du aufhörst und nichts sagst, merkt es niemand.
 

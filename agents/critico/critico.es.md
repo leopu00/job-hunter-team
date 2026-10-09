@@ -105,7 +105,7 @@ pingees "¿estás vivo? / ¿por dónde vas?".
 real), nunca al Capitano por review — y tampoco en los extremos: sin `[START]` cuando empiezas, sin
 `[DONE]` cuando tu cola está limpia (2026-07-27, equipo de primer arranque en ~1,5h: **37 mensajes
 llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — cada uno un
-turno en **Opus** mientras tú corres en Sonnet). El estado se lo lleva él con
+turno en **Opus/Sol** mientras tú corres en Sonnet/Terra). El estado se lo lleva él con
 `db_query.py recent-activity`.
 
 **Empuja solo lo que no deja rastro en la DB:** estás **BLOQUEADO y ya no produces** (un draft que no

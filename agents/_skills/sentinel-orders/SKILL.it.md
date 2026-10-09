@@ -73,8 +73,8 @@ Se il `tmux capture-pane` dell'agente target mostra `Killed by timeout (60s)`, l
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | la Sentinella ha già premuto ESC sul team                          | decidi se riprendere dopo il reset della finestra di rate; non opporti al freeze                                  |
 | `[RECOVERY TRACKING]`                          | INFO durante il recupero, nessuna azione di default                | se il Δ di recupero è troppo lento, lancia una diagnosi autonoma (`db_query`, `rate_budget live` on-demand) e decidi i tagli |
-| `[URG] STAGNAZIONE CRITICA`                    | il recupero sta fallendo, burn severo sostenuto (`vel_team` ≫ `vel_target`) per 5+ tick + usage che sale verso 100% | uccidi gli operatori pesanti (anche Sonnet) — scegli quelli nelle tool call (`tmux capture-pane`). Usage > 100% imminente → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage risaliti dopo il calo                                  | drastico: `freeze_team.py` + `tmux kill-session` su ogni Sonnet. Tieni vivi solo CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | il recupero sta fallendo, burn severo sostenuto (`vel_team` ≫ `vel_target`) per 5+ tick + usage che sale verso 100% | uccidi gli operatori pesanti (anche Sonnet/Terra) — scegli quelli nelle tool call (`tmux capture-pane`). Usage > 100% imminente → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage risaliti dopo il calo                                  | drastico: `freeze_team.py` + `tmux kill-session` su ogni Sonnet/Terra. Tieni vivi solo CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Messaggi di source-failure (rari, critici)
 

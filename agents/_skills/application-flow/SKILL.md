@@ -197,7 +197,7 @@ Repeat every ~6h of continuous run or every ~50 main-loop iterations. NOT inside
 
 ## Hard rules
 
-- **Anti-rewriting before claim, always.** Skipping Step 2 means re-running the Critic on a finalised application = wasted Opus tokens and possibly overwriting a final verdict.
+- **Anti-rewriting before claim, always.** Skipping Step 2 means re-running the Critic on a finalised application = wasted Opus/Sol tokens and possibly overwriting a final verdict.
 - **Claim before write.** A CV written without claim risks two Writers producing parallel CVs for the same position.
 - **Path under `$JHT_USER_DIR/cv/`, never `$JHT_AGENT_DIR/`.** The user looks under `$JHT_USER_DIR`; CVs scattered in agent workspaces are invisible to them. T11.
 - **No raw SQL.** Always `db_query.py` / `db_update.py` / `db_insert.py`. The wrappers enforce invariants the team relies on.

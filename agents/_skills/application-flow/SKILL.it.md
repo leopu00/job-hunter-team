@@ -198,7 +198,7 @@ Ripeti ogni ~6h di esecuzione continua o ogni ~50 iterazioni del loop principale
 
 ## Regole ferree
 
-- **Anti-riscrittura prima del claim, sempre.** Saltare lo Step 2 significa rieseguire il Critico su un'application finalizzata = token Opus sprecati e possibile sovrascrittura di un verdetto finale.
+- **Anti-riscrittura prima del claim, sempre.** Saltare lo Step 2 significa rieseguire il Critico su un'application finalizzata = token Opus/Sol sprecati e possibile sovrascrittura di un verdetto finale.
 - **Claim prima di scrivere.** Un CV scritto senza claim rischia che due Scrittori producano CV paralleli per la stessa posizione.
 - **Path sotto `$JHT_USER_DIR/cv/`, mai `$JHT_AGENT_DIR/`.** L'utente cerca sotto `$JHT_USER_DIR`; CV sparsi nei workspace degli agenti sono invisibili per lui. T11.
 - **Niente SQL grezzo.** Sempre `db_query.py` / `db_update.py` / `db_insert.py`. I wrapper impongono invarianti su cui il team fa affidamento.

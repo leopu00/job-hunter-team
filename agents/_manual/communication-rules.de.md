@@ -58,7 +58,7 @@ Rändern: die Bookends `[START]` / `[DONE]` wurden am **2026-07-27 entfernt**. G
 beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner
 Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung
 verlangten. Jede kostet ihn eine volle Runde, und mit dem automatischen Modell-Split läuft er auf
-**Opus**, während Scout / Analyst / Scorer auf **Sonnet** laufen: ein „fertig" des Scorers weckt den
+**Opus/Sol**, während Scout / Analyst / Scorer auf **Sonnet/Terra** laufen: ein „fertig" des Scorers weckt den
 teuersten Agenten der Flotte, damit er nichts tut.
 
 Die Pull-Seite gab es bereits, und sie ist deutlich besser:

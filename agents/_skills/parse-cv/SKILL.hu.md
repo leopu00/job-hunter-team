@@ -12,8 +12,8 @@ drag-and-drop felületen) keresztül. Az Asszisztensnek ki kell nyernie
 a strukturált adatokat (név, pozíció, készségek, tapasztalatok) a
 `$JHT_HOME/profile/candidate_profile.yml` feltöltéséhez.
 
-**Előfeldolgozás nélkül**: az LLM a bináris PDF-et kapja a Read tool-on
-keresztül, és közvetlenül elemzi. Működik, de:
+**Előfeldolgozás nélkül**: az LLM a bináris PDF-et kapja úgy, ahogy van,
+és közvetlenül elemzi. Működik, de:
 - Sok tokent fogyaszt (egy 2 oldalas önéletrajz ≈ 3-5k token csak a fájlra)
 - Változó eredmények szkennelt PDF-ek / nem szabványos formátumok esetén
 - Csendes hiba .pages/.numbers fájloknál (nem olvasható Apple formátumok)

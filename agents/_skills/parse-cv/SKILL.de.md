@@ -11,7 +11,7 @@ Der Nutzer lädt seinen CV via Telegram (oder Web-Drop-Zone) hoch. Der Assistent
 muss die strukturierten Daten (Name, Rolle, Skills, Erfahrungen) extrahieren, um
 `$JHT_HOME/profile/candidate_profile.yml` zu befüllen.
 
-**Ohne Vorverarbeitung**: Das LLM empfängt die binäre PDF via Read-Tool und
+**Ohne Vorverarbeitung**: Das LLM empfängt die binäre PDF unverändert und
 macht das Parsing direkt. Funktioniert, aber:
 - Kostet viele Token (ein CV mit 2 Seiten ≈ 3-5k Token nur für die Datei)
 - Variable Ergebnisse bei gescannten PDFs / Nicht-Standard-Formaten

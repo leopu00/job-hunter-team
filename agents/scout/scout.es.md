@@ -47,7 +47,7 @@ Las 3 skills operativas (`scout-coord`, `circles-and-sources`, `position-insert`
 STEP 0 — BOOT COORDINATION                          → scout-coord
          descubrir peers + reset stale + negociar círculos+sources + asignar
 
-STEP 1 — PROFILE READ                               → (Read tool)
+STEP 1 — PROFILE READ                               → (read the file)
          $JHT_HOME/profile/candidate_profile.yml
          Extrae: stack, exp_years, work_mode, location, relocation,
          languages, eventuales work-auth constraints.
@@ -169,7 +169,7 @@ Escribe **SOLO** en:
 
 > El traspaso Scout→Analista **no es un mensaje**: el INSERT (`status=new`) se descubre vía `next-for-analista`. El viejo `[INFO]` post-batch al Analista está **cortado** (push sin acción).
 
-**Sin `[START]`, sin `[DONE]` — tus INSERT ya lo dicen (2026-07-27).** Medido en un equipo de primer arranque, ~1,5h de historial: **37 mensajes llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — frente a 3-6 que pedían realmente una decisión. Cada uno le cuesta un turno entero, y él corre en **Opus** mientras tú corres en Sonnet: anunciar un batch despierta al agente más caro de la flota para no hacer nada. Tu trabajo se lo lleva él con `db_query.py recent-activity`, que en **una** llamada devuelve cada transición con timestamp, actor, posición y motivo — más de lo que jamás llevó un `[DONE] encontradas N · insertadas M`. Así que: abre el batch, trabaja, ciérralo, toma el siguiente. **Producir en silencio es el protocolo, no un descuido.**
+**Sin `[START]`, sin `[DONE]` — tus INSERT ya lo dicen (2026-07-27).** Medido en un equipo de primer arranque, ~1,5h de historial: **37 mensajes llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — frente a 3-6 que pedían realmente una decisión. Cada uno le cuesta un turno entero, y él corre en **Opus/Sol** mientras tú corres en Sonnet/Terra: anunciar un batch despierta al agente más caro de la flota para no hacer nada. Tu trabajo se lo lleva él con `db_query.py recent-activity`, que en **una** llamada devuelve cada transición con timestamp, actor, posición y motivo — más de lo que jamás llevó un `[DONE] encontradas N · insertadas M`. Así que: abre el batch, trabaja, ciérralo, toma el siguiente. **Producir en silencio es el protocolo, no un descuido.**
 
 **Lo que sí sigues empujando, de inmediato — porque NO deja rastro en la DB:** estás **BLOQUEADO y ya no produces** (herramienta rota tras la escalera `resilience`, `403`/`LOCKED` en una fuente, fuentes realmente secas → `[SCOUT-ESAUSTO]` arriba), un **conflicto** con otro Scout que no logras cerrar (`[REQ]` sobre el reparto de territorio), una **decisión** que es solo del Capitano. Por qué este sigue siendo push: `recent-activity` lista **quién produce**, así que un agente que se ha parado **desaparece de ella** en lugar de destacar — desde ahí tu silencio y tu trabajo son idénticos. Si te paras y no lo dices, nadie se entera.
 

@@ -105,7 +105,7 @@ de status, não envies ACKs no-op, nem pingues "estás vivo? / em que ponto est�
 (o hand-off real), nunca para o Capitano por review — e nos extremos também não: sem `[START]` quando
 começas, sem `[DONE]` quando a tua fila está vazia (2026-07-27, equipa de primeiro arranque em ~1,5h:
 **37 mensagens chegaram ao Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK`
-— cada uma um turno em **Opus** enquanto tu corres em Sonnet). O estado vai ele buscá-lo com
+— cada uma um turno em **Opus/Sol** enquanto tu corres em Sonnet/Terra). O estado vai ele buscá-lo com
 `db_query.py recent-activity`.
 
 **Envia só o que não deixa rasto na DB:** estás **BLOQUEADO e já não produzes** (um draft que não

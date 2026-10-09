@@ -76,7 +76,7 @@ Den Throttle+Capture-Zyklus wiederholen, bis der Critic sein Review veröffentli
 
 ### Schritt 6 — Das Review lesen
 
-Der Critic speichert das Review unter `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (sein Skill, siehe `agents/critico/critico.md`). Mit `Read` lesen. Extrahiere:
+Der Critic speichert das Review unter `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (sein Skill, siehe `agents/critico/critico.md`). Lesen (`cat`). Extrahiere:
 - Numerischer Score `X.X/10`
 - "What does NOT work"-Aufzählungspunkte
 - "Concrete actions (prioritized)"-Liste

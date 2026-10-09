@@ -75,7 +75,7 @@ Repita o ciclo throttle+capture até o Critico ter publicado a sua revisão (pro
 
 ### Passo 6 — Ler a revisão
 
-O Critico guarda a revisão em `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (skill dele, ver `agents/critico/critico.md`). Leia com `Read`. Extraia:
+O Critico guarda a revisão em `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (skill dele, ver `agents/critico/critico.md`). Leia-a (`cat`). Extraia:
 - Pontuação numérica `X.X/10`
 - Pontos "What does NOT work"
 - Lista "Concrete actions (prioritized)"

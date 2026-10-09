@@ -73,8 +73,8 @@ Wenn das `tmux capture-pane` des Ziel-Agenten `Killed by timeout (60s)` anzeigt,
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | die Sentinella hat bereits ESC für das Team gedrückt               | entscheide, ob nach dem Rate-Fenster-Reset fortgefahren werden soll; bekämpfe den Freeze nicht                    |
 | `[RECOVERY TRACKING]`                          | INFO während der Wiederherstellung, standardmäßig keine Aktion     | wenn das Δ der Wiederherstellung zu langsam ist, führe eine autonome Diagnose durch (`db_query`, `rate_budget live` on-demand) und entscheide über Kürzungen |
-| `[URG] STAGNAZIONE CRITICA`                    | Wiederherstellung schlägt fehl, schwerer anhaltender Burn (`vel_team` ≫ `vel_target`) seit 5+ Tick + Usage steigt Richtung 100% | beende schwere Operatoren (auch Sonnet) — wähle diejenigen in Tool Calls (`tmux capture-pane`). Usage > 100% unmittelbar bevorstehend → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage nach dem Rückgang wieder angestiegen                   | drastisch: `freeze_team.py` + `tmux kill-session` auf jedem Sonnet. Am Leben halten nur CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | Wiederherstellung schlägt fehl, schwerer anhaltender Burn (`vel_team` ≫ `vel_target`) seit 5+ Tick + Usage steigt Richtung 100% | beende schwere Operatoren (auch Sonnet/Terra) — wähle diejenigen in Tool Calls (`tmux capture-pane`). Usage > 100% unmittelbar bevorstehend → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage nach dem Rückgang wieder angestiegen                   | drastisch: `freeze_team.py` + `tmux kill-session` auf jedem Sonnet/Terra. Am Leben halten nur CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Source-Failure-Nachrichten (selten, kritisch)
 

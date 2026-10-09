@@ -198,7 +198,7 @@ Repetir a cada ~6h de execução contínua ou a cada ~50 iterações do loop pri
 
 ## Regras rígidas
 
-- **Anti-reescrita antes da reivindicação, sempre.** Pular o Passo 2 significa re-executar o Critico numa application finalizada = tokens Opus desperdiçados e possivelmente sobrescrever um veredito final.
+- **Anti-reescrita antes da reivindicação, sempre.** Pular o Passo 2 significa re-executar o Critico numa application finalizada = tokens Opus/Sol desperdiçados e possivelmente sobrescrever um veredito final.
 - **Reivindicar antes de escrever.** Um CV escrito sem reivindicação arrisca dois Scrittori a produzir CVs paralelos para a mesma posição.
 - **Caminho sob `$JHT_USER_DIR/cv/`, nunca `$JHT_AGENT_DIR/`.** O utilizador procura sob `$JHT_USER_DIR`; CVs espalhados em workspaces de agentes são invisíveis para ele. T11.
 - **Sem SQL direto.** Sempre `db_query.py` / `db_update.py` / `db_insert.py`. Os wrappers impõem invariantes das quais a equipa depende.

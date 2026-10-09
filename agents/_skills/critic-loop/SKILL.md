@@ -74,7 +74,7 @@ Repeat the throttle+capture cycle until the Critic has published its review (loo
 
 ### Step 6 — Read the review
 
-The Critic saves the review under `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (its skill, see `agents/critico/critico.md`). Read it with `Read`. Extract:
+The Critic saves the review under `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (its skill, see `agents/critico/critico.md`). Read the file (`cat`). Extract:
 - Numerical score `X.X/10`
 - "What does NOT work" bullets
 - "Concrete actions (prioritized)" list

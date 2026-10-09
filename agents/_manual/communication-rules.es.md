@@ -58,8 +58,8 @@ Un worker toca al Capitano **cero veces** para contar su avance. Ni por ítem, n
 bookends `[START]` / `[DONE]` se **retiraron el 2026-07-27**. Medido en un equipo de primer arranque,
 ~1,5h de historial: **37 mensajes llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`,
 8 `INFO`, 2 `ACK` — frente a 3-6 que pedían realmente una decisión. Cada uno le cuesta un turno entero
-y, con el reparto automático de modelos, él corre en **Opus** mientras Scout / Analista / Scorer corren
-en **Sonnet**: un "hecho" del Scorer despierta al agente más caro de la flota para no hacer nada.
+y, con el reparto automático de modelos, él corre en **Opus/Sol** mientras Scout / Analista / Scorer corren
+en **Sonnet/Terra**: un "hecho" del Scorer despierta al agente más caro de la flota para no hacer nada.
 
 El lado pull ya existía y es claramente mejor:
 

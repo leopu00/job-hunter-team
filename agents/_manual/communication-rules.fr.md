@@ -58,8 +58,8 @@ Un worker touche le Capitano **zéro fois** pour raconter son avancement. Ni par
 les bookends `[START]` / `[DONE]` ont été **retirés le 2026-07-27**. Mesuré sur une équipe de premier
 démarrage, ~1,5h d'historique : **37 messages sont arrivés au Capitano, 30 (81 %) du pur statut** — 12
 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contre 3-6 qui demandaient vraiment une décision. Chacun lui
-coûte un tour entier et, avec le partage automatique des modèles, il tourne sur **Opus** alors que
-Scout / Analyste / Scorer tournent sur **Sonnet** : un « fait » du Scorer réveille l'agent le plus cher
+coûte un tour entier et, avec le partage automatique des modèles, il tourne sur **Opus/Sol** alors que
+Scout / Analyste / Scorer tournent sur **Sonnet/Terra** : un « fait » du Scorer réveille l'agent le plus cher
 de la flotte pour ne rien faire.
 
 Le côté pull existait déjà et il est nettement meilleur :

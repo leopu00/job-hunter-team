@@ -73,8 +73,8 @@ Si le `tmux capture-pane` de l'agent cible montre `Killed by timeout (60s)`, l'a
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | la Sentinella a déjà appuyé sur ESC pour l'équipe                  | décide s'il faut reprendre après le reset de la fenêtre de rate ; ne t'oppose pas au freeze                       |
 | `[RECOVERY TRACKING]`                          | INFO pendant la récupération, aucune action par défaut             | si le Δ de récupération est trop lent, lance un diagnostic autonome (`db_query`, `rate_budget live` on-demand) et décide les coupes |
-| `[URG] STAGNAZIONE CRITICA`                    | la récupération échoue, burn sévère soutenu (`vel_team` ≫ `vel_target`) pendant 5+ tick + usage qui monte vers 100% | tue les opérateurs lourds (même Sonnet) — choisis ceux en tool calls (`tmux capture-pane`). Usage > 100% imminent → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage remontés après la baisse                               | drastique : `freeze_team.py` + `tmux kill-session` sur chaque Sonnet. Garder en vie seulement CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | la récupération échoue, burn sévère soutenu (`vel_team` ≫ `vel_target`) pendant 5+ tick + usage qui monte vers 100% | tue les opérateurs lourds (même Sonnet/Terra) — choisis ceux en tool calls (`tmux capture-pane`). Usage > 100% imminent → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage remontés après la baisse                               | drastique : `freeze_team.py` + `tmux kill-session` sur chaque Sonnet/Terra. Garder en vie seulement CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Messages de source-failure (rares, critiques)
 

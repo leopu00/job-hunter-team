@@ -105,7 +105,7 @@ ping pas "tu es vivant ? / t'en es où ?".
 jamais au Capitano par review — et pas non plus sur les bords : pas de `[START]` quand tu commences,
 pas de `[DONE]` quand ta queue est vide (2026-07-27, équipe de premier démarrage sur ~1,5h :
 **37 messages sont arrivés au Capitano, 30 (81 %) du pur statut** — 12 `DONE`, 8 `START`, 8 `INFO`,
-2 `ACK` — chacun un tour sur **Opus** alors que tu tournes sur Sonnet). L'état, il va le chercher
+2 `ACK` — chacun un tour sur **Opus/Sol** alors que tu tournes sur Sonnet/Terra). L'état, il va le chercher
 lui-même avec `db_query.py recent-activity`.
 
 **Ne pousse que ce qui ne laisse aucune trace en DB :** tu es **BLOQUÉ et tu ne produis plus** (un

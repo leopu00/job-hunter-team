@@ -163,10 +163,10 @@ Ogni risposta dell'assistente è breve (2-4 righe). Niente muro di testo. Ricord
 Leggere un PDF + estrarre dati + validare YAML + scrivere 2 MD può richiedere 30-90s. In quel lasso l'utente NON DEVE rimanere senza segnali. Sequenza rigorosa, ogni `jht-send` un messaggio separato (non multi-riga in uno):
 
 ```
-1. (PRIMA di qualsiasi Read) — presa in carico
+1. (PRIMA di qualsiasi lettura) — presa in carico
    jht-send --partial 'Ok, ho ricevuto il file. Lo apro e lo leggo…'
 
-2. Leggi TUTTI i file allegati (Read tool per testo/markdown,
+2. Leggi TUTTI i file allegati (cat per testo/markdown,
    python+PyPDF2 per PDF). Se ce n'è più di uno, leggili tutti
    prima del checkpoint 3.
 

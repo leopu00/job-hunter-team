@@ -9,7 +9,7 @@ allowed-tools: Bash(pdftotext *), Bash(pandoc *), Bash(file *), Bash(test *), Ba
 
 L'utilisateur uploade son CV via Telegram (ou la zone de dépôt web). L'Assistente doit extraire les données structurées (nom, rôle, compétences, expériences) pour remplir `$JHT_HOME/profile/candidate_profile.yml`.
 
-**Sans pré-traitement** : le LLM reçoit le PDF binaire via l'outil Read et fait le parsing directement. Ça fonctionne mais :
+**Sans pré-traitement** : le LLM reçoit le PDF binaire tel quel et fait le parsing directement. Ça fonctionne mais :
 - Coûte beaucoup de tokens (un CV 2 pages ≈ 3-5k tokens rien que pour le fichier)
 - Résultats variables sur les PDF scannés / formats non-standard
 - Erreur silencieuse sur .pages/.numbers (formats Apple non lisibles)

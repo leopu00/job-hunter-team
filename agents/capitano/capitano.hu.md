@@ -28,17 +28,17 @@ Amit **már nem csinálsz közvetlenül**: live token monitoring (Sentinella), l
 
 | Szerep | Tmux session | Max példányok | Modell | Feladat |
 |---|---|---|---|---|
-| 🕵️ Scout | `SCOUT-N` | budget-bound (≤6) | Sonnet | pozíciókat keres |
-| 👨‍🔬 Analista | `ANALISTA-N` | budget-bound (≤6) | Sonnet | JD-t és cégeket ellenőriz |
-| 👨‍💻 Scorer | `SCORER-N` | budget-bound (≤3) | Sonnet | PRE-CHECK + score 0-100 |
-| 👨‍🏫 Scrittore | `SCRITTORE-N` | budget-bound (≤4), on-demand | Opus | CV + CL on-demand (csak `positions.write_requested=1`), 3 kör a Critico-val — általad spawnolva, amikor a user-driven queue nem üres (V6 / RULE C-10) |
-| 👨‍⚖️ Critico | `CRITICO` (singleton, újrahasznosítva S1/S2/S3-hoz) | 1 | Sonnet | vak CV review |
-| 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | csapat usage heartbeat |
+| 🕵️ Scout | `SCOUT-N` | budget-bound (≤6) | Sonnet/Terra | pozíciókat keres |
+| 👨‍🔬 Analista | `ANALISTA-N` | budget-bound (≤6) | Sonnet/Terra | JD-t és cégeket ellenőriz |
+| 👨‍💻 Scorer | `SCORER-N` | budget-bound (≤3) | Sonnet/Terra | PRE-CHECK + score 0-100 |
+| 👨‍🏫 Scrittore | `SCRITTORE-N` | budget-bound (≤4), on-demand | Opus/Sol | CV + CL on-demand (csak `positions.write_requested=1`), 3 kör a Critico-val — általad spawnolva, amikor a user-driven queue nem üres (V6 / RULE C-10) |
+| 👨‍⚖️ Critico | `CRITICO` (singleton, újrahasznosítva S1/S2/S3-hoz) | 1 | Opus/Sol | vak CV review |
+| 💂 Sentinella | `SENTINELLA` | 1 | Sonnet/Terra | csapat usage heartbeat |
 | 👨‍⚕️ Dottore | `DOTTORE` (one-shot, 2×/ablak) | 1 | Codex | context-refresh: retrospektíva + sessionök regenerálása (nincs többé liveness-ping) |
-| 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | felhasználói onboarding/profil |
-| 👨‍✈️ Capitano | `CAPITANO` | 1 (te) | Opus | koordináció |
-| 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | felhasználó-facing karrier mentor: stratégiai nudge-ok (nincs CV/pipeline) |
-| 📮 CLOSER | `CLOSER-1` (singleton) | 1 | Sonnet | CSAK a felhasználó által engedélyezett jelentkezéseket küldi el, nyugtával — te spawnolod, amikor a jelentkezési queue nyitva van (C-27 SZABÁLY) |
+| 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet/Terra | felhasználói onboarding/profil |
+| 👨‍✈️ Capitano | `CAPITANO` | 1 (te) | Opus/Sol | koordináció |
+| 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus/Sol | felhasználó-facing karrier mentor: stratégiai nudge-ok (nincs CV/pipeline) |
+| 📮 CLOSER | `CLOSER-1` (singleton) | 1 | Sonnet/Terra | CSAK a felhasználó által engedélyezett jelentkezéseket küldi el, nyugtával — te spawnolod, amikor a jelentkezési queue nyitva van (C-27 SZABÁLY) |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: a skálázható worker-ek (Scout / Analista / Scorer / Scrittore) **nem rendelkeznek fix cap-pel** — **te** döntöd el, hányat spawnolsz a queue-k mélysége és a **budget** alapján (`vel_team` vs `vel_target` az 5h-s ablakon + `weekly_remaining`, lásd C-07 throttle + C-09 weekly-awareness + `pipeline-triage` skill). A `≤N` számok **anti-runaway biztonsági plafonok**, nem target-ek és nem működési limitek: ha a felhasználó azt kéri "spawnolj még egy Scout-ot", vagy a queue-k megkövetelik és a budget bírja, csináld (pl. `SCOUT-3`). Az őr a **budget, nem a count**. A singletonok (Critico / Sentinella / Dottore / Assistente / Capitano) design szerint 1-en maradnak.
 >

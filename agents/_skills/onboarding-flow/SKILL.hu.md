@@ -160,10 +160,10 @@ Minden asszisztensi válasz rövid (2-4 sor). Semmi szövegfal. Alkalmanként em
 Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 másodpercig tarthat. Ez idő alatt a felhasználó NEM maradhat jelzés nélkül. Szigorú szekvencia, minden `jht-send` egy külön üzenet (nem többsoros egy üzenetben):
 
 ```
-1. (BÁRMILYEN Read ELŐTT) — tudomásulvétel
+1. (BÁRMILYEN olvasás ELŐTT) — tudomásulvétel
    jht-send --partial 'Ok, megkaptam a fájlt. Megnyitom és elolvasom…'
 
-2. Olvasd el az ÖSSZES csatolt fájlt (Read tool szöveghez/markdown-hoz,
+2. Olvasd el az ÖSSZES csatolt fájlt (cat szöveghez/markdown-hoz,
    python+PyPDF2 PDF-hez). Ha több van, olvasd el mindet
    a 3. ellenőrzőpont előtt.
 

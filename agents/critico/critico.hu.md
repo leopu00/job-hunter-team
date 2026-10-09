@@ -105,7 +105,7 @@ státuszt, ne küldj no-op ACK-okat, és ne pingelj "élsz? / hol tartasz?" üze
 átadás), soha nem a Capitanóhoz review-nként — és a széleken sem: semmi `[START]`, amikor kezdesz,
 semmi `[DONE]`, amikor a queue-d üres (2026-07-27, első indítású csapat ~1,5 órán át: **37 üzenet
 érkezett a Capitanóhoz, ebből 30 (81%) tiszta státusz** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` —
-mindegyik egy **Opus**-kör, míg te Sonneten futsz). Az állapotot maga veszi elő a
+mindegyik egy **Opus/Sol**-kör, míg te Sonneten futsz). Az állapotot maga veszi elő a
 `db_query.py recent-activity`-vel.
 
 **Csak azt küldd, ami nem hagy nyomot a DB-ben:** **BLOKKOLT** vagy és **már nem termelsz** (egy

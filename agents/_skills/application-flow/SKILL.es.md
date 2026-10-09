@@ -198,7 +198,7 @@ Repetir cada ~6h de ejecución continua o cada ~50 iteraciones del bucle princip
 
 ## Reglas estrictas
 
-- **Anti-reescritura antes de reclamar, siempre.** Saltarse el Paso 2 significa re-ejecutar el Critic en una application finalizada = tokens Opus desperdiciados y posiblemente sobrescribir un veredicto final.
+- **Anti-reescritura antes de reclamar, siempre.** Saltarse el Paso 2 significa re-ejecutar el Critic en una application finalizada = tokens Opus/Sol desperdiciados y posiblemente sobrescribir un veredicto final.
 - **Reclamar antes de escribir.** Un CV escrito sin reclamación arriesga que dos Writers produzcan CVs paralelos para la misma posición.
 - **Ruta bajo `$JHT_USER_DIR/cv/`, nunca `$JHT_AGENT_DIR/`.** El usuario busca bajo `$JHT_USER_DIR`; CVs dispersos en workspaces de agentes son invisibles para ellos. T11.
 - **Sin SQL crudo.** Siempre `db_query.py` / `db_update.py` / `db_insert.py`. Los wrappers imponen invariantes de los que depende el equipo.

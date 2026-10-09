@@ -73,8 +73,8 @@ Ha a célagens `tmux capture-pane` kimenete `Killed by timeout (60s)`-t mutat, a
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | a Sentinella már megnyomta az ESC-t a csapaton                     | döntsd el, hogy folytasd-e a rate-ablak reset után; ne harcolj a freeze ellen                                     |
 | `[RECOVERY TRACKING]`                          | INFO a helyreállítás alatt, alapértelmezetten nincs akció          | ha a helyreállítás Δ-ja túl lassú, futtass autonóm diagnózist (`db_query`, on-demand `rate_budget live`) és dönts a csökkentésekről |
-| `[URG] STAGNAZIONE CRITICA`                    | a helyreállítás kudarcot vall, súlyos tartós burn (`vel_team` ≫ `vel_target`) 5+ ticken át + usage 100% felé emelkedik | öld meg a nehéz operátorokat (még Sonnet-et is) — válaszd ki a tool call-okban lévőket (`tmux capture-pane`). Usage > 100% küszöbön → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage újra emelkedett a csökkenés után                       | drasztikus: `freeze_team.py` + `tmux kill-session` minden Sonnet-en. Csak a CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE marad életben |
+| `[URG] STAGNAZIONE CRITICA`                    | a helyreállítás kudarcot vall, súlyos tartós burn (`vel_team` ≫ `vel_target`) 5+ ticken át + usage 100% felé emelkedik | öld meg a nehéz operátorokat (még a Sonnet/Terra modelleket is) — válaszd ki a tool call-okban lévőket (`tmux capture-pane`). Usage > 100% küszöbön → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage újra emelkedett a csökkenés után                       | drasztikus: `freeze_team.py` + `tmux kill-session` minden Sonnet/Terra modellen. Csak a CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE marad életben |
 
 ### Source-failure üzenetek (ritkák, kritikusak)
 

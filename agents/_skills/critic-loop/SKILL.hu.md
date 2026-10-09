@@ -76,7 +76,7 @@ Ismételd a throttle+capture ciklust, amíg a Critic közzé nem teszi a felülv
 
 ### 6. lépés — Olvasd el a felülvizsgálatot
 
-A Critic a felülvizsgálatot a `$JHT_USER_DIR/critiche/review-<company>-<date>.md` alá menti (az ő skill-je, lásd `agents/critico/critico.md`). Olvasd `Read`-del. Vond ki:
+A Critic a felülvizsgálatot a `$JHT_USER_DIR/critiche/review-<company>-<date>.md` alá menti (az ő skill-je, lásd `agents/critico/critico.md`). Olvasd el (`cat`). Vond ki:
 - Numerikus pontszám `X.X/10`
 - "Ami NEM működik" felsorolásjeleket
 - "Konkrét cselekvések (prioritizálva)" listát

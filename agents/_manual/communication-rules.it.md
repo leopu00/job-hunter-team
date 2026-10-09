@@ -54,8 +54,8 @@ Un worker tocca il Capitano **zero volte** per raccontare l'avanzamento. Né per
 estremi: i bookend `[START]` / `[DONE]` sono stati **rimossi il 2026-07-27**. Misurato su un team di
 primo avvio, ~1,5h di cronologia: **37 messaggi sono arrivati al Capitano, 30 (81%) puro stato** — 12
 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contro 3-6 che chiedevano davvero una decisione. Ognuno gli
-costa un turno intero e, con lo split automatico dei modelli, lui gira su **Opus** mentre Scout /
-Analista / Scorer girano su **Sonnet**: un "fatto" dello Scorer sveglia l'agente più costoso della
+costa un turno intero e, con lo split automatico dei modelli, lui gira su **Opus/Sol** mentre Scout /
+Analista / Scorer girano su **Sonnet/Terra**: un "fatto" dello Scorer sveglia l'agente più costoso della
 flotta per non fare niente.
 
 Il lato pull esisteva già ed è nettamente migliore:

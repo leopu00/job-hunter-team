@@ -1,6 +1,6 @@
 ---
 name: position-insert
-description: "Az 5 kapus szekvencia, amelyet a Scout MINDEN jelolt poziciohoz vegrehajt, mielott INSERTelne a `positions` tablaba: dedup → link-ellenorzes → JD lekerdezes → megenged szurok → INSERT. Barmely kapu kihagyasa duplikatumokkal, halott linkekkel vagy hatalytalanul szurt sorokkal tolti meg az adatbazist, amelyeket aztan az Analistanak kell eldobnia — elpazarolt Sonnet-koltsegvetes downstream. A Scout szerephez tartozik; parja a `circles-and-sources` (meghatározza, HOL keresunk) es a `scout-coord` (meghatározza, KI hol keres)."
+description: "Az 5 kapus szekvencia, amelyet a Scout MINDEN jelolt poziciohoz vegrehajt, mielott INSERTelne a `positions` tablaba: dedup → link-ellenorzes → JD lekerdezes → megenged szurok → INSERT. Barmely kapu kihagyasa duplikatumokkal, halott linkekkel vagy hatalytalanul szurt sorokkal tolti meg az adatbazist, amelyeket aztan az Analistanak kell eldobnia — elpazarolt Sonnet/Terra-koltsegvetes downstream. A Scout szerephez tartozik; parja a `circles-and-sources` (meghatározza, HOL keresunk) es a `scout-coord` (meghatározza, KI hol keres)."
 allowed-tools: Bash(python3 *), Bash(grep *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->

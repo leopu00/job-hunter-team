@@ -73,8 +73,8 @@ Se o `tmux capture-pane` do agente alvo mostrar `Killed by timeout (60s)`, o age
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | a Sentinella já premiu ESC na equipa                               | decide se retomas após o reset da janela de rate; não te oponhas ao freeze                                        |
 | `[RECOVERY TRACKING]`                          | INFO durante a recuperação, nenhuma ação por defeito               | se o Δ de recuperação é demasiado lento, lança um diagnóstico autónomo (`db_query`, `rate_budget live` on-demand) e decide os cortes |
-| `[URG] STAGNAZIONE CRITICA`                    | a recuperação está a falhar, burn severo sustentado (`vel_team` ≫ `vel_target`) durante 5+ tick + usage a subir para 100% | mata os operadores pesados (mesmo Sonnet) — escolhe os que estão em tool calls (`tmux capture-pane`). Usage > 100% iminente → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage voltaram a subir após a descida                        | drástico: `freeze_team.py` + `tmux kill-session` em cada Sonnet. Manter vivos apenas CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | a recuperação está a falhar, burn severo sustentado (`vel_team` ≫ `vel_target`) durante 5+ tick + usage a subir para 100% | mata os operadores pesados (mesmo Sonnet/Terra) — escolhe os que estão em tool calls (`tmux capture-pane`). Usage > 100% iminente → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage voltaram a subir após a descida                        | drástico: `freeze_team.py` + `tmux kill-session` em cada Sonnet/Terra. Manter vivos apenas CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Mensagens de source-failure (raras, críticas)
 

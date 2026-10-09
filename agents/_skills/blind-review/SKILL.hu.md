@@ -53,7 +53,7 @@ python3 /app/shared/skills/safe_fetch.py '<JD URL>' > /tmp/jd.txt
 > munka része. Szigorúan az alábbi rubrika szerint pontozz, a CV valós érdemei
 > alapján.
 
-Az Író mind a mentett fájlt (`Read` az útvonalon) mind a panel kimenetet rögzíti. Ne tömörítsd az egyiket vagy a másikat — adj mindkettőt.
+Az Író mind a mentett fájlt (a fájl elolvasásával az útvonalon) mind a panel kimenetet rögzíti. Ne tömörítsd az egyiket vagy a másikat — adj mindkettőt.
 
 ## Kimeneti struktúra (kötelező sorrend, kötelező szekciók)
 

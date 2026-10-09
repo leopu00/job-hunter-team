@@ -73,8 +73,8 @@ Si el `tmux capture-pane` del agente objetivo muestra `Killed by timeout (60s)`,
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | la Sentinella ya pulsó ESC en el equipo                            | decide si reanudar tras el reset de la ventana de rate; no te opongas al freeze                                   |
 | `[RECOVERY TRACKING]`                          | INFO durante la recuperación, sin acción por defecto               | si el Δ de recuperación es demasiado lento, ejecuta un diagnóstico autónomo (`db_query`, `rate_budget live` on-demand) y decide los recortes |
-| `[URG] STAGNAZIONE CRITICA`                    | la recuperación está fallando, burn severo sostenido (`vel_team` ≫ `vel_target`) durante 5+ tick + usage subiendo hacia 100% | mata a los operadores pesados (incluso Sonnet) — elige los que estén en tool calls (`tmux capture-pane`). Usage > 100% inminente → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage subieron de nuevo tras la bajada                       | drástico: `freeze_team.py` + `tmux kill-session` en cada Sonnet. Mantener vivos solo CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | la recuperación está fallando, burn severo sostenido (`vel_team` ≫ `vel_target`) durante 5+ tick + usage subiendo hacia 100% | mata a los operadores pesados (incluso Sonnet/Terra) — elige los que estén en tool calls (`tmux capture-pane`). Usage > 100% inminente → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage subieron de nuevo tras la bajada                       | drástico: `freeze_team.py` + `tmux kill-session` en cada Sonnet/Terra. Mantener vivos solo CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Mensajes de source-failure (raros, críticos)
 

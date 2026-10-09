@@ -75,7 +75,7 @@ Ripeti il ciclo throttle+capture finché il Critico ha pubblicato la sua revisio
 
 ### Step 6 — Leggi la revisione
 
-Il Critico salva la revisione sotto `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (la sua skill, vedi `agents/critico/critico.md`). Leggila con `Read`. Estrai:
+Il Critico salva la revisione sotto `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (la sua skill, vedi `agents/critico/critico.md`). Leggila (`cat`). Estrai:
 - Punteggio numerico `X.X/10`
 - Bullet "Cosa NON funziona"
 - Lista "Azioni concrete (prioritizzate)"

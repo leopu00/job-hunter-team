@@ -75,7 +75,7 @@ Repite el ciclo throttle+capture hasta que el Critic haya publicado su revisión
 
 ### Paso 6 — Leer la revisión
 
-El Critic guarda la revisión bajo `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (su skill, ver `agents/critico/critico.md`). Léela con `Read`. Extrae:
+El Critic guarda la revisión bajo `$JHT_USER_DIR/critiche/review-<company>-<date>.md` (su skill, ver `agents/critico/critico.md`). Léela (`cat`). Extrae:
 - Puntuación numérica `X.X/10`
 - Viñetas de "What does NOT work"
 - Lista de "Concrete actions (prioritized)"

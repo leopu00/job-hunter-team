@@ -198,7 +198,7 @@ Alle ~6h kontinuierlicher Laufzeit oder alle ~50 Hauptschleifen-Iterationen wied
 
 ## Strenge Regeln
 
-- **Anti-Rewriting vor Beanspruchung, immer.** Das Überspringen von Schritt 2 bedeutet, den Critic auf eine finalisierte Application erneut laufen zu lassen = verschwendete Opus-Token und möglicherweise Überschreiben eines finalen Urteils.
+- **Anti-Rewriting vor Beanspruchung, immer.** Das Überspringen von Schritt 2 bedeutet, den Critic auf eine finalisierte Application erneut laufen zu lassen = verschwendete Opus/Sol-Token und möglicherweise Überschreiben eines finalen Urteils.
 - **Beanspruchung vor Schreiben.** Ein ohne Beanspruchung geschriebener CV riskiert, dass zwei Writer parallele CVs für dieselbe Position erstellen.
 - **Pfad unter `$JHT_USER_DIR/cv/`, niemals `$JHT_AGENT_DIR/`.** Der Nutzer schaut unter `$JHT_USER_DIR`; CVs, die in Agent-Workspaces verstreut sind, sind für ihn unsichtbar. T11.
 - **Kein rohes SQL.** Immer `db_query.py` / `db_update.py` / `db_insert.py`. Die Wrapper erzwingen Invarianten, auf die das Team angewiesen ist.

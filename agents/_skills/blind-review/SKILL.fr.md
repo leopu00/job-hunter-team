@@ -53,7 +53,7 @@ python3 /app/shared/skills/safe_fetch.py '<JD URL>' > /tmp/jd.txt
 > du poste. Notez strictement selon la grille ci-dessous, sur les mérites réels
 > du CV.
 
-Le Scrittore capture à la fois le fichier sauvegardé (`Read` sur le chemin) et la sortie du panneau. Ne compressez pas vers l'un ou l'autre — fournissez les deux.
+Le Scrittore capture à la fois le fichier sauvegardé (en lisant le fichier à ce chemin) et la sortie du panneau. Ne compressez pas vers l'un ou l'autre — fournissez les deux.
 
 ## Structure de sortie (ordre obligatoire, sections obligatoires)
 

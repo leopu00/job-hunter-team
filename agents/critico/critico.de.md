@@ -105,7 +105,7 @@ Status-Broadcast, keine No-op-ACKs, kein Ping "bist du am Leben? / wie weit bist
 echte Übergabe), nie an den Capitano pro Review — und auch nicht an den Rändern: kein `[START]`, wenn
 du beginnst, kein `[DONE]`, wenn deine Queue leer ist (2026-07-27, Team beim Erststart über ~1,5h:
 **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner Status** — 12 `DONE`, 8 `START`,
-8 `INFO`, 2 `ACK` — jede eine Runde auf **Opus**, während du auf Sonnet läufst). Den Zustand holt er
+8 `INFO`, 2 `ACK` — jede eine Runde auf **Opus/Sol**, während du auf Sonnet/Terra läufst). Den Zustand holt er
 sich selbst mit `db_query.py recent-activity`.
 
 **Pushe nur das, was keine Spur in der DB hinterlässt:** du bist **BLOCKIERT und produzierst nicht

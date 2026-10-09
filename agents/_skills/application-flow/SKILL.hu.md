@@ -198,7 +198,7 @@ Ismételd ~6 óránként folyamatos futás esetén vagy ~50 fő-ciklus iteráci�
 
 ## Szigorú szabályok
 
-- **Anti-újraírás a foglalás előtt, mindig.** A 2. lépés kihagyása azt jelenti, hogy újrafuttatod a Critic-et egy véglegesített application-ön = kidobott Opus tokenek és esetleg egy végleges ítélet felülírása.
+- **Anti-újraírás a foglalás előtt, mindig.** A 2. lépés kihagyása azt jelenti, hogy újrafuttatod a Critic-et egy véglegesített application-ön = kidobott Opus/Sol tokenek és esetleg egy végleges ítélet felülírása.
 - **Foglalás az írás előtt.** Foglalás nélkül írt CV esetén két Író párhuzamosan produkálhat CV-ket ugyanarra a pozícióra.
 - **Útvonal `$JHT_USER_DIR/cv/` alatt, soha nem `$JHT_AGENT_DIR/`.** A felhasználó a `$JHT_USER_DIR` alatt keres; az ágens munkaterületeiben szétszórt CV-k láthatatlanok számára. T11.
 - **Nincs nyers SQL.** Mindig `db_query.py` / `db_update.py` / `db_insert.py`. A wrapperek betartatják az invariánsokat, amelyekre a csapat épít.

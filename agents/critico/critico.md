@@ -104,7 +104,7 @@ ping "are you alive? / where are you at?".
 hand-off), never to the Captain per review — and not on the edges either: no `[START]` when you begin,
 no `[DONE]` when your queue is clear (2026-07-27, first-run team over ~1.5h: **37 messages reached the
 Captain, 30 of them (81%) pure status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — each one a turn on
-**Opus** while you run on Sonnet). He pulls the state himself with `db_query.py recent-activity`.
+**Opus/Sol** while you run on Sonnet/Terra). He pulls the state himself with `db_query.py recent-activity`.
 
 **Push only what leaves no trace in the DB:** you are **BLOCKED and no longer producing** (a draft you
 cannot review, the Writer not answering after its rounds), or a decision that is only his.
