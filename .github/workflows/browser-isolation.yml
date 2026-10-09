@@ -1,0 +1,120 @@
+name: Broker — login browser isolation
+
+# P2-3, design S: the login browser in a twin container with a uid of its
+# own, away from the broker's secrets. scripts/ci/browser_isolation.py
+# brings the stack up as the product does, opens a login view, finds
+# Chromium by role and attacks the broker from a process with Chromium's
+# uid. On today's design (Chromium is uid 1002 in the broker) it is RED by
+# design: the expected checks are declared in the script
+# (EXPECTED_RED_TODAY), and its last line says whether the red matches.
+
+on:
+  push:
+    branches:
+      - master
+      - master-arthur
+      - "ci-**"
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "shared/broker/**"
+      - "scripts/security/**"
+      - "scripts/ci/browser_isolation.py"
+      - "scripts/ci/broker_security_host.sh"
+      - "scripts/install.sh"
+      - ".github/workflows/browser-isolation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-isolation-docker:
+    name: A compromised Chromium against the broker (Docker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build the image (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:broker-sandbox
+          cache-from: type=gha
+
+      - name: Load the jht-broker AppArmor profile
+        run: |
+          sudo cp scripts/security/jht-broker.apparmor.txt /etc/apparmor.d/jht-broker
+          sudo apparmor_parser -r /etc/apparmor.d/jht-broker
+          sudo grep -x 'jht-broker (enforce)' /sys/kernel/security/apparmor/profiles
+
+      - name: install.sh installs the broker's profiles and compose overrides
+        run: bash scripts/ci/broker_security_host.sh
+
+      - name: Tools of the gate
+        run: sudo apt-get install -y -qq python3-yaml
+
+      - name: From Chromium's uid, the broker's secrets, processes, socket and loopback are out of reach
+        run: >-
+          python3 scripts/ci/browser_isolation.py docker jht:broker-sandbox docker-compose.yml
+          /etc/jht/security/compose-seccomp.yml /etc/jht/security/compose-apparmor.yml
+
+  browser-isolation-podman:
+    name: A compromised Chromium against the broker (rootless Podman)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build the image (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:broker-sandbox
+          cache-from: type=gha
+
+      - name: Hand the image to the runner user's rootless Podman
+        run: |
+          grep "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
+          podman system migrate
+          docker save jht:broker-sandbox | podman load | tee "$RUNNER_TEMP/loaded.txt"
+          sed -n 's/^Loaded image[s()]*: //p' "$RUNNER_TEMP/loaded.txt" | head -n 1 > "$RUNNER_TEMP/image-ref"
+          test -s "$RUNNER_TEMP/image-ref"
+
+      # install.sh's step asserts the AppArmor profile is loaded; under
+      # rootless Podman the gate adds only the seccomp override, as jht up.
+      - name: Load the jht-broker AppArmor profile
+        run: |
+          sudo cp scripts/security/jht-broker.apparmor.txt /etc/apparmor.d/jht-broker
+          sudo apparmor_parser -r /etc/apparmor.d/jht-broker
+
+      - name: install.sh installs the broker's profiles and compose overrides
+        run: bash scripts/ci/broker_security_host.sh
+
+      - name: Tools of the gate (podman-compose as jht pins it)
+        run: |
+          sudo apt-get install -y -qq python3-yaml
+          pipx install podman-compose==1.6.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: From Chromium's uid, the broker's secrets, processes, socket and loopback are out of reach
+        run: >-
+          python3 scripts/ci/browser_isolation.py podman "$(cat "$RUNNER_TEMP/image-ref")" docker-compose.yml
+          /etc/jht/security/compose-seccomp.yml
