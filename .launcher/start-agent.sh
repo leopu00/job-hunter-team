@@ -1009,7 +1009,9 @@ case "$PROVIDER" in
     # Codex non ha un --effort flag; l'effort passa via -c. Il modello invece
     # va passato separatamente: senza --model tutti i ruoli ereditavano il
     # default del CLI (gpt-5.6-sol), inclusi quelli calibrati su Terra.
-    CLI_ARGS="--yolo --model $codex_model -c model_reasoning_effort=$effort"
+    # project_doc_max_bytes: senza, Codex tronca AGENTS.md a 32 KiB (vedi
+    # JHT_CODEX_PROJECT_DOC_MAX_BYTES in spawn-lib.sh).
+    CLI_ARGS="--yolo --model $codex_model -c model_reasoning_effort=$effort -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi

@@ -325,6 +325,16 @@ except Exception:
 PYEOF
 }
 
+# Codex legge AGENTS.md solo fino a `project_doc_max_bytes` (default 32 KiB) e
+# il resto lo tronca senza dirlo. Misurato l'08/10 con `codex debug
+# prompt-input` (0.161): al Capitano arrivava il 37-39% del suo prompt
+# (83-89 KB secondo la lingua), all'Analista ~80%, alla Sentinella ~85%; le
+# regole in coda non esistevano per il modello. Il limite vale per la somma
+# degli AGENTS.md che Codex trova (quello globale piu' quello della workdir):
+# tests/test_codex_project_doc_budget.py tiene ogni prompt di ruolo, in ogni
+# lingua, sotto questo valore con un margine.
+JHT_CODEX_PROJECT_DOC_MAX_BYTES=131072
+
 # jht_spawn_repl_cmd
 #   Stampa il comando REPL del PROVIDER ATTIVO (non più codex hardcoded: su un
 #   setup claude, lanciare codex fallirebbe per CLI/auth assenti). effort=high
@@ -336,7 +346,7 @@ jht_spawn_repl_cmd() {
     provider="$(jht_spawn_active_provider)" || return 2
   fi
   case "$provider" in
-    openai|codex) printf '%s\n' "codex --yolo -c model_reasoning_effort=high" ;;
+    openai|codex) printf '%s\n' "codex --yolo -c model_reasoning_effort=high -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES" ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
