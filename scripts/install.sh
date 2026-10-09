@@ -1805,13 +1805,21 @@ maybe_onboard() {
 verify_test_image() {
   [ "$TEST_CHANNEL" -eq 1 ] || return 0
   local wanted="ghcr.io/leopu00/jht@$EXPECTED_IMAGE_DIGEST" digests
+  # The engine the runtime will run on. On the Mac's Podman path DOCKER_CLI
+  # stays "docker" (no Docker client is resolved there): the image must be
+  # pulled and checked inside the JHT machine, through its own connection,
+  # never in another Docker that happens to be installed.
+  local engine=("$DOCKER_CLI")
+  if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
+    engine=(podman --connection "$PODMAN_MACHINE_NAME")
+  fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would pull %s and require %s\n" "$IMAGE" "$wanted"
+    printf "  ${DIM}[dry-run]${RESET} would pull %s with %s and require %s\n" "$IMAGE" "${engine[*]}" "$wanted"
     return 0
   fi
   info "Pulling the test image $IMAGE..."
-  "$DOCKER_CLI" pull "$IMAGE" >/dev/null || fail "Cannot pull the test image $IMAGE."
-  digests="$("$DOCKER_CLI" image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null)" \
+  "${engine[@]}" pull "$IMAGE" >/dev/null || fail "Cannot pull the test image $IMAGE."
+  digests="$("${engine[@]}" image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null)" \
     || fail "Cannot inspect the test image $IMAGE."
   printf '%s\n' "$digests" | grep -Fqx "$wanted" \
     || fail "The test image $IMAGE is not $EXPECTED_IMAGE_DIGEST: nothing was installed."

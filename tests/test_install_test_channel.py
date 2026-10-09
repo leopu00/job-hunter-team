@@ -289,3 +289,44 @@ def test_image_is_verified_before_anything_is_published():
 
     assert main.index("verify_docker_works") < main.index("verify_test_image")
     assert main.index("verify_test_image") < main.index("download_runtime_files")
+
+
+def _fake_podman(fake_bin: Path, repo_digests: str) -> None:
+    podman = fake_bin / "podman"
+    podman.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        'printf \'%s\\n\' "$*" >> "$JHT_TEST_PODMAN_LOG"\n'
+        '[ "$1" = --connection ] || exit 64\n'
+        'case "$3" in\n'
+        "  pull) exit 0 ;;\n"
+        f"  image) printf '%s' {shlex.quote(repo_digests)} ;;\n"
+        "  *) exit 64 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    podman.chmod(0o755)
+
+
+@pytest.mark.parametrize("machine_digests, accepted", [(f"{PINNED}\n", True), (f"ghcr.io/leopu00/jht@{OTHER_DIGEST}\n", False)])
+def test_on_the_mac_podman_path_the_image_is_checked_inside_the_jht_machine(tmp_path, machine_digests, accepted):
+    # The Podman path leaves DOCKER_CLI at "docker": a Docker that happens to
+    # be installed (this fake one answers with the right digest) must not
+    # decide. The pull and the RepoDigests check go to the JHT machine.
+    fake_bin = _fake_bin(tmp_path, f"{PINNED}\n")
+    _fake_podman(fake_bin, machine_digests)
+    env = {**_env(tmp_path, fake_bin), "JHT_TEST_PODMAN_LOG": str(tmp_path / "podman.log")}
+    args = " ".join(map(shlex.quote, ["--runtime", "podman", *_channel()]))
+    script = (
+        f"JHT_INSTALLER_SOURCE_ONLY=1 . {shlex.quote(str(INSTALLER))} {args}\n"
+        'OS=macos; DOCKER_CLI=docker\n'
+        "verify_test_image\n"
+    )
+
+    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30)
+
+    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
+    calls = (tmp_path / "podman.log").read_text(encoding="utf-8").splitlines()
+    assert calls[0] == f"--connection jht-podman pull {TAG}"
+    assert calls[1].startswith("--connection jht-podman image inspect ")
+    assert not (tmp_path / "docker.log").exists()
