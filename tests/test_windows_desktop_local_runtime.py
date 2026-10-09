@@ -10,7 +10,9 @@ ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
 ACL_SELFTEST = ROOT / "scripts" / "windows-config-acl-selftest.ps1"
 PODMAN_COMPOSE = ROOT / "docker-compose.podman.yml"
 PODMAN_PROBE = ROOT / "scripts" / "podman-windows-probe.ps1"
+PODMAN_NETWORK = ROOT / "scripts" / "configure-podman-windows-network.ps1"
 SECURE_CONFIG_IO = ROOT / "cli" / "src" / "lib" / "secure-config-io.js"
+ONBOARDING = ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs"
 
 
 def _wrapper() -> str:
@@ -182,6 +184,39 @@ def test_only_explicit_up_wakes_the_podman_machine():
     assert up.index("Start-PodmanMachineForUp") < up.index("Require-Docker")
 
 
+def test_windows_onboarding_delegates_restart_to_wrapper_up():
+    onboarding = ONBOARDING.read_text(encoding="utf-8")
+    begin = onboarding.index("fn start_and_verify_local_container_with")
+    start = onboarding[begin : onboarding.index("fn prepare_impl", begin)]
+    assert "run(LocalCliOperation::Up, PREPARE_TIMEOUT)" in start
+    assert "podman.exe" not in start
+    assert "machine start" not in start
+
+
+def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
+    enabler = ENABLER.read_text(encoding="utf-8")
+    network = PODMAN_NETWORK.read_text(encoding="utf-8")
+    install_service = enabler.index("Install-JhtContainerService -PodmanPath")
+    install_task = enabler.index("Install-JhtStartupTask -PodmanPath", install_service)
+    assert install_service < install_task
+    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in enabler
+    assert "New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited" in enabler
+    assert '"machine start --update-connection=false $MachineName"' in enabler
+    assert "start --sig-proxy=false jht-broker jht-telegram jht" in enabler
+    assert "stop --time 30 jht jht-telegram jht-broker" in enabler
+    enabled = network[network.index("sudo systemctl enable") :]
+    for service in (
+        "jht-windows-egress-proxy.service",
+        "jht-windows-egress-proxy-broker.service",
+        "jht-windows-egress-proxy-telegram.service",
+        "jht-rootless-podman.service",
+    ):
+        assert service in enabled
+    assert "Restart=always" in network
+    assert '--connector "$connectorWsl"' in network
+    assert "Job Hunter Team - Start runtime" in _wrapper()
+
+
 def test_declining_dependency_installation_cannot_run_winget():
     """The desktop owns consent; without its opt-in flag scripts install nothing."""
     enabler = ENABLER.read_text(encoding="utf-8")
@@ -257,7 +292,7 @@ def test_container_lifecycle_is_detached_from_the_desktop_process():
     assert "Type=oneshot" in unit
     assert "RemainAfterExit=yes" in unit
     assert "ExecStart=/usr/bin/podman --remote" in unit
-    assert "start --sig-proxy=false jht" in unit
+    assert "start --sig-proxy=false jht-broker jht-telegram jht" in unit
     assert "WantedBy=multi-user.target" in unit
     assert "sudo systemctl enable jht-container.service" in enabler
 

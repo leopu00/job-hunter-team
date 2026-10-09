@@ -309,6 +309,99 @@ def test_up_names_why_the_machine_is_not_there(tmp_path, podman, docker, fail, c
 
 
 # ---------------------------------------------------------------------------
+# Windows logon: the host starts exactly the JHT machine without opening Tauri
+# ---------------------------------------------------------------------------
+
+STARTUP_TASK_BODY = r"""
+$script:Registered = $null
+function New-ScheduledTaskAction {
+  param($Execute, $Argument)
+  [pscustomobject]@{ Execute = $Execute; Arguments = $Argument }
+}
+function New-ScheduledTaskTrigger {
+  param([switch]$AtLogOn, $User)
+  if (-not $AtLogOn) { throw 'not an at-logon trigger' }
+  [pscustomobject]@{ UserId = $User }
+}
+function New-ScheduledTaskPrincipal {
+  param($UserId, $LogonType, $RunLevel)
+  [pscustomobject]@{ UserId = $UserId; LogonType = $LogonType; RunLevel = $RunLevel }
+}
+function New-ScheduledTaskSettingsSet {
+  param([switch]$Hidden, [switch]$StartWhenAvailable,
+        [switch]$AllowStartIfOnBatteries, [switch]$DontStopIfGoingOnBatteries,
+        $MultipleInstances, $ExecutionTimeLimit)
+  if (-not $StartWhenAvailable -or $MultipleInstances -ne 'IgnoreNew') { throw 'unsafe settings' }
+  [pscustomobject]@{ Hidden = [bool]$Hidden }
+}
+function Register-ScheduledTask {
+  param($TaskName, $Action, $Trigger, $Principal, $Settings, [switch]$Force)
+  if ($env:REGISTER_FAIL -eq '1') { throw 'registration failed' }
+  if (-not $Force) { throw 'task is not idempotent' }
+  $script:Registered = [pscustomobject]@{
+    TaskName = $TaskName; Actions = @($Action); Triggers = @($Trigger)
+    Principal = $Principal; Settings = $Settings
+  }
+}
+function Get-ScheduledTask { param($TaskName, $ErrorAction) $script:Registered }
+Install-JhtStartupTask -PodmanPath 'C:\Program Files\RedHat\Podman\podman.exe' `
+  -MachineName 'jht-podman' -UserId 'S-1-5-21-test'
+[Console]::Out.WriteLine("TASK=$($script:Registered.TaskName)")
+[Console]::Out.WriteLine("EXEC=$($script:Registered.Actions[0].Execute)")
+[Console]::Out.WriteLine("ARGS=$($script:Registered.Actions[0].Arguments)")
+[Console]::Out.WriteLine("USER=$($script:Registered.Principal.UserId)")
+"""
+
+
+def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_path):
+    result, calls = _run(
+        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        {"REGISTER_FAIL": "0"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls == []
+    assert "TASK=Job Hunter Team - Start runtime" in result.stdout
+    assert "EXEC=C:\\Program Files\\RedHat\\Podman\\podman.exe" in result.stdout
+    assert "ARGS=machine start --update-connection=false jht-podman" in result.stdout
+    assert "USER=S-1-5-21-test" in result.stdout
+
+
+def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
+    result, _ = _run(
+        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        {"REGISTER_FAIL": "1"},
+    )
+    assert result.returncode != 0
+    assert "registration failed" in result.stderr
+
+
+REMOVE_STARTUP_TASK_BODY = r"""
+$script:Present = $true
+function Get-ScheduledTask {
+  param($TaskName, $ErrorAction)
+  if ($script:Present) { [pscustomobject]@{ TaskName = $TaskName } }
+}
+function Unregister-ScheduledTask {
+  param($TaskName, [switch]$Confirm, $ErrorAction)
+  if ($TaskName -cne 'Job Hunter Team - Start runtime') { throw 'wrong task' }
+  if ($Confirm) { throw 'interactive confirmation requested' }
+  if ($env:UNREGISTER_FAIL -eq '1') { throw 'cannot unregister' }
+  $script:Present = $false
+}
+if ((Remove-JhtStartupTask) -ne ($env:UNREGISTER_FAIL -ne '1')) { throw 'wrong removal result' }
+"""
+
+
+@pytest.mark.parametrize("fails", [False, True], ids=["removed-and-verified", "failure-is-reported"])
+def test_uninstall_removes_and_verifies_the_exact_logon_task(tmp_path, fails):
+    result, _ = _run(
+        tmp_path, WRAPPER, ["Remove-JhtStartupTask"], REMOVE_STARTUP_TASK_BODY,
+        {"UNREGISTER_FAIL": "1" if fails else "0"},
+    )
+    assert result.returncode == 0, result.stderr
+
+
+# ---------------------------------------------------------------------------
 # The manifest keys: one list in four places, two languages
 # ---------------------------------------------------------------------------
 

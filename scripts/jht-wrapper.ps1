@@ -121,6 +121,16 @@ function Remove-JhtUserEnvironment {
   } catch { return $false }
 }
 
+function Remove-JhtStartupTask {
+  param([string]$TaskName = 'Job Hunter Team - Start runtime')
+  try {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if (-not $task) { return $true }
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+    return -not [bool](Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
+  } catch { return $false }
+}
+
 function Invoke-JhtWindowsUninstall {
   param(
     [string[]]$UninstallArgs,
@@ -166,6 +176,14 @@ function Invoke-JhtWindowsUninstall {
 
   Write-JhtUninstallPhase uninstall_machine
   $machineState = Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
+  # Remove the logon trigger before deleting the machine, otherwise a concurrent
+  # sign-in could recreate activity while uninstall is tearing the runtime down.
+  if (-not (Remove-JhtStartupTask)) {
+    if ($machineState -ne 'absent') { Write-JhtUninstallLeft machine }
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
+    Write-JhtUninstallLeft commands
+    return 24
+  }
   if ($machineState -eq 'present') {
     if (-not $PodmanPath -or -not $WslPath) {
       Write-JhtUninstallLeft machine

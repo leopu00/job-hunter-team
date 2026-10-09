@@ -186,6 +186,43 @@ function Install-JhtContainerService {
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
+function Install-JhtStartupTask {
+  param(
+    [Parameter(Mandatory)][string]$PodmanPath,
+    [Parameter(Mandatory)][string]$MachineName,
+    [Parameter(Mandatory)][string]$UserId
+  )
+  $taskName = 'Job Hunter Team - Start runtime'
+  $arguments = "machine start --update-connection=false $MachineName"
+  $action = New-ScheduledTaskAction -Execute $PodmanPath -Argument $arguments
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
+  $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
+  $settings = New-ScheduledTaskSettingsSet -Hidden -StartWhenAvailable `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit ([TimeSpan]::FromMinutes(10))
+  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+    -Principal $principal -Settings $settings -Force | Out-Null
+
+  # Registration is part of the reboot contract, not a best-effort hint. Check
+  # the exact executable, machine and user before publishing a successful install.
+  $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+  $registeredActions = @($registered.Actions)
+  $registeredTriggers = @($registered.Triggers)
+  $sameExecutable = $registeredActions.Count -eq 1 -and
+    ([IO.Path]::GetFullPath([string]$registeredActions[0].Execute)).Equals(
+      [IO.Path]::GetFullPath($PodmanPath), [StringComparison]::OrdinalIgnoreCase)
+  if (-not $sameExecutable -or
+      ([string]$registeredActions[0].Arguments) -cne $arguments -or
+      $registeredTriggers.Count -ne 1 -or
+      ([string]$registeredTriggers[0].UserId) -cne $UserId -or
+      ([string]$registered.Principal.UserId) -cne $UserId -or
+      ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
+      ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
+      -not [bool]$registered.Settings.Hidden) {
+    throw "JHT startup task verification failed: $taskName"
+  }
+}
+
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
   try {
@@ -302,8 +339,8 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
-ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht
-ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht
+ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht
+ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
 TimeoutStartSec=90
 TimeoutStopSec=45
 
@@ -362,5 +399,8 @@ if ($metadataRepaired -or -not (& $Podman --connection $MachineName ps --format 
 }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
+$currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+if (-not $currentUserSid) { throw 'Cannot identify the Windows user for runtime startup.' }
+Install-JhtStartupTask -PodmanPath $Podman -MachineName $MachineName -UserId $currentUserSid
 
 Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green

@@ -34,6 +34,8 @@ def test_uninstall_is_an_early_fixed_scope_protocol():
     assert "$machineName = 'jht-podman'" in uninstall
     assert "podman-machine-$MachineName" in uninstall
     assert "machine rm --force $machineName" in uninstall
+    assert "Remove-JhtStartupTask" in uninstall
+    assert "Job Hunter Team - Start runtime" in uninstall
     assert "JHT_RUNTIME_DIR" not in uninstall
     assert "JHT_PODMAN_MACHINE" in uninstall  # removed, never used as a target
     assert "Docker.DockerDesktop" not in uninstall

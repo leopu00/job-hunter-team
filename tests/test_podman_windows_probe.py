@@ -207,11 +207,13 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "Requires=jht-windows-egress-proxy.service" in source
     assert "After=jht-windows-egress-proxy.service" in source
     assert "Requires=jht-rootless-podman.service" in source
-    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht" in source
-    assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht" in source
+    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht" in source
+    assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker" in source
     assert "WantedBy=multi-user.target" in source
     assert "sudo systemctl enable jht-container.service" in source
     assert "sudo systemctl start jht-container.service" in source
+    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in source
+    assert "Install-JhtStartupTask -PodmanPath $Podman" in source
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
