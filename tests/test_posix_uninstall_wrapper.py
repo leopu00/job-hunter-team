@@ -16,6 +16,7 @@ so no test can ever reach the real Podman or Docker of the machine it runs on.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -64,14 +65,23 @@ esac
 exit 90
 """
 
-# Objects: one "<kind> <id> <project>" per line in $FAKE_STATE/objects.
+# Objects: one "<kind> <id> <project> <logical>" per line in $FAKE_STATE/objects;
+# <logical> is the Compose service, network or volume name.
 FAKE_DOCKER = """#!/bin/sh
 printf 'docker %s\\n' "$*" >> "$FAKE_LOG"
 objects="$FAKE_STATE/objects"
 touch "$objects"
 list() {
-  [ "$3:$4" = "--filter:label=com.docker.compose.project=jht" ] || exit 93
-  awk -v kind="$1" '$1 == kind && $3 == "jht" { print $2 }' "$objects"
+  kind="$1"; shift
+  case "$1:$3" in --filter:--filter) ;; *) exit 93 ;; esac
+  case "$2" in label=com.docker.compose.project=*) project="${2#*=*=}" ;; *) exit 93 ;; esac
+  case "$kind:$4" in
+    container:label=com.docker.compose.service=*|network:label=com.docker.compose.network=*|volume:label=com.docker.compose.volume=*)
+      logical="${4#*=*=}" ;;
+    *) exit 93 ;;
+  esac
+  awk -v kind="$kind" -v project="$project" -v logical="$logical" \\
+    '$1 == kind && $3 == project && $4 == logical { print $2 }' "$objects"
 }
 drop() {
   awk -v kind="$1" -v id="$2" '!($1 == kind && $2 == id)' "$objects" > "$objects.new"
@@ -84,15 +94,19 @@ case "$1" in
     if [ -f "$FAKE_STATE/endpoint" ]; then cat "$FAKE_STATE/endpoint"; else echo unix:///var/run/docker.sock; fi
     exit 0 ;;
   info) [ ! -f "$FAKE_STATE/docker-down" ] || exit 1; exit 0 ;;
-  ps) [ "$2" = -aq ] || exit 94; shift 2; list container "" "$@" ;;
+  ps) [ "$2" = -aq ] || exit 94; shift 2; list container "$@" ;;
   rm) [ "$2" = -f ] || exit 95; drop container "$3" ;;
   network|volume)
     kind="$1"
     case "$2" in
-      ls) [ "$3" = -q ] || exit 96; shift 3; list "$kind" "" "$@" ;;
+      ls) [ "$3" = -q ] || exit 96; shift 3; list "$kind" "$@" ;;
       rm)
-        # A volume still used by a container cannot go: removal order matters.
-        if [ "$kind" = volume ] && grep -q '^container .* jht$' "$objects"; then exit 1; fi
+        # A volume still mounted by a JHT container of its project cannot go:
+        # removal order matters.
+        if [ "$kind" = volume ] && awk -v id="$3" '
+            $1 == "volume" && $2 == id { project = $3 }
+            $1 == "container" && $4 ~ /^jht(-broker|-telegram)?$/ { owners[$3] = 1 }
+            END { exit !(project in owners) }' "$objects"; then exit 1; fi
         drop "$kind" "$3" ;;
       *) exit 97 ;;
     esac ;;
@@ -244,28 +258,49 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
 
 
 @pytest.mark.parametrize("kernel", ["Darwin", "Linux"])
-def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path, kernel: str) -> None:
+@pytest.mark.parametrize("project", ["host-runtime", "jht"])
+def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path, kernel: str, project: str) -> None:
+    """Docker names the project after the runtime folder (host-runtime) because
+    compose_file passes --project-directory; Podman and `name: jht` use jht."""
     box = Box(tmp_path, kernel)
     if kernel == "Darwin":
         box.select("docker")  # Colima: install.sh writes the marker on macOS only
         box.machines("colima-default*")
+    p = project
     box.objects(
-        "container c1 jht", "container c2 jht", "container other1 someone",
-        "network n1 jht", "network other2 someone",
-        "volume jht_jht-broker-secrets jht", "volume jht_jht-telegram-secrets jht",
-        "volume other_data someone",
+        f"container c1 {p} jht", f"container c2 {p} jht-broker", f"container c3 {p} jht-telegram",
+        f"network n1 {p} default",
+        f"volume {p}_jht-secrets {p} jht-secrets",
+        f"volume {p}_jht-telegram-secrets {p} jht-telegram-secrets",
+        f"volume {p}_jht-runtime-mask {p} jht-runtime-mask",
+        # Someone else's project, and someone else's things inside a project
+        # that happens to share the generic name.
+        "container other1 someone jht", "volume other_data someone jht-secrets",
+        f"container stranger {p} web", f"volume {p}_cache {p} cache", f"network n2 {p} frontend",
     )
 
     result = box.run("uninstall", "--confirm")
 
     assert result.returncode == 0, result.stderr
     assert box.remaining("objects").splitlines() == [
-        "container other1 someone", "network other2 someone", "volume other_data someone",
+        "container other1 someone jht", "volume other_data someone jht-secrets",
+        f"container stranger {p} web", f"volume {p}_cache {p} cache", f"network n2 {p} frontend",
     ]
     assert not any("prune" in call for call in box.calls())
     assert not any(call.startswith("podman machine rm") for call in box.calls())
     assert not box.runtime.exists() and not box.wrapper.exists()
     assert_user_data_kept(box)
+
+
+def test_the_cleanup_names_match_the_compose_file() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    services = re.findall(r"^  ([a-z][a-z0-9-]*):\n", compose.split("\nvolumes:\n")[0], re.M)
+    volumes = re.findall(r"^  ([a-z][a-z0-9-]*):\s*$", compose.split("\nvolumes:\n", 1)[1].split("\n\n")[0], re.M)
+    line = lambda name: next(l for l in SOURCE.splitlines() if l.startswith(f"{name}=")).split("=", 1)[1].strip('"').split()
+    assert sorted(line("UNINSTALL_SERVICES")) == sorted(services)
+    assert sorted(line("UNINSTALL_VOLUMES")) == sorted(volumes)
+    assert "--project-directory \"$RUNTIME_DIR\"" in SOURCE  # why host-runtime is a project name
+    assert line("UNINSTALL_PROJECTS") == ["jht", "host-runtime"]
 
 
 @pytest.mark.parametrize(
@@ -281,7 +316,7 @@ def test_a_docker_that_is_not_this_computer_is_never_cleaned(
     tmp_path: Path, context: str | None, docker_host: str | None, named: str
 ) -> None:
     box = Box(tmp_path, "Linux")
-    box.objects("container c1 jht", "volume jht_jht-broker-secrets jht")
+    box.objects("container c1 host-runtime jht", "volume v1 host-runtime jht-secrets")
     if context:
         (box.state / "endpoint").write_text(context + "\n", encoding="utf-8")
     extra = {"DOCKER_HOST": docker_host} if docker_host else {}
@@ -291,40 +326,40 @@ def test_a_docker_that_is_not_this_computer_is_never_cleaned(
     assert result.returncode == 24
     assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_LEFT machine", "JHT_LEFT runtime", "JHT_LEFT commands"]
     assert named in result.stderr
-    assert box.remaining("objects").splitlines() == ["container c1 jht", "volume jht_jht-broker-secrets jht"]
+    assert box.remaining("objects").splitlines() == ["container c1 host-runtime jht", "volume v1 host-runtime jht-secrets"]
     assert not any(call.split()[1:2] in (["rm"], ["volume"], ["network"], ["ps"]) for call in box.calls())
     assert box.runtime.is_dir() and box.wrapper.is_file()
 
 
 def test_an_unknown_docker_endpoint_is_never_cleaned(tmp_path: Path) -> None:
     box = Box(tmp_path, "Linux")
-    box.objects("volume jht_jht-broker-secrets jht")
+    box.objects("volume v1 host-runtime jht-secrets")
     (box.state / "context-fails").write_text("", encoding="utf-8")
 
     result = box.run("uninstall", "--confirm")
 
     assert result.returncode == 24
     assert "JHT_LEFT machine" in result.stdout
-    assert box.remaining("objects") == "volume jht_jht-broker-secrets jht\n"
+    assert box.remaining("objects") == "volume v1 host-runtime jht-secrets\n"
 
 
 def test_mac_podman_skips_a_remote_docker_and_still_removes_the_machine(tmp_path: Path) -> None:
     box = Box(tmp_path, "Darwin")
     box.select("podman")
     box.machines("jht-podman*")
-    box.objects("volume jht_jht-broker-secrets jht")
+    box.objects("volume v1 host-runtime jht-secrets")
     (box.state / "endpoint").write_text("ssh://me@my-vps.invalid\n", encoding="utf-8")
 
     result = box.run("uninstall", "--confirm")
 
     assert result.returncode == 0, result.stderr
     assert box.remaining("machines") == ""
-    assert box.remaining("objects") == "volume jht_jht-broker-secrets jht\n"
+    assert box.remaining("objects") == "volume v1 host-runtime jht-secrets\n"
 
 
 def test_a_docker_daemon_that_does_not_answer_keeps_everything_for_retry(tmp_path: Path) -> None:
     box = Box(tmp_path, "Linux")
-    box.objects("container c1 jht", "volume jht_jht-broker-secrets jht")
+    box.objects("container c1 host-runtime jht", "volume v1 host-runtime jht-secrets")
     (box.state / "docker-down").write_text("", encoding="utf-8")
     profile = box.home / ".profile"
     profile.write_text(RC_BLOCK.format(bin=box.bin), encoding="utf-8")
@@ -336,7 +371,7 @@ def test_a_docker_daemon_that_does_not_answer_keeps_everything_for_retry(tmp_pat
     assert "segreti" in stuck.stderr
     assert box.runtime.is_dir() and box.wrapper.is_file()
     assert "export PATH" in profile.read_text(encoding="utf-8")
-    assert "volume jht_jht-broker-secrets jht" in box.remaining("objects")
+    assert "volume v1 host-runtime jht-secrets" in box.remaining("objects")
 
     (box.state / "docker-down").unlink()
     retried = box.run("uninstall", "--confirm")

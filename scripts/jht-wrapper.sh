@@ -2793,7 +2793,7 @@ fi
 # Si toglie solo cio' che l'installer ha messo, da percorsi fissi e mai da
 # override d'ambiente: la macchina Podman jht-podman per nome esplicito
 # (mai la connessione di default, mai altre macchine), oppure container, reti
-# e volumi del progetto Compose jht per label (mai un prune); poi il runtime
+# e volumi del progetto Compose di JHT per label (mai un prune); poi il runtime
 # host, le righe PATH che install.sh ha aggiunto ai file rc e il comando jht,
 # per ultimo, cosi' un fallimento lascia il wrapper per riprovare. Restano
 # ~/.jht, Documenti, Homebrew, Podman, podman-compose, Docker, Colima e le
@@ -2806,7 +2806,7 @@ UNINSTALL_LOSS="Vengono cancellati anche la password della posta, la sessione Li
 
 uninstall_usage() {
   err "uso: jht uninstall --confirm"
-  info "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi del progetto jht, il runtime host e il comando jht."
+  info "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht."
   info "$UNINSTALL_LOSS"
   info "Restano anche Podman, podman-compose, Docker, Colima e Homebrew."
 }
@@ -2816,7 +2816,7 @@ uninstall_phase() { printf 'JHT_PHASE %s\n' "$1"; }
 uninstall_left() {
   printf 'JHT_LEFT %s\n' "$1"
   case "$1" in
-    machine) err "Non rimossi: la macchina Podman jht-podman o i container e i volumi del progetto jht, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
+    machine) err "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     runtime) err "Non rimosso: il runtime host di JHT." ;;
     commands) err "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
   esac
@@ -2948,20 +2948,51 @@ uninstall_podman_machine_state() {
   printf 'absent\n'
 }
 
+# Il progetto Compose ha due nomi: jht con Podman (e in futuro ovunque) e,
+# con Docker, il nome della cartella del runtime (host-runtime), perche' li'
+# compose_file usa --project-directory. "host-runtime" da solo e' troppo
+# generico per cancellare: oltre al progetto si chiede il servizio, il volume
+# logico o la rete di default di QUESTO compose, come fa `jht reset`.
+UNINSTALL_PROJECTS="jht host-runtime"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox"
+
 uninstall_docker_ids() {
-  local docker_bin="$1" kind="$2" ids id
-  case "$kind" in
-    container) ids="$("$docker_bin" ps -aq --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
-    network) ids="$("$docker_bin" network ls -q --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
-    volume) ids="$("$docker_bin" volume ls -q --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
-  esac
-  for id in $ids; do
+  local docker_bin="$1" kind="$2" project name ids id
+  for project in $UNINSTALL_PROJECTS; do
+    case "$kind" in
+      container)
+        for name in $UNINSTALL_SERVICES; do
+          ids="$("$docker_bin" ps -aq --filter "label=com.docker.compose.project=$project" \
+            --filter "label=com.docker.compose.service=$name")" || return 1
+          uninstall_print_ids $ids || return 1
+        done
+        ;;
+      network)
+        ids="$("$docker_bin" network ls -q --filter "label=com.docker.compose.project=$project" \
+          --filter "label=com.docker.compose.network=default")" || return 1
+        uninstall_print_ids $ids || return 1
+        ;;
+      volume)
+        for name in $UNINSTALL_VOLUMES; do
+          ids="$("$docker_bin" volume ls -q --filter "label=com.docker.compose.project=$project" \
+            --filter "label=com.docker.compose.volume=$name")" || return 1
+          uninstall_print_ids $ids || return 1
+        done
+        ;;
+    esac
+  done
+}
+
+uninstall_print_ids() {
+  local id
+  for id in "$@"; do
     case "$id" in ''|*[!A-Za-z0-9_.-]*) return 1 ;; esac
     printf '%s\n' "$id"
   done
 }
 
-# Container, reti e volumi del progetto jht, nell'ordine in cui si liberano.
+# Container, reti e volumi di JHT, nell'ordine in cui si liberano.
 uninstall_docker_project() {
   local docker_bin="$1" kind id ids
   for kind in container network volume; do
