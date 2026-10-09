@@ -40,6 +40,19 @@
     ],
     "windows": {
       "nsis": {
+        "languages": [
+          "English",
+          "Italian",
+          "German",
+          "Spanish",
+          "French",
+          "Portuguese",
+          "Hungarian"
+        ],
+        "customLanguageFiles": {
+          "Hungarian": "windows/nsis-hungarian.nsi"
+        },
+        "displayLanguageSelector": false,
         "installerHooks": "windows/installer-hooks.nsi"
       }
     }
