@@ -73,8 +73,17 @@ const T: Record<
     revoking: string;
     confirmRevoke: string;
     errName: string;
-    errHttp: string; // {status}
+    // Errori di «Genera token» e «Revoca»: mai il corpo grezzo della route
+    // (`internal`, o un suo messaggio in italiano), sempre una frase che dice
+    // cosa è successo e cosa resta vero.
+    errCreate: string;
+    errNotRevoked: string;
+    errServer: string;
+    errSession: string;
+    errRateLimit: string;
+    errNotFound: string;
     errNetwork: string;
+    errLoad: string;
     loading: string;
     clientBuild: string;
     clientUnknown: string;
@@ -105,8 +114,14 @@ const T: Record<
     confirmRevoke:
       "Revocare questo token? I dispositivi che lo usano si scollegano.",
     errName: "Nome obbligatorio (1-100 caratteri).",
-    errHttp: "Errore HTTP {status}",
-    errNetwork: "Errore di rete",
+    errCreate: "Token non creato.",
+    errNotRevoked: "Il token NON è stato revocato: è ancora attivo.",
+    errServer: "Errore del server, riprova tra poco.",
+    errSession: "Sessione scaduta: ricarica la pagina e accedi di nuovo.",
+    errRateLimit: "Troppe richieste: riprova fra un minuto.",
+    errNotFound: "Token non trovato per questo account.",
+    errNetwork: "Errore di rete: controlla la connessione.",
+    errLoad: "Impossibile caricare i token: ricarica la pagina.",
     loading: "Caricamento…",
     clientBuild: "Versione",
     clientUnknown: "non ancora dichiarata",
@@ -135,8 +150,14 @@ const T: Record<
     revoking: "Revoking…",
     confirmRevoke: "Revoke this token? Devices using it will disconnect.",
     errName: "Name required (1-100 characters).",
-    errHttp: "HTTP error {status}",
-    errNetwork: "Network error",
+    errCreate: "Token not created.",
+    errNotRevoked: "The token was NOT revoked: it is still active.",
+    errServer: "Server error, try again shortly.",
+    errSession: "Session expired: reload the page and sign in again.",
+    errRateLimit: "Too many requests: try again in a minute.",
+    errNotFound: "Token not found for this account.",
+    errNetwork: "Network error: check your connection.",
+    errLoad: "Could not load the tokens: reload the page.",
     loading: "Loading…",
     clientBuild: "Build",
     clientUnknown: "not declared yet",
@@ -166,8 +187,14 @@ const T: Record<
     confirmRevoke:
       "¿Revocar este token? Los dispositivos que lo usan se desconectarán.",
     errName: "Nombre obligatorio (1-100 caracteres).",
-    errHttp: "Error HTTP {status}",
-    errNetwork: "Error de red",
+    errCreate: "Token no creado.",
+    errNotRevoked: "El token NO se ha revocado: sigue activo.",
+    errServer: "Error del servidor, inténtalo de nuevo en un momento.",
+    errSession: "Sesión caducada: recarga la página e inicia sesión de nuevo.",
+    errRateLimit: "Demasiadas solicitudes: inténtalo de nuevo en un minuto.",
+    errNotFound: "Token no encontrado para esta cuenta.",
+    errNetwork: "Error de red: comprueba la conexión.",
+    errLoad: "No se pudieron cargar los tokens: recarga la página.",
     loading: "Cargando…",
     clientBuild: "Versión",
     clientUnknown: "aún no declarada",
@@ -197,8 +224,14 @@ const T: Record<
     confirmRevoke:
       "Révoquer ce token ? Les appareils qui l'utilisent seront déconnectés.",
     errName: "Nom obligatoire (1-100 caractères).",
-    errHttp: "Erreur HTTP {status}",
-    errNetwork: "Erreur réseau",
+    errCreate: "Token non créé.",
+    errNotRevoked: "Le token n'a PAS été révoqué : il est toujours actif.",
+    errServer: "Erreur du serveur, réessayez dans un instant.",
+    errSession: "Session expirée : rechargez la page et reconnectez-vous.",
+    errRateLimit: "Trop de requêtes : réessayez dans une minute.",
+    errNotFound: "Token introuvable pour ce compte.",
+    errNetwork: "Erreur réseau : vérifiez votre connexion.",
+    errLoad: "Impossible de charger les tokens : rechargez la page.",
     loading: "Chargement…",
     clientBuild: "Version",
     clientUnknown: "pas encore déclarée",
@@ -228,8 +261,15 @@ const T: Record<
     confirmRevoke:
       "Diesen Token widerrufen? Geräte, die ihn nutzen, werden getrennt.",
     errName: "Name erforderlich (1-100 Zeichen).",
-    errHttp: "HTTP-Fehler {status}",
-    errNetwork: "Netzwerkfehler",
+    errCreate: "Token nicht erstellt.",
+    errNotRevoked: "Der Token wurde NICHT widerrufen: Er ist weiterhin aktiv.",
+    errServer: "Serverfehler, versuche es gleich noch einmal.",
+    errSession:
+      "Sitzung abgelaufen: Lade die Seite neu und melde dich erneut an.",
+    errRateLimit: "Zu viele Anfragen: Versuche es in einer Minute erneut.",
+    errNotFound: "Token für dieses Konto nicht gefunden.",
+    errNetwork: "Netzwerkfehler: Prüfe deine Verbindung.",
+    errLoad: "Tokens konnten nicht geladen werden: Lade die Seite neu.",
     loading: "Laden…",
     clientBuild: "Version",
     clientUnknown: "noch nicht angegeben",
@@ -259,8 +299,15 @@ const T: Record<
     confirmRevoke:
       "Visszavonod ezt a tokent? Az azt használó eszközök lecsatlakoznak.",
     errName: "Név kötelező (1-100 karakter).",
-    errHttp: "HTTP {status} hiba",
-    errNetwork: "Hálózati hiba",
+    errCreate: "A token nem jött létre.",
+    errNotRevoked: "A token NEM lett visszavonva: továbbra is aktív.",
+    errServer: "Szerverhiba, próbáld újra kicsit később.",
+    errSession:
+      "A munkamenet lejárt: töltsd újra az oldalt, és jelentkezz be újra.",
+    errRateLimit: "Túl sok kérés: próbáld újra egy perc múlva.",
+    errNotFound: "A token nem található ehhez a fiókhoz.",
+    errNetwork: "Hálózati hiba: ellenőrizd a kapcsolatot.",
+    errLoad: "A tokenek nem tölthetők be: töltsd újra az oldalt.",
     loading: "Betöltés…",
     clientBuild: "Verzió",
     clientUnknown: "még nincs megadva",
@@ -290,14 +337,31 @@ const T: Record<
     confirmRevoke:
       "Revogar este token? Os dispositivos que o usam serão desligados.",
     errName: "Nome obrigatório (1-100 caracteres).",
-    errHttp: "Erro HTTP {status}",
-    errNetwork: "Erro de rede",
+    errCreate: "Token não criado.",
+    errNotRevoked: "O token NÃO foi revogado: continua ativo.",
+    errServer: "Erro do servidor, tenta novamente daqui a pouco.",
+    errSession:
+      "Sessão expirada: recarrega a página e inicia sessão novamente.",
+    errRateLimit: "Demasiados pedidos: tenta novamente daqui a um minuto.",
+    errNotFound: "Token não encontrado para esta conta.",
+    errNetwork: "Erro de rede: verifica a ligação.",
+    errLoad: "Não foi possível carregar os tokens: recarrega a página.",
     loading: "A carregar…",
     clientBuild: "Versão",
     clientUnknown: "ainda não declarada",
     clientCapabilities: "Funções",
   },
 };
+
+type Strings = (typeof T)[Locale];
+
+/** Il motivo di una risposta non riuscita, detto all'utente. */
+function failureReason(t: Strings, status: number): string {
+  if (status === 401) return t.errSession;
+  if (status === 404) return t.errNotFound;
+  if (status === 429) return t.errRateLimit;
+  return t.errServer;
+}
 
 export default function CloudTokensClient() {
   const locale = useLocale();
@@ -308,18 +372,27 @@ export default function CloudTokensClient() {
   const [createState, setCreateState] = useState<CreateState>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
+  // Una lista che non si carica NON è una lista vuota: «Nessun token attivo»
+  // dopo una revoca fallita direbbe che il token non c'è più. Chi non riesce
+  // a leggere tiene la lista che aveva e lo dice.
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/cloud-sync/tokens");
       if (!res.ok) {
-        setTokens([]);
+        setLoadError(true);
         return;
       }
       const data = await res.json();
       setTokens(data.tokens ?? []);
+      setLoadError(false);
     } catch {
-      setTokens([]);
+      setLoadError(true);
     }
   }, []);
 
@@ -343,12 +416,12 @@ export default function CloudTokensClient() {
         body: JSON.stringify({ name: trimmed }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setCreateState({
-          kind: "error",
-          message:
-            body.error || t.errHttp.replace("{status}", String(res.status)),
-        });
+      if (!res.ok || typeof body.token !== "string") {
+        // Il 400 della route riguarda il nome (l'unico campo che la pagina
+        // manda); il resto non va mostrato com'è: `internal` non dice niente.
+        const reason =
+          res.status === 400 ? t.errName : failureReason(t, res.status);
+        setCreateState({ kind: "error", message: `${t.errCreate} ${reason}` });
         return;
       }
       setCreateState({
@@ -358,21 +431,45 @@ export default function CloudTokensClient() {
       });
       setName("");
       refresh();
-    } catch (err) {
+    } catch {
       setCreateState({
         kind: "error",
-        message: err instanceof Error ? err.message : t.errNetwork,
+        message: `${t.errCreate} ${t.errNetwork}`,
       });
     }
   }
 
+  // Revocato solo se la route lo dice ({ ok: true }). Prima la risposta non
+  // veniva letta: una revoca fallita (rete, 404, 500, permessi) lasciava il
+  // token attivo e la pagina andava avanti come se niente fosse, proprio con
+  // chi revoca un token che teme sia uscito. Ora il token resta in lista,
+  // attivo, con la frase che lo dice.
   async function handleRevoke(id: string) {
     if (!window.confirm(t.confirmRevoke)) return;
+    setRevokeError(null);
     setRevokingId(id);
     try {
-      await fetch(`/api/cloud-sync/tokens?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
+      let res: Response;
+      try {
+        res = await fetch(
+          `/api/cloud-sync/tokens?id=${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+          },
+        );
+      } catch {
+        setRevokeError({ id, message: `${t.errNotRevoked} ${t.errNetwork}` });
+        return;
+      }
+      const body = await res.json().catch(() => null);
+      if (!res.ok || body?.ok !== true) {
+        setRevokeError({
+          id,
+          message: `${t.errNotRevoked} ${failureReason(t, res.status)}`,
+        });
+        return;
+      }
+      setTokens((list) => list?.filter((tok) => tok.id !== id) ?? list);
       await refresh();
     } finally {
       setRevokingId(null);
@@ -456,6 +553,7 @@ export default function CloudTokensClient() {
 
         {createState.kind === "error" && (
           <div
+            role="alert"
             className="mt-3 text-[11px]"
             style={{ color: "var(--color-red)" }}
           >
@@ -498,7 +596,16 @@ export default function CloudTokensClient() {
         <h2 className="text-[10px] uppercase tracking-wider text-[var(--color-dim)] mb-2">
           {t.existingTitle}
         </h2>
-        {tokens === null && (
+        {loadError && (
+          <div
+            role="alert"
+            className="mb-2 text-[11px]"
+            style={{ color: "var(--color-red)" }}
+          >
+            {t.errLoad}
+          </div>
+        )}
+        {tokens === null && !loadError && (
           <div className="text-[11px] text-[var(--color-dim)]">{t.loading}</div>
         )}
         {tokens !== null && tokens.length === 0 && (
@@ -548,6 +655,15 @@ export default function CloudTokensClient() {
                     expiresAt={tok.expires_at}
                   />
                   <TokenInactivityNotice locale={locale} token={tok} />
+                  {revokeError?.id === tok.id && (
+                    <div
+                      role="alert"
+                      className="mt-1 text-[11px]"
+                      style={{ color: "var(--color-red)" }}
+                    >
+                      {revokeError.message}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => handleRevoke(tok.id)}
