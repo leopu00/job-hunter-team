@@ -311,15 +311,19 @@ def _launch_browser(playwright):
 
 
 def sandboxed(text: str) -> bool:
-    """chrome://sandbox, read as text: Chromium's own verdict. Both layers must
-    say Yes (the namespace sandbox and seccomp-bpf), and the verdict must be
-    the positive one: "You are not adequately sandboxed!" contains the
-    positive words too."""
+    """chrome://sandbox, read as text: Chromium's own verdict. Layer 1 must be
+    the namespace sandbox, with PID and network namespaces, layer 2 seccomp-bpf,
+    and the verdict the positive one: "You are not adequately sandboxed!"
+    contains the positive words too. The rows are the ones Chromium prints
+    (measured on the broker-sandbox CI job, run 37873589868):
+    "Layer 1 Sandbox  Namespace", "PID namespaces  Yes", ..."""
     flat = " ".join(text.split()).lower()
     return (
         "you are adequately sandboxed" in flat
         and "not adequately sandboxed" not in flat
-        and re.search(r"namespace sandbox\W*yes\b", flat) is not None
+        and re.search(r"layer 1 sandbox\W*namespace\b", flat) is not None
+        and re.search(r"pid namespaces\W*yes\b", flat) is not None
+        and re.search(r"network namespaces\W*yes\b", flat) is not None
         and re.search(r"seccomp-bpf sandbox\W*yes\b", flat) is not None
     )
 

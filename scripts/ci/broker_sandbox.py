@@ -126,7 +126,11 @@ for pid in os.listdir("/proc"):
     except OSError:
         continue
     joined = b" ".join(cmd).decode(errors="replace")
-    if "chrom" not in joined:
+    # Only Chromium's own processes (chrome, chrome_crashpad_handler), by the
+    # program they run: this probe's command line holds "chrom",
+    # "--type=renderer" and the no-sandbox flag as text, and runs in the broker's
+    # user namespace (the fourth CI run counted it as a renderer).
+    if int(pid) == os.getpid() or not os.path.basename(cmd[0].decode(errors="replace")).startswith("chrom"):
         continue
     cmdlines.append(joined)
     try:

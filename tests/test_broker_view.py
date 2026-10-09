@@ -246,8 +246,13 @@ def test_status_says_ready_when_confined(env):
 
 
 # What chrome://sandbox prints for a sandboxed Chromium on Linux (rows of a
-# table, read as text); T1 pins it on a real one in CI.
-SANDBOXED = "Layer 1 Sandbox\tNamespace\nNamespace Sandbox\tYes\nPID namespaces\tYes\nNetwork namespaces\tYes\nSeccomp-BPF sandbox\tYes\nYou are adequately sandboxed."
+# table, read as text), as measured in the broker's conditions on the
+# broker-sandbox CI job (run 37873589868). There is no "Namespace Sandbox"
+# row: layer 1 names the sandbox in use.
+SANDBOXED = ("Layer 1 Sandbox\tNamespace\nPID namespaces\tYes\nNetwork namespaces\tYes\n"
+             "Seccomp-BPF sandbox\tYes\nSeccomp-BPF sandbox supports TSYNC\tYes\n"
+             "Yama LSM Enforcing (Broker)\tYes\nYama LSM Enforcing (Non-broker)\tNo\n"
+             "You are adequately sandboxed.")
 
 
 class FakeChromium:
@@ -299,13 +304,24 @@ def test_chromium_is_always_launched_with_its_sandbox(env):
     FakeChromium(sandbox_text="Namespace Sandbox: No\nSeccomp-BPF sandbox: No\nYou are not adequately sandboxed!"),
     FakeChromium(sandbox_text=""),
     FakeChromium(sandbox_text=SANDBOXED.replace("Seccomp-BPF sandbox\tYes", "Seccomp-BPF sandbox\tNo")),
-    FakeChromium(sandbox_text=SANDBOXED.replace("Namespace Sandbox\tYes", "Namespace Sandbox\tNo")),
-], ids=["launch-fails", "not-sandboxed", "no-answer", "no-seccomp", "no-namespaces"])
+    FakeChromium(sandbox_text=SANDBOXED.replace("Layer 1 Sandbox\tNamespace", "Layer 1 Sandbox\tNone")),
+    FakeChromium(sandbox_text=SANDBOXED.replace("Layer 1 Sandbox\tNamespace", "Layer 1 Sandbox\tSUID")),
+    FakeChromium(sandbox_text=SANDBOXED.replace("PID namespaces\tYes", "PID namespaces\tNo")),
+    FakeChromium(sandbox_text=SANDBOXED.replace("Network namespaces\tYes", "Network namespaces\tNo")),
+], ids=["launch-fails", "not-sandboxed", "no-answer", "no-seccomp", "no-layer-1", "suid-not-namespace",
+        "no-pid-namespaces", "no-network-namespaces"])
 def test_a_browser_without_an_active_sandbox_is_closed_and_refused(env, chromium):
     with pytest.raises(view.ViewError) as caught:
         view.open_browser(_playwright(chromium))
     assert caught.value.code == "chromium_sandbox_unavailable"
     assert chromium.fail or chromium.closed
+
+
+def test_chromium_s_page_as_measured_in_ci_is_read_as_sandboxed():
+    # The text of the fourth broker-sandbox run, rows joined by the probe.
+    measured = ("Layer 1 Sandbox Namespace | PID namespaces Yes | Network namespaces Yes | Seccomp-BPF sandbox Yes | "
+                "TSYNC Yes | Yama (Broker) Yes | Yama (Non-broker) No | You are adequately sandboxed.")
+    assert view.sandboxed(measured)
 
 
 def test_the_view_is_not_an_operation_of_the_agents_socket():

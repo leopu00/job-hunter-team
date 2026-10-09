@@ -150,3 +150,10 @@ def test_the_control_profile_has_no_userns_and_is_loaded_by_the_job():
     workflow = (ROOT / ".github" / "workflows" / "broker-sandbox.yml").read_text()
     assert "apparmor_parser -r /etc/apparmor.d/jht-journal-control" in workflow
 
+
+def test_the_probe_counts_only_chromium_s_processes_never_itself():
+    # Fourth CI run: the probe's own command line (its source holds "chrom",
+    # "--type=renderer" and the flag it looks for) was read as a renderer
+    # with --no-sandbox in the broker's user namespace: three false FAILs.
+    assert "int(pid) == os.getpid()" in gate.PROBE
+    assert 'os.path.basename(cmd[0].decode(errors="replace")).startswith("chrom")' in gate.PROBE
