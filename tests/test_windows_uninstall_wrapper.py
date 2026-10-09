@@ -44,6 +44,10 @@ def test_uninstall_is_an_early_fixed_scope_protocol():
 
 def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
     uninstall = _uninstall_source()
+    notice = (
+        "Vengono cancellati anche la password della posta, la sessione LinkedIn "
+        "e i token di Telegram salvati; ~/.jht e Documenti restano."
+    )
 
     assert (
         "$UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm'" in uninstall
@@ -54,6 +58,10 @@ def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
     for leftover in ("machine", "runtime", "commands"):
         assert f"'{leftover}'" in uninstall
     assert "return 24" in uninstall
+    assert notice in SOURCE
+    assert uninstall.count("WriteLine($JhtUninstallRemovalNotice)") == 2
+    assert "Write-JhtUninstallMachineLeft" in uninstall
+    assert "I segreti salvati non sono stati rimossi." in uninstall
     assert "--remove-data" not in uninstall
     assert "--remove-podman" not in uninstall
 
@@ -180,6 +188,7 @@ if ($second -ne 0) {{ throw "second uninstall returned $second" }}
     assert "machine rm --force jht-podman" in calls
     assert "machine rm --force somebody-else" not in calls
     assert result.stdout.count("JHT_PHASE uninstall_machine") == 2
+    assert result.stderr.count("Vengono cancellati anche la password della posta") == 2
 
 
 @pytest.mark.skipif(
@@ -221,6 +230,7 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     assert "JHT_LEFT runtime" in result.stdout
     assert "JHT_LEFT commands" in result.stdout
     assert "machine rm" not in log.read_text(encoding="utf-8")
+    assert "I segreti salvati non sono stati rimossi." in result.stderr
 
 
 @pytest.mark.skipif(
@@ -286,3 +296,5 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     assert result.returncode == 0, result.stderr
     assert "JHT_LEFT runtime" in result.stdout
     assert "JHT_LEFT commands" in result.stdout
+    assert "uso: jht uninstall --confirm" in result.stderr
+    assert "Vengono cancellati anche la password della posta" in result.stderr

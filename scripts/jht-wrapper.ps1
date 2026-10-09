@@ -39,6 +39,7 @@ $JHT_HOST_RUNTIME_PROTOCOL = 1
 $JHT_DESKTOP_CHAT_PROTOCOL = 1
 $JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
+$JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta, la sessione LinkedIn e i token di Telegram salvati; ~/.jht e Documenti restano.'
 
 # `uninstall` deve funzionare anche quando il runtime e' gia' parzialmente
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
@@ -54,6 +55,11 @@ function Write-JhtUninstallPhase {
 function Write-JhtUninstallLeft {
   param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id)
   [Console]::Out.WriteLine("JHT_LEFT $Id")
+}
+
+function Write-JhtUninstallMachineLeft {
+  Write-JhtUninstallLeft machine
+  [Console]::Error.WriteLine('I segreti salvati non sono stati rimossi.')
 }
 
 function Get-JhtNormalizedWindowsPath {
@@ -142,8 +148,10 @@ function Invoke-JhtWindowsUninstall {
   )
   if ($UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm') {
     [Console]::Error.WriteLine('uso: jht uninstall --confirm')
+    [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
     return 2
   }
+  [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
 
   $machineName = 'jht-podman'
   $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
@@ -179,21 +187,21 @@ function Invoke-JhtWindowsUninstall {
   # Remove the logon trigger before deleting the machine, otherwise a concurrent
   # sign-in could recreate activity while uninstall is tearing the runtime down.
   if (-not (Remove-JhtStartupTask)) {
-    if ($machineState -ne 'absent') { Write-JhtUninstallLeft machine }
+    if ($machineState -ne 'absent') { Write-JhtUninstallMachineLeft }
     if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
     Write-JhtUninstallLeft commands
     return 24
   }
   if ($machineState -eq 'present') {
     if (-not $PodmanPath -or -not $WslPath) {
-      Write-JhtUninstallLeft machine
+      Write-JhtUninstallMachineLeft
       if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
       if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
       return 24
     }
     & $WslPath --status *> $null
     if ($LASTEXITCODE -ne 0) {
-      Write-JhtUninstallLeft machine
+      Write-JhtUninstallMachineLeft
       if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
       if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
       return 24
@@ -201,13 +209,13 @@ function Invoke-JhtWindowsUninstall {
     & $PodmanPath machine rm --force $machineName *> $null
     if ($LASTEXITCODE -ne 0 -or
         (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
-      Write-JhtUninstallLeft machine
+      Write-JhtUninstallMachineLeft
       if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
       if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
       return 24
     }
   } elseif ($machineState -ne 'absent') {
-    Write-JhtUninstallLeft machine
+    Write-JhtUninstallMachineLeft
     if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
     if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
     return 24
