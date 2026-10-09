@@ -243,9 +243,9 @@ def test_a_stopped_docker_desktop_is_never_started_for_the_v039_inventory(tmp_pa
         "volume ls --format {{.Name}} --filter label=com.docker.compose.project=host-runtime"
     ]
     assert "Docker Desktop was not started" in result.stdout
-    assert not any(
-        token in " ".join(calls) for token in ("start", "rm", "cp", "export")
-    )
+    # Whole argv words: "--format" contains "rm" as a substring.
+    words = {word for call in calls for word in call.split()}
+    assert words.isdisjoint({"start", "rm", "cp", "export"})
 
 
 # The app shows podman_start_failed only for exit code 22 (exit_failure):
