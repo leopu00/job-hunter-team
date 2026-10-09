@@ -138,3 +138,57 @@ pub fn resolve(
         )),
     }
 }
+
+/// The build's inputs: the CI's variables, read by build.rs.
+#[allow(dead_code)] // used by build.rs and by the app's tests
+pub const BUILD_INPUTS: [&str; 6] = [
+    "JHT_CHANNEL",
+    "JHT_SOURCE_SHA",
+    "JHT_RUNTIME_IMAGE",
+    "JHT_RUNTIME_IMAGE_DIGEST",
+    "JHT_INSTALL_SHA256",
+    "JHT_INSTALL_PS1_SHA256",
+];
+
+/// What build.rs compiles in (`cargo:rustc-env`, read back by
+/// release_channel::current), from its inputs as `lookup` finds them. A
+/// production build compiles the channel name and empty values; an error
+/// stops the build.
+#[allow(dead_code)] // used by build.rs and by the app's tests
+pub fn build_env(
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Result<[(&'static str, String); 6], String> {
+    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256] =
+        BUILD_INPUTS.map(|name| lookup(name));
+    let resolved = resolve(
+        channel.as_deref(),
+        source_sha.as_deref(),
+        runtime_image.as_deref(),
+        image_digest.as_deref(),
+        install_sha256.as_deref(),
+        install_ps1_sha256.as_deref(),
+    )?;
+    let (channel, test) = match resolved {
+        None => ("production", None),
+        Some(test) => (TEST_CHANNEL, Some(test)),
+    };
+    let value =
+        |pick: fn(&TestChannel) -> &String| test.as_ref().map(pick).cloned().unwrap_or_default();
+    Ok([
+        ("JHT_BUILD_CHANNEL", channel.to_owned()),
+        ("JHT_BUILD_SOURCE_SHA", value(|test| &test.source_sha)),
+        ("JHT_BUILD_RUNTIME_IMAGE", value(|test| &test.runtime_image)),
+        (
+            "JHT_BUILD_RUNTIME_IMAGE_DIGEST",
+            value(|test| &test.image_digest),
+        ),
+        (
+            "JHT_BUILD_INSTALL_SHA256",
+            value(|test| &test.install_sha256),
+        ),
+        (
+            "JHT_BUILD_INSTALL_PS1_SHA256",
+            value(|test| &test.install_ps1_sha256),
+        ),
+    ])
+}

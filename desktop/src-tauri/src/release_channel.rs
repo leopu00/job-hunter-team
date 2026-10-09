@@ -223,6 +223,84 @@ mod tests {
         assert_eq!(pinned.image_digest, DIGEST);
     }
 
+    /// build.rs's logic, run: what a build compiles in from the CI's
+    /// variables, and the refusal of a half-configured test build.
+    #[test]
+    fn the_build_script_logic_refuses_a_test_build_with_a_value_missing() {
+        use crate::release_channel_rules::{build_env, BUILD_INPUTS};
+        let full = [
+            ("JHT_CHANNEL", "test"),
+            ("JHT_SOURCE_SHA", SHA),
+            ("JHT_RUNTIME_IMAGE", "ghcr.io/leopu00/jht:master-arthur"),
+            ("JHT_RUNTIME_IMAGE_DIGEST", DIGEST),
+            ("JHT_INSTALL_SHA256", INSTALL),
+            ("JHT_INSTALL_PS1_SHA256", INSTALL_PS1),
+        ];
+        assert_eq!(full.map(|(name, _)| name), BUILD_INPUTS);
+        let build = |skip: &str| {
+            build_env(|name| {
+                full.iter()
+                    .find(|(given, _)| *given == name && name != skip)
+                    .map(|(_, value)| (*value).to_owned())
+            })
+        };
+
+        // A full test build: every compiled value is read back by current()
+        // and gives the same channel.
+        let compiled = build("").unwrap();
+        let source = include_str!("release_channel.rs");
+        for (name, _) in &compiled {
+            assert!(source.contains(&format!("env!(\"{name}\")")), "{name}");
+        }
+        let [c, s, i, d, sh, ps] = compiled.map(|(_, value)| value);
+        assert_eq!(c, "test");
+        assert_eq!(
+            from_build(&c, &s, &i, &d, &sh, &ps),
+            Ok(Some(test_channel("ghcr.io/leopu00/jht:master-arthur")))
+        );
+
+        // Any value missing: no build.
+        for name in &BUILD_INPUTS[1..] {
+            assert!(build(name).is_err(), "{name}");
+        }
+        // Nothing given: production, with empty values.
+        let production = build_env(|_| None).unwrap();
+        assert_eq!(
+            production[0],
+            ("JHT_BUILD_CHANNEL", "production".to_owned())
+        );
+        assert!(production[1..].iter().all(|(_, value)| value.is_empty()));
+        // A value without the test channel: no build either.
+        assert!(build_env(|name| (name == "JHT_SOURCE_SHA").then(|| SHA.to_owned())).is_err());
+    }
+
+    /// build.rs itself only prints what build_env returns, and stops the
+    /// build on its error: it cannot swallow it.
+    #[test]
+    fn build_rs_stops_the_build_on_the_rules_error() {
+        let build = include_str!("../build.rs");
+        let body = &build[build.find("fn emit_release_channel").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        for line in [
+            "for name in release_channel_rules::BUILD_INPUTS {",
+            "println!(\"cargo:rerun-if-env-changed={name}\");",
+            "let compiled = release_channel_rules::build_env(|name| env::var(name).ok())",
+            ".unwrap_or_else(|error| panic!(\"release channel: {error}\"));",
+            "println!(\"cargo:rustc-env={name}={value}\");",
+        ] {
+            assert!(body.contains(line), "{line}");
+        }
+        for swallowing in [
+            "unwrap_or_default",
+            "unwrap_or(",
+            ".ok()?",
+            "if let Ok",
+            "match ",
+        ] {
+            assert!(!body.contains(swallowing), "{swallowing}");
+        }
+    }
+
     #[test]
     fn production_reuses_only_a_production_runtime_and_a_test_build_never_reuses() {
         let root = std::env::temp_dir().join(format!(
