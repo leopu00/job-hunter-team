@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-08-03 -->
 ---
 name: maintainer-sweep
 description: "A ronda de manutenção da INFRA do Mantenitore 👷‍♂️ (gémea da do Dottore, mas com âmbito na infraestrutura em vez de nos agentes). Uma passagem one-shot por dia: canário de liveness dos processos de suporte de vida do contentor (bridge/daemon/watchdog) via process_health.py, smoke-test das ferramentas mission-critical (browser/LinkedIn) via tool_health.py, auditoria/consolidação de dependências fora do padrão, GC de scripts órfãos e ficheiros tmp, de-dup de scripts recorrentes, atualidade das dependências, tendência de disco/RAM, canário da locale UTF-8 dos panes via locale_health.py (defeito cosmético vs dados corrompidos). Single-writer: o Mantenitore é o ÚNICO que repara a infra; as ações DESTRUTIVAS (apagar/arquivar) ele PROPÕE, quem decide é o Capitano. Resultado acrescentado a mantenitore-logbook.jsonl."
 allowed-tools: Bash(python3 /app/shared/skills/process_health.py *), Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/sync_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(python3 /app/shared/skills/locale_health.py *), Bash(python3 /app/shared/skills/log_archive.py *), Bash(bash /app/.launcher/start-agent.sh *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: pt, ai-translated 2026-08-03 -->
 
 # maintainer-sweep — manter a INFRA saudável, em silêncio e à prova de regressões
 

@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
 description: Os seis padrões que o Mentor procura nos registos para decidir QUANDO falar. Silêncio é o padrão; apenas um padrão real e recorrente merece uma palavra. Esta skill dá o método canónico de deteção para cada padrão (consulta DB + limiar) para que o Mentor nunca fale a partir de um único ponto de dados. Read-only — nunca escreve no DB. Pertence ao Mentor.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # mentor-patterns — o que os registos revelam
 

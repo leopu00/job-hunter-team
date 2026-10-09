@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: emergency-handling
 description: Hogyan kezeljük a rate-limit vészhelyzeteket és a FATAL kaszkádot, amikor a bridge megvakul. Tartalmazza a cooldown-bypass triggereket, az L4-SOFT/L5-HARD helyreállítási utat és a RESET SESSIONE kezelését > 30 pontos usage-csökkenésnél.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — Vészhelyzet-kezelés és FATAL kaszkád
 

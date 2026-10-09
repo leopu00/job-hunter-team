@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: daily-restart-wave
 description: "Riavvio di massa preventivo di tutti gli agenti del team una volta ogni 24h per freschezza del contesto. Responsabilità del Dottore. Viene eseguito solo dentro una finestra giornaliera stretta (default 03:00 UTC ± 30 min) e solo se nessun wave è partito nelle ultime 23h. Ogni agente viene killato + respawnato tramite la stessa sequenza atomica di `liveness-check` Step 3, ordinato tier 3 → tier 2 → tier 1 così i worker vengono ciclati per primi e i coordinatori (Capitano/Sentinella/Mentor/Assistente) per ultimi. Background: le sessioni Codex/Kimi long-lived accumulano \"rumore\" — vecchie decisioni, fatti obsoleti, drift del prompt — e diventano misurabilmente meno lucide dopo ore. Evidenza empirica dal Case Study #1 (run Codex 2026-05-19/21): il riavvio di massa manuale ha ripristinato la qualità decisionale. Questa skill chiude quel gap senza intervento manuale."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(date *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # daily-restart-wave — riavvio preventivo per freschezza del contesto
 

@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: team-modes
 description: "El manual de los modos del equipo — una ficha por modo (search / harvest / care / calibration / saving). Ábrelo siempre que el banner horario [MODALITÀ CORRENTE] nombre un modo y no recuerdes qué implica operativamente, al despertar tras un refresh de contexto, o cuando el usuario cambie de modo desde el juego. El modo es SIEMPRE una elección del usuario - esta skill te dice cómo LLEVAR el actual, nunca cómo cambiarlo."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # team-modes — qué significa el modo actual, en treinta segundos
 

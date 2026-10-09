@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-09-13 -->
 ---
 name: email-application-flow
 description: Hogyan küld el a CLOSER egy engedélyezett jelentkezést e-mailben az `email_application.py`-val, amikor az `apply_flow.py` `email_channel` választ ad (az Apply vezérlő egy `mailto:` link) — inspect, preflight, draft, send, status; a gate újraellenőrzése közvetlenül a küldés előtt; `send_started` a visszafordíthatatlan parancs előtt; a nyugta, amely nélkül az `applied` soha nem íródik be. Használd minden olyan pozíciónál, amelynek folyamata `email_channel`-lel ér véget. A CLOSER-é.
 allowed-tools: Bash(python3 /app/shared/skills/email_application.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-09-13 -->
 
 # email-application-flow — egy e-mail, egy nyugta, nincs vakon újrapróbálás
 

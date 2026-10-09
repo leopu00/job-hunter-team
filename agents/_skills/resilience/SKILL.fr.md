@@ -1,8 +1,8 @@
-<!-- @translation: fr, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Quand un outil critique pour la mission tombe en panne, ne JAMAIS dégrader en silence ni annoncer \"file épuisée\"/new=0. Classe cassé-vs-vide, puis remonte l'échelle de repli — réparation automatique via jht-install, nouvel essai, méthode alternative, marquage OPEN_UNVERIFIED, escalade au Capitano avec le correctif exact. À utiliser dès qu'un outil dont tu dépends (navigateur, linkedin_check, un fetch, une CLI) tombe en erreur ou qu'une dépendance manque."
 ---
+<!-- @translation: fr, ai-translated 2026-08-03 -->
 
 # resilience — ne jamais abandonner en silence face à un outil cassé
 

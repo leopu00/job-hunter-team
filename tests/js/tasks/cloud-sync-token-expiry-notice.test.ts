@@ -39,23 +39,6 @@ vi.mock("@/lib/supabase/server", () => ({
         eq: () => chain,
         is: () => chain,
         order: async () => ({ data: [], error: null }),
-        insert(row: Record<string, unknown>) {
-          mocks.inserted.push(row);
-          return {
-            select: () => ({
-              single: async () => ({
-                data: {
-                  id: "synthetic-token-id",
-                  name: row.name,
-                  token_prefix: row.token_prefix,
-                  created_at: new Date(NOW).toISOString(),
-                  expires_at: row.expires_at,
-                },
-                error: null,
-              }),
-            }),
-          };
-        },
       };
       return chain;
     },
@@ -70,6 +53,24 @@ vi.mock("@/lib/supabase/admin", () => ({
         }),
       }),
       update: () => ({ eq: () => ({ then: () => undefined }) }),
+      // POST /api/cloud-sync/tokens crea il token col service_role (093).
+      insert(row: Record<string, unknown>) {
+        mocks.inserted.push(row);
+        return {
+          select: () => ({
+            single: async () => ({
+              data: {
+                id: "synthetic-token-id",
+                name: row.name,
+                token_prefix: row.token_prefix,
+                created_at: new Date(NOW).toISOString(),
+                expires_at: row.expires_at,
+              },
+              error: null,
+            }),
+          }),
+        };
+      },
     }),
   }),
 }));

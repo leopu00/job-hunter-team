@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: critic-loop
 description: "Führe die verpflichtende 3-Runden CV-Review-Schleife mit dem Critico durch — autonom, ohne über den Capitano zu gehen. Für jede Runde spawnst du eine FRISCHE `CRITICO-S<N>`-Sitzung (gleiche N wie deine Scrittore-Sitzung: SCRITTORE-2 → CRITICO-S2), sendest PDF + JD, wartest auf das strukturierte Urteil, beendest den Critic, korrigierst den CV, generierst das PDF neu und startest die nächste Runde mit einer weiteren frischen Instanz. Drei Runden sind nicht verhandelbar — weder 1 noch 2. Nach der 3. Runde Gate: `critic_score ≥ 5` → `ready`, sonst `excluded`. Zuständig: Scrittore."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # critic-loop — 3 frische Runden, keine Abkürzungen
 

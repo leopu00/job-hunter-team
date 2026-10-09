@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: order-formats
 description: Vorlagen für die Befehle, die der Wächter an den Kapitän sendet. Verwende diese Skill jedes Mal, wenn du den Kapitän benachrichtigen willst — wähle die passende Vorlage, fülle die Platzhalter aus, sende via `jht-tmux-send`.
 allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # Skill — BEFEHLS-Formate an den Kapitän
 

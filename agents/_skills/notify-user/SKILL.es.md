@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: notify-user
 description: Notificar al usuario con respaldo automático. Intenta Telegram primero; si el bot no está configurado / inaccesible / rate-limited, el mensaje aterriza en el dashboard web vía sincronización cloud. Siempre registra el mensaje en `pending_user_messages` para que nada se pierda. Usa esto cada vez que necesites llegar al usuario con una actualización de estado, una pregunta o un digest — nunca llames a `jht-telegram-send` directamente para ese propósito.
 allowed-tools: Bash(jht-notify-user *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # notify-user — API única para llegar al usuario
 

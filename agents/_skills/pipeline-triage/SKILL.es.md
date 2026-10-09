@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: pipeline-triage
 description: "Decidir QUÉ rol generar / pausar / eliminar basándose en el estado del backlog, no en intuición. Abrir esta skill CADA VEZ que observes — vel team < 50% del objetivo, O cualquier cola de rol = 0, O fuentes del Scout agotadas, O [SCALA UP] de Sentinella, O `PIPELINE VUOTA + UNDERSHOOT`, O `MARGINE` de bridge-pacing, O cold start, O cada vez que estés tentado de \"simplemente generar otro Scout\". NO esperes un `[SCALA UP]` explícito de Sentinella cuando las condiciones ya son visibles para ti en las métricas. El punto central: leer 4 números, elegir el un rol que rompe el cuello de botella, pasar a `spawn-agent`."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # pipeline-triage — escalamiento basado en datos
 

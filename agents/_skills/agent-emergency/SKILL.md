@@ -1,6 +1,6 @@
 ---
 name: agent-emergency
-description: Capitano — handles an agent suspected of being STUCK IN AN ACTIVE LOOP (alive and generating turns, but repeating the same cycle without producing anything: ACK ping-loop with a peer, same action/query going nowhere). Covers the crack between C-08 (dead/silent → Dottore) and C-12 (burning at cadence 0.00/min → kill). Graduated ladder, Dottore-FIRST → kill+clean-respawn only if it persists or burns budget. Deterministic detection (capture-pane diff + 0 DB progress), escalation decision left to the LLM.
+description: "Capitano — handles an agent suspected of being STUCK IN AN ACTIVE LOOP (alive and generating turns, but repeating the same cycle without producing anything: ACK ping-loop with a peer, same action/query going nowhere). Covers the crack between C-08 (dead/silent → Dottore) and C-12 (burning at cadence 0.00/min → kill). Graduated ladder, Dottore-FIRST → kill+clean-respawn only if it persists or burns budget. Deterministic detection (capture-pane diff + 0 DB progress), escalation decision left to the LLM."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 

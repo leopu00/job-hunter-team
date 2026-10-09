@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — behandelt einen Agenten, bei dem der Verdacht besteht, dass er IN EINER AKTIVEN SCHLEIFE FESTHÄNGT (lebendig und Züge generierend, aber denselben Zyklus wiederholend, ohne etwas zu produzieren: ACK-Ping-Schleife mit einem Peer, dieselbe Aktion/Abfrage, die zu nichts führt). Deckt die Lücke zwischen C-08 (tot/still → Dottore) und C-12 (Verbrennen mit cadenza 0.00/min → kill) ab. Abgestufte Leiter, Dottore-ZUERST → kill + sauberer Respawn nur, wenn es anhält oder Budget verbrennt. Deterministische Erkennung (capture-pane-Diff + 0 DB-Fortschritt), Eskalationsentscheidung dem LLM überlassen."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: de, ai-translated 2026-07-30 -->
 
 # agent-emergency — Agent in einer aktiven Schleife festgefahren
 

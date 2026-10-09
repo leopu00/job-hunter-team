@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: scout-coord
 description: Indulaskori koordinacios protokoll tobb Scout kozott. E kepesseg nelkul ket scout ugyanazt a kort (Remote EU) jarja ugyanazon a szinten (LinkedIn), es 100%-ban duplikatumokat allit elo, amelyeket a dedup gate-nek kell eldobnia — pazarolt koltsegvetes es lassabb csapat. Hasznald ELSO tevekenysegkent a ciklusodban, minden mas elott. A Scout szerephez tartozik; a SCOUT-1 altalaban dont, ha tobb scout egyszerre indul.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # scout-coord — a terulet felosztasa
 

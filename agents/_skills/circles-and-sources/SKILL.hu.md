@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: circles-and-sources
 description: Stratégiai térkép arról, mit hol keress, teljes egészében a jelölt profiljából származtatva. Az 5 koncentrikus kör (work_mode + relocation) megadja a földrajzi hatókört; a 4 forrás szint (LinkedIn → ATS aggregátorok → niche → web) megadja, mely platformokat ürítsed ki sorrendben. Egy scout, aki rossz szintben keres rossz körben, elpazarolja a kvótáját és a `scout-coord` partícióját. Nyisd meg ezt a skill-t boot-kor (a `scout-coord` után) és újra, amikor egy kör kimerül vagy az Analyst `[FEEDBACK]`-je forrásváltást javasol.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # circles-and-sources — olvasd a profilt, építsd a térképet
 

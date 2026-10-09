@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: game-reply-options
 description: "Kínálj 2-5 kontextusfüggő, kattintható válaszgombot a JHT játék chatjében, ha azok tényleg megkönnyítik a felhasználó következő döntését. Csak kicsi, jól körülhatárolt választáshoz használd; minden más esetben válaszolj a szokásos módon a jht-send paranccsal. Soha ne használd ezeket rögzített onboarding-fának."
 allowed-tools: Bash(jht-reply-options *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # Generált válaszlehetőségek a játékban
 

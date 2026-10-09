@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: spawn-doctor
 description: Spawna un DOTTORE fresco on-demand quando tu (Capitano/Assistente/Sentinella/Mentor) hai bisogno di un giro di health-check immediato. Usa questa skill INVECE di scrivere nella sessione DOTTORE quando l'utente chiede "fai partire il dottore" / "dottora" / "controlla il team", perche' tra un round schedulato e l'altro la sessione DOTTORE e' bash residua (lifecycle one-shot, ~10 min attivi + ~110 min di sleep per il prossimo spawn del ciclo 2h).
 allowed-tools: Bash(/app/.launcher/spawn-doctor.sh *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # spawn-doctor — chiamata di emergenza al Dottore
 

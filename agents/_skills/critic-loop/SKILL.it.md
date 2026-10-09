@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: critic-loop
 description: "Esegui il loop obbligatorio di revisione CV a 3 round con il Critico — autonomamente, senza passare dal Capitano. Per ogni round spawni una sessione FRESH `CRITICO-S<N>` (stesso N della tua sessione Scrittore: SCRITTORE-2 → CRITICO-S2), invii PDF + JD, aspetti il verdetto strutturato, killi il Critico, correggi il CV, rigeneri il PDF, e inizi il round successivo con un'altra istanza fresh. Tre round non sono negoziabili — né 1 né 2. Dopo il 3° round, gate: `critic_score ≥ 5` → `ready`, altrimenti `excluded`. Responsabilità dello Scrittore."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # critic-loop — 3 round freschi, nessuna scorciatoia
 

@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: daily-restart-wave
 description: "Reinício em massa preventivo de cada agente da equipa uma vez a cada 24h para frescura de contexto. Pertence ao Dottore. Executa apenas dentro de uma janela diária estreita (padrão 03:00 UTC ± 30 min) e apenas se nenhuma onda disparou nas últimas 23h. Cada agente é eliminado + regenerado via a mesma sequência atómica do `liveness-check` Passo 3, ordenados tier 3 → tier 2 → tier 1 para que os workers ciclem primeiro e os coordenadores (Capitano/Sentinella/Mentor/Assistente) por último. Contexto: sessões Codex/Kimi de longa duração acumulam \"ruído\" — decisões antigas, factos desatualizados, drift do prompt — e tornam-se mensuravelmente menos lúcidas após horas. Evidência empírica do Case Study #1 (run Codex 2026-05-19/21): o reinício em massa manual restaurou a qualidade de decisão. Esta skill fecha essa lacuna sem intervenção manual."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(date *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # daily-restart-wave — reinício preventivo para frescura de contexto
 

@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: scout-coord
 description: Protocollo di coordinamento all'avvio tra più Scout. Senza questa skill due scout esplorano lo stesso cerchio (Remote EU) sullo stesso tier (LinkedIn) e producono il 100% di duplicati che il gate di dedup deve poi scartare — budget sprecato e team più lento. Usala come PRIMA azione nel tuo loop, prima di qualsiasi altra cosa. Di proprietà del ruolo Scout; SCOUT-1 di solito arbitra se più scout si avviano contemporaneamente.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # scout-coord — partizionare il territorio
 

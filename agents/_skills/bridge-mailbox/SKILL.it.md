@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: bridge-mailbox
 description: Svuota i verdetti bridge pendenti all'INIZIO di ogni turno del Capitano — azione OBBLIGATORIA prima di fare qualsiasi altra cosa. Durante un turno lungo, `jht-tmux-send` dal bridge può fallire con rc=3 (testo mai apparso nel pannello) e un verdetto `[BRIDGE PACING]` o `PIPELINE STALLED` viene silenziosamente perso. Il bridge appende OGNI verdetto a una mailbox JSONL così puoi recuperarli. Saltare questo svuotamento significa agire su misurazioni obsolete mentre un verdetto più recente giace non letto.
 allowed-tools: Bash(python3 /app/shared/skills/bridge_mailbox.py *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # bridge-mailbox — recupera i verdetti mancati
 

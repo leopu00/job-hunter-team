@@ -1,8 +1,8 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: scaling-calc
 description: "A roster fokozatos kalibrálása — mérd meg 1 worker burnjét, számold ki, hány worker és milyen throttle kell a cél-sebesség eléréséhez, és spawnolj lépcsőzetesen (soha nem hatodikban)."
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # 🎚️ scaling-calc — egyszerre egy fokozatot kapcsolj, ne indulj rögtön hatodikban
 

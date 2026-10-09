@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: chat-web
 description: Dem Nutzer antworten, wenn er dir vom JHT-Web-Chat aus schreibt. Der Nutzer erreicht dich mit dem Präfix `[@utente -> @capitano] [CHAT] <body>`; antworte NUR mit `jht-send` — schreibe niemals von Hand in `chat.jsonl` (Shell-Quoting bricht die JSON-Zeile und das Frontend verwirft die Nachricht stillschweigend, der Nutzer sieht nichts während du denkst, du hast geantwortet). Verwende diesen Skill bei jeder `[CHAT]`-Nachricht; verwende ihn NICHT für Inter-Agenten-Verkehr (das ist `tmux-send`).
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # chat-web — Nutzer ↔ Captain Protokoll
 

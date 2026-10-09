@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-07-30 -->
 ---
 name: throttle-set
 description: Der EINZIGE Weg, auf dem die Rhythmen des Teams geschrieben werden. Nur der Kapitaen. `throttle-set <agent> <sekunden>` bearbeitet die Throttle-Config pro Agent; die Engine liest sie neu, wenn sie jeden Timer armiert, also greift die Aenderung von selbst im NAECHSTEN Zyklus dieses Agenten - keine tmux-Nachricht, kein Agent muss etwas neu lesen, und der bereits laufende Zyklus wird nicht gestoert. Nutze es, statt Zahlen an Worker zu schicken. Ausserdem `throttle-set a=N b=M ...` fuer einen atomaren Mehrfach-Write, `--dump` fuer die effektiven Werte, `--get <agent>`, `--reset`.
 allowed-tools: Bash(throttle-set *), Bash(python3 /app/shared/skills/throttle-config.py *)
 ---
+<!-- @translation: de, ai-translated 2026-07-30 -->
 
 # throttle-set — die Rhythmen steuern, ohne die Agenten anzufassen
 

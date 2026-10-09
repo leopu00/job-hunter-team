@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: format-time
 description: Converti i timestamp UTC nel fuso orario dell'utente prima di mostrarli in chat, grafici, Telegram, o qualsiasi output rivolto all'utente. Usa questo helper ogni volta che scriveresti un `strftime("%H:%M")` grezzo di un datetime UTC in qualcosa che l'utente legge.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # format-time — UTC → fuso orario utente nell'output rivolto all'utente
 

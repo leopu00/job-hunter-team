@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: captain-diary
 description: "Diario de traspaso diario para el Capitano. El Capitano se reinicia a menudo (context-refresh, nueva ventana de trabajo, reboot) y de lo contrario pierde las lecciones de pacing que tanto costó aprender durante el día — repitiendo los mismos errores (p. ej. 3 Scout a la vez → un pico imposible de frenar → 5 h a ralentí para pagar la deuda). Al arrancar, lee las notas del día ANTERIOR (handoff) y AÑADE una nota de una línea cada vez que ocurra algo significativo durante el día (una decisión de escalado, un pico, un kill, una lección). Un archivo append-only por día."
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # captain-diary — el traspaso entre Capitanos
 

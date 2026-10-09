@@ -1,8 +1,8 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: decision-throttle
 description: Tabella di riferimento che mappa `proj` (utilizzo proiettato al reset) a uno stato Sentinella e a un livello di throttle (0-4). Usala ad ogni tick DOPO aver ottenuto un campione fresco per decidere quale ordine inviare al Capitano.
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # Skill — Tabella stati e throttle
 

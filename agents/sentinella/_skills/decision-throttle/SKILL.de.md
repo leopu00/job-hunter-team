@@ -1,8 +1,8 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: decision-throttle
 description: Referenztabelle, die `proj` (prognostizierte Nutzung beim Reset) einem Sentinel-Zustand und einer Throttle-Stufe (0-4) zuordnet. Verwende sie bei jedem Tick NACHDEM du ein frisches Sample hast, um zu entscheiden, welchen Befehl du an den Kapitän sendest.
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # Skill — Zustands- und Throttle-Tabelle
 

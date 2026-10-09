@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
-description: Die sechs Muster, nach denen der Mentor in den Aufzeichnungen sucht, um zu entscheiden WANN er spricht. Stille ist der Standard; nur ein echtes, wiederkehrendes Muster verdient ein Wort. Dieser Skill gibt die kanonische Erkennungsmethode für jedes Muster (DB-Abfrage + Schwelle), damit der Mentor nie von einem einzelnen Datenpunkt aus spricht. Nur lesend — schreibt nie in die DB. Zuständig: Mentor.
+description: "Die sechs Muster, nach denen der Mentor in den Aufzeichnungen sucht, um zu entscheiden WANN er spricht. Stille ist der Standard; nur ein echtes, wiederkehrendes Muster verdient ein Wort. Dieser Skill gibt die kanonische Erkennungsmethode für jedes Muster (DB-Abfrage + Schwelle), damit der Mentor nie von einem einzelnen Datenpunkt aus spricht. Nur lesend — schreibt nie in die DB. Zuständig: Mentor."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # mentor-patterns — was die Aufzeichnungen verraten
 

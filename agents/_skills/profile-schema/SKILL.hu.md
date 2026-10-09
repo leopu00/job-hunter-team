@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: profile-schema
 description: "A candidate_profile.yml SCHEMAJA egyetlen igazsagforras — a kanonikus formatum, amelyet az EGESZ csapat eloallit es fogyaszt. 3 szintu modell: fagyasztott core + standard blokkkok + szabad egyedi blokkok. Definilja a 6 blokk-`kind`-ot, amelyet a web renderelni tud, es a kormanyzasi szabalyt (egyetlen ugynok sem talalja ki a formatumot). Minden profil-irast a `jht profile validate` paranccsal kell validalni. Hivatkozik ra: profile-yaml, onboarding-flow, parse-cv, cv-structure."
 allowed-tools: Bash(jht profile validate *), Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # profile-schema — a profil kanonikus formatuma
 

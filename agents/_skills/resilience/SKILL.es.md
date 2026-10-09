@@ -1,8 +1,8 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Cuando una herramienta crítica para la misión falla, NUNCA degrades en silencio ni informes \"cola agotada\"/new=0. Clasifica rota-vs-vacía y luego sube la escalera de fallbacks — autorreparación con jht-install, reintento, método alternativo, marcar OPEN_UNVERIFIED, escalar al Capitano con el fix exacto. Úsala siempre que una herramienta de la que dependes (navegador, linkedin_check, un fetch, una CLI) dé error o falte una dependencia."
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # resilience — nunca te rindas en silencio ante una herramienta rota
 

@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-09-13 -->
 ---
 name: email-application-flow
 description: Como o CLOSER envia por email uma candidatura autorizada com `email_application.py` quando `apply_flow.py` responde `email_channel` (o controlo Apply é um link `mailto:`) — inspect, preflight, draft, send, status; o gate verificado de novo logo antes do transporte; `send_started` antes do comando irreversível; o recibo sem o qual `applied` nunca é escrito. Usa-a para cada posição cujo fluxo termina em `email_channel`. Do CLOSER.
 allowed-tools: Bash(python3 /app/shared/skills/email_application.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-09-13 -->
 
 # email-application-flow — um email, um recibo, nenhuma tentativa às cegas
 

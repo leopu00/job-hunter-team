@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — prend en charge un agent soupçonné d'être BLOQUÉ DANS UNE BOUCLE ACTIVE (vivant et générant des tours, mais répétant le même cycle sans rien produire : ping-loop d'ACK avec un autre agent, même action/requête qui ne mène nulle part). Couvre la faille entre C-08 (mort/silencieux → Dottore) et C-12 (qui brûle à cadence 0.00/min → kill). Échelle graduée, le Dottore D'ABORD → kill+respawn propre seulement si ça persiste ou si ça brûle du budget. Détection déterministe (diff de capture-pane + 0 progrès en base), décision d'escalade laissée au LLM."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-07-30 -->
 
 # agent-emergency — agent bloqué dans une boucle active
 

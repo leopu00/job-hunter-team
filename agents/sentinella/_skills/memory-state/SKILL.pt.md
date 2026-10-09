@@ -1,8 +1,8 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: memory-state
 description: Variaveis de estado que a Sentinela deve manter entre ticks (ultima ordem enviada, flag de freeze, serie FATAL, contadores por estado, historico de emergencias, cooldowns). Use esta skill em cada tick para atualizar a memoria e decidir se uma nova ordem e necessaria (edge-triggered).
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # Skill — Memoria de estado (variaveis entre ticks)
 

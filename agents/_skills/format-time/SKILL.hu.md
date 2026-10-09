@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: format-time
 description: UTC időbélyegek konvertálása a felhasználó időzónájába, mielőtt csevegésben, diagramokon, Telegramon vagy bármilyen felhasználó felé mutató kimenetben megjelenítenéd. Használd ezt a helper-t, amikor egyébként nyers `strftime("%H:%M")`-t írnál egy UTC datetime-ból valami felhasználó által olvasható dologba.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # format-time — UTC → felhasználói időzóna felhasználó felé mutató kimenetben
 

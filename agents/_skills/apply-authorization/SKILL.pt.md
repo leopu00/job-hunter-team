@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-09-13 -->
 ---
 name: apply-authorization
 description: As duas portas entre a equipa e a caixa de um recrutador, e como ler as suas recusas. Uma candidatura sai SÓ se o utilizador deu o consentimento geral (`applications.auto_apply` na config do utilizador) E marcou essa mesma posição. Ambas fail-closed e verificadas no código por `apply_gate.py`. Usa-a no arranque e antes de cada posição para ler a queue do CLOSER, e sempre que precisares de explicar porque é que uma posição não saiu. Do CLOSER; o Capitano lê a mesma queue para decidir se o spawna.
 allowed-tools: Bash(python3 /app/shared/skills/apply_gate.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-09-13 -->
 
 # apply-authorization — o que pode sair, e porque é que o resto não
 

@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: order-formats
 description: Modelli per gli ordini che la Sentinella invia al Capitano. Usa questa skill ogni volta che decidi di notificare il Capitano — scegli il modello corrispondente, compila i segnaposto, invia via `jht-tmux-send`.
 allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # Skill — Formati ORDINE al Capitano
 

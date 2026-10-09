@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: scout-web-access
 description: "Cross-provider web-access reteg a Scout-ok szamara (F-2). 5 koordinalt komponens — anti-bot robust scrape, LinkedIn session + search, email IMAP poll, multi-Scout workspace claim, freshness focus. Minden sweep alap stack-jekent hasznalva: a Scout a legkonnyebb mukodo hozzaferesi szintet valasztja, es csak blokkolas eseten eszkalal."
 allowed-tools: Bash(python3 /app/shared/skills/web_scrape_robust.py *), Bash(python3 /app/shared/skills/linkedin_access.py *), Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_workspace.py *), Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # scout-web-access — robosztus adatforrasok a Scout-ok szamara
 

@@ -7,4 +7,5 @@
 export const DESKTOP_LINKS = [
   { href: "/agents", label: "Agenti" },
   { href: "/office", label: "Ufficio" },
+  { href: "/mail", label: "Posta" },
 ];

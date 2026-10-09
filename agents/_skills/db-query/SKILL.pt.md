@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: db-query
 description: Consultar o DB SQLite do JHT (positions, applications, stats). Usar sempre que precisar de status de posições, filas por agente, pontuações, taxa de correspondência ou contagens de registos. Caminho do DB de $JHT_DB, fallback /jht_home/jobs.db.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # db-query — consultas ao DB do JHT
 

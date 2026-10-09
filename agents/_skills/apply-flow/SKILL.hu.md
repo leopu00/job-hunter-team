@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-09-13 -->
 ---
 name: apply-flow
 description: Hogyan futtatja a CLOSER egy engedélyezett jelentkezést az `apply_flow.py`-jal — a checkpointos állapotgép (detect, fill, upload_cv, screening, review, submit), a kötelező nyugta, amely nélkül az `applied` soha nem íródik be, és mit kell tenni az egyes eredményeknél, mindenekelőtt `blocked_human` esetén. Használd minden, a queue-ból felvett pozícióhoz. A CLOSER-é.
 allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-09-13 -->
 
 # apply-flow — egy jelentkezés, egy nyugta, nincs vak újrapróbálás
 

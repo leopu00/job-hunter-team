@@ -1,8 +1,8 @@
-<!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Wenn ein missionskritisches Tool ausfällt, NIEMALS still degradieren oder \"Warteschlange erschöpft\"/new=0 melden. Klassifiziere kaputt-vs-leer und steige dann die Fallback-Leiter hinauf — Auto-Reparatur via jht-install, erneuter Versuch, alternative Methode, als OPEN_UNVERIFIED markieren, Eskalation an den Capitano mit dem exakten Fix. Immer dann verwenden, wenn ein Tool, von dem du abhängst (Browser, linkedin_check, ein Fetch, eine CLI), einen Fehler wirft oder eine Abhängigkeit fehlt."
 ---
+<!-- @translation: de, ai-translated 2026-08-03 -->
 
 # resilience — bei einem kaputten Tool niemals still aufgeben
 

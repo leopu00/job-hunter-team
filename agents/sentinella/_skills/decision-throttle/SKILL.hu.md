@@ -1,8 +1,8 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: decision-throttle
 description: Referencia-tabla, amely a `proj` (becsült használat a resetnél) értéket egy Sentinel-állapothoz és egy throttle-szinthez (0-4) rendeli. Használd minden tick-nél, MIUTÁN friss mintát kaptál, hogy eldöntsd, milyen parancsot küldj a Kapitánynak.
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — Állapot- és throttle-tábla
 

@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: onboarding-flow
 description: Protocolo conversacional que o Assistente segue para integrar o utilizador — primeira mensagem, ritmo iterativo de uma-pergunta-por-turno, checklist de bloqueio (o piso que desbloqueia o dashboard) vs checklist rica (o que torna os Scrittori realmente úteis), estilo de perguntas agnóstico de setor (NUNCA assumir IT), e a sequência obrigatória de checkpoints quando o utilizador carrega ficheiros. Fortemente combinado com `profile-yaml` (cada resposta = um Write+validate) e `profile-summaries` (MDs narrativos após marcos-chave). Abrir esta skill no início de uma sessão de onboarding e em cada turno do utilizador que traga nova informação.
 allowed-tools: Bash(mkdir -p *), Bash(cp *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # onboarding-flow — como o Assistente move a conversa
 

@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: cache-prune
 description: "Récupérer de l'espace disque sur les caches partagés JHT (cache de wheels `uv` + log SQLite `codex`) toutes les ~24h. Propriété du Dottore — instance unique, exécuté à la fin d'un tour de routine quand l'équipe est inactive. Ne jamais exécuter en pleine urgence : le VACUUM SQLite bloque pendant ~30s sur une DB de 200 Mo et volerait des cycles à une récupération pilotée par la Sentinella. Migré depuis le Capitano pour que celui-ci reste concentré sur la coordination, pas la maintenance."
 allowed-tools: Bash(node /app/cli/bin/jht.js cache *), Bash(du *), Bash(df *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # cache-prune — récupérer les caches partagés
 

@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-09-13 -->
 ---
 name: apply-authorization
 description: A két kapu a csapat és egy recruiter postafiókja között, és hogyan olvasd az elutasításaikat. Egy jelentkezés CSAK akkor megy ki, ha a felhasználó általános hozzájárulást adott (`applications.auto_apply` a felhasználói configban) ÉS megjelölte éppen azt a pozíciót. Mindkettő fail-closed, és a kódban az `apply_gate.py` ellenőrzi. Használd bootoláskor és minden pozíció előtt a CLOSER queue-jának olvasásához, és valahányszor meg kell magyaráznod, miért nem ment ki egy pozíció. A CLOSER-é; a Capitano ugyanezt a queue-t olvassa, hogy eldöntse, elindítja-e.
 allowed-tools: Bash(python3 /app/shared/skills/apply_gate.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-09-13 -->
 
 # apply-authorization — mi mehet ki, és a többi miért nem
 

@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-07-30 -->
 ---
 name: throttle-ack
 description: Unterschreibe dein Aufwachen. IMMER der ERSTE Befehl jedes Aufwachens, vor allem anderen, jedes Mal wenn du nach einer Throttle-Pause eine `[RIPRENDI]`-Nachricht bekommst. `throttle-ack <dein-name>` kippt dein Flag von NOTIFIED auf ACTIVE. Nur du kannst das - die Engine kann es nicht - und genau deshalb ist ein auf NOTIFIED stehen gebliebenes Flag der Beweis, dass ein Agent den Weckruf erhalten und nicht geantwortet hat, und deshalb eskaliert der Watchdog darauf. Wer es auslaesst, laesst einen voellig gesunden Agenten blockiert aussehen.
 allowed-tools: Bash(throttle-ack *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: de, ai-translated 2026-07-30 -->
 
 # throttle-ack — unterschreibe den Weckruf, dann zurueck an die Arbeit
 

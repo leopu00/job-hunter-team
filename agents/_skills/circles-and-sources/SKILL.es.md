@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: circles-and-sources
 description: Mapa estratégico de qué buscar DÓNDE, derivado enteramente del perfil del candidato. Los 5 círculos concéntricos (work_mode + reubicación) te indican el alcance geográfico; los 4 niveles de fuentes (LinkedIn → agregadores ATS → nicho → web) te indican qué plataformas drenar en orden. Un scout que busca en el nivel equivocado en el círculo equivocado desperdicia su cuota y su partición de `scout-coord`. Abre esta skill al arranque (después de `scout-coord`) y de nuevo cuando un círculo se agote o un `[FEEDBACK]` del Analyst sugiera cambiar de fuente.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # circles-and-sources — lee el perfil, construye el mapa
 

@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-08-03 -->
 ---
 name: captain-diary
 description: "Journal de passation quotidien pour le Capitano. Le Capitano est redémarré souvent (context-refresh, nouvelle fenêtre de travail, reboot) et perd sinon les leçons de pacing durement acquises dans la journée — répétant les mêmes erreurs (p. ex. 3 Scout d'un coup → un pic impossible à freiner → 5 h au ralenti pour rembourser la dette). Au démarrage, lis les notes de la veille (handoff) et AJOUTE une note d'une ligne chaque fois que quelque chose de significatif se produit dans la journée (une décision de scaling, un pic, un kill, une leçon). Un fichier append-only par jour."
 allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-08-03 -->
 
 # captain-diary — la passation entre Capitanos
 

@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: mentor-patterns
 description: Los seis patrones que el Mentor busca en los registros para decidir CUÁNDO hablar. El silencio es el predeterminado; solo un patrón real y recurrente merece una palabra. Esta skill da el método de detección canónico para cada patrón (consulta DB + umbral) para que el Mentor nunca hable desde un solo punto de datos. Solo lectura — nunca escribe en la DB. Propiedad del Mentor.
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(grep *), Bash(awk *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # mentor-patterns — lo que revelan los registros
 

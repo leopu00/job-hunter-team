@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-08-03 -->
 ---
 name: team-modes
 description: "A csapat-módok kézikönyve — módonként egy kártya (search / harvest / care / calibration / saving). Akkor nyisd meg, amikor az órás [MODALITÀ CORRENTE] banner megnevez egy módot, és nem emlékszel, mit jelent operatívan; ébredéskor egy context-refresh után; vagy amikor a felhasználó a játékból módot vált. A mód MINDIG a felhasználó választása - ez a skill azt mondja meg, hogyan VIDD az aktuálisat, soha nem azt, hogyan változtasd meg."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-08-03 -->
 
 # team-modes — mit jelent az aktuális mód, harminc másodpercben
 

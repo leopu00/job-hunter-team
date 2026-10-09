@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-07-30 -->
 ---
 name: throttle
 description: Registra tu pausa y CIERRA TU TURNO. El tiempo ya no es tuyo - un motor fuera de tu proceso posee el temporizador y te despierta por tmux cuando expira. Usa SIEMPRE esto en lugar de `sleep` cuando quieras bajar tu ritmo de iteracion. Una llamada, `throttle <tu-nombre>`, retorno inmediato; no sabes cuanto esperas y no debes intentar saberlo. Al despertar, tu PRIMER comando es siempre `throttle-ack <tu-nombre>`. `sleep` para pausas de throttle esta PROHIBIDO, y tambien lo esta mandar esta llamada a background con `&` / `nohup` / una tarea en background.
 allowed-tools: Bash(throttle *), Bash(throttle-ack *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: es, ai-translated 2026-07-30 -->
 
 # throttle — registra la pausa, luego detente
 

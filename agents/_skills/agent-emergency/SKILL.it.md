@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — gestisce un agente sospettato di essere BLOCCATO IN UN LOOP ATTIVO (vivo e genera turni, ma ripete lo stesso ciclo senza produrre nulla: ping-loop di ACK con un altro agente, stessa azione/query che non porta da nessuna parte). Copre la crepa fra C-08 (morto/silenzioso → Dottore) e C-12 (che brucia a cadenza 0.00/min → kill). Scala graduata, prima il Dottore → kill+respawn pulito solo se persiste o brucia budget. Rilevamento deterministico (diff di capture-pane + 0 progresso nel DB), decisione di escalation lasciata all'LLM."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: it, ai-translated 2026-07-30 -->
 
 # agent-emergency — agente bloccato in un loop attivo
 

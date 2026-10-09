@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: expiration-tracking
 description: Estrae le scadenze dalle job description e riporta informazioni fattuali sulle scadenze solo su richiesta esplicita dell'utente. Non notificare o sollecitare mai automaticamente.
 allowed-tools: Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/expiration_alerts.py *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # expiration-tracking — dati sulle scadenze su richiesta
 

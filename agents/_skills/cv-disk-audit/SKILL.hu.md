@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: cv-disk-audit
 description: Periodikus egészségügyi ellenőrzés (Dottore) a lemezen lévő CV-k és a DB-beli cv_pdf_path egyeztetésére. Azonosítja az árvákat (fájl a lemezen DB sor nélkül) és szellemeket (DB sor cv_pdf_path-szal, ami nem létező fájlra mutat). Értesíti a Capitano-t az eltérésekről, hogy a felhasználó ne veszítse el a top PASS láthatatlan CV-ket és ne lásson "megírandó CV"-t már megírt CV-khez.
 allowed-tools: Bash(python3 *), Bash(find *), Bash(stat *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # cv-disk-audit — lemez↔DB egyeztetés a CV-ken
 

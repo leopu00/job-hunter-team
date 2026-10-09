@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: cache-prune
 description: "Recuperar espacio en disco en las cachés compartidas de JHT (caché de wheels `uv` + log SQLite de `codex`) cada ~24h. Propiedad del Dottore — instancia única, se ejecuta al final de una ronda rutinaria cuando el equipo está inactivo. Nunca ejecutar en medio de una emergencia: el VACUUM de SQLite bloquea ~30s en una DB de 200 MB y robaría ciclos de una recuperación dirigida por el Sentinel. Migrado del Captain para que el Captain se enfoque en coordinación, no en mantenimiento."
 allowed-tools: Bash(node /app/cli/bin/jht.js cache *), Bash(du *), Bash(df *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # cache-prune — recuperar cachés compartidas
 

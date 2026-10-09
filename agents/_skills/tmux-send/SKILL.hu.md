@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: tmux-send
 description: Uzenetet kuldi atomikusan egy masik agens tmux munkamenetebe. MINDIG hasznald ezt a skillt a SCOUT/ANALISTA/SCORER/SCRITTORE/CRITICO/SENTINELLA/CAPITANO agensekkel valo kommunikaciohoz. SOHA ne hivd meg kozvetlenul a `tmux send-keys` parancsot — az Ink-alapu TUI-k (Codex, Kimi) elveszitik az Enter karaktert.
 allowed-tools: Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # tmux-send — agensek kozotti uzenetkuldes
 

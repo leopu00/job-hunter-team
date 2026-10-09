@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: cache-prune
 description: "Lemezterület visszanyerése a megosztott JHT gyorsítótárakból (`uv` wheel cache + `codex` SQLite napló) ~24 óránként. A Dottore felelőssége — egyetlen példány, a rutin kör végén fut, amikor a csapat inaktív. Soha ne futtasd vészhelyzet közben: az SQLite VACUUM ~30 másodpercre blokkolja egy 200 MB-os DB-n, és elvenne ciklusokat egy Sentinel-vezérelt helyreállítástól. A Capitano-tól migrálva, hogy a Capitano a koordinálásra összpontosíthasson, ne karbantartásra."
 allowed-tools: Bash(node /app/cli/bin/jht.js cache *), Bash(du *), Bash(df *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # cache-prune — megosztott gyorsítótárak visszanyerése
 

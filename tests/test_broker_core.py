@@ -453,6 +453,15 @@ def test_a_pending_rotation_leaves_sending_open_and_warns_until_a_new_password(b
         assert "warning" not in admin_run(broker, argv)[1], argv
 
 
+def test_mailbox_show_names_the_address_never_the_password(broker):
+    # For the desktop's Mail screen: address, configured or not, rotation.
+    assert admin_run(broker, ["mailbox", "show"])[1]["address"] is None
+    admin_run(broker, ["secrets", "set", "email_monitor"], mailbox_json())
+    shown = admin_run(broker, ["mailbox", "show"])[1]
+    assert shown["address"] == "me@example.com"
+    assert CANARY not in json.dumps(shown)
+
+
 def test_the_wrappers_no_longer_say_sending_is_stopped():
     for wrapper in ("scripts/jht-wrapper.sh", "scripts/jht-wrapper.ps1"):
         text = (ROOT / wrapper).read_text(encoding="utf-8")

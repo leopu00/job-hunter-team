@@ -6,6 +6,7 @@ mod browsers;
 mod desktop_platform;
 mod direct_chat;
 mod live_screen;
+mod mail;
 mod onboarding;
 #[cfg(test)]
 mod onboarding_attestation_tests;
@@ -63,6 +64,8 @@ pub fn run() {
             desktop_platform::desktop_platform,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
+            mail::mail_save_password,
+            mail::mail_status,
             onboarding::onboarding_assistant_open,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_podman_machine_recreate,

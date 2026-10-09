@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-09-13 -->
 ---
 name: apply-authorization
 description: Die zwei Tore zwischen dem Team und dem Postfach eines Recruiters, und wie man ihre Ablehnungen liest. Eine Bewerbung geht NUR raus, wenn der User allgemein zugestimmt hat (`applications.auto_apply` in der User-Config) UND genau diese Position markiert hat. Beide fail-closed und im Code von `apply_gate.py` geprüft. Nutze sie beim Boot und vor jeder Position, um die Queue des CLOSER zu lesen, und immer wenn du erklären musst, warum eine Position nicht rausging. Gehört dem CLOSER; der Capitano liest dieselbe Queue, um zu entscheiden, ob er ihn spawnt.
 allowed-tools: Bash(python3 /app/shared/skills/apply_gate.py *)
 ---
+<!-- @translation: de, ai-translated 2026-09-13 -->
 
 # apply-authorization — was rausgehen darf, und warum der Rest nicht
 

@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-20 -->
 ---
 name: email-monitor
 description: "Day-start Sourcing aus dem DEDIZIERTEN E-Mail-Postfach des Teams (der Benutzer leitet euch seine eigenen Job-Alerts weiter). Quelle mit hoechster Genauigkeit: der Alert ist bereits auf die Absicht des Benutzers vorgefiltert. IMAP-Polling JEDER Plattform (LinkedIn/Glassdoor/Indeed + nationale/staedtische/Nischen-Boards), erstellt Positionen mit dem source-Tag, idempotent pro Message-ID. Das VOLUMEN steuert der Capitano (C-16): zu Tagesbeginn liest man die E-Mail VOR dem Web-Scraping; bei Flood werden nur die markanten aufgenommen, damit der Funnel zum SCORE gelangt."
 allowed-tools: Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_dedup.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: de, ai-translated 2026-06-20 -->
 
 # email-monitor — die weitergeleiteten Job-Alerts lesen, zu Tagesbeginn
 

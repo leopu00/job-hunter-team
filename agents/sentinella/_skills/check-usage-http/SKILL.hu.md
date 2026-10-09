@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: check-usage-http
 description: Ellenorzi a szolgaltato hasznalatat HTTP fast path-on keresztul (~2s, nulla CLI token). ELSODELGES muvelet, amikor a bridge nem tudja kiolvasni a hasznalati adatokat. Visszaesik a `check-usage-tui`-ra, ha a HTTP RATE_LIMIT-et ad vissza vagy sikertelen.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # Skill — Hasznalat ellenorzese HTTP-n keresztul (gyors, ~2s, ZERO token)
 

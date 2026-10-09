@@ -877,6 +877,28 @@ telegram_legacy() {
     /app/shared/telegram_service/bin/jht-telegram-legacy.py "$@"
 }
 
+read_hidden_tty() {
+  (
+    local prompt="${1:-}" value="" tty_state="" read_rc=0
+    [ -t 0 ] || return 2
+    tty_state="$(stty -g <&0)" || return 1
+    restore_tty() {
+      stty "$tty_state" <&0 2>/dev/null || stty echo <&0 2>/dev/null || :
+    }
+    trap 'restore_tty' EXIT
+    trap 'exit 130' HUP INT TERM
+    stty -echo <&0 || return 1
+    printf '%s' "$prompt" >&2
+    IFS= read -r value
+    read_rc=$?
+    printf '\n' >&2
+    restore_tty
+    trap - EXIT HUP INT TERM
+    [ "$read_rc" -eq 0 ] || return "$read_rc"
+    printf '%s' "$value"
+  )
+}
+
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
   local token="" chat_id="" pair_rc=0
@@ -904,9 +926,7 @@ telegram_pair() {
   was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
   if [ -t 0 ]; then
     info "Se esisteva già un bot, revoca il token precedente in BotFather e usa quello nuovo."
-    printf 'Token del bot (input nascosto): ' >&2
-    if ! IFS= read -rs token; then
-      printf '\n' >&2
+    if ! token="$(read_hidden_tty 'Token del bot (input nascosto): ')"; then
       err "input_interrotto: token non letto."
       return 1
     fi
@@ -1132,8 +1152,13 @@ reset_command() {
   remove_broker_reset_data
 }
 
+# `jht mail setup --password-stdin --user U --dedicated|--not-dedicated` e' il
+# canale del desktop: nessuna domanda, la password e' la prima riga di stdin
+# (mai argv, file o log), e su stdout c'e' una sola riga JSON, quella del
+# broker o un errore fisso (setup_argument_missing, secret_password_missing).
+# Una password gia' esposta torna come {"ok": false, "reason": "password_not_rotated"}.
 mail_setup() {
-  local user="" imap_host="" smtp_host="" dedicated="" admission password
+  local user="" imap_host="" smtp_host="" dedicated="" admission password="" from_stdin=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --user) user="${2:-}"; shift 2 ;;
@@ -1141,9 +1166,22 @@ mail_setup() {
       --smtp-host) smtp_host="${2:-}"; shift 2 ;;
       --dedicated) dedicated=yes; shift ;;
       --not-dedicated) dedicated=no; shift ;;
+      --password-stdin) from_stdin=yes; shift ;;
       *) err "mail setup: opzione sconosciuta $1"; return 2 ;;
     esac
   done
+  if [ -n "$from_stdin" ]; then
+    if [ -z "$user" ] || [ -z "$dedicated" ]; then
+      printf '%s\n' '{"ok": false, "reason": "setup_argument_missing"}'
+      return 2
+    fi
+    IFS= read -r password || [ -n "$password" ] || password=""
+    password="${password%$'\r'}"
+    if [ -z "$password" ]; then
+      printf '%s\n' '{"ok": false, "reason": "secret_password_missing"}'
+      return 1
+    fi
+  fi
   if [ -z "$user" ]; then
     printf 'Indirizzo della casella: ' >&2
     IFS= read -r user || return 1
@@ -1154,10 +1192,12 @@ mail_setup() {
     case "$dedicated" in s|S|si|sì|y|Y|yes) dedicated=yes ;; *) dedicated=no ;; esac
   fi
   if [ "$dedicated" = yes ]; then admission=whole_mailbox; else admission=allowlist; fi
-  printf 'Password per app (non viene mostrata): ' >&2
-  IFS= read -rs password || return 1
-  printf '\n' >&2
-  [ -n "$password" ] || { err "mail setup: password vuota"; return 1; }
+  if [ -z "$from_stdin" ]; then
+    printf 'Password per app (non viene mostrata): ' >&2
+    IFS= read -rs password || return 1
+    printf '\n' >&2
+    [ -n "$password" ] || { err "mail setup: password vuota"; return 1; }
+  fi
   set -- mailbox setup --user "$user" --admission "$admission"
   [ -z "$imap_host" ] || set -- "$@" --imap-host "$imap_host"
   [ -z "$smtp_host" ] || set -- "$@" --smtp-host "$smtp_host"

@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-09-13 -->
 ---
 name: apply-authorization
 description: Les deux portes entre l'équipe et la boîte d'un recruteur, et comment lire leurs refus. Une candidature part UNIQUEMENT si l'utilisateur a donné son consentement général (`applications.auto_apply` dans la config utilisateur) ET a marqué cette position précise. Les deux sont fail-closed et vérifiées dans le code par `apply_gate.py`. Utilise-la au boot et avant chaque position pour lire la queue du CLOSER, et chaque fois que tu dois expliquer pourquoi une position n'est pas partie. Au CLOSER ; le Capitano lit la même queue pour décider s'il le spawne.
 allowed-tools: Bash(python3 /app/shared/skills/apply_gate.py *)
 ---
+<!-- @translation: fr, ai-translated 2026-09-13 -->
 
 # apply-authorization — ce qui peut partir, et pourquoi le reste non
 

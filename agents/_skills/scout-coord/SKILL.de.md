@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: scout-coord
 description: Koordinationsprotokoll beim Start zwischen mehreren Scouts. Ohne diese Fähigkeit durchsuchen zwei Scouts denselben Kreis (Remote EU) auf derselben Ebene (LinkedIn) und erzeugen 100 % Duplikate, die das Dedup-Gate dann verwerfen muss — verschwendetes Budget und langsameres Team. Verwende sie als ERSTE Aktion in deiner Schleife, vor allem anderen. Gehört zur Scout-Rolle; SCOUT-1 ist normalerweise der Schiedsrichter, wenn mehrere Scouts gleichzeitig starten.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # scout-coord — Territorium aufteilen
 

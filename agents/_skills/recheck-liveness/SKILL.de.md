@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: recheck-liveness
 description: "Prüft, ob eine Stellenanzeige NOCH OFFEN ist, ohne fälschlich als offen zu melden. Ersetzt den improvisierten curl (HTTP 200 = \"offen\"), der weder das per JavaScript gerenderte Ablaufdatum (Ashby/Workday/Greenhouse) noch die LinkedIn-Authwall sieht (200 auch bei geschlossenen Anzeigen). IMMER im Recheck verwenden; is_open niemals von Hand anhand eines einzelnen HTTP 200 setzen."
 allowed-tools: Bash(python3 /app/shared/skills/recheck_liveness.py *)
 ---
+<!-- @translation: de, ai-translated 2026-08-03 -->
 
 # recheck-liveness — "ist die Stelle noch offen?", richtig gemacht
 

@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: db-query
 description: Abfragen der JHT SQLite-DB (Positions, Applications, Statistiken). Verwende es, wann immer du Position-Status, Warteschlangen pro Agent, Scores, Match-Rate oder Datensatz-Zählungen benötigst. DB-Pfad aus $JHT_DB, Fallback /jht_home/jobs.db.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # db-query — JHT-DB-Abfragen
 

@@ -1,8 +1,8 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: memory-state
 description: Zustandsvariablen, die der Wachposten zwischen Ticks beibehalten muss (letzter gesendeter Befehl, Freeze-Flag, FATAL-Serie, Zaehler pro Zustand, Notfall-Verlauf, Cooldowns). Verwende diese Skill bei jedem Tick, um den Speicher zu aktualisieren und zu entscheiden, ob ein neuer Befehl erforderlich ist (edge-triggered).
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # Skill — Zustandsspeicher (Variablen zwischen Ticks)
 

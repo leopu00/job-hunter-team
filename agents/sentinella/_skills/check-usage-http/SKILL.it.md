@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: check-usage-http
 description: Controlla l'utilizzo del provider tramite HTTP fast path (~2s, zero token CLI). Azione PRIMARIA quando il bridge non riesce a leggere l'utilizzo. Fallback su `check-usage-tui` se HTTP restituisce RATE_LIMIT o fallisce.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # Skill — Controllo utilizzo via HTTP (rapido, ~2s, ZERO token)
 

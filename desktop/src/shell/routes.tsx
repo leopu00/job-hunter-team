@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import AgentsPage from "../pages/agents";
 import DashboardPage from "../pages/dashboard";
+import MailPage from "../pages/mail";
 import MapPage from "../pages/map";
 import MessagesPage from "../pages/messages";
 import OfficePage from "../pages/office";
@@ -51,4 +52,5 @@ export const ROUTES: Route[] = [
   // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in desktop-links.ts).
   { path: "/agents", page: AgentsPage },
   { path: "/office", page: OfficePage, fullBleed: true },
+  { path: "/mail", page: MailPage },
 ];

@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: feedback-query
 description: Lê feedback do utilizador (like/dislike/hide/star) da cloud — por posição ou agregado numa janela. O Scorer usa-o apenas como evidência contextual de preferência para posições futuras, excluindo a atual; o Mentor conta motivos recorrentes (Padrão F) e o Scout usa-o como sinal contextual. Retorna um payload neutro "sem sinal" quando a cloud está indisponível.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 ## Fronteira raw/display (`RAW_DISPLAY_BOUNDARY`)
 

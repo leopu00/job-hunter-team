@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: profile-yaml
 description: "Mantener `$JHT_HOME/profile/candidate_profile.yml` — los datos estructurados del candidato que consume todo el equipo. El frontend sondea este archivo cada ~2s; un YAML invalido hace que el panel izquierdo del usuario se quede silenciosamente en blanco. Propiedad del Assistente. Usar esta skill en CADA nueva pieza de informacion del usuario (texto o archivo subido): escribir incrementalmente, validar inmediatamente, hablar con el usuario solo despues de que el validador diga VALID_PROFILE. Tambien cubre `ready.flag` (el desbloqueo del boton \"Ir al dashboard\") con su protocolo estricto de 3 pasos verificar-luego-anunciar."
 allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # profile-yaml — fuente unica de verdad sobre el candidato
 

@@ -90,6 +90,15 @@ const NOT_ERRORS: Record<string, string> = {
   snapshot: "wrapper subcommand",
   status: "wrapper subcommand",
   up: "wrapper subcommand",
+  // The mailbox (mail.rs): broker words read from `jht mail status`, and the
+  // broker's setup reasons, each mapped to a mail_* catalog code.
+  allowlist: "mail admission policy",
+  whole_mailbox: "mail admission policy",
+  email_monitor: "broker secret name",
+  present: "broker secret state",
+  password_not_utf8: "broker reason, shown as mail_password_invalid",
+  secret_password_missing: "broker reason, shown as mail_password_missing",
+  secret_user_missing: "broker reason, shown as mail_address_invalid",
   // States of the broker's LinkedIn login (`jht linkedin status`), shown as a status.
   logged_in: "broker login state",
   login_required: "broker login state",

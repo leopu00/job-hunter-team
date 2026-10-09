@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: pipeline-triage
 description: "Döntsd el, MELYIK szerepet indítsd / szüneteltesd / állítsd le a backlog állapota alapján, ne megérzés alapján. Nyisd meg ezt a skillt MINDEN alkalommal, amikor megfigyeled — csapat sebesség < 50% cél, VAGY bármely szerep sora = 0, VAGY Scout források kimerültek, VAGY [SCALA UP] a Sentinellától, VAGY `PIPELINE VUOTA + UNDERSHOOT`, VAGY `MARGINE` a bridge-pacingtől, VAGY hidegindítás, VAGY valahányszor kísértésbe esel, hogy \"csak indíts még egy Scoutot\". NE várd meg a Sentinella kifejezett [SCALA UP] parancsát, ha a feltételek már láthatók a metrikákban. A lényeg: olvass le 4 számot, válaszd ki azt az egy szerepet, amely feloldja a szűk keresztmetszetet, és add át a `spawn-agent`-nek."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # pipeline-triage — adatvezérelt skálázás
 

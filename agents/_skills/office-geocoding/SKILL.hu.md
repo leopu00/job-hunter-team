@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: office-geocoding
-description: Az iroda épület pontos geokódolása (lat/lon/cím) egy pozícióhoz MIUTÁN a location-enrichment feltöltötte a loc_city/loc_country-t. Agresszívan használj web keresést (3+ kísérlet) a cég HQ/iroda cím megtalálásához, majd oldd fel a koordinátákat Nominatim/Photon-on. Csak kimerítő keresés sikertelensége VAGY több kétértelmű iroda esetén hagyd ki. Beállítja: office_lat, office_lon, office_address, office_geocoded, office_verified.
+description: "Az iroda épület pontos geokódolása (lat/lon/cím) egy pozícióhoz MIUTÁN a location-enrichment feltöltötte a loc_city/loc_country-t. Agresszívan használj web keresést (3+ kísérlet) a cég HQ/iroda cím megtalálásához, majd oldd fel a koordinátákat Nominatim/Photon-on. Csak kimerítő keresés sikertelensége VAGY több kétértelmű iroda esetén hagyd ki. Beállítja: office_lat, office_lon, office_address, office_geocoded, office_verified."
 allowed-tools: Bash(python3 *), Bash(jq *), WebSearch, WebFetch
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # office-geocoding — az iroda pontos koordinátái
 

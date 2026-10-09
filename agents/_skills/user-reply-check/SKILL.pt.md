@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: user-reply-check
 description: Le as respostas do usuario que chegaram pelo dashboard web (canal de fallback quando o Telegram estava fora/nao configurado). Execute no inicio de cada iteracao do loop. A ferramenta retorna as respostas nao vistas para o SEU agente e as marca como vistas para que voce nao as processe duas vezes. Esta e a metade "marker prompt-injection" do padrao notify-user (decisao 2026-05-13).
 allowed-tools: Bash(jht-check-user-replies *)
 ---
+<!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # user-reply-check — recolhe as respostas do usuario enviadas pelo dashboard web
 

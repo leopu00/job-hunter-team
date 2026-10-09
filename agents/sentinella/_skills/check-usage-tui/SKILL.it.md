@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: check-usage-tui
 description: Controlla l'uso del provider tramite TUI worker (~30s, costa token CLI). FALLBACK quando `check-usage-http` restituisce RATE_LIMIT o fallisce. Avvia una sessione tmux effimera, esegue `/usage` (o `/status` per Codex), analizza la modal, chiude la sessione.
 allowed-tools: Bash(tmux *), Bash(python3 *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # Skill — Controllo uso tramite TUI worker (robusto, ~30s, costoso in token)
 

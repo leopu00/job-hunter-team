@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-28 -->
 ---
 name: throttle-distribution
-description: Döntsd el, KIT lassíts és MENNYIVEL, amikor a csapat fogyasztásának változnia kell. Akkor nyisd meg, ha egy `[PACE-GUARD]` tanács érkezik a paneledbe, ha a Sentinella `Throttle: N` szintet rendel el, vagy ha egy saját ellenőrzésed szerint az ablak kicsúszott az ütemből. Ezek mindegyike egyetlen csapatszintű szám; a beavatkozó szerv viszont ágensenkénti, és az ágensenkénti felosztás kizárólag a te dolgod — a worker-throttle-t egyetlen szkript sem mozdítja többé. Azt is megmondja, mikor a helyes lépés az, ha nem nyúlsz hozzá.
+description: "Döntsd el, KIT lassíts és MENNYIVEL, amikor a csapat fogyasztásának változnia kell. Akkor nyisd meg, ha egy `[PACE-GUARD]` tanács érkezik a paneledbe, ha a Sentinella `Throttle: N` szintet rendel el, vagy ha egy saját ellenőrzésed szerint az ablak kicsúszott az ütemből. Ezek mindegyike egyetlen csapatszintű szám; a beavatkozó szerv viszont ágensenkénti, és az ágensenkénti felosztás kizárólag a te dolgod — a worker-throttle-t egyetlen szkript sem mozdítja többé. Azt is megmondja, mikor a helyes lépés az, ha nem nyúlsz hozzá."
 allowed-tools: Bash(python3 *), Bash(jht-tmux-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-28 -->
 
 # throttle-distribution — ki lassít, és mennyivel
 

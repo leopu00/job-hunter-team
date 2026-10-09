@@ -1,9 +1,9 @@
-<!-- @translation: pt, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — trata um agente suspeito de estar PRESO NUM CICLO ATIVO (vivo e a gerar turnos, mas a repetir o mesmo ciclo sem produzir nada: ping-loop de ACK com um par, mesma ação/consulta que não leva a lado nenhum). Cobre a fenda entre C-08 (morto/silencioso → Dottore) e C-12 (a queimar com cadenza 0.00/min → kill). Escada graduada, Dottore-PRIMEIRO → kill + respawn limpo apenas se persistir ou queimar orçamento. Deteção determinística (diff de capture-pane + 0 progresso na DB), decisão de escalada deixada ao LLM."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: pt, ai-translated 2026-07-30 -->
 
 # agent-emergency — agente preso num ciclo ativo
 

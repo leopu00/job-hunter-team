@@ -1,6 +1,6 @@
 ---
 name: throttle-distribution
-description: Decide WHO slows down and BY HOW MUCH when the team's consumption has to change. Open it when a `[PACE-GUARD]` advisory lands in your pane, when the Sentinella orders a `Throttle: N` level, or when your own check says the window is off pace. Every one of those signals is a single team-level number; the actuator is per-agent, and choosing the per-agent split is yours alone — no script moves the worker throttle any more. Also tells you when the right move is to leave it alone.
+description: "Decide WHO slows down and BY HOW MUCH when the team's consumption has to change. Open it when a `[PACE-GUARD]` advisory lands in your pane, when the Sentinella orders a `Throttle: N` level, or when your own check says the window is off pace. Every one of those signals is a single team-level number; the actuator is per-agent, and choosing the per-agent split is yours alone — no script moves the worker throttle any more. Also tells you when the right move is to leave it alone."
 allowed-tools: Bash(python3 *), Bash(jht-tmux-send *)
 ---
 

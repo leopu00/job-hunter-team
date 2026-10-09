@@ -1,6 +1,6 @@
 ---
 name: bridge-pacing
-description: Read a 15-min `[BRIDGE PACING]` calibration tick — the bridge's measurement of the team's actual rate, with a verdict (SFORO / MARGINE / ALLINEATO) plus the per-agent share and cadence. The tick is addressed to the SENTINELLA, not to you: open this skill when she forwards you those numbers, or when you go and read a tick yourself. Do not sit waiting for one to land in your pane — it will not. Turning the verdict into per-agent throttle values is `throttle-distribution`.
+description: "Read a 15-min `[BRIDGE PACING]` calibration tick — the bridge's measurement of the team's actual rate, with a verdict (SFORO / MARGINE / ALLINEATO) plus the per-agent share and cadence. The tick is addressed to the SENTINELLA, not to you: open this skill when she forwards you those numbers, or when you go and read a tick yourself. Do not sit waiting for one to land in your pane — it will not. Turning the verdict into per-agent throttle values is `throttle-distribution`."
 allowed-tools: Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *)
 ---
 

@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: scout-web-access
 description: "Capa web-access cross-provider para los Scout (F-2). 5 componentes coordinados — anti-bot robust scrape, LinkedIn session + search, email IMAP poll, multi-Scout workspace claim, freshness focus. Usado como stack base para cada sweep: el Scout elige el nivel de acceso mas ligero que funciona, y escala solo cuando esta bloqueado."
 allowed-tools: Bash(python3 /app/shared/skills/web_scrape_robust.py *), Bash(python3 /app/shared/skills/linkedin_access.py *), Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_workspace.py *), Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # scout-web-access — fuentes de datos robustas para los Scout
 

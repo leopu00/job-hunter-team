@@ -1,9 +1,9 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
 ---
 name: telegram-send
 description: Envoie un message à l'utilisateur via Telegram (sortant). Utilise ceci sur le bridge Telegram — l'utilisateur est sur son téléphone, PAS devant le dashboard web. Le wrapper `jht-telegram-send` résout bot token + chat_id par agent depuis la configuration (`--from assistente|capitano|mentor`) ; n'appelle jamais directement l'API Bot.
 allowed-tools: Bash(jht-telegram-send *)
 ---
+<!-- @translation: fr, ai-translated 2026-06-06 -->
 
 # telegram-send — messages sortants vers l'utilisateur via Telegram
 

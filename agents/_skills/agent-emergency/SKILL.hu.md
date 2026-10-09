@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: agent-emergency
 description: "Capitano — olyan agenst kezel, amelyről feltehető, hogy AKTÍV HUROKBAN RAGADT (él és turnöket generál, de ugyanazt a ciklust ismétli anélkül, hogy bármit előállítana: ACK ping-hurok egy társsal, ugyanaz a művelet/lekérdezés, ami nem vezet sehová). A C-08 (halott/néma → Dottore) és a C-12 (cadenza 0.00/min mellett éget → kill) közötti rést fedi le. Fokozatos létra, Dottore-ELŐSZÖR → kill + tiszta respawn csak akkor, ha kitart vagy budgetet éget. Determinisztikus felismerés (capture-pane diff + 0 DB-előrehaladás), az eszkalációs döntés az LLM-re marad."
 allowed-tools: Bash(tmux *), Bash(jht-agent-contain *), Bash(jht-tmux-send *), Bash(/app/.launcher/spawn-doctor.sh *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # agent-emergency — aktív hurokban ragadt agens
 

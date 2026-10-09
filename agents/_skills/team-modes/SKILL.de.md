@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-08-03 -->
 ---
 name: team-modes
 description: "Das Handbuch der Team-Modi — eine Karte pro Modus (search / harvest / care / calibration / saving). Öffne es immer dann, wenn das stündliche [MODALITÀ CORRENTE]-Banner einen Modus nennt und du dich nicht erinnerst, was er operativ bedeutet, beim Aufwachen nach einem Context-Refresh, oder wenn der Nutzer den Modus aus dem Spiel heraus wechselt. Der Modus ist IMMER die Wahl des Nutzers - diese Skill sagt dir, wie du den aktuellen FÜHRST, nie wie du ihn änderst."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
+<!-- @translation: de, ai-translated 2026-08-03 -->
 
 # team-modes — was der aktuelle Modus bedeutet, in dreißig Sekunden
 

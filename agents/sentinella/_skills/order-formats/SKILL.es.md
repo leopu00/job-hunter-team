@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: order-formats
 description: Plantillas para las órdenes que el Centinela envía al Capitán. Usa esta skill cada vez que decidas notificar al Capitán — elige la plantilla correspondiente, rellena los marcadores, envía vía `jht-tmux-send`.
 allowed-tools: Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # Skill — Formatos de ORDEN al Capitán
 

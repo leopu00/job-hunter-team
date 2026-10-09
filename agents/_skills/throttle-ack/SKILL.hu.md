@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: throttle-ack
 description: Ird ala a felebredesedet. MINDIG minden felebredes ELSO parancsa, minden mas elott, valahanyszor `[RIPRENDI]` uzenetet kapsz egy throttle szunet utan. A `throttle-ack <neved>` NOTIFIED-rol ACTIVE-ra valtja a flagedet. Csak te tudod megtenni - a motor nem - es pontosan ezert egy NOTIFIED-en maradt flag annak bizonyiteka, hogy egy agent megkapta a felkeltest es nem valaszolt, es ezert eszkalal ra a watchdog. Ha kihagyod, egy tokeletesen egeszseges agent blokkoltnak fog tunni.
 allowed-tools: Bash(throttle-ack *), Bash(python3 /app/shared/skills/throttle_engine.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # throttle-ack — ird ala a felkeltest, aztan vissza a munkahoz
 

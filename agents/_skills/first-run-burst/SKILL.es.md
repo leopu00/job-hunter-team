@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-08-03 -->
 ---
 name: first-run-burst
 description: "La primera media hora en la que un usuario recién llegado ve trabajar al equipo. Abre esta skill cuando recibas `[PROFILO-PRONTO]` del Assistente, o al despertar si `first_run.py status` informa de la fase `awaiting_profile` / `burst`. Deroga la calibración gradual (C-02) solo durante la primera ventana, y define el éxito como posiciones CON PUNTUACIÓN en pantalla — no como posiciones encontradas."
 allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
+<!-- @translation: es, ai-translated 2026-08-03 -->
 
 # first-run-burst — la demostración de la que depende que el usuario se quede
 

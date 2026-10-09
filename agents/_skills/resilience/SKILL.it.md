@@ -1,8 +1,8 @@
-<!-- @translation: it, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Quando uno strumento mission-critical si rompe, MAI degradare in silenzio né riportare \"coda esaurita\"/new=0. Classifica rotto-vs-vuoto, poi risali la scala dei fallback — auto-riparazione via jht-install, retry, metodo alternativo, marcatura OPEN_UNVERIFIED, escalation al Capitano con il fix esatto. Usala ogni volta che uno strumento da cui dipendi (browser, linkedin_check, un fetch, una CLI) va in errore o manca una dipendenza."
 ---
+<!-- @translation: it, ai-translated 2026-08-03 -->
 
 # resilience — mai arrendersi in silenzio davanti a uno strumento rotto
 

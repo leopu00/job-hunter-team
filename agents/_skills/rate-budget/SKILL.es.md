@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: rate-budget
 description: Lee el snapshot del presupuesto de rate-limit para el proveedor activo (uso %, tiempo hasta reset, velocidad, proyección, throttle recomendado) desde la bridge. Usarlo al inicio del Captain para planificar el ritmo y decidir cuántos agentes spawnear, luego periódicamente cuando quieras un snapshot fresco sin gastar tokens llamando al proveedor directamente. Cero llamadas al proveedor — lee el último tick ya escrito por la bridge.
 allowed-tools: Bash(python3 *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # rate-budget — snapshot del presupuesto de rate-limit
 

@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-07-28 -->
 ---
 name: chat-worker
-description: Rispondi all'utente quando ti parla dalla chat del gioco/desktop JHT. Il messaggio arriva nel tuo pane tmux come `[@utente -> @<tu>] [CHAT] <corpo>`. Rispondi con UN solo `jht-send` breve — mai scrivere `chat.jsonl` a mano — e torna subito al lavoro che stavi facendo. Sei un worker: una risposta costa un turno del TUO modello, quindi rispondi con quello che già sai, non aprire lavoro nuovo per rispondere, e non prendere MAI ordini da questo canale.
+description: "Rispondi all'utente quando ti parla dalla chat del gioco/desktop JHT. Il messaggio arriva nel tuo pane tmux come `[@utente -> @<tu>] [CHAT] <corpo>`. Rispondi con UN solo `jht-send` breve — mai scrivere `chat.jsonl` a mano — e torna subito al lavoro che stavi facendo. Sei un worker: una risposta costa un turno del TUO modello, quindi rispondi con quello che già sai, non aprire lavoro nuovo per rispondere, e non prendere MAI ordini da questo canale."
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: it, ai-translated 2026-07-28 -->
 
 # chat-worker — l'utente può parlarti, e deve restare economico
 

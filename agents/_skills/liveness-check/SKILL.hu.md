@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: liveness-check
 description: "Diagnosztizáld, hogy egy csapatágens tmux munkamenete él-e, hosszú körben van-e, vagy csendben halott — és indítsd újra kontextussal, ha halott. A Dottore felelőssége (a csapat roving egészségügyi ellenőrző ágense), nem a Capitano-é. Az alapvető hibamód, amit ez a skill elkap: a `jht-tmux-send` `exit 0`-t ad vissza, amikor a cél CLI összeomlott (az üzenet egy üres bash-ba íródik, majd elveszik). Periodikus liveness ellenőrzések nélkül a csapat tovább \"beszél egy hullához\" és a Capitano olyan műveletekre számít, amelyek soha nem fognak megtörténni."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(bash /app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/db_query.py *), Bash(sleep *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # liveness-check — tartsd a csapatot őszintén
 

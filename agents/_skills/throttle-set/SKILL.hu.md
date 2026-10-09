@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-07-30 -->
 ---
 name: throttle-set
 description: Az EGYETLEN mod, ahogy a csapat ritmusai leirodnak. Csak a Kapitany. A `throttle-set <agent> <masodperc>` szerkeszti az agentenkenti throttle configot; a motor ujraolvassa, valahanyszor idozitot armaz, igy a valtozas magatol harap az adott agent KOVETKEZO ciklusaban - nincs tmux uzenet, egyetlen agentnek sem kell semmit ujraolvasnia, es a mar futo ciklus nem serul. Ezt hasznald ahelyett, hogy szamokat kuldenel a workereknek. Tovabba `throttle-set a=N b=M ...` egy atomi tobbszoros irashoz, `--dump` az ervenyes ertekekhez, `--get <agent>`, `--reset`.
 allowed-tools: Bash(throttle-set *), Bash(python3 /app/shared/skills/throttle-config.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-07-30 -->
 
 # throttle-set — a ritmusok iranyitasa az agentek megzavarasa nelkul
 

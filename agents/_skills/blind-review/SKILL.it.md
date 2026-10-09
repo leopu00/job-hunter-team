@@ -1,9 +1,9 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: blind-review
 description: Protocollo completo di revisione del Critico — ricevi PDF + JD, esegui una revisione cieca (senza accesso al profilo), produci un verdetto strutturato con punteggio 1-10 + 7 sezioni fisse + tabella JD-vs-CV + azioni prioritizzate, salva il file sotto `$JHT_USER_DIR/critiche/`, notifica lo Scrittore che ti ha spawnato, fermati. Responsabilità del Critico. Il punto centrale del "blind" — NON devi leggere il profilo del candidato; sai solo ciò che c'è sul PDF davanti a te. Il bias da ancoraggio derivante da conoscenze pregresse romperebbe il protocollo a 3 round su cui lo Scrittore fa affidamento.
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
 ---
+<!-- @translation: it, ai-translated 2026-06-06 -->
 
 # blind-review — una revisione, nessun ancoraggio
 

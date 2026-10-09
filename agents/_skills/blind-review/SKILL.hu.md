@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: blind-review
 description: A Critic teljes felülvizsgálati protokollja — PDF + JD fogadása, vak felülvizsgálat futtatása (profil-hozzáférés nélkül), strukturált ítélet készítése 1-10 pontszámmal + 7 rögzített szekció + JD-vs-CV táblázat + prioritizált cselekvések, fájl mentése a `$JHT_USER_DIR/critiche/` alá, a hívó Író értesítése, megállás. A Critic felelőssége. A "vak" lényege — NEM szabad olvasnod a jelölt profilt; csak azt tudod, ami a PDF-en van előtted. A korábbi tudásból származó lehorgonyzási torzítás megtörné a 3 körös protokollt, amelyre az Író épít.
 allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # blind-review — egy felülvizsgálat, horgonyok nélkül
 

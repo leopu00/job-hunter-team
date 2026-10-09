@@ -1,9 +1,9 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
 ---
 name: bridge-mailbox
 description: Drenar veredictos pendientes del bridge al INICIO de cada turno del Captain — acción obligatoria PRIMERO antes de hacer cualquier otra cosa. Durante un turno largo, `jht-tmux-send` desde el bridge puede fallar con rc=3 (texto nunca apareció en el panel) y un veredicto `[BRIDGE PACING]` o `PIPELINE STALLED` se pierde silenciosamente. El bridge añade CADA veredicto a un buzón JSONL para que puedas recuperarlos. Saltarse este drenaje significa actuar con mediciones obsoletas mientras un veredicto más reciente está sin leer.
 allowed-tools: Bash(python3 /app/shared/skills/bridge_mailbox.py *)
 ---
+<!-- @translation: es, ai-translated 2026-06-06 -->
 
 # bridge-mailbox — recuperar veredictos perdidos
 

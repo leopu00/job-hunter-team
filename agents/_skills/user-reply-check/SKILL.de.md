@@ -1,9 +1,9 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: user-reply-check
 description: Liest Benutzerantworten, die ueber das Web-Dashboard eingegangen sind (Fallback-Kanal wenn Telegram ausgefallen/nicht konfiguriert war). Fuehre dies am Anfang jeder Loop-Iteration aus. Das Tool gibt die ungelesenen Antworten fuer DEINEN Agenten zurueck und markiert sie als gesehen, damit du sie nicht doppelt verarbeitest. Dies ist die "marker prompt-injection"-Haelfte des notify-user-Musters (Entscheidung 2026-05-13).
 allowed-tools: Bash(jht-check-user-replies *)
 ---
+<!-- @translation: de, ai-translated 2026-06-06 -->
 
 # user-reply-check — Benutzerantworten vom Web-Dashboard abholen
 

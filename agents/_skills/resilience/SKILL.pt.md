@@ -1,8 +1,8 @@
-<!-- @translation: pt, ai-translated 2026-08-03 -->
 ---
 name: resilience
 description: "Quando uma ferramenta crítica para a missão falha, NUNCA degrades em silêncio nem reportes \"fila esgotada\"/new=0. Classifica avariada-vs-vazia e depois sobe a escada de fallbacks — reparação automática via jht-install, nova tentativa, método alternativo, marcar OPEN_UNVERIFIED, escalar ao Capitano com a correção exata. Usa-a sempre que uma ferramenta de que dependes (browser, linkedin_check, um fetch, uma CLI) dê erro ou falte uma dependência."
 ---
+<!-- @translation: pt, ai-translated 2026-08-03 -->
 
 # resilience — nunca desistir em silêncio perante uma ferramenta avariada
 

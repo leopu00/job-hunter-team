@@ -1,9 +1,9 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: mentor-output
 description: Hogyan beszél a Mentor, miután a `mentor-patterns` egy mintája átlépte a küszöböt. Három kimeneti formátum — stratégiai tanács (ritka, súlyos), heti összefoglaló, igény szerinti válasz — mindegyik szigorú forma- és hangszabályokkal. A Mentor tekintélye abból ered, milyen ritkán szólal meg és mennyit nyomnak a szavai; ez a skill érvényesíti ezt. A Mentor felelőssége. Párosítsd a `chat-web`-vel (kézbesítés jht-send-en keresztül) és a `mentor-patterns`-szel (a trigger).
 allowed-tools: Bash(jht-send *)
 ---
+<!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # mentor-output — hang + formátum
 
