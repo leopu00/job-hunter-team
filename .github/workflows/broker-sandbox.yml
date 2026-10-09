@@ -12,6 +12,10 @@ on:
     branches:
       - master
       - master-arthur
+      # The integrator's trial branches: a job that never ran is proved on
+      # one of them before it reaches master-arthur. A workflow_dispatch
+      # cannot do it, as long as this file is not on the default branch.
+      - "ci-**"
     paths:
       - "Dockerfile"
       - "shared/broker/**"
