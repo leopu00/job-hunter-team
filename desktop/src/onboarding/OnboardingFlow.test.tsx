@@ -139,7 +139,7 @@ describe("OnboardingFlow technical setup", () => {
 
   it("lists, before the Windows setup starts, what it installs: the values are the script's", async () => {
     const script = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
-    const init = script.match(/'machine' 'init' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
+    const init = script.match(/'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
     expect(init, "podman machine init not found in the script").not.toBeNull();
     const [, cpus, memoryMb, diskGb] = init!;
     expect(WINDOWS_SETUP).toMatchObject({ cpus: Number(cpus), memoryGb: Number(memoryMb) / 1024, diskGb: Number(diskGb) });
