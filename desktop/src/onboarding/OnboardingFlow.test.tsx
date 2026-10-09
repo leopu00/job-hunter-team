@@ -158,9 +158,9 @@ describe("OnboardingFlow technical setup", () => {
     for (const id of packages) expect(installs).toHaveTextContent(id);
     expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
     expect(installs).toHaveTextContent(/PATH del tuo utente: dove Docker non c’è, il comando docker nei tuoi terminali porta a Podman/i);
-    // How they are removed, and what the app cannot remove yet.
-    expect(installs).toHaveTextContent(/si disinstallano da Impostazioni › App › App installate/);
-    expect(installs).toHaveTextContent(/per ora, non si tolgono dall’app/);
+    // How they are removed: JHT's own part from the app, Podman and Compose from Windows.
+    expect(installs).toHaveTextContent(/si tolgono dall’app, da «Questo computer › Rimuovi JHT da questo computer»/);
+    expect(installs).toHaveTextContent(/Podman e Docker Compose restano: si disinstallano da Impostazioni › App › App installate/);
   });
 
   it("asks for the consent in the language of Windows when the person chose none", async () => {

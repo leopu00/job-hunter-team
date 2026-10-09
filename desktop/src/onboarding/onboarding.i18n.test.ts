@@ -126,3 +126,13 @@ describe("the onboarding and mail screens hold no hand-written sentence", () => 
     expect(handWritten("probe.tsx", probe).found).toEqual(["Stato", "ok", "Prepara la squadra", "Ciao a tutti"]);
   });
 });
+
+describe("the Windows consent says where JHT is removed", () => {
+  it.each(locales)("%s: it names the removal page, and Podman and Compose as staying", (locale) => {
+    const computer = COMPUTER_TEXT[locale];
+    const removal = ONBOARDING_TEXT[locale].installsRemoval;
+    expect(removal).toContain(`${computer.navLabel} › ${computer.removeTitle}`);
+    expect(removal).toContain("Podman");
+    expect(removal).toContain("Docker Compose");
+  });
+});
