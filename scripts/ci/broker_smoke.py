@@ -90,7 +90,7 @@ def main(argv: list[str]) -> int:
         if seen.stdout.strip() != "False":
             fail("secret-volumes", "the broker's volumes are visible to the agent")
     finally:
-        docker("rm", "-f", broker, check=False)
+        docker("rm", "-f", "-v", broker, check=False)
         for vol in vols.values():
             docker("volume", "rm", "-f", vol, check=False)
     print(f"checks done: {fails} failed")

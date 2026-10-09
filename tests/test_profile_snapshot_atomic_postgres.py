@@ -282,7 +282,7 @@ def postgres16():
         psql.container_name = name
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def _snapshot(name: str, *, skill_category: str = "primary") -> dict:

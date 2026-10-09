@@ -128,7 +128,7 @@ def pg():
         psql(bootstrap)
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def _write(pg, body: dict, *, check=True):

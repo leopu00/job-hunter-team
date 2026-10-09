@@ -204,7 +204,7 @@ def postgres16():
         psql(pairing_sql)
         yield name, psql, tenant_sql is not None
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def test_migration_sanitizes_existing_expired_plaintext(postgres16):

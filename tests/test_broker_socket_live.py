@@ -89,7 +89,7 @@ def stack(request):
                    IMAGE, "python3", "-c", script, check=False)
 
     yield engine, agent, broker
-    run(engine, "rm", "-f", broker, check=False)
+    run(engine, "rm", "-f", "-v", broker, check=False)
     for vol in names.values():
         run(engine, "volume", "rm", "-f", vol, check=False)
 
