@@ -1,10 +1,10 @@
 # Choose where to run Job Hunter Team
 
 Job Hunter Team (JHT) has one containerized team and more than one place to
-run it. The desktop application stays on the computer you use; on macOS and
-Linux the Docker container can run on that same computer or on a Linux host
-reached over SSH. The Windows 0.4 desktop supports only the Linux host over SSH;
-local Windows execution is planned for a later version.
+run it. The desktop application stays on the computer you use, and the
+container can run on that same computer or on a Linux host reached over SSH.
+On macOS and Linux the local container runs in Docker; on Windows 0.4 it runs
+in Podman inside WSL, installed by the app.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -14,8 +14,8 @@ host.
 ## Decision tree
 
 1. **Do you want the shortest path to a first working team?** Run it on your
-   **local PC** when the desktop is on macOS or Linux. On Windows 0.4, choose a
-   **VPS**: the native office deliberately does not offer a local runtime.
+   **local PC**. On Windows 0.4 the app installs Podman inside WSL for it;
+   WSL must already be enabled.
 2. **Do you already have a spare computer that can stay on, and will you use
    it mainly from the same trusted local network?** A **dedicated Linux PC on
    the LAN** can work through the existing SSH transport. This is an advanced
@@ -28,17 +28,16 @@ host.
    Optional cloud sync can show supported mirrored data in the browser, but it
    does not make the remote host reachable over SSH.
 
-If you are unsure, start locally on macOS or Linux; on Windows 0.4, start with a
-VPS. Moving later is possible, but read [Moving an existing
+If you are unsure, start locally. Moving later is possible, but read [Moving an existing
 team](#moving-an-existing-team) before relying on the automated migration flow.
 
 ## At a glance
 
 | | Local PC | Dedicated PC on the LAN | VPS |
 |---|---|---|---|
-| **Current product path** | Supported on macOS/Linux; unavailable in the Windows 0.4 office | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
+| **Current product path** | Supported on macOS and Linux (Docker) and on Windows 0.4 (Podman inside WSL) | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
 | **Where the team runs** | Your everyday computer | A Linux computer you own or control | A Linux virtual server from an infrastructure provider |
-| **How the desktop reaches it** | Direct `docker` commands | SSH over your network | SSH over the internet |
+| **How the desktop reaches it** | Direct `docker` commands (on Windows, forwarded to Podman) | SSH over your network | SSH over the internet |
 | **Must your everyday PC stay on?** | Yes | No; only while you use the desktop | No; only while you use the desktop |
 | **What must stay available?** | Your PC, Docker and its network connection | Dedicated PC, Docker, power and the LAN | VPS, Docker, provider account and network |
 | **Where persistent workspace data lives** | On your PC | On the dedicated PC | On the VPS provider's storage |
@@ -79,17 +78,17 @@ desktop, container, SSH and optional-cloud boundaries.
 
 ## Path 1 — Local PC
 
-Choose this on macOS or Linux when you want the least infrastructure and can
-leave your computer awake while the agents work. The Windows 0.4 native office
-does not expose this path; use a Linux VPS instead.
+Choose this when you want the least infrastructure and can leave your computer
+awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL;
+Kimi is not supported yet when the team runs on this computer on Windows.
 
 ### What you need
 
-- A supported local-runtime desktop release: Linux x64 or macOS (Intel 11 or
-  newer; Apple silicon 13 or newer). Windows x64 can run the office, but its
-  0.4 onboarding requires a Linux VPS.
-- Docker installed and running. The native setup guide handles the supported
-  runtime choices for macOS and Linux.
+- A supported desktop release: Linux x64, macOS (Intel 11 or newer; Apple
+  silicon 13 or newer) or Windows x64.
+- On macOS and Linux, Docker installed and running; the native setup guide
+  handles the supported runtime choices. On Windows, WSL enabled: the app
+  installs Podman and the rest, and Docker Desktop is not needed.
 - About **8 GB of RAM available before starting the team** for comfortable
   local use. This is a measured recommendation, not a universal minimum.
 - Enough unmeasured disk headroom for the image and your data.

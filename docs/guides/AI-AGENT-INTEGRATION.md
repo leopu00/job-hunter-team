@@ -63,9 +63,12 @@ Get-Content .\install.ps1
 .\install.ps1
 ```
 
-Windows requires Docker Desktop to be installed, running and through its own
-first-run consent. On macOS and Linux, the installer can prepare a supported
-runtime after user confirmation.
+On Windows the installer runs the team in Podman inside WSL: it installs the
+Podman CLI and the Compose provider through winget when they are missing, and
+Docker Desktop is not needed. WSL must already be enabled; the installer does
+not enable it. Kimi is not supported yet when the team runs on Windows. On
+macOS and Linux, the installer can prepare a supported runtime after user
+confirmation.
 
 The container path downloads the Compose file, host wrapper and, on
 macOS/Linux, the host preflight helper. It creates `~/.jht/host.env` and may

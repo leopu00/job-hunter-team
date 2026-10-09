@@ -89,13 +89,13 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A Docker hivatalos telepítési oldala ehhez a rendszerhez.",
     },
     caption: {
-      en: "Docker Desktop on macOS and Windows, Docker Engine on Linux.",
-      it: "Docker Desktop su macOS e Windows, Docker Engine su Linux.",
-      es: "Docker Desktop en macOS y Windows, Docker Engine en Linux.",
-      fr: "Docker Desktop sur macOS et Windows, Docker Engine sur Linux.",
-      de: "Docker Desktop unter macOS und Windows, Docker Engine unter Linux.",
-      pt: "Docker Desktop no macOS e Windows, Docker Engine no Linux.",
-      hu: "Docker Desktop macOS-en és Windowson, Docker Engine Linuxon.",
+      en: "Docker Desktop on macOS, Docker Engine on Linux.",
+      it: "Docker Desktop su macOS, Docker Engine su Linux.",
+      es: "Docker Desktop en macOS, Docker Engine en Linux.",
+      fr: "Docker Desktop sur macOS, Docker Engine sur Linux.",
+      de: "Docker Desktop unter macOS, Docker Engine unter Linux.",
+      pt: "Docker Desktop no macOS, Docker Engine no Linux.",
+      hu: "Docker Desktop macOS-en, Docker Engine Linuxon.",
     },
     assets: {
       linux: {
@@ -108,13 +108,10 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 1512,
         height: 828,
       },
-      windows: {
-        src: "/setup-guide/S02-docker-download-windows.png",
-        width: 1366,
-        height: 768,
-      },
+      // Niente variante Windows: lì il team gira in Podman dentro WSL, che
+      // l'app installa da sé, e la fase Windows non mostra questa pagina.
     },
-    pending: "Completa sui tre sistemi.",
+    pending: "Completa su macOS e Linux.",
   },
   {
     id: "S03-artifact-download",
@@ -408,13 +405,13 @@ const SCREEN_LIST: GuideScreen[] = [
   {
     id: "S10-choose-provider",
     alt: {
-      en: "The provider choice: Claude, Codex or Kimi, with the subscription plan.",
-      it: "La scelta del provider: Claude, Codex o Kimi, con il piano di abbonamento.",
-      es: "La elección de proveedor: Claude, Codex o Kimi, con el plan de suscripción.",
-      fr: "Le choix du fournisseur : Claude, Codex ou Kimi, avec le plan d'abonnement.",
-      de: "Die Anbieterwahl: Claude, Codex oder Kimi, mit dem Abo-Tarif.",
-      pt: "A escolha do provedor: Claude, Codex ou Kimi, com o plano de subscrição.",
-      hu: "A szolgáltató kiválasztása: Claude, Codex vagy Kimi, az előfizetési csomaggal.",
+      en: "The provider choice: Claude, Codex or Kimi (not yet on Windows when the team runs locally), with the subscription plan.",
+      it: "La scelta del provider: Claude, Codex o Kimi (non ancora su Windows col team in locale), con il piano di abbonamento.",
+      es: "La elección de proveedor: Claude, Codex o Kimi (aún no en Windows con el equipo en local), con el plan de suscripción.",
+      fr: "Le choix du fournisseur : Claude, Codex ou Kimi (pas encore sous Windows avec l'équipe en local), avec le plan d'abonnement.",
+      de: "Die Anbieterwahl: Claude, Codex oder Kimi (unter Windows mit lokalem Team noch nicht), mit dem Abo-Tarif.",
+      pt: "A escolha do provedor: Claude, Codex ou Kimi (ainda não no Windows com a equipa local), com o plano de subscrição.",
+      hu: "A szolgáltató kiválasztása: Claude, Codex vagy Kimi (helyi csapattal Windowson még nem), az előfizetési csomaggal.",
     },
     // La didascalia dichiara ciò che l'inquadratura NON mostra. Su Linux il
     // provider è scelto ma non ancora autenticato, quindi al posto

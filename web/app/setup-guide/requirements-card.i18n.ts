@@ -9,13 +9,13 @@ import type { GuideText } from "./guide-types";
 
 export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
   docker: {
-    en: "Required",
-    it: "Obbligatorio",
-    es: "Obligatorio",
-    fr: "Requis",
-    de: "Erforderlich",
-    pt: "Obrigatório",
-    hu: "Szükséges",
+    en: "Required on macOS and Linux — on Windows the app installs Podman inside WSL",
+    it: "Obbligatorio su macOS e Linux — su Windows l’app installa Podman dentro WSL",
+    es: "Obligatorio en macOS y Linux — en Windows la aplicación instala Podman dentro de WSL",
+    fr: "Requis sous macOS et Linux — sous Windows, l’application installe Podman dans WSL",
+    de: "Unter macOS und Linux erforderlich — unter Windows installiert die App Podman in WSL",
+    pt: "Obrigatório no macOS e no Linux — no Windows a aplicação instala o Podman dentro do WSL",
+    hu: "macOS-en és Linuxon szükséges — Windowson az alkalmazás Podmant telepít a WSL-be",
   },
   memory: {
     en: "About 8 GB available before starting the team",

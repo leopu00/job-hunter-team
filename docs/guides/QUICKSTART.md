@@ -17,7 +17,7 @@ You need an active subscription to **one** of:
 | --- | ---------- | ---------- | ------- | ----------------------------------------------------------------------------------------- |
 | 🟠  | **Claude** | Max x20    | ~€200   | ✅ Production-ready, best precision                                                       |
 | 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
-| 🌙  | **Kimi**   | Pro        | ~€40    | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing)            |
+| 🌙  | **Kimi**   | Pro        | ~€40    | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing). Not supported yet when the team runs on this computer on Windows |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
@@ -25,9 +25,9 @@ For comfortable local use on macOS or Linux, keep about **8 GB of RAM available
 before starting the team**. This is a measured recommendation, not a universal
 minimum. No universal local disk minimum has been measured; leave room for the
 Docker image and persistent data. The desktop releases support Windows x64,
-Linux x64 and macOS (Intel: 11+; Apple silicon: 13+), but the Windows 0.4 office
-controls a Linux VPS only. Local Windows execution is planned for a later
-version.
+Linux x64 and macOS (Intel: 11+; Apple silicon: 13+). On Windows 0.4 the team
+runs on your computer in Podman inside WSL, installed by the app; Docker Desktop
+is not needed, but WSL must already be enabled.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
@@ -65,8 +65,7 @@ The office is visible immediately. Select **Activate team** and complete all
 four required gates: a local container or connected VPS runtime, provider login
 in the embedded console with a plan selected, candidate profile, and working
 hours. On macOS and Linux, the office can launch the local runtime installer.
-On Windows 0.4, onboarding offers only a Linux VPS and does not attempt a local
-install. Optional email, Telegram, account sync and VPS setup live under
+On Windows 0.4, onboarding installs the local runtime too: Podman inside WSL. Optional email, Telegram, account sync and VPS setup live under
 **Settings**.
 
 > The office is the interaction cockpit. The web dashboard reflects synced
@@ -97,37 +96,21 @@ The shorter form, after you have reviewed it, is:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-**Windows (PowerShell, no WSL required):**
+**Windows (PowerShell; WSL must be enabled):**
 
 ```powershell
 iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 ```
 
-> ⚠️ Windows path requires **Docker Desktop** already installed and running. The PowerShell installer doesn't install Docker for you (Docker Desktop is an MSI with its own EULA flow — out of scope for an unattended script).
-
-**Windows Podman migration preview:** the repository also contains a tested,
-headless migration path that leaves the existing `docker` call sites unchanged.
-From a reviewed checkout run:
-
-```powershell
-pwsh -File scripts/enable-podman-windows-runtime.ps1 `
-  -MachineName jht-podman -InstallDependencies -InitializeMachine
-```
-
-It installs/starts a rootless Podman WSL machine, a standalone Compose provider,
-the persistent Windows-interop network service, the native `docker.exe` shim and
-the attested Compose override. System-level services inside the dedicated machine
-run the rootless API with `cgroupfs`, restore the JHT container after a machine
-restart and avoid collisions with user managers from other WSL distributions.
-Existing Docker-created DrvFS metadata is repaired with a recoverable backup when
-needed. The path has passed lifecycle, clean shutdown/reboot, image build, Codex
-agent auto-restore and response tests on Windows; it remains a preview until the
-same chain is repeated on a clean Windows account.
+> On Windows the installer runs the team in a rootless Podman machine
+> (`jht-podman`) inside WSL. It installs the Podman CLI and the Compose provider
+> through winget when they are missing; Docker Desktop is not used. WSL itself
+> must already work: the installer stops and says so when it does not.
 
 The installer:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
-2. Installs the **Docker runtime** (macOS: Colima by default or your Docker Desktop via `--runtime`; reuses any Docker already running. `docker.io` on Linux/WSL2). On Windows: verifies Docker Desktop is running.
+2. Installs the **Docker runtime** (macOS: Colima by default or your Docker Desktop via `--runtime`; reuses any Docker already running. `docker.io` on Linux/WSL2). On Windows: installs Podman and Compose when missing and starts the `jht-podman` machine inside WSL.
 3. Downloads `docker-compose.yml`, the host wrapper and, on macOS/Linux, the host preflight helper.
 4. Creates `~/.jht/host.env` and registers the wrapper directory on `PATH` when needed.
 
@@ -265,8 +248,9 @@ If you chose the native app:
    the suggested replies to prepare your profile, choose local/VPS runtime and
    provider, and set search preferences.
 3. **Complete the native checklist.** On macOS or Linux, bring up the local
-   container or connect a VPS. On Windows 0.4, connect a Linux VPS; local
-   execution is not offered yet. Authorize Codex, Claude or Kimi in the embedded
+   container or connect a VPS. On Windows 0.4, the local container runs in
+   Podman inside WSL, or connect a VPS. Authorize Codex, Claude or Kimi (Kimi is
+   not supported yet when the team runs on Windows) in the embedded
    console and select its plan, fill the Profile page, and configure working
    hours. Provider links may open in your browser, but codes and terminal
    interaction remain wrapped inside the office.

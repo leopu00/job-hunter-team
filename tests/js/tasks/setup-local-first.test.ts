@@ -273,12 +273,21 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
     expect(chooseWhere).toContain("advanced topology, not separately validated as a guided path");
   });
 
-  it("la release 0.4 non promette il runtime locale Windows nelle guide native", () => {
+  // Fino al 09/10 questo test teneva la promessa opposta («Windows 0.4: solo
+  // VPS»). Con la catena Windows il team gira in locale in Podman dentro WSL,
+  // installato dall'app: le guide lo dicono, e nessuna torna a chiedere Docker
+  // Desktop o a rimandare l'esecuzione locale. Il README ha la sua frase vecchia
+  // ma resta fuori dal controllo positivo: il suo framing lo decide l'operatore.
+  it("la release 0.4 dice che su Windows il team gira in locale, in Podman dentro WSL", () => {
     for (const guide of nativeOfficeGuides) {
-      expect(guide).toMatch(/Windows 0\.4/i);
       expect(guide).not.toMatch(/Windows users must complete\s+Docker Desktop/i);
     }
-    expect(chooseWhere).toContain("unavailable in the Windows 0.4 office");
-    expect(chooseWhere).toContain("use a Linux VPS instead");
+    for (const guide of nativeOfficeGuides.slice(1)) {
+      expect(guide).toMatch(/Windows 0\.4/i);
+      expect(guide).toMatch(/Podman\s+(?:inside|dentro|dentro de|dans|in|dentro do)\s+(?:o\s+)?WSL|WSL-en belül futó Podman/i);
+      expect(guide).not.toMatch(/local Windows execution is planned|does not offer local execution yet|offers only a Linux VPS/i);
+    }
+    expect(chooseWhere).toContain("on Windows 0.4 it runs");
+    expect(chooseWhere).not.toContain("use a Linux VPS instead");
   });
 });

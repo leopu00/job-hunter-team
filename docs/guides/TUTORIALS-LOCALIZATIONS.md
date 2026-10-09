@@ -47,8 +47,9 @@ variare il risultato, ma non è un'operazione da cinque minuti.
    setup: conversazioni e posizioni di esempio non avviano un team dal vivo né
    usano un provider.
 4. **Apri la checklist.** Seleziona **Attiva team**. Su macOS o Linux scegli un
-   runtime locale o collega una VPS. Su Windows 0.4 collega una VPS Linux:
-   l'ufficio nativo non offre ancora l'esecuzione locale.
+   runtime locale o collega una VPS. Su Windows 0.4 il runtime locale è Podman
+   dentro WSL, installato dall'app (WSL deve essere già attivo), oppure collega
+   una VPS. Kimi non è ancora supportato quando il team gira su Windows.
 5. **Collega un provider.** Nel setup del Coordinatore scegli un provider in
    abbonamento e il piano, poi completa l'autorizzazione nel terminale
    integrato. Un link può aprirsi nel browser, ma codici e scelte restano nel
@@ -224,8 +225,10 @@ no es una tarea de cinco minutos.
    explorarla antes de configurarla: las conversaciones y posiciones de ejemplo
    no inician un equipo real ni usan un proveedor.
 4. **Abre la lista de configuración.** Selecciona **Activar equipo**. En macOS
-   o Linux, elige un runtime local o conecta una VPS. En Windows 0.4, conecta
-   una VPS Linux: la oficina nativa todavía no ofrece ejecución local.
+   o Linux, elige un runtime local o conecta una VPS. En Windows 0.4, el runtime
+   local es Podman dentro de WSL, instalado por la aplicación (WSL ya debe estar
+   activado), o conecta una VPS. Kimi aún no es compatible cuando el equipo se
+   ejecuta en Windows.
 5. **Conecta un proveedor.** En la configuración del Coordinador selecciona un
    proveedor de suscripción y su plan, y completa la autorización en el
    terminal integrado. Un enlace puede abrirse en el navegador, pero los
@@ -408,8 +411,9 @@ Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
    et n'utilisent pas de fournisseur.
 4. **Ouvrez la liste de configuration.** Sélectionnez **Activer l'équipe**. Sur
    macOS ou Linux, choisissez un runtime local ou connectez un VPS. Sous Windows
-   0.4, connectez un VPS Linux : le bureau natif ne propose pas encore
-   d'exécution locale.
+   0.4, le runtime local est Podman dans WSL, installé par l'application (WSL doit
+   déjà être activé), ou connectez un VPS. Kimi n'est pas encore pris en charge
+   lorsque l'équipe tourne sous Windows.
 5. **Connectez un fournisseur.** Dans la configuration du Coordinateur,
    sélectionnez un fournisseur par abonnement et son forfait, puis terminez
    l'autorisation dans le terminal intégré. Un lien peut s'ouvrir dans le
@@ -593,9 +597,10 @@ Fünf-Minuten-Aufgabe.
    es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten
    kein Live-Team und nutzen keinen Provider.
 4. **Öffne die Einrichtungs-Checkliste.** Wähle **Team aktivieren**. Wähle unter
-   macOS oder Linux eine lokale Runtime oder verbinde einen VPS. Verbinde unter
-   Windows 0.4 einen Linux-VPS; die native Anwendung bietet dort noch keine
-   lokale Ausführung an.
+   macOS oder Linux eine lokale Runtime oder verbinde einen VPS. Unter Windows
+   0.4 ist die lokale Runtime Podman in WSL, von der App installiert (WSL muss
+   bereits aktiviert sein), oder verbinde einen VPS. Kimi wird noch nicht
+   unterstützt, wenn das Team unter Windows läuft.
 5. **Verbinde einen Provider.** Wähle in der Koordinator-Einrichtung einen
    Abonnement-Provider und Tarif und schließe die Autorisierung im integrierten
    Terminal ab. Ein Link kann sich im Browser öffnen, Codes und Auswahl bleiben
@@ -781,8 +786,10 @@ de cinco minutos.
    explorá-lo antes da configuração: as conversas e posições de exemplo não
    iniciam uma equipa real nem usam um fornecedor.
 4. **Abre a lista de configuração.** Seleciona **Ativar equipa**. No macOS ou
-   Linux, escolhe um runtime local ou liga uma VPS. No Windows 0.4, liga uma VPS
-   Linux; o escritório nativo ainda não oferece execução local.
+   Linux, escolhe um runtime local ou liga uma VPS. No Windows 0.4, o runtime
+   local é o Podman dentro do WSL, instalado pela aplicação (o WSL já tem de
+   estar ativado), ou liga uma VPS. O Kimi ainda não é suportado quando a equipa
+   corre no Windows.
 5. **Liga um fornecedor.** Na configuração do Coordenador, escolhe um
    fornecedor por subscrição e o plano e conclui a autorização no terminal
    integrado. Uma ligação pode abrir no navegador, mas os códigos e as escolhas
@@ -963,8 +970,9 @@ eredményt, de ez nem ötperces feladat.
    csapatot és nem használnak szolgáltatót.
 4. **Nyisd meg a beállítási ellenőrzőlistát.** Válaszd a **Csapat aktiválása**
    lehetőséget. macOS vagy Linux alatt válassz helyi runtime-ot vagy kapcsolj
-   VPS-t. Windows 0.4 alatt Linux VPS-t kapcsolj; a natív iroda ott még nem
-   kínál helyi futtatást.
+   VPS-t. Windows 0.4 alatt a helyi runtime a WSL-en belül futó Podman, amelyet
+   az alkalmazás telepít (a WSL-nek már bekapcsolva kell lennie), vagy kapcsolj
+   VPS-t. A Kimi még nem támogatott, ha a csapat Windowson fut.
 5. **Kapcsolj szolgáltatót.** A Koordinátor beállításában válassz előfizetéses
    AI-szolgáltatót és csomagot, majd fejezd be az engedélyezést a beépített
    terminálban. A hivatkozás megnyílhat a böngészőben, de a kódok és választások
