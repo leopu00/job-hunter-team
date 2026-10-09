@@ -106,6 +106,18 @@ jobs:
       - name: Portal-secrets broker answers the agents and only them
         run: python3 scripts/ci/broker_smoke.py jht:agent-shell-check
 
+      # Quello che serve a un agente per partire, sull'immagine vera (la prova
+      # del launcher del 08/10 e' morta su `tmux new-session` rc=127, senza che
+      # niente l'avesse detto prima): tmux apre una sessione, il launcher e'
+      # eseguibile e si legge, gli installatori delle CLI ci sono e i pin dei
+      # provider sono quelli del commit. Poi Codex installato come lo installa
+      # il prodotto, al pin, e i flag che il launcher gli passa (--yolo,
+      # --search, -c project_doc_max_bytes=131072) accettati, senza chiamare il
+      # modello e senza login. Le CLI non stanno nell'immagine (Dockerfile):
+      # questo passo e' l'unico a installarne una prima del giro dal vivo.
+      - name: Agent toolchain in the image, Codex at its pin with the launcher's flags
+        run: python3 scripts/ci/agent_image_toolchain.py jht:agent-shell-check --install codex
+
       - name: Build & push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
