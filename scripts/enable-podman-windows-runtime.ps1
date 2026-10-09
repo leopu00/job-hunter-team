@@ -247,10 +247,14 @@ function Install-JhtContainerService {
     [Parameter(Mandatory)][string]$UnitPath
   )
   $unitWsl = ConvertTo-WslPath $UnitPath
+  # Never `systemctl daemon-reload` here (configure-podman-windows-network.ps1
+  # says why): a unit seen for the first time is read from disk when started,
+  # and a changed unit that is already loaded takes effect at the machine's
+  # next start (after a Windows restart at the latest).
   $install = "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-container.service /home/user/.config/systemd/user/jht-container.service && " +
     "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-container.service && " +
-    'sudo systemctl daemon-reload && sudo systemctl enable jht-container.service && ' +
-    '(sudo systemctl is-active --quiet jht-container.service || sudo systemctl start jht-container.service)'
+    'sudo timeout 60 systemctl enable --no-reload jht-container.service && ' +
+    '(sudo timeout 30 systemctl is-active --quiet jht-container.service || sudo timeout 120 systemctl start jht-container.service)'
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 

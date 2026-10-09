@@ -102,7 +102,8 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "system service --time=0 unix:///run/user/1000/podman/podman.sock" in source
     assert "Requires=user-runtime-dir@1000.service" in source
     assert "CONTAINERS_CGROUP_MANAGER=cgroupfs" in source
-    assert "sudo systemctl restart jht-windows-egress-proxy.service" in source
+    assert "sudo timeout 90 systemctl restart $egressServices" in source
+    assert "jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service" in source
     assert "-Policy agent -ListenPort $Port" in source
     assert "-Policy broker -ListenPort $BrokerPort" in source
     assert "-Policy telegram -ListenPort $TelegramPort" in source
@@ -210,8 +211,8 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht" in source
     assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker" in source
     assert "WantedBy=multi-user.target" in source
-    assert "sudo systemctl enable jht-container.service" in source
-    assert "sudo systemctl start jht-container.service" in source
+    assert "systemctl enable --no-reload jht-container.service" in source
+    assert "sudo timeout 120 systemctl start jht-container.service" in source
     assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in source
     assert "Install-JhtStartupTask -PodmanPath $Podman" in source
 

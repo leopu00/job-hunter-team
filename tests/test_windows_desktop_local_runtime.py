@@ -1,6 +1,7 @@
 """Static contracts between the Windows desktop and its PowerShell runtime."""
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -249,7 +250,9 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     assert '"machine start --update-connection=false $MachineName"' in enabler
     assert "start --sig-proxy=false jht-broker jht-telegram jht" in enabler
     assert "stop --time 30 jht jht-telegram jht-broker" in enabler
-    enabled = network[network.index("sudo systemctl enable") :]
+    assert "systemctl enable --no-reload $runtimeServices" in network
+    # $runtimeServices is $egressServices plus the rootless API service.
+    enabled = network[network.index("$egressServices = ") : network.index("$unitInstall = ")]
     for service in (
         "jht-windows-egress-proxy.service",
         "jht-windows-egress-proxy-broker.service",
@@ -260,6 +263,31 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     assert "Restart=always" in network
     assert '--connector "$connectorWsl"' in network
     assert "Job Hunter Team - Start runtime" in _wrapper()
+
+
+def test_windows_install_never_reloads_systemd_inside_the_machine():
+    # On a Windows 10 test PC (09/10/2026) the reload implied by
+    # `systemctl enable` never finished inside the Podman WSL machine: systemd
+    # stopped answering and the installer hung on `podman machine ssh`.
+    enabler = ENABLER.read_text(encoding="utf-8")
+    network = PODMAN_NETWORK.read_text(encoding="utf-8")
+    for source in (enabler, network):
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "daemon-reload" not in code
+        assert "daemon-reexec" not in code
+        for verb in ("enable", "disable"):
+            for match in re.finditer(rf"systemctl {verb}\b", code):
+                assert code[match.end() :].startswith(" --no-reload"), code[match.start() : match.start() + 80]
+        for match in re.finditer(r"sudo (?:timeout \d+ )?systemctl", code):
+            assert match.group().startswith("sudo timeout "), code[match.start() : match.start() + 80]
+    # A unit systemd already holds and that changed is picked up by a
+    # machine restart, and the services are awaited after it.
+    restart = network[network.index("JHT_MACHINE_RESTART' }") :]
+    assert restart.index("'machine' 'stop' $MachineName") < restart.index("'machine' 'start' '--update-connection=false' $MachineName")
+    assert "systemctl is-active --quiet $runtimeServices" in restart
+    assert "AddSeconds(120)" in restart
 
 
 def test_podman_docker_shim_is_private_and_does_not_touch_docker_desktop():
@@ -372,7 +400,7 @@ def test_container_lifecycle_is_detached_from_the_desktop_process():
     assert "ExecStart=/usr/bin/podman --remote" in unit
     assert "start --sig-proxy=false jht-broker jht-telegram jht" in unit
     assert "WantedBy=multi-user.target" in unit
-    assert "sudo systemctl enable jht-container.service" in enabler
+    assert "systemctl enable --no-reload jht-container.service" in enabler
 
 
 def test_keep_id_closes_the_atomic_jht_config_rename_regression():

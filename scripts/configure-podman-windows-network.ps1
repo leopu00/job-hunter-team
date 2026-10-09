@@ -249,18 +249,64 @@ $brokerUnitWsl = ConvertTo-WslPath $brokerUnitFile
 $telegramUnitWsl = ConvertTo-WslPath $telegramUnitFile
 $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 
-Invoke-MachineShell ("sudo mkdir -p /home/user/.local/share/jht-podman /home/user/.config/systemd/user && " +
-  "sudo install -o user -g user -m 0644 $(Quote-Sh $proxySourceWsl) /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py && " +
-  "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-interop-proxy.service /home/user/.config/systemd/user/podman.service.d/jht-proxy.conf && " +
-  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.socket && " +
-  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.service && " +
-  "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-windows-egress-proxy.service && " +
-  "sudo install -m 0644 $(Quote-Sh $brokerUnitWsl) /etc/systemd/system/jht-windows-egress-proxy-broker.service && " +
-  "sudo install -m 0644 $(Quote-Sh $telegramUnitWsl) /etc/systemd/system/jht-windows-egress-proxy-telegram.service && " +
-  "sudo install -m 0644 $(Quote-Sh $apiServiceWsl) /etc/systemd/system/jht-rootless-podman.service && " +
-  "sudo systemctl disable --now jht-rootless-podman.socket 2>/dev/null || true; " +
-  "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket")
-Invoke-MachineShell 'sudo systemctl daemon-reload && sudo systemctl enable jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service jht-rootless-podman.service && sudo systemctl restart jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service jht-rootless-podman.service'
+# No systemd reload while the machine runs. In Podman's WSL machine systemd
+# runs in its own PID namespace, and on a Windows 10 test PC (09/10/2026)
+# the reload implied by `systemctl enable` never finished: systemd stopped
+# answering, `podman machine ssh` hung with it, and so did the installer.
+# Units seen for the first time are loaded from disk when started; a unit
+# that systemd already holds and that changed is picked up by restarting the
+# machine instead. Every systemctl runs under a timeout, so a stuck systemd
+# becomes an error instead of an endless wait.
+$egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service'
+$runtimeServices = "$egressServices jht-rootless-podman.service"
+$unitInstall = ''
+foreach ($unitEntry in @(
+  @($unitWsl, 'jht-windows-egress-proxy.service'),
+  @($brokerUnitWsl, 'jht-windows-egress-proxy-broker.service'),
+  @($telegramUnitWsl, 'jht-windows-egress-proxy-telegram.service'),
+  @($apiServiceWsl, 'jht-rootless-podman.service')
+)) {
+  $unitSource = Quote-Sh $unitEntry[0]
+  $unitTarget = '/etc/systemd/system/' + $unitEntry[1]
+  $unitInstall += "if [ -e $unitTarget ] && ! sudo cmp -s $unitSource $unitTarget; then units_changed=1; fi; " +
+    "sudo install -m 0644 $unitSource $unitTarget; "
+}
+$proxyTarget = '/home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py'
+$machineOutput = @(Invoke-MachineShell ("set -e; units_changed=0; proxy_changed=0; " +
+  "sudo mkdir -p /home/user/.local/share/jht-podman /home/user/.config/systemd/user; " +
+  "sudo cmp -s $(Quote-Sh $proxySourceWsl) $proxyTarget || proxy_changed=1; " +
+  "sudo install -o user -g user -m 0644 $(Quote-Sh $proxySourceWsl) $proxyTarget; " +
+  "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-interop-proxy.service /home/user/.config/systemd/user/podman.service.d/jht-proxy.conf; " +
+  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.socket; " +
+  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.service; " +
+  $unitInstall +
+  "sudo timeout 60 systemctl disable --no-reload --now jht-rootless-podman.socket 2>/dev/null || true; " +
+  "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket; " +
+  "sudo timeout 60 systemctl enable --no-reload $runtimeServices; " +
+  "if [ `$units_changed = 1 ]; then echo JHT_MACHINE_RESTART; exit 0; fi; " +
+  "if [ `$proxy_changed = 1 ]; then sudo timeout 90 systemctl restart $egressServices; fi; " +
+  "sudo timeout 90 systemctl start $runtimeServices"))
+$machineOutput | ForEach-Object { Write-Host $_ }
+if (@($machineOutput | Where-Object { ([string]$_).Trim() -eq 'JHT_MACHINE_RESTART' }).Count -gt 0) {
+  Invoke-Checked $Podman 'machine' 'stop' $MachineName
+  Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  # `podman machine start` does not wait for systemd: the enabled units
+  # come up with it at boot.
+  $deadline = [DateTime]::UtcNow.AddSeconds(120)
+  $servicesActive = $false
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    while (-not $servicesActive -and [DateTime]::UtcNow -lt $deadline) {
+      & $Podman machine ssh $MachineName "timeout 20 systemctl is-active --quiet $runtimeServices" 2>$null | Out-Null
+      $servicesActive = ($LASTEXITCODE -eq 0)
+      if (-not $servicesActive) { Start-Sleep -Seconds 2 }
+    }
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if (-not $servicesActive) { throw "JHT egress services did not start after restarting Podman machine '$MachineName'." }
+}
 $validation = "agent=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://ghcr.io/v2/) && test `"`$agent`" = 401 && " +
   "broker=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort https://ghcr.io/v2/) && test `"`$broker`" = 401 && " +
   "curl --silent --show-error --output /dev/null --proxy http://127.0.0.1:$TelegramPort https://api.telegram.org/ && " +
