@@ -14,6 +14,8 @@ from urllib.parse import urlsplit
 
 
 MAX_HEADER = 64 * 1024
+HANDSHAKE_TIMEOUT_SECONDS = 65
+CONNECT_IDLE_TIMEOUT_SECONDS = 600
 POLICY_PORTS = {
     "agent": frozenset({80, 443}),
     "broker": frozenset({443, 465, 587, 993}),
@@ -143,7 +145,7 @@ def send_error(client: socket.socket, status: bytes) -> None:
 class ProxyHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         client: socket.socket = self.request
-        client.settimeout(65)
+        client.settimeout(self.server.handshake_timeout)  # type: ignore[attr-defined]
         process: subprocess.Popen[bytes] | None = None
         try:
             header = read_header(client)
@@ -185,6 +187,15 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                 bufsize=0,
             )
             assert process.stdin is not None and process.stdout is not None
+            ready_streams, _, _ = select.select(
+                [process.stdout],
+                [],
+                [],
+                self.server.handshake_timeout,  # type: ignore[attr-defined]
+            )
+            if not ready_streams:
+                send_error(client, b"502 Bad Gateway")
+                return
             ready = process.stdout.read(1)
             if ready != b"\x00":
                 send_error(client, b"502 Bad Gateway")
@@ -195,9 +206,16 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                 process.stdin.write(initial_data)
                 process.stdin.flush()
             client.settimeout(None)
+            idle_timeout = (
+                self.server.connect_idle_timeout  # type: ignore[attr-defined]
+                if is_connect
+                else self.server.handshake_timeout  # type: ignore[attr-defined]
+            )
 
             while True:
-                readable, _, _ = select.select([client, process.stdout], [], [], 65)
+                readable, _, _ = select.select(
+                    [client, process.stdout], [], [], idle_timeout
+                )
                 if not readable:
                     break
                 if client in readable:
@@ -237,11 +255,17 @@ class ThreadingProxy(socketserver.ThreadingTCPServer):
         resolver: Resolver = socket.getaddrinfo,
         allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
         allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
+        handshake_timeout: float = HANDSHAKE_TIMEOUT_SECONDS,
+        connect_idle_timeout: float = CONNECT_IDLE_TIMEOUT_SECONDS,
     ):
+        if handshake_timeout <= 0 or connect_idle_timeout <= 0:
+            raise ValueError("proxy timeouts must be positive")
         self.connector = connector
         self.resolver = resolver
         self.allowed_ports = allowed_ports
         self.allowed_hosts = allowed_hosts
+        self.handshake_timeout = handshake_timeout
+        self.connect_idle_timeout = connect_idle_timeout
         super().__init__(address, ProxyHandler)
 
 

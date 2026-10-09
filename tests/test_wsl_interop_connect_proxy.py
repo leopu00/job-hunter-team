@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import socket
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -195,6 +197,31 @@ def connector(tmp_path: Path) -> tuple[Path, Path]:
     return script, marker
 
 
+def echo_connector(tmp_path: Path) -> Path:
+    script = tmp_path / "echo-connector"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "sys.stdout.buffer.write(b'\\x00'); sys.stdout.buffer.flush()\n"
+        "while True:\n"
+        "    data = sys.stdin.buffer.read(1)\n"
+        "    if not data: break\n"
+        "    sys.stdout.buffer.write(data); sys.stdout.buffer.flush()\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o700)
+    return script
+
+
+def never_ready_connector(tmp_path: Path) -> Path:
+    script = tmp_path / "never-ready-connector"
+    script.write_text(
+        "#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n", encoding="utf-8"
+    )
+    script.chmod(0o700)
+    return script
+
+
 def proxy_request(
     tmp_path: Path,
     target: str,
@@ -225,6 +252,92 @@ def proxy_request(
         server.server_close()
         thread.join(timeout=2)
     return response, marker
+
+
+def test_a_client_that_never_sends_the_handshake_is_closed_quickly(tmp_path):
+    executable, _marker = connector(tmp_path)
+    server = PROXY.ThreadingProxy(
+        ("127.0.0.1", 0),
+        str(executable),
+        answers("192.0.2.10"),
+        handshake_timeout=0.05,
+    )
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}
+    )
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            client.settimeout(2)
+            response = client.recv(4096)
+            assert response.startswith(b"HTTP/1.1 502 Bad Gateway\r\n")
+            assert client.recv(1) == b""
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_a_connector_that_never_completes_the_handshake_is_closed_quickly(tmp_path):
+    server = PROXY.ThreadingProxy(
+        ("127.0.0.1", 0),
+        str(never_ready_connector(tmp_path)),
+        answers("192.0.2.10"),
+        handshake_timeout=0.05,
+    )
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}
+    )
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            client.settimeout(2)
+            client.sendall(
+                b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"
+            )
+            response = client.recv(4096)
+            assert response.startswith(b"HTTP/1.1 502 Bad Gateway\r\n")
+            assert client.recv(1) == b""
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_connect_tunnels_have_a_ten_minute_idle_budget():
+    assert PROXY.HANDSHAKE_TIMEOUT_SECONDS == 65
+    assert PROXY.CONNECT_IDLE_TIMEOUT_SECONDS == 600
+
+
+@pytest.mark.skipif(
+    os.environ.get("JHT_PROXY_IDLE_LIVE") != "1",
+    reason="set JHT_PROXY_IDLE_LIVE=1 for the real 120-second silence probe",
+)
+def test_live_connect_tunnel_survives_120_seconds_of_silence(tmp_path):
+    server = PROXY.ThreadingProxy(
+        ("127.0.0.1", 0),
+        str(echo_connector(tmp_path)),
+        answers("192.0.2.10"),
+    )
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}
+    )
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            client.settimeout(5)
+            client.sendall(
+                b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"
+            )
+            response = client.recv(4096)
+            assert response.startswith(b"HTTP/1.1 200 Connection Established\r\n")
+            time.sleep(120)
+            client.sendall(b"x")
+            assert client.recv(1) == b"x"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 @pytest.mark.parametrize(
