@@ -101,7 +101,7 @@ def main(argv: list[str]) -> int:
             if not inventory_complete:
                 raise AdminError("legacy_inventory_required")
             secret, digest = _read_bot()
-            if digest in history:
+            if digest in store.known_token_digests():
                 raise AdminError("rotation_required")
             rotation = "rotated" if history else "fresh"
             # Record before publishing the secret.  A crash may force another

@@ -191,6 +191,15 @@ def token_history(role: str) -> tuple[set[str], bool]:
     return digests, entry.get("inventory_complete") is True
 
 
+def known_token_digests() -> set[str]:
+    """Every fingerprint recorded under any role.
+
+    A token is one bot whatever role it was seen under: a captain token reused
+    for the assistant is just as exposed, so reuse is checked on the union.
+    """
+    return set().union(*(token_history(role)[0] for role in BOT_ROLES))
+
+
 def legacy_inventory_complete() -> bool:
     return all(token_history(role)[1] for role in BOT_ROLES)
 

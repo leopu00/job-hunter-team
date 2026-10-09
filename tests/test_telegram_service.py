@@ -657,3 +657,43 @@ def test_legacy_environment_token_cannot_be_cleaned_or_cut_over(tmp_path: Path) 
         [str(command), "remaining"], env=environment, capture_output=True, text=True,
     )
     assert remaining.returncode == 1 and remaining.stdout.strip() == "assistente"
+
+
+@pytest.mark.parametrize("seen_as", ["legacy", "paired", "deleted"])
+def test_a_token_seen_under_another_role_is_never_accepted(
+    telegram_store: dict[str, Path], seen_as: str
+) -> None:
+    """Token history is kept per role, but reuse is checked across all roles."""
+    captain = "123456:abcdefghijklmnopqrstuvwxyz"
+    command = ROOT / "shared/telegram_service/bin/jht-telegram-admin.py"
+    environment = {
+        **os.environ,
+        "JHT_TELEGRAM_SECRETS": str(telegram_store["secrets"]),
+        "JHT_TELEGRAM_STATE": str(telegram_store["state"]),
+    }
+
+    def admin(*args: str, stdin: str = "") -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(command), *args], input=stdin, env=environment, capture_output=True, text=True,
+        )
+
+    captain_digest = __import__("hashlib").sha256(captain.encode()).hexdigest()
+    for role in ("assistente", "capitano", "mentor"):
+        inventory = captain_digest if seen_as == "legacy" and role == "capitano" else ""
+        assert admin("legacy", "remember", role, stdin=inventory).returncode == 0
+    if seen_as in {"paired", "deleted"}:
+        assert admin("bots", "pair", "capitano", stdin=json.dumps({"bot_token": captain, "chat_id": "42"})).returncode == 0
+    if seen_as == "deleted":
+        assert admin("bots", "delete", "capitano").returncode == 0
+
+    reused = admin("bots", "pair", "assistente", stdin=json.dumps({"bot_token": captain, "chat_id": "42"}))
+
+    assert reused.returncode == 1
+    assert json.loads(reused.stdout) == {"ok": False, "reason": "rotation_required"}
+    assert not store.read_bot("assistente")
+    # The assistant's own history stays its own: a fresh token still pairs.
+    fresh = admin(
+        "bots", "pair", "assistente",
+        stdin=json.dumps({"bot_token": "654321:ABCDEFGHIJKLMNOPQRSTUVWXYZ", "chat_id": "42"}),
+    )
+    assert json.loads(fresh.stdout) == {"ok": True, "bot": "assistente", "state": "present", "rotation": "fresh"}
