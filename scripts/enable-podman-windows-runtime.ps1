@@ -94,9 +94,11 @@ public static class JhtPodmanDockerShim {
   public static int Main(string[] args) {
     var joined = new StringBuilder();
     foreach (var arg in args) { if (joined.Length > 0) joined.Append(' '); joined.Append(Quote(arg)); }
-    var start = new ProcessStartInfo { FileName = PodmanPath, Arguments = joined.ToString(), UseShellExecute = false };
+    // Set on the shim's own process, which podman inherits: an exe compiled by
+    // pwsh fails on the environment dictionary of ProcessStartInfo.
     if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_CONNECTION")))
-      start.EnvironmentVariables["CONTAINER_CONNECTION"] = MachineConnection;
+      Environment.SetEnvironmentVariable("CONTAINER_CONNECTION", MachineConnection);
+    var start = new ProcessStartInfo { FileName = PodmanPath, Arguments = joined.ToString(), UseShellExecute = false };
     using (var process = Process.Start(start)) { process.WaitForExit(); return process.ExitCode; }
   }
 }

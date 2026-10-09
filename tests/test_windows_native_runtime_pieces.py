@@ -5,7 +5,8 @@ programs. Two pieces cannot be faked there:
 
 - the `docker.exe` shim the enabler compiles with Add-Type: it must forward
   every argument byte for byte (spaces, quotes, trailing backslashes, empty
-  strings) and give back the exit code of the backend;
+  strings), give back the exit code of the backend, and hand it the JHT
+  connection when CONTAINER_CONNECTION is unset (a caller's own wins);
 - `ConvertTo-WslPath`, which leans on `[IO.Path]::GetFullPath`: on Linux a
   `C:\\...` path is just a relative file name, so only Windows answers.
 
@@ -68,7 +69,8 @@ def _run(shell: str, command: str, cwd: Path | None = None) -> subprocess.Comple
 
 
 # A backend that writes back what it received, one argument per line, as
-# [length]value: an empty argument and a trailing space stay visible.
+# [length]value: an empty argument and a trailing space stay visible. Next to
+# it, the CONTAINER_CONNECTION it was started with.
 ARGV_DUMPER = r"""
 using System;
 using System.IO;
@@ -78,6 +80,9 @@ public static class ArgvDump {
     var sb = new StringBuilder();
     foreach (var a in args) { sb.Append('[').Append(a.Length).Append(']').Append(a).Append('\n'); }
     File.WriteAllText(Environment.GetEnvironmentVariable("JHT_ARGV_OUT"), sb.ToString(), new UTF8Encoding(false));
+    var connection = Environment.GetEnvironmentVariable("CONTAINER_CONNECTION");
+    File.WriteAllText(Environment.GetEnvironmentVariable("JHT_ARGV_OUT") + ".connection",
+      connection == null ? "<unset>" : connection, new UTF8Encoding(false));
     var code = Environment.GetEnvironmentVariable("JHT_ARGV_EXIT");
     return string.IsNullOrEmpty(code) ? 0 : int.Parse(code);
   }
@@ -97,6 +102,9 @@ FORWARDED = [
 ]
 
 
+MACHINE = "test-jht-machine"
+
+
 def _shim(shell: str, tmp_path: Path) -> Path:
     """The enabler's docker.exe, pointed at a backend that writes back its argv."""
     dumper_source = tmp_path / "ArgvDump.cs"
@@ -108,7 +116,7 @@ def _shim(shell: str, tmp_path: Path) -> Path:
         + f"Add-Type -TypeDefinition ([IO.File]::ReadAllText('{dumper_source}')) "
         + f"-OutputAssembly '{dumper}' -OutputType ConsoleApplication; "
         + f"New-Item -ItemType Directory -Force -Path '{shim.parent}' | Out-Null; "
-        + f"New-DockerShim -Destination '{shim}' -PodmanPath '{dumper}'"
+        + f"New-DockerShim -Destination '{shim}' -PodmanPath '{dumper}' -MachineName '{MACHINE}'"
     )
     result = _run(shell, command)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -116,27 +124,37 @@ def _shim(shell: str, tmp_path: Path) -> Path:
     return shim
 
 
-def _call_shim(shim: Path, tmp_path: Path, args: list[str], exit_code: int) -> tuple[int, str]:
+def _call_shim(
+    shim: Path, tmp_path: Path, args: list[str], exit_code: int, connection: str | None = None,
+) -> tuple[int, str, str]:
     out = tmp_path / "argv.txt"
+    seen = tmp_path / "argv.txt.connection"
     out.unlink(missing_ok=True)
+    seen.unlink(missing_ok=True)
     env = {**os.environ, "JHT_ARGV_OUT": str(out), "JHT_ARGV_EXIT": str(exit_code)}
+    env.pop("CONTAINER_CONNECTION", None)
+    if connection is not None:
+        env["CONTAINER_CONNECTION"] = connection
     # Python builds the command line with the same Windows rules the shim
     # parses with, so what the shim sees as argv is exactly `args`.
     result = subprocess.run([str(shim), *args], capture_output=True, text=True, timeout=60, env=env)
-    return result.returncode, out.read_text(encoding="utf-8")
+    assert out.is_file(), f"the backend was never started: {result.returncode}\n{result.stdout}{result.stderr}"
+    return result.returncode, out.read_text(encoding="utf-8"), seen.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("shell_name", SHELLS)
 def test_the_enabler_docker_shim_forwards_every_argument_and_the_exit_code(shell_name, tmp_path):
     shim = _shim(_shell(shell_name), tmp_path)
 
-    code, received = _call_shim(shim, tmp_path, FORWARDED, 0)
+    code, received, connection = _call_shim(shim, tmp_path, FORWARDED, 0)
     assert code == 0
     assert received == "".join(f"[{len(arg)}]{arg}\n" for arg in FORWARDED)
+    assert connection == MACHINE
 
-    code, received = _call_shim(shim, tmp_path, ["compose", "up"], 23)
+    code, received, connection = _call_shim(shim, tmp_path, ["compose", "up"], 23, connection="callers-own")
     assert code == 23
     assert received == "[7]compose\n[2]up\n"
+    assert connection == "callers-own"
 
 
 def _map(shell: str, script: Path, paths: list[str], tmp_path: Path, cwd: Path | None = None) -> list[dict]:

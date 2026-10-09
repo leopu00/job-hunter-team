@@ -71,5 +71,7 @@ def test_the_windows_docker_shim_falls_back_to_the_jht_connection():
     assert "[string]$MachineName = 'jht-podman'" in shim
     assert 'private const string MachineConnection = "$MachineName";' in shim
     assert 'GetEnvironmentVariable("CONTAINER_CONNECTION")' in shim
-    assert 'start.EnvironmentVariables["CONTAINER_CONNECTION"] = MachineConnection;' in shim
+    assert 'Environment.SetEnvironmentVariable("CONTAINER_CONNECTION", MachineConnection);' in shim
+    # The pwsh-compiled shim never reached podman through StartInfo's environment.
+    assert "EnvironmentVariables" not in shim
     assert "New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName" in enabler
