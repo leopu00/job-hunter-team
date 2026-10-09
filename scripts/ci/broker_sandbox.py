@@ -58,6 +58,13 @@ def unshare_works(flag):
         os._exit(0 if libc.unshare(flag) == 0 else 1)
     return os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0
 
+def chroot_works():
+    pid = os.fork()
+    if pid == 0:
+        libc = ctypes.CDLL(None, use_errno=True)
+        os._exit(0 if libc.chroot(b"/") == 0 else 1)
+    return os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0
+
 KEEP = ("FATAL", "ERROR", "Check failed", "sandbox", "zygote", "namespace", "clone", "unshare",
         "denied", "not permitted", "No such", "error while loading", "Missing X")
 
@@ -65,10 +72,13 @@ def keep(text):
     return [line.strip()[:300] for line in text.splitlines() if any(k in line for k in KEEP)][:25]
 
 out = {"confinement": view.confinement()}
-# The broker's own Python: only Chromium's binary may create a user namespace
-# (the child profile); a mount namespace is refused to everyone.
+# The broker's own Python: it may create a user namespace, as Chromium may
+# (userns is in the whole profile); a mount namespace is refused to everyone,
+# and chroot, which seccomp now lets through, is still refused by the kernel
+# outside a user namespace of its own.
 out["python_unshare_user"] = unshare_works(0x10000000)
 out["python_unshare_mount"] = unshare_works(0x00020000)
+out["python_chroot"] = chroot_works()
 if not out["confinement"]["ready"]:
     print(json.dumps(out)); sys.exit(0)
 xvfb = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
@@ -231,6 +241,8 @@ def main(argv: list[str]) -> int:
     print(f"MEASURE broker-python-userns={'allowed' if good.get('python_unshare_user') else 'refused'}")
     if "error" not in good and good.get("python_unshare_mount") is not False:
         fail("python-mountns", "the broker's Python created a mount namespace under the profiles")
+    if "error" not in good and good.get("python_chroot") is not False:
+        fail("python-chroot", "the broker's Python chrooted without a user namespace of its own")
     denied = denials(since)
     controls = [line for line in denied if expected_denial(line)]
     unexpected = [line for line in denied if not expected_denial(line)]

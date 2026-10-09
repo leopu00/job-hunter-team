@@ -966,6 +966,13 @@
           "CAP_SYS_ADMIN"
         ]
       }
+    },
+    {
+      "names": [
+        "chroot"
+      ],
+      "action": "SCMP_ACT_ALLOW",
+      "comment": "jht-broker (R3): Chromium's sandbox chroots into an empty directory inside its own user namespace; outside one, with no capability, the kernel still refuses"
     }
   ]
 }

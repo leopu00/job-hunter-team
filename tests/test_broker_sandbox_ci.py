@@ -30,6 +30,7 @@ GOOD = {
     "renderer_in_own_userns": True,
     "python_unshare_user": True,
     "python_unshare_mount": False,
+    "python_chroot": False,
 }
 BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "python_unshare_mount": False}
 CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-journal-control" pid=7 comm="python3"'
@@ -64,6 +65,7 @@ def test_a_good_run_passes(monkeypatch, capsys):
     ({"sandboxed": False, "sandbox_text": "You are not adequately sandboxed!"}, "chrome-sandbox"),
     ({"renderer_in_own_userns": False}, "renderer-userns"),
     ({"python_unshare_mount": True}, "python-mountns"),
+    ({"python_chroot": True}, "python-chroot"),
 ])
 def test_each_broken_fact_with_the_profiles_fails(monkeypatch, capsys, change, tag):
     code, out = _verdict(monkeypatch, capsys, good={**GOOD, **change})

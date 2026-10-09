@@ -30,10 +30,10 @@ def _ours(profile):
     return [rule for rule in profile["syscalls"] if str(rule.get("comment", "")).startswith("jht-broker")]
 
 
-def test_the_seccomp_profile_is_upstream_plus_our_two_rules():
+def test_the_seccomp_profile_is_upstream_plus_our_three_rules():
     profile = json.loads(SECCOMP.read_text())
     ours = _ours(profile)
-    assert [rule["names"] for rule in ours] == [["clone"], ["unshare"]]
+    assert [rule["names"] for rule in ours] == [["clone"], ["unshare"], ["chroot"]]
     upstream = dict(profile, syscalls=[rule for rule in profile["syscalls"] if rule not in ours])
     canonical = json.dumps(upstream, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(canonical).hexdigest() == UPSTREAM_SECCOMP_CANONICAL
@@ -42,7 +42,7 @@ def test_the_seccomp_profile_is_upstream_plus_our_two_rules():
 def test_our_seccomp_rules_open_user_pid_and_net_namespaces_only():
     profile = json.loads(SECCOMP.read_text())
     assert profile["defaultAction"] == "SCMP_ACT_ERRNO"
-    for rule in _ours(profile):
+    for rule in _ours(profile)[:2]:
         assert rule["action"] == "SCMP_ACT_ALLOW"
         (arg,) = rule["args"]
         assert arg == {"index": 0, "value": OTHER_NAMESPACES, "valueTwo": 0, "op": "SCMP_CMP_MASKED_EQ"}
@@ -53,6 +53,19 @@ def test_our_seccomp_rules_open_user_pid_and_net_namespaces_only():
     # the masks above can inspect.
     clone3 = [r for r in profile["syscalls"] if "clone3" in r["names"] and r["action"] == "SCMP_ACT_ERRNO"]
     assert clone3 and clone3[0]["errnoRet"] == 38
+
+
+def test_chroot_is_let_through_without_a_capability_condition():
+    # Chromium chroots into an empty directory inside the user namespace it
+    # created (credentials.cc). Upstream allows chroot only to a container
+    # with CAP_SYS_CHROOT, and the broker drops every capability: the third
+    # CI run failed on `Check failed: sys_chroot("/proc/self/fdinfo/") == 0`.
+    # Outside its own user namespace a process with no capability is still
+    # refused by the kernel (the CI job checks it from the broker's Python).
+    profile = json.loads(SECCOMP.read_text())
+    (rule,) = [r for r in _ours(profile) if r["names"] == ["chroot"]]
+    assert rule["action"] == "SCMP_ACT_ALLOW"
+    assert set(rule) == {"names", "action", "comment"}
 
 
 UPSTREAM_APPARMOR_RULES = """
