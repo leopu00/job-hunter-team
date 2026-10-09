@@ -226,15 +226,19 @@ function Install-JhtStartupTask {
     [Parameter(Mandatory)][string]$UserId
   )
   $taskName = 'Job Hunter Team - Start runtime'
+  $description = 'Starts the dedicated Job Hunter Team Podman machine at sign-in so the local team can resume after Windows restarts. It never starts or stops other Podman machines.'
   $arguments = "machine start --update-connection=false $MachineName"
   $action = New-ScheduledTaskAction -Execute $PodmanPath -Argument $arguments
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
   $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
-  $settings = New-ScheduledTaskSettingsSet -Hidden -StartWhenAvailable `
+  # Keep the task visible in Task Scheduler: hiding a persistent logon action
+  # makes inspection and manual removal needlessly difficult. Visibility is
+  # unrelated to whether the command opens a console window.
+  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit ([TimeSpan]::FromMinutes(10))
   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-    -Principal $principal -Settings $settings -Force | Out-Null
+    -Principal $principal -Settings $settings -Description $description -Force | Out-Null
 
   # Registration is part of the reboot contract, not a best-effort hint. Check
   # the exact executable, machine and user before publishing a successful install.
@@ -251,7 +255,8 @@ function Install-JhtStartupTask {
       ([string]$registered.Principal.UserId) -cne $UserId -or
       ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
       ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
-      -not [bool]$registered.Settings.Hidden) {
+      [bool]$registered.Settings.Hidden -or
+      ([string]$registered.Description) -cne $description) {
     throw "JHT startup task verification failed: $taskName"
   }
 }
