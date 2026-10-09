@@ -11,12 +11,12 @@ read-only. Checked from the agent's side:
 With Docker and, when present, rootless Podman with `keep-id` on both
 containers: that is the mapping under which the broker must still see the
 agents as uid 1001 (design §9). Needs Linux with the engine; runs in CI.
+Podman outside Linux only on JHT_PODMAN_TEST_CONNECTION (tests/live_engines.py).
 
 Run with: pytest tests/test_broker_socket_live.py -v
 """
 
 import json
-import shutil
 import subprocess
 import time
 import uuid
@@ -24,25 +24,18 @@ from pathlib import Path
 
 import pytest
 
+from live_engines import engine_argv, live_engines
+
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "docker.io/library/python:3.11-slim-bookworm"
 
 
-def _engine_ok(engine: str) -> bool:
-    if shutil.which(engine) is None:
-        return False
-    try:
-        return subprocess.run([engine, "info"], capture_output=True, timeout=60).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
-ENGINES = [e for e in ("docker", "podman") if _engine_ok(e)]
+ENGINES = live_engines()
 pytestmark = pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)")
 
 
 def run(engine, *args, check=True, timeout=300, input=None):
-    result = subprocess.run([engine, *args], capture_output=True, text=True, timeout=timeout, input=input)
+    result = subprocess.run([*engine_argv(engine), *args], capture_output=True, text=True, timeout=timeout, input=input)
     if check and result.returncode != 0:
         raise AssertionError(f"{engine} {' '.join(args)} -> {result.returncode}\n{result.stdout}\n{result.stderr}")
     return result

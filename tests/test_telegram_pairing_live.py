@@ -3,6 +3,8 @@
 The first admin query deliberately runs before ``bots pair``.  If it regains
 ``exec -i``, it drains the JSON supplied to this shell and the real admin in
 the second call fails with ``input_not_json``.
+
+Podman outside Linux only on JHT_PODMAN_TEST_CONNECTION (tests/live_engines.py).
 """
 
 from __future__ import annotations
@@ -17,28 +19,21 @@ from pathlib import Path
 
 import pytest
 
+from live_engines import engine_argv, engine_env, live_engines
+
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "docker.io/library/python:3.11-slim-bookworm"
 TOKEN = "987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
 
 
-def _engine_ok(engine: str) -> bool:
-    if shutil.which(engine) is None:
-        return False
-    try:
-        return subprocess.run([engine, "info"], capture_output=True, timeout=60).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
-ENGINES = [engine for engine in ("docker", "podman") if _engine_ok(engine)]
+ENGINES = live_engines()
 pytestmark = pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)")
 
 
 def run(engine: str, *args: str, check: bool = True, input: str | None = None) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        [engine, *args], capture_output=True, text=True, timeout=300, input=input,
+        [*engine_argv(engine), *args], capture_output=True, text=True, timeout=300, input=input,
     )
     if check and result.returncode != 0:
         raise AssertionError(f"{engine} {' '.join(args)} -> {result.returncode}\n{result.stdout}\n{result.stderr}")
@@ -101,7 +96,7 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
             capture_output=True,
             text=True,
             timeout=60,
-            env={**os.environ, "JHT_LIVE_ENGINE": shutil.which(engine) or engine},
+            env={**os.environ, **engine_env(engine), "JHT_LIVE_ENGINE": shutil.which(engine) or engine},
         )
         assert paired.returncode == 0, paired.stderr
         assert json.loads(paired.stdout.strip()) == {
