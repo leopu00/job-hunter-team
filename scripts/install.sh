@@ -378,18 +378,8 @@ install_brew_if_missing() {
     done
   fi
   if command -v brew &>/dev/null; then return 0; fi
-  info "Homebrew not found. Installing..."
-  if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash\n"
-    return 0
-  fi
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    || fail "Homebrew installation failed"
-  if [ -x /opt/homebrew/bin/brew ]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [ -x /usr/local/bin/brew ]; then
-    eval "$(/usr/local/bin/brew shellenv)"
-  fi
+  printf '%s\n' 'homebrew_missing: Homebrew is required to prepare the macOS runtime.' >&2
+  exit 80
 }
 
 install_colima_macos() {

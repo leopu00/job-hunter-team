@@ -5,6 +5,7 @@ section_panel.gd choosing the Podman runtime). Godot is abandoned and it went
 with it.
 """
 
+import subprocess
 from pathlib import Path
 
 
@@ -89,6 +90,47 @@ def test_macos_podman_install_reports_the_desktop_phase_contract():
         "run brew install podman-compose"
     )
     assert setup.rindex("jht_phase image_pull") < setup.index('pull "$IMAGE"')
+
+
+def test_missing_homebrew_stops_with_the_desktop_exit_code_before_network_io(
+    tmp_path: Path,
+):
+    source = _source(INSTALLER)
+    isolated = source.replace(
+        "/opt/homebrew/bin/brew /usr/local/bin/brew",
+        f"{tmp_path}/missing-opt-brew {tmp_path}/missing-usr-brew",
+    )
+    installer = tmp_path / "install.sh"
+    installer.write_text(isolated, encoding="utf-8")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    curl_log = tmp_path / "curl.log"
+    fake_curl = fake_bin / "curl"
+    fake_curl.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {curl_log}\nexit 97\n",
+        encoding="utf-8",
+    )
+    fake_curl.chmod(0o700)
+
+    result = subprocess.run(
+        ["bash", "-c", f'. "{installer}"; install_brew_if_missing'],
+        env={
+            "HOME": str(tmp_path / "home"),
+            "PATH": f"{fake_bin}:/usr/bin:/bin",
+            "JHT_INSTALLER_SOURCE_ONLY": "1",
+        },
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 80
+    assert result.stderr.strip() == (
+        "homebrew_missing: Homebrew is required to prepare the macOS runtime."
+    )
+    assert not curl_log.exists()
+    assert "Homebrew/install/HEAD/install.sh" not in source
 
 
 def test_macos_podman_setup_reports_another_running_machine_without_stopping_it():
