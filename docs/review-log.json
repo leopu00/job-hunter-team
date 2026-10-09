@@ -1799,6 +1799,11 @@
       "path": "docs/internal/architecture/desktop-local-runtime-parity.md",
       "description": "Parità del percorso runtime locale Electron-Tauri: identità, Podman, container, provider, team e adozione legacy",
       "last_review": null
+    },
+    {
+      "path": "scripts/security/README.md",
+      "description": "🛡️ jht-broker security profiles — the seccomp and AppArmor profiles that let the login browser run Chromium's own sandbox, and what they add to the upstream defaults",
+      "last_review": null
     }
   ]
 }
