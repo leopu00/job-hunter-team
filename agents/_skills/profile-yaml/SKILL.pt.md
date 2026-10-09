@@ -231,6 +231,13 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 - faltam: nome, cargo alvo, cidade, anos de experiencia, email;
 - faltam: competencias (≥2), linguas (≥1), experiencias (≥1), formacoes (≥1).
 
+## 🎓 `has_degree` — a partir da formacao, nunca como valor provisorio
+
+`has_degree` e obrigatorio para o validador, mas e um facto sobre o candidato, nao um valor por omissao:
+- `true` quando `education` (CV ou chat) inclui um curso superior: licenciatura, mestrado, doutoramento ou equivalente.
+- `false` so depois de o utilizador te dizer que nao tem nenhum.
+- Enquanto ainda estas a perguntar, nao o escrevas. Se o unico `ERROR:` da validacao for `has_degree`, a tua proxima mensagem E essa pergunta: faz a pergunta, espera pela resposta e so depois escreve o campo. Nunca `false` para calar o validador: o Scorer compara-o com os requisitos de formacao de cada vaga.
+
 ## ⚠️ Anti-alucinacao — a regra critica
 
 **NUNCA ler `docs/examples/candidate_profile.yml.example` ou `docs/examples/candidate_profile.hr.yml.example` como fonte de valores.** Esses ficheiros documentam a *estrutura*, nao o candidato. Se os ler, arrisca escrever "Mario Rossi" / "mario.rossi@example.com" no perfil real.
