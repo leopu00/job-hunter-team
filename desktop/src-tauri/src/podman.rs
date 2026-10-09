@@ -211,6 +211,39 @@ fn args(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
 }
 
+/// The Podman machine of JHT: install.sh and the Windows enabler create it
+/// under this name (JHT_PODMAN_MACHINE overrides it in both, and here).
+const JHT_PODMAN_MACHINE: &str = "jht-podman";
+
+fn jht_machine() -> String {
+    std::env::var("JHT_PODMAN_MACHINE")
+        .ok()
+        .filter(|name| valid_machine_name(name))
+        .unwrap_or_else(|| JHT_PODMAN_MACHINE.to_owned())
+}
+
+fn valid_machine_name(name: &str) -> bool {
+    // A name that starts with '-' would be read as an option.
+    name.len() <= 64
+        && name
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphanumeric())
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+}
+
+/// Every engine call names the JHT connection. Without it Podman answers for
+/// the DEFAULT connection: on a Mac with another machine next to ours (another
+/// product's, or `podman-machine-default`, which sees the whole of /Users) the
+/// app would report on, and act on, the wrong machine.
+fn jht_engine_args(machine: &str, values: &[&str]) -> Vec<OsString> {
+    let mut out = args(&["--connection", machine]);
+    out.extend(args(values));
+    out
+}
+
 fn normalized_version(stdout: &[u8]) -> Option<String> {
     let version = String::from_utf8_lossy(stdout)
         .split_whitespace()
@@ -258,7 +291,8 @@ pub(crate) fn check_podman_sync() -> PodmanStatus {
     };
 
     let version = normalized_version(&version_output.stdout);
-    match command(&args(&["info", "--format=json"]), INFO_TIMEOUT, None, false) {
+    let info = jht_engine_args(&jht_machine(), &["info", "--format=json"]);
+    match command(&info, INFO_TIMEOUT, None, false) {
         Ok(output) if output.success => PodmanStatus {
             installed: true,
             ready: true,
@@ -318,10 +352,49 @@ pub(crate) async fn check_podman(
 #[cfg(test)]
 mod tests {
     use super::{
-        normalized_version, read_bounded_output, read_stderr_lines, MAX_CAPTURE_BYTES,
-        MAX_STDERR_LINE_BYTES,
+        args, jht_engine_args, jht_machine, normalized_version, read_bounded_output,
+        read_stderr_lines, valid_machine_name, MAX_CAPTURE_BYTES, MAX_STDERR_LINE_BYTES,
     };
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn the_engine_check_names_the_jht_connection() {
+        let info = jht_engine_args("jht-podman", &["info", "--format=json"]);
+        assert_eq!(info[..3], args(&["--connection", "jht-podman", "info"])[..]);
+        assert_eq!(
+            jht_machine(),
+            std::env::var("JHT_PODMAN_MACHINE")
+                .ok()
+                .filter(|name| valid_machine_name(name))
+                .unwrap_or_else(|| "jht-podman".to_owned())
+        );
+        assert!(!valid_machine_name("jht podman"));
+        assert!(!valid_machine_name("--connection"));
+    }
+
+    /// Every call that reaches the engine goes through jht_engine_args: only
+    /// `--version`, which never contacts a machine, may go without it.
+    #[test]
+    fn no_engine_call_uses_the_default_connection() {
+        let source = include_str!("podman.rs");
+        let production = &source[..source.find("#[cfg(test)]").unwrap()];
+        let calls: Vec<String> = production
+            .match_indices("command(&")
+            .map(|(at, _)| production[at..].chars().take(40).collect())
+            .collect();
+        assert!(
+            !calls.is_empty(),
+            "no command call found: the search is broken"
+        );
+        for call in calls {
+            assert!(
+                call.starts_with("command(&args(&[\"--version\"])")
+                    || call.starts_with("command(&info"),
+                "engine call without the JHT connection: {call}"
+            );
+        }
+        assert!(!production.contains("args(&[\"info\""));
+    }
 
     #[test]
     fn normalizes_podman_version_output() {

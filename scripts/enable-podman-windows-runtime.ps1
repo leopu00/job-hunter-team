@@ -63,7 +63,16 @@ function Quote-Sh {
 }
 
 function New-DockerShim {
-  param([Parameter(Mandatory)][string]$Destination, [Parameter(Mandatory)][string]$PodmanPath)
+  param(
+    [Parameter(Mandatory)][string]$Destination,
+    [Parameter(Mandatory)][string]$PodmanPath,
+    # The connection the shim falls back to when CONTAINER_CONNECTION is unset:
+    # jht-wrapper.ps1 sets it, but a call that reaches docker.exe without the
+    # wrapper would get Podman's DEFAULT connection, which on a computer with
+    # two machines is not ours.
+    [string]$MachineName = 'jht-podman'
+  )
+  if ($MachineName -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { throw "Invalid Podman machine name for the docker shim: $MachineName" }
   $escaped = $PodmanPath.Replace('\', '\\').Replace('"', '\"')
   $source = @"
 using System;
@@ -71,6 +80,7 @@ using System.Diagnostics;
 using System.Text;
 public static class JhtPodmanDockerShim {
   private const string PodmanPath = "$escaped";
+  private const string MachineConnection = "$MachineName";
   private static string Quote(string value) {
     if (value.Length > 0 && value.IndexOfAny(new[] { ' ', '\t', '\n', '\v', '"' }) < 0) return value;
     var result = new StringBuilder("\""); int slashes = 0;
@@ -85,6 +95,8 @@ public static class JhtPodmanDockerShim {
     var joined = new StringBuilder();
     foreach (var arg in args) { if (joined.Length > 0) joined.Append(' '); joined.Append(Quote(arg)); }
     var start = new ProcessStartInfo { FileName = PodmanPath, Arguments = joined.ToString(), UseShellExecute = false };
+    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_CONNECTION")))
+      start.EnvironmentVariables["CONTAINER_CONNECTION"] = MachineConnection;
     using (var process = Process.Start(start)) { process.WaitForExit(); return process.ExitCode; }
   }
 }
@@ -371,7 +383,7 @@ WantedBy=multi-user.target
 '@
 [IO.File]::WriteAllText($containerUnitFile, ($containerUnit.Trim() + "`n"), [Text.UTF8Encoding]::new($false))
 $shim = Join-Path $RuntimeShimDir 'docker.exe'
-New-DockerShim -Destination $shim -PodmanPath $Podman
+New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName
 
 $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml')).Hash.ToLowerInvariant()
 $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.podman.yml')).Hash.ToLowerInvariant()
