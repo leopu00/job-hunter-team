@@ -13,6 +13,10 @@ PODMAN_PROBE = ROOT / "scripts" / "podman-windows-probe.ps1"
 PODMAN_NETWORK = ROOT / "scripts" / "configure-podman-windows-network.ps1"
 SECURE_CONFIG_IO = ROOT / "cli" / "src" / "lib" / "secure-config-io.js"
 ONBOARDING = ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs"
+WINDOWS_RUNTIME = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
+RUNTIME_HOST = ROOT / "desktop" / "src-tauri" / "src" / "runtime_host.rs"
+ERROR_CATALOG = ROOT / "desktop" / "src" / "lib" / "error-catalog.ts"
+ERROR_LOCALES = ROOT / "desktop" / "src" / "lib" / "error-catalog.locales.ts"
 
 
 def _wrapper() -> str:
@@ -119,6 +123,42 @@ def test_windows_installer_exposes_stable_podman_phases_and_exit_codes():
     assert "'--provider' 'wsl'" in enabler
     assert "'--cpus' '2' '--memory' '3072' '--disk-size' '30'" in enabler
     assert "machine' 'start' '--update-connection=false'" in enabler
+
+
+def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
+    onboarding = ONBOARDING.read_text(encoding="utf-8")
+    begin = onboarding.index("fn install_local_windows(")
+    install = onboarding[begin : onboarding.index("fn download_verified_bytes", begin)]
+    preflight = install.index("wsl_state(run_program(")
+    reuse = install.index("if let Some(wrapper) = wrapper_path(app)")
+    download = install.index("download_verified_bytes(")
+    assert preflight < reuse < download
+    assert 'wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?' in install
+    assert '["--status"]' in install
+    assert "Duration::from_secs(30)" in install
+
+    runtime = WINDOWS_RUNTIME.read_text(encoding="utf-8")
+    assert 'Err("wsl_not_ready")' in runtime[runtime.index("pub(crate) fn wsl_state") :]
+    host = RUNTIME_HOST.read_text(encoding="utf-8")
+    run_program = host[host.index("pub(crate) fn run_program<I, S>") :]
+    assert "hide_console(&mut command);" in run_program
+    assert "const CREATE_NO_WINDOW: u32 = 0x0800_0000" in host
+
+    failure = onboarding[onboarding.index("fn failure(") : onboarding.index("struct ProgressReporter")]
+    assert '"wsl_not_ready" => (' in failure
+    assert "true," in failure[failure.index('"wsl_not_ready" => (') :][:180]
+    prepare = onboarding[onboarding.index("pub(crate) async fn onboarding_prepare(") :]
+    assert prepare.index("let result =") < prepare.index("state.preparing.store(false")
+
+    catalog = ERROR_CATALOG.read_text(encoding="utf-8")
+    wsl_copy = catalog[catalog.index("wsl_not_ready: copy(") : catalog.index("podman_not_ready: copy(")]
+    assert "Microsoft Store" in wsl_copy
+    assert "riavvia il computer e premi Riprova" in wsl_copy
+    assert "restart the computer and press Try again" in wsl_copy
+    locales = ERROR_LOCALES.read_text(encoding="utf-8")
+    translated = locales[locales.index('"WSL is not ready:') : locales.index('"The installed team version', locales.index('"WSL is not ready:'))]
+    for locale in ("de:", "es:", "fr:", "hu:", "pt:"):
+        assert locale in translated
 
 
 def test_existing_game_data_is_deliberately_reused_with_a_mail_rotation_warning():

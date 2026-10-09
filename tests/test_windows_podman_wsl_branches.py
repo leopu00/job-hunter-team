@@ -261,6 +261,32 @@ def test_a_dry_run_does_not_call_wsl(tmp_path):
     assert "DRY wsl.exe --status" in result.stdout
 
 
+def test_the_next_launch_retries_wsl_after_the_user_enables_it(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(
+        bin_dir,
+        "wsl.exe",
+        '  "--status") [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;',
+    )
+    env = {"DRY_RUN": "0"}
+
+    first, first_calls = _run(
+        tmp_path, INSTALLER, ["Test-WindowsSubsystem", "Write-JhtPhase"], WSL_BODY, env,
+    )
+    assert first.returncode == 20
+    assert "wsl_not_ready: WSL is not usable" in first.stderr
+    assert first_calls == ["--status"]
+
+    (tmp_path / "state").write_text("enabled", encoding="utf-8")
+    second, second_calls = _run(
+        tmp_path, INSTALLER, ["Test-WindowsSubsystem", "Write-JhtPhase"], WSL_BODY, env,
+    )
+    assert second.returncode == 0, second.stderr
+    assert _phases(second.stdout) == ["wsl_check"]
+    assert second_calls == ["--status", "--status"]
+
+
 # ---------------------------------------------------------------------------
 # jht-wrapper.ps1: Start-PodmanMachineForUp (what `jht up` does first)
 # ---------------------------------------------------------------------------
