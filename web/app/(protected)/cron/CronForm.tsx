@@ -5,6 +5,7 @@ import { useLocale } from "@/lib/use-locale";
 import type { CronJobCreateInput, ScheduleKind } from "./types";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./CronForm.i18n";
+import { attemptWrite } from "@/lib/write-failure";
 
 interface Props {
   onCreated: () => void;
@@ -69,23 +70,24 @@ export function CronForm({ onCreated, onCancel }: Props) {
       payload: { kind: "command", command: command.trim() },
     };
 
-    try {
-      const res = await fetch("/api/cron", {
+    // Created only with the route's { ok: true }; otherwise the form stays
+    // filled in and says why, never with the route's own text.
+    const result = await attemptWrite(
+      locale,
+      "/api/cron",
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setError(data.error ?? tr("err_create"));
-        setSaving(false);
-        return;
-      }
-      onCreated();
-    } catch {
-      setError(tr("err_network"));
+      },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setError(`${tr("err_create")} ${result.reason}`);
       setSaving(false);
+      return;
     }
+    onCreated();
   };
 
   return (
@@ -200,7 +202,11 @@ export function CronForm({ onCreated, onCancel }: Props) {
         )}
       </div>
       {error && (
-        <p className="text-[11px]" style={{ color: "var(--color-red)" }}>
+        <p
+          role="alert"
+          className="text-[11px]"
+          style={{ color: "var(--color-red)" }}
+        >
           {error}
         </p>
       )}

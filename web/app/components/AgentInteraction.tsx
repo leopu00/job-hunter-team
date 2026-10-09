@@ -6,6 +6,7 @@ import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { intlTag } from "@/lib/locale-tag";
+import { attemptWrite } from "@/lib/write-failure";
 
 const T: Record<
   Locale,
@@ -290,21 +291,32 @@ export default function AgentInteraction({
     if (!input.trim() || sending || !activeSession) return;
     setSending(true);
     const text = input.trim();
-    setInput("");
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text, ts: Date.now() / 1000 },
-    ]);
-    try {
-      await fetch("/api/team/send", {
+    // The message joins the chat only when the route sent it ({ ok: true }):
+    // a refused send keeps the text in the box and says why.
+    const sent = await attemptWrite(
+      locale,
+      "/api/team/send",
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session: activeSession, message: text }),
-      });
-    } catch {
+      },
+      { expectOk: true },
+    );
+    if (sent.ok) {
+      setInput("");
       setMessages((prev) => [
         ...prev,
-        { role: "system", text: t.sendError, ts: Date.now() / 1000 },
+        { role: "user", text, ts: Date.now() / 1000 },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text: `${t.sendError} ${sent.reason}`,
+          ts: Date.now() / 1000,
+        },
       ]);
     }
     setSending(false);

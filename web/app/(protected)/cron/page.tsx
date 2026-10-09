@@ -8,6 +8,7 @@ import { CronJobRow } from "./CronJobRow";
 import { CronForm } from "./CronForm";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import { attemptWrite } from "@/lib/write-failure";
 
 export default function CronPage() {
   const locale = useLocale();
@@ -37,27 +38,41 @@ export default function CronPage() {
     return () => clearInterval(t);
   }, [load]);
 
+  // A job changes or leaves the list only with the route's { ok: true }; a
+  // refused write keeps it as it was and says why.
   const handleToggle = async (id: string, enabled: boolean) => {
-    setJobs((js) => js.map((j) => (j.id === id ? { ...j, enabled } : j)));
-    try {
-      await fetch(`/api/cron/${id}`, {
+    const result = await attemptWrite(
+      locale,
+      `/api/cron/${id}`,
+      {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),
-      });
-      load();
-    } catch {
-      load();
+      },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setError(`${tr("err_toggle")} ${result.reason}`);
+      return;
     }
+    setError(undefined);
+    setJobs((js) => js.map((j) => (j.id === id ? { ...j, enabled } : j)));
+    load();
   };
 
   const handleDelete = async (id: string) => {
-    setJobs((js) => js.filter((j) => j.id !== id));
-    try {
-      await fetch(`/api/cron/${id}`, { method: "DELETE" });
-    } catch {
-      load();
+    const result = await attemptWrite(
+      locale,
+      `/api/cron/${id}`,
+      { method: "DELETE" },
+      { expectOk: true },
+    );
+    if (!result.ok) {
+      setError(`${tr("err_delete")} ${result.reason}`);
+      return;
     }
+    setError(undefined);
+    setJobs((js) => js.filter((j) => j.id !== id));
   };
 
   const active = jobs.filter((j) => j.enabled).length;
@@ -128,6 +143,7 @@ export default function CronPage() {
 
         {error && (
           <div
+            role="alert"
             className="mb-4 px-4 py-3 rounded border text-[11px]"
             style={{
               borderColor: "var(--color-red)",

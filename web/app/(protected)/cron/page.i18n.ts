@@ -9,6 +9,24 @@
 import type { Dictionary } from "@/lib/i18n-dict";
 
 export const T = {
+  err_toggle: {
+    it: "Job NON aggiornato:",
+    en: "Job NOT updated:",
+    hu: "A feladat NEM frissült:",
+    es: "Tarea NO actualizada:",
+    de: "Job NICHT aktualisiert:",
+    fr: "Tâche NON mise à jour :",
+    pt: "Tarefa NÃO atualizada:",
+  },
+  err_delete: {
+    it: "Job NON eliminato:",
+    en: "Job NOT deleted:",
+    hu: "A feladat NEM lett törölve:",
+    es: "Tarea NO eliminada:",
+    de: "Job NICHT gelöscht:",
+    fr: "Tâche NON supprimée :",
+    pt: "Tarefa NÃO eliminada:",
+  },
   err_load: {
     it: "Errore caricamento",
     en: "Loading error",

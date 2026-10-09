@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/app/components/Toast";
 import { useLocale } from "@/lib/use-locale";
+import { attemptWrite, writeFailureReason } from "@/lib/write-failure";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./WorkHoursPicker.i18n";
 
@@ -300,14 +301,18 @@ export default function WorkHoursPicker() {
   const save = useCallback(
     async (next: WorkingHoursConfig | null) => {
       setSaving(true);
-      try {
-        const r = await fetch("/api/team/working-hours", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ working_hours: next }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      // The hours change only with the route's answer ({ saved: true }): a
+      // refused or failed save keeps what was there and says why.
+      const result = await attemptWrite(locale, "/api/team/working-hours", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ working_hours: next }),
+      });
+      if (result.ok && result.body.saved === true) {
+        const data = result.body as {
+          working_hours?: WorkingHoursConfig | null;
+          preview?: Preview | null;
+        };
         setCfg(data.working_hours ?? null);
         setPreview(data.preview ?? null);
         setEditSched(null);
@@ -315,11 +320,13 @@ export default function WorkHoursPicker() {
           next === null ? tr("toast_removed") : tr("toast_saved"),
           "success",
         );
-      } catch (e: any) {
-        toast(tr("toast_err").replace("{msg}", e.message), "error");
-      } finally {
-        setSaving(false);
+      } else {
+        const reason = result.ok
+          ? writeFailureReason(locale, 500)
+          : result.reason;
+        toast(tr("toast_err").replace("{msg}", reason), "error");
       }
+      setSaving(false);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [toast, locale],
