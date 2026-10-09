@@ -573,6 +573,17 @@
   font-size: 11px;
 }
 
+.onboarding-choice__badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--color-green);
+  border-radius: 999px;
+  color: var(--color-green);
+  font-size: 8px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
 .onboarding-choice small {
   margin-top: 5px;
   color: var(--color-muted);

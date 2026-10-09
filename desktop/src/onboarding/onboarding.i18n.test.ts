@@ -155,3 +155,11 @@ describe("the Windows consent names the scheduled task the setup registers", () 
     expect(text.installsRemoval).toContain(TASK[locale]);
   });
 });
+
+describe("the provider step calls Codex recommended", () => {
+  const WORD = { it: "consigliato", en: "recommended", de: "empfohlen", es: "recomendado", fr: "recommandé", hu: "ajánlott", pt: "recomendado" };
+
+  it.each(locales)("%s: the label says it in the language", (locale) => {
+    expect(ONBOARDING_TEXT[locale].providerRecommended).toBe(WORD[locale]);
+  });
+});

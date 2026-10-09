@@ -24,12 +24,13 @@ function emptyVpsHost(): ExecutionHost {
 }
 const COLLECTION_STEP_COUNT = 4;
 
-// Codex is the provider the onboarding proposes: first, and already chosen.
+// Codex is the provider the onboarding proposes: first, already chosen, and
+// labelled as recommended.
 const PROPOSED_PROVIDER: SubscriptionProvider = "codex";
 // Product names and plans: the same in every language, but the Kimi plan's.
-function providers(t: OnboardingCopy): Array<{ value: SubscriptionProvider; label: string; vendor: string; mark: string }> {
+function providers(t: OnboardingCopy): Array<{ value: SubscriptionProvider; label: string; vendor: string; mark: string; recommended?: string }> {
   return [
-    { value: "codex", label: "Codex", vendor: "OpenAI · ChatGPT Plus/Pro", mark: "CX" },
+    { value: "codex", label: "Codex", vendor: "OpenAI · ChatGPT Plus/Pro", mark: "CX", recommended: t.providerRecommended },
     { value: "claude", label: "Claude Code", vendor: "Anthropic · Claude Pro/Max", mark: "CL" },
     { value: "kimi", label: "Kimi", vendor: t.kimiVendor, mark: "KM" },
   ];
@@ -438,7 +439,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">{t.providerEyebrow}</p><h2 ref={headingRef} tabIndex={-1}>{t.providerTitle}</h2><p className="onboarding-lede">{t.providerLede}</p>
             <div className="onboarding-choice-grid onboarding-choice-grid--providers" role="radiogroup" aria-label={t.providerGroupAria}>
-              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} disabled={unavailable.has(item.value)} aria-describedby={unavailable.has(item.value) ? "onboarding-provider-unavailable" : undefined} onKeyDown={(event) => moveRadio(event, selectableProviders, provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
+              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} disabled={unavailable.has(item.value)} aria-describedby={unavailable.has(item.value) ? "onboarding-provider-unavailable" : undefined} onKeyDown={(event) => moveRadio(event, selectableProviders, provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}{item.recommended && <span className="onboarding-choice__badge">{item.recommended}</span>}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
             </div>
             {kimiReason && <p className="onboarding-subscription-note" id="onboarding-provider-unavailable">{kimiReason.text} {kimiReason.action}</p>}
             <p className="onboarding-subscription-note"><strong>{t.subscriptionStrong}</strong> {t.subscriptionText}</p>

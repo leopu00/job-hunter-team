@@ -105,6 +105,11 @@ describe("OnboardingFlow technical setup", () => {
     await reachProviderLocal(user);
     const providers = screen.getAllByRole("radio");
     expect(providers[0]).toHaveTextContent("Codex");
+    // Only Codex carries the recommended label; Claude and Kimi stay choosable.
+    expect(providers[0]).toHaveTextContent("consigliato");
+    expect(providers.slice(1).map((radio) => radio.textContent)).toEqual([
+      expect.not.stringContaining("consigliato"), expect.not.stringContaining("consigliato"),
+    ]);
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
