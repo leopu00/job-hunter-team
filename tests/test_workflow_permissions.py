@@ -86,7 +86,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 13
+    assert len(workflow_paths) == 14
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])
