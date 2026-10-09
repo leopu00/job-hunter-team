@@ -995,6 +995,21 @@ download_runtime_files() {
 BROKER_SECURITY_DIR="/etc/jht/security"
 BROKER_APPARMOR_FILE="/etc/apparmor.d/jht-broker"
 APPARMOR_ENABLED_FILE="/sys/module/apparmor/parameters/enabled"
+# The two profiles this installer accepts, byte for byte: they end up in the
+# kernel as root, so a download that is not exactly them is refused. The
+# desktop pins this file's digest (installer.sha256), so it pins these too.
+# tests/test_broker_security_install.py fails when scripts/security changes
+# without them.
+BROKER_SECCOMP_SHA256="a83590d674139ff8f9b7e33e57832570c33bf93b02c30eae135a50e342e88986"
+BROKER_APPARMOR_SHA256="63cc02c525c03607a2d55102ca2d530c98b975478cc282344b6140f2bd6eb396"
+
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
 
 host_apparmor_enabled() {
   [ "$(cat "$APPARMOR_ENABLED_FILE" 2>/dev/null)" = "Y" ]
@@ -1039,9 +1054,13 @@ install_broker_security_profiles() {
   fi
   local stage
   stage="$(mktemp -d)" || { warn "Cannot stage the broker security profiles."; return 0; }
+  # Exactly the pinned profiles, and one AppArmor profile only: a file
+  # with a second profile would load it too, as root.
   if ! curl -fsSL "$RUNTIME_RELEASE_BASE/scripts/security/jht-broker.seccomp.json" -o "$stage/seccomp.json" \
-    || ! grep -q '"defaultAction": "SCMP_ACT_ERRNO"' "$stage/seccomp.json" \
+    || [ "$(file_sha256 "$stage/seccomp.json")" != "$BROKER_SECCOMP_SHA256" ] \
     || ! curl -fsSL "$RUNTIME_RELEASE_BASE/scripts/security/jht-broker.apparmor.txt" -o "$stage/apparmor" \
+    || [ "$(file_sha256 "$stage/apparmor")" != "$BROKER_APPARMOR_SHA256" ] \
+    || [ "$(grep -c '^[[:space:]]*profile[[:space:]]' "$stage/apparmor")" != "1" ] \
     || ! grep -q '^profile jht-broker ' "$stage/apparmor"; then
     rm -rf "$stage"
     warn "Broker security profiles: download or validation failed; mail works, the login view stays off."

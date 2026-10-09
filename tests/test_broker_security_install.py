@@ -48,7 +48,7 @@ def host(tmp_path):
             "dir": tmp_path / "etc-jht" / "security", "apparmor": tmp_path / "apparmor.d" / "jht-broker"}
 
 
-def _install(host, *args, base=None, os_name="linux", parser_exit=0):
+def _install(host, *args, base=None, os_name="linux", parser_exit=0, pins=None):
     (host["tmp"] / "apparmor.d").mkdir(exist_ok=True)
     script = (
         f"JHT_INSTALLER_SOURCE_ONLY=1 . {shlex.quote(str(INSTALLER))} {' '.join(map(shlex.quote, args))}\n"
@@ -57,6 +57,7 @@ def _install(host, *args, base=None, os_name="linux", parser_exit=0):
         f"BROKER_SECURITY_DIR={shlex.quote(str(host['dir']))}\n"
         f"BROKER_APPARMOR_FILE={shlex.quote(str(host['apparmor']))}\n"
         f"APPARMOR_ENABLED_FILE={shlex.quote(str(host['enabled']))}\n"
+        + "".join(f"{name}={value}\n" for name, value in (pins or {}).items()) +
         # sudo's work: the call is logged, then run without the root owner
         # (the test is not root).
         "sudo_maybe() {\n"
@@ -121,17 +122,54 @@ def test_without_consent_nothing_is_written(host):
     assert "mail works" in result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("broken", ["seccomp", "apparmor"])
-def test_a_file_that_is_not_the_profile_is_never_installed(host, tmp_path, broken):
-    fake_repo = tmp_path / "repo" / "scripts" / "security"
-    fake_repo.mkdir(parents=True)
+def _sha256(path):
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _fake_repo(tmp_path):
+    repo = tmp_path / "repo" / "scripts" / "security"
+    repo.mkdir(parents=True)
     for name in ("jht-broker.seccomp.json", "jht-broker.apparmor.txt"):
-        shutil.copy(ROOT / "scripts" / "security" / name, fake_repo / name)
+        shutil.copy(ROOT / "scripts" / "security" / name, repo / name)
+    return repo
+
+
+def _pinned(name):
+    text = INSTALLER.read_text()
+    return re.search(rf'^{name}="([0-9a-f]{{64}})"$', text, re.M).group(1)
+
+
+def test_the_installer_pins_exactly_the_profiles_of_its_commit():
+    # A profile changed without its pin would be refused on every host.
+    assert _pinned("BROKER_SECCOMP_SHA256") == _sha256(ROOT / "scripts" / "security" / "jht-broker.seccomp.json")
+    assert _pinned("BROKER_APPARMOR_SHA256") == _sha256(ROOT / "scripts" / "security" / "jht-broker.apparmor.txt")
+
+
+@pytest.mark.parametrize("broken", ["seccomp", "apparmor"])
+def test_a_file_that_is_not_the_pinned_profile_is_never_installed(host, tmp_path, broken):
+    repo = _fake_repo(tmp_path)
     if broken == "seccomp":
-        (fake_repo / "jht-broker.seccomp.json").write_text('{"defaultAction": "SCMP_ACT_ALLOW"}')
+        target = repo / "jht-broker.seccomp.json"
+        target.write_text(target.read_text().replace('"SCMP_ACT_ERRNO"', '"SCMP_ACT_ALLOW"', 1))
     else:
-        (fake_repo / "jht-broker.apparmor.txt").write_text("profile other flags=(unconfined) {}\n")
+        target = repo / "jht-broker.apparmor.txt"
+        target.write_text(target.read_text().replace("deny mount,", "mount,", 1))
     result = _install(host, "--broker-profiles", base=(tmp_path / "repo").as_uri())
+    assert result.returncode == 0
+    assert not host["dir"].exists() and _calls(host) == ""
+    assert "validation failed" in result.stdout + result.stderr
+
+
+def test_an_apparmor_file_with_a_second_profile_is_refused_even_when_pinned(host, tmp_path):
+    # R1 of the review: apparmor_parser -r would load every profile of the file,
+    # as root. The pin is moved to the tampered file, so only the
+    # one-profile rule can refuse it.
+    repo = _fake_repo(tmp_path)
+    target = repo / "jht-broker.apparmor.txt"
+    target.write_text(target.read_text() + "\nprofile planted flags=(unconfined) {\n}\n")
+    result = _install(host, "--broker-profiles", base=(tmp_path / "repo").as_uri(),
+                      pins={"BROKER_APPARMOR_SHA256": _sha256(target)})
     assert result.returncode == 0
     assert not host["dir"].exists() and _calls(host) == ""
     assert "validation failed" in result.stdout + result.stderr
