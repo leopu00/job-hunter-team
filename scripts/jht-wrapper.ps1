@@ -613,6 +613,19 @@ function Invoke-TelegramPair {
   }
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
   if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  # Gli altri ruoli con un token legacy: finche' ne resta uno il servizio non si
+  # accende e il ruolo appena abbinato resta muto. Serve solo ad avvisare.
+  $remainingOut = @(Invoke-TelegramLegacy remaining 2>$null)
+  if ($LASTEXITCODE -eq 1) {
+    $others = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') -and $_ -ne $Role })
+    if ($others.Count -gt 0) {
+      Write-Warn "Restano token legacy per: $($others -join ' '). Finche' non abbini anche questi ruoli, $Role resta muto su Telegram: abbinali tutti in questa seduta."
+      if (-not [Console]::IsInputRedirected) {
+        $answer = Read-Host "Abbinare $Role adesso? [s/N]"
+        if ($answer -notmatch '^(s|si)$') { Write-Info 'Abbinamento annullato: nessuna modifica.'; return 1 }
+      }
+    }
+  }
   $agentWasRunning = Test-ContainerUp
   if ($agentWasRunning) {
     Invoke-Compose stop $Container | Out-Null

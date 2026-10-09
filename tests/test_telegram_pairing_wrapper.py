@@ -46,7 +46,9 @@ printf 'ARGV %s\n' "$*" >> "$FAKE_LOG"
   case "$*" in
     *"jht-telegram-legacy.py inventory assistente") [ -z "$FAKE_DIGEST" ] || printf '%s\n' "$FAKE_DIGEST" ;;
     *"jht-telegram-legacy.py remove assistente") printf 'REMOVED\n' >> "$FAKE_LOG" ;;
-    *"jht-telegram-legacy.py remaining") exit "${FAKE_REMAINING_RC:-0}" ;;
+    *"jht-telegram-legacy.py remaining")
+      [ -z "${FAKE_REMAINING_ROLES:-}" ] || printf '%s\n' "$FAKE_REMAINING_ROLES"
+      exit "${FAKE_REMAINING_RC:-0}" ;;
     *) exit 96 ;;
   esac
   exit 0
@@ -106,7 +108,7 @@ def pair_script() -> str:
         'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
         'CONTAINER_RUNTIME=docker\nHOME=/host-home\n'
-        + functions("host_data_dir_same", "host_data_dirs_supported", "telegram_admin", "telegram_admin_input", "telegram_legacy", "read_hidden_tty", "telegram_pair")
+        + functions("host_data_dir_same", "host_data_dirs_supported", "telegram_admin", "telegram_admin_input", "telegram_legacy", "read_hidden_tty", "telegram_pair_other_legacy_roles", "telegram_pair")
         + '\ntelegram_image() { printf "fake-image\\n"; }\n'
         + '\ntelegram_pair assistente\n'
     )
@@ -574,3 +576,119 @@ def test_powershell_start_skips_the_inventory_only_without_legacy_sources(
     else:
         assert done.returncode == 0, done.stderr
         assert calls == []
+
+
+OTHER_ROLES_WARNING = "Restano token legacy per: capitano mentor"
+
+
+def _pair_env(tmp_path: Path, **extra: str) -> dict[str, str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    docker = bin_dir / "docker"
+    docker.write_text(FAKE_DOCKER, encoding="utf-8")
+    docker.chmod(0o755)
+    payload = f'{{"bot_token":"{SECRET}","chat_id":"42"}}'
+    return {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "FAKE_LOG": str(tmp_path / "calls.log"),
+        "FAKE_DIGEST": DIGEST,
+        "EXPECTED_PAYLOAD": payload,
+        **extra,
+    }
+
+
+def test_pairing_warns_when_other_roles_still_have_legacy_tokens(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="assistente capitano mentor", FAKE_REMAINING_RC="1")
+    done = subprocess.run(
+        ["bash", "-c", pair_script()], input=env["EXPECTED_PAYLOAD"], text=True, capture_output=True, env=env,
+    )
+
+    # Automation goes on: the warning is on stderr, the role itself is not listed.
+    assert OTHER_ROLES_WARNING + "." in done.stderr
+    assert "assistente resta muto" in done.stderr
+    assert "TELEGRAM_STDIN_OK" in (tmp_path / "calls.log").read_text(encoding="utf-8")
+
+
+def test_no_warning_when_only_the_role_being_paired_is_legacy(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="assistente", FAKE_REMAINING_RC="1")
+    done = subprocess.run(
+        ["bash", "-c", pair_script()], input=env["EXPECTED_PAYLOAD"], text=True, capture_output=True, env=env,
+    )
+
+    assert "Restano token legacy per" not in done.stderr
+
+
+def _interactive_pair(env: dict[str, str], answer: bytes, wanted: bytes) -> tuple[int, bytes]:
+    master, slave = pty.openpty()
+    process = subprocess.Popen(
+        ["bash", "-c", pair_script()], stdin=slave, stdout=slave, stderr=slave, env=env, close_fds=True,
+        preexec_fn=_restore_default_sigint,
+    )
+    os.close(slave)
+    try:
+        output = _read_pty_until(master, b"[s/N] ")
+        os.write(master, answer)
+        output += _read_pty_until(master, wanted)
+        if process.poll() is None and wanted.startswith(b"Token"):
+            process.kill()
+        process.wait(timeout=5)
+    finally:
+        os.close(master)
+        if process.poll() is None:
+            process.kill()
+    return process.returncode, output
+
+
+def test_interactive_pairing_can_stop_before_touching_anything(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1")
+
+    code, output = _interactive_pair(env, b"n\n", b"nessuna modifica.")
+
+    assert code == 1
+    assert OTHER_ROLES_WARNING.encode() in output
+    calls = (tmp_path / "calls.log").read_text(encoding="utf-8")
+    assert "COMPOSE stop" not in calls
+    assert "inventory" not in calls
+    assert "bots pair" not in calls
+
+
+def test_interactive_pairing_goes_on_after_yes(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path, FAKE_REMAINING_ROLES="capitano mentor", FAKE_REMAINING_RC="1")
+
+    _code, output = _interactive_pair(env, b"s\n", b"Token del bot (input nascosto): ")
+
+    assert b"Token del bot (input nascosto): " in output
+    assert "COMPOSE stop jht" in (tmp_path / "calls.log").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")
+def test_powershell_pairing_warns_when_other_roles_still_have_legacy_tokens(tmp_path: Path) -> None:
+    env = _pair_env(tmp_path)
+    script = tmp_path / "pair.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        "function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
+        "function Write-Info { param([string]$Message) }\n"
+        "function Write-Warn { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
+        "function Get-RunningComposeServiceId { param([string]$Service) if ($Service -eq 'jht-telegram') { 'telegram-id' } }\n"
+        "function Test-ContainerUp { return $false }\n"
+        "function Invoke-Compose { param([Parameter(ValueFromRemainingArguments)] $Args) }\n"
+        "$TelegramContainer = 'jht-telegram'\n$Container = 'jht'\n"
+        + powershell_functions("Invoke-TelegramAdmin", "Invoke-TelegramPair")
+        + "\nfunction Invoke-TelegramLegacy {\n"
+        + "  param([string]$Command, [string]$Role = '')\n"
+        + "  if ($Command -eq 'remaining') { Write-Output 'assistente capitano'; Write-Output 'mentor'; $global:LASTEXITCODE = 1; return }\n"
+        + "  if ($Command -eq 'inventory') { Write-Output $env:FAKE_DIGEST; $global:LASTEXITCODE = 0; return }\n"
+        + "  $global:LASTEXITCODE = 0\n"
+        + "}\n"
+        + "$code = Invoke-TelegramPair 'assistente'\nexit $code\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-File", str(script)],
+        input=env["EXPECTED_PAYLOAD"], text=True, capture_output=True, env=env,
+    )
+
+    assert OTHER_ROLES_WARNING + "." in done.stderr
+    assert "TELEGRAM_STDIN_OK" in (tmp_path / "calls.log").read_text(encoding="utf-8")

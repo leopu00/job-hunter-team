@@ -1083,8 +1083,25 @@ telegram_prepare_legacy_inventory() {
   done
 }
 
+# Gli ALTRI ruoli che hanno ancora un token legacy. Il servizio isolato si
+# accende solo quando non ne resta nessuno, e intanto il ruolo appena
+# abbinato e' muto (copia legacy tolta, servizio non ancora acceso). Serve
+# solo ad avvisare: un errore di lettura non dice niente, l'inventario decide.
+telegram_pair_other_legacy_roles() {
+  local role="$1" listed="" other output rc=0
+  output="$(telegram_legacy remaining 2>/dev/null)" || rc=$?
+  [ "$rc" -eq 1 ] || return 0
+  for other in $output; do
+    case "$other" in
+      assistente|capitano|mentor) [ "$other" = "$role" ] || listed="${listed:+$listed }$other" ;;
+    esac
+  done
+  printf '%s' "$listed"
+}
+
 telegram_pair() {
   local role="${1:-}" digest digests="" remaining_rc=0 was_enabled="" first_cutover=0
+  local others="" answer=""
   local agent_was_running=0 agent_status=0
   local token="" chat_id="" pair_rc=0
   local -a digest_args=()
@@ -1094,6 +1111,18 @@ telegram_pair() {
     return 2
     ;;
   esac
+  others="$(telegram_pair_other_legacy_roles "$role")"
+  if [ -n "$others" ]; then
+    warn "Restano token legacy per: $others. Finché non abbini anche questi ruoli, $role resta muto su Telegram: abbinali tutti in questa seduta."
+    if [ -t 0 ]; then
+      printf 'Abbinare %s adesso? [s/N] ' "$role" >&2
+      IFS= read -r answer || answer=""
+      case "$answer" in
+        s|S|si|Si|SI|sì|Sì) ;;
+        *) info "Abbinamento annullato: nessuna modifica."; return 1 ;;
+      esac
+    fi
+  fi
   if read_only_container_id >/dev/null 2>&1; then
     agent_was_running=1
     compose stop "$CONTAINER_SERVICE" >/dev/null || {
