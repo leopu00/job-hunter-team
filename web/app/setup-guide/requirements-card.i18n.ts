@@ -65,11 +65,11 @@ export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
 };
 
 export const REQUIREMENTS_CARD_EVIDENCE: GuideText = {
-  en: "Measured over 30 minutes on Windows: a 12 GB machine kept more than 4 GB free with the team and Job Hunter Team Desktop running, on a 2013 2-core, 4-thread CPU, without saturation.",
-  it: "Misurato per 30 minuti su Windows: una macchina con 12 GB ha mantenuto più di 4 GB liberi con il team e Job Hunter Team Desktop in esecuzione, su una CPU del 2013 con 2 core e 4 thread, senza saturarsi.",
-  es: "Medido durante 30 minutos en Windows: una máquina con 12 GB mantuvo más de 4 GB libres con el equipo y Job Hunter Team Desktop en ejecución, en una CPU de 2013 con 2 núcleos y 4 hilos, sin saturarse.",
-  fr: "Mesuré pendant 30 minutes sous Windows : une machine équipée de 12 Go a conservé plus de 4 Go libres avec l’équipe et Job Hunter Team Desktop en fonctionnement, sur un processeur de 2013 à 2 cœurs et 4 threads, sans saturation.",
-  de: "Über 30 Minuten unter Windows gemessen: Auf einem Rechner mit 12 GB blieben bei laufendem Team und Job Hunter Team Desktop mehr als 4 GB frei; die CPU aus dem Jahr 2013 mit 2 Kernen und 4 Threads wurde dabei nicht ausgelastet.",
-  pt: "Medido durante 30 minutos no Windows: uma máquina com 12 GB manteve mais de 4 GB livres com a equipa e o Job Hunter Team Desktop em execução, num processador de 2013 com 2 núcleos e 4 threads, sem saturar.",
-  hu: "30 perces Windows-futtatásban mérve: egy 12 GB-os gépen több mint 4 GB maradt szabadon a csapat és a Job Hunter Team Desktop futása közben; a 2013-as, 2 magos, 4 szálas processzor nem telítődött.",
+  en: "Measured over 30 minutes on Windows with Docker Desktop, in v0.3.9: a 12 GB machine kept more than 4 GB free with the team and Job Hunter Team Desktop running, on a 2013 2-core, 4-thread CPU, without saturation.",
+  it: "Misurato per 30 minuti su Windows con Docker Desktop, nella v0.3.9: una macchina con 12 GB ha mantenuto più di 4 GB liberi con il team e Job Hunter Team Desktop in esecuzione, su una CPU del 2013 con 2 core e 4 thread, senza saturarsi.",
+  es: "Medido durante 30 minutos en Windows con Docker Desktop, en la v0.3.9: una máquina con 12 GB mantuvo más de 4 GB libres con el equipo y Job Hunter Team Desktop en ejecución, en una CPU de 2013 con 2 núcleos y 4 hilos, sin saturarse.",
+  fr: "Mesuré pendant 30 minutes sous Windows avec Docker Desktop, dans la v0.3.9 : une machine équipée de 12 Go a conservé plus de 4 Go libres avec l’équipe et Job Hunter Team Desktop en fonctionnement, sur un processeur de 2013 à 2 cœurs et 4 threads, sans saturation.",
+  de: "Über 30 Minuten unter Windows mit Docker Desktop gemessen, in v0.3.9: Auf einem Rechner mit 12 GB blieben bei laufendem Team und Job Hunter Team Desktop mehr als 4 GB frei; die CPU aus dem Jahr 2013 mit 2 Kernen und 4 Threads wurde dabei nicht ausgelastet.",
+  pt: "Medido durante 30 minutos no Windows com o Docker Desktop, na v0.3.9: uma máquina com 12 GB manteve mais de 4 GB livres com a equipa e o Job Hunter Team Desktop em execução, num processador de 2013 com 2 núcleos e 4 threads, sem saturar.",
+  hu: "30 perces Windows-futtatásban mérve, Docker Desktoppal, a v0.3.9-ben: egy 12 GB-os gépen több mint 4 GB maradt szabadon a csapat és a Job Hunter Team Desktop futása közben; a 2013-as, 2 magos, 4 szálas processzor nem telítődött.",
 };
