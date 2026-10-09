@@ -248,6 +248,63 @@ def test_a_stopped_docker_desktop_is_never_started_for_the_v039_inventory(tmp_pa
     assert words.isdisjoint({"start", "rm", "cp", "export"})
 
 
+COMPOSE_BODY = r"""
+$ComposeProviderVersion = '5.1.2'
+$ComposeProviderUrl = 'https://example.invalid/docker-compose.exe'
+$ComposeProviderSha256 = $env:EXPECTED_SHA
+function Invoke-WebRequest {
+  param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
+  Add-Content -LiteralPath $env:FAKE_LOG -Value "download $Uri"
+  [IO.File]::WriteAllText($OutFile, $env:PAYLOAD)
+}
+Install-PrivateComposeProvider -Destination $env:DEST
+"""
+
+
+@pytest.mark.parametrize(
+    ("existing", "expected_sha_of", "downloads", "installed"),
+    [
+        (None, "compose-5.1.2", 1, True),
+        (None, "another build", 1, False),
+        ("compose-5.1.2", "compose-5.1.2", 0, True),
+        ("compose-from-elsewhere", "compose-5.1.2", 1, True),
+    ],
+    ids=["downloads-and-verifies", "refuses-a-wrong-digest", "keeps-a-verified-copy", "replaces-a-foreign-copy"],
+)
+def test_the_private_compose_provider_is_installed_only_with_the_pinned_digest(
+    tmp_path, existing, expected_sha_of, downloads, installed
+):
+    import hashlib
+
+    runtime_bin = tmp_path / "host-runtime" / "bin"
+    dest = runtime_bin / "docker-compose.exe"
+    if existing is not None:
+        runtime_bin.mkdir(parents=True)
+        dest.write_text(existing, encoding="utf-8")
+    result, calls = _run(
+        tmp_path,
+        ENABLER,
+        ["Install-PrivateComposeProvider"],
+        COMPOSE_BODY,
+        {
+            "DEST": str(dest),
+            "PAYLOAD": "compose-5.1.2",
+            "EXPECTED_SHA": hashlib.sha256(expected_sha_of.encode()).hexdigest(),
+        },
+    )
+
+    assert calls == ["download https://example.invalid/docker-compose.exe"] * downloads
+    if installed:
+        assert result.returncode == 0, result.stderr
+        assert dest.read_text(encoding="utf-8") == "compose-5.1.2"
+    else:
+        assert result.returncode != 0
+        assert "has SHA-256" in result.stderr
+        assert not dest.exists()
+    # No partial download is ever left next to the provider.
+    assert sorted(path.name for path in runtime_bin.iterdir()) == (["docker-compose.exe"] if installed else [])
+
+
 # The app shows podman_start_failed only for exit code 22 (exit_failure):
 # every failure of the machine step must end with 22, not with PowerShell's 1.
 @pytest.mark.parametrize(

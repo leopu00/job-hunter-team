@@ -336,8 +336,9 @@ if ($ContainerRuntime -eq 'podman') {
   } else { 'jht-podman' }
   $env:JHT_PODMAN_HTTP_PROXY = if ($env:JHT_PODMAN_HTTP_PROXY) { $env:JHT_PODMAN_HTTP_PROXY } else { 'http://127.0.0.1:3128' }
   $env:JHT_PODMAN_HTTPS_PROXY = if ($env:JHT_PODMAN_HTTPS_PROXY) { $env:JHT_PODMAN_HTTPS_PROXY } else { 'http://127.0.0.1:3128' }
-  $composeProvider = Get-Command docker-compose.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($composeProvider) { $env:PODMAN_COMPOSE_PROVIDER = $composeProvider.Source }
+  # The runtime's own docker-compose.exe (5.1.2, checked by the enabler),
+  # never one from PATH: Docker Desktop ships another version.
+  $env:PODMAN_COMPOSE_PROVIDER = Join-Path $RuntimeShimDir 'docker-compose.exe'
   $env:PODMAN_COMPOSE_WARNING_LOGS = 'false'
 }
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'

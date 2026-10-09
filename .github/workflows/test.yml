@@ -261,22 +261,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The hosted runner has no winget. docker-compose.exe comes from the
-      # release asset that winget's Docker.DockerCompose 5.1.2 manifest
-      # installs on users' PCs, checked against that manifest's SHA-256.
+      # docker-compose.exe is the one the Windows runtime installs: the URL and
+      # SHA-256 are read from the enabler, never repeated here.
       - name: Install the exact Compose providers
         shell: pwsh
         run: |
           python -m pip install --require-hashes -r scripts/ci/compose-providers-requirements.txt
+          $enabler = Get-Content -Raw -LiteralPath scripts/enable-podman-windows-runtime.ps1
+          if ($enabler -notmatch '(?m)^\$ComposeProviderUrl = ''(https://[^'']+)''\r?$') { throw 'ComposeProviderUrl missing' }
+          $url = $Matches[1]
+          if ($enabler -notmatch '(?m)^\$ComposeProviderSha256 = ''([0-9a-f]{64})''\r?$') { throw 'ComposeProviderSha256 missing' }
+          $sha256 = $Matches[1]
           $providers = Join-Path $env:RUNNER_TEMP 'jht-compose-providers'
           New-Item -ItemType Directory -Path $providers -Force | Out-Null
           $dockerCompose = Join-Path $providers 'docker-compose.exe'
-          Invoke-WebRequest -UseBasicParsing -OutFile $dockerCompose `
-            -Uri 'https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-windows-x86_64.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dockerCompose
           $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $dockerCompose).Hash.ToLowerInvariant()
-          if ($digest -ne '00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255') {
-            throw "docker-compose.exe 5.1.2 has an unexpected SHA-256: $digest"
-          }
+          if ($digest -ne $sha256) { throw "docker-compose.exe has SHA-256 $digest, expected $sha256" }
           $providers | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       # `podman-compose config` asks its engine only for `podman --version`.

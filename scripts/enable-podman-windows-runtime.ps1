@@ -21,6 +21,13 @@ $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
 $PodmanCliVersion = '6.0.2'
 $ComposeProviderVersion = '5.1.2'
+# JHT's own docker-compose.exe, private to the runtime: never one found in
+# PATH (Docker Desktop ships its own, of another version). The release asset
+# and SHA-256 are those of winget's Docker.DockerCompose 5.1.2 manifest; the
+# CI parity gate (.github/workflows/test.yml) reads both from here.
+$ComposeProviderUrl = 'https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-windows-x86_64.exe'
+$ComposeProviderSha256 = '00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255'
+$ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
 
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
@@ -42,6 +49,26 @@ function Invoke-Checked {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
   & $FilePath @Arguments
   if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')" }
+}
+
+function Install-PrivateComposeProvider {
+  param([Parameter(Mandatory)][string]$Destination)
+  if ((Test-Path -LiteralPath $Destination -PathType Leaf) -and
+      (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash -eq $ComposeProviderSha256) { return }
+  New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
+  $temp = "$Destination.download-$PID"
+  # Windows PowerShell's progress bar slows a large download by minutes.
+  $previousProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $ComposeProviderUrl -OutFile $temp -ErrorAction Stop
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $temp).Hash
+    if ($actual -ne $ComposeProviderSha256) { throw "docker-compose.exe $ComposeProviderVersion has SHA-256 $actual, expected $ComposeProviderSha256" }
+    Move-Item -LiteralPath $temp -Destination $Destination -Force
+  } finally {
+    $ProgressPreference = $previousProgress
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Get-Application {
@@ -305,7 +332,6 @@ if ($InstallDependencies) {
   try {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
     if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $PodmanCliVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
-    if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $ComposeProviderVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
   } catch {
     [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
@@ -318,7 +344,10 @@ if (-not $Podman) {
   if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
 }
 if (-not $Podman) { [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable after installation.'); exit 21 }
-if (-not (Get-Application 'docker-compose.exe')) { [Console]::Error.WriteLine('podman_not_installable: docker-compose.exe is unavailable after installation.'); exit 21 }
+try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
+  [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
+  exit 21
+}
 
 try {
   $machines = @((& $Podman machine list --format json | ConvertFrom-Json))

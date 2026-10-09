@@ -9,8 +9,9 @@
 # ║    & ([scriptblock]::Create((iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/install.ps1).Content)) -Branch dev-1
 # ║                                                                          ║
 # ║  Default: Podman rootless in a dedicated WSL machine. The desktop        ║
-# ║  obtains consent; this script installs the user-scope Podman CLI and      ║
-# ║  Compose provider when absent. Docker Desktop is not used.               ║
+# ║  obtains consent; this script installs the user-scope Podman CLI when    ║
+# ║  absent and the runtime's own Compose provider. Docker Desktop is not    ║
+# ║  used.                                                                   ║
 # ║                                                                          ║
 # ║  Downloads:                                                              ║
 # ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
@@ -29,8 +30,9 @@
 # ║  Differences vs install.sh (Linux/macOS):                                ║
 # ║    - NO --no-docker: Windows native (Node+tmux+Claude standalone) is     ║
 # ║      not supported. The container is the only path.                      ║
-# ║    - NO Docker Desktop. WSL must already be usable; Podman and the        ║
-# ║      standalone Compose provider are installed silently through winget.  ║
+# ║    - NO Docker Desktop. WSL must already be usable; Podman is installed  ║
+# ║      silently through winget, docker-compose.exe 5.1.2 is downloaded and ║
+# ║      verified into the runtime, never taken from PATH.                   ║
 # ║    - PATH registered with [Environment]::SetEnvironmentVariable in the   ║
 # ║      User scope (no shell rc). Effective from the next terminal.         ║
 # ║                                                                          ║
@@ -222,8 +224,9 @@ function Invoke-PodmanRuntimeEnabler {
     '-File', $ScriptPath, '-MachineName', 'jht-podman', '-InitializeMachine',
     '-RuntimeImage', $RuntimeImage, '-ExpectedImageDigest', $RuntimeImageDigest
   )
-  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -or
-      -not (Get-Command docker-compose.exe -CommandType Application -ErrorAction SilentlyContinue)) {
+  # docker-compose.exe is the runtime's own, which the enabler always
+  # downloads and verifies: only Podman comes from winget.
+  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue)) {
     $enablerArgs += '-InstallDependencies'
   }
   if ($TestChannel) { $enablerArgs += '-PersistImagePin' }

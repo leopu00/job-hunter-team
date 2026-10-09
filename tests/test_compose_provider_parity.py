@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import re
 
 import pytest
 import yaml
@@ -110,16 +111,19 @@ def test_ci_runs_the_exact_distributed_providers_on_windows():
     ).read_text(encoding="utf-8")
     assert "podman-compose==1.6.0 \\\n" in requirements
     assert "--require-hashes -r scripts/ci/compose-providers-requirements.txt" in commands
-    # The asset and SHA-256 of winget's Docker.DockerCompose 5.1.2 manifest,
-    # the version the Windows enabler installs.
+    # docker-compose.exe: the very URL and SHA-256 the Windows enabler
+    # installs, read from it at run time and never repeated in the workflow.
     enabler = (ROOT / "scripts" / "enable-podman-windows-runtime.ps1").read_text(
         encoding="utf-8"
     )
+    url = re.search(r"^\$ComposeProviderUrl = '(https://[^']+)'$", enabler, re.MULTILINE)
+    sha = re.search(r"^\$ComposeProviderSha256 = '([0-9a-f]{64})'$", enabler, re.MULTILINE)
+    assert url and sha
+    assert "/v5.1.2/" in url.group(1)
     assert "$ComposeProviderVersion = '5.1.2'" in enabler
-    assert (
-        "https://github.com/docker/compose/releases/download/v5.1.2/"
-        "docker-compose-windows-x86_64.exe" in commands
-    )
-    assert "00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255" in commands
+    assert "Get-Content -Raw -LiteralPath scripts/enable-podman-windows-runtime.ps1" in commands
+    assert "Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dockerCompose" in commands
+    assert "if ($digest -ne $sha256) { throw" in commands
+    assert url.group(1) not in commands and sha.group(1) not in commands
     assert "winget" not in commands
     assert "scripts/ci/compose_provider_parity.py" in commands

@@ -151,22 +151,25 @@ describe("OnboardingFlow technical setup", () => {
     expect(script).toContain(`$PodmanCliVersion = '${WINDOWS_SETUP.podmanVersion}'`);
     expect(script).toContain(`$ComposeProviderVersion = '${WINDOWS_SETUP.composeVersion}'`);
     const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
-    expect(packages).toEqual(["Podman.CLI", "Docker.DockerCompose"]);
+    expect(packages).toEqual(["Podman.CLI"]);
+    // Compose is the runtime's own binary, from the release of that version.
+    expect(script).toContain(`/releases/download/v${WINDOWS_SETUP.composeVersion}/docker-compose-windows-x86_64.exe'`);
 
     const user = userEvent.setup();
     renderFlow({ platform: "windows" });
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
-    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion} e Docker Compose ${WINDOWS_SETUP.composeVersion}`);
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}, con winget (pacchetto Podman.CLI)`);
+    expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`);
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
     expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
     expect(installs).toHaveTextContent(/comando jht nel PATH del tuo utente/i);
     expect(installs).toHaveTextContent(/docker\.exe compatibile resta privato nel runtime e non cambia Docker per gli altri programmi/i);
-    // How they are removed: JHT's own part from the app, Podman and Compose from Windows.
-    expect(installs).toHaveTextContent(/si tolgono dall’app, da «Questo computer › Rimuovi JHT da questo computer»/);
-    expect(installs).toHaveTextContent(/Podman e Docker Compose restano: si disinstallano da Impostazioni › App › App installate/);
+    // How they are removed: JHT's own part (Compose included) from the app, Podman from Windows.
+    expect(installs).toHaveTextContent(/docker\.exe e Docker Compose si tolgono dall’app, da «Questo computer › Rimuovi JHT da questo computer»/);
+    expect(installs).toHaveTextContent(/Podman resta: si disinstalla da Impostazioni › App › App installate/);
   });
 
   it("asks for the consent in the language of Windows when the person chose none", async () => {

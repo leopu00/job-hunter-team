@@ -359,12 +359,42 @@ def test_declining_dependency_installation_cannot_run_winget():
             "Update-ProcessPath", enabler.index("if ($InstallDependencies) {")
         )
     ]
-    assert enabler.count("Invoke-Checked 'winget' 'install'") == 2
-    assert guarded.count("Invoke-Checked 'winget' 'install'") == 2
+    assert enabler.count("Invoke-Checked 'winget' 'install'") == 1
+    assert guarded.count("Invoke-Checked 'winget' 'install'") == 1
     assert "'--source' 'winget' '--version' $PodmanCliVersion" in guarded
-    assert "'--source' 'winget' '--version' $ComposeProviderVersion" in guarded
     assert "$PodmanCliVersion = '6.0.2'" in enabler
     assert "$ComposeProviderVersion = '5.1.2'" in enabler
+
+
+def test_windows_compose_provider_is_the_runtime_own_never_one_from_path():
+    # Docker Desktop puts its own docker-compose.exe, of another version, in
+    # PATH: a test PC upgraded from v0.3.9 had JHT running on it.
+    enabler = ENABLER.read_text(encoding="utf-8")
+    wrapper = _wrapper()
+    installer = INSTALLER.read_text(encoding="utf-8")
+    for name, source in (("enabler", enabler), ("wrapper", wrapper), ("installer", installer)):
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert not re.search(r"Get-(?:Command|Application) '?docker-compose(?:\.exe)?", code), name
+        assert "Docker.DockerCompose" not in code, name
+    # The wrapper hands podman compose the runtime's binary, unconditionally.
+    assert "$env:PODMAN_COMPOSE_PROVIDER = Join-Path $RuntimeShimDir 'docker-compose.exe'" in wrapper
+    assert wrapper.count("PODMAN_COMPOSE_PROVIDER") == 1
+    # The enabler puts exactly that file there, from the pinned asset, before
+    # it touches the Podman machine, and fails with exit 21 otherwise.
+    assert "$ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'" in enabler
+    assert (
+        "$ComposeProviderUrl = 'https://github.com/docker/compose/releases/download/"
+        "v5.1.2/docker-compose-windows-x86_64.exe'" in enabler
+    )
+    assert (
+        "$ComposeProviderSha256 = "
+        "'00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255'" in enabler
+    )
+    install = enabler.index("try { Install-PrivateComposeProvider -Destination $ComposeProvider }")
+    assert install < enabler.index("machine list --format json")
+    assert 'podman_not_installable: $($_.Exception.Message)")\n  exit 21' in enabler[install:]
 
 
 def test_podman_failures_reach_the_documented_exit_codes():
