@@ -99,7 +99,7 @@ def test_the_public_installer_carries_the_same_check():
 def wrapper_functions() -> str:
     text = WRAPPER.read_text(encoding="utf-8")
     out = []
-    for fn in ("bind_uid_conflict", "ensure_bind_owner"):
+    for fn in ("bind_uid_conflict", "host_data_dir_same", "host_data_dirs_supported", "ensure_bind_owner"):
         match = re.search(rf"^{fn}\(\) \{{\n.*?^\}}\n", text, re.S | re.M)
         assert match, fn
         out.append(match.group(0))

@@ -106,7 +106,7 @@ def pair_script() -> str:
         'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
         'CONTAINER_RUNTIME=docker\nHOME=/host-home\n'
-        + functions("telegram_admin", "telegram_admin_input", "telegram_legacy", "read_hidden_tty", "telegram_pair")
+        + functions("host_data_dir_same", "host_data_dirs_supported", "telegram_admin", "telegram_admin_input", "telegram_legacy", "read_hidden_tty", "telegram_pair")
         + '\ntelegram_image() { printf "fake-image\\n"; }\n'
         + '\ntelegram_pair assistente\n'
     )

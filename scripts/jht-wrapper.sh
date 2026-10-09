@@ -892,6 +892,7 @@ telegram_legacy() {
   local -a userns_args=()
   case "$command" in inventory|remaining) mode=ro ;; remove) mode=rw ;; *) return 2 ;; esac
   image="$(telegram_image)" || return 1
+  host_data_dirs_supported || return 1
   home_mount="${JHT_HOME_HOST:-$HOME/.jht}"
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     userns_args=(--userns keep-id:uid=1001,gid=1001)
@@ -1641,6 +1642,9 @@ bind_uid_conflict() {
 }
 
 ensure_bind_owner() {
+  # Prima di ogni avvio (ensure_up, up, upgrade) e su ogni sistema: il
+  # disaccordo sulle cartelle dati vale anche dove l'owner non si tocca.
+  host_data_dirs_supported || exit 1
   [ "$(uname -s)" = "Linux" ] || return 0
   local target="${JHT_BIND_OWNER:-1001:1001}"
   local target_uid="${target%%:*}"
@@ -1665,6 +1669,33 @@ ensure_bind_owner() {
       fi
     fi
   done
+}
+
+# Le cartelle dei dati sono fisse: docker-compose.yml monta ${HOME}/.jht e
+# ${HOME}/Documents/Job Hunter Team, l'app desktop legge ~/.jht, e su macOS la
+# machine Podman dichiara esattamente quelle due (PODMAN_MOUNT_*). Una
+# JHT_HOME_HOST o JHT_USER_DIR_HOST altrove metterebbe il wrapper in disaccordo
+# con tutti gli altri: i dati finirebbero in due posti, e su macOS ogni bind
+# della cartella spostata morirebbe con «statfs ... no such file or
+# directory». Meglio dirlo prima, con la cosa da fare.
+host_data_dir_same() {
+  local given="${1%/}" expected="${2%/}" a b
+  [ "$given" = "$expected" ] && return 0
+  a="$(cd -P "$given" 2>/dev/null && pwd -P)" || return 1
+  b="$(cd -P "$expected" 2>/dev/null && pwd -P)" || return 1
+  [ "$a" = "$b" ]
+}
+
+host_data_dirs_supported() {
+  local expected_home="$HOME/.jht" expected_user="$HOME/Documents/Job Hunter Team"
+  if [ -n "${JHT_HOME_HOST:-}" ] && ! host_data_dir_same "$JHT_HOME_HOST" "$expected_home"; then
+    err "data_dir_moved: JHT_HOME_HOST=$JHT_HOME_HOST non e' $expected_home. Il team usa sempre $expected_home: lo monta il compose, lo legge l'app, e su macOS e' l'unica cartella dati che la macchina Podman vede. Togli JHT_HOME_HOST, oppure sposta i dati in $expected_home."
+    return 1
+  fi
+  if [ -n "${JHT_USER_DIR_HOST:-}" ] && ! host_data_dir_same "$JHT_USER_DIR_HOST" "$expected_user"; then
+    err "data_dir_moved: JHT_USER_DIR_HOST=$JHT_USER_DIR_HOST non e' $expected_user. Il team usa sempre $expected_user: lo monta il compose, e su macOS e' l'unica cartella documenti che la macchina Podman vede. Togli JHT_USER_DIR_HOST, oppure sposta i documenti in $expected_user."
+    return 1
+  fi
 }
 
 ensure_up() {
