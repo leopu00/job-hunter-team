@@ -14,7 +14,16 @@ from urllib.parse import urlsplit
 
 
 MAX_HEADER = 64 * 1024
-ALLOWED_PORTS = frozenset({80, 443, 465, 587, 993})
+POLICY_PORTS = {
+    "agent": frozenset({80, 443}),
+    "broker": frozenset({443, 465, 587, 993}),
+    "telegram": frozenset({443}),
+}
+POLICY_HOSTS = {
+    "agent": None,
+    "broker": None,
+    "telegram": frozenset({"api.telegram.org"}),
+}
 FORBIDDEN_V4 = tuple(
     ipaddress.ip_network(value)
     for value in (
@@ -77,13 +86,19 @@ Resolver = Callable[..., Sequence[tuple[int, int, int, str, tuple[object, ...]]]
 
 
 def resolve_public_target(
-    host: str, port: int, resolver: Resolver = socket.getaddrinfo
+    host: str,
+    port: int,
+    resolver: Resolver = socket.getaddrinfo,
+    allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
+    allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
 ) -> str:
     """Resolve once, reject the whole answer if any address is non-public."""
     normalized = host.rstrip(".").lower()
     if normalized == "localhost" or normalized.endswith((".localhost", ".local")):
         raise PolicyDenied("local hostname")
-    if port not in ALLOWED_PORTS:
+    if allowed_hosts is not None and normalized not in allowed_hosts:
+        raise PolicyDenied("hostname denied")
+    if port not in allowed_ports:
         raise PolicyDenied("port denied")
 
     answers = resolver(host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)
@@ -139,7 +154,13 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                     f"{parts[0]} {path} {parts[2]}".encode("ascii"),
                     1,
                 )
-            resolved_ip = resolve_public_target(host, port, self.server.resolver)  # type: ignore[attr-defined]
+            resolved_ip = resolve_public_target(
+                host,
+                port,
+                self.server.resolver,  # type: ignore[attr-defined]
+                self.server.allowed_ports,  # type: ignore[attr-defined]
+                self.server.allowed_hosts,  # type: ignore[attr-defined]
+            )
             process = subprocess.Popen(
                 [self.server.connector, resolved_ip, str(port)],  # type: ignore[attr-defined]
                 stdin=subprocess.PIPE,
@@ -198,9 +219,13 @@ class ThreadingProxy(socketserver.ThreadingTCPServer):
         address: tuple[str, int],
         connector: str,
         resolver: Resolver = socket.getaddrinfo,
+        allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
+        allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
     ):
         self.connector = connector
         self.resolver = resolver
+        self.allowed_ports = allowed_ports
+        self.allowed_hosts = allowed_hosts
         super().__init__(address, ProxyHandler)
 
 
@@ -213,6 +238,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--port", type=int, default=3128)
     parser.add_argument(
+        "--policy",
+        choices=tuple(POLICY_PORTS),
+        default="agent",
+        help="named outbound port policy (default: agent)",
+    )
+    parser.add_argument(
         "--connector", required=True, help="WSL path to native Windows connector"
     )
     return parser.parse_args(argv)
@@ -221,7 +252,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    with ThreadingProxy((args.bind, args.port), args.connector) as server:
+    with ThreadingProxy(
+        (args.bind, args.port),
+        args.connector,
+        allowed_ports=POLICY_PORTS[args.policy],
+        allowed_hosts=POLICY_HOSTS[args.policy],
+    ) as server:
         print(f"JHT_INTEROP_PROXY_READY http://{args.bind}:{args.port}", flush=True)
         server.serve_forever(poll_interval=0.25)
 
