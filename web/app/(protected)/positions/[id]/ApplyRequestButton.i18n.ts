@@ -141,15 +141,6 @@ export const T = {
     fr: "Candidature déjà envoyée.",
     pt: "Candidatura já enviada.",
   },
-  network_error: {
-    it: "Errore di rete",
-    en: "Network error",
-    hu: "Hálózati hiba",
-    es: "Error de red",
-    de: "Netzwerkfehler",
-    fr: "Erreur réseau",
-    pt: "Erro de rede",
-  },
   refused_already_submitted: {
     it: "La candidatura è già stata inviata.",
     en: "The application has already been sent.",

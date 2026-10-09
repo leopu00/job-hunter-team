@@ -4,6 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import {
+  requestFailureMessage,
+  requestFailureReason,
+  sendPositionRequest,
+} from "@/lib/position-request";
 import { ActionRow, IconFileText } from "./ActionRow";
 
 interface Props {
@@ -24,7 +29,6 @@ const T: Record<
     requestedDesc: string;
     sending: string;
     unavailable: string;
-    networkError: string;
   }
 > = {
   it: {
@@ -33,7 +37,6 @@ const T: Record<
     requestedDesc: "CV richiesto al team — tocca per annullare",
     sending: "Un momento…",
     unavailable: "Non disponibile",
-    networkError: "Errore di rete",
   },
   en: {
     title: "Request a tailored CV",
@@ -41,7 +44,6 @@ const T: Record<
     requestedDesc: "CV requested from the team — tap to cancel",
     sending: "One moment…",
     unavailable: "Not available",
-    networkError: "Network error",
   },
   es: {
     title: "Solicita un CV a medida",
@@ -49,7 +51,6 @@ const T: Record<
     requestedDesc: "CV solicitado al equipo — toca para cancelar",
     sending: "Un momento…",
     unavailable: "No disponible",
-    networkError: "Error de red",
   },
   fr: {
     title: "Demander un CV sur mesure",
@@ -57,7 +58,6 @@ const T: Record<
     requestedDesc: "CV demandé à l'équipe — touchez pour annuler",
     sending: "Un instant…",
     unavailable: "Non disponible",
-    networkError: "Erreur réseau",
   },
   de: {
     title: "Maßgeschneiderten Lebenslauf anfordern",
@@ -65,7 +65,6 @@ const T: Record<
     requestedDesc: "Lebenslauf angefordert — zum Abbrechen tippen",
     sending: "Einen Moment…",
     unavailable: "Nicht verfügbar",
-    networkError: "Netzwerkfehler",
   },
   hu: {
     title: "Kérj testreszabott önéletrajzot",
@@ -73,7 +72,6 @@ const T: Record<
     requestedDesc: "Önéletrajz kérve a csapattól — koppints a visszavonáshoz",
     sending: "Egy pillanat…",
     unavailable: "Nem elérhető",
-    networkError: "Hálózati hiba",
   },
   pt: {
     title: "Pede um CV à medida",
@@ -81,7 +79,6 @@ const T: Record<
     requestedDesc: "CV solicitado à equipa — toca para cancelar",
     sending: "Um momento…",
     unavailable: "Não disponível",
-    networkError: "Erro de rede",
   },
 };
 
@@ -91,36 +88,43 @@ export function WriteRequestButton({
   disabled = false,
   disabledReason,
 }: Props) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const [requested, setRequested] = useState(initialRequested);
+  const [sending, setSending] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Lo stato cambia solo quando la route conferma: niente più update
+  // ottimistico, che per un attimo diceva «richiesto» anche a una richiesta
+  // che non sarebbe mai arrivata al team.
   const toggle = async () => {
     setError(null);
     const next = !requested;
-    // Optimistic update: il Capitano vede comunque la verita' di SQLite,
-    // qui ottimizziamo per la UX percepita. Se POST/DELETE fallisce
-    // riportiamo lo stato indietro.
-    setRequested(next);
-    try {
-      const res = await fetch(`/api/positions/${legacyId}/write-request`, {
-        method: next ? "POST" : "DELETE",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setRequested(!next);
-        setError(body?.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      // Hard refresh dei dati server-side per allineare anche
-      // applications/status post-spawn Scrittore (futuro).
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setRequested(!next);
-      setError(e instanceof Error ? e.message : t.networkError);
+    setSending(true);
+    const outcome = await sendPositionRequest(
+      `/api/positions/${legacyId}/write-request`,
+      { method: next ? "POST" : "DELETE" },
+      (body) =>
+        (body.position as { write_requested?: unknown } | undefined)
+          ?.write_requested === next,
+    );
+    setSending(false);
+    if (!outcome.ok) {
+      setError(
+        requestFailureMessage(
+          locale,
+          next ? "request" : "cancel",
+          requestFailureReason(locale, outcome.status),
+        ),
+      );
+      return;
     }
+    setRequested(next);
+    // Hard refresh dei dati server-side per allineare anche
+    // applications/status post-spawn Scrittore (futuro).
+    startTransition(() => router.refresh());
   };
 
   return (
@@ -130,7 +134,7 @@ export function WriteRequestButton({
       description={
         disabled
           ? (disabledReason ?? t.unavailable)
-          : isPending
+          : sending || isPending
             ? t.sending
             : requested
               ? t.requestedDesc
@@ -138,7 +142,7 @@ export function WriteRequestButton({
       }
       accent="var(--color-purple)"
       active={requested}
-      busy={isPending}
+      busy={sending || isPending}
       disabled={disabled}
       onClick={toggle}
       error={error}

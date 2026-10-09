@@ -7,6 +7,11 @@ import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
 import type { ApplyRequestState } from "@/lib/apply-request-rule";
+import {
+  requestFailureMessage,
+  requestFailureReason,
+  sendPositionRequest,
+} from "@/lib/position-request";
 import { T } from "./ApplyRequestButton.i18n";
 
 // [JHT-CLOSER] Il bottone con cui l'utente autorizza la candidatura dal sito.
@@ -20,23 +25,32 @@ import { T } from "./ApplyRequestButton.i18n";
 
 type Translate = (key: string) => string;
 
+// Autorizzata (o ritirata) solo se la route lo conferma con
+// `apply_requested`: un 2xx qualunque non basta, perché il bottone direbbe
+// «autorizzata» a una candidatura che il CLOSER non vedrà, o «ritirata» a una
+// che può ancora partire. `error` è il codice della route, mai una sua frase.
 export async function submitApplyRequest(
   legacyId: number,
   requested: boolean,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const res = await fetchImpl(`/api/positions/${legacyId}/apply-request`, {
-    method: requested ? "POST" : "DELETE",
-  });
-  if (res.ok) return { ok: true };
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  return { ok: false, error: body?.error ?? `HTTP ${res.status}` };
+): Promise<
+  { ok: true } | { ok: false; error: string | null; status: number | null }
+> {
+  const outcome = await sendPositionRequest(
+    `/api/positions/${legacyId}/apply-request`,
+    { method: requested ? "POST" : "DELETE" },
+    (body) => body.apply_requested === requested,
+    fetchImpl,
+  );
+  if (outcome.ok) return { ok: true };
+  return { ok: false, error: outcome.code, status: outcome.status };
 }
 
-export function refusalText(t: Translate, error: string): string {
+/** La frase per un rifiuto che la route motiva con un codice noto. */
+export function refusalText(t: Translate, error: string | null): string | null {
   if (error === "already_submitted") return t("refused_already_submitted");
   if (error === "position_not_ready") return t("refused_position_not_ready");
-  return error;
+  return null;
 }
 
 export function ApplyRequestView({
@@ -160,7 +174,11 @@ export function ApplyRequestView({
         </div>
       )}
       {error && (
-        <p className="mt-1 text-[10px]" style={{ color: "var(--color-red)" }}>
+        <p
+          role="alert"
+          className="mt-1 text-[10px]"
+          style={{ color: "var(--color-red)" }}
+        >
           {error}
         </p>
       )}
@@ -214,7 +232,8 @@ export function ApplyRequestButton({
   legacyId: number;
   state: ApplyRequestState;
 }) {
-  const t = makeT(T, useLocale());
+  const locale = useLocale();
+  const t = makeT(T, locale);
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,12 +256,19 @@ export function ApplyRequestButton({
     try {
       const outcome = await submitApplyRequest(legacyId, requested);
       if (!outcome.ok) {
-        setError(refusalText(t, outcome.error));
+        const reason =
+          refusalText(t, outcome.error) ??
+          requestFailureReason(locale, outcome.status);
+        setError(
+          requestFailureMessage(
+            locale,
+            requested ? "authorise" : "withdraw",
+            reason,
+          ),
+        );
         return;
       }
       startTransition(() => router.refresh());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("network_error"));
     } finally {
       setSending(false);
     }

@@ -4,6 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import {
+  requestFailureMessage,
+  requestFailureReason,
+  sendPositionRequest,
+} from "@/lib/position-request";
 import { ActionRow, IconCoverLetter } from "./ActionRow";
 
 interface Props {
@@ -21,7 +26,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: string;
     sending: string;
     unavailable: string;
-    networkError: string;
     invalidResponse: string;
   }
 > = {
@@ -31,7 +35,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Cover letter richiesta al team — tocca per annullare",
     sending: "Un momento…",
     unavailable: "Disponibile dopo la creazione del CV",
-    networkError: "Errore di rete",
     invalidResponse: "Il team non ha confermato la richiesta",
   },
   en: {
@@ -40,7 +43,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Cover letter requested — tap to cancel",
     sending: "One moment…",
     unavailable: "Available after the CV is created",
-    networkError: "Network error",
     invalidResponse: "The team did not confirm the request",
   },
   hu: {
@@ -49,7 +51,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Motivációs levél kérve — koppints a visszavonáshoz",
     sending: "Egy pillanat…",
     unavailable: "A CV elkészítése után érhető el",
-    networkError: "Hálózati hiba",
     invalidResponse: "A csapat nem erősítette meg a kérést",
   },
   es: {
@@ -58,7 +59,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Carta solicitada — toca para cancelar",
     sending: "Un momento…",
     unavailable: "Disponible después de crear el CV",
-    networkError: "Error de red",
     invalidResponse: "El equipo no confirmó la solicitud",
   },
   de: {
@@ -67,7 +67,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Anschreiben angefordert — zum Abbrechen tippen",
     sending: "Einen Moment…",
     unavailable: "Verfügbar, nachdem der Lebenslauf erstellt wurde",
-    networkError: "Netzwerkfehler",
     invalidResponse: "Das Team hat die Anfrage nicht bestätigt",
   },
   fr: {
@@ -76,7 +75,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Lettre demandée — touchez pour annuler",
     sending: "Un instant…",
     unavailable: "Disponible après la création du CV",
-    networkError: "Erreur réseau",
     invalidResponse: "L'équipe n'a pas confirmé la demande",
   },
   pt: {
@@ -85,7 +83,6 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
     requestedDesc: "Carta pedida — toca para cancelar",
     sending: "Um momento…",
     unavailable: "Disponível depois de criar o CV",
-    networkError: "Erro de rede",
     invalidResponse: "A equipa não confirmou o pedido",
   },
 };
@@ -95,40 +92,56 @@ export function CoverLetterRequestButton({
   initialRequested,
   disabled = false,
 }: Props) {
-  const t = COVER_LETTER_REQUEST_TEXT[useLocale()];
+  const locale = useLocale();
+  const t = COVER_LETTER_REQUEST_TEXT[locale];
   const [requested, setRequested] = useState(initialRequested);
+  const [sending, setSending] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Stato cambiato solo quando la route conferma proprio la lettera.
   const toggle = async () => {
     setError(null);
     const next = !requested;
-    setRequested(next);
-    try {
-      const res = await fetch(`/api/positions/${legacyId}/write-request`, {
+    setSending(true);
+    const acknowledged = (body: Record<string, unknown>) => {
+      const position = body.position as
+        | { write_requested?: unknown; write_request_kind?: unknown }
+        | undefined;
+      return (
+        position?.write_requested === next &&
+        (next
+          ? position.write_request_kind === KIND
+          : position.write_request_kind == null)
+      );
+    };
+    const outcome = await sendPositionRequest(
+      `/api/positions/${legacyId}/write-request`,
+      {
         method: next ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: KIND }),
-      });
-      const body = await res.json().catch(() => null);
-      const acknowledged =
-        body?.position?.write_requested === next &&
-        (next
-          ? body.position.write_request_kind === KIND
-          : body.position.write_request_kind == null);
-      if (!res.ok || !acknowledged) {
-        setRequested(!next);
-        setError(
-          res.ok ? t.invalidResponse : (body?.error ?? `HTTP ${res.status}`),
-        );
-        return;
-      }
-      startTransition(() => router.refresh());
-    } catch (error) {
-      setRequested(!next);
-      setError(error instanceof Error ? error.message : t.networkError);
+      },
+      acknowledged,
+    );
+    setSending(false);
+    if (!outcome.ok) {
+      // Un 2xx che non conferma la lettera, e il 409 della lettera senza
+      // candidatura, hanno la loro frase; il resto viene dallo status.
+      const reason =
+        outcome.code === "cover_letter_requires_application"
+          ? t.unavailable
+          : outcome.unconfirmed
+            ? t.invalidResponse
+            : requestFailureReason(locale, outcome.status);
+      setError(
+        requestFailureMessage(locale, next ? "request" : "cancel", reason),
+      );
+      return;
     }
+    setRequested(next);
+    startTransition(() => router.refresh());
   };
 
   return (
@@ -138,7 +151,7 @@ export function CoverLetterRequestButton({
       description={
         disabled
           ? t.unavailable
-          : isPending
+          : sending || isPending
             ? t.sending
             : requested
               ? t.requestedDesc
@@ -146,7 +159,7 @@ export function CoverLetterRequestButton({
       }
       accent="var(--color-purple)"
       active={requested}
-      busy={isPending}
+      busy={sending || isPending}
       disabled={disabled}
       onClick={toggle}
       error={error}

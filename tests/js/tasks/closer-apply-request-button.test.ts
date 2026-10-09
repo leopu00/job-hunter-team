@@ -418,9 +418,13 @@ describe("il bottone", () => {
 
   it("chiama la route con il metodo giusto e riporta il rifiuto", async () => {
     const calls: [string, RequestInit | undefined][] = [];
+    // La route conferma con `apply_requested`: solo così il bottone cambia.
     const ok = (async (url: string, init?: RequestInit) => {
       calls.push([url, init]);
-      return new Response("{}", { status: 200 });
+      return new Response(
+        JSON.stringify({ apply_requested: init?.method === "POST" }),
+        { status: 200 },
+      );
     }) as unknown as typeof fetch;
     expect(await button.submitApplyRequest(7, true, ok)).toEqual({ ok: true });
     expect(await button.submitApplyRequest(7, false, ok)).toEqual({ ok: true });
@@ -433,10 +437,31 @@ describe("il bottone", () => {
         status: 409,
       })) as unknown as typeof fetch;
     const outcome = await button.submitApplyRequest(7, true, refused);
-    expect(outcome).toEqual({ ok: false, error: "already_submitted" });
+    expect(outcome).toEqual({
+      ok: false,
+      error: "already_submitted",
+      status: 409,
+    });
     expect(button.refusalText(t, "already_submitted")).toBe(
       T.refused_already_submitted.en,
     );
+    // Un codice sconosciuto non diventa testo a schermo: lo decide lo status.
+    expect(button.refusalText(t, "something_else")).toBeNull();
+  });
+
+  it("un 2xx che non conferma non è un'autorizzazione", async () => {
+    const empty = (async () =>
+      new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    expect(await button.submitApplyRequest(7, true, empty)).toMatchObject({
+      ok: false,
+    });
+    const other = (async () =>
+      new Response(JSON.stringify({ apply_requested: false }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    expect(await button.submitApplyRequest(7, true, other)).toMatchObject({
+      ok: false,
+    });
   });
 
   it("il click apre la conferma, che dice che l'invio è automatico", () => {

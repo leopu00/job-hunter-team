@@ -71,7 +71,11 @@ export function ActionRow({
         )}
       </button>
       {error && (
-        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
+        <span
+          role="alert"
+          className="text-[10px]"
+          style={{ color: "var(--color-red)" }}
+        >
           {error}
         </span>
       )}

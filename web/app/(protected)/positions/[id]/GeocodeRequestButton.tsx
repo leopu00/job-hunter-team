@@ -4,6 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import {
+  requestFailureMessage,
+  requestFailureReason,
+  sendPositionRequest,
+} from "@/lib/position-request";
 import { ActionRow, IconMapPin } from "./ActionRow";
 
 interface Props {
@@ -23,7 +28,6 @@ const T: Record<
     desc: string;
     requestedDesc: string;
     sending: string;
-    networkError: string;
   }
 > = {
   it: {
@@ -32,7 +36,6 @@ const T: Record<
     desc: "Il team cerca l'indirizzo esatto della sede e mette il pin preciso sulla mappa",
     requestedDesc: "Richiesta inviata al team — tocca per annullare",
     sending: "Un momento…",
-    networkError: "Errore di rete",
   },
   en: {
     title: "Locate the office on the map",
@@ -40,7 +43,6 @@ const T: Record<
     desc: "The team looks up the exact office address and pins it on the map",
     requestedDesc: "Request sent to the team — tap to cancel",
     sending: "One moment…",
-    networkError: "Network error",
   },
   es: {
     title: "Ubicar la oficina en el mapa",
@@ -48,7 +50,6 @@ const T: Record<
     desc: "El equipo busca la dirección exacta de la sede y la marca en el mapa",
     requestedDesc: "Solicitud enviada al equipo — toca para cancelar",
     sending: "Un momento…",
-    networkError: "Error de red",
   },
   fr: {
     title: "Localiser le bureau sur la carte",
@@ -56,7 +57,6 @@ const T: Record<
     desc: "L'équipe recherche l'adresse exacte du bureau et la place sur la carte",
     requestedDesc: "Demande envoyée à l'équipe — touchez pour annuler",
     sending: "Un instant…",
-    networkError: "Erreur réseau",
   },
   de: {
     title: "Büro auf der Karte finden",
@@ -64,7 +64,6 @@ const T: Record<
     desc: "Das Team ermittelt die genaue Büroadresse und setzt den Pin auf die Karte",
     requestedDesc: "Anfrage ans Team gesendet — zum Abbrechen tippen",
     sending: "Einen Moment…",
-    networkError: "Netzwerkfehler",
   },
   hu: {
     title: "Iroda megkeresése a térképen",
@@ -72,7 +71,6 @@ const T: Record<
     desc: "A csapat megkeresi az iroda pontos címét és kiteszi a térképre",
     requestedDesc: "Kérés elküldve a csapatnak — koppints a visszavonáshoz",
     sending: "Egy pillanat…",
-    networkError: "Hálózati hiba",
   },
   pt: {
     title: "Localizar o escritório no mapa",
@@ -80,7 +78,6 @@ const T: Record<
     desc: "A equipa procura o endereço exato da sede e coloca o pin no mapa",
     requestedDesc: "Pedido enviado à equipa — toca para cancelar",
     sending: "Um momento…",
-    networkError: "Erro de rede",
   },
 };
 
@@ -89,41 +86,51 @@ export function GeocodeRequestButton({
   initialRequested,
   alreadyGeocoded = false,
 }: Props) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const [requested, setRequested] = useState(initialRequested);
+  const [sending, setSending] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Stato cambiato solo dalla conferma della route (`geocode_requested`).
   const toggle = async () => {
     setError(null);
     const next = !requested;
-    setRequested(next);
-    try {
-      const res = await fetch(`/api/positions/${legacyId}/geocode-request`, {
-        method: next ? "POST" : "DELETE",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setRequested(!next);
-        setError(body?.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setRequested(!next);
-      setError(e instanceof Error ? e.message : t.networkError);
+    setSending(true);
+    const outcome = await sendPositionRequest(
+      `/api/positions/${legacyId}/geocode-request`,
+      { method: next ? "POST" : "DELETE" },
+      (body) =>
+        (body.position as { geocode_requested?: unknown } | undefined)
+          ?.geocode_requested === next,
+    );
+    setSending(false);
+    if (!outcome.ok) {
+      setError(
+        requestFailureMessage(
+          locale,
+          next ? "request" : "cancel",
+          requestFailureReason(locale, outcome.status),
+        ),
+      );
+      return;
     }
+    setRequested(next);
+    startTransition(() => router.refresh());
   };
 
   return (
     <ActionRow
       icon={<IconMapPin />}
       title={alreadyGeocoded ? t.titleRecompute : t.title}
-      description={isPending ? t.sending : requested ? t.requestedDesc : t.desc}
+      description={
+        sending || isPending ? t.sending : requested ? t.requestedDesc : t.desc
+      }
       accent="var(--color-purple)"
       active={requested}
-      busy={isPending}
+      busy={sending || isPending}
       onClick={toggle}
       error={error}
     />

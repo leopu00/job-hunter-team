@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import {
+  requestFailureMessage,
+  requestFailureReason,
+  sendPositionRequest,
+} from "@/lib/position-request";
+import {
   RESCORE_TICKET_KIND,
   type ActiveRescoreStatus,
 } from "@/lib/rescore-ticket";
@@ -26,7 +31,6 @@ const T: Record<
     assignedDesc: string;
     sending: string;
     unavailable: string;
-    networkError: string;
     invalidResponse: string;
   }
 > = {
@@ -39,7 +43,6 @@ const T: Record<
     assignedDesc: "Lo Scorer sta rivalutando questa posizione",
     sending: "Invio della richiesta…",
     unavailable: "La posizione non ha ancora uno score da rivalutare",
-    networkError: "Errore di rete",
     invalidResponse: "Il team non ha confermato la richiesta",
   },
   en: {
@@ -51,7 +54,6 @@ const T: Record<
     assignedDesc: "The Scorer is re-evaluating this position",
     sending: "Sending request…",
     unavailable: "This position does not have a score to re-evaluate yet",
-    networkError: "Network error",
     invalidResponse: "The team did not confirm the request",
   },
   hu: {
@@ -63,7 +65,6 @@ const T: Record<
     assignedDesc: "A Scorer újraértékeli ezt a pozíciót",
     sending: "Kérés küldése…",
     unavailable: "Ehhez a pozícióhoz még nincs újraértékelhető pontszám",
-    networkError: "Hálózati hiba",
     invalidResponse: "A csapat nem erősítette meg a kérést",
   },
   es: {
@@ -75,7 +76,6 @@ const T: Record<
     assignedDesc: "El Scorer está reevaluando esta posición",
     sending: "Enviando solicitud…",
     unavailable: "Esta posición aún no tiene una puntuación que reevaluar",
-    networkError: "Error de red",
     invalidResponse: "El equipo no confirmó la solicitud",
   },
   de: {
@@ -87,7 +87,6 @@ const T: Record<
     assignedDesc: "Der Scorer bewertet diese Position neu",
     sending: "Anfrage wird gesendet…",
     unavailable: "Diese Position hat noch keine Bewertung zur Neubewertung",
-    networkError: "Netzwerkfehler",
     invalidResponse: "Das Team hat die Anfrage nicht bestätigt",
   },
   fr: {
@@ -98,7 +97,6 @@ const T: Record<
     assignedDesc: "Le Scorer réévalue ce poste",
     sending: "Envoi de la demande…",
     unavailable: "Ce poste n'a pas encore de score à réévaluer",
-    networkError: "Erreur réseau",
     invalidResponse: "L'équipe n'a pas confirmé la demande",
   },
   pt: {
@@ -109,7 +107,6 @@ const T: Record<
     assignedDesc: "O Scorer está a reavaliar esta vaga",
     sending: "A enviar pedido…",
     unavailable: "Esta vaga ainda não tem uma pontuação para reavaliar",
-    networkError: "Erro de rede",
     invalidResponse: "A equipa não confirmou o pedido",
   },
 };
@@ -119,42 +116,46 @@ export function RescoreRequestButton({
   initialStatus,
   disabled = false,
 }: Props) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const [status, setStatus] = useState<ActiveRescoreStatus | null>(
     initialStatus,
   );
+  const [sending, setSending] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const requestRescore = async () => {
-    if (status || disabled) return;
+    if (status || disabled || sending) return;
     setError(null);
-    try {
-      const res = await fetch(`/api/positions/${legacyId}/ticket`, {
+    setSending(true);
+    // Un 2xx senza identità e stato del ticket non prova che la richiesta
+    // sia entrata nella pipeline: leggiamo la conferma, poi aggiorniamo la UI.
+    const outcome = await sendPositionRequest(
+      `/api/positions/${legacyId}/ticket`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: RESCORE_TICKET_KIND,
           request_text: t.requestText,
         }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(body?.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      // Un 2xx senza identità e stato del ticket non prova che la richiesta
-      // sia entrata nella pipeline: leggiamo la conferma, poi aggiorniamo la UI.
-      if (!body?.id || (body.status !== "open" && body.status !== "assigned")) {
-        setError(t.invalidResponse);
-        return;
-      }
-      setStatus(body.status);
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t.networkError);
+      },
+      (body) =>
+        Boolean(body.id) &&
+        !(body.status !== "open" && body.status !== "assigned"),
+    );
+    setSending(false);
+    if (!outcome.ok) {
+      const reason = outcome.unconfirmed
+        ? t.invalidResponse
+        : requestFailureReason(locale, outcome.status);
+      setError(requestFailureMessage(locale, "request", reason));
+      return;
     }
+    setStatus(outcome.body.status as ActiveRescoreStatus);
+    startTransition(() => router.refresh());
   };
 
   return (
@@ -164,7 +165,7 @@ export function RescoreRequestButton({
       description={
         disabled
           ? t.unavailable
-          : isPending
+          : sending || isPending
             ? t.sending
             : status === "assigned"
               ? t.assignedDesc
@@ -174,7 +175,7 @@ export function RescoreRequestButton({
       }
       accent="var(--color-purple)"
       active={status != null}
-      busy={isPending}
+      busy={sending || isPending}
       disabled={disabled || status != null}
       onClick={requestRescore}
       error={error}
