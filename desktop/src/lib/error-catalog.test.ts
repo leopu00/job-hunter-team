@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
@@ -69,6 +69,7 @@ const NOT_ERRORS: Record<string, string> = {
   install_failed: "debug trace event",
   install_required: "debug trace event",
   install_reused: "debug trace event",
+  installed_on_another_engine: "debug trace event",
   not_ready: "debug trace event",
   start_failed: "debug trace event",
   snapshot_not_ready: "debug trace event",
@@ -335,3 +336,18 @@ describe("podman_other_machine_running with the machine's name", () => {
   });
 });
 
+describe("a Mac installed with another container engine", () => {
+  it("says what would stay behind and what to do, in every language, without a terminal", () => {
+    for (const locale of ERROR_LOCALES) {
+      const { text, action } = describeError("runtime_change_requires_migration", { locale });
+      expect(text, locale).toMatch(/Colima/);
+      expect(text, locale).toMatch(/LinkedIn/);
+      expect(text, locale).toMatch(/Telegram/);
+      expect(action, locale).toMatch(/VPS/);
+      expect(action, locale).toMatch(/~\/\.jht/);
+      for (const value of [text, action]) {
+        expect(value, locale).not.toMatch(/terminal|curl|install\.sh|--runtime|`/i);
+      }
+    }
+  });
+});

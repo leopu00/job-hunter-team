@@ -352,6 +352,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs.",
     "Recreate the Podman machine: your data in ~/.jht and in Documents › Job Hunter Team stays where it is.",
   ),
+  // A Mac installed from the command line with Colima: Podman would start the
+  // team on empty volumes, and nothing moves them yet.
+  runtime_change_requires_migration: copy(
+    "Su questo Mac Job Hunter Team è già installato con un altro motore dei container (Docker con Colima). Se l’app passasse a Podman, le CLI dei provider, i segreti del broker (la password della posta e gli accessi ai portali, LinkedIn compreso) e il collegamento a Telegram resterebbero nel motore di prima.",
+    "Per ora l’app non può spostarli: continua a usare il team come l’hai installato, oppure scegli una VPS. Il profilo, i CV e i dati in ~/.jht e in Documenti › Job Hunter Team restano dove sono.",
+    "On this Mac Job Hunter Team is already installed with another container engine (Docker with Colima). If the app switched to Podman, the provider CLIs, the broker's secrets (the mail password and the portal logins, LinkedIn included) and the Telegram connection would stay behind in the previous engine.",
+    "For now the app cannot move them: keep using the team the way you installed it, or choose a VPS. Your profile, CVs and the data in ~/.jht and in Documents › Job Hunter Team stay where they are.",
+  ),
   // Not an error: the confirmation before the machine is deleted.
   podman_machine_recreate_confirm: copy(
     "Ricreare la macchina Podman di JHT cancella ciò che vive solo al suo interno e non si conserva: le CLI dei provider installate (volume jht-deps) e i segreti del broker, cioè la password della posta e i login dei portali (LinkedIn compreso).",

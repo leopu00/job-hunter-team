@@ -42,6 +42,8 @@ const PODMAN_MACHINE_MOUNTS_EXIT: i32 = 78;
 const PODMAN_MACHINE_MOUNTS_HOME: &str = "podman_machine_mounts_home";
 const PODMAN_OTHER_MACHINE_EXIT: i32 = 79;
 const PODMAN_OTHER_MACHINE_RUNNING: &str = "podman_other_machine_running";
+/// install.sh's refusal to move a Mac to another container engine.
+const RUNTIME_CHANGE_REQUIRES_MIGRATION: &str = "runtime_change_requires_migration";
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -759,6 +761,12 @@ fn failure(code: &'static str) -> OnboardingError {
             "Un'altra macchina Podman è già accesa. Spegnila e riprova.",
             true,
         ),
+        // Retrying cannot help: the volumes stay in the other engine until a
+        // migration exists.
+        RUNTIME_CHANGE_REQUIRES_MIGRATION => (
+            "Su questo Mac il team è già installato con un altro motore dei container: passando a Podman, alcuni dati resterebbero lì.",
+            false,
+        ),
         "podman_machine_recreate_failed" => (
             "La macchina Podman di JHT non è stata ricreata. Riprova.",
             true,
@@ -1401,11 +1409,25 @@ fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError>
 }
 
 #[cfg(target_os = "macos")]
-fn podman_runtime_selected(app: &tauri::AppHandle) -> bool {
+fn local_runtime_marker(app: &tauri::AppHandle) -> Option<String> {
     local_runtime_dir(app)
         .ok()
         .and_then(|dir| fs::read_to_string(dir.join("container-runtime")).ok())
-        .is_some_and(|value| value.trim() == "podman")
+        .map(|value| value.trim().to_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn podman_runtime_selected(app: &tauri::AppHandle) -> bool {
+    local_runtime_marker(app).is_some_and(|value| value == "podman")
+}
+
+/// A Mac installed from the command line with Colima (marker `docker`) holds
+/// its container and volumes in Colima. Installing Podman over it would start
+/// the team on empty volumes, and install.sh refuses it
+/// (runtime_change_requires_migration): the app says so before running it.
+#[cfg(any(target_os = "macos", test))]
+fn installed_on_another_engine(marker: Option<&str>) -> bool {
+    marker.is_some_and(|value| value == "docker")
 }
 
 #[cfg(target_os = "macos")]
@@ -1539,6 +1561,11 @@ fn install_local(
                 podman_runtime_selected(app),
                 podman_path().is_some(),
             );
+            if install_required && installed_on_another_engine(local_runtime_marker(app).as_deref())
+            {
+                trace_local_runtime("runtime", "installed_on_another_engine");
+                return Err(failure(RUNTIME_CHANGE_REQUIRES_MIGRATION));
+            }
             if install_required {
                 trace_local_runtime("runtime", "install_required");
                 let installed = with_downloaded_installer(|installer| {
@@ -4185,6 +4212,25 @@ mod tests {
         assert!(local_podman_install_required(true, false, true));
         assert!(local_podman_install_required(true, true, false));
         assert!(!local_podman_install_required(true, true, true));
+    }
+
+    /// A Mac installed from the command line with Colima: the app refuses
+    /// before running install.sh, which would refuse too, with a code of its
+    /// own and no retry.
+    #[test]
+    fn a_mac_on_another_engine_is_not_moved_to_podman_by_the_app() {
+        assert!(super::installed_on_another_engine(Some("docker")));
+        assert!(!super::installed_on_another_engine(Some("podman")));
+        assert!(!super::installed_on_another_engine(None));
+        let error = failure(super::RUNTIME_CHANGE_REQUIRES_MIGRATION);
+        assert_eq!(error.code, "runtime_change_requires_migration");
+        assert!(!error.retryable);
+        let source = include_str!("onboarding.rs");
+        let install = &source[source.find("fn install_local(").unwrap()..];
+        let guard = install
+            .find("installed_on_another_engine(local_runtime_marker(app)")
+            .expect("install_local checks the marker");
+        assert!(guard < install.find("with_downloaded_installer").unwrap());
     }
 
     #[cfg(target_os = "macos")]
