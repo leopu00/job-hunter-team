@@ -642,6 +642,34 @@ mod tests {
         assert!(!wrapper_supports_uninstall("$JHT_HOST_RUNTIME_PROTOCOL = 1\n"));
     }
 
+    /// The wrapper this commit publishes removes JHT with the app's protocol,
+    /// and prints exactly the phases and leftovers the app knows: a phase
+    /// renamed on one side only would never show, and an unknown leftover
+    /// would turn into "everything is left".
+    #[test]
+    fn the_published_wrapper_prints_the_removal_s_phases_and_leftovers() {
+        let source = include_str!("../../../scripts/jht-wrapper.ps1");
+        assert!(wrapper_supports_uninstall(source));
+        let ids = |call: &str| -> std::collections::BTreeSet<String> {
+            let mut ids = std::collections::BTreeSet::new();
+            for (at, _) in source.match_indices(call) {
+                let rest = source[at + call.len()..].trim_start_matches(' ');
+                if rest.starts_with('{') {
+                    continue; // the function's own definition
+                }
+                let id: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+                assert!(!id.is_empty(), "{call} with an id the test cannot read: {:?}", &rest[..rest.len().min(30)]);
+                ids.insert(id);
+            }
+            ids
+        };
+        let phases: std::collections::BTreeSet<String> =
+            UNINSTALL_PHASES.iter().map(|(id, _)| (*id).to_owned()).collect();
+        let items: std::collections::BTreeSet<String> = UNINSTALL_ITEMS.iter().map(|id| (*id).to_owned()).collect();
+        assert_eq!(ids("Write-JhtUninstallPhase "), phases);
+        assert_eq!(ids("Write-JhtUninstallLeft "), items);
+    }
+
     #[test]
     fn only_the_removal_s_own_lines_are_read() {
         assert_eq!(uninstall_line("JHT_PHASE uninstall_machine\r\n"), Some(UninstallLine::Phase("ui_uninstall_machine")));
