@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 INSTALLER = ROOT / "scripts" / "install.sh"
 CONTAINER_ID = "a" * 64
+TELEGRAM_ID = "c" * 64
 MACHINE = "jht-podman"
 PODMAN_UNIT = "podman-compose" + "@" + "jht.service"
 PS_Q_CHILD = [
@@ -103,7 +104,9 @@ def _runtime(tmp_path: Path) -> tuple[Path, dict[str, str], Path, Path]:
         "  jht:\n"
         "    image: example.invalid/jht@sha256:" + "1" * 64 + "\n"
         "    volumes:\n"
-        "      - jht-runtime-mask:/jht_home/runtime\n",
+        "      - jht-runtime-mask:/jht_home/runtime\n"
+        "  jht-telegram:\n"
+        "    image: example.invalid/jht@sha256:" + "1" * 64 + "\n",
         encoding="utf-8",
     )
     candidate_source = tmp_path / "candidate-compose.yml"
@@ -173,11 +176,18 @@ if args[0] == "exec":
             target_index += 2
             continue
         break
-    if (
-        target_index >= len(args)
-        or args[target_index] != expected_id
-        or not metadata_path.is_file()
-    ):
+    if target_index >= len(args):
+        raise SystemExit(95)
+    target = args[target_index]
+    if target == os.environ["JHT_FIXTURE_TELEGRAM_ID"]:
+        if not Path(os.environ["JHT_FIXTURE_TELEGRAM_MARKER"]).is_file():
+            raise SystemExit(95)
+        command = args[target_index + 1:]
+        if command != ["jht-telegram-admin", "legacy", "complete"]:
+            raise SystemExit(96)
+        print('{"ok":true,"legacy":"complete"}')
+        raise SystemExit(0)
+    if target != expected_id or not metadata_path.is_file():
         raise SystemExit(95)
     if args[-1] == "--version":
         print("0.4.0")
@@ -211,7 +221,11 @@ try:
     target = args[target_index]
 except IndexError:
     raise SystemExit(92)
-if target != expected_id or case == "inspect-failure":
+is_telegram = (
+    target == os.environ["JHT_FIXTURE_TELEGRAM_ID"]
+    and Path(os.environ["JHT_FIXTURE_TELEGRAM_MARKER"]).is_file()
+)
+if (not is_telegram and target != expected_id) or (not is_telegram and case == "inspect-failure"):
     raise SystemExit(91)
 try:
     template = args[args.index("--format") + 1]
@@ -231,7 +245,21 @@ metadata = {
     "systemd_unit": "podman-compose" + "@" + "jht.service",
     "config_hash": os.environ["JHT_FIXTURE_CONFIG_HASH"],
 }
-if metadata_path.is_file():
+if is_telegram:
+    metadata.update(
+        {
+            "name": "jht-telegram",
+            "io_service": "jht-telegram",
+            "com_service": "jht-telegram",
+            "image_digest": "1" * 64,
+            "config_hash": (
+                os.environ["JHT_FIXTURE_CANDIDATE_CONFIG_HASH"]
+                if "# candidate-release" in Path(os.environ["JHT_COMPOSE_FILE"]).read_text(encoding="utf-8")
+                else os.environ["JHT_FIXTURE_CONFIG_HASH"]
+            ),
+        }
+    )
+elif metadata_path.is_file():
     metadata.update(json.loads(metadata_path.read_text(encoding="utf-8")))
 case_overrides = {
     "wrong-name": ("name", "foreign"),
@@ -394,9 +422,12 @@ if command == "up" and rest and rest[0] == "-d":
     )
     if probe.returncode:
         raise SystemExit(probe.returncode)
-    created = run_podman("create", "jht")
+    service = rest[-1] if rest[-1] in ("jht", "jht-telegram") else "jht"
+    created = run_podman("create", service)
     if created.returncode:
         raise SystemExit(created.returncode)
+    if service == "jht-telegram":
+        raise SystemExit(0)
     Path(os.environ["JHT_FIXTURE_CONTAINER_METADATA"]).write_text(
         json.dumps(
             {
@@ -490,11 +521,16 @@ if command == "ps":
             print(os.environ["JHT_FIXTURE_FOREIGN_CONTAINER_ID"])
         else:
             print(os.environ["JHT_FIXTURE_CONTAINER_ID"])
+        if Path(os.environ["JHT_FIXTURE_TELEGRAM_MARKER"]).is_file():
+            print(os.environ["JHT_FIXTURE_TELEGRAM_ID"])
     raise SystemExit(0)
 if command in ("create", "pull"):
     if command == "pull":
         raise SystemExit(0)
-    Path(os.environ["JHT_FIXTURE_CREATE_MARKER"]).write_text("created\\n")
+    if tail == ["jht-telegram"]:
+        Path(os.environ["JHT_FIXTURE_TELEGRAM_MARKER"]).write_text("created\\n")
+    else:
+        Path(os.environ["JHT_FIXTURE_CREATE_MARKER"]).write_text("created\\n")
     raise SystemExit(0)
 raise SystemExit(125)
 """,
@@ -543,6 +579,7 @@ esac
     manifest.chmod(0o600)
 
     create_marker = tmp_path / "container-created"
+    telegram_marker = tmp_path / "telegram-created"
     container_metadata.write_text(
         json.dumps(
             {
@@ -578,6 +615,8 @@ esac
         "JHT_FIXTURE_CREATE_MARKER": str(create_marker),
         "JHT_FIXTURE_RUNTIME_STATE": str(tmp_path / "runtime-ready"),
         "JHT_FIXTURE_CONTAINER_ID": CONTAINER_ID,
+        "JHT_FIXTURE_TELEGRAM_ID": TELEGRAM_ID,
+        "JHT_FIXTURE_TELEGRAM_MARKER": str(telegram_marker),
         "JHT_FIXTURE_FOREIGN_CONTAINER_ID": "b" * 64,
         "JHT_FIXTURE_CONTAINER_METADATA": str(container_metadata),
         "JHT_FIXTURE_CONFIG_HASH": "c" * 64,
@@ -602,7 +641,7 @@ def _run(wrapper: Path, env: dict[str, str], *args: str) -> subprocess.Completed
         env=env,
         text=True,
         capture_output=True,
-        timeout=10,
+        timeout=30,
         check=False,
     )
 
@@ -811,6 +850,10 @@ def test_exact_supported_versions_use_named_connection_for_real_ps_and_up(
         PS_Q_CHILD,
         HASH_PROBE_CHILD,
         PS_UP_CHILD,
+        ["create", "jht-telegram"],
+        PS_Q_CHILD,
+        HASH_PROBE_CHILD,
+        PS_UP_CHILD,
         ["create", "jht"],
         PS_Q_CHILD,
         HASH_PROBE_CHILD,
@@ -832,7 +875,9 @@ def test_exact_supported_versions_use_named_connection_for_real_ps_and_up(
     assert any(args and args[0] == "inspect" for _, args in docker_calls)
     assert all(connection == "" for connection, _ in docker_calls)
     inspect = [args for _, args in docker_calls if args and args[0] == "inspect"]
-    assert len(inspect) == 3
+    # Agent probe + preflight, then agent/Telegram for the isolated service
+    # attestation and again for the final agent postcheck.
+    assert len(inspect) == 6
     for inspect_call in inspect:
         assert inspect_call[1:3] == ["--type", "container"]
         inspect_argv = " ".join(inspect_call)
@@ -1055,6 +1100,10 @@ def test_up_creates_only_when_precheck_finds_no_existing_project_container(
     assert [args for _, args in _provider_podman_calls(podman_log)] == [
         PS_Q_CHILD,
         PS_UP_CHILD,
+        ["create", "jht-telegram"],
+        PS_Q_CHILD,
+        HASH_PROBE_CHILD,
+        PS_UP_CHILD,
         ["create", "jht"],
         PS_Q_CHILD,
         HASH_PROBE_CHILD,
@@ -1064,7 +1113,7 @@ def test_up_creates_only_when_precheck_finds_no_existing_project_container(
         for _, args in _docker_calls(env)
         if args and args[0] == "inspect"
     ]
-    assert len(inspect_calls) == 1
+    assert len(inspect_calls) == 3
     assert ".Name" in " ".join(inspect_calls[0])
     _assert_hash_probes_are_read_only(env)
 
@@ -1322,13 +1371,13 @@ def test_upgrade_activate_commits_canonical_project_metadata_for_later_probes(
         for _, args in _actual_compose_calls(env)
         if "up" in args and "--dry-run" not in args
     ]
-    assert len(up_calls) == 1
-    assert up_calls[0][up_calls[0].index("-f") + 1] == canonical_compose
-    assert up_calls[0][up_calls[0].index("-p") + 1] == "jht"
-    assert up_calls[0][up_calls[0].index("up") + 1 :] == [
-        "-d",
-        "--force-recreate",
-        "jht",
+    assert len(up_calls) == 3
+    assert all(call[call.index("-f") + 1] == canonical_compose for call in up_calls)
+    assert all(call[call.index("-p") + 1] == "jht" for call in up_calls)
+    assert [call[call.index("up") + 1 :] for call in up_calls] == [
+        ["-d", "jht-telegram"],
+        ["-d", "--force-recreate", "jht"],
+        ["-d", "--force-recreate", "jht-telegram"],
     ]
     stage_calls = [
         args

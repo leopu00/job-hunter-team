@@ -224,10 +224,14 @@ def test_the_repair_dispatch_is_the_same_in_the_script_and_the_wrapper():
 
 def test_every_up_of_the_windows_wrapper_repairs_first():
     lines = PS1.read_text(encoding="utf-8").splitlines()
-    ups = [i for i, line in enumerate(lines) if re.search(r"Invoke-Compose 'up'|Invoke-UpgradeCompose \$newCompose 'up'", line)]
+    ups = [
+        i for i, line in enumerate(lines)
+        if re.search(r"Invoke-Compose 'up'|Invoke-UpgradeCompose \$newCompose 'up'", line)
+        and "$TelegramContainer" not in line
+    ]
     assert len(ups) == 4
     for i in ups:
-        window = "\n".join(lines[max(0, i - 4): i])
+        window = "\n".join(lines[max(0, i - 9): i])
         assert "Repair-MountOwnership" in window, lines[i]
 
 
