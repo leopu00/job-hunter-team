@@ -571,7 +571,12 @@ function Test-TelegramLegacySource {
       $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
       if (-not $item) { continue }
       if ($item.PSIsContainer -or $item.LinkType) { return $true }
-      $raw = [IO.File]::ReadAllText($path)
+      # UTF-16 e UTF-32 li legge anche json.load: un BOM o un byte NUL fanno
+      # partire l'inventario.
+      $bytes = [IO.File]::ReadAllBytes($path)
+      if ($bytes.Length -ge 2 -and (($bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) -or ($bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF))) { return $true }
+      if ([Array]::IndexOf($bytes, [byte]0) -ge 0) { return $true }
+      $raw = [Text.Encoding]::UTF8.GetString($bytes)
       if ($raw.Contains('telegram') -or $raw.Contains('\u')) { return $true }
     }
   } catch { return $true }

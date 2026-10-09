@@ -934,7 +934,7 @@ read_hidden_tty() {
 # soltanto scritta così o con un escape \u. Nel dubbio (file illeggibile, non
 # regolare, cartella non leggibile) l'inventario parte e decide lui.
 telegram_legacy_sources_present() {
-  local root="${JHT_HOME_HOST:-$HOME/.jht}" path rc=0
+  local root="${JHT_HOME_HOST:-$HOME/.jht}" path rc=0 size stripped
   [ -e "$root" ] || [ -L "$root" ] || return 1
   [ -d "$root" ] && [ -r "$root" ] && [ -x "$root" ] || return 0
   if [ -e "$root/credentials" ] || [ -L "$root/credentials" ]; then
@@ -949,6 +949,13 @@ telegram_legacy_sources_present() {
     LC_ALL=C grep -q -e 'telegram' -e '\\u' "$path" && return 0
     rc=$?
     [ "$rc" -eq 1 ] || return 0
+    # json.load legge anche UTF-16 e UTF-32, e lì «telegram» non è una
+    # sequenza di byte ASCII: un BOM UTF-16/32 o un byte NUL fanno partire
+    # l'inventario.
+    case "$(LC_ALL=C od -An -tx1 -N2 "$path" | tr -d ' \n')" in fffe|feff) return 0 ;; esac
+    size="$(wc -c < "$path")" || return 0
+    stripped="$(LC_ALL=C tr -d '\000' < "$path" | wc -c)" || return 0
+    [ "$((size))" -eq "$((stripped))" ] || return 0
   done
   return 1
 }

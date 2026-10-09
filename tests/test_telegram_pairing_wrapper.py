@@ -23,6 +23,19 @@ POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 SECRET = "987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
 DIGEST = "a" * 64
+LEGACY_CONFIG_TEXT = '{"channels": {"telegram": {"bots": {"assistente": {"bot_token": "x"}}}}}'
+# json.load in legacy.py reads UTF-8, UTF-16 and UTF-32 (with or without BOM),
+# so a byte-level check must not take any of them for a config without Telegram.
+LEGACY_CONFIG_ENCODINGS = {
+    "utf16-le-bom": b"\xff\xfe" + LEGACY_CONFIG_TEXT.encode("utf-16-le"),
+    "utf16-be-bom": b"\xfe\xff" + LEGACY_CONFIG_TEXT.encode("utf-16-be"),
+    "utf32-le-bom": b"\xff\xfe\x00\x00" + LEGACY_CONFIG_TEXT.encode("utf-32-le"),
+    "utf32-be-bom": b"\x00\x00\xfe\xff" + LEGACY_CONFIG_TEXT.encode("utf-32-be"),
+    "utf16-le-without-bom": LEGACY_CONFIG_TEXT.encode("utf-16-le"),
+    # A BOM alone, with no NUL byte after it, still starts the inventory.
+    "utf16-le-bom-without-nul": b"\xff\xfe\x41\x41",
+    "utf16-be-bom-without-nul": b"\xfe\xff\x41\x41",
+}
 
 FAKE_DOCKER = r"""#!/bin/sh
 printf 'ARGV %s\n' "$*" >> "$FAKE_LOG"
@@ -173,7 +186,7 @@ def test_missing_jht_home_starts_without_the_isolated_service(tmp_path: Path) ->
 
 @pytest.mark.parametrize(
     "layout",
-    ["escaped-key", "model-pin-backup", "credential-file", "unreadable-config"],
+    ["escaped-key", "model-pin-backup", "credential-file", "unreadable-config", *LEGACY_CONFIG_ENCODINGS],
 )
 def test_any_possible_legacy_source_still_requires_the_inventory(tmp_path: Path, layout: str) -> None:
     home = legacy_home(tmp_path, '{"model": "x"}')
@@ -184,6 +197,8 @@ def test_any_possible_legacy_source_still_requires_the_inventory(tmp_path: Path,
     elif layout == "credential-file":
         (home / "credentials").mkdir()
         (home / "credentials" / "telegram_bot.json").write_text("{}", encoding="utf-8")
+    elif layout in LEGACY_CONFIG_ENCODINGS:
+        (home / "jht.config.json").write_bytes(LEGACY_CONFIG_ENCODINGS[layout])
     else:
         (home / "jht.config.json").chmod(0)
     log = tmp_path / "calls.log"
@@ -498,6 +513,7 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
         ("config-without-telegram", False),
         ("legacy-config", True),
         ("escaped-key", True),
+        *((encoding, True) for encoding in LEGACY_CONFIG_ENCODINGS),
         ("model-pin-backup", True),
         ("credential-file", True),
     ],
@@ -520,6 +536,8 @@ def test_powershell_start_skips_the_inventory_only_without_legacy_sources(
     elif layout == "credential-file":
         (home / "credentials").mkdir()
         (home / "credentials" / "telegram_bot.json").write_text("{}", encoding="utf-8")
+    elif layout in LEGACY_CONFIG_ENCODINGS:
+        (home / "jht.config.json").write_bytes(LEGACY_CONFIG_ENCODINGS[layout])
     log = tmp_path / "calls.log"
     script = tmp_path / "start.ps1"
     script.write_text(
