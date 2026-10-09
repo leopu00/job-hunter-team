@@ -186,6 +186,25 @@ def _rootless(proc: Path) -> bool:
     return True
 
 
+# The SELinux types of a confined container process (container-selinux;
+# svirt_lxc_net_t is its older name). Never spc_t ("super privileged") nor
+# an unconfined type.
+SELINUX_CONTAINER_TYPES = ("container_t", "svirt_lxc_net_t")
+
+
+def _selinux_confined(proc: Path) -> bool:
+    """The process runs under SELinux as a confined container
+    (`system_u:system_r:container_t:s0:c1,c2`)."""
+    for name in ("attr/selinux/current", "attr/current"):
+        try:
+            label = (proc / name).read_text(encoding="utf-8", errors="replace").strip().rstrip("\x00")
+        except OSError:
+            continue
+        parts = label.split(":")
+        return len(parts) >= 4 and parts[2] in SELINUX_CONTAINER_TYPES
+    return False
+
+
 def confinement(proc: Path | None = None) -> dict:
     """Whether the broker runs confined enough for Chromium's sandbox (R3).
 
@@ -195,15 +214,24 @@ def confinement(proc: Path | None = None) -> dict:
     container: rootless Podman applies no AppArmor profile and refuses a
     container that asks for one (CI, Podman 4.9.3), and Chromium's sandbox
     was measured to start there under the seccomp profile alone. Rootful
-    Docker without the label stays off (the security review's decision, 09/10)."""
+    Docker without the label stays off (the security review's decision, 09/10).
+
+    Where the kernel runs no AppArmor (SELinux hosts, a kernel with no LSM,
+    Docker Desktop's LinuxKit) the seccomp profile alone is accepted only in
+    a rootless container, or under SELinux's confined container type: a
+    rootful container with no LSM at all stays off (security review, P2 on
+    acd9e02b6)."""
     proc = proc or PROC_SELF
+    off = {"ready": False, "reason": "secure_browser_unavailable"}
     if not _hardened(proc):
-        return {"ready": False, "reason": "secure_browser_unavailable"}
+        return off
     label = _apparmor_label(proc)
     if label is not None:
         names = {part.split(" (", 1)[0].strip() for part in label.split("//&")}
         if APPARMOR_PROFILE not in names and not _rootless(proc):
-            return {"ready": False, "reason": "secure_browser_unavailable"}
+            return off
+    elif not (_rootless(proc) or _selinux_confined(proc)):
+        return off
     return {"ready": True, "reason": None}
 
 

@@ -16,6 +16,9 @@ capabilities, no new privileges, no network), twice:
   - the broker's own Python cannot create a mount namespace (a user
     namespace it may, as Chromium may: `userns,` is in the whole profile,
     see scripts/security/README.md; the job prints it);
+  - the same rootful process, seen as a kernel with no LSM shows it (its
+    real status and uid_map, no attr/), is off: seccomp alone is accepted
+    only rootless or as an SELinux confined container;
   - the kernel logged no `apparmor="DENIED"` for the profile meanwhile
     (userns, signal, ptrace: the Podman plan's risk too). That "no" is
     trusted only after the control: under the job's own profile
@@ -108,6 +111,15 @@ out["python_chroot"] = chroot_works()
 out["python_af_alg"] = socket_works(38, socket.SOCK_SEQPACKET)
 out["python_af_vsock"] = socket_works(40, socket.SOCK_STREAM)
 out["own_label"] = label_of("self")
+# The same process as a kernel with no LSM would show it (SELinux hosts,
+# Docker Desktop's LinuxKit): its real status and uid_map, no attr/. The
+# security review's P2 on acd9e02b6: a rootful container there must be off.
+import tempfile
+from pathlib import Path
+bare_proc = Path(tempfile.mkdtemp())
+for name in ("status", "uid_map"):
+    (bare_proc / name).write_text(open(f"/proc/self/{name}").read())
+out["confinement_without_lsm"] = view.confinement(bare_proc)
 if not out["confinement"]["ready"]:
     print(json.dumps(out)); sys.exit(0)
 xvfb = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
@@ -277,6 +289,8 @@ def main(argv: list[str]) -> int:
             fail("renderer-userns", "no renderer process was found: the probe could not compare namespaces")
         elif good.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {good.get('renderer_userns')} vs own {good.get('own_userns')}")
+    if "error" not in good and good.get("confinement_without_lsm") != {"ready": False, "reason": "secure_browser_unavailable"}:
+        fail("no-lsm", f"this rootful container, seen with no LSM label, is not off: {good.get('confinement_without_lsm')}")
     # Declared, not a failure: userns is in the whole jht-broker profile,
     # because no-new-privileges forbids a transition to a Chromium-only child.
     print(f"MEASURE broker-python-userns={'allowed' if good.get('python_unshare_user') else 'refused'}")

@@ -33,6 +33,8 @@ GOOD = {
     "python_chroot": False,
     "python_af_alg": False,
     "python_af_vsock": False,
+    # Rootful Docker seen with no LSM label: off (security review, P2 on acd9e02b6).
+    "confinement_without_lsm": {"ready": False, "reason": "secure_browser_unavailable"},
 }
 BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "python_unshare_mount": False}
 CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-journal-control" pid=7 comm="python3"'
@@ -186,3 +188,20 @@ def test_a_chromium_process_is_known_by_its_program_whatever_its_title(cmdline, 
 def test_no_renderer_found_is_said_as_such(monkeypatch, capsys):
     code, out = _verdict(monkeypatch, capsys, good={**GOOD, "renderer_userns": [], "renderer_in_own_userns": False})
     assert code == 1 and "FAIL [renderer-userns] no renderer process was found" in out
+
+
+def test_a_rootful_container_seen_with_no_lsm_label_must_be_off(monkeypatch, capsys):
+    """The security review's P2 on acd9e02b6: the runner has AppArmor, so the
+    probe also asks confinement() about its own status and uid_map with no
+    attr/, as a kernel without an LSM would show them."""
+    code, out = _verdict(monkeypatch, capsys, good={**GOOD, "confinement_without_lsm": {"ready": True, "reason": None}})
+    assert code == 1 and "FAIL [no-lsm]" in out
+    code, out = _verdict(monkeypatch, capsys, good={k: v for k, v in GOOD.items() if k != "confinement_without_lsm"})
+    assert code == 1 and "FAIL [no-lsm]" in out
+
+
+def test_the_probe_reads_its_real_status_and_uid_map_without_attr():
+    probe = gate.PROBE
+    assert 'for name in ("status", "uid_map"):' in probe
+    assert 'out["confinement_without_lsm"] = view.confinement(bare_proc)' in probe
+    assert probe.index('out["confinement_without_lsm"]') < probe.index('if not out["confinement"]["ready"]:')

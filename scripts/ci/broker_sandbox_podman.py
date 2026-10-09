@@ -23,7 +23,9 @@ Runs, as a NON-ROOT user:
     as not provable;
 - DOCKER_IMAGE under rootful Docker with the same seccomp profile and no
   jht-broker label: a container that is NOT rootless. FAILS unless the
-  broker stays off (`secure_browser_unavailable`).
+  broker stays off (`secure_browser_unavailable`), and stays off also when
+  seen as a kernel with no LSM shows it (status and uid_map, no attr/),
+  while the rootless one seen that way is ready.
 
 Usage: broker_sandbox_podman.py PODMAN_IMAGE DOCKER_IMAGE SECCOMP_JSON
 """
@@ -142,6 +144,14 @@ def main(argv: list[str]) -> int:
     print("MEASURE rootful-without-label " + json.dumps(rootful))
     if rootful.get("confinement") != OFF:
         fail("rootful", f"a rootful container without the jht-broker label is not off: {rootful.get('confinement') or rootful.get('error')}")
+    # The security review's P2 on acd9e02b6: with no LSM label (SELinux
+    # hosts, LinuxKit) seccomp alone counts only rootless. The same two
+    # processes seen as such a kernel shows them: rootful off, rootless ready
+    # (the control that the view without attr/ is not off for any process).
+    if rootful.get("confinement_without_lsm") != OFF:
+        fail("rootful-no-lsm", f"a rootful container with no LSM label is not off: {rootful.get('confinement_without_lsm')}")
+    if "error" not in got and got.get("confinement_without_lsm") != {"ready": True, "reason": None}:
+        fail("rootless-no-lsm", f"rootless Podman with no LSM label is not ready: {got.get('confinement_without_lsm')}")
 
     print(f"checks done: {fails} failed")
     return 0 if fails == 0 else 1

@@ -36,8 +36,10 @@ GOOD = {
     "python_chroot": False,
     "python_af_alg": False,
     "python_af_vsock": False,
+    "confinement_without_lsm": {"ready": True, "reason": None},
 }
-OFF = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "own_label": "docker-default (enforce)"}
+OFF = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "own_label": "docker-default (enforce)",
+       "confinement_without_lsm": {"ready": False, "reason": "secure_browser_unavailable"}}
 ROOTLESS = {"version": "4.9.3", "rootless": True, "apparmor_enabled": False}
 OPENS_BOTH = {"af_alg": True, "af_vsock": True}
 
@@ -123,3 +125,17 @@ def test_the_gate_runs_wherever_the_docker_gate_runs_as_the_runner_user():
     # The rootful counter-proof needs a container WITHOUT the jht-broker
     # label: this job never loads the profile.
     assert not any("apparmor_parser" in s.get("run", "") for s in job["steps"])
+
+
+@pytest.mark.parametrize("rootful_no_lsm,rootless_no_lsm,tag", [
+    ({"ready": True, "reason": None}, {"ready": True, "reason": None}, "rootful-no-lsm"),
+    (None, {"ready": True, "reason": None}, "rootful-no-lsm"),
+    ({"ready": False, "reason": "secure_browser_unavailable"}, {"ready": False, "reason": "secure_browser_unavailable"}, "rootless-no-lsm"),
+    ({"ready": False, "reason": "secure_browser_unavailable"}, None, "rootless-no-lsm"),
+])
+def test_with_no_lsm_label_rootful_is_off_and_rootless_is_ready(monkeypatch, capsys, rootful_no_lsm, rootless_no_lsm, tag):
+    """The security review's P2 on acd9e02b6, on real containers: rootful off,
+    and the rootless control ready, both seen with no attr/."""
+    code, out, _ = _verdict(monkeypatch, capsys, got={**GOOD, "confinement_without_lsm": rootless_no_lsm},
+                            rootful={**OFF, "confinement_without_lsm": rootful_no_lsm})
+    assert code == 1 and f"FAIL [{tag}]" in out

@@ -221,8 +221,8 @@ def test_there_is_no_way_to_turn_the_sandbox_off(env):
     ("2", "jht-broker (enforce)", None, True),
     ("2", "jht-broker//&crun (enforce)", None, True),       # Podman's stacked label
     ("2", "crun//&jht-broker (enforce)", None, True),
-    ("2", None, "system_u:system_r:container_t:s0:c1,c2", True),  # SELinux host: seccomp only
-    ("2", None, None, True),                                 # no LSM label at all
+    ("2", None, "system_u:system_r:container_t:s0:c1,c2", True),  # SELinux host, confined container
+    ("2", None, None, False),                                # rootful, no LSM label at all
     ("2", "docker-default (enforce)", None, False),          # the runtime's default profile
     ("2", "containers-default-0.66.0//&crun (enforce)", None, False),
     ("2", "unconfined", None, False),
@@ -256,6 +256,27 @@ KEEP_ID = "         0          1       1001\n      1001          0          1\n 
 ])
 def test_rootless_podman_stands_in_for_the_label_only_with_a_verified_map(tmp_path, apparmor, uid_map, ready):
     proc = fake_proc(tmp_path / "p", apparmor=apparmor, uid_map=uid_map)
+    expected = {"ready": True, "reason": None} if ready else {"ready": False, "reason": "secure_browser_unavailable"}
+    assert view.confinement(proc) == expected
+
+
+# The security review, P2 on acd9e02b6: where the kernel runs no AppArmor
+# (SELinux, no LSM, Docker Desktop's LinuxKit) the seccomp profile alone is
+# accepted only rootless, or as an SELinux confined container.
+@pytest.mark.parametrize("lsm,uid_map,ready", [
+    (None, ROOTFUL, False),                                              # rootful, no LSM: off
+    (None, ROOTLESS, True),                                              # rootless, no LSM
+    (None, None, False),                                                 # no uid map read: not proved
+    ("system_u:system_r:container_t:s0:c1,c2", ROOTFUL, True),           # SELinux confined container
+    ("system_u:system_r:svirt_lxc_net_t:s0:c7,c9", ROOTFUL, True),       # its older name
+    ("system_u:system_r:spc_t:s0", ROOTFUL, False),                      # super privileged container
+    ("unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023", ROOTFUL, False),
+    ("system_u:system_r:container_runtime_t:s0", ROOTFUL, False),        # the engine's own domain
+    ("system_u:system_r:spc_t:s0", ROOTLESS, True),                      # rootless stands on its own
+    ("container_t", ROOTFUL, False),                                     # not an SELinux context
+])
+def test_without_apparmor_seccomp_alone_needs_rootless_or_a_confined_selinux_container(tmp_path, lsm, uid_map, ready):
+    proc = fake_proc(tmp_path / "p", lsm_current=lsm, uid_map=uid_map)
     expected = {"ready": True, "reason": None} if ready else {"ready": False, "reason": "secure_browser_unavailable"}
     assert view.confinement(proc) == expected
 
