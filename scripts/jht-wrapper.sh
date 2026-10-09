@@ -1494,6 +1494,16 @@ emit_inactive_onboarding_snapshot() {
 }
 
 onboarding_snapshot() {
+  local expected_team=""
+  case "$#:${1:-}" in
+    0:) ;;
+    1:--expect-team-stdin)
+      IFS= read -r expected_team || return 64
+      [ "${#expected_team}" -ge 16 ] && [ "${#expected_team}" -le 128 ] || return 64
+      case "$expected_team" in *[!A-Za-z0-9_-]*) return 64 ;; esac
+      ;;
+    *) return 2 ;;
+  esac
   if ! runtime_bundle_trusted; then
     emit_inactive_onboarding_snapshot 0
     return 0
@@ -1504,8 +1514,14 @@ onboarding_snapshot() {
     emit_inactive_onboarding_snapshot 1
     return 0
   }
+  local metadata_status=0
   metadata="$(docker exec "$container_id" node -e '
-const fs=require("fs"); let config={};
+const fs=require("fs"); const expected=process.argv[1]||"";
+if(expected){
+ let cloud; try { cloud=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8")); } catch { process.exit(72); }
+ if(typeof cloud.user_id!=="string"||cloud.user_id!==expected) process.exit(72);
+}
+let config={};
 try { config=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
 const provider=String(config.active_provider||"").toLowerCase();
 const providers=config.providers||{}; const entry=providers[provider]||{};
@@ -1513,7 +1529,11 @@ const configured=["claude","anthropic","codex","openai","kimi","moonshot"].inclu
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
 process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
-' 2>/dev/null)" || metadata=""
+' "$expected_team" 2>/dev/null)" || metadata_status=$?
+  if [ "$metadata_status" -ne 0 ]; then
+    [ -z "$expected_team" ] || return "$metadata_status"
+    metadata=""
+  fi
   provider_configured=0
   provider_authenticated=0
   assistant_welcomed=0
@@ -2825,7 +2845,8 @@ case "$SUB" in
     ;;
 
   onboarding-snapshot)
-    onboarding_snapshot
+    shift || true
+    onboarding_snapshot "$@"
     ;;
 
   # ── Machine Podman confinata (macOS) ─────────────────────────────────

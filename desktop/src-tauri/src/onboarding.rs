@@ -1694,31 +1694,11 @@ pub(crate) fn remote_install_input(
 }
 const REMOTE_JHT_UP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" up"#;
 const REMOTE_EXISTING_TEAM_PROBE: &str = r#"set -eu
-IFS= read -r JHT_EXPECTED_TEAM
-[ "${#JHT_EXPECTED_TEAM}" -ge 16 ] && [ "${#JHT_EXPECTED_TEAM}" -le 128 ] || exit 64
-case "$JHT_EXPECTED_TEAM" in *[!A-Za-z0-9_-]*) exit 64 ;; esac
 JHT_BIN="$(command -v jht 2>/dev/null || true)"
 [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"
 [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70
-grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$JHT_BIN" || exit 70
-"$JHT_BIN" status >/dev/null 2>&1 || exit 71
-docker exec jht node -e '
-const fs=require("fs"); const path="/jht_home/cloud.json"; const expected=process.argv[1];
-let cloud; try { cloud=JSON.parse(fs.readFileSync(path,"utf8")); } catch { process.exit(72); }
-if (typeof cloud.user_id!=="string" || cloud.user_id!==expected) process.exit(72);
-let cfg={}; try { cfg=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
-const provider=String(cfg.active_provider||"").toLowerCase();
-const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider);
-const marker={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"}[provider];
-console.log("runtimeInstalled=1"); console.log("containerRunning=1");
-console.log("providerConfigured="+(configured?"1":"0"));
-console.log("providerAuthenticated="+(marker&&fs.existsSync(marker)?"1":"0"));
-console.log("profileReady="+(fs.existsSync("/jht_home/profile/ready.flag")?"1":"0"));
-console.log("assistantWelcomed="+(fs.existsSync("/jht_home/profile/welcomed.flag")?"1":"0"));
-' "$JHT_EXPECTED_TEAM" || exit $?
-docker exec jht tmux has-session -t CAPITANO 2>/dev/null || exit 73
-docker exec jht tmux has-session -t ASSISTENTE 2>/dev/null || exit 73
-printf 'captainRunning=1\nassistantRunning=1\n'"#;
+grep -Fqx 'JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1' "$JHT_BIN" || exit 70
+exec "$JHT_BIN" onboarding-snapshot --expect-team-stdin"#;
 const REMOTE_USE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use claude"#;
 const REMOTE_USE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use codex"#;
 const REMOTE_USE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use kimi"#;
@@ -4888,10 +4868,10 @@ mod tests {
                 "mutating command in attach probe: {forbidden}"
             );
         }
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("\"$JHT_BIN\" status"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("docker exec jht node"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t CAPITANO"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t ASSISTENTE"));
+        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1"));
+        assert!(REMOTE_EXISTING_TEAM_PROBE
+            .contains("exec \"$JHT_BIN\" onboarding-snapshot --expect-team-stdin"));
+        assert!(!REMOTE_EXISTING_TEAM_PROBE.contains("docker "));
 
         let team_id = "00000000-0000-4000-8000-000000000001";
         let active = existing_team_probe_with(team_id, |input| {

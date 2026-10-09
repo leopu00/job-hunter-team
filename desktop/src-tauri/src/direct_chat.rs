@@ -20,8 +20,8 @@ use zeroize::{Zeroize, Zeroizing};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
 const SEND_TIMEOUT: Duration = Duration::from_secs(105);
-const REMOTE_CONTAINER_PROBE: &str = "docker inspect jht --format '{{.State.Running}}'";
-const REMOTE_PYTHON_STDIN: &str = "docker exec -i jht python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'";
+const REMOTE_CONTAINER_PROBE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat probe"#;
+const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
 
 const CHAT_READ_PY: &str = r#"import hashlib,json,os,sys
 req=json.loads(sys.stdin.readline())
@@ -777,20 +777,30 @@ pub(crate) async fn direct_chat_read(
 
 fn delivery_command(agent: &str) -> Option<&'static str> {
     Some(match agent {
-        "capitano" => "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send CAPITANO \"$msg\"'",
+        "capitano" => {
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send CAPITANO"#
+        }
         "assistente" => {
-            "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send ASSISTENTE \"$msg\"'"
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send ASSISTENTE"#
         }
-        "mentor" => "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send MENTOR \"$msg\"'",
-        "scout" => "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send SCOUT-1 \"$msg\"'",
+        "mentor" => {
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send MENTOR"#
+        }
+        "scout" => {
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCOUT-1"#
+        }
         "analista" => {
-            "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send ANALISTA-1 \"$msg\"'"
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send ANALISTA-1"#
         }
-        "scorer" => "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send SCORER-1 \"$msg\"'",
+        "scorer" => {
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCORER-1"#
+        }
         "scrittore" => {
-            "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send SCRITTORE-1 \"$msg\"'"
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCRITTORE-1"#
         }
-        "critico" => "docker exec -i jht sh -c 'msg=$(cat); exec jht-tmux-send CRITICO \"$msg\"'",
+        "critico" => {
+            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send CRITICO"#
+        }
         _ => return None,
     })
 }
@@ -988,8 +998,9 @@ pub(crate) fn teardown(state: &DirectChatState) {
 #[cfg(test)]
 mod tests {
     use super::{
-        connection_config_path_at, hex_encode, parse_json, probe, session_for, status, valid_agent,
-        verify_migration_local_host_at, Connection, DirectChatPage, ProcessResult,
+        connection_config_path_at, delivery_command, hex_encode, parse_json, probe, session_for,
+        status, valid_agent, verify_migration_local_host_at, Connection, DirectChatPage,
+        ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
 
@@ -1024,6 +1035,32 @@ mod tests {
         assert_eq!(session_for("assistente"), Some("ASSISTENTE"));
         for bad in ["", "CAPITANO;touch", "dottore", "../capitano"] {
             assert!(!valid_agent(bad));
+        }
+    }
+
+    #[test]
+    fn every_vps_chat_command_uses_the_attested_wrapper() {
+        let mut commands = vec![REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN];
+        commands.extend(
+            [
+                "capitano",
+                "assistente",
+                "mentor",
+                "scout",
+                "analista",
+                "scorer",
+                "scrittore",
+                "critico",
+            ]
+            .into_iter()
+            .map(|agent| delivery_command(agent).unwrap()),
+        );
+
+        assert_eq!(commands.len(), 10);
+        for command in commands {
+            assert!(command.contains("JHT_DESKTOP_CHAT_PROTOCOL=1"));
+            assert!(command.contains("exec \"$JHT_BIN\" desktop-chat"));
+            assert!(!command.contains("docker "));
         }
     }
 

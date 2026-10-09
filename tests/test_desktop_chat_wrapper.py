@@ -77,7 +77,12 @@ case "$1" in
     shift
     [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
     case "$1:$2" in
-      node:-e) printf '1 1 1' ;;
+      node:-e)
+        if [ -n "${JHT_TEST_EXPECTED_TEAM:-}" ]; then
+          for value in "$@"; do last="$value"; done
+          [ "$last" = "$JHT_TEST_EXPECTED_TEAM" ] || exit 72
+        fi
+        printf '1 1 1' ;;
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;
@@ -555,6 +560,37 @@ def test_onboarding_snapshot_is_one_read_only_dispatcher_operation(tmp_path: Pat
         " up " in line and "--dry-run" not in line for line in calls.splitlines()
     )
     assert "machine start" not in calls
+
+
+def test_existing_team_snapshot_checks_the_stdin_identity_inside_the_wrapper(
+    tmp_path: Path,
+):
+    wrapper, env, _ = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXPECTED_TEAM"] = "00000000-0000-4000-8000-000000000001"
+
+    matching = subprocess.run(
+        [str(wrapper), "onboarding-snapshot", "--expect-team-stdin"],
+        env=env,
+        input=f'{env["JHT_TEST_EXPECTED_TEAM"]}\n',
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    mismatch = subprocess.run(
+        [str(wrapper), "onboarding-snapshot", "--expect-team-stdin"],
+        env=env,
+        input="00000000-0000-4000-8000-000000000002\n",
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert matching.returncode == 0, matching.stderr
+    assert "containerRunning=1" in matching.stdout
+    assert mismatch.returncode == 72
 
 
 def test_onboarding_snapshot_never_auto_ups_when_container_stops_mid_probe(
