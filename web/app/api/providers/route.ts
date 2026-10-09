@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { JHT_HOME } from "@/lib/jht-paths";
 import { loadJhtConfig, readJsonSafe } from "@/lib/json-files";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 // Le versioni dei CLI provider le dichiara la release, non il registry
 // (issue #130). Il JSON viene inlinato a build time — nessun path da
 // risolvere a runtime — e la regola di composizione è la stessa di
@@ -340,6 +340,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const denied = await requireAuth();
   if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: { providerId?: string; force?: boolean } = {};
   try {
     body = await req.json();

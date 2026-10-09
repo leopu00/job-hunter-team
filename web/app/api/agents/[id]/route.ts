@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execSync } from "node:child_process";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { safeResolveUnder } from "@/lib/fs-safety";
 
 export const dynamic = "force-dynamic";
@@ -157,6 +157,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 export async function POST(req: Request, ctx: RouteCtx) {
   const denied = await requireAuth();
   if (denied) return denied;
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const { id } = await ctx.params;
   const body = (await req.json().catch(() => ({}))) as {
     action?: string;
