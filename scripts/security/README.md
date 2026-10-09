@@ -1,8 +1,8 @@
 # Security profiles of the `jht-broker` container
 
 Chromium's sandbox in the broker's login browser (design R3, way a) needs two
-host profiles; the installer loads them and `jht up` applies them only when
-they are loaded, so a missing profile never stops mail.
+host profiles; on Linux the installer loads them and `jht up` applies them
+only when they are loaded, so a missing profile never stops mail.
 
 | File | Derived from | What is added |
 | --- | --- | --- |
@@ -46,3 +46,40 @@ creates a user namespace of its own, it can chroot inside it, as Chromium
 does. That is the residue already accepted with `userns,` in the whole
 profile (above): no surface beyond it, since the chroot reaches nothing the
 new namespace did not already hold.
+
+## How they reach the host, per platform
+
+**Linux (VPS and desktop), `scripts/install.sh`.** After the runtime files,
+the installer downloads both profiles from the same commit, checks that they
+are the profiles, and installs them as root, once: the seccomp profile and
+two compose overrides in `/etc/jht/security/` (root, 0644), and, where the
+kernel uses AppArmor, `/etc/apparmor.d/jht-broker`, loaded with
+`apparmor_parser -r -W`. Run as root (a VPS) it asks nothing; a user is asked
+once, with sudo; `--broker-profiles` / `--no-broker-profiles` decide without
+asking. Any failure is a warning: mail never depends on the profiles.
+
+**`jht up` (`scripts/jht-wrapper.sh`).** Every compose call adds
+`compose-seccomp.yml` and, with AppArmor, `compose-apparmor.yml` to
+`jht-broker` only when the files are root's and not writable by others and
+the profile is loaded in enforce mode (`profiles`, readable by root, or the
+profile's `name` and `mode` under `policy/`). Otherwise nothing is added:
+the broker starts with the engine's defaults, its `confinement()` is not
+ready, the login view answers `secure_browser_unavailable`, and `jht up` says
+so with what to do. Whether a non-root `jht up` can see the loaded profile
+depends on what the kernel lets a user read: the broker-sandbox CI job
+measures it (`scripts/ci/broker_security_host.sh`), and checks that as root
+the installer's step and `jht up` agree.
+
+**Mac (Colima, Podman machine, Docker Desktop).** The containers run in a
+Linux VM; the wrapper adds no override on macOS, so the broker runs with the
+VM engine's default profiles and the login view stays off
+(`secure_browser_unavailable`), fail closed. Not measured on a machine yet:
+which LSM each VM runs (Podman's machine is Fedora-based, with SELinux;
+Colima's is Ubuntu), and so whether the seccomp profile alone would do there.
+Either way the profiles have to live inside the VM, which no step puts there
+yet: it is the Mac part of T3/T4.
+
+**Windows (Podman in WSL).** The same as the Mac: the PowerShell wrapper adds
+no override, and the login view stays off until the seccomp profile is
+carried into the Podman machine (stage 3 of the Podman plan). Whether the
+WSL2 kernel runs AppArmor there is not measured.

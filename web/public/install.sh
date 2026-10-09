@@ -27,6 +27,9 @@
 # ║                            Except for explicit Podman, a running Docker  ║
 # ║                            is reused (detect-first). Linux ignores it.   ║
 # ║    --dry-run               Only show the actions that would be executed  ║
+# ║    --broker-profiles       Linux: install the login browser's security   ║
+# ║                            profiles (root once) without asking           ║
+# ║    --no-broker-profiles    Linux: skip them; mail works, login view off  ║
 # ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
 # ║                              wrapper, compose and host-setup transaction;║
 # ║                              no engine, GUI, account or container I/O.   ║
@@ -105,6 +108,7 @@ MIN_NODE_MAJOR=22
 # ── Arguments ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
 DRY_RUN=0
+BROKER_PROFILES=ask
 PAIRING_TOKEN=""
 PUBLISH_RUNTIME_BUNDLE=0
 EXPECTED_INSTALLER_SHA256=""
@@ -140,6 +144,8 @@ while [ $# -gt 0 ]; do
       ;;
     --runtime=*) RUNTIME_CHOICE="${1#*=}"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --broker-profiles) BROKER_PROFILES=yes; shift ;;
+    --no-broker-profiles) BROKER_PROFILES=no; shift ;;
     --publish-runtime-bundle) PUBLISH_RUNTIME_BUNDLE=1; shift ;;
     --expected-installer-sha256)
       [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
@@ -760,6 +766,8 @@ download_runtime_files() {
     release_base="$(attested_raw_base)" \
       || fail "Cannot resolve branch '$BRANCH' to an immutable release commit."
   fi
+  # The broker's security profiles come from this same commit.
+  RUNTIME_RELEASE_BASE="$release_base"
   local compose_url="$release_base/docker-compose.yml"
   local wrapper_url="$release_base/scripts/jht-wrapper.sh"
   local hostsetup_url="$release_base/scripts/host-setup.sh"
@@ -975,6 +983,106 @@ download_runtime_files() {
       PATH_READY=1
       ;;
   esac
+}
+
+# ── Security profiles of the portal-secrets broker (R3) ──────────────────
+# The broker's login browser runs Chromium with its own sandbox only under two
+# host profiles: seccomp always, AppArmor where the kernel uses it. They are
+# installed as root, once, in fixed root-owned places; `jht up` adds them to
+# jht-broker only when they are there and loaded. Without them the broker
+# starts with the engine's defaults: mail works, the login view answers
+# secure_browser_unavailable and opens nothing.
+BROKER_SECURITY_DIR="/etc/jht/security"
+BROKER_APPARMOR_FILE="/etc/apparmor.d/jht-broker"
+APPARMOR_ENABLED_FILE="/sys/module/apparmor/parameters/enabled"
+
+host_apparmor_enabled() {
+  [ "$(cat "$APPARMOR_ENABLED_FILE" 2>/dev/null)" = "Y" ]
+}
+
+broker_profiles_consent() {
+  case "$BROKER_PROFILES" in
+    yes) return 0 ;;
+    no) return 1 ;;
+  esac
+  [ "$(id -u)" -eq 0 ] && return 0
+  local answer=""
+  if [ -r /dev/tty ]; then
+    printf "  The login browser of the broker needs two security profiles on this host,\n"
+    printf "  installed once as root (sudo) in %s and /etc/apparmor.d.\n" "$BROKER_SECURITY_DIR"
+    printf "  Install them now? [y/N] "
+    read -r answer </dev/tty || answer=""
+  fi
+  case "$answer" in y|Y|yes|YES) return 0 ;; esac
+  return 1
+}
+
+install_broker_security_profiles() {
+  [ "$OS" = "linux" ] || return 0
+  if ! broker_profiles_consent; then
+    warn "Broker security profiles not installed: mail works, the LinkedIn login view stays off."
+    info "To add them later, run the installer again with --broker-profiles (root once)."
+    return 0
+  fi
+  local apparmor=0
+  if host_apparmor_enabled; then
+    command -v apparmor_parser >/dev/null 2>&1 || {
+      warn "AppArmor is on but apparmor_parser is missing: broker security profiles not installed."
+      return 0
+    }
+    apparmor=1
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would install %s/jht-broker.seccomp.json and its compose overrides\n" "$BROKER_SECURITY_DIR"
+    [ "$apparmor" -eq 1 ] && printf "  ${DIM}[dry-run]${RESET} would install and load %s\n" "$BROKER_APPARMOR_FILE"
+    return 0
+  fi
+  local stage
+  stage="$(mktemp -d)" || { warn "Cannot stage the broker security profiles."; return 0; }
+  if ! curl -fsSL "$RUNTIME_RELEASE_BASE/scripts/security/jht-broker.seccomp.json" -o "$stage/seccomp.json" \
+    || ! grep -q '"defaultAction": "SCMP_ACT_ERRNO"' "$stage/seccomp.json" \
+    || ! curl -fsSL "$RUNTIME_RELEASE_BASE/scripts/security/jht-broker.apparmor.txt" -o "$stage/apparmor" \
+    || ! grep -q '^profile jht-broker ' "$stage/apparmor"; then
+    rm -rf "$stage"
+    warn "Broker security profiles: download or validation failed; mail works, the login view stays off."
+    return 0
+  fi
+  cat > "$stage/compose-seccomp.yml" <<EOF
+# Installed by the JHT installer. jht up adds it only when the broker's
+# profiles are in place (Chromium's sandbox in the login view, R3).
+services:
+  jht-broker:
+    security_opt:
+      - seccomp=$BROKER_SECURITY_DIR/jht-broker.seccomp.json
+EOF
+  cat > "$stage/compose-apparmor.yml" <<'EOF'
+# Installed by the JHT installer. jht up adds it only when the jht-broker
+# AppArmor profile is loaded in the kernel.
+services:
+  jht-broker:
+    security_opt:
+      - apparmor=jht-broker
+EOF
+  if ! sudo_maybe install -d -m 0755 -o root -g root /etc/jht "$BROKER_SECURITY_DIR" \
+    || ! sudo_maybe install -m 0644 -o root -g root "$stage/seccomp.json" "$BROKER_SECURITY_DIR/jht-broker.seccomp.json" \
+    || ! sudo_maybe install -m 0644 -o root -g root "$stage/compose-seccomp.yml" "$BROKER_SECURITY_DIR/compose-seccomp.yml" \
+    || ! sudo_maybe install -m 0644 -o root -g root "$stage/compose-apparmor.yml" "$BROKER_SECURITY_DIR/compose-apparmor.yml"; then
+    rm -rf "$stage"
+    warn "Broker security profiles: could not write $BROKER_SECURITY_DIR; the login view stays off."
+    return 0
+  fi
+  if [ "$apparmor" -eq 1 ]; then
+    if ! sudo_maybe install -m 0644 -o root -g root "$stage/apparmor" "$BROKER_APPARMOR_FILE" \
+      || ! sudo_maybe apparmor_parser -r -W "$BROKER_APPARMOR_FILE"; then
+      rm -rf "$stage"
+      warn "The jht-broker AppArmor profile did not load; the login view stays off."
+      return 0
+    fi
+    ok "broker security profiles: seccomp and AppArmor (jht-broker, loaded)"
+  else
+    ok "broker security profiles: seccomp (no AppArmor on this kernel)"
+  fi
+  rm -rf "$stage"
 }
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -1824,6 +1932,7 @@ main_docker() {
   verify_docker_works
   verify_test_image
   download_runtime_files
+  install_broker_security_profiles
 }
 
 main_native() {

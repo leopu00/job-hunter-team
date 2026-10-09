@@ -21,6 +21,9 @@ on:
       - "shared/broker/**"
       - "scripts/security/**"
       - "scripts/ci/broker_sandbox.py"
+      - "scripts/ci/broker_security_host.sh"
+      - "scripts/install.sh"
+      - "scripts/jht-wrapper.sh"
       - ".github/workflows/broker-sandbox.yml"
   workflow_dispatch:
 
@@ -63,3 +66,6 @@ jobs:
 
       - name: Chromium's sandbox runs, and the broker fails closed without the profiles
         run: python3 scripts/ci/broker_sandbox.py jht:broker-sandbox scripts/security/jht-broker.seccomp.json
+
+      - name: install.sh installs the profiles, and jht up adds them only when loaded
+        run: bash scripts/ci/broker_security_host.sh

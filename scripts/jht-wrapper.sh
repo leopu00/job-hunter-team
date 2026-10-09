@@ -800,6 +800,12 @@ require_compose_file() {
 compose_file() {
   local file="$1"
   shift
+  case "$(broker_security_mode "$file")" in
+    apparmor)
+      set -- -f "$BROKER_SECURITY_DIR/compose-seccomp.yml" -f "$BROKER_SECURITY_DIR/compose-apparmor.yml" "$@" ;;
+    seccomp)
+      set -- -f "$BROKER_SECURITY_DIR/compose-seccomp.yml" "$@" ;;
+  esac
   local project
   project="$(compose_project_name)" \
     || { err "Identita progetto Compose non valida."; return 1; }
@@ -877,6 +883,74 @@ BROKER_SERVICE="jht-broker"
 LEGACY_SECRET_NAMES="email_monitor email_transport"
 BROKER_VOLUME_NAMES="jht-secrets jht-broker-state jht-broker-sock"
 HOST_RESET_CONFIRMED_EXIT=20
+
+# Profili di sicurezza del broker (R3): il browser di login usa la sandbox di
+# Chromium solo con i profili che install.sh mette sull'host (root, una volta):
+# seccomp sempre, AppArmor dove il kernel lo usa. jht up aggiunge i loro
+# override a jht-broker solo se ci sono, sono di root e, con AppArmor, il
+# profilo e' caricato. Altrimenti il broker parte con i profili del motore:
+# la posta funziona e la vista di login risponde secure_browser_unavailable.
+BROKER_SECURITY_DIR="/etc/jht/security"
+APPARMOR_ENABLED_FILE="/sys/module/apparmor/parameters/enabled"
+APPARMOR_FS="/sys/kernel/security/apparmor"
+BROKER_APPARMOR_PROFILE="jht-broker"
+
+broker_security_node_safe() {
+  local path="$1" kind="$2" metadata mode_num
+  [ ! -L "$path" ] || return 1
+  case "$kind" in dir) [ -d "$path" ] ;; file) [ -f "$path" ] ;; esac || return 1
+  metadata="$(runtime_stat "$path")" || return 1
+  [ "${metadata%% *}" = "0" ] || return 1
+  mode_num=$((8#${metadata#* }))
+  [ $((mode_num & 0022)) -eq 0 ]
+}
+
+host_apparmor_enabled() {
+  [ "$(cat "$APPARMOR_ENABLED_FILE" 2>/dev/null)" = "Y" ]
+}
+
+# Caricato e in enforce. La lista dei profili la legge root; da utente si
+# guarda la cartella del profilo in policy/ (name e mode), se il kernel la
+# rende leggibile. Se nessuna delle due si legge, il profilo conta come non
+# caricato: meglio la vista spenta che un broker che non parte.
+broker_apparmor_loaded() {
+  local dir
+  if [ -r "$APPARMOR_FS/profiles" ]; then
+    grep -Fqx "$BROKER_APPARMOR_PROFILE (enforce)" "$APPARMOR_FS/profiles"
+    return $?
+  fi
+  for dir in "$APPARMOR_FS"/policy/profiles/*/; do
+    [ "$(cat "$dir/name" 2>/dev/null)" = "$BROKER_APPARMOR_PROFILE" ] || continue
+    [ "$(cat "$dir/mode" 2>/dev/null)" = "enforce" ] && return 0
+  done
+  return 1
+}
+
+# Quale override aggiungere: "apparmor" (seccomp + AppArmor), "seccomp" (host
+# senza AppArmor), o niente. Solo su Linux e solo se il compose ha il broker.
+broker_security_mode() {
+  local file="$1" dir="$BROKER_SECURITY_DIR"
+  [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
+  grep -q "^  $BROKER_SERVICE:" "$file" 2>/dev/null || return 0
+  broker_security_node_safe "$dir" dir || return 0
+  broker_security_node_safe "$dir/jht-broker.seccomp.json" file || return 0
+  broker_security_node_safe "$dir/compose-seccomp.yml" file || return 0
+  if host_apparmor_enabled; then
+    broker_security_node_safe "$dir/compose-apparmor.yml" file || return 0
+    broker_apparmor_loaded || return 0
+    printf 'apparmor\n'
+  else
+    printf 'seccomp\n'
+  fi
+}
+
+broker_security_notice() {
+  [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
+  grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" 2>/dev/null || return 0
+  [ -z "$(broker_security_mode "$COMPOSE_FILE")" ] || return 0
+  info "Profili di sicurezza del broker assenti o non caricati: la posta funziona, il login LinkedIn resta spento."
+  info "Cosa fare: rilancia l'installazione con --broker-profiles (serve root una volta)."
+}
 
 broker_admin() {
   local broker_id
@@ -2767,6 +2841,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_security_notice
     ;;
 
   start-container)
@@ -2777,6 +2852,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_security_notice
     ;;
 
   down|stop-container)
@@ -2812,6 +2888,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_security_notice
     ;;
 
   upgrade)
