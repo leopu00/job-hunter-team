@@ -95,6 +95,90 @@ def test_public_dns_is_resolved_once_and_returns_the_numeric_address():
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize(
+    ("policy", "allowed", "denied"),
+    [
+        ("agent", (80, 443), (465, 587, 993)),
+        ("broker", (443, 465, 587, 993), (80, 22)),
+        ("telegram", (443,), (80, 465, 587, 993)),
+    ],
+)
+def test_named_policy_has_only_its_service_ports(policy, allowed, denied):
+    host = "api.telegram.org" if policy == "telegram" else "public.example"
+    for port in allowed:
+        assert (
+            PROXY.resolve_public_target(
+                host,
+                port,
+                answers("192.0.2.10"),
+                PROXY.POLICY_PORTS[policy],
+                PROXY.POLICY_HOSTS[policy],
+            )
+            == "192.0.2.10"
+        )
+    for port in denied:
+        with pytest.raises(PROXY.PolicyDenied):
+            PROXY.resolve_public_target(
+                host,
+                port,
+                answers("192.0.2.10"),
+                PROXY.POLICY_PORTS[policy],
+                PROXY.POLICY_HOSTS[policy],
+            )
+
+
+@pytest.mark.parametrize(
+    ("policy", "port"),
+    [("agent", 443), ("broker", 993), ("telegram", 443)],
+)
+def test_every_service_policy_shares_the_public_address_filter(policy, port):
+    host = "api.telegram.org" if policy == "telegram" else "destination.example"
+    for address in ("127.0.0.1", "192.168.1.1", "::1", "fc00::1"):
+        with pytest.raises(PROXY.PolicyDenied):
+            PROXY.resolve_public_target(
+                host,
+                port,
+                answers(address),
+                PROXY.POLICY_PORTS[policy],
+                PROXY.POLICY_HOSTS[policy],
+            )
+
+
+@pytest.mark.parametrize(
+    "host", ["example.com", "telegram.org", "sub.api.telegram.org", "192.0.2.10"]
+)
+def test_telegram_policy_denies_every_destination_except_the_api_name(host):
+    with pytest.raises(PROXY.PolicyDenied):
+        PROXY.resolve_public_target(
+            host,
+            443,
+            answers("192.0.2.10"),
+            PROXY.POLICY_PORTS["telegram"],
+            PROXY.POLICY_HOSTS["telegram"],
+        )
+
+
+@pytest.mark.parametrize("host", ["api.telegram.org", "API.TELEGRAM.ORG."])
+def test_telegram_policy_accepts_only_the_normalized_api_name(host):
+    assert (
+        PROXY.resolve_public_target(
+            host,
+            443,
+            answers("192.0.2.10"),
+            PROXY.POLICY_PORTS["telegram"],
+            PROXY.POLICY_HOSTS["telegram"],
+        )
+        == "192.0.2.10"
+    )
+
+
+def test_standalone_proxy_defaults_to_the_agent_policy():
+    args = PROXY.parse_args(["--connector", "/unused"])
+
+    assert args.policy == "agent"
+    assert PROXY.POLICY_PORTS[args.policy] == frozenset({80, 443})
+
+
 def connector(tmp_path: Path) -> tuple[Path, Path]:
     marker = tmp_path / "connector-called"
     script = tmp_path / "connector"
@@ -110,9 +194,21 @@ def connector(tmp_path: Path) -> tuple[Path, Path]:
     return script, marker
 
 
-def proxy_request(tmp_path: Path, target: str, resolver) -> tuple[bytes, Path]:
+def proxy_request(
+    tmp_path: Path,
+    target: str,
+    resolver,
+    allowed_ports=PROXY.POLICY_PORTS["agent"],
+    allowed_hosts=PROXY.POLICY_HOSTS["agent"],
+) -> tuple[bytes, Path]:
     executable, marker = connector(tmp_path)
-    server = PROXY.ThreadingProxy(("127.0.0.1", 0), str(executable), resolver)
+    server = PROXY.ThreadingProxy(
+        ("127.0.0.1", 0),
+        str(executable),
+        resolver,
+        allowed_ports,
+        allowed_hosts,
+    )
     thread = threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.01}
     )
@@ -150,5 +246,31 @@ def test_denied_connect_requests_return_403_without_starting_the_connector(
 
 def test_example_https_connect_passes_the_verified_ip_to_the_connector(tmp_path):
     response, marker = proxy_request(tmp_path, "example.com:443", answers("192.0.2.10"))
+    assert response.startswith(b"HTTP/1.1 200 Connection Established\r\n")
+    assert marker.read_text(encoding="utf-8") == "192.0.2.10 443"
+
+
+def test_telegram_proxy_denies_another_public_https_name_before_connecting(tmp_path):
+    response, marker = proxy_request(
+        tmp_path,
+        "example.com:443",
+        answers("192.0.2.10"),
+        PROXY.POLICY_PORTS["telegram"],
+        PROXY.POLICY_HOSTS["telegram"],
+    )
+
+    assert response.startswith(b"HTTP/1.1 403 Forbidden\r\n")
+    assert not marker.exists()
+
+
+def test_telegram_proxy_connects_to_the_verified_api_ip(tmp_path):
+    response, marker = proxy_request(
+        tmp_path,
+        "api.telegram.org:443",
+        answers("192.0.2.10"),
+        PROXY.POLICY_PORTS["telegram"],
+        PROXY.POLICY_HOSTS["telegram"],
+    )
+
     assert response.startswith(b"HTTP/1.1 200 Connection Established\r\n")
     assert marker.read_text(encoding="utf-8") == "192.0.2.10 443"

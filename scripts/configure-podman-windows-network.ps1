@@ -4,10 +4,17 @@
 [CmdletBinding()]
 param(
   [string]$MachineName = 'jht-podman-probe',
-  [int]$Port = 3128
+  [int]$Port = 3128,
+  [int]$BrokerPort = 3129,
+  [int]$TelegramPort = 3130
 )
 
 $ErrorActionPreference = 'Stop'
+$proxyPorts = @($Port, $BrokerPort, $TelegramPort)
+if (($proxyPorts | Where-Object { $_ -lt 1 -or $_ -gt 65535 }).Count -ne 0 -or
+    ($proxyPorts | Sort-Object -Unique).Count -ne 3) {
+  throw 'Agent, broker and Telegram proxy ports must be distinct valid TCP ports.'
+}
 $Podman = (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue |
   Select-Object -First 1).Source
 if (-not $Podman) {
@@ -138,9 +145,15 @@ $proxySourceWsl = ConvertTo-WslPath $proxySource
 $connectorWsl = ConvertTo-WslPath $connector
 $proxyUrl = "http://127.0.0.1:$Port"
 
-$unit = @"
+function New-JhtProxyUnit {
+  param(
+    [Parameter(Mandatory)][string]$Description,
+    [Parameter(Mandatory)][ValidateSet('agent', 'broker', 'telegram')][string]$Policy,
+    [Parameter(Mandatory)][int]$ListenPort
+  )
+  return @"
 [Unit]
-Description=JHT Windows interop egress proxy
+Description=$Description
 Before=jht-rootless-podman.service
 
 [Service]
@@ -148,17 +161,26 @@ Type=simple
 User=user
 Group=user
 Environment="HOME=/home/user"
-ExecStart=/usr/bin/python3 /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py --bind 127.0.0.1 --port $Port --connector "$connectorWsl"
+ExecStart=/usr/bin/python3 /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py --bind 127.0.0.1 --port $ListenPort --policy $Policy --connector "$connectorWsl"
 Restart=always
 RestartSec=1s
 
 [Install]
 WantedBy=multi-user.target
 "@
+}
+
+$unit = New-JhtProxyUnit -Description 'JHT Windows agent egress proxy' -Policy agent -ListenPort $Port
+$brokerUnit = New-JhtProxyUnit -Description 'JHT Windows broker egress proxy' -Policy broker -ListenPort $BrokerPort
+$telegramUnit = New-JhtProxyUnit -Description 'JHT Windows Telegram egress proxy' -Policy telegram -ListenPort $TelegramPort
 $apiService = @"
 [Unit]
 Requires=jht-windows-egress-proxy.service
 After=jht-windows-egress-proxy.service
+Requires=jht-windows-egress-proxy-broker.service
+After=jht-windows-egress-proxy-broker.service
+Requires=jht-windows-egress-proxy-telegram.service
+After=jht-windows-egress-proxy-telegram.service
 Requires=user-runtime-dir@1000.service
 After=user-runtime-dir@1000.service
 
@@ -185,10 +207,16 @@ ExecStart=/usr/bin/podman --log-level=info system service --time=0 unix:///run/u
 WantedBy=multi-user.target
 "@
 $unitFile = Join-Path $stateDir 'jht-windows-egress-proxy.service'
+$brokerUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-broker.service'
+$telegramUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-telegram.service'
 $apiServiceFile = Join-Path $stateDir 'jht-rootless-podman.service'
 [IO.File]::WriteAllText($unitFile, $unit, [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($brokerUnitFile, $brokerUnit, [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($telegramUnitFile, $telegramUnit, [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($apiServiceFile, $apiService, [Text.UTF8Encoding]::new($false))
 $unitWsl = ConvertTo-WslPath $unitFile
+$brokerUnitWsl = ConvertTo-WslPath $brokerUnitFile
+$telegramUnitWsl = ConvertTo-WslPath $telegramUnitFile
 $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 
 Invoke-MachineShell ("sudo mkdir -p /home/user/.local/share/jht-podman /home/user/.config/systemd/user && " +
@@ -197,12 +225,19 @@ Invoke-MachineShell ("sudo mkdir -p /home/user/.local/share/jht-podman /home/use
   "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.socket && " +
   "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.service && " +
   "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-windows-egress-proxy.service && " +
+  "sudo install -m 0644 $(Quote-Sh $brokerUnitWsl) /etc/systemd/system/jht-windows-egress-proxy-broker.service && " +
+  "sudo install -m 0644 $(Quote-Sh $telegramUnitWsl) /etc/systemd/system/jht-windows-egress-proxy-telegram.service && " +
   "sudo install -m 0644 $(Quote-Sh $apiServiceWsl) /etc/systemd/system/jht-rootless-podman.service && " +
   "sudo systemctl disable --now jht-rootless-podman.socket 2>/dev/null || true; " +
   "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket")
-Invoke-MachineShell 'sudo systemctl daemon-reload && sudo systemctl enable jht-windows-egress-proxy.service jht-rootless-podman.service && sudo systemctl restart jht-windows-egress-proxy.service jht-rootless-podman.service'
-$validation = "code=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy $(Quote-Sh $proxyUrl) https://ghcr.io/v2/); test `"`$code`" = 401"
+Invoke-MachineShell 'sudo systemctl daemon-reload && sudo systemctl enable jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service jht-rootless-podman.service && sudo systemctl restart jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service jht-rootless-podman.service'
+$validation = "agent=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://ghcr.io/v2/) && test `"`$agent`" = 401 && " +
+  "broker=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort https://ghcr.io/v2/) && test `"`$broker`" = 401 && " +
+  "curl --silent --show-error --output /dev/null --proxy http://127.0.0.1:$TelegramPort https://api.telegram.org/ && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://example.com:993/)`" = 403 && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort http://example.com/)`" = 403 && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$TelegramPort https://example.com/)`" = 403"
 Invoke-MachineShell $validation
 Invoke-Checked $Podman '--connection' $MachineName 'info' '--format' 'rootless={{.Host.Security.Rootless}} cgroups={{.Host.CgroupManager}}' | Out-Null
 
-Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via $proxyUrl)" -ForegroundColor Green
+Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$BrokerPort telegram=$TelegramPort)" -ForegroundColor Green

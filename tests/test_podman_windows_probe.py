@@ -103,10 +103,24 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "Requires=user-runtime-dir@1000.service" in source
     assert "CONTAINERS_CGROUP_MANAGER=cgroupfs" in source
     assert "sudo systemctl restart jht-windows-egress-proxy.service" in source
+    assert "-Policy agent -ListenPort $Port" in source
+    assert "-Policy broker -ListenPort $BrokerPort" in source
+    assert "-Policy telegram -ListenPort $TelegramPort" in source
+    assert "--policy $Policy" in source
+    assert "jht-windows-egress-proxy-broker.service" in source
+    assert "jht-windows-egress-proxy-telegram.service" in source
+    assert "[int]$BrokerPort = 3129" in source
+    assert "[int]$TelegramPort = 3130" in source
+    assert "Agent, broker and Telegram proxy ports must be distinct" in source
+    assert "http://127.0.0.1:$Port https://example.com:993/" in source
+    assert "http://127.0.0.1:$BrokerPort http://example.com/" in source
+    assert "http://127.0.0.1:$TelegramPort https://api.telegram.org/" in source
+    assert "http://127.0.0.1:$TelegramPort https://example.com/" in source
     assert "https://ghcr.io/v2/" in source
     assert "--node" not in proxy
     assert "[self.server.connector, resolved_ip, str(port)]" in proxy
-    assert "resolve_public_target(host, port" in proxy
+    assert "resolved_ip = resolve_public_target(" in proxy
+    assert "self.server.allowed_ports" in proxy
 
 
 def test_interop_proxy_defaults_to_loopback_when_run_standalone():
