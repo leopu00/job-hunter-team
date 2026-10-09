@@ -18,6 +18,7 @@ import {
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
+import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
@@ -106,6 +107,10 @@ vi.mock("../lib/identity-choice", () => ({
   googleIdentitySelected: vi.fn(),
 }));
 vi.mock("../shell/router", () => ({ navigate: vi.fn() }));
+vi.mock("../lib/runtime-log", () => ({
+  runtimeLogPath: vi.fn(async () => "C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log"),
+  openRuntimeLog: vi.fn(async () => true),
+}));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", () => ({
   default: ({ onLogout }: { onLogout?: () => Promise<void> }) => (
@@ -170,6 +175,10 @@ vi.mock("../onboarding", () => ({
         )}
         {props.runtime.status === "failed" && props.runtime.retryable === false && (
           <button type="button" onClick={props.onExitFailure}>exit-failure</button>
+        )}
+        {props.runtimeLogPath && <p>runtime-log:{props.runtimeLogPath}</p>}
+        {props.onOpenRuntimeLog && (
+          <button type="button" onClick={() => void props.onOpenRuntimeLog?.()}>open-runtime-log</button>
         )}
         {props.runtime.status === "failed" && props.runtime.code === "podman_machine_mounts_home" && props.onRecreatePodmanMachine && (
           <button type="button" onClick={() => void props.onRecreatePodmanMachine?.().catch(() => undefined)}>recreate-podman-machine</button>
@@ -256,6 +265,8 @@ async function reachAssistant(user: ReturnType<typeof userEvent.setup>) {
 describe("DashboardApp onboarding router", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(runtimeLogPath).mockResolvedValue(null);
+    vi.mocked(openRuntimeLog).mockResolvedValue(false);
     localStorage.clear();
     vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
     vi.mocked(readPreviousLocalData).mockResolvedValue(false);
@@ -813,6 +824,27 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByText("ignored raw output")).not.toBeInTheDocument();
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("a failed setup step shows where the runtime log is, and opens it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-log-account"));
+    requireOnboarding();
+    vi.mocked(runtimeLogPath).mockResolvedValue("C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log");
+    vi.mocked(openRuntimeLog).mockResolvedValue(true);
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "runtime_install_failed",
+      message: "raw native message",
+      retryable: true,
+    });
+    render(<DashboardApp />);
+    expect(screen.queryByText(/^runtime-log:/)).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(await screen.findByText(/^runtime-log:.*\\logs\\runtime\.log$/)).toBeInTheDocument();
+    expect(runtimeLogPath).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "open-runtime-log" }));
+    expect(openRuntimeLog).toHaveBeenCalledOnce();
   });
 
   it("a Podman machine that sees more of the Mac is recreated only from its own action, then setup starts over", async () => {

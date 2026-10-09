@@ -175,6 +175,12 @@ export interface OnboardingFlowProps {
    * `podman_machine_mounts_home` error, after the person confirms it.
    */
   onRecreatePodmanMachine?: () => Promise<void>;
+  /**
+   * Where the local runtime's log is (lib/runtime-log.ts), shown with a button
+   * that opens it when a local setup step fails.
+   */
+  runtimeLogPath?: string | null;
+  onOpenRuntimeLog?: () => Promise<boolean>;
   /** The language of the onboarding; the app's own (lib/app-locale.ts) when absent. */
   locale?: Locale;
   /**

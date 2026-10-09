@@ -573,8 +573,23 @@ pub(crate) fn run_program_lines<I, S>(
     program: &str,
     args: I,
     timeout: Duration,
-    mut on_line: impl FnMut(&str),
+    on_line: impl FnMut(&str),
 ) -> Result<i32, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_program_lines_keeping_stderr(program, args, timeout, on_line).0
+}
+
+/// run_program_lines that also returns what the program printed on stderr
+/// (capped), for the local runtime's own log only: see run_program_keeping_stderr.
+pub(crate) fn run_program_lines_keeping_stderr<I, S>(
+    program: &str,
+    args: I,
+    timeout: Duration,
+    mut on_line: impl FnMut(&str),
+) -> (Result<i32, &'static str>, Vec<u8>)
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -587,9 +602,14 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     hide_console(&mut command);
-    let mut child = command.spawn().map_err(|_| "process_start_failed")?;
-    let stdout = child.stdout.take().ok_or("process_pipe_failed")?;
-    let stderr = child.stderr.take().ok_or("process_pipe_failed")?;
+    let Ok(mut child) = command.spawn() else {
+        return (Err("process_start_failed"), Vec::new());
+    };
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (Err("process_pipe_failed"), Vec::new());
+    };
     let (lines, received) = std::sync::mpsc::channel::<String>();
     // Neither reader is joined: see LINES_DRAIN_GRACE.
     thread::spawn(move || {
@@ -607,7 +627,30 @@ where
             }
         }
     });
-    thread::spawn(move || read_capped(stderr));
+    // stderr is read as it comes, so what arrived is there even when the
+    // program is killed or leaves a process holding the pipe.
+    let kept = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (stderr_closed, stderr_done) = std::sync::mpsc::channel::<()>();
+    {
+        let kept = kept.clone();
+        thread::spawn(move || {
+            let mut stderr = stderr;
+            let mut buffer = [0u8; 8192];
+            loop {
+                match stderr.read(&mut buffer) {
+                    Ok(0) | Err(_) => break,
+                    Ok(count) => {
+                        if let Ok(mut kept) = kept.lock() {
+                            let room = MAX_OUTPUT_BYTES.saturating_sub(kept.len());
+                            kept.extend_from_slice(&buffer[..count.min(room)]);
+                        }
+                    }
+                }
+            }
+            let _ = stderr_closed.send(());
+        });
+    }
+    let taken = |kept: &std::sync::Mutex<Vec<u8>>| kept.lock().map(|mut kept| std::mem::take(&mut *kept)).unwrap_or_default();
     let started = Instant::now();
     let tick = Duration::from_millis(50);
     let code = loop {
@@ -617,13 +660,15 @@ where
             // stdout closed: recv_timeout no longer waits, so this does.
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => thread::sleep(tick),
         }
-        if let Some(status) = child.try_wait().map_err(|_| "process_wait_failed")? {
-            break status.code().unwrap_or(-1);
+        match child.try_wait() {
+            Ok(Some(status)) => break status.code().unwrap_or(-1),
+            Ok(None) => {}
+            Err(_) => return (Err("process_wait_failed"), taken(&kept)),
         }
         if started.elapsed() >= timeout {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("process_timeout");
+            return (Err("process_timeout"), taken(&kept));
         }
     };
     let exited = Instant::now();
@@ -633,7 +678,10 @@ where
             Err(_) => break,
         }
     }
-    Ok(code)
+    if let Some(left) = LINES_DRAIN_GRACE.checked_sub(exited.elapsed()) {
+        let _ = stderr_done.recv_timeout(left);
+    }
+    (Ok(code), taken(&kept))
 }
 
 pub(crate) fn run_program<I, S>(
@@ -642,6 +690,23 @@ pub(crate) fn run_program<I, S>(
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_program_keeping_stderr(program, args, input, timeout).0
+}
+
+/// run_program that also returns what the program printed on stderr. Only
+/// for the steps that prepare the local runtime, which keep it in their own
+/// log (runtime_log.rs, redacted there): never for SSH or provider commands,
+/// whose stderr can carry credentials or host data.
+pub(crate) fn run_program_keeping_stderr<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> (Result<ProcessResult, &'static str>, Vec<u8>)
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -657,38 +722,58 @@ where
     } else {
         command.stdin(Stdio::null());
     }
-    let mut child = command.spawn().map_err(|_| "process_start_failed")?;
-    let stdout = child.stdout.take().ok_or("process_pipe_failed")?;
-    let stderr = child.stderr.take().ok_or("process_pipe_failed")?;
+    let Ok(mut child) = command.spawn() else {
+        return (Err("process_start_failed"), Vec::new());
+    };
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (Err("process_pipe_failed"), Vec::new());
+    };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
     let stderr_reader = thread::spawn(move || read_capped(stderr));
+    let stopped = |child: &mut std::process::Child,
+                   stdout_reader: thread::JoinHandle<Vec<u8>>,
+                   stderr_reader: thread::JoinHandle<Vec<u8>>,
+                   error: &'static str| {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = stdout_reader.join();
+        (Err(error), stderr_reader.join().unwrap_or_default())
+    };
     if let Some(bytes) = input {
-        let mut stdin = child.stdin.take().ok_or("process_pipe_failed")?;
-        stdin.write_all(bytes).map_err(|_| "process_input_failed")?;
+        let Some(mut stdin) = child.stdin.take() else {
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_pipe_failed");
+        };
+        if stdin.write_all(bytes).is_err() {
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_input_failed");
+        }
     }
     let started = Instant::now();
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(|_| "process_wait_failed")? {
-            break status;
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(_) => return stopped(&mut child, stdout_reader, stderr_reader, "process_wait_failed"),
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = stdout_reader.join();
-            let _ = stderr_reader.join();
-            return Err("process_timeout");
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_timeout");
         }
         thread::sleep(Duration::from_millis(50));
     };
     let stdout = stdout_reader.join().unwrap_or_default();
-    // stderr is deliberately drained but never returned to UI-facing callers:
-    // SSH/provider output can contain credentials or host data. Stable error
-    // codes are the public contract.
-    let _ = stderr_reader.join();
-    Ok(ProcessResult {
-        code: status.code().unwrap_or(-1),
-        stdout,
-    })
+    // stderr is never returned to UI-facing callers: SSH/provider output can
+    // contain credentials or host data, and stable error codes are the public
+    // contract. run_program drops it; only the local runtime's own log keeps
+    // it, redacted.
+    let stderr = stderr_reader.join().unwrap_or_default();
+    (
+        Ok(ProcessResult {
+            code: status.code().unwrap_or(-1),
+            stdout,
+        }),
+        stderr,
+    )
 }
 
 #[cfg(test)]
@@ -879,6 +964,51 @@ mod tests {
         assert_eq!(result, Ok(0));
         assert_eq!(seen, ["JHT_PHASE podman_machine_start\n"]);
         assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
+    }
+
+    /// The local runtime's steps keep what the program said on stderr, for
+    /// their log: when it fails, when it is killed, and next to its stdout.
+    #[cfg(unix)]
+    #[test]
+    fn a_runtime_step_keeps_its_stderr_and_run_program_still_drops_it() {
+        let (result, stderr) = super::run_program_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo out; echo 'install.ps1 : Access denied' >&2; exit 3"],
+            None,
+            std::time::Duration::from_secs(20),
+        );
+        let result = result.unwrap();
+        assert_eq!((result.code, result.stdout.as_slice()), (3, &b"out\n"[..]));
+        assert_eq!(stderr, b"install.ps1 : Access denied\n");
+
+        let (timed_out, stderr) = super::run_program_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'stuck at the machine' >&2; exec sleep 30"],
+            None,
+            std::time::Duration::from_millis(500),
+        );
+        assert_eq!(timed_out.unwrap_err(), "process_timeout");
+        assert_eq!(stderr, b"stuck at the machine\n");
+
+        let mut seen = Vec::new();
+        let (ended, stderr) = super::run_program_lines_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'JHT_PHASE podman_install'; echo 'winget: 0x8a15000f' >&2; exit 1"],
+            std::time::Duration::from_secs(20),
+            |line| seen.push(line.to_owned()),
+        );
+        assert_eq!(ended, Ok(1));
+        assert_eq!(seen, ["JHT_PHASE podman_install\n"]);
+        assert_eq!(stderr, b"winget: 0x8a15000f\n");
+
+        let (timed_out, stderr) = super::run_program_lines_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'still pulling' >&2; exec sleep 30"],
+            std::time::Duration::from_millis(500),
+            |_| {},
+        );
+        assert_eq!(timed_out, Err("process_timeout"));
+        assert_eq!(stderr, b"still pulling\n");
     }
 
     #[cfg(unix)]

@@ -111,6 +111,9 @@ const NOT_ERRORS: Record<string, string> = {
   podman_machine_start: "install.ps1 phase id",
   runtime_download: "install.ps1 phase id",
   image_pull: "install.ps1 phase id",
+  // runtime_log.rs: a log that cannot be written never stops the step it describes (RuntimeLog::record drops it).
+  runtime_log_failed: "runtime log write, never surfaced",
+  runtime_log_invalid: "runtime log write, never surfaced",
   // jht.ps1 uninstall's phases (windows_runtime::UNINSTALL_PHASES): shown as progress, never an error.
   uninstall_machine: "jht.ps1 uninstall phase id",
   uninstall_runtime: "jht.ps1 uninstall phase id",

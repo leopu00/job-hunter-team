@@ -1,8 +1,9 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::release_channel;
 use crate::windows_runtime::exit_failure;
+use crate::runtime_log::RuntimeLog;
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_program_keeping_stderr, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,9 @@ const DIAGNOSTIC_MAX_BYTES: usize = 64 * 1024;
 /// scripts/jht-wrapper.sh). `run_local` turns it into this error code.
 const PODMAN_MACHINE_MOUNTS_EXIT: i32 = 78;
 const PODMAN_MACHINE_MOUNTS_HOME: &str = "podman_machine_mounts_home";
+/// What the Windows install keeps of install.ps1's stdout for the runtime log.
+#[cfg_attr(not(windows), allow(dead_code))]
+const INSTALL_STDOUT_KEPT: usize = 256 * 1024;
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -1503,6 +1507,7 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
 #[cfg(windows)]
 fn install_local_windows(
     app: &tauri::AppHandle,
+    log: Option<&RuntimeLog>,
     phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
     use crate::windows_runtime::{
@@ -1510,13 +1515,17 @@ fn install_local_windows(
         wsl_state, INSTALL_PS1_SHA256,
     };
     let wsl = wsl_path(std::env::var_os("SystemRoot"));
-    wsl_state(run_program(
+    let started = Instant::now();
+    let (wsl_status, wsl_stderr) = run_program_keeping_stderr(
         wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?,
         ["--status"],
         None,
         Duration::from_secs(30),
-    ))
-    .map_err(failure)?;
+    );
+    if let Some(log) = log {
+        log.record_result("wsl --status", &wsl_status, &wsl_stderr, started.elapsed());
+    }
+    wsl_state(wsl_status).map_err(failure)?;
     let channel = release_channel::current().map_err(failure)?;
     // A runtime already there is reused only by a production build, and only
     // when it is a production one: a test build always installs its own.
@@ -1550,7 +1559,9 @@ fn install_local_windows(
             fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
             crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
             let shell = powershell_path(std::env::var_os("SystemRoot"));
-            installer_outcome(crate::runtime_host::run_program_lines(
+            let started = Instant::now();
+            let mut stdout = Vec::new();
+            let (ended, stderr) = crate::runtime_host::run_program_lines_keeping_stderr(
                 shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
                 installer_invocation(&script, &channel_args),
                 PREPARE_TIMEOUT,
@@ -1558,9 +1569,15 @@ fn install_local_windows(
                     if let Some(message) = phase_message(line) {
                         phase(message);
                     }
+                    if stdout.len() < INSTALL_STDOUT_KEPT {
+                        stdout.extend_from_slice(line.as_bytes());
+                    }
                 },
-            ))
-            .map_err(failure)
+            );
+            if let Some(log) = log {
+                log.record("install.ps1", ended, &stdout, &stderr, started.elapsed());
+            }
+            installer_outcome(ended).map_err(failure)
         })();
         let _ = fs::remove_dir_all(&dir);
         result
@@ -1603,12 +1620,13 @@ fn download_verified_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, 
 fn install_local(
     app: &tauri::AppHandle,
     diagnostics: Option<&OnboardingDiagnosticSink>,
+    log: Option<&RuntimeLog>,
     phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
     #[cfg(windows)]
     {
         let _ = diagnostics;
-        return install_local_windows(app, phase);
+        return install_local_windows(app, log, phase);
     }
     #[cfg(not(windows))]
     let _ = phase;
@@ -1638,15 +1656,17 @@ fn install_local(
             if install_required {
                 trace_local_runtime("runtime", "install_required");
                 let installed = with_downloaded_installer(|installer, channel_args| {
-                    ensure_success(
-                        run_program(
-                            "/usr/bin/env",
-                            local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
-                            Some(installer.bytes()),
-                            PREPARE_TIMEOUT,
-                        ),
-                        "runtime_install_failed",
-                    )
+                    let started = Instant::now();
+                    let (result, stderr) = run_program_keeping_stderr(
+                        "/usr/bin/env",
+                        local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
+                        Some(installer.bytes()),
+                        PREPARE_TIMEOUT,
+                    );
+                    if let Some(log) = log {
+                        log.record_result("install.sh", &result, &stderr, started.elapsed());
+                    }
+                    ensure_success(result, "runtime_install_failed")
                 });
                 if let Err(error) = installed {
                     trace_local_runtime("runtime", "install_failed");
@@ -1687,7 +1707,7 @@ fn install_local(
             let snapshot = probe_installed_wrapper_with(|operation, timeout| {
                 probe_sequence = probe_sequence.saturating_add(1);
                 let started = Instant::now();
-                let result = run_local(&installed_wrapper, &operation.argv(), timeout);
+                let result = run_local_logged(&installed_wrapper, &operation.argv(), timeout, log);
                 if let Some(diagnostics) = diagnostics {
                     diagnostics.record_process(
                         format!("wrapper-{}-{probe_sequence}", operation.diagnostic_id()),
@@ -1719,15 +1739,17 @@ fn install_local(
                         &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
                         channel_args,
                     );
-                    ensure_success(
-                        run_program(
-                            "/usr/bin/env",
-                            args,
-                            Some(installer.bytes()),
-                            PREPARE_TIMEOUT,
-                        ),
-                        "runtime_install_failed",
-                    )
+                    let started = Instant::now();
+                    let (result, stderr) = run_program_keeping_stderr(
+                        "/usr/bin/env",
+                        args,
+                        Some(installer.bytes()),
+                        PREPARE_TIMEOUT,
+                    );
+                    if let Some(log) = log {
+                        log.record_result("install.sh", &result, &stderr, started.elapsed());
+                    }
+                    ensure_success(result, "runtime_install_failed")
                 })?;
             }
             wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
@@ -1997,37 +2019,74 @@ pub(crate) fn run_verified_local_wrapper(
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
+    run_verified_local_wrapper_keeping_stderr(wrapper, args, input, timeout).0
+}
+
+/// run_verified_local_wrapper with the wrapper's stderr, for the runtime log
+/// only (run_local_logged).
+fn run_verified_local_wrapper_keeping_stderr(
+    wrapper: &Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> (Result<ProcessResult, &'static str>, Vec<u8>) {
     if !valid_wrapper_file(wrapper) {
-        return Err("runtime_missing");
+        return (Err("runtime_missing"), Vec::new());
     }
     #[cfg(target_os = "macos")]
     {
-        let (program, invocation) = local_wrapper_command(wrapper, args, std::env::var_os("PATH"))?;
-        return run_program(
-            program.to_str().ok_or("runtime_missing")?,
-            invocation,
-            input,
-            timeout,
-        );
+        let (program, invocation) = match local_wrapper_command(wrapper, args, std::env::var_os("PATH")) {
+            Ok(command) => command,
+            Err(error) => return (Err(error), Vec::new()),
+        };
+        let Some(program) = program.to_str() else {
+            return (Err("runtime_missing"), Vec::new());
+        };
+        return run_program_keeping_stderr(program, invocation, input, timeout);
     }
     #[cfg(windows)]
     {
         use crate::windows_runtime::{powershell_path, script_invocation};
         let shell = powershell_path(std::env::var_os("SystemRoot"));
-        return run_program(
-            shell.to_str().ok_or("runtime_missing")?,
-            script_invocation(wrapper, args),
-            input,
-            timeout,
-        );
+        let Some(shell) = shell.to_str() else {
+            return (Err("runtime_missing"), Vec::new());
+        };
+        return run_program_keeping_stderr(shell, script_invocation(wrapper, args), input, timeout);
     }
     #[cfg(not(any(target_os = "macos", windows)))]
-    run_program(
-        wrapper.to_str().ok_or("runtime_missing")?,
-        args,
-        input,
-        timeout,
-    )
+    let Some(program) = wrapper.to_str() else {
+        return (Err("runtime_missing"), Vec::new());
+    };
+    #[cfg(not(any(target_os = "macos", windows)))]
+    run_program_keeping_stderr(program, args, input, timeout)
+}
+
+/// run_local for a step that prepares the runtime: how it ended and what it
+/// printed go to the runtime log.
+fn run_local_logged(
+    wrapper: &Path,
+    args: &[&str],
+    timeout: Duration,
+    log: Option<&RuntimeLog>,
+) -> Result<ProcessResult, &'static str> {
+    let started = Instant::now();
+    let (result, stderr) = run_verified_local_wrapper_keeping_stderr(wrapper, args, None, timeout);
+    if let Some(log) = log {
+        log.record_result(&format!("jht {}", args.join(" ")), &result, &stderr, started.elapsed());
+    }
+    refuse_broad_podman_machine(result)
+}
+
+fn run_scoped_local_logged(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    wrapper: &Path,
+    operation: LocalCliOperation,
+    timeout: Duration,
+    log: Option<&RuntimeLog>,
+) -> Result<ProcessResult, &'static str> {
+    crate::account_scope::validate_local_runtime(app, scope)?;
+    run_local_logged(wrapper, &operation.argv(), timeout, log)
 }
 
 #[cfg(test)]
@@ -2103,6 +2162,7 @@ fn prepare_impl(
         &scope,
         OnboardingDiagnosticHostKind::from_host(&submission.host),
     );
+    let runtime_log = RuntimeLog::new(&app);
     let progress_diagnostics = diagnostics.clone();
     let reporter = ProgressReporter::with_emitter(move |event| {
         let _ = channel.send(event.clone());
@@ -2122,6 +2182,7 @@ fn prepare_impl(
                 ValidatedHost::Local => Some(install_local(
                     &app,
                     diagnostics.as_ref(),
+                    runtime_log.as_ref(),
                     &|message| reporter.phase(message),
                 )?),
                 ValidatedHost::Vps { .. } => {
@@ -2167,7 +2228,14 @@ fn prepare_impl(
                     |operation, timeout| {
                         request_sequence = request_sequence.saturating_add(1);
                         let started = Instant::now();
-                        let result = run_scoped_local(&app, &scope, wrapper, operation, timeout);
+                        let result = run_scoped_local_logged(
+                            &app,
+                            &scope,
+                            wrapper,
+                            operation,
+                            timeout,
+                            runtime_log.as_ref(),
+                        );
                         if let Some(diagnostics) = diagnostics.as_ref() {
                             diagnostics.record_process(
                                 format!(
@@ -2818,8 +2886,9 @@ fn secret_terminator(character: char) -> bool {
     character.is_whitespace() || matches!(character, '"' | '\'' | ',' | ';' | '}' | ']' | '\u{1b}')
 }
 
-#[cfg(test)]
-fn redact(text: String) -> String {
+/// Text with its secrets and terminal sequences taken out, as the runtime log
+/// writes it (runtime_log.rs).
+pub(crate) fn redact(text: String) -> String {
     let mut redactor = StreamRedactor::default();
     let mut output = redactor.push(&text);
     output.push_str(&redactor.finish());
@@ -5410,6 +5479,33 @@ esac
         super::start_and_verify_local_container(&wrapper).unwrap();
         assert!(dir.join("container-ready").is_file());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A local runtime step leaves how it ended and its stderr in the runtime
+    /// log, and still answers as run_local does.
+    #[cfg(unix)]
+    #[test]
+    fn a_local_runtime_step_writes_the_runtime_log() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("jht-runtime-log-step-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let wrapper = dir.join("jht");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\necho 'starting the machine'\necho \"  x Podman machine non avviabile\" >&2\nexit 1\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let log = super::RuntimeLog::in_dir(&dir.join("logs"));
+        let result = super::run_local_logged(&wrapper, &["up"], std::time::Duration::from_secs(20), Some(&log)).unwrap();
+        assert_eq!(result.code, 1);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(
+            text.contains(" jht up: exit 1 after ") && text.contains("--- stdout\nstarting the machine\n--- stderr\n  x Podman machine non avviabile\n"),
+            "{text}"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -75,6 +75,7 @@ import MessagesPage from "../pages/messages";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorResetsAt } from "../lib/error-catalog";
+import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 
 
 type LocalMigrationGate = {
@@ -308,6 +309,7 @@ export default function DashboardApp() {
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
   const [previousLocalData, setPreviousLocalData] = useState(false);
+  const [runtimeLog, setRuntimeLog] = useState<string | null>(null);
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
@@ -1028,6 +1030,15 @@ export default function DashboardApp() {
     return finishAssistant();
   }, [connectResumedAssistant, finishAssistant, gate, loginProvider, resumeTeam]);
 
+  // A failed setup step shows where the runtime log is, written by then.
+  const setupFailed = gate.phase === "required" && gate.runtime.status === "failed";
+  useEffect(() => {
+    if (!setupFailed) return;
+    let active = true;
+    void runtimeLogPath().then((path) => { if (active) setRuntimeLog(path); });
+    return () => { active = false; };
+  }, [setupFailed]);
+
   // Only from the confirmation on the podman_machine_mounts_home error: the
   // machine is deleted and created again, then the setup starts over.
   const recreatePodmanMachine = useCallback(async () => {
@@ -1164,6 +1175,8 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRecreatePodmanMachine={recreatePodmanMachine}
+        runtimeLogPath={runtimeLog}
+        onOpenRuntimeLog={openRuntimeLog}
         previousLocalData={previousLocalData}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}

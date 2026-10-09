@@ -18,6 +18,7 @@ mod profile_migration;
 mod release_channel;
 mod release_channel_rules;
 mod runtime_host;
+mod runtime_log;
 mod voice_input;
 mod windows_runtime;
 
@@ -75,6 +76,8 @@ pub fn run() {
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
+            runtime_log::onboarding_runtime_log,
+            runtime_log::onboarding_runtime_log_open,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

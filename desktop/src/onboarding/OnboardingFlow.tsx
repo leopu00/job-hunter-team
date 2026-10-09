@@ -83,7 +83,7 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
+function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [actionFailed, setActionFailed] = useState(false);
@@ -249,6 +249,12 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
               {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
               <small>{runtime.message}</small>
               {failed && runtime.action && <small className="onboarding-runtime-status__action">{t.whatToDo(runtime.action)}</small>}
+              {failed && host.kind === "local" && runtimeLogPath && (
+                <small className="onboarding-runtime-status__log">
+                  {t.runtimeLogAt} <code>{runtimeLogPath}</code>{" "}
+                  {onOpenRuntimeLog && <button className="onboarding-secondary" type="button" onClick={() => void onOpenRuntimeLog()}>{t.openRuntimeLog}</button>}
+                </small>
+              )}
             </div>
           </div>
           <ol className="onboarding-runtime-track">
@@ -334,7 +340,7 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -360,7 +366,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     headingRef.current?.focus();
   }, [step]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));

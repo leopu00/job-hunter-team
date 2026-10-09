@@ -172,6 +172,22 @@ describe("OnboardingFlow technical setup", () => {
     expect(installs).toHaveTextContent(/Podman resta: si disinstalla da Impostazioni › App › App installate/);
   });
 
+  it("shows where the runtime log is on a failed local step, with a button that opens it", async () => {
+    const open = vi.fn(async () => true);
+    const failed = { status: "failed" as const, stage: "runtime" as const, code: "runtime_install_failed", message: "Non riuscita.", retryable: true };
+    const path = "C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log";
+    const { unmount } = renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: path, onOpenRuntimeLog: open });
+    const status = screen.getByRole("alert");
+    expect(status).toHaveTextContent(`Il registro di ogni passo, con l’errore completo, è in: ${path}`);
+    await userEvent.click(within(status).getByRole("button", { name: "Apri il registro" }));
+    expect(open).toHaveBeenCalledOnce();
+    unmount();
+
+    // No log yet, or a step that is not this computer's: nothing to show.
+    renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: null, onOpenRuntimeLog: open });
+    expect(screen.queryByText(/Il registro di ogni passo/)).toBeNull();
+  });
+
   it("asks for the consent in the language of Windows when the person chose none", async () => {
     const navigator = window.navigator;
     const languages = Object.getOwnPropertyDescriptor(navigator, "languages");
