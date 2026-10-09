@@ -338,7 +338,7 @@ def test_from_each_container_only_its_proxy_answers_and_forwards(service):
             )
             runs.append(json.loads(result.stdout.strip().splitlines()[-1]))
     finally:
-        _podman("rm", "-f", listener, check=False)
+        _podman("rm", "-f", "-v", listener, check=False)
 
     for run in runs:
         assert run["proxy"] == "forwarded", f"{service}: {allowed_host} through its proxy: {run['proxy']}"
