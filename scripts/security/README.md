@@ -41,4 +41,8 @@ broker-sandbox CI job (run 37872819366) Chromium stopped on
 `Check failed: sys_chroot("/proc/self/fdinfo/") == 0`, with no AppArmor
 denial (a seccomp errno is not logged). Outside a user namespace of its
 own, a process with no capability is still refused by the kernel: the CI
-job checks it from the broker's Python.
+job checks that the broker's Python cannot chroot *directly*. If it first
+creates a user namespace of its own, it can chroot inside it, as Chromium
+does. That is the residue already accepted with `userns,` in the whole
+profile (above): no surface beyond it, since the chroot reaches nothing the
+new namespace did not already hold.
