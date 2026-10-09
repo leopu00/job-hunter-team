@@ -121,7 +121,7 @@ reads:
    image's layout, so a path into the checkout's `shared/` cannot pass.
 
 8. **The CAPITANO is told which models exist HERE** (B-05, 24/09). Its team
-   table gives each role a model — Sonnet for seven of them, Opus for three,
+   table gives each role a model class — Sonnet/Terra for six of them, Opus/Sol for four,
    Codex for the Dottore — and the table is *true*: those are the CLIs the
    product's tmux sessions run on. It is not true of this harness, and a model
    follows its prompt over a tool's description: the CAPITANO asked for

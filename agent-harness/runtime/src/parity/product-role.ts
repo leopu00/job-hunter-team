@@ -152,7 +152,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const shell = hasShell(options.agent);
   // B-05: the CAPITANO asks for a model its own prompt names, and the launcher
   // refuses it every round. The team table of `capitano.md` gives each role a
-  // model — Sonnet for seven of them — and that table is TRUE: it describes the
+  // model class — Sonnet/Terra for six of them — and that table is TRUE: it describes the
   // product's tmux team, where those are the CLIs the roles run on. It is simply
   // not true here, and the model follows the prompt over a tool's description,
   // which is why five live rounds died on `sonnet` (VPS's count, 23-24/09).

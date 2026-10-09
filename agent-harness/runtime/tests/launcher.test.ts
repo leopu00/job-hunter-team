@@ -551,7 +551,7 @@ describe("through the hub", () => {
 
       /**
        * B-05: the same list in the PROMPT, because the model follows the prompt.
-       * `capitano.md` gives each role a model — Sonnet for seven of them — and
+       * `capitano.md` gives each role a model class — Sonnet/Terra for six of them — and
        * that table is true of the product's tmux team and not of here, which is
        * why five live rounds died on `sonnet`. The prompt is not touched; the
        * difference goes in the parity notes it reads every round, from the same
@@ -564,7 +564,8 @@ describe("through the hub", () => {
       expect(captain.systemPrompt).toContain("scout has indices 1-2");
       expect(captain.systemPrompt).toContain("never the next index to ask for");
       // The prompt's own table is still there, unedited: the note explains it, it does not hide it.
-      expect(captain.systemPrompt).toMatch(/\| Sonnet \|/);
+      // Since 09/10 the table names the class on both providers (Sonnet/Terra, Opus/Sol).
+      expect(captain.systemPrompt).toMatch(/\| Sonnet\/Terra \|/);
       // `sonnet` is what it asked for in every live round, and it is not in the sentence.
       expect(said).not.toContain("sonnet");
 
