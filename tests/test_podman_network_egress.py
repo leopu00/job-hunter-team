@@ -100,6 +100,45 @@ def test_node_in_the_container_goes_through_the_proxy():
     assert "NODE_USE_ENV_PROXY=1" in _services(OVERRIDE)["jht"]["environment"]
 
 
+def test_a_service_on_pasta_does_not_keep_the_base_files_networks():
+    # network_mode and networks exclude each other: if the base file gives a
+    # service a network (the broker's own, for its login view), the override
+    # that puts it on pasta must reset it, or the whole project is invalid
+    # and nothing starts on Windows.
+    base = _services(ROOT / "docker-compose.yml")
+    override = yaml.load(OVERRIDE.read_text(encoding="utf-8"), Loader=_ComposeLoader)["services"]
+    for name in SERVICES:
+        if base.get(name, {}).get("networks"):
+            assert "networks" in override[name] and not override[name]["networks"], name
+
+
+def _compose_config() -> dict | None:
+    for command in (["docker-compose"], ["docker", "compose"]):
+        if not shutil.which(command[0]):
+            continue
+        result = subprocess.run(
+            [*command, "-f", str(ROOT / "docker-compose.yml"), "-f", str(OVERRIDE), "config", "--format", "json"],
+            capture_output=True, text=True, check=False,
+            env={**os.environ, "HOME": os.environ.get("TMPDIR", "/tmp")},
+        )
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)
+    return None
+
+
+@pytest.mark.skipif(not any(shutil.which(c) for c in ("docker-compose", "docker")), reason="compose not available")
+def test_the_merged_project_is_valid_and_publishes_only_on_loopback():
+    config = _compose_config()
+    if config is None:
+        pytest.skip("compose not available")
+    for name, (port, _, _) in SERVICES.items():
+        service = config["services"][name]
+        assert service["network_mode"] == _pasta(port), name
+        assert not service.get("networks"), name
+        for published in service.get("ports") or []:
+            assert published["host_ip"] == "127.0.0.1", (name, published)
+
+
 def test_no_compose_service_shares_the_host_network():
     for path in sorted(ROOT.glob("docker-compose*.yml")):
         for name, service in _services(path).items():

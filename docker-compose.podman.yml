@@ -60,6 +60,11 @@ services:
     # bridge usciva diretto e vedeva la LAN. IMAP e SMTP non leggono le
     # variabili del proxy: passano dal tunnel CONNECT di mail_egress.py.
     network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3129"
+    # Il file base gli dà la rete `broker`; con network_mode le due chiavi si
+    # escludono e il progetto non sarebbe valido. La porta della vista di
+    # login (127.0.0.1:6081 della VM) resta quella del file base: pasta la
+    # inoltra al container, dove websockify ascolta su 0.0.0.0.
+    networks: !reset []
     environment:
       - HTTPS_PROXY=http://127.0.0.1:3129
       - https_proxy=http://127.0.0.1:3129
