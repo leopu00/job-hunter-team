@@ -191,6 +191,30 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
 
+      # The NSIS setup as a person runs it, per user, here silent: what it
+      # writes for «App e funzionalità», then its own uninstaller.
+      # desktop/src-tauri/windows/installer-hooks.nsi is what it checks.
+      - name: Install and uninstall the NSIS setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'NSIS setup not found' }
+          $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+          Write-Host "InstallLocation: $location"
+          if ($location -match '"') { throw "InstallLocation is written in quotes: $location" }
+          $uninstaller = Join-Path $location 'uninstall.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { throw "no uninstaller in InstallLocation: $location" }
+          Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait | Out-Null
+          # The uninstaller copies itself and returns: wait for its entry to go.
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry in App e funzionalità' }
+
       - name: Collect bundle outputs
         run: |
           mkdir -p gate-assets
