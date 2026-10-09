@@ -116,3 +116,16 @@ def test_the_probe_never_asks_for_no_sandbox():
     assert "chromium_sandbox=True" in gate.PROBE and "chromium_sandbox=False" not in gate.PROBE
     # The one mention of the flag is the check that looks for it.
     assert gate.PROBE.count("--no-sandbox") == 1 and '"--no-sandbox" in c' in gate.PROBE
+
+
+def test_a_probe_that_prints_nothing_is_reported_as_such(monkeypatch, capsys):
+    # Second CI run: the probe died before printing; every check then failed
+    # on missing data with a misleading message. Now it is one clear FAIL.
+    code, out = _verdict(monkeypatch, capsys, good={"error": "the probe printed nothing (exit 1): Traceback"})
+    assert code == 1 and "FAIL [probe]" in out
+    assert "FAIL [python-userns]" not in out and "FAIL [python-mountns]" not in out
+
+
+def test_an_exec_refused_is_an_answer_of_the_probe():
+    assert "except OSError as refused:" in gate.PROBE
+

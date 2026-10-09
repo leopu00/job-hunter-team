@@ -91,6 +91,10 @@ except Exception as exc:
         out["chrome_alone"] = {"exit": alone.returncode, "stderr": keep(alone.stderr)}
     except subprocess.TimeoutExpired as running:
         out["chrome_alone"] = {"exit": "still running after 15 s", "stderr": keep((running.stderr or b"").decode(errors="replace"))}
+    except OSError as refused:
+        # The exec itself refused (an AppArmor transition, a missing binary):
+        # it is the answer, not a crash of the probe.
+        out["chrome_alone"] = {"exit": f"exec refused: {type(refused).__name__} errno {refused.errno}", "stderr": []}
     print(json.dumps(out)); sys.exit(0)
 out["launch"] = "ok"
 page = context.new_page()
@@ -129,9 +133,9 @@ print(json.dumps(out))
 def run(image: str, extra: list[str]) -> dict:
     result = subprocess.run(["docker", "run", "--rm", *HARDENING, *extra, "--entrypoint", "python3", image, "-c", PROBE],
                             capture_output=True, text=True, timeout=300)
-    line = (result.stdout.strip().splitlines() or ["{}"])[-1]
+    lines = result.stdout.strip().splitlines()
     try:
-        return json.loads(line)
+        return json.loads(lines[-1]) if lines else {"error": f"the probe printed nothing (exit {result.returncode}): {result.stderr[-800:]}"}
     except json.JSONDecodeError:
         return {"error": (result.stderr or result.stdout)[-800:]}
 
@@ -169,7 +173,11 @@ def main(argv: list[str]) -> int:
     time.sleep(1)
     good = run(image, ["--security-opt", "apparmor=jht-broker", "--security-opt", f"seccomp={seccomp}"])
     print("MEASURE with-profiles " + json.dumps(good))
-    if good.get("confinement", {}).get("ready") is not True:
+    if "error" in good:
+        # No answer is not an answer: say so, instead of failing every check
+        # on missing data.
+        fail("probe", f"the probe gave no answer with the profiles: {good['error']}")
+    elif good.get("confinement", {}).get("ready") is not True:
         fail("confinement", f"the broker does not see its profiles: {good.get('confinement') or good.get('error')}")
     elif good.get("launch") != "ok":
         fail("launch", f"Chromium did not start with its sandbox: {good.get('launch_error')}")
@@ -186,9 +194,9 @@ def main(argv: list[str]) -> int:
             fail("chrome-sandbox", f"chrome://sandbox: {good.get('sandbox_text')}")
         if good.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {good.get('renderer_userns')} vs own {good.get('own_userns')}")
-    if good.get("python_unshare_user") is not False:
+    if "error" not in good and good.get("python_unshare_user") is not False:
         fail("python-userns", "the broker's Python created a user namespace: userns is not limited to Chromium")
-    if good.get("python_unshare_mount") is not False:
+    if "error" not in good and good.get("python_unshare_mount") is not False:
         fail("python-mountns", "the broker's Python created a mount namespace under the profiles")
     denied = denials(since)
     control = [line for line in denied if expected_denial(line)]
