@@ -11,6 +11,7 @@
 import pc from 'picocolors';
 import {
   AI_PROVIDERS,
+  RECOMMENDED_PROVIDER,
   JHT_CONFIG_DIR,
   writeConfigFile,
   validateApiKey,
@@ -45,10 +46,10 @@ export async function runNonInteractiveSetup(opts) {
   console.log(pc.bold(pc.cyan('\n  JHT Setup — Non-interactive mode\n')));
 
   // --- Validazione flag obbligatori ---
-  const providerName = opts.provider || 'claude';
+  const providerName = opts.provider || RECOMMENDED_PROVIDER;
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
   if (!selectedProvider) {
-    console.error(pc.red(`Invalid provider "${providerName}". Use: claude, openai, kimi`));
+    console.error(pc.red(`Invalid provider "${providerName}". Use: openai (Codex, recommended), claude, kimi`));
     process.exitCode = 1;
     return;
   }

@@ -11,7 +11,22 @@ import os from 'node:os';
 export const JHT_CONFIG_DIR = process.env.JHT_HOME || path.join(os.homedir(), '.jht');
 export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');
 
+// Codex is the recommended provider: first, and the wizard's default.
+export const RECOMMENDED_PROVIDER = 'openai';
+
 export const AI_PROVIDERS = [
+  {
+    value: 'openai',
+    label: 'Codex (OpenAI)',
+    keyPrefix: 'sk-',
+    keyPlaceholder: 'sk-proj-...',
+    docsUrl: 'https://platform.openai.com/api-keys',
+    models: [
+      { value: 'gpt-4o', label: 'GPT-4o' },
+      { value: 'o3', label: 'o3' },
+      { value: 'o4-mini', label: 'o4-mini' },
+    ],
+  },
   {
     value: 'claude',
     label: 'Claude',
@@ -22,18 +37,6 @@ export const AI_PROVIDERS = [
       { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
       { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
       { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    ],
-  },
-  {
-    value: 'openai',
-    label: 'OpenAI',
-    keyPrefix: 'sk-',
-    keyPlaceholder: 'sk-proj-...',
-    docsUrl: 'https://platform.openai.com/api-keys',
-    models: [
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'o3', label: 'o3' },
-      { value: 'o4-mini', label: 'o4-mini' },
     ],
   },
   {

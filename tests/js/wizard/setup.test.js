@@ -237,3 +237,15 @@ describe('runSetupWizard — config esistente', () => {
     expect(savedConfig.providers.openai).toBeDefined();
   });
 });
+
+describe('runSetupWizard — provider proposto', () => {
+  it('propone Codex per primo e già scelto; Claude e Kimi restano', async () => {
+    const prompter = createMockPrompter({ selects: ['openai'], confirms: [false, false] });
+
+    await runSetupWizard(prompter);
+
+    const [params] = prompter.select.mock.calls.find(([p]) => p?.options?.some((o) => o.value === 'kimi'));
+    expect(params.options.map((o) => o.value)).toEqual(['openai', 'claude', 'kimi']);
+    expect(params.initialValue).toBe('openai');
+  });
+});

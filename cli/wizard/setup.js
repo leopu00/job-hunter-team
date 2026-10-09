@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import {
   AI_PROVIDERS,
+  RECOMMENDED_PROVIDER,
   readConfigFileSnapshot,
   validateApiKey,
   summarizeExistingConfig,
@@ -33,6 +34,14 @@ import { t, tf } from './i18n.js';
 const PROVIDER_UPDATE_ID = {
   claude: 'claude',
   openai: 'codex',
+  kimi: 'kimi',
+};
+
+// Etichetta mostrata nel wizard (shared/locales, wizard.provider.*): Codex
+// porta la parola «consigliato» nella lingua dell'utente.
+const PROVIDER_LABEL_KEY = {
+  openai: 'codex',
+  claude: 'claude',
   kimi: 'kimi',
 };
 
@@ -188,8 +197,8 @@ export async function runSetupWizard(prompter) {
   // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   const providerChoice = await prompter.select({
     message: t('wizard.provider.prompt'),
-    options: AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label, hint: p.hint })),
-    initialValue: baseConfig.active_provider || 'claude',
+    options: AI_PROVIDERS.map((p) => ({ value: p.value, label: t(`wizard.provider.${PROVIDER_LABEL_KEY[p.value]}`) })),
+    initialValue: baseConfig.active_provider || RECOMMENDED_PROVIDER,
   });
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 

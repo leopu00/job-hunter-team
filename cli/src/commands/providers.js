@@ -17,8 +17,9 @@ const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
 const CREDS_DIR   = join(JHT_DIR, 'credentials');
 
 const KNOWN_PROVIDERS = {
+  // Codex is the recommended provider: listed first.
+  openai:    { name: 'OpenAI (Codex)',     envKey: 'OPENAI_API_KEY',    aliases: ['codex'], recommended: true },
   anthropic: { name: 'Anthropic (Claude)', envKey: 'ANTHROPIC_API_KEY', aliases: ['claude'] },
-  openai:    { name: 'OpenAI (Codex)',     envKey: 'OPENAI_API_KEY',    aliases: ['codex'] },
   kimi:      { name: 'Kimi K2 (Moonshot)', envKey: 'MOONSHOT_API_KEY',  aliases: ['moonshot'] },
 };
 
@@ -120,7 +121,8 @@ async function handleProviders() {
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
     const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
 
-    console.log(`  ${icon}  ${known.name}${activeLabel}`);
+    const recommendedLabel = known.recommended ? ` ${DIM}· recommended${RESET}` : '';
+    console.log(`  ${icon}  ${known.name}${recommendedLabel}${activeLabel}`);
     console.log(`     ${DIM}ID: ${id} · Model: ${model} · Auth: ${authMethod}${RESET}`);
     if (hasEnv) console.log(`     ${DIM}Env: ${known.envKey} ✓${RESET}`);
     if (hasCred) console.log(`     ${DIM}Credentials: encrypted file ✓${RESET}`);
@@ -158,7 +160,7 @@ async function handleProviders() {
   }
 
   if (!activeProvider) {
-    console.log(`  ${DIM}No active providers. Configure with: jht config set active_provider <id>${RESET}\n`);
+    console.log(`  ${DIM}No active providers. Recommended: jht providers use codex (or claude / kimi)${RESET}\n`);
   }
 }
 
@@ -205,7 +207,7 @@ const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: NPM_PREFIX };
 // il setup installa QUELLE, non `@latest`. `latest: true` è la deroga
 // esplicita dell'operatore (`jht providers update <id> --latest`) e resta una
 // scelta dichiarata a schermo, mai un default silenzioso.
-const UPDATE_TARGETS = ['claude', 'codex', 'kimi'];
+const UPDATE_TARGETS = ['codex', 'claude', 'kimi'];
 
 function updateSteps(target, { latest = false } = {}) {
   const spec = installSpec(target, { latest });
@@ -296,7 +298,7 @@ async function handleUpdate(id, opts = {}) {
     : [...UPDATE_TARGETS]; // `jht providers update` senza arg → aggiorna tutti
 
   if (targets.length === 0) {
-    console.error(`${ERR}  provider '${id}' unrecognized. Supported: claude, codex, kimi`);
+    console.error(`${ERR}  provider '${id}' unrecognized. Supported: codex, claude, kimi`);
     process.exitCode = 1;
     return;
   }
@@ -636,7 +638,7 @@ async function autoUpdateOnce() {
   }
   const target = resolveUpdateTarget(active.id);
   if (!target) {
-    console.log(`${AU} skip: active provider '${active.id}' has no update spec (supported: claude, codex, kimi)`);
+    console.log(`${AU} skip: active provider '${active.id}' has no update spec (supported: codex, claude, kimi)`);
     return;
   }
 
@@ -929,7 +931,7 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('update [id]')
-    .description('Install the provider\'s CLI (claude/codex/kimi) at the version pinned by this release. Omitted id: all supported providers.')
+    .description('Install the provider\'s CLI (codex/claude/kimi) at the version pinned by this release. Omitted id: all supported providers.')
     .option('--latest', 'install the latest published version instead of the release pin (explicit, temporary: the next boot restores the pin)')
     .action((id, opts) => handleUpdate(id, opts));
 

@@ -43,7 +43,7 @@ export function registerSetupCommand(program) {
     .command('setup')
     .description(t('wizard.cli.description'))
     .option('--non-interactive', t('wizard.cli.non_interactive'))
-    .option('--provider <name>', t('wizard.cli.provider'), 'claude')
+    .option('--provider <name>', t('wizard.cli.provider'), 'openai')
     .option('--auth-method <method>', t('wizard.cli.auth_method'), 'api_key')
     .option('--api-key <key>', t('wizard.cli.api_key'))
     .option('--secret-mode <mode>', t('wizard.cli.secret_mode'), 'plaintext')

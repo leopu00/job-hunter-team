@@ -74,7 +74,7 @@ async function checkProvider() {
   const cfg = await readConfigAsync()
   if (!cfg) return { ok: false, msg: 'Providers — missing config' }
   const active = cfg.active_provider
-  if (!active) return { warn: true, msg: 'No active providers', hint: 'Run: jht config set active_provider anthropic' }
+  if (!active) return { warn: true, msg: 'No active providers', hint: 'Run: jht providers use codex (recommended; or claude / kimi)' }
   const prov = cfg.providers?.[active]
   // Le subscription usano la sessione OAuth della CLI e non hanno, per
   // definizione, una API key nel config. Segnalarle come incomplete rende il
