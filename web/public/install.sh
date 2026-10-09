@@ -417,6 +417,33 @@ install_colima_macos() {
   fi
 }
 
+running_podman_machine() {
+  local podman_bin="$1" name running
+  "$podman_bin" machine list --format '{{.Name}} {{.Running}}' 2>/dev/null |
+    while IFS=' ' read -r name running _; do
+      case "$name" in
+        ''|*[!A-Za-z0-9_.-]*) continue ;;
+      esac
+      if [ "$running" = true ] && [ "$name" != "$PODMAN_MACHINE_NAME" ]; then
+        printf '%s\n' "$name"
+        break
+      fi
+    done
+}
+
+report_podman_machine_conflict() {
+  local podman_bin="$1" command_error="$2" running
+  printf '%s\n' "$command_error" | grep -Fqi 'only one VM can be active at a time' || return 1
+  running="$(running_podman_machine "$podman_bin")"
+  if [ -n "$running" ]; then
+    printf 'JHT_OTHER_MACHINE %s\n' "$running"
+    err "podman_other_machine_running: un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
+  else
+    err "podman_other_machine_running: un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
+  fi
+  return 0
+}
+
 install_podman_macos() {
   # Preview non distruttiva: non ferma e non rimuove Colima. La macchina e la
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
@@ -470,18 +497,27 @@ install_podman_macos() {
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
-      podman machine start --update-connection=false "$PODMAN_MACHINE_NAME" \
-        || fail "Podman machine start failed; Colima was not changed."
+      local start_error start_status
+      start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
+        && start_status=0 || start_status=$?
+      if [ "$start_status" -ne 0 ]; then
+        report_podman_machine_conflict "$podman_bin" "$start_error" && exit 79
+        fail "Podman machine start failed; Colima was not changed."
+      fi
     else
       ok "Podman machine '$PODMAN_MACHINE_NAME' already running"
     fi
   else
     info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
-    podman machine init --now --update-connection=false \
+    local init_error init_status
+    init_error="$("$podman_bin" machine init --now --update-connection=false \
       --volume "$jht_home_dir:$jht_home_dir" \
       --volume "$jht_docs_dir:$jht_docs_dir" \
-      "$PODMAN_MACHINE_NAME" \
-      || fail "Podman machine initialization failed; Colima was not changed."
+      "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" && init_status=0 || init_status=$?
+    if [ "$init_status" -ne 0 ]; then
+      report_podman_machine_conflict "$podman_bin" "$init_error" && exit 79
+      fail "Podman machine initialization failed; Colima was not changed."
+    fi
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."

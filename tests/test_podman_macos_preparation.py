@@ -47,8 +47,8 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
 
     assert "brew install podman" in block
     assert "brew install podman-compose" in block
-    assert "podman machine init --now --update-connection=false" in block
-    assert "podman machine start --update-connection=false" in block
+    assert '"$podman_bin" machine init --now --update-connection=false' in block
+    assert '"$podman_bin" machine start --update-connection=false' in block
     assert "Colima retained" in block
     for destructive in (
         "brew uninstall colima",
@@ -61,6 +61,41 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
         assert destructive not in block
 
     assert "the Podman machine and Colima are both kept" in source
+
+
+def test_macos_podman_setup_reports_another_running_machine_without_stopping_it():
+    installer = _source(INSTALLER)
+    wrapper = _source(WRAPPER)
+
+    for source in (installer, wrapper):
+        assert "only one VM can be active at a time" in source
+        assert "podman_other_machine_running" in source
+        assert "podman machine list" in source
+        assert "podman machine stop $running" in source
+        assert "JHT_OTHER_MACHINE %s" in source
+        assert "exit 79" in source or "return 79" in source
+    installer_conflict = installer[
+        installer.index("running_podman_machine()") : installer.index(
+            "install_docker_linux()"
+        )
+    ]
+    wrapper_conflict = wrapper[
+        wrapper.index("running_podman_machine()") : wrapper.index(
+            "# `podman-machine-recreate --confirm`"
+        )
+    ]
+    active_installer = "\n".join(
+        line for line in installer_conflict.splitlines() if not line.lstrip().startswith("#")
+    )
+    active_wrapper = "\n".join(
+        line for line in wrapper_conflict.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert ' machine stop ' not in active_installer.replace(
+        "'podman machine stop $running'", ""
+    ).replace("'podman machine stop <nome>'", "")
+    assert ' machine stop ' not in active_wrapper.replace(
+        "'podman machine stop $running'", ""
+    ).replace("'podman machine stop <nome>'", "")
 
 
 def test_jht_scoped_shim_and_runtime_selection_are_attested():

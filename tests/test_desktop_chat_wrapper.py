@@ -95,6 +95,14 @@ esac
         """#!/bin/sh
 if [ "$1" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
 printf 'podman %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+if [ "$1:$2" = machine:list ]; then
+  printf '%s true\n' "${JHT_TEST_OTHER_MACHINE:-jht-podman}"
+  exit 0
+fi
+if [ "$1:$2" = machine:start ] && [ -n "${JHT_TEST_OTHER_MACHINE:-}" ]; then
+  printf '%s\n' 'Error: only one VM can be active at a time' >&2
+  exit 125
+fi
 if [ "$1:$2" = machine:start ] && [ "${JHT_TEST_WAKE_SUCCESS:-0}" = 1 ]; then
   : > "$JHT_TEST_RUNTIME_STATE"
   exit 0
@@ -497,6 +505,30 @@ def test_only_explicit_up_can_wake_the_named_podman_machine(tmp_path: Path):
     assert source.count("wake_container_runtime_for_up") == 2
     up_arm = source[source.index("  up)\n") : source.index("  start-container)\n")]
     assert "wake_container_runtime_for_up" in up_arm
+
+
+def test_explicit_up_names_the_other_running_machine_without_stopping_it(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "0"
+    env["JHT_TEST_OTHER_MACHINE"] = "personal-work"
+
+    result = subprocess.run(
+        [str(wrapper), "up"],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 79
+    assert result.stdout == "JHT_OTHER_MACHINE personal-work\n"
+    assert "podman_other_machine_running" in result.stderr
+    assert "personal-work" in result.stderr
+    assert "podman machine stop personal-work" in result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman machine list --format {{.Name}} {{.Running}}" in calls
+    assert "machine stop" not in calls
 
 
 def test_onboarding_snapshot_is_one_read_only_dispatcher_operation(tmp_path: Path):

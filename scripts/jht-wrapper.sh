@@ -437,6 +437,38 @@ require_docker() {
 # Unico ingresso che puo' accendere la machine Podman. Deve restare chiamato
 # esclusivamente dall'arm esplicito `up`; tutti i probe e gli altri comandi
 # usano require_docker, che e' rigorosamente osservativo.
+running_podman_machine() {
+  local podman_bin="$1" name running
+  "$podman_bin" machine list --format '{{.Name}} {{.Running}}' 2>/dev/null |
+    while IFS=' ' read -r name running _; do
+      case "$name" in
+        ''|*[!A-Za-z0-9_.-]*) continue ;;
+      esac
+      if [ "$running" = true ] && [ "$name" != "$PODMAN_MACHINE_NAME" ]; then
+        printf '%s\n' "$name"
+        break
+      fi
+    done
+}
+
+start_jht_podman_machine() {
+  local podman_bin="$1" start_error start_status running
+  start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
+    && start_status=0 || start_status=$?
+  [ "$start_status" -eq 0 ] && return 0
+  if printf '%s\n' "$start_error" | grep -Fqi 'only one VM can be active at a time'; then
+    running="$(running_podman_machine "$podman_bin")"
+    if [ -n "$running" ]; then
+      printf 'JHT_OTHER_MACHINE %s\n' "$running"
+      err "podman_other_machine_running: un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
+    else
+      err "podman_other_machine_running: un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
+    fi
+    return 79
+  fi
+  return 1
+}
+
 wake_container_runtime_for_up() {
   if [ -n "${err_runtime:-}" ]; then
     err "$err_runtime"
@@ -457,8 +489,14 @@ wake_container_runtime_for_up() {
     ensure_podman_mount_dirs \
       || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
     info "Podman machine '$PODMAN_MACHINE_NAME' non attiva, la avvio..."
-    "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
-      || { err "Podman machine non avviabile; Colima non e' stato modificato."; exit 1; }
+    if start_jht_podman_machine "$podman_bin"; then
+      :
+    else
+      local start_status=$?
+      [ "$start_status" -eq 79 ] && exit 79
+      err "Podman machine non avviabile; Colima non e' stato modificato."
+      exit 1
+    fi
   elif [ "$(uname)" = "Darwin" ]; then
     err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
     exit 1
@@ -478,8 +516,8 @@ start_podman_for_recreate() {
   if "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1; then
     return 0
   fi
-  "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" >/dev/null \
-    || { err "Non riesco ad avviare la macchina Podman per salvare lo stato del broker."; return 1; }
+  start_jht_podman_machine "$podman_bin" \
+    || return $?
 }
 
 # ── Cartelle del Mac visibili alla machine Podman di JHT ─────────────────

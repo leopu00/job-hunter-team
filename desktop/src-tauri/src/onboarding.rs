@@ -40,6 +40,8 @@ const DIAGNOSTIC_MAX_BYTES: usize = 64 * 1024;
 /// scripts/jht-wrapper.sh). `run_local` turns it into this error code.
 const PODMAN_MACHINE_MOUNTS_EXIT: i32 = 78;
 const PODMAN_MACHINE_MOUNTS_HOME: &str = "podman_machine_mounts_home";
+const PODMAN_OTHER_MACHINE_EXIT: i32 = 79;
+const PODMAN_OTHER_MACHINE_RUNNING: &str = "podman_other_machine_running";
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -748,6 +750,10 @@ fn failure(code: &'static str) -> OnboardingError {
         PODMAN_MACHINE_MOUNTS_HOME => (
             "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono. Ricreala per continuare.",
             false,
+        ),
+        PODMAN_OTHER_MACHINE_RUNNING => (
+            "Un'altra macchina Podman è già accesa. Spegnila e riprova.",
+            true,
         ),
         "podman_machine_recreate_failed" => (
             "La macchina Podman di JHT non è stata ricreata. Riprova.",
@@ -1685,8 +1691,12 @@ fn ensure_success(
 ) -> Result<(), OnboardingError> {
     match result {
         Ok(value) if value.success() => Ok(()),
+        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => {
+            Err(failure(PODMAN_OTHER_MACHINE_RUNNING))
+        }
         Err("process_timeout") => Err(failure("timeout")),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
+        Err(PODMAN_OTHER_MACHINE_RUNNING) => Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
         _ => Err(failure(code)),
     }
 }
@@ -1698,8 +1708,12 @@ fn ensure_success_with_timeout(
 ) -> Result<(), OnboardingError> {
     match result {
         Ok(value) if value.success() => Ok(()),
+        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => {
+            Err(failure(PODMAN_OTHER_MACHINE_RUNNING))
+        }
         Err("process_timeout") => Err(failure(timeout_code)),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
+        Err(PODMAN_OTHER_MACHINE_RUNNING) => Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
         _ => Err(failure(code)),
     }
 }
@@ -1812,16 +1826,17 @@ fn refuse_broad_podman_machine(
 ) -> Result<ProcessResult, &'static str> {
     match result {
         Ok(value) if value.code == PODMAN_MACHINE_MOUNTS_EXIT => Err(PODMAN_MACHINE_MOUNTS_HOME),
+        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => Err(PODMAN_OTHER_MACHINE_RUNNING),
         other => other,
     }
 }
 
 /// The error for a failed local step: the broad Podman machine keeps its own.
 fn local_failure(error: &'static str, code: &'static str) -> OnboardingError {
-    failure(if error == PODMAN_MACHINE_MOUNTS_HOME {
-        PODMAN_MACHINE_MOUNTS_HOME
-    } else {
-        code
+    failure(match error {
+        PODMAN_MACHINE_MOUNTS_HOME => PODMAN_MACHINE_MOUNTS_HOME,
+        PODMAN_OTHER_MACHINE_RUNNING => PODMAN_OTHER_MACHINE_RUNNING,
+        _ => code,
     })
 }
 
@@ -1886,6 +1901,7 @@ fn start_and_verify_local_container_with(
         Ok(result) if result.success() => Ok(()),
         Err("process_timeout") => Err("container_timeout"),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
+        Err(PODMAN_OTHER_MACHINE_RUNNING) => return Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
         _ => Err("container_start_failed"),
     };
 
@@ -1897,6 +1913,7 @@ fn start_and_verify_local_container_with(
             }
             Err("process_timeout") => return Err(failure("container_timeout")),
             Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
+            Err(PODMAN_OTHER_MACHINE_RUNNING) => return Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
             _ => {}
         }
         if attempt + 1 < attempts {
@@ -3672,7 +3689,7 @@ mod tests {
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
         refuse_broad_podman_machine, PODMAN_MACHINE_MOUNTS_EXIT, PODMAN_MACHINE_MOUNTS_HOME,
-        PREPARE_TIMEOUT,
+        PODMAN_OTHER_MACHINE_EXIT, PODMAN_OTHER_MACHINE_RUNNING, PREPARE_TIMEOUT,
     };
     #[cfg(target_os = "macos")]
     use super::{
@@ -4534,6 +4551,46 @@ mod tests {
         ];
         for (operation, expected) in operations {
             assert_eq!(operation.argv(), expected);
+        }
+    }
+
+    #[test]
+    fn another_running_podman_machine_keeps_its_actionable_catalog_error() {
+        let occupied = || {
+            refuse_broad_podman_machine(Ok(ProcessResult {
+                code: PODMAN_OTHER_MACHINE_EXIT,
+                stdout: Vec::new(),
+            }))
+        };
+        assert_eq!(occupied().unwrap_err(), PODMAN_OTHER_MACHINE_RUNNING);
+
+        let mut calls = Vec::new();
+        let error = start_and_verify_local_container_with(
+            |operation, _| {
+                calls.push(operation.diagnostic_id());
+                occupied()
+            },
+            |_| panic!("a machine conflict must not poll or wait"),
+            3,
+        )
+        .unwrap_err();
+        assert_eq!(calls, ["up"]);
+        assert_eq!(error.code, PODMAN_OTHER_MACHINE_RUNNING);
+        assert!(error.retryable);
+
+        for error in [
+            ensure_success(
+                Ok(ProcessResult {
+                    code: PODMAN_OTHER_MACHINE_EXIT,
+                    stdout: Vec::new(),
+                }),
+                "runtime_install_failed",
+            )
+            .unwrap_err(),
+            ensure_success_with_timeout(occupied(), "provider_config_failed", "provider_timeout")
+                .unwrap_err(),
+        ] {
+            assert_eq!(error.code, PODMAN_OTHER_MACHINE_RUNNING);
         }
     }
 
