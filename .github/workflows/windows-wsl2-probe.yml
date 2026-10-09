@@ -2,10 +2,16 @@ name: Windows WSL2 probe
 
 # Do GitHub's hosted Windows runners run WSL2 (and so a Podman machine)?
 # The documentation does not agree with itself, so this answers on our own
-# runners instead of assuming. Manual only: it decides where the Windows
-# Podman-in-WSL tests can live (CI or the collaudo), it is not a gate.
+# runners instead of assuming. It decides where the Windows Podman-in-WSL
+# tests can live (CI or the collaudo), it is not a gate.
+# GitHub dispatches only workflows that exist on the default branch, and this
+# one lives on the development branches: so it also runs once when this file
+# is pushed, and never on any other change.
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-wsl2-probe.yml'
 
 permissions:
   contents: read
