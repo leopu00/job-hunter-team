@@ -240,17 +240,25 @@ def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():
         "Get-RuntimeFiles",
         "$installedHelperHash -ne $sourceHelperHash",
         "$manifestValues.'windows-private-acl.ps1' -ne $installedHelperHash",
+        "$podmanManifestBytes = [IO.File]::ReadAllBytes($manifest)",
+        "$dockerManifestText = \"version=1`ndocker-compose.yml=",
+        "Set-JhtNodeOwner -Path $manifest",
         "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper up",
         "mount_repaired /jht_home",
         "mount_repaired /jht_user",
         "empty mount-repair output was accepted",
         "empty mount-repair output reached compose up",
+        "empty mount-repair failed before reaching Docker",
         "--security-opt no-new-privileges",
         "-File $installedWrapper onboarding-snapshot",
         "desktop onboarding snapshot schema changed",
         "E03 CLEAN_START installer-helper-smoke PASS",
     ):
         assert seam in smoke
+    assert smoke.index("$dockerManifestText =") < smoke.index("$env:JHT_CONTAINER_RUNTIME = 'docker'")
+    assert smoke.index("[IO.File]::WriteAllBytes($manifest, $podmanManifestBytes)") < smoke.index(
+        "# E04 MANIFEST"
+    )
     assert "./scripts/windows-config-acl-selftest.ps1" in workflow
     for watched in (
         "scripts/install.ps1",

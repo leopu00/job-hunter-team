@@ -136,6 +136,17 @@ try {
     throw 'clean-start wrapper or compose bytes are not exactly attested'
   }
 
+  # E03 exercises the legacy Docker-only ownership repair. The clean install
+  # above is Podman, whose manifest deliberately has five additional attested
+  # files. Merely overriding JHT_CONTAINER_RUNTIME would make that manifest
+  # inconsistent and the wrapper would correctly fail closed before Docker.
+  # Use the exact Docker manifest for this branch, then restore the installed
+  # Podman manifest before E04 checks the app-facing contract.
+  $podmanManifestBytes = [IO.File]::ReadAllBytes($manifest)
+  $dockerManifestText = "version=1`ndocker-compose.yml=$installedComposeHash`njht-wrapper.ps1=$installedWrapperHash`nwindows-private-acl.ps1=$installedHelperHash`n"
+  [IO.File]::WriteAllText($manifest, $dockerManifestText, [Text.UTF8Encoding]::new($false))
+  Set-JhtNodeOwner -Path $manifest
+
   # Name the failed trust predicate instead of collapsing every native CI
   # failure into the wrapper's intentionally generic production error.
   $wrapperTokens = $null; $wrapperErrors = $null
@@ -202,6 +213,9 @@ exit /b 0
   $emptyRepairExit = $LASTEXITCODE
   Remove-Item Env:JHT_FAKE_REPAIR_EMPTY
   if ($emptyRepairExit -eq 0) { throw 'empty mount-repair output was accepted' }
+  if (-not (Test-Path -LiteralPath $dockerLog -PathType Leaf)) {
+    throw "empty mount-repair failed before reaching Docker: $($emptyRepairOutput | Out-String)"
+  }
   $emptyRepairCalls = Get-Content -LiteralPath $dockerLog -Raw
   if ($emptyRepairCalls -match '(?m)^compose .* up -d\s*$') { throw 'empty mount-repair output reached compose up' }
   Clear-Content -LiteralPath $dockerLog
@@ -228,6 +242,8 @@ exit /b 0
   if (($snapshotOutput -join "`n") -ne ($expectedSnapshot -join "`n")) {
     throw "desktop onboarding snapshot schema changed: $($snapshotOutput | Out-String)"
   }
+  [IO.File]::WriteAllBytes($manifest, $podmanManifestBytes)
+  Set-JhtNodeOwner -Path $manifest
   Write-Host 'E03 CLEAN_START installer-helper-smoke PASS'
 
   # E04 MANIFEST: the desktop app trusts the runtime only when
