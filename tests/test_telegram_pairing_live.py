@@ -112,6 +112,6 @@ def test_real_container_pair_gets_stdin_after_status_query(engine: str) -> None:
         }
         assert TOKEN not in paired.stdout + paired.stderr
     finally:
-        run(engine, "rm", "-f", container, check=False)
+        run(engine, "rm", "-f", "-v", container, check=False)
         run(engine, "volume", "rm", "-f", secrets, check=False)
         run(engine, "volume", "rm", "-f", state, check=False)

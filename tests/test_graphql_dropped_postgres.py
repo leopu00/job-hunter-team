@@ -95,7 +95,7 @@ def plain_pg():
             pytest.fail("PostgreSQL 16 non è diventato ready")
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def test_self_hosted_postgres_without_pg_graphql_runs_091_as_a_no_op(plain_pg):

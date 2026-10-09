@@ -875,7 +875,7 @@ def postgres_container(image: str = POSTGRES_IMAGE):
             pytest.fail(f"{image} final server non pronto")
         yield psql
     finally:
-        subprocess.run(["docker", "rm", "-f", name], text=True, capture_output=True)
+        subprocess.run(["docker", "rm", "-f", "-v", name], text=True, capture_output=True)
 
 
 @contextmanager

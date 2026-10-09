@@ -180,8 +180,14 @@ services:
       - jht-broker-state:/jht_broker_state
       - jht-broker-sock:/run/jht-broker
     read_only: true
+    # The image declares VOLUME /jht_home and /jht_user: without a mount there,
+    # every new broker container gets two anonymous volumes, and a compose
+    # down without -v leaves them behind. Empty and read-only, as for
+    # jht-telegram: the broker never reads the agents' home.
     tmpfs:
       - /tmp
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

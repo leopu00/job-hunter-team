@@ -61,7 +61,7 @@ def pg16_server():
             time.sleep(.2)
         pytest.fail(f"postgres:16 non pronto: {logs}")
     finally:
-        run(["docker", "rm", "-f", name], check=False)
+        run(["docker", "rm", "-f", "-v", name], check=False)
 
 
 def test_pg16_readiness_rejects_the_temporary_initdb_server():

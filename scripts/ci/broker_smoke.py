@@ -134,7 +134,7 @@ def main(argv: list[str]) -> int:
         if mistake != json.dumps({"/jht_secrets": "mounted"}):
             fail("secret-volumes-control", f"the secrets volume mounted into an agent was not caught: {mistake!r}")
     finally:
-        docker("rm", "-f", broker, check=False)
+        docker("rm", "-f", "-v", broker, check=False)
         for vol in vols.values():
             docker("volume", "rm", "-f", vol, check=False)
     print(f"checks done: {fails} failed")

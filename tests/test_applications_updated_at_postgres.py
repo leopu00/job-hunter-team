@@ -170,7 +170,7 @@ def postgres16():
         )
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 @pytest.fixture()

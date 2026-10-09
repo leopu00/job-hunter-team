@@ -110,7 +110,7 @@ def download_db():
         psql(SOURCE_MIGRATION.read_text(encoding="utf-8"))
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def _scalar(psql, sql: str) -> str:

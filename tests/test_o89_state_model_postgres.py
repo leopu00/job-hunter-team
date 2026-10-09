@@ -111,7 +111,7 @@ def postgres16():
         _psql(name, MIG_083.read_text())
         yield name
     finally:
-        _docker("rm", "-f", name, check=False)
+        _docker("rm", "-f", "-v", name, check=False)
 
 
 def test_pg16_readiness_rejects_temporary_initdb_server():

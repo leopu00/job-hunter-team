@@ -171,7 +171,7 @@ def postgres16():
         psql.container_name = name
         yield psql
     finally:
-        _run(["docker", "rm", "--force", name], check=False)
+        _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
 def _rpc(psql, rows, *, user_id=USER_1, check=True):
