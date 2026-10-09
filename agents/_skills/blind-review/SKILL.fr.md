@@ -1,7 +1,7 @@
 ---
 name: blind-review
 description: Le protocole de revue complet du Critico — recevoir le PDF + JD, effectuer une revue à l'aveugle (sans accès au profil), produire un verdict structuré avec score 1-10 + 7 sections fixes + tableau JD-vs-CV + actions prioritaires, sauvegarder le fichier sous `$JHT_USER_DIR/critiche/`, notifier le Scrittore qui l'a lancé, s'arrêter. Propriété du Critico. Tout l'intérêt du "blind" — vous ne devez PAS lire le profil du candidat ; vous ne connaissez que ce qui est sur le PDF devant vous. Le biais d'ancrage lié à des connaissances préalables casserait le protocole en 3 tours sur lequel le Scrittore s'appuie.
-allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
+allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(pdftotext *), Bash(pdfinfo *)
 ---
 <!-- @translation: fr, ai-translated 2026-06-06 -->
 
@@ -22,7 +22,7 @@ Si le PDF est manquant → **REFUSER** avec un `[RES]` au Scrittore expliquant l
 ## Procédure
 
 ```
-1. Lire le PDF                         → outil Read
+1. Lire le PDF                         → pdftotext -layout "$PDF" -   (pages : pdfinfo "$PDF")
 2. Tenter de récupérer le JD depuis l'URL → safe_fetch.py (ci-dessous)
    ↳ en cas d'échec → Lire le fichier JD local txt
 3. Analyser selon la structure en 7 sections (ci-dessous)

@@ -1,7 +1,7 @@
 ---
 name: blind-review
 description: The Critic's full review protocol — receive PDF + JD, run a blind review (no profile access), produce a structured verdict with score 1-10 + 7 fixed sections + JD-vs-CV table + prioritized actions, save the file under `$JHT_USER_DIR/critiche/`, notify the spawning Writer, stop. Owned by the Critic. The whole point of "blind" — you must NOT read the candidate profile; you only know what is on the PDF in front of you. Anchoring bias from prior knowledge would break the 3-round protocol the Writer relies on.
-allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
+allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(pdftotext *), Bash(pdfinfo *)
 ---
 
 # blind-review — one review, no anchors
@@ -21,7 +21,7 @@ If the PDF is missing → **REFUSE** with a `[RES]` to the Writer explaining the
 ## Procedure
 
 ```
-1. Read the PDF                         → tool Read
+1. Read the PDF                         → pdftotext -layout "$PDF" -   (pages: pdfinfo "$PDF")
 2. Try fetch the JD from URL            → safe_fetch.py (below)
    ↳ if it fails → Read the local JD txt
 3. Analyse against the 7-section structure (below)

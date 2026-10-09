@@ -1,7 +1,7 @@
 ---
 name: blind-review
 description: "Das vollständige Review-Protokoll des Critic — PDF + JD empfangen, ein Blind-Review durchführen (kein Profilzugriff), ein strukturiertes Urteil mit Score 1-10 + 7 festen Abschnitten + JD-vs-CV-Tabelle + priorisierten Maßnahmen erstellen, die Datei unter `$JHT_USER_DIR/critiche/` speichern, den aufrufenden Writer benachrichtigen, stoppen. Zuständig: Critic. Der ganze Sinn von \"blind\" — du darfst das Kandidatenprofil NICHT lesen; du weißt nur, was auf dem PDF vor dir steht. Verankerungsbias durch Vorwissen würde das 3-Runden-Protokoll brechen, auf das der Writer angewiesen ist."
-allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
+allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(pdftotext *), Bash(pdfinfo *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
@@ -22,7 +22,7 @@ Wenn das PDF fehlt → **ABLEHNEN** mit einem `[RES]` an den Writer, der die Lü
 ## Vorgehen
 
 ```
-1. PDF lesen                            → Tool Read
+1. PDF lesen                            → pdftotext -layout "$PDF" -   (Seiten: pdfinfo "$PDF")
 2. JD von URL abrufen versuchen         → safe_fetch.py (unten)
    ↳ bei Fehlschlag → Lokale JD-txt lesen
 3. Anhand der 7-Abschnitte-Struktur (unten) analysieren

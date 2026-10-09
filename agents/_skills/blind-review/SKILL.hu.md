@@ -1,7 +1,7 @@
 ---
 name: blind-review
 description: A Critic teljes felülvizsgálati protokollja — PDF + JD fogadása, vak felülvizsgálat futtatása (profil-hozzáférés nélkül), strukturált ítélet készítése 1-10 pontszámmal + 7 rögzített szekció + JD-vs-CV táblázat + prioritizált cselekvések, fájl mentése a `$JHT_USER_DIR/critiche/` alá, a hívó Író értesítése, megállás. A Critic felelőssége. A "vak" lényege — NEM szabad olvasnod a jelölt profilt; csak azt tudod, ami a PDF-en van előtted. A korábbi tudásból származó lehorgonyzási torzítás megtörné a 3 körös protokollt, amelyre az Író épít.
-allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *)
+allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(pdftotext *), Bash(pdfinfo *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -22,7 +22,7 @@ Ha a PDF hiányzik → **UTASÍTSD VISSZA** egy `[RES]`-szel az Írónak, elmagy
 ## Eljárás
 
 ```
-1. Olvasd el a PDF-et                      → Read eszköz
+1. Olvasd el a PDF-et                      → pdftotext -layout "$PDF" -   (oldalak: pdfinfo "$PDF")
 2. Próbáld lekérni a JD-t URL-ről          → safe_fetch.py (lent)
    ↳ ha sikertelen → Olvasd a helyi JD txt-t
 3. Elemezd a 7 szekciós struktúra alapján (lásd alább)
