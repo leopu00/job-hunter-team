@@ -61,6 +61,8 @@ function New-NativeConnector {
   $source = @'
 using System;
 using System.IO;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -77,6 +79,20 @@ public static class JhtWindowsConnect
         }
     }
 
+    // The PC's own addresses are the user's home even when they are public
+    // (a PC with a public IPv4 of its own): never a destination.
+    private static bool IsOwnAddress(IPAddress target)
+    {
+        foreach (NetworkInterface card in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            foreach (UnicastIPAddressInformation own in card.GetIPProperties().UnicastAddresses)
+            {
+                if (own.Address.Equals(target)) return true;
+            }
+        }
+        return false;
+    }
+
     public static int Main(string[] args)
     {
         Stream output = Console.OpenStandardOutput();
@@ -84,11 +100,22 @@ public static class JhtWindowsConnect
         int port;
         if (!Int32.TryParse(args[1], out port) || port < 1 || port > 65535)
         { output.WriteByte(1); output.Flush(); return 2; }
+        // Only the numeric IPv4 address the proxy verified: never a name
+        // (it would be resolved again here), never IPv6 (a global IPv6 can
+        // be the home /64), never one of this PC's own addresses.
+        IPAddress target;
+        if (!IPAddress.TryParse(args[0], out target) || target.AddressFamily != AddressFamily.InterNetwork)
+        { output.WriteByte(1); output.Flush(); return 3; }
+        try
+        {
+            if (IsOwnAddress(target)) { output.WriteByte(1); output.Flush(); return 3; }
+        }
+        catch { output.WriteByte(1); output.Flush(); return 3; }
 
         TcpClient client = new TcpClient();
         try
         {
-            IAsyncResult pending = client.BeginConnect(args[0], port, null, null);
+            IAsyncResult pending = client.BeginConnect(target, port, null, null);
             if (!pending.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(60)))
                 throw new TimeoutException("connect timeout");
             client.EndConnect(pending);
@@ -136,7 +163,10 @@ public static class JhtWindowsConnect
 
 $stateDir = Join-Path $env:LOCALAPPDATA 'Job Hunter Team\podman-network'
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-$connector = Join-Path $stateDir 'jht-windows-connect.exe'
+# The name carries the source's digest (tests/test_podman_windows_probe.py
+# checks it): New-NativeConnector never overwrites an existing binary, so a
+# changed connector must get a new name to reach installs that have the old.
+$connector = Join-Path $stateDir 'jht-windows-connect-1d6ba098a310.exe'
 New-NativeConnector -Destination $connector
 
 $proxySource = Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'

@@ -92,19 +92,35 @@ def resolve_public_target(
     allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
     allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
 ) -> str:
-    """Resolve once, reject the whole answer if any address is non-public."""
+    """Resolve once, IPv4 only, and reject the whole answer if any address is
+    non-public.
+
+    IPv6 is not admitted at all: the containers are IPv4-only (pasta -4), and
+    a global IPv6 address can still be the user's home (the SLAAC addresses of
+    the LAN's devices and of the PC on the home /64), which no fixed range
+    can tell apart from the Internet."""
     normalized = host.rstrip(".").lower()
     if normalized == "localhost" or normalized.endswith((".localhost", ".local")):
         raise PolicyDenied("local hostname")
+    try:
+        literal = ipaddress.ip_address(normalized.strip("[]"))
+    except ValueError:
+        literal = None
+    if literal is not None and literal.version == 6:
+        raise PolicyDenied("IPv6 destination")
     if allowed_hosts is not None and normalized not in allowed_hosts:
         raise PolicyDenied("hostname denied")
     if port not in allowed_ports:
         raise PolicyDenied("port denied")
 
-    answers = resolver(host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)
+    answers = resolver(
+        host, port, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+    )
     addresses: list[str] = []
     for family, socktype, protocol, _canonname, sockaddr in answers:
-        if family not in (socket.AF_INET, socket.AF_INET6):
+        if family == socket.AF_INET6:
+            raise PolicyDenied("IPv6 destination")
+        if family != socket.AF_INET:
             continue
         if socktype != socket.SOCK_STREAM or protocol not in (0, socket.IPPROTO_TCP):
             continue
