@@ -1,6 +1,6 @@
 import {
-  closeSync, chmodSync, ftruncateSync, fsyncSync, mkdirSync, openSync, renameSync,
-  unlinkSync, writeFileSync, writeSync,
+  closeSync, chmodSync, constants, fchmodSync, fstatSync, ftruncateSync, fsyncSync, lstatSync,
+  mkdirSync, openSync, renameSync, unlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -89,16 +89,32 @@ function renameWithRetry(tmp, path) {
   }
 }
 
-// Only an EXISTING file, opened without O_CREAT: this path never creates a
-// file the atomic path could not create. One write of the whole body, then
-// truncate and fsync.
+// Only an EXISTING regular file, opened without O_CREAT: this path never
+// creates a file the atomic path could not create, and never follows a link.
+// A symlink planted where the config should be would otherwise send the
+// configuration wherever it points (lstat refuses it; O_NOFOLLOW, where the
+// platform has it, closes the window between lstat and open, and the inode
+// check catches a swap). One write of the whole body, then truncate, the
+// private mode and fsync. On Windows the file keeps the ACL it already has:
+// writing content does not touch the security descriptor, only a rename would.
 function writeInPlace(path, body, cause) {
   let fd;
   try {
-    fd = openSync(path, 'r+');
+    const before = lstatSync(path);
+    if (before.isSymbolicLink() || !before.isFile()) {
+      throw Object.assign(new Error('not a regular file'),
+        { code: before.isSymbolicLink() ? 'ELOOP' : 'EINVAL' });
+    }
+    fd = openSync(path, constants.O_RDWR | (constants.O_NOFOLLOW || 0));
+    const opened = fstatSync(fd);
+    if (before.ino && opened.ino && (opened.ino !== before.ino || opened.dev !== before.dev)) {
+      throw Object.assign(new Error('replaced while opening'), { code: 'ESTALE' });
+    }
     const bytes = Buffer.from(body, 'utf8');
     writeSync(fd, bytes, 0, bytes.length, 0);
     ftruncateSync(fd, bytes.length);
+    // Same rule as the atomic path: private, unless the host ACL owns it.
+    try { fchmodSync(fd, PRIVATE_FILE_MODE); } catch { /* host ACL is authoritative */ }
     fsyncSync(fd);
   } catch (err) {
     const failure = new Error(

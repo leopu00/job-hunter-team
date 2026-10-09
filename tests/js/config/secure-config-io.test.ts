@@ -100,6 +100,34 @@ describe('writePrivateJson — scrittura atomica', () => {
     expect(String(stderr.mock.calls[0]?.[0])).toContain(file);
   });
 
+  // Il ripiego scrive dentro un file esistente: se al posto del config c'è un
+  // link, seguirlo manderebbe la configurazione dove punta il link.
+  it('un symlink al posto del config non viene seguito', async () => {
+    const elsewhere = path.join(dir, 'elsewhere.json');
+    fs.writeFileSync(elsewhere, '{"untouched":true}\n');
+    fs.symlinkSync(elsewhere, file);
+    await refuseTempFiles();
+
+    let thrown: unknown;
+    try { writePrivateJson(file, { version: 2 }); } catch (err) { thrown = err; }
+
+    expect((thrown as { code?: string })?.code).toBe('config_write_failed');
+    expect(String((thrown as Error).message)).toMatch(/ELOOP/);
+    expect(fs.readFileSync(elsewhere, 'utf8')).toBe('{"untouched":true}\n');
+    expect(fs.lstatSync(file).isSymbolicLink()).toBe(true);
+  });
+
+  it.skipIf(process.platform === 'win32')('la riscrittura al suo posto rimette i permessi privati', async () => {
+    fs.writeFileSync(file, '{"version":1}\n');
+    fs.chmodSync(file, 0o644);
+    await refuseTempFiles();
+
+    writePrivateJson(file, { version: 2 });
+
+    expect(saved().version).toBe(2);
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  });
+
   it('cartella che rifiuta il temporaneo e file assente: errore chiaro, niente creato', async () => {
     await refuseTempFiles();
 
