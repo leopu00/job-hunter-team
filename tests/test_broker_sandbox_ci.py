@@ -155,5 +155,30 @@ def test_the_probe_counts_only_chromium_s_processes_never_itself():
     # Fourth CI run: the probe's own command line (its source holds "chrom",
     # "--type=renderer" and the flag it looks for) was read as a renderer
     # with --no-sandbox in the broker's user namespace: three false FAILs.
-    assert "int(pid) == os.getpid()" in gate.PROBE
-    assert 'os.path.basename(cmd[0].decode(errors="replace")).startswith("chrom")' in gate.PROBE
+    assert "int(pid) == os.getpid() or not chromium_program(cmd)" in gate.PROBE
+
+
+def _chromium_program():
+    source = gate.PROBE[gate.PROBE.index("def chromium_program(cmd):"):gate.PROBE.index("KEEP = (")]
+    scope = {"os": __import__("os")}
+    exec(source, scope)
+    return scope["chromium_program"]
+
+
+@pytest.mark.parametrize("cmdline,is_chromium", [
+    # A renderer forked by the zygote: its title is one argv[0] with spaces,
+    # and a flag after the program holds slashes (fifth CI run).
+    (b"/ms-playwright/chromium-1208/chrome-linux/chrome --type=renderer --user-data-dir=/tmp/profile --lang=en\0", True),
+    (b"/ms-playwright/chromium-1208/chrome-linux/chrome\0--type=zygote\0--no-zygote-sandbox\0", True),
+    (b"/ms-playwright/chromium-1208/chrome-linux/chrome_crashpad_handler\0--database=/tmp/x\0", True),
+    (b"python3\0-c\0import json  # chrom --type=renderer\0", False),
+    (b"/usr/bin/Xvfb\0:99\0", False),
+    (b"", False),
+])
+def test_a_chromium_process_is_known_by_its_program_whatever_its_title(cmdline, is_chromium):
+    assert _chromium_program()(cmdline.split(b"\0")) is is_chromium
+
+
+def test_no_renderer_found_is_said_as_such(monkeypatch, capsys):
+    code, out = _verdict(monkeypatch, capsys, good={**GOOD, "renderer_userns": [], "renderer_in_own_userns": False})
+    assert code == 1 and "FAIL [renderer-userns] no renderer process was found" in out

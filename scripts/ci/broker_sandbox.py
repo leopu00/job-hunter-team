@@ -65,6 +65,14 @@ def chroot_works():
         os._exit(0 if libc.chroot(b"/") == 0 else 1)
     return os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0
 
+def chromium_program(cmd):
+    # The program is the first word of argv[0]: the zygote's children rewrite
+    # their title into argv[0] as one string with spaces (setproctitle), so
+    # the whole command line can sit there (the fifth CI run found no renderer
+    # by the basename of all of it).
+    first = cmd[0].decode(errors="replace").split(" ", 1)[0] if cmd and cmd[0] else ""
+    return os.path.basename(first).startswith("chrom")
+
 KEEP = ("FATAL", "ERROR", "Check failed", "sandbox", "zygote", "namespace", "clone", "unshare",
         "denied", "not permitted", "No such", "error while loading", "Missing X")
 
@@ -130,7 +138,7 @@ for pid in os.listdir("/proc"):
     # program they run: this probe's command line holds "chrom",
     # "--type=renderer" and the no-sandbox flag as text, and runs in the broker's
     # user namespace (the fourth CI run counted it as a renderer).
-    if int(pid) == os.getpid() or not os.path.basename(cmd[0].decode(errors="replace")).startswith("chrom"):
+    if int(pid) == os.getpid() or not chromium_program(cmd):
         continue
     cmdlines.append(joined)
     try:
@@ -238,7 +246,9 @@ def main(argv: list[str]) -> int:
             fail("flag", "a Chromium process runs with --no-sandbox")
         if good.get("sandboxed") is not True:
             fail("chrome-sandbox", f"chrome://sandbox: {good.get('sandbox_text')}")
-        if good.get("renderer_in_own_userns") is not True:
+        if not good.get("renderer_userns"):
+            fail("renderer-userns", "no renderer process was found: the probe could not compare namespaces")
+        elif good.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {good.get('renderer_userns')} vs own {good.get('own_userns')}")
     # Declared, not a failure: userns is in the whole jht-broker profile,
     # because no-new-privileges forbids a transition to a Chromium-only child.
