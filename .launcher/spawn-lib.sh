@@ -335,6 +335,22 @@ PYEOF
 # lingua, sotto questo valore con un margine.
 JHT_CODEX_PROJECT_DOC_MAX_BYTES=131072
 
+# Ricerca web nativa di Codex (`--search`: il tool `web_search` delle
+# Responses), per parita' con WebSearch di Claude nei ruoli che la usano nelle
+# loro skill o nel prompt. Senza, lo Scout perde il tier 4 delle fonti
+# (circles-and-sources), l'Analista il ripiego web di geocoding, localita' e
+# loghi, il Mentor la verifica sul web. tests/test_codex_web_search.py tiene
+# questo elenco uguale ai ruoli che nominano WebSearch.
+JHT_CODEX_WEB_SEARCH_ROLES="scout analista mentor"
+
+# jht_codex_web_search_role <ruolo> → 0 se il ruolo riceve --search con Codex.
+jht_codex_web_search_role() {
+  case " $JHT_CODEX_WEB_SEARCH_ROLES " in
+    *" ${1:-} "*) return 0 ;;
+  esac
+  return 1
+}
+
 # jht_spawn_repl_cmd
 #   Stampa il comando REPL del PROVIDER ATTIVO (non più codex hardcoded: su un
 #   setup claude, lanciare codex fallirebbe per CLI/auth assenti). effort=high

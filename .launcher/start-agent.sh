@@ -1012,6 +1012,11 @@ case "$PROVIDER" in
     # project_doc_max_bytes: senza, Codex tronca AGENTS.md a 32 KiB (vedi
     # JHT_CODEX_PROJECT_DOC_MAX_BYTES in spawn-lib.sh).
     CLI_ARGS="--yolo --model $codex_model -c model_reasoning_effort=$effort -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES"
+    # --search: ricerca web nativa per i ruoli che la usano (parita' con
+    # WebSearch di Claude; elenco in spawn-lib.sh).
+    if jht_codex_web_search_role "$ROLE"; then
+      CLI_ARGS="$CLI_ARGS --search"
+    fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="OPENAI_API_KEY='${API_KEY}' "
     fi
