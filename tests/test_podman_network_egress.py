@@ -1,11 +1,14 @@
-"""The agents' container on Podman (Windows, WSL) leaves only through the proxy.
+"""On Podman (Windows, WSL) each container leaves only through its own proxy.
 
 With `network_mode: host` the container shared the VM's network: the proxy
 was only an environment variable, and an agent could skip it (`curl
 --noproxy '*'`) to reach the LAN, the Windows host and the VM's loopback (the
 proxy itself, the broker's login view on 6081). docker-compose.podman.yml now
 runs the container on pasta with no route out and one forwarded port, the
-VM's 127.0.0.1:3128 where the egress proxy listens.
+VM's 127.0.0.1:3128 where the egress proxy listens. The broker (3129) and the
+Telegram service (3130) left directly from the compose bridge, LAN included:
+they run the same way, each with its own proxy instance and policy
+(configure-podman-windows-network.ps1).
 
 - The static tests pin that line, the wrapper's trust check on it, and that
   the override never reaches Linux or a VPS (it is a Windows-only file).
@@ -35,8 +38,18 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERRIDE = ROOT / "docker-compose.podman.yml"
-PASTA = "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"
+# Each service, its proxy port, the proxy policy listening there, and a real
+# destination that policy admits (the live test's positive check).
+SERVICES = {
+    "jht": (3128, "agent", ("example.com", 443)),
+    "jht-broker": (3129, "broker", ("imap.gmail.com", 993)),
+    "jht-telegram": (3130, "telegram", ("api.telegram.org", 443)),
+}
 PROXY_PORT = 3128
+
+
+def _pasta(port: int) -> str:
+    return f"pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,{port}"
 
 
 class _ComposeLoader(yaml.SafeLoader):
@@ -56,9 +69,11 @@ def _pasta_options(network_mode: str) -> list[str]:
     return network_mode.removeprefix("pasta:").split(",")
 
 
-def test_the_agents_run_on_pasta_with_the_proxy_as_the_only_way_out():
-    network = _services(OVERRIDE)["jht"]["network_mode"]
-    assert network == PASTA
+@pytest.mark.parametrize("service", SERVICES)
+def test_each_service_runs_on_pasta_with_its_proxy_as_the_only_way_out(service):
+    port = SERVICES[service][0]
+    network = _services(OVERRIDE)[service]["network_mode"]
+    assert network == _pasta(port)
     options = _pasta_options(network)
     # What each option buys (see the override's comment).
     for flag in ("--no-udp", "--no-icmp", "--no-map-gw", "-4"):
@@ -67,9 +82,16 @@ def test_the_agents_run_on_pasta_with_the_proxy_as_the_only_way_out():
     # One forwarded port out of the namespace, the proxy's; nothing that
     # widens it (port ranges, `all`, a second -T, a mapped host loopback).
     forwards = [options[i + 1] for i, flag in enumerate(options) if flag in ("-T", "--tcp-ns")]
-    assert forwards == [str(PROXY_PORT)]
+    assert forwards == [str(port)]
     for widening in ("-U", "--udp-ns", "--map-host-loopback", "--freebind", "--outbound-if4"):
         assert widening not in options, widening
+
+
+@pytest.mark.parametrize("service", ["jht-broker", "jht-telegram"])
+def test_the_broker_and_telegram_are_given_their_own_proxy(service):
+    environment = _services(OVERRIDE)[service]["environment"]
+    url = f"http://127.0.0.1:{SERVICES[service][0]}"
+    assert f"HTTPS_PROXY={url}" in environment and f"https_proxy={url}" in environment
 
 
 def test_node_in_the_container_goes_through_the_proxy():
@@ -84,16 +106,21 @@ def test_no_compose_service_shares_the_host_network():
             assert service.get("network_mode") != "host", f"{path.name}: {name}"
 
 
-def test_the_wrapper_trusts_the_override_only_with_that_line():
+def test_the_wrapper_trusts_the_override_only_with_those_lines():
     wrapper = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
-    assert f"-SimpleMatch 'network_mode: \"{PASTA}\"'" in wrapper
+    for port, _, _ in SERVICES.values():
+        assert f"-SimpleMatch 'network_mode: \"{_pasta(port)}\"'" in wrapper, port
     assert "'network_mode: host'" not in wrapper
 
 
-def test_the_forwarded_port_is_the_one_the_proxy_listens_on():
+def test_each_forwarded_port_is_the_one_its_proxy_instance_listens_on():
     configure = (ROOT / "scripts" / "configure-podman-windows-network.ps1").read_text(encoding="utf-8")
-    assert re.search(rf"\[int\]\$Port = {PROXY_PORT}\b", configure)
-    assert "--bind 127.0.0.1 --port $Port" in configure
+    variables = {"agent": "Port", "broker": "BrokerPort", "telegram": "TelegramPort"}
+    for port, policy, _ in SERVICES.values():
+        variable = variables[policy]
+        assert re.search(rf"\[int\]\${variable} = {port}\b", configure), variable
+        assert f"-Policy {policy} -ListenPort ${variable}" in configure, policy
+    assert "--bind 127.0.0.1 --port $ListenPort --policy $Policy" in configure
     wrapper = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
     assert f"'http://127.0.0.1:{PROXY_PORT}'" in wrapper
 
@@ -160,14 +187,16 @@ def serve(port, handle):
     while True:
         c, _ = s.accept()
         threading.Thread(target=handle, args=(c,), daemon=True).start()
-threading.Thread(target=serve, args=(%d, tunnel), daemon=True).start()
+for proxy_port in %r:
+    threading.Thread(target=serve, args=(proxy_port, tunnel), daemon=True).start()
 threading.Thread(target=serve, args=(%d, lambda c: c.close()), daemon=True).start()
 time.sleep(300)
-""" % (PROXY_PORT, VM_SERVICE_PORT)
+""" % (tuple(port for port, _, _ in SERVICES.values()), VM_SERVICE_PORT)
 
 PROBE = r"""
-import http.client, json, socket, ssl, struct, sys
+import json, socket, ssl, struct, sys
 targets = json.loads(sys.argv[1])
+proxy_port, allowed_host, allowed_port = targets["proxy_port"], targets["allowed_host"], targets["allowed_port"]
 gateway = None
 for line in open("/proc/net/route").read().splitlines()[1:]:
     fields = line.split()
@@ -189,22 +218,30 @@ def udp_dns():
     except OSError:
         return False
 def through_the_proxy():
-    # The positive check: a real CONNECT to example.com:443 through the
-    # proxy, then TLS and a request. A proxy that answers but does not
-    # forward fails here.
-    connection = http.client.HTTPSConnection(
-        "127.0.0.1", %d, timeout=20, context=ssl.create_default_context()
-    )
-    connection.set_tunnel("example.com", 443)
+    # The positive check: a real CONNECT through this service's proxy to a
+    # destination its policy admits, then a TLS handshake whose certificate
+    # is verified for that name. A proxy that answers but does not forward,
+    # or forwards somewhere else, fails here.
     try:
-        connection.request("HEAD", "/")
-        return connection.getresponse().status
+        sock = socket.create_connection(("127.0.0.1", proxy_port), timeout=20)
+        target = f"{allowed_host}:{allowed_port}"
+        sock.sendall(f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n".encode())
+        reply = b""
+        while b"\r\n\r\n" not in reply:
+            chunk = sock.recv(1)
+            if not chunk:
+                return "proxy closed"
+            reply += chunk
+        status = reply.split(b"\r\n", 1)[0].split()[1].decode()
+        if status != "200":
+            return f"proxy answered {status}"
+        with ssl.create_default_context().wrap_socket(sock, server_hostname=allowed_host):
+            return "forwarded"
     except Exception as error:
         return type(error).__name__
-    finally:
-        connection.close()
 reach = {
     "VM loopback service": tcp("127.0.0.1", %d),
+    "another service's proxy": any(tcp("127.0.0.1", port) for port in %r if port != proxy_port),
     "Internet, direct": tcp(targets["internet4"], 443),
     "DNS over UDP": udp_dns(),
 }
@@ -216,7 +253,7 @@ if gateway:
 if targets["lan"]:
     reach["LAN address on 80"] = tcp(targets["lan"], 80)
 print(json.dumps({"proxy": through_the_proxy(), "reach": reach}))
-""" % (PROXY_PORT, VM_SERVICE_PORT)
+""" % (VM_SERVICE_PORT, tuple(port for port, _, _ in SERVICES.values()))
 
 
 def _public_targets() -> dict[str, str]:
@@ -247,10 +284,17 @@ def _podman(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 @pytest.mark.skipif(not CONNECTION, reason="live: set JHT_PODMAN_EGRESS_CONNECTION")
 @pytest.mark.skipif(shutil.which("podman") is None, reason="podman not installed")
-def test_from_the_container_only_the_proxy_answers_and_forwards():
+@pytest.mark.parametrize("service", SERVICES)
+def test_from_each_container_only_its_proxy_answers_and_forwards(service):
     override = Path(os.environ.get("JHT_PODMAN_EGRESS_COMPOSE", OVERRIDE))
-    network = _services(override)["jht"]["network_mode"]
-    targets = _public_targets()
+    network = _services(override)[service].get("network_mode", "the compose bridge")
+    proxy_port, _, (allowed_host, allowed_port) = SERVICES[service]
+    targets = {
+        **_public_targets(),
+        "proxy_port": proxy_port,
+        "allowed_host": allowed_host,
+        "allowed_port": allowed_port,
+    }
     listener = f"jht-egress-listener-{os.getpid()}"
     _podman("run", "-d", "--rm", "--name", listener, "--network", "host", IMAGE, "python3", "-c", LISTENER)
     try:
@@ -258,8 +302,9 @@ def test_from_the_container_only_the_proxy_answers_and_forwards():
         # probe can time out by chance.
         runs = []
         for _ in range(3):
+            network_args = ["--network", network] if network.startswith("pasta:") else []
             result = _podman(
-                "run", "--rm", "--network", network, IMAGE,
+                "run", "--rm", *network_args, IMAGE,
                 "python3", "-c", PROBE, json.dumps(targets),
             )
             runs.append(json.loads(result.stdout.strip().splitlines()[-1]))
@@ -267,6 +312,6 @@ def test_from_the_container_only_the_proxy_answers_and_forwards():
         _podman("rm", "-f", listener, check=False)
 
     for run in runs:
-        assert run["proxy"] == 200, f"{network}: example.com through the proxy: {run['proxy']}"
+        assert run["proxy"] == "forwarded", f"{service}: {allowed_host} through its proxy: {run['proxy']}"
         open_ways = [way for way, reached in run["reach"].items() if reached]
-        assert not open_ways, f"{network}: reachable besides the proxy: {open_ways}"
+        assert not open_ways, f"{service} on {network}: reachable besides its proxy: {open_ways}"
