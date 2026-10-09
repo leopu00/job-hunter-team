@@ -70,7 +70,7 @@ import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import MessagesPage from "../pages/messages";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
-import { describeError, errorCodeOf, errorResetsAt } from "../lib/error-catalog";
+import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
 
 const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
@@ -152,7 +152,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     };
   }
   // The sentence comes from the app's catalog, never from the native message.
-  const described = describeError(value.code);
+  const described = describeError(value.code, { machine: errorMachineOf(error) });
   return {
     status: "failed",
     stage,
@@ -167,7 +167,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
 function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
   const code = errorCodeOf(error);
   if (!code) return null;
-  const described = describeError(code, { resetsAt: errorResetsAt(error) });
+  const described = describeError(code, { resetsAt: errorResetsAt(error), machine: errorMachineOf(error) });
   if (!described.known) return null;
   const retryable = typeof error === "object" && error !== null &&
     typeof (error as { retryable?: unknown }).retryable === "boolean"

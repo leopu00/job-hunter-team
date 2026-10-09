@@ -814,6 +814,25 @@ describe("DashboardApp onboarding router", () => {
     expect(recreateOnboardingPodmanMachine).not.toHaveBeenCalled();
   });
 
+  it("the setup names the other Podman machine the wrapper found running", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("podman-other-machine-named-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "podman_other_machine_running",
+      message: "raw native message",
+      retryable: true,
+      machine: "altra",
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    const described = describeError("podman_other_machine_running", { machine: "altra" });
+    expect(await screen.findByText(described.text)).toBeInTheDocument();
+    expect(described.text).toContain("«altra»");
+    expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
   it("a Podman machine that sees more of the Mac is recreated only from its own action, then setup starts over", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("podman-mounts-account"));
     requireOnboarding();

@@ -653,6 +653,10 @@ pub(crate) struct OnboardingError {
     /// `provider_limits_exhausted`.
     #[serde(skip_serializing_if = "Option::is_none")]
     resets_at: Option<i64>,
+    /// The other Podman machine that is running, as the wrapper names it
+    /// (`JHT_OTHER_MACHINE <name>`), only for `podman_other_machine_running`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    machine: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -907,6 +911,24 @@ fn failure(code: &'static str) -> OnboardingError {
         message,
         retryable,
         resets_at: None,
+        machine: None,
+    }
+}
+
+/// `podman_other_machine_running`, with the machine the wrapper printed on
+/// stdout before exiting 79: one exact `JHT_OTHER_MACHINE <name>` line with a
+/// Podman machine name, or no name at all.
+fn other_machine_failure(stdout: &[u8]) -> OnboardingError {
+    let machine = String::from_utf8_lossy(stdout).lines().find_map(|line| {
+        let name = line.trim_end_matches('\r').strip_prefix("JHT_OTHER_MACHINE ")?;
+        (!name.is_empty()
+            && name.len() <= 64
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-')))
+        .then(|| name.to_owned())
+    });
+    OnboardingError {
+        machine,
+        ..failure(PODMAN_OTHER_MACHINE_RUNNING)
     }
 }
 
@@ -1691,12 +1713,9 @@ fn ensure_success(
 ) -> Result<(), OnboardingError> {
     match result {
         Ok(value) if value.success() => Ok(()),
-        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => {
-            Err(failure(PODMAN_OTHER_MACHINE_RUNNING))
-        }
+        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => Err(other_machine_failure(&value.stdout)),
         Err("process_timeout") => Err(failure("timeout")),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
-        Err(PODMAN_OTHER_MACHINE_RUNNING) => Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
         _ => Err(failure(code)),
     }
 }
@@ -1708,12 +1727,9 @@ fn ensure_success_with_timeout(
 ) -> Result<(), OnboardingError> {
     match result {
         Ok(value) if value.success() => Ok(()),
-        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => {
-            Err(failure(PODMAN_OTHER_MACHINE_RUNNING))
-        }
+        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => Err(other_machine_failure(&value.stdout)),
         Err("process_timeout") => Err(failure(timeout_code)),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
-        Err(PODMAN_OTHER_MACHINE_RUNNING) => Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
         _ => Err(failure(code)),
     }
 }
@@ -1820,13 +1836,14 @@ pub(crate) fn remote_jht_command(args: &[&str]) -> String {
 }
 
 /// A wrapper that refused a Podman machine mounting more of the Mac answers
-/// with its own error, never with the failure of the step that ran it.
+/// with its own error, never with the failure of the step that ran it. Exit 79
+/// (another machine running) stays a result: its stdout names the machine,
+/// and the steps that start the machine read it (other_machine_failure).
 fn refuse_broad_podman_machine(
     result: Result<ProcessResult, &'static str>,
 ) -> Result<ProcessResult, &'static str> {
     match result {
         Ok(value) if value.code == PODMAN_MACHINE_MOUNTS_EXIT => Err(PODMAN_MACHINE_MOUNTS_HOME),
-        Ok(value) if value.code == PODMAN_OTHER_MACHINE_EXIT => Err(PODMAN_OTHER_MACHINE_RUNNING),
         other => other,
     }
 }
@@ -1835,7 +1852,6 @@ fn refuse_broad_podman_machine(
 fn local_failure(error: &'static str, code: &'static str) -> OnboardingError {
     failure(match error {
         PODMAN_MACHINE_MOUNTS_HOME => PODMAN_MACHINE_MOUNTS_HOME,
-        PODMAN_OTHER_MACHINE_RUNNING => PODMAN_OTHER_MACHINE_RUNNING,
         _ => code,
     })
 }
@@ -1901,7 +1917,9 @@ fn start_and_verify_local_container_with(
         Ok(result) if result.success() => Ok(()),
         Err("process_timeout") => Err("container_timeout"),
         Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
-        Err(PODMAN_OTHER_MACHINE_RUNNING) => return Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
+        Ok(result) if result.code == PODMAN_OTHER_MACHINE_EXIT => {
+            return Err(other_machine_failure(&result.stdout))
+        }
         _ => Err("container_start_failed"),
     };
 
@@ -1913,7 +1931,9 @@ fn start_and_verify_local_container_with(
             }
             Err("process_timeout") => return Err(failure("container_timeout")),
             Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
-            Err(PODMAN_OTHER_MACHINE_RUNNING) => return Err(failure(PODMAN_OTHER_MACHINE_RUNNING)),
+            Ok(result) if result.code == PODMAN_OTHER_MACHINE_EXIT => {
+                return Err(other_machine_failure(&result.stdout))
+            }
             _ => {}
         }
         if attempt + 1 < attempts {
@@ -3510,6 +3530,7 @@ fn recreate_podman_machine_with(
         Ok(result) if result.success() => Ok(()),
         Err("process_timeout") => Err(failure("timeout")),
         Err(error) => Err(local_failure(error, "podman_machine_recreate_failed")),
+        Ok(result) if result.code == PODMAN_OTHER_MACHINE_EXIT => Err(other_machine_failure(&result.stdout)),
         Ok(_) => Err(failure("podman_machine_recreate_failed")),
     }
 }
@@ -4556,19 +4577,19 @@ mod tests {
 
     #[test]
     fn another_running_podman_machine_keeps_its_actionable_catalog_error() {
-        let occupied = || {
+        let occupied = |stdout: &[u8]| -> Result<ProcessResult, &'static str> {
             refuse_broad_podman_machine(Ok(ProcessResult {
                 code: PODMAN_OTHER_MACHINE_EXIT,
-                stdout: Vec::new(),
+                stdout: stdout.to_vec(),
             }))
         };
-        assert_eq!(occupied().unwrap_err(), PODMAN_OTHER_MACHINE_RUNNING);
+        let named = b"Starting...\nJHT_OTHER_MACHINE altra\n";
 
         let mut calls = Vec::new();
         let error = start_and_verify_local_container_with(
             |operation, _| {
                 calls.push(operation.diagnostic_id());
-                occupied()
+                occupied(named)
             },
             |_| panic!("a machine conflict must not poll or wait"),
             3,
@@ -4576,22 +4597,42 @@ mod tests {
         .unwrap_err();
         assert_eq!(calls, ["up"]);
         assert_eq!(error.code, PODMAN_OTHER_MACHINE_RUNNING);
+        assert_eq!(error.machine.as_deref(), Some("altra"));
         assert!(error.retryable);
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["machine"], "altra");
 
         for error in [
-            ensure_success(
-                Ok(ProcessResult {
-                    code: PODMAN_OTHER_MACHINE_EXIT,
-                    stdout: Vec::new(),
-                }),
-                "runtime_install_failed",
-            )
-            .unwrap_err(),
-            ensure_success_with_timeout(occupied(), "provider_config_failed", "provider_timeout")
+            ensure_success(occupied(named), "runtime_install_failed").unwrap_err(),
+            ensure_success_with_timeout(occupied(named), "provider_config_failed", "provider_timeout")
                 .unwrap_err(),
+            recreate_podman_machine_with(|_, _| occupied(named)).unwrap_err(),
         ] {
             assert_eq!(error.code, PODMAN_OTHER_MACHINE_RUNNING);
+            assert_eq!(error.machine.as_deref(), Some("altra"));
         }
+
+        // A name the wrapper would not print, or no line, names nothing.
+        for stdout in [
+            &b""[..],
+            b"JHT_OTHER_MACHINE \n",
+            b"JHT_OTHER_MACHINE bad name\n",
+            b"JHT_OTHER_MACHINE $(reboot)\n",
+            b" JHT_OTHER_MACHINE altra\n",
+            b"JHT_OTHER_MACHINEaltra\n",
+        ] {
+            let error = ensure_success(occupied(stdout), "runtime_install_failed").unwrap_err();
+            assert_eq!(error.code, PODMAN_OTHER_MACHINE_RUNNING, "{stdout:?}");
+            assert_eq!(error.machine, None, "{stdout:?}");
+            assert!(serde_json::to_value(&error).unwrap().get("machine").is_none());
+        }
+        assert_eq!(
+            ensure_success(occupied(b"JHT_OTHER_MACHINE podman-machine-default\r\n"), "x")
+                .unwrap_err()
+                .machine
+                .as_deref(),
+            Some("podman-machine-default")
+        );
     }
 
     #[test]

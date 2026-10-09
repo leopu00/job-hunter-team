@@ -339,6 +339,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Another Podman machine is already running: on a Mac only one can run at a time.",
     "Stop the other machine from the app you use it with (for example Podman Desktop), then press Try again. Job Hunter Team never stops it for you, and you can start it again afterwards.",
   ),
+  // The same, when the wrapper named the machine (describeError's `machine`).
+  podman_other_machine_running_named: copy(
+    "La macchina Podman «{machine}» è già accesa: sul Mac ne può girare una sola alla volta.",
+    "Spegni «{machine}» dall’app con cui la usi (per esempio Podman Desktop), poi premi Riprova. Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla.",
+    "The Podman machine “{machine}” is already running: on a Mac only one can run at a time.",
+    "Stop “{machine}” from the app you use it with (for example Podman Desktop), then press Try again. Job Hunter Team never stops it for you, and you can start it again afterwards.",
+  ),
   podman_machine_mounts_home: copy(
     "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono a Job Hunter Team.",
     "Ricrea la macchina Podman: i tuoi dati in ~/.jht e in Documenti › Job Hunter Team restano dove sono.",
@@ -1009,6 +1016,7 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "runtime_wrapper_install_failed",
   "command_timeout",
   // TS: handled by the UI, produced by no backend.
+  "podman_other_machine_running_named",
   "container_version_incompatible",
   "account_team_mismatch",
   "ssh_unavailable",
@@ -1061,16 +1069,20 @@ export function describeError(
     now?: number;
     /** Catalog code whose copy replaces the generic one for an unknown code. */
     fallback?: string;
+    /** The Podman machine an error names (errorMachineOf), when it has one. */
+    machine?: string | null;
   } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
   const key = typeof code === "string" ? code : "unknown";
   const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
-  const entry = key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
+  const machine = validMachine(options.machine);
+  const named = machine && key in NAMED_VARIANTS ? NAMED_VARIANTS[key] : null;
+  const entry = named ? ERROR_CATALOG[named] : key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
   const fallbackCode = options.fallback && has(options.fallback) ? options.fallback : "unknown";
   const fallback = ERROR_CATALOG[fallbackCode];
   let chosen = entry ?? fallback;
-  let chosenCode = entry ? key : fallbackCode;
+  let chosenCode = entry ? named ?? key : fallbackCode;
   let known = entry !== undefined;
   let [text, action] = localizedCopy(chosenCode, chosen, locale);
   const needsTime = text.includes("{time}") || action.includes("{time}");
@@ -1085,10 +1097,26 @@ export function describeError(
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
   return {
     code: key,
-    text: text.replaceAll("{time}", time),
-    action: action.replaceAll("{time}", time),
+    text: text.replaceAll("{time}", time).replaceAll("{machine}", machine ?? ""),
+    action: action.replaceAll("{time}", time).replaceAll("{machine}", machine ?? ""),
     known,
   };
+}
+
+/** Codes with a variant that names the machine, picked when one is given. */
+const NAMED_VARIANTS: Readonly<Record<string, string>> = {
+  podman_other_machine_running: "podman_other_machine_running_named",
+};
+
+/** A Podman machine name as the wrapper prints it, or nothing. */
+function validMachine(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
+}
+
+/** The Podman machine a native error names (`machine`), when it is a valid name. */
+export function errorMachineOf(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  return validMachine((error as { machine?: unknown }).machine);
 }
 
 /** The code of a native or TS error: `{ code }` objects and bare strings. */

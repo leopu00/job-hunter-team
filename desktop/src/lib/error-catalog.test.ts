@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, NOT_EMITTED, describeError, errorCodeOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
@@ -309,3 +309,29 @@ describe("podman_other_machine_running", () => {
     expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|podman machine (stop|list)|`/i);
   });
 });
+
+describe("podman_other_machine_running with the machine's name", () => {
+  it.each(["it", "en", "de", "es", "fr", "hu", "pt"])("%s: names the machine in the sentence and in the action", (locale) => {
+    const named = describeError("podman_other_machine_running", { locale, machine: "altra" });
+    const plain = describeError("podman_other_machine_running", { locale });
+    expect(named.code).toBe("podman_other_machine_running");
+    expect(named.known).toBe(true);
+    expect(named.text).toContain("altra");
+    expect(named.action).toContain("altra");
+    expect(`${named.text} ${named.action}`).not.toContain("{machine}");
+    expect(plain.text).not.toContain("{machine}");
+    expect(named.text).not.toBe(plain.text);
+  });
+
+  it("names only a machine name the wrapper could print, and only for this code", () => {
+    const plain = describeError("podman_other_machine_running");
+    for (const machine of ["bad name", "$(reboot)", "", "x".repeat(65), null]) {
+      expect(describeError("podman_other_machine_running", { machine })).toEqual(plain);
+    }
+    expect(describeError("podman_start_failed", { machine: "altra" })).toEqual(describeError("podman_start_failed"));
+    expect(errorMachineOf({ code: "podman_other_machine_running", machine: "podman-machine-default" })).toBe("podman-machine-default");
+    expect(errorMachineOf({ machine: "a b" })).toBeNull();
+    expect(errorMachineOf("podman_other_machine_running")).toBeNull();
+  });
+});
+
