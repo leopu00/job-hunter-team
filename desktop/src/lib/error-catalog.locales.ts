@@ -225,6 +225,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A konténermotor telepítve van, de nem válaszol.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet."],
     pt: ["O motor de contentores está instalado, mas não responde.", "Tenta novamente. Se voltar a acontecer, reinicia o computador."],
   },
+  "Homebrew is missing on this Mac: the app uses it to install Podman.": {
+    de: ["Auf diesem Mac fehlt Homebrew: Die App installiert Podman damit.", "Lade das Installationspaket von Homebrew (die .pkg-Datei) von der offiziellen Seite brew.sh herunter, öffne es und schließe die macOS-Installation ab. Komm dann hierher zurück und klicke auf Erneut versuchen."],
+    es: ["Falta Homebrew en este Mac: la aplicación lo usa para instalar Podman.", "Descarga el paquete de instalación de Homebrew (el archivo .pkg) desde su página oficial brew.sh, ábrelo y completa la instalación de macOS; luego vuelve aquí y pulsa Reintentar."],
+    fr: ["Homebrew manque sur ce Mac : l’application l’utilise pour installer Podman.", "Télécharge le paquet d’installation de Homebrew (le fichier .pkg) depuis sa page officielle brew.sh, ouvre-le et termine l’installation de macOS, puis reviens ici et clique sur Réessayer."],
+    hu: ["Erről a Macről hiányzik a Homebrew: az alkalmazás ezzel telepíti a Podmant.", "Töltsd le a Homebrew telepítőcsomagját (a .pkg fájlt) a hivatalos brew.sh oldalról, nyisd meg, és fejezd be a macOS-telepítést, aztán gyere vissza ide, és kattints az Újra gombra."],
+    pt: ["Falta o Homebrew neste Mac: a aplicação usa-o para instalar o Podman.", "Descarrega o pacote de instalação do Homebrew (o ficheiro .pkg) a partir da sua página oficial brew.sh, abre-o e conclui a instalação do macOS; depois volta aqui e carrega em Tentar novamente."],
+  },
   "The container engine did not start.": {
     de: ["Die Container-Engine wurde nicht gestartet.", "Versuche es erneut. Wenn es wieder passiert, starte den Computer neu."],
     es: ["El motor de contenedores no se ha iniciado.", "Inténtalo de nuevo. Si vuelve a ocurrir, reinicia el ordenador."],
@@ -652,6 +659,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   uninstall_unavailable: translated("Removing JHT from this computer is not available with the installed runtime."),
   uninstall_unsupported: translated("For now, removing JHT from the app is only available on Windows."),
   uninstall_failed: translated("Removing JHT from this computer did not succeed."),
+  homebrew_missing: translated("Homebrew is missing on this Mac: the app uses it to install Podman."),
   podman_start_failed: translated("The container engine did not start."),
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
   podman_machine_recreate_failed: translated("The JHT Podman machine was not recreated."),

@@ -1348,6 +1348,32 @@ fn podman_path() -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+/// install.sh installs Podman and podman-compose with Homebrew, and installs
+/// Homebrew itself when it is missing. Run from the app it has no terminal and
+/// no administrator password, so Homebrew's own installer stops there: the app
+/// says it before starting, with `homebrew_missing`.
+#[cfg(target_os = "macos")]
+const HOMEBREW_PREFIXES: [&str; 2] = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+
+/// `brew` on PATH or in one of Homebrew's two standard prefixes (an app
+/// opened from the Finder has a PATH without them).
+#[cfg(target_os = "macos")]
+fn homebrew_path_in(path: Option<std::ffi::OsString>, prefixes: &[&str]) -> Option<PathBuf> {
+    path.map(|value| std::env::split_paths(&value).map(|dir| dir.join("brew")).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .chain(prefixes.iter().map(PathBuf::from))
+        .find(|path| path.is_file())
+}
+
+#[cfg(target_os = "macos")]
+fn local_podman_install_preflight(install_required: bool, homebrew: Option<PathBuf>) -> Result<(), &'static str> {
+    if install_required && homebrew.is_none() {
+        return Err("homebrew_missing");
+    }
+    Ok(())
+}
+
 pub(crate) struct VerifiedInstaller {
     bytes: Vec<u8>,
     digest: String,
@@ -1602,6 +1628,13 @@ fn install_local(
                     &local_runtime_dir(app)?,
                 ),
             );
+            if let Err(code) = local_podman_install_preflight(
+                install_required,
+                homebrew_path_in(std::env::var_os("PATH"), &HOMEBREW_PREFIXES),
+            ) {
+                trace_local_runtime("runtime", code);
+                return Err(failure(code));
+            }
             if install_required {
                 trace_local_runtime("runtime", "install_required");
                 let installed = with_downloaded_installer(|installer, channel_args| {
@@ -4672,6 +4705,36 @@ mod tests {
         // A complete runtime of the other channel (or any runtime, in a test
         // build) is installed again, not reused.
         assert!(local_podman_install_required(true, true, true, false));
+    }
+
+    /// Without Homebrew, install.sh would start Homebrew's own installer with
+    /// no terminal and no password, and stop there: the app says it first.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_mac_without_homebrew_is_told_before_the_install_starts() {
+        use super::{homebrew_path_in, local_podman_install_preflight};
+        use std::fs;
+        let root = std::env::temp_dir().join(format!("jht-homebrew-{}", std::process::id()));
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let nowhere = root.join("nowhere/brew");
+        let nowhere = nowhere.to_str().unwrap();
+
+        assert_eq!(homebrew_path_in(Some(bin.clone().into_os_string()), &[nowhere]), None);
+        assert_eq!(homebrew_path_in(None, &[nowhere]), None);
+        fs::write(bin.join("brew"), b"#!/bin/sh\n").unwrap();
+        assert_eq!(homebrew_path_in(Some(bin.clone().into_os_string()), &[nowhere]), Some(bin.join("brew")));
+        // The Finder's PATH has no Homebrew: its standard prefix still counts.
+        let prefix = bin.join("brew");
+        assert_eq!(homebrew_path_in(None, &[prefix.to_str().unwrap()]), Some(prefix.clone()));
+
+        assert_eq!(local_podman_install_preflight(true, None), Err("homebrew_missing"));
+        assert_eq!(local_podman_install_preflight(true, Some(prefix.clone())), Ok(()));
+        // A runtime that is reused installs nothing, so it needs no Homebrew.
+        assert_eq!(local_podman_install_preflight(false, None), Ok(()));
+        let error = super::failure("homebrew_missing");
+        assert!(error.retryable, "after installing Homebrew the person presses Try again");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[cfg(target_os = "macos")]

@@ -321,6 +321,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The container engine (Podman) was not installed.",
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
   ),
+  homebrew_missing: copy(
+    "Su questo Mac manca Homebrew: l’app lo usa per installare Podman.",
+    "Scarica il pacchetto di installazione di Homebrew (il file .pkg) dalla pagina ufficiale brew.sh, aprilo e completa l’installazione di macOS, poi torna qui e premi Riprova.",
+    "Homebrew is missing on this Mac: the app uses it to install Podman.",
+    "Download Homebrew’s installer package (the .pkg file) from its official page brew.sh, open it and complete the macOS installation, then come back here and press Try again.",
+  ),
   wsl_not_ready: copy(
     "WSL non è pronto: su Windows è lui a far girare la macchina Podman del team.",
     "Apri il Microsoft Store, installa o aggiorna «Sottosistema Windows per Linux», riavvia il computer e premi Riprova.",

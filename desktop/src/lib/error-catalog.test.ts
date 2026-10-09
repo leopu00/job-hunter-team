@@ -314,3 +314,16 @@ describe("describeError", () => {
     expect(errorResetsAt(null)).toBeNull();
   });
 });
+
+describe("homebrew_missing", () => {
+  // The Retry button of the setup's error screen, as each language labels it.
+  const RETRY = { it: "Riprova", en: "Try again", de: "Erneut versuchen", es: "Reintentar", fr: "Réessayer", hu: "Újra", pt: "Tentar novamente" };
+  it.each(Object.entries(RETRY))("%s: points to Homebrew's .pkg on brew.sh and to Retry, never to a terminal", (locale, retry) => {
+    const described = describeError("homebrew_missing", { locale });
+    expect(described.text).toContain("Homebrew");
+    expect(described.action).toContain("brew.sh");
+    expect(described.action).toContain(".pkg");
+    expect(described.action).toContain(retry);
+    expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|brew install|curl|sudo/i);
+  });
+});
