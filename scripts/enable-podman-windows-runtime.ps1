@@ -49,6 +49,41 @@ function Get-Application {
   return (Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 }
 
+function Report-LegacyDockerVolumes {
+  param([string]$DockerPath)
+  $visible = @()
+  if ($DockerPath) {
+    try {
+      $visible = @(& $DockerPath volume ls --format '{{.Name}}' `
+        --filter 'label=com.docker.compose.project=host-runtime' 2>$null |
+        ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+      if ($LASTEXITCODE -ne 0) { $visible = @() }
+    } catch { $visible = @() }
+  }
+
+  # v0.3.9/docker-compose.yml mounts all durable user state from Windows.
+  # Its only named volumes are a reinstallable provider CLI/cache and an
+  # empty mask over the protected host runtime directory.
+  [Console]::Out.WriteLine('JHT v0.3.9 Docker volumes contain only reinstallable provider CLI/cache (jht-deps) and an empty runtime mask; config, profile, provider login and documents are in ~/.jht and Documents.')
+  [Console]::Out.WriteLine('Those Docker volumes are not copied to Podman and remain in Docker Desktop for manual removal after the upgrade is verified.')
+  if ($visible.Count -eq 0) {
+    [Console]::Out.WriteLine('Docker Desktop was not started; no legacy volume was enumerated.')
+    return
+  }
+  $expected = @($visible | Where-Object {
+    $_ -in @('host-runtime_jht-deps', 'host-runtime_jht-runtime-mask')
+  })
+  $unexpected = @($visible | Where-Object {
+    $_ -notin @('host-runtime_jht-deps', 'host-runtime_jht-runtime-mask')
+  })
+  if ($expected.Count -gt 0) {
+    [Console]::Out.WriteLine("Legacy v0.3.9 volumes left in Docker Desktop: $($expected -join ', ').")
+  }
+  if ($unexpected.Count -gt 0) {
+    [Console]::Error.WriteLine("Additional JHT Docker volumes were left untouched and were not migrated: $($unexpected -join ', ').")
+  }
+}
+
 function ConvertTo-WslPath {
   param([Parameter(Mandatory)][string]$Path)
   $full = [IO.Path]::GetFullPath($Path)
@@ -337,6 +372,12 @@ $legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config
 if ($legacyInstallDetected) {
   Write-Host 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.' -ForegroundColor Yellow
   Write-Host 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.' -ForegroundColor Yellow
+  $legacyDocker = ''
+  if ($env:ProgramFiles) {
+    $dockerDesktopCli = Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe'
+    if (Test-Path -LiteralPath $dockerDesktopCli -PathType Leaf) { $legacyDocker = $dockerDesktopCli }
+  }
+  Report-LegacyDockerVolumes -DockerPath $legacyDocker
 }
 
 $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman

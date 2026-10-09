@@ -192,6 +192,62 @@ def test_a_running_machine_is_only_checked(tmp_path):
     assert _phases(result.stdout) == []
 
 
+def test_v039_docker_volumes_are_reported_as_reinstallable_and_left_untouched(
+    tmp_path,
+):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(
+        bin_dir,
+        "docker.exe",
+        '  "volume ls --format {{.Name}} --filter label=com.docker.compose.project=host-runtime") '
+        "printf '%s\\n' host-runtime_jht-deps host-runtime_jht-runtime-mask; exit 0 ;;",
+    )
+    result, calls = _run(
+        tmp_path,
+        ENABLER,
+        ["Report-LegacyDockerVolumes"],
+        "Report-LegacyDockerVolumes -DockerPath $env:FAKE_DOCKER",
+        {"FAKE_DOCKER": str(bin_dir / "docker.exe")},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls == [
+        "volume ls --format {{.Name}} --filter label=com.docker.compose.project=host-runtime"
+    ]
+    assert "only reinstallable provider CLI/cache" in result.stdout
+    assert "empty runtime mask" in result.stdout
+    assert "not copied to Podman" in result.stdout
+    assert "host-runtime_jht-deps, host-runtime_jht-runtime-mask" in result.stdout
+
+
+def test_a_stopped_docker_desktop_is_never_started_for_the_v039_inventory(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(
+        bin_dir,
+        "docker.exe",
+        '  "volume ls --format {{.Name}} --filter label=com.docker.compose.project=host-runtime") '
+        "exit 1 ;;",
+    )
+    result, calls = _run(
+        tmp_path,
+        ENABLER,
+        ["Report-LegacyDockerVolumes"],
+        "Report-LegacyDockerVolumes -DockerPath $env:FAKE_DOCKER",
+        {"FAKE_DOCKER": str(bin_dir / "docker.exe")},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls == [
+        "volume ls --format {{.Name}} --filter label=com.docker.compose.project=host-runtime"
+    ]
+    assert "Docker Desktop was not started" in result.stdout
+    assert not any(
+        token in " ".join(calls) for token in ("start", "rm", "cp", "export")
+    )
+
+
 # The app shows podman_start_failed only for exit code 22 (exit_failure):
 # every failure of the machine step must end with 22, not with PowerShell's 1.
 @pytest.mark.parametrize(
