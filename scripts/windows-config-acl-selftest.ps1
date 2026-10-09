@@ -18,7 +18,7 @@ try {
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseFile($standalone, [ref]$tokens, [ref]$errors)
   if ($errors.Count) { throw "standalone parse failed: $($errors[0])" }
-  foreach ($installerFunctionName in @('Protect-JhtHomeAcl', 'Set-JhtNodeOwner')) {
+  foreach ($installerFunctionName in @('Set-JhtAccessControl', 'Protect-JhtHomeAcl', 'Set-JhtNodeOwner')) {
     $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
     if (-not $fn) { throw "standalone $installerFunctionName function missing" }
     . ([scriptblock]::Create($fn.Extent.Text))

@@ -9,6 +9,7 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 INSTALLER = ROOT / "scripts" / "install.ps1"
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
 ACL_SELFTEST = ROOT / "scripts" / "windows-config-acl-selftest.ps1"
+PRIVATE_ACL = ROOT / "scripts" / "windows-private-acl.ps1"
 PODMAN_COMPOSE = ROOT / "docker-compose.podman.yml"
 PODMAN_PROBE = ROOT / "scripts" / "podman-windows-probe.ps1"
 PODMAN_NETWORK = ROOT / "scripts" / "configure-podman-windows-network.ps1"
@@ -263,6 +264,33 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     assert "Restart=always" in network
     assert '--connector "$connectorWsl"' in network
     assert "Job Hunter Team - Start runtime" in _wrapper()
+
+
+def test_windows_install_never_needs_an_elevated_token_to_write_acls():
+    # A normal user's install.ps1 (the desktop app is never elevated) stopped
+    # on ~/.jht with PrivilegeNotHeldException (SeSecurityPrivilege): on a
+    # target whose access rules are already protected, Windows PowerShell's
+    # Set-Acl writes the SACL too. Only changed sections are persisted now.
+    for path in (INSTALLER, PRIVATE_ACL, ENABLER):
+        source = path.read_text(encoding="utf-8")
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert not re.search(r"\bSet-Acl\b", code), path.name
+    for path in (INSTALLER, PRIVATE_ACL):
+        source = path.read_text(encoding="utf-8")
+        helper = source[source.index("function Set-JhtAccessControl") :]
+        helper = helper[: helper.index("\n}\n")]
+        assert "[IO.FileSystemAclExtensions]::SetAccessControl($item, $Acl)" in helper
+        assert "$item.SetAccessControl($Acl)" in helper
+    enabler = ENABLER.read_text(encoding="utf-8")
+    assert enabler.index(". $helperSource") < enabler.index("Protect-OwnerOnlyDirectory -Path $RuntimeDir\n")
+    # The installer's own copy keeps SYSTEM and Administrators, like the helper.
+    installer = INSTALLER.read_text(encoding="utf-8")
+    assert "'NT AUTHORITY\\\\SYSTEM'" not in installer
+    assert "'NT AUTHORITY\\SYSTEM'" in installer
+    selftest = ACL_SELFTEST.read_text(encoding="utf-8")
+    assert "@('Set-JhtAccessControl', 'Protect-JhtHomeAcl', 'Set-JhtNodeOwner')" in selftest
 
 
 def test_windows_install_never_reloads_systemd_inside_the_machine():

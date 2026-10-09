@@ -82,6 +82,17 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
+# Never Set-Acl. When the target's access rules are already protected (as a
+# previous install leaves ~/.jht), Windows PowerShell's Set-Acl writes the SACL
+# too. That needs SeSecurityPrivilege, which only an elevated process holds:
+# the desktop app, a normal user, got PrivilegeNotHeldException on ~/.jht.
+# .NET persists only the sections that changed (access rules, owner).
+function Set-JhtAccessControl {
+  param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)]$Acl)
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl($item, $Acl) }
+  else { $item.SetAccessControl($Acl) }
+}
 function Protect-JhtHomeAcl {
   param([Parameter(Mandatory)][string]$Path)
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -90,11 +101,11 @@ function Protect-JhtHomeAcl {
     $acl = Get-Acl -LiteralPath $node.FullName
     $acl.SetAccessRuleProtection($true, $false)
     foreach ($existing in @($acl.Access)) {
-      if ($existing.AccessControlType -eq 'Allow' -and $existing.IdentityReference.Value -ne $owner -and $existing.IdentityReference.Value -notin @('NT AUTHORITY\\SYSTEM','BUILTIN\\Administrators')) { [void]$acl.RemoveAccessRule($existing) }
+      if ($existing.AccessControlType -eq 'Allow' -and $existing.IdentityReference.Value -ne $owner -and $existing.IdentityReference.Value -notin @('NT AUTHORITY\SYSTEM','BUILTIN\Administrators')) { [void]$acl.RemoveAccessRule($existing) }
     }
     $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
     $acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')))
-    Set-Acl -LiteralPath $node.FullName -AclObject $acl
+    Set-JhtAccessControl -Path $node.FullName -Acl $acl
   }
   if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
 }
@@ -103,7 +114,7 @@ function Set-JhtNodeOwner {
   $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
   $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
   $acl.SetOwner($ownerSid)
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  Set-JhtAccessControl -Path $Path -Acl $acl
   $actualOwner = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
   $actualSid = ([Security.Principal.NTAccount]$actualOwner).Translate([Security.Principal.SecurityIdentifier])
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
@@ -290,7 +301,7 @@ function Get-RuntimeFiles {
   $runtimeAcl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
     [Security.Principal.WindowsIdentity]::GetCurrent().User,
     'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-  Set-Acl -LiteralPath $RuntimeDir -AclObject $runtimeAcl
+  Set-JhtAccessControl -Path $RuntimeDir -Acl $runtimeAcl
   Set-JhtNodeOwner -Path $RuntimeDir
 
   $stage = Join-Path $RuntimeDir ('.install-stage-' + [guid]::NewGuid().ToString('N'))
@@ -457,7 +468,7 @@ JHT_USER_TZ=$tz
           'FullControl', 'Allow'
         )
         $acl.SetAccessRule($rule)
-        Set-Acl -Path $tokenFile -AclObject $acl
+        Set-JhtAccessControl -Path $tokenFile -Acl $acl
       } catch {
         Write-Warn "ACL restriction failed (file still readable by Users): $($_.Exception.Message)"
       }

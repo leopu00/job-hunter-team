@@ -206,7 +206,7 @@ function Protect-OwnerOnlyDirectory {
   foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleAll($rule) }
   $acl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
     $identity.User, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  Set-JhtAccessControl -Path $Path -Acl $acl
   if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
 }
 
@@ -387,12 +387,13 @@ if ($legacyInstallDetected) {
 $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman
 
 New-Item -ItemType Directory -Path $RuntimeDir, $RuntimeShimDir, $BinDir, $JhtHome -Force | Out-Null
+# Set-JhtAccessControl and the ~/.jht ACL functions.
+$helperSource = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
+. $helperSource
 Protect-OwnerOnlyDirectory -Path $RuntimeDir
 $legacyShim = Join-Path $BinDir 'docker.exe'
 $legacyShimOwned = Test-AttestedLegacyDockerShim `
   -ManifestPath (Join-Path $RuntimeDir '.runtime-integrity') -LegacyShimPath $legacyShim
-$helperSource = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
-. $helperSource
 if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Protect-JhtHomeAcl -Path $JhtHome }
 
 $files = @{
