@@ -525,7 +525,9 @@ function Invoke-TelegramAdmin {
     Write-Err 'Cosa fare: jht up'
     return 1
   }
-  if ($null -ne $InputText) {
+  # [string] trasforma $null in "": solo un -InputText passato davvero (anche
+  # vuoto, come le impronte di un inventario senza token) apre lo stdin.
+  if ($PSBoundParameters.ContainsKey('InputText')) {
     $previousEncoding = $OutputEncoding
     $OutputEncoding = [Text.UTF8Encoding]::new($false)
     try { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }

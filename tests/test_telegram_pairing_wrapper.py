@@ -692,3 +692,40 @@ def test_powershell_pairing_warns_when_other_roles_still_have_legacy_tokens(tmp_
 
     assert OTHER_ROLES_WARNING + "." in done.stderr
     assert "TELEGRAM_STDIN_OK" in (tmp_path / "calls.log").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")
+def test_powershell_admin_calls_open_stdin_only_when_given_input(tmp_path: Path) -> None:
+    """R2 on Windows: run the calls instead of reading the source. A [string]
+    parameter turns $null into "", so a $null check attached -i to every call."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$FAKE_LOG"\n', encoding="utf-8")
+    docker.chmod(0o755)
+    log = tmp_path / "calls.log"
+    script = tmp_path / "admin.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        "function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
+        "function Get-RunningComposeServiceId { param([string]$Service) 'telegram-id' }\n"
+        "$TelegramContainer = 'jht-telegram'\n"
+        + powershell_functions("Invoke-TelegramAdmin")
+        + "\n$null = Invoke-TelegramAdmin -AdminArgs @('bots', 'status')\n"
+        + "$null = Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')\n"
+        + "$null = Invoke-TelegramAdmin -InputText '' -AdminArgs @('legacy', 'remember', 'mentor')\n"
+        + "$null = Invoke-TelegramAdmin -InputText '{}' -AdminArgs @('bots', 'pair', 'mentor')\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-File", str(script)], input="", text=True, capture_output=True,
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_LOG": str(log)},
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        "exec telegram-id jht-telegram-admin bots status",
+        "exec telegram-id jht-telegram-admin cutover enable",
+        "exec -i telegram-id jht-telegram-admin legacy remember mentor",
+        "exec -i telegram-id jht-telegram-admin bots pair mentor",
+    ]
