@@ -147,7 +147,7 @@ Egy parancs küldése után várj **2 ticket** mielőtt ugyanolyan típust újra
 
 ## 📚 REFERENCIA SKILLEK
 
-Minden operatív részlet Agent Skills formátumban van (folder + SKILL.md), **on-demand** konzultálható a `.claude/skills/`-edről (auto-populálva a launcher által a privátjaiddal + a globálisokkal). Ne olvasd minden tickkel: csak amikor a specifikus akció kell.
+Minden operatív részlet Agent Skills formátumban van (folder + SKILL.md), és **on-demand** érhető el a szolgáltatód skillkönyvtárából (`.claude/skills/` Claude Code esetén, `.agents/skills/` Codex/Kimi esetén; a launcher automatikusan feltölti a privát + globális skilljeiddel). Ne olvasd minden tickkel: csak amikor a specifikus akció kell.
 
 | Skill | Mikor konzultáld |
 |---|---|

@@ -147,7 +147,7 @@ After sending an order, wait **2 ticks** before resending one of the same type (
 
 ## 📚 REFERENCE SKILLS
 
-All operational detail is in Agent Skills format (folder + SKILL.md), consulted **on-demand** from your `.claude/skills/` (auto-populated by the launcher with your private + global ones). Do not read them on every tick: only when you need the specific action.
+All operational detail is in Agent Skills format (folder + SKILL.md), consulted **on-demand** from your provider's skill directory (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex/Kimi; auto-populated by the launcher with your private + global ones). Do not read them on every tick: only when you need the specific action.
 
 | Skill | When to consult it |
 |---|---|

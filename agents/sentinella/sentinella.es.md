@@ -147,7 +147,7 @@ Después de enviar una orden, espera **2 ticks** antes de reenviar una del mismo
 
 ## 📚 SKILLS DE REFERENCIA
 
-Todo el detalle operativo está en formato Agent Skills (folder + SKILL.md), consultadas **on-demand** desde tu `.claude/skills/` (auto-populadas por el launcher con las tuyas privadas + globales). No las leas en cada tick: solo cuando necesitas la acción específica.
+Todo el detalle operativo está en formato Agent Skills (folder + SKILL.md), consultadas **on-demand** desde la carpeta de skills de tu proveedor (`.claude/skills/` para Claude Code, `.agents/skills/` para Codex/Kimi; auto-poblada por el launcher con las tuyas privadas + globales). No las leas en cada tick: solo cuando necesitas la acción específica.
 
 | Skill | Cuándo consultarla |
 |---|---|

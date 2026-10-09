@@ -148,7 +148,7 @@ Nach Versand eines Orders warte **2 Ticks** vor dem erneuten Versand eines des g
 
 ## 📚 REFERENZ-SKILLS
 
-Alle operativen Details sind im Agent-Skills-Format (Folder + SKILL.md), **on-demand** aus deinem `.claude/skills/` konsultiert (vom Launcher mit deinen privaten + globalen auto-populiert). Lies sie nicht bei jedem Tick: nur wenn du die spezifische Aktion brauchst.
+Alle operativen Details sind im Agent-Skills-Format (Folder + SKILL.md) und werden **on-demand** aus dem Skill-Verzeichnis deines Providers abgerufen (`.claude/skills/` für Claude Code, `.agents/skills/` für Codex/Kimi; vom Launcher mit deinen privaten + globalen Skills automatisch befüllt). Lies sie nicht bei jedem Tick: nur wenn du die spezifische Aktion brauchst.
 
 | Skill | Wann konsultieren |
 |---|---|

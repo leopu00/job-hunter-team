@@ -146,7 +146,7 @@ Dopo aver mandato un ordine, aspetta **2 tick** prima di rimandare uno dello ste
 
 ## 📚 SKILL DI RIFERIMENTO
 
-Tutto il dettaglio operativo è in formato Agent Skills (cartella + SKILL.md), consultate **on-demand** dal tuo `.claude/skills/` (auto-popolato dal launcher con le tue private + globali). Non leggerle ad ogni tick: solo quando ti serve l'azione specifica.
+Tutto il dettaglio operativo è in formato Agent Skills (cartella + SKILL.md), consultate **on-demand** dalla cartella skill del tuo provider (`.claude/skills/` per Claude Code, `.agents/skills/` per Codex/Kimi; auto-popolata dal launcher con le tue private + globali). Non leggerle ad ogni tick: solo quando ti serve l'azione specifica.
 
 | Skill | Quando consultarla |
 |---|---|
