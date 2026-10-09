@@ -1644,6 +1644,9 @@ jht — Job Hunter Team
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
+    jht uninstall --confirm rimuove il runtime locale (macchina Podman o
+                           container e volumi jht, con i segreti salvati);
+                           restano ~/.jht, Documenti, Podman e Docker
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -2782,8 +2785,301 @@ else
   EXEC_FLAGS="-i"
 fi
 
+# ── jht uninstall ─────────────────────────────────────────────────────────
+# Stesso contratto del wrapper Windows: una sola conferma esplicita, righe
+# stabili JHT_PHASE/JHT_LEFT su stdout, uscita 0 (niente resta), 2 (uso) o
+# 24 (qualcosa resta: si rilancia). Ripetuto dopo un successo esce con 0.
+#
+# Si toglie solo cio' che l'installer ha messo, da percorsi fissi e mai da
+# override d'ambiente: la macchina Podman jht-podman per nome esplicito
+# (mai la connessione di default, mai altre macchine), oppure container, reti
+# e volumi del progetto Compose jht per label (mai un prune); poi il runtime
+# host, le righe PATH che install.sh ha aggiunto ai file rc e il comando jht,
+# per ultimo, cosi' un fallimento lascia il wrapper per riprovare. Restano
+# ~/.jht, Documenti, Homebrew, Podman, podman-compose, Docker, Colima e le
+# immagini. Nessun LaunchAgent: ne' install.sh ne' l'app ne creano.
+JHT_UNINSTALL_PROTOCOL=1
+UNINSTALL_MACHINE_NAME="jht-podman"
+UNINSTALL_PROJECT="jht"
+UNINSTALL_RC_MARKER="# Added by JHT install.sh"
+UNINSTALL_LOSS="Vengono cancellati anche la password della posta, la sessione LinkedIn e i token di Telegram salvati; ~/.jht e Documenti restano."
+
+uninstall_usage() {
+  err "uso: jht uninstall --confirm"
+  info "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi del progetto jht, il runtime host e il comando jht."
+  info "$UNINSTALL_LOSS"
+  info "Restano anche Podman, podman-compose, Docker, Colima e Homebrew."
+}
+
+uninstall_phase() { printf 'JHT_PHASE %s\n' "$1"; }
+
+uninstall_left() {
+  printf 'JHT_LEFT %s\n' "$1"
+  case "$1" in
+    machine) err "Non rimossi: la macchina Podman jht-podman o i container e i volumi del progetto jht, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
+    runtime) err "Non rimosso: il runtime host di JHT." ;;
+    commands) err "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
+  esac
+}
+
+uninstall_runtime_dir() {
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
+    printf '%s\n' "$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+  else
+    printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+  fi
+}
+
+# Le cartelle dove install.sh pubblica `jht`: ~/.local/bin, e /usr/local/bin
+# quando l'installazione e' stata fatta da root.
+uninstall_bin_dirs() {
+  printf '%s\n' "$HOME/.local/bin"
+  [ "$HOST_UID" -ne 0 ] || printf '%s\n' "/usr/local/bin"
+}
+
+uninstall_is_wrapper() {
+  [ -f "$1" ] && [ ! -L "$1" ] && grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$1" 2>/dev/null
+}
+
+# Altri programmi nella stessa cartella: allora le righe PATH restano, sono
+# anche casa loro.
+uninstall_bin_has_foreign() {
+  local entry
+  [ -d "$1" ] || return 1
+  for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    [ "$entry" = "$1/jht" ] && continue
+    return 0
+  done
+  return 1
+}
+
+uninstall_rc_files() {
+  printf '%s\n' "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"
+}
+
+uninstall_rc_has_block() {
+  [ -f "$1" ] || return 1
+  JHT_RC_LINE="export PATH=\"\$PATH:$2\"" JHT_RC_MARKER="$UNINSTALL_RC_MARKER" awk '
+    BEGIN { line = ENVIRON["JHT_RC_LINE"]; marker = ENVIRON["JHT_RC_MARKER"] }
+    prev == marker && $0 == line { found = 1 }
+    { prev = $0 }
+    END { exit found ? 0 : 1 }
+  ' "$1"
+}
+
+# Toglie il blocco che install.sh ha aggiunto (riga vuota, commento, export) e
+# nient'altro. Si riscrive accanto e si rinomina: un file rc a meta' non resta.
+uninstall_rc_drop_block() {
+  local rc="$1" bin="$2" tmp
+  [ -f "$rc" ] && [ ! -L "$rc" ] && [ -w "$rc" ] || return 1
+  tmp="$(mktemp "$(dirname "$rc")/.jht-uninstall.XXXXXX")" || return 1
+  if cp -p "$rc" "$tmp" \
+      && JHT_RC_LINE="export PATH=\"\$PATH:$bin\"" JHT_RC_MARKER="$UNINSTALL_RC_MARKER" awk '
+        BEGIN { line = ENVIRON["JHT_RC_LINE"]; marker = ENVIRON["JHT_RC_MARKER"] }
+        { lines[n++] = $0 }
+        END {
+          for (i = 0; i < n; i++) {
+            if (lines[i] == marker && i + 1 < n && lines[i + 1] == line) {
+              if (k > 0 && out[k - 1] == "") k--
+              i++
+              continue
+            }
+            out[k++] = lines[i]
+          }
+          for (j = 0; j < k; j++) print out[j]
+        }
+      ' "$rc" > "$tmp" \
+      && mv -f "$tmp" "$rc"; then
+    return 0
+  fi
+  rm -f -- "$tmp"
+  return 1
+}
+
+uninstall_commands_left() {
+  local bin rc
+  while IFS= read -r bin; do
+    uninstall_is_wrapper "$bin/jht" && return 0
+    uninstall_bin_has_foreign "$bin" && continue
+    while IFS= read -r rc; do
+      uninstall_rc_has_block "$rc" "$bin" && return 0
+    done < <(uninstall_rc_files)
+  done < <(uninstall_bin_dirs)
+  return 1
+}
+
+uninstall_report_rest() {
+  [ ! -e "$1" ] && [ ! -L "$1" ] || uninstall_left runtime
+  ! uninstall_commands_left || uninstall_left commands
+}
+
+# Dove cercare podman e docker oltre al PATH: un'app aperta dal Finder riceve
+# il PATH ridotto di launchd, senza Homebrew.
+UNINSTALL_TOOL_DIRS="/opt/homebrew/bin /usr/local/bin /usr/bin /opt/podman/bin /Applications/Docker.app/Contents/Resources/bin"
+
+# Il primo eseguibile vero con quel nome; mai lo shim JHT che inoltra Docker a
+# Podman (il wrapper lo mette in testa al PATH con il runtime Podman).
+uninstall_tool() {
+  local candidate dir
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] && [ -f "$candidate" ] && [ -x "$candidate" ] || continue
+    grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$candidate" 2>/dev/null && continue
+    printf '%s\n' "$candidate"
+    return 0
+  done < <(
+    type -ap "$1" 2>/dev/null || true
+    for dir in $UNINSTALL_TOOL_DIRS; do printf '%s\n' "$dir/$1"; done
+  )
+  return 1
+}
+
+# present | absent; ritorna 1 quando Podman non sa rispondere.
+uninstall_podman_machine_state() {
+  local names name
+  names="$("$1" machine list --format '{{.Name}}' 2>/dev/null)" || return 1
+  while IFS= read -r name; do
+    # Podman marca con * la macchina di default anche in questo formato.
+    if [ "${name%\*}" = "$UNINSTALL_MACHINE_NAME" ]; then
+      printf 'present\n'
+      return 0
+    fi
+  done <<< "$names"
+  printf 'absent\n'
+}
+
+uninstall_docker_ids() {
+  local docker_bin="$1" kind="$2" ids id
+  case "$kind" in
+    container) ids="$("$docker_bin" ps -aq --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
+    network) ids="$("$docker_bin" network ls -q --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
+    volume) ids="$("$docker_bin" volume ls -q --filter "label=com.docker.compose.project=$UNINSTALL_PROJECT")" || return 1 ;;
+  esac
+  for id in $ids; do
+    case "$id" in ''|*[!A-Za-z0-9_.-]*) return 1 ;; esac
+    printf '%s\n' "$id"
+  done
+}
+
+# Container, reti e volumi del progetto jht, nell'ordine in cui si liberano.
+uninstall_docker_project() {
+  local docker_bin="$1" kind id ids
+  for kind in container network volume; do
+    ids="$(uninstall_docker_ids "$docker_bin" "$kind")" || return 1
+    for id in $ids; do
+      case "$kind" in
+        container) "$docker_bin" rm -f "$id" >/dev/null 2>&1 || return 1 ;;
+        network) "$docker_bin" network rm "$id" >/dev/null 2>&1 || return 1 ;;
+        volume) "$docker_bin" volume rm "$id" >/dev/null 2>&1 || return 1 ;;
+      esac
+    done
+  done
+  for kind in container network volume; do
+    ids="$(uninstall_docker_ids "$docker_bin" "$kind")" || return 1
+    [ -z "$ids" ] || return 1
+  done
+}
+
+uninstall_machine() {
+  local selection="$1" podman_bin docker_bin state
+  # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
+  # scelto oggi e' Docker: una prova Podman precedente la lascia inerte, con
+  # i suoi volumi.
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
+    if podman_bin="$(uninstall_tool podman)"; then
+      state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
+      if [ "$state" = "present" ]; then
+        "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME" >/dev/null 2>&1 || return 1
+        state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
+        [ "$state" = "absent" ] || return 1
+      fi
+    elif [ "$selection" = "podman" ]; then
+      return 1
+    fi
+  fi
+  # Linux e Mac con Colima o Docker Desktop: il team e' un progetto Compose
+  # nel Docker dell'utente. Con Podman scelto, un vecchio progetto Docker si
+  # toglie solo se Docker risponde.
+  if docker_bin="$(uninstall_tool docker)"; then
+    if "$docker_bin" info >/dev/null 2>&1; then
+      uninstall_docker_project "$docker_bin" || return 1
+    elif [ "$selection" != "podman" ]; then
+      return 1
+    fi
+  fi
+}
+
+jht_uninstall() {
+  local runtime_dir selection="" bin rc failed=0
+  if [ "$#" -ne 1 ] || [ "$1" != "--confirm" ]; then
+    uninstall_usage
+    return 2
+  fi
+  case "$HOME" in
+    /?*) ;;
+    *) err "HOME non valida: rimozione negata."; return 2 ;;
+  esac
+  runtime_dir="$(uninstall_runtime_dir)"
+  if [ -e "$runtime_dir/container-runtime" ] || [ -L "$runtime_dir/container-runtime" ]; then
+    if [ -f "$runtime_dir/container-runtime" ] && [ ! -L "$runtime_dir/container-runtime" ]; then
+      selection="$(tr -d '\r\n' < "$runtime_dir/container-runtime")"
+    fi
+    case "$selection" in
+      docker|podman) ;;
+      *)
+        err "Scelta del runtime JHT non leggibile: nessuna rimozione."
+        uninstall_report_rest "$runtime_dir"
+        return 24
+        ;;
+    esac
+  fi
+  info "$UNINSTALL_LOSS"
+
+  uninstall_phase uninstall_machine
+  if ! uninstall_machine "$selection"; then
+    uninstall_left machine
+    uninstall_report_rest "$runtime_dir"
+    return 24
+  fi
+
+  uninstall_phase uninstall_runtime
+  if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
+    rm -rf -- "$runtime_dir" 2>/dev/null || true
+  fi
+  if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
+    uninstall_report_rest "$runtime_dir"
+    return 24
+  fi
+  rmdir -- "$(dirname "$runtime_dir")" 2>/dev/null || true
+
+  uninstall_phase uninstall_commands
+  while IFS= read -r bin; do
+    uninstall_bin_has_foreign "$bin" && continue
+    while IFS= read -r rc; do
+      uninstall_rc_has_block "$rc" "$bin" || continue
+      uninstall_rc_drop_block "$rc" "$bin" || failed=1
+    done < <(uninstall_rc_files)
+  done < <(uninstall_bin_dirs)
+  if [ "$failed" -eq 0 ]; then
+    while IFS= read -r bin; do
+      uninstall_is_wrapper "$bin/jht" || continue
+      rm -f -- "$bin/jht" 2>/dev/null || failed=1
+    done < <(uninstall_bin_dirs)
+  fi
+  if [ "$failed" -ne 0 ] || uninstall_commands_left; then
+    uninstall_left commands
+    return 24
+  fi
+  return 0
+}
+
 # ── Dispatcher ────────────────────────────────────────────────────────────
 SUB="${1:-}"
+
+# Prima di tutto il resto: deve funzionare anche con il runtime gia' a meta'.
+if [ "$SUB" = "uninstall" ]; then
+  if jht_uninstall "${@:2}"; then exit 0; else exit $?; fi
+fi
 
 # Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo
 # solo nel catch-all lascia `up --help`, `setup --help`, ecc. liberi di entrare
