@@ -84,13 +84,31 @@ signal (send,receive) peer=jht-broker,
 ptrace (trace,tracedby,read,readby) peer=jht-broker,
 """.strip().splitlines()
 
+# Ours, in the jht-broker profile: no `userns,` there (P2-1 of the review).
 OUR_APPARMOR_RULES = [
     "abi <abi/4.0>,",
     "unix,",
-    "userns,",
     'signal (send,receive) peer="jht-broker//&crun",',
     'ptrace (trace,tracedby,read,readby) peer="jht-broker//&crun",',
+    "/opt/playwright/chromium-jht/chrome-linux/chrome cx -> chromium,",
+    "signal (send) peer=jht-broker//chromium,",
+    'signal (send) peer="jht-broker//chromium//&crun",',
 ]
+# The child profile Chromium runs under: upstream's rules for its own label,
+# plus `userns,`, which nothing else in the container has.
+CHROMIUM_PEERS = {
+    "signal (send,receive) peer=jht-broker,": "signal (send,receive) peer=jht-broker//chromium,",
+    "ptrace (trace,tracedby,read,readby) peer=jht-broker,": "ptrace (trace,tracedby,read,readby) peer=jht-broker//chromium,",
+}
+OUR_CHROMIUM_RULES = [
+    "unix,",
+    "userns,",
+    "signal (receive) peer=jht-broker,",
+    'signal (receive) peer="jht-broker//&crun",',
+    'signal (send,receive) peer="jht-broker//chromium//&crun",',
+    'ptrace (trace,tracedby,read,readby) peer="jht-broker//chromium//&crun",',
+]
+CHILD_HEAD = "profile chromium flags=(attach_disconnected,mediate_deleted) {"
 
 
 def _rules(text):
@@ -102,14 +120,40 @@ def _rules(text):
     return out
 
 
+def _parent_and_child(text):
+    rules = _rules(text)
+    start = rules.index(CHILD_HEAD)
+    end = rules.index("}", start)
+    return rules[:start] + rules[end + 1 :], rules[start + 1 : end]
+
+
 def test_the_apparmor_profile_keeps_every_upstream_rule_and_adds_only_ours():
-    rules = _rules(APPARMOR.read_text())
-    assert "profile jht-broker flags=(attach_disconnected,mediate_deleted) {" in rules
+    parent, _ = _parent_and_child(APPARMOR.read_text())
+    assert "profile jht-broker flags=(attach_disconnected,mediate_deleted) {" in parent
     for rule in UPSTREAM_APPARMOR_RULES + OUR_APPARMOR_RULES:
-        assert rule in rules, rule
+        assert rule in parent, rule
     structural = {"include <tunables/global>", "profile jht-broker flags=(attach_disconnected,mediate_deleted) {", "}"}
-    extra = set(rules) - set(UPSTREAM_APPARMOR_RULES) - set(OUR_APPARMOR_RULES) - structural
+    extra = set(parent) - set(UPSTREAM_APPARMOR_RULES) - set(OUR_APPARMOR_RULES) - structural
     assert extra == set()
+
+
+def test_only_chromium_may_create_user_namespaces():
+    # P2-1 of HQ-SICUREZZA's review: the broker's Python and every other
+    # process stay without `userns,`; only the exec of Chromium's binary,
+    # at the exact path the image gives it, moves to the child profile.
+    parent, child = _parent_and_child(APPARMOR.read_text())
+    assert "userns," not in parent
+    assert "userns," in child
+    transitions = [rule for rule in parent if " cx " in rule or " px " in rule or " Cx " in rule or " Px " in rule]
+    assert transitions == ["/opt/playwright/chromium-jht/chrome-linux/chrome cx -> chromium,"]
+    upstream_for_chromium = [CHROMIUM_PEERS.get(rule, rule) for rule in UPSTREAM_APPARMOR_RULES]
+    for rule in upstream_for_chromium + OUR_CHROMIUM_RULES:
+        assert rule in child, rule
+    assert set(child) - set(upstream_for_chromium) - set(OUR_CHROMIUM_RULES) == set()
+    # The image keeps the binary at that exact path.
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "mv \"$revisioned\" /opt/playwright/chromium-jht" in dockerfile
+    assert "test -x /opt/playwright/chromium-jht/chrome-linux/chrome" in dockerfile
 
 
 def test_the_profiles_never_open_more_than_they_name():
