@@ -28,11 +28,14 @@ GOOD = {
     "own_userns": "user:[4026531837]",
     "renderer_userns": ["user:[4026532300]"],
     "renderer_in_own_userns": True,
+    "python_unshare_user": False,
+    "python_unshare_mount": False,
 }
-BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}}
+BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "python_unshare_mount": False}
+CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-broker" pid=7 comm="python3"'
 
 
-def _verdict(monkeypatch, capsys, good=GOOD, bare=BARE, denied=(), sysctl="1"):
+def _verdict(monkeypatch, capsys, good=GOOD, bare=BARE, denied=(CONTROL,), sysctl="1"):
     monkeypatch.setattr(gate, "run", lambda image, extra: dict(good) if extra else dict(bare))
     monkeypatch.setattr(gate, "denials", lambda since: list(denied))
     monkeypatch.setattr(gate.time, "sleep", lambda s: None)
@@ -59,6 +62,8 @@ def test_a_good_run_passes(monkeypatch, capsys):
     ({"no_sandbox_flag": True}, "flag"),
     ({"sandboxed": False, "sandbox_text": "You are not adequately sandboxed!"}, "chrome-sandbox"),
     ({"renderer_in_own_userns": False}, "renderer-userns"),
+    ({"python_unshare_user": True}, "python-userns"),
+    ({"python_unshare_mount": True}, "python-mountns"),
 ])
 def test_each_broken_fact_with_the_profiles_fails(monkeypatch, capsys, change, tag):
     code, out = _verdict(monkeypatch, capsys, good={**GOOD, **change})
@@ -67,8 +72,34 @@ def test_each_broken_fact_with_the_profiles_fails(monkeypatch, capsys, change, t
 
 def test_an_apparmor_denial_fails(monkeypatch, capsys):
     line = 'audit: apparmor="DENIED" operation="signal" profile="jht-broker//&crun" signal=term'
-    code, out = _verdict(monkeypatch, capsys, denied=[line])
+    code, out = _verdict(monkeypatch, capsys, denied=[CONTROL, line])
     assert code == 1 and "FAIL [apparmor-denied]" in out
+
+
+def test_the_expected_denial_of_the_probe_is_not_a_failure(monkeypatch, capsys):
+    code, out = _verdict(monkeypatch, capsys, denied=[CONTROL])
+    assert code == 0 and "control-denials=1" in out
+
+
+def test_a_journal_that_shows_nothing_fails(monkeypatch, capsys):
+    # The probe's own unshare must be denied and logged: with no line at all
+    # the reader would report 0 denials for anything.
+    code, out = _verdict(monkeypatch, capsys, denied=[])
+    assert code == 1 and "FAIL [journal]" in out
+
+
+def test_chromium_s_own_log_is_printed_when_it_does_not_start(monkeypatch, capsys):
+    broken = {**GOOD, "launch": "failed", "launch_error": "Target page, context or browser has been closed",
+              "browser_log": ["[ERROR:zygote_host_impl_linux.cc] No usable sandbox!"],
+              "chrome_alone": {"exit": 1, "stderr": ["FATAL: Check failed: clone"]}}
+    code, out = _verdict(monkeypatch, capsys, good=broken)
+    assert code == 1 and "browser: [ERROR:zygote_host_impl_linux.cc] No usable sandbox!" in out
+    assert "chrome: FATAL: Check failed: clone" in out
+
+
+def test_without_the_profiles_a_mount_namespace_stays_refused(monkeypatch, capsys):
+    code, out = _verdict(monkeypatch, capsys, bare={**BARE, "python_unshare_mount": True})
+    assert code == 1 and "FAIL [bare-mountns]" in out
 
 
 def test_the_broker_must_refuse_without_the_profiles(monkeypatch, capsys):

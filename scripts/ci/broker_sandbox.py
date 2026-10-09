@@ -13,10 +13,17 @@ capabilities, no new privileges, no network), twice:
   - chrome://sandbox says the namespace sandbox and seccomp-bpf are on, with
     the positive verdict (`view.sandboxed()`);
   - a renderer runs in a user namespace of its own, not the browser's;
-  - the kernel logged no `apparmor="DENIED"` for the profile meanwhile
-    (userns, signal, ptrace: the Podman plan's risk too).
+  - the broker's own Python cannot create a user namespace (only Chromium's
+    binary, in the child profile, may) nor a mount namespace;
+  - the kernel logged the denial of that unshare (the control: a journal
+    reader that sees nothing would report 0 denials for anything) and no
+    other `apparmor="DENIED"` for the profile meanwhile (userns, signal,
+    ptrace: the Podman plan's risk too).
+  If Chromium does not start, Chromium's own log and the binary's stderr
+  are printed.
 - WITHOUT them (the runtime's defaults). It FAILS unless the broker refuses
-  with `secure_browser_unavailable`: the fail-closed path.
+  with `secure_browser_unavailable`, and its Python still cannot create a
+  mount namespace: the fail-closed path.
 
 Usage: broker_sandbox.py IMAGE SECCOMP_JSON
 The caller loads the AppArmor profile first (`apparmor_parser -r`). Prints
@@ -37,10 +44,28 @@ HARDENING = ["--user", "1002:1002", "--read-only", "--tmpfs", "/tmp:size=512m,mo
 
 # Runs inside the container. Prints one JSON line.
 PROBE = r'''
-import json, os, subprocess, sys, time
+import ctypes, json, os, subprocess, sys, time
 from broker import view
 
+def unshare_works(flag):
+    # In a forked child, so the probe itself stays where it is.
+    pid = os.fork()
+    if pid == 0:
+        libc = ctypes.CDLL(None, use_errno=True)
+        os._exit(0 if libc.unshare(flag) == 0 else 1)
+    return os.WEXITSTATUS(os.waitpid(pid, 0)[1]) == 0
+
+KEEP = ("FATAL", "ERROR", "Check failed", "sandbox", "zygote", "namespace", "clone", "unshare",
+        "denied", "not permitted", "No such", "error while loading", "Missing X")
+
+def keep(text):
+    return [line.strip()[:300] for line in text.splitlines() if any(k in line for k in KEEP)][:25]
+
 out = {"confinement": view.confinement()}
+# The broker's own Python: only Chromium's binary may create a user namespace
+# (the child profile); a mount namespace is refused to everyone.
+out["python_unshare_user"] = unshare_works(0x10000000)
+out["python_unshare_mount"] = unshare_works(0x00020000)
 if not out["confinement"]["ready"]:
     print(json.dumps(out)); sys.exit(0)
 xvfb = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
@@ -55,6 +80,17 @@ try:
 except Exception as exc:
     out["launch"] = "failed"
     out["launch_error"] = str(exc).splitlines()[0][:300]
+    # Playwright appends Chromium's own log to the error; and the binary run
+    # alone, for a few seconds, says on stderr why it stops.
+    out["browser_log"] = keep(str(exc))
+    try:
+        alone = subprocess.run([pw.chromium.executable_path, "--enable-logging=stderr", "--user-data-dir=/tmp/diag",
+                                "--disable-dev-shm-usage", "about:blank"],
+                               env={**os.environ, "DISPLAY": ":99", "HOME": "/tmp"},
+                               capture_output=True, text=True, timeout=15)
+        out["chrome_alone"] = {"exit": alone.returncode, "stderr": keep(alone.stderr)}
+    except subprocess.TimeoutExpired as running:
+        out["chrome_alone"] = {"exit": "still running after 15 s", "stderr": keep((running.stderr or b"").decode(errors="replace"))}
     print(json.dumps(out)); sys.exit(0)
 out["launch"] = "ok"
 page = context.new_page()
@@ -100,6 +136,12 @@ def run(image: str, extra: list[str]) -> dict:
         return {"error": (result.stderr or result.stdout)[-800:]}
 
 
+def expected_denial(line: str) -> bool:
+    """The denial the probe provokes on purpose: the broker's Python asking
+    for a user namespace under jht-broker, which has no `userns,`."""
+    return 'operation="userns_create"' in line and 'profile="jht-broker"' in line and 'comm="python3"' in line
+
+
 def denials(since: str) -> list[str]:
     log = subprocess.run(["sudo", "journalctl", "-k", "--since", since, "--no-pager"], capture_output=True, text=True)
     return [line for line in log.stdout.splitlines() if 'apparmor="DENIED"' in line and "jht-broker" in line]
@@ -131,6 +173,12 @@ def main(argv: list[str]) -> int:
         fail("confinement", f"the broker does not see its profiles: {good.get('confinement') or good.get('error')}")
     elif good.get("launch") != "ok":
         fail("launch", f"Chromium did not start with its sandbox: {good.get('launch_error')}")
+        for line in good.get("browser_log") or []:
+            print("  browser: " + line)
+        alone = good.get("chrome_alone") or {}
+        print(f"  chrome alone: exit {alone.get('exit')}")
+        for line in alone.get("stderr") or []:
+            print("  chrome: " + line)
     else:
         if good.get("no_sandbox_flag"):
             fail("flag", "a Chromium process runs with --no-sandbox")
@@ -138,17 +186,29 @@ def main(argv: list[str]) -> int:
             fail("chrome-sandbox", f"chrome://sandbox: {good.get('sandbox_text')}")
         if good.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {good.get('renderer_userns')} vs own {good.get('own_userns')}")
+    if good.get("python_unshare_user") is not False:
+        fail("python-userns", "the broker's Python created a user namespace: userns is not limited to Chromium")
+    if good.get("python_unshare_mount") is not False:
+        fail("python-mountns", "the broker's Python created a mount namespace under the profiles")
     denied = denials(since)
-    print(f"MEASURE apparmor-denials={len(denied)}")
-    for line in denied[:20]:
+    control = [line for line in denied if expected_denial(line)]
+    unexpected = [line for line in denied if not expected_denial(line)]
+    print(f"MEASURE apparmor-denials={len(unexpected)} control-denials={len(control)}")
+    for line in unexpected[:20]:
         print("  " + line)
-    if denied:
-        fail("apparmor-denied", f"{len(denied)} DENIED lines for jht-broker")
+    if not control:
+        # The probe's own unshare must show up: if it does not, the journal
+        # reader would miss real denials too, and "0" would prove nothing.
+        fail("journal", "no DENIED line for the broker's own unshare: the journal reader sees nothing")
+    if unexpected:
+        fail("apparmor-denied", f"{len(unexpected)} DENIED lines for jht-broker")
 
     bare = run(image, [])
     print("MEASURE without-profiles " + json.dumps(bare))
     if bare.get("confinement") != {"ready": False, "reason": "secure_browser_unavailable"}:
         fail("fail-closed", f"without the profiles the broker says {bare.get('confinement') or bare.get('error')}")
+    if bare.get("python_unshare_mount") is not False:
+        fail("bare-mountns", "without the profiles the broker's Python created a mount namespace")
 
     print(f"checks done: {fails} failed")
     return 0 if fails == 0 else 1
