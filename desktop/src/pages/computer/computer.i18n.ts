@@ -16,6 +16,7 @@ const it = {
   removesTitle: "Si cancella",
   removes: [
     "la macchina Podman di JHT in WSL, con il suo disco: il container del team, il servizio che lo tiene acceso, le CLI dei provider installate e i segreti del broker (password della posta, accessi ai portali)",
+    "l’attività pianificata «Job Hunter Team - Start runtime», che all’accesso a Windows riaccendeva la macchina",
     "il runtime di JHT nella cartella Job Hunter Team\\host-runtime dei dati delle app",
     "i comandi di JHT in .local\\bin (jht e docker.exe); la cartella e la sua voce nel PATH solo se non contiene altro",
     "le variabili utente JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE",
@@ -59,6 +60,7 @@ const en: ComputerCopy = {
   removesTitle: "Deleted",
   removes: [
     "the JHT Podman machine in WSL, with its disk: the team’s container, the service that keeps it running, the installed provider CLIs and the broker’s secrets (mail password, portal logins)",
+    "the scheduled task “Job Hunter Team - Start runtime”, which turned the machine back on when you signed in to Windows",
     "the JHT runtime in the Job Hunter Team\\host-runtime folder of the app data",
     "the JHT commands in .local\\bin (jht and docker.exe); the folder and its PATH entry only if it holds nothing else",
     "the user variables JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE",
@@ -100,6 +102,7 @@ const de: ComputerCopy = {
   removesTitle: "Wird gelöscht",
   removes: [
     "die Podman-Maschine von JHT in WSL mit ihrer Festplatte: der Container des Teams, der Dienst, der ihn laufen lässt, die installierten Anbieter-CLIs und die Geheimnisse des Brokers (E-Mail-Passwort, Anmeldungen bei Portalen)",
+    "die geplante Aufgabe „Job Hunter Team - Start runtime“, die die Maschine bei der Anmeldung an Windows wieder startete",
     "die Runtime von JHT im Ordner Job Hunter Team\\host-runtime der App-Daten",
     "die Befehle von JHT in .local\\bin (jht und docker.exe); der Ordner und sein PATH-Eintrag nur, wenn er sonst nichts enthält",
     "die Benutzervariablen JHT_CONTAINER_RUNTIME und JHT_PODMAN_MACHINE",
@@ -141,6 +144,7 @@ const es: ComputerCopy = {
   removesTitle: "Se borra",
   removes: [
     "la máquina Podman de JHT en WSL, con su disco: el contenedor del equipo, el servicio que lo mantiene en marcha, las CLI de los proveedores instaladas y los secretos del broker (contraseña del correo, accesos a los portales)",
+    "la tarea programada «Job Hunter Team - Start runtime», que volvía a encender la máquina al iniciar sesión en Windows",
     "el runtime de JHT en la carpeta Job Hunter Team\\host-runtime de los datos de las aplicaciones",
     "los comandos de JHT en .local\\bin (jht y docker.exe); la carpeta y su entrada en el PATH solo si no contiene nada más",
     "las variables de usuario JHT_CONTAINER_RUNTIME y JHT_PODMAN_MACHINE",
@@ -182,6 +186,7 @@ const fr: ComputerCopy = {
   removesTitle: "Supprimé",
   removes: [
     "la machine Podman de JHT dans WSL, avec son disque : le conteneur de l’équipe, le service qui le garde en marche, les CLI des fournisseurs installées et les secrets du broker (mot de passe du courrier, connexions aux portails)",
+    "la tâche planifiée « Job Hunter Team - Start runtime », qui rallumait la machine à l’ouverture de session Windows",
     "le runtime de JHT dans le dossier Job Hunter Team\\host-runtime des données des applications",
     "les commandes de JHT dans .local\\bin (jht et docker.exe) ; le dossier et son entrée dans le PATH seulement s’il ne contient rien d’autre",
     "les variables utilisateur JHT_CONTAINER_RUNTIME et JHT_PODMAN_MACHINE",
@@ -223,6 +228,7 @@ const hu: ComputerCopy = {
   removesTitle: "Törlődik",
   removes: [
     "a JHT Podman-gépe a WSL-ben, a lemezével együtt: a csapat konténere, az azt működtető szolgáltatás, a telepített szolgáltatói CLI-k és a broker titkai (a levelezés jelszava, a portálok bejelentkezései)",
+    "a(z) „Job Hunter Team - Start runtime” ütemezett feladat, amely a Windowsba való bejelentkezéskor újraindította a gépet",
     "a JHT runtime az alkalmazásadatok Job Hunter Team\\host-runtime mappájában",
     "a JHT parancsai a .local\\bin mappában (jht és docker.exe); a mappa és a PATH-bejegyzése csak akkor, ha mást nem tartalmaz",
     "a JHT_CONTAINER_RUNTIME és a JHT_PODMAN_MACHINE felhasználói változó",
@@ -264,6 +270,7 @@ const pt: ComputerCopy = {
   removesTitle: "É apagado",
   removes: [
     "a máquina Podman do JHT no WSL, com o seu disco: o contentor da equipa, o serviço que o mantém a funcionar, as CLI dos fornecedores instaladas e os segredos do broker (palavra-passe do correio, acessos aos portais)",
+    "a tarefa agendada «Job Hunter Team - Start runtime», que voltava a ligar a máquina quando iniciavas sessão no Windows",
     "o runtime do JHT na pasta Job Hunter Team\\host-runtime dos dados das aplicações",
     "os comandos do JHT em .local\\bin (jht e docker.exe); a pasta e a sua entrada no PATH só se não contiver mais nada",
     "as variáveis de utilizador JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE",

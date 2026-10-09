@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../../lib/local-uninstall";
+import { locales } from "@/i18n/config";
+import { COMPUTER_TEXT } from "./computer.i18n";
 import { ComputerScreen } from "./index";
 
 it("says there is nothing to remove where the removal cannot run, and offers no button", async () => {
@@ -72,3 +75,13 @@ it("tells a failure with the catalog, in the page's language", async () => {
   expect(within(alert).queryByText(/Riprova/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
 });
+
+it.each(locales)("%s: lists among what is deleted the scheduled task the removal unregisters, by its name in the script", (locale) => {
+  const wrapper = readFileSync("../scripts/jht-wrapper.ps1", "utf8");
+  const task = /function Remove-JhtStartupTask \{\s*param\(\[string\]\$TaskName = '([^']+)'\)/.exec(wrapper)?.[1];
+  expect(task, "Remove-JhtStartupTask and its task name in jht-wrapper.ps1").toBe("Job Hunter Team - Start runtime");
+  // The removal calls it: the function is not just defined.
+  expect(wrapper.split("Remove-JhtStartupTask").length - 1).toBeGreaterThan(1);
+  expect(COMPUTER_TEXT[locale].removes.filter((item) => item.includes(task!))).toHaveLength(1);
+});
+
