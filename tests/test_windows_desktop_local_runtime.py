@@ -144,9 +144,14 @@ def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
     assert "hide_console(&mut command);" in run_program
     assert "const CREATE_NO_WINDOW: u32 = 0x0800_0000" in host
 
-    failure = onboarding[onboarding.index("fn failure(") : onboarding.index("struct ProgressReporter")]
-    assert '"wsl_not_ready" => (' in failure
-    assert "true," in failure[failure.index('"wsl_not_ready" => (') :][:180]
+    # Rust transports the stable key and its retryability; the localized
+    # sentence lives in the desktop catalog. Do not couple this contract to
+    # failure()'s internal representation.
+    contract = onboarding[
+        onboarding.index("fn local_runtime_prepare_errors_preserve_sanitized_contract") :
+    ]
+    assert '"wsl_not_ready",' in contract
+    assert 'assert_eq!(serialized["retryable"], true)' in contract
     prepare = onboarding[onboarding.index("pub(crate) async fn onboarding_prepare(") :]
     assert prepare.index("let result =") < prepare.index("state.preparing.store(false")
 
