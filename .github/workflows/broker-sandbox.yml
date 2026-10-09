@@ -71,14 +71,14 @@ jobs:
       - name: install.sh installs the profiles, and jht up adds them only when loaded
         run: bash scripts/ci/broker_security_host.sh
 
-  # T3 part B, a risk of stage 1 of the Podman plan: does ROOTLESS Podman
-  # apply the jht-broker AppArmor profile, so that the login view works on a
-  # VPS migrated to Podman? A measure: red means the risk is real. It runs
-  # only on the integrator's trial branches and by hand, so that a measured
-  # red never turns master-arthur red.
+  # the security review's decision (a), 09/10: under rootless Podman (stage 1 of the
+  # Podman plan) no AppArmor profile applies, and the broker runs with the
+  # seccomp profile alone, accepted only in a verified rootless container.
+  # This job is that decision's gate: the broker ready and Chromium
+  # sandboxed under rootless Podman, the counter-proofs from the broker's
+  # Python, and a rootful container without the label that must stay off.
   broker-sandbox-podman:
-    name: The same broker under rootless Podman (measure)
-    if: startsWith(github.ref, 'refs/heads/ci-') || github.event_name == 'workflow_dispatch'
+    name: The broker under rootless Podman, seccomp only
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -99,24 +99,16 @@ jobs:
           tags: jht:broker-sandbox
           cache-from: type=gha
 
-      - name: Load the jht-broker AppArmor profile (root, as install.sh does)
-        run: |
-          sudo cp scripts/security/jht-broker.apparmor.txt /etc/apparmor.d/jht-broker
-          sudo apparmor_parser -r -W /etc/apparmor.d/jht-broker
-          sudo grep -x 'jht-broker (enforce)' /sys/kernel/security/apparmor/profiles
-          echo "MEASURE apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)"
-
       - name: Hand the image to the runner user's rootless Podman
         run: |
-          id -u
+          echo "MEASURE apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)"
           grep "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
           podman system migrate
-          docker save jht:broker-sandbox -o "$RUNNER_TEMP/jht.tar"
-          docker image rm jht:broker-sandbox
-          podman load -i "$RUNNER_TEMP/jht.tar" | tee "$RUNNER_TEMP/loaded.txt"
-          rm -f "$RUNNER_TEMP/jht.tar"
+          docker save jht:broker-sandbox | podman load | tee "$RUNNER_TEMP/loaded.txt"
           sed -n 's/^Loaded image[s()]*: //p' "$RUNNER_TEMP/loaded.txt" | head -n 1 > "$RUNNER_TEMP/image-ref"
           test -s "$RUNNER_TEMP/image-ref"
 
-      - name: Rootless Podman applies the profile, and Chromium starts with its sandbox
-        run: python3 scripts/ci/broker_sandbox_podman.py "$(cat "$RUNNER_TEMP/image-ref")" scripts/security/jht-broker.seccomp.json
+      - name: Rootless Podman runs the broker confined and Chromium sandboxed; rootful without the label stays off
+        run: >-
+          python3 scripts/ci/broker_sandbox_podman.py "$(cat "$RUNNER_TEMP/image-ref")" jht:broker-sandbox
+          scripts/security/jht-broker.seccomp.json

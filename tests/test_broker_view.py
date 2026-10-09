@@ -39,9 +39,16 @@ def env(tmp_path, monkeypatch):
     return tmp_path
 
 
-def fake_proc(root: Path, seccomp: str = "2", apparmor: str | None = None, lsm_current: str | None = None) -> Path:
+ROOTFUL = "         0          0 4294967295\n"
+ROOTLESS = "         0       1000          1\n         1     100000      65536\n"
+
+
+def fake_proc(root: Path, seccomp: str = "2", apparmor: str | None = None, lsm_current: str | None = None,
+              uid_map: str | None = ROOTFUL, no_new_privs: str = "1", cap_eff: str = "0000000000000000") -> Path:
     (root / "attr" / "apparmor").mkdir(parents=True, exist_ok=True)
-    (root / "status").write_text(f"Name:\tpython3\nNoNewPrivs:\t1\nSeccomp:\t{seccomp}\n")
+    if uid_map is not None:
+        (root / "uid_map").write_text(uid_map)
+    (root / "status").write_text(f"Name:\tpython3\nCapEff:\t{cap_eff}\nNoNewPrivs:\t{no_new_privs}\nSeccomp:\t{seccomp}\n")
     if apparmor is not None:
         (root / "attr" / "apparmor" / "current").write_text(apparmor + "\n")
     if lsm_current is not None:
@@ -228,6 +235,46 @@ def test_the_broker_checks_its_own_confinement(tmp_path, seccomp, apparmor, lsm,
         (proc / "status").unlink()
     expected = {"ready": True, "reason": None} if ready else {"ready": False, "reason": "secure_browser_unavailable"}
     assert view.confinement(proc) == expected
+
+
+# The security review's decision (09/10), conditions 1 and 2: under rootless Podman
+# the seccomp profile alone is accepted, only with a verified rootless map
+# and a hardened broker process.
+KEEP_ID = "         0          1       1001\n      1001          0          1\n      1002       1002      64534\n"
+
+
+@pytest.mark.parametrize("apparmor,uid_map,ready", [
+    ("crun (unconfined)", ROOTLESS, True),                      # measured in CI, Podman 4.9.3
+    ("containers-default-0.66.0//&crun (enforce)", ROOTLESS, True),
+    ("crun (unconfined)", KEEP_ID, True),                       # keep-id: 0 inside is 1 outside
+    ("crun (unconfined)", ROOTFUL, False),                      # the identity map: root is the host's
+    ("crun (unconfined)", "         0          0          1\n         1     100000      65536\n", False),
+    ("docker-default (enforce)", ROOTFUL, False),               # rootful Docker without the label
+    ("docker-default (enforce)", None, False),                  # no uid map read: not proved
+    ("docker-default (enforce)", "", False),
+    ("docker-default (enforce)", "garbage\n", False),
+])
+def test_rootless_podman_stands_in_for_the_label_only_with_a_verified_map(tmp_path, apparmor, uid_map, ready):
+    proc = fake_proc(tmp_path / "p", apparmor=apparmor, uid_map=uid_map)
+    expected = {"ready": True, "reason": None} if ready else {"ready": False, "reason": "secure_browser_unavailable"}
+    assert view.confinement(proc) == expected
+
+
+@pytest.mark.parametrize("change", [
+    {"seccomp": "0"},
+    {"seccomp": "1"},
+    {"no_new_privs": "0"},
+    {"cap_eff": "0000000000000400"},     # CAP_NET_BIND_SERVICE
+    {"cap_eff": ""},
+])
+@pytest.mark.parametrize("apparmor,uid_map", [
+    ("jht-broker (enforce)", ROOTFUL),
+    ("crun (unconfined)", ROOTLESS),
+    (None, ROOTFUL),
+])
+def test_a_broker_without_seccomp_no_new_privs_or_with_a_capability_is_never_ready(tmp_path, change, apparmor, uid_map):
+    proc = fake_proc(tmp_path / "p", apparmor=apparmor, uid_map=uid_map, **change)
+    assert view.confinement(proc) == {"ready": False, "reason": "secure_browser_unavailable"}
 
 
 def test_without_the_profiles_no_browser_starts_and_status_says_so_in_advance(env, monkeypatch):

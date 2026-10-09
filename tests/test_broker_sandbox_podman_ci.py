@@ -1,11 +1,12 @@
-"""The rootless Podman measure of the broker's login browser
+"""The rootless Podman gate of the broker's login browser
 (scripts/ci/broker_sandbox_podman.py), without Podman.
 
-The measure runs only in CI on a real Linux. Here its verdicts are checked
-with the container's answers faked: a broker and a Chromium under the
-jht-broker label, sandboxed, pass; every missing fact (label not applied,
-confinement refused, Chromium not starting, Podman not rootless, no answer)
-fails. Red is the answer "the risk is real".
+the security review's decision (a), 09/10: under rootless Podman the broker runs
+with the seccomp profile alone, accepted only in a verified rootless
+container. The gate runs only in CI on a real Linux; here its verdicts are
+checked with the containers' answers faked: a confined broker with a
+sandboxed Chromium, refused counter-proofs and a rootful container that
+stays off pass; every broken fact fails.
 
 Run with: pytest tests/test_broker_sandbox_podman_ci.py -v
 """
@@ -23,118 +24,102 @@ spec.loader.exec_module(measure)
 
 GOOD = {
     "confinement": {"ready": True, "reason": None},
-    "own_label": "jht-broker//&crun (enforce)",
-    "chromium_labels": ["jht-broker//&crun (enforce)"],
+    "own_label": "crun (unconfined)",
+    "chromium_labels": ["crun (unconfined)"],
     "launch": "ok",
     "sandboxed": True,
     "no_sandbox_flag": False,
     "own_userns": "user:[4026532001]",
     "renderer_userns": ["user:[4026532300]"],
     "renderer_in_own_userns": True,
+    "python_unshare_mount": False,
+    "python_chroot": False,
+    "python_af_alg": False,
+    "python_af_vsock": False,
 }
-ROOTLESS = {"version": "4.9.3", "rootless": True, "apparmor_enabled": True}
+OFF = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "own_label": "docker-default (enforce)"}
+ROOTLESS = {"version": "4.9.3", "rootless": True, "apparmor_enabled": False}
+OPENS_BOTH = {"af_alg": True, "af_vsock": True}
 
 
-def _verdict(monkeypatch, capsys, got=GOOD, info=ROOTLESS):
+def _verdict(monkeypatch, capsys, got=GOOD, rootful=OFF, info=ROOTLESS, control=OPENS_BOTH):
     calls = []
 
     def fake_run(image, extra, engine="docker"):
-        calls.append((engine, extra))
-        return dict(got)
+        calls.append((engine, image, list(extra)))
+        return dict(got if engine == "podman" else rootful)
 
     monkeypatch.setattr(measure.gate, "run", fake_run)
     monkeypatch.setattr(measure, "podman_info", lambda: dict(info))
-    code = measure.main(["localhost/jht:x", "seccomp.json"])
+    monkeypatch.setattr(measure, "socket_control", lambda image: dict(control))
+    code = measure.main(["localhost/jht:x", "jht:broker-sandbox", "seccomp.json"])
     return code, capsys.readouterr().out, calls
 
 
-def test_a_broker_and_chromium_under_the_profile_pass(monkeypatch, capsys):
+def test_a_confined_broker_a_sandboxed_chromium_and_a_rootful_container_off_pass(monkeypatch, capsys):
     code, out, calls = _verdict(monkeypatch, capsys)
     assert code == 0 and "checks done: 0 failed" in out
-    assert "the view works under rootless Podman" in out
-    ((engine, extra),) = calls
-    assert engine == "podman"
-    assert "apparmor=jht-broker" in extra and "JHT_PROBE_LAUNCH_ANYWAY=1" in extra
+    (podman, docker) = calls
+    # Under Podman, as the wrapper starts the broker there: seccomp, no AppArmor.
+    assert podman == ("podman", "localhost/jht:x", ["--security-opt", "seccomp=seccomp.json"])
+    # The rootful counter-proof: Docker, the same seccomp, no jht-broker label.
+    assert docker == ("docker", "jht:broker-sandbox", ["--security-opt", "seccomp=seccomp.json"])
 
 
 @pytest.mark.parametrize("change,tag", [
-    ({"own_label": "unconfined"}, "apparmor-label"),
-    ({"own_label": None}, "apparmor-label"),
-    ({"own_label": "containers-default-0.57.4 (enforce)"}, "apparmor-label"),
-    ({"chromium_labels": ["jht-broker//&crun (enforce)", "unconfined"]}, "apparmor-label"),
-    ({"chromium_labels": []}, "apparmor-label"),
     ({"confinement": {"ready": False, "reason": "secure_browser_unavailable"}}, "confinement"),
     ({"launch": "failed", "launch_error": "No usable sandbox!"}, "launch"),
     ({"no_sandbox_flag": True}, "flag"),
     ({"sandboxed": False}, "chrome-sandbox"),
     ({"renderer_in_own_userns": False}, "renderer-userns"),
     ({"renderer_userns": []}, "renderer-userns"),
+    ({"python_unshare_mount": True}, "python-mountns"),
+    ({"python_chroot": True}, "python-chroot"),
+    ({"python_af_alg": True}, "python-af-alg"),
+    ({"python_af_vsock": True}, "python-af-vsock"),
 ])
-def test_each_missing_fact_says_the_risk_is_real(monkeypatch, capsys, change, tag):
+def test_each_broken_fact_under_rootless_podman_fails(monkeypatch, capsys, change, tag):
     code, out, _ = _verdict(monkeypatch, capsys, got={**GOOD, **change})
     assert code == 1 and f"FAIL [{tag}]" in out
-    assert "the risk is real" in out
 
 
-def test_a_rootful_podman_answers_another_question(monkeypatch, capsys):
+def test_a_rootful_container_without_the_label_that_is_not_off_fails(monkeypatch, capsys):
+    code, out, _ = _verdict(monkeypatch, capsys, rootful={"confinement": {"ready": True, "reason": None}})
+    assert code == 1 and "FAIL [rootful]" in out
+
+
+def test_a_rootful_podman_would_check_another_case(monkeypatch, capsys):
     code, out, _ = _verdict(monkeypatch, capsys, info={**ROOTLESS, "rootless": False})
     assert code == 1 and "FAIL [rootless]" in out
 
 
-def test_a_refused_apparmor_option_is_the_risk_and_seccomp_only_is_measured(monkeypatch, capsys):
-    # CI, Podman 4.9.3 rootless: exit 125, the container never starts.
-    refused = {"error": 'the probe printed nothing (exit 125): Error: apparmor profile "jht-broker" specified, '
-                        "but Apparmor is not enabled on this system"}
-    answers = [refused, {**GOOD, "own_label": "unconfined", "confinement": {"ready": False}}]
-    calls = []
-
-    def fake_run(image, extra, engine="docker"):
-        calls.append(extra)
-        return dict(answers[len(calls) - 1])
-
-    monkeypatch.setattr(measure.gate, "run", fake_run)
-    monkeypatch.setattr(measure, "podman_info", lambda: dict(ROOTLESS))
-    code = measure.main(["localhost/jht:x", "seccomp.json"])
-    out = capsys.readouterr().out
-    assert code == 1 and "FAIL [apparmor-refused]" in out and "the risk is real" in out
-    assert len(calls) == 2 and not any(a.startswith("apparmor=") for a in calls[1])
-    assert "seccomp=seccomp.json" in calls[1] and "JHT_PROBE_LAUNCH_ANYWAY=1" in calls[1]
-    assert "MEASURE rootless-seccomp-only-sandbox launch=ok sandboxed=True" in out
-
-
 def test_no_answer_from_the_probe_is_said_as_such(monkeypatch, capsys):
-    code, out, _ = _verdict(monkeypatch, capsys, got={"error": "the probe printed nothing (exit 125): apparmor"})
-    assert code == 1 and "FAIL [probe]" in out and "FAIL [apparmor-label]" not in out
+    code, out, _ = _verdict(monkeypatch, capsys, got={"error": "the probe printed nothing (exit 125)"})
+    assert code == 1 and "FAIL [probe]" in out and "FAIL [python-mountns]" not in out
 
 
-@pytest.mark.parametrize("label,confined", [
-    ("jht-broker (enforce)", True),
-    ("jht-broker//&crun (enforce)", True),
-    ("jht-broker-old (enforce)", False),
-    ("jht-broker (complain)", True),  # the name only: the mode is the broker's own check
-    ("unconfined", False),
-    ("", False),
-])
-def test_the_label_is_read_by_the_profile_s_name(label, confined):
-    assert measure.confined_by_the_profile(label) is confined
+def test_a_socket_family_the_kernel_never_opens_is_declared_not_proved(monkeypatch, capsys):
+    code, out, _ = _verdict(monkeypatch, capsys, control={"af_alg": True, "af_vsock": False})
+    assert code == 0
+    assert "python-af-vsock=refused, not provable here" in out and "python-af-alg=refused, not provable" not in out
 
 
-def test_the_probe_launches_anyway_only_when_asked_and_reports_labels():
+def test_the_probe_opens_the_two_families_from_the_broker_s_python():
     probe = measure.gate.PROBE
-    assert 'os.environ.get("JHT_PROBE_LAUNCH_ANYWAY") != "1"' in probe
-    assert 'out["own_label"] = label_of("self")' in probe
-    assert 'out["chromium_labels"] = sorted(set(labels))' in probe
-    assert 'labels.append(label_of(pid) or "unreadable")' in probe
-    # The Docker gate never sets it: there the broker's refusal stops the probe.
-    assert "JHT_PROBE_LAUNCH_ANYWAY" not in Path(measure.gate.__file__).read_text().split("PROBE = r'''", 1)[0]
-    assert "JHT_PROBE_LAUNCH_ANYWAY" not in Path(measure.gate.__file__).read_text().split("'''", 2)[2]
+    assert 'out["python_af_alg"] = socket_works(38, socket.SOCK_SEQPACKET)' in probe
+    assert 'out["python_af_vsock"] = socket_works(40, socket.SOCK_STREAM)' in probe
+    # Measured before the broker's refusal stops the probe: the rootful run
+    # reports them too.
+    assert probe.index('out["python_af_vsock"]') < probe.index('if not out["confinement"]["ready"]:')
+    assert "JHT_PROBE_LAUNCH_ANYWAY" not in probe
 
 
-def test_the_measure_runs_only_on_trial_branches_and_by_hand_as_the_runner_user():
+def test_the_gate_runs_wherever_the_docker_gate_runs_as_the_runner_user():
     workflow = yaml.load((ROOT / ".github" / "workflows" / "broker-sandbox.yml").read_text(), Loader=yaml.BaseLoader)
     job = workflow["jobs"]["broker-sandbox-podman"]
-    assert job["if"] == "startsWith(github.ref, 'refs/heads/ci-') || github.event_name == 'workflow_dispatch'"
+    assert "if" not in job
     (step,) = [s for s in job["steps"] if "broker_sandbox_podman.py" in s.get("run", "")]
     assert not step["run"].lstrip().startswith("sudo")
-    loaded = [s for s in job["steps"] if "apparmor_parser" in s.get("run", "")]
-    assert loaded and "sudo apparmor_parser -r -W /etc/apparmor.d/jht-broker" in loaded[0]["run"]
+    # The rootful counter-proof needs a container WITHOUT the jht-broker
+    # label: this job never loads the profile.
+    assert not any("apparmor_parser" in s.get("run", "") for s in job["steps"])

@@ -17,7 +17,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     # Chromium's sandbox in the broker (R3): builds locally, publishes nothing.
     "broker-sandbox.yml": {
         "broker-sandbox": READ_CONTENTS,
-        # The same broker under rootless Podman: a measure, ci-** and dispatch.
+        # The broker under rootless Podman: the gate of the security review's decision (a).
         "broker-sandbox-podman": READ_CONTENTS,
     },
     "ci.yml": {

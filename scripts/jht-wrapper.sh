@@ -938,12 +938,16 @@ broker_security_mode() {
   broker_security_node_safe "$dir" dir || return 0
   broker_security_node_safe "$dir/jht-broker.seccomp.json" file || return 0
   broker_security_node_safe "$dir/compose-seccomp.yml" file || return 0
+  # Podman rootless non applica AppArmor, e con apparmor= nelle opzioni
+  # rifiuta il container (exit 125: misurato in CI con Podman 4.9.3): il
+  # broker non partirebbe e la posta si fermerebbe. Li' va solo il seccomp;
+  # il broker accetta il solo seccomp se il container e' davvero rootless
+  # (decisione (a) della revisione di sicurezza, 09/10, con il gate in CI).
+  if [ "${CONTAINER_RUNTIME:-docker}" = "podman" ]; then
+    printf 'seccomp\n'
+    return 0
+  fi
   if host_apparmor_enabled; then
-    # Podman rootless non applica AppArmor, e con apparmor= nelle opzioni
-    # rifiuta il container (exit 125: misurato in CI con Podman 4.9.3): il
-    # broker non partirebbe e la posta si fermerebbe. Niente override:
-    # vista spenta, posta accesa.
-    [ "${CONTAINER_RUNTIME:-docker}" != "podman" ] || return 0
     broker_security_node_safe "$dir/compose-apparmor.yml" file || return 0
     broker_apparmor_loaded || return 0
     printf 'apparmor\n'
@@ -956,10 +960,6 @@ broker_security_notice() {
   [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
   grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" 2>/dev/null || return 0
   [ -z "$(broker_security_mode "$COMPOSE_FILE")" ] || return 0
-  if [ "${CONTAINER_RUNTIME:-docker}" = "podman" ] && host_apparmor_enabled; then
-    info "Con Podman senza root il profilo AppArmor del broker non si applica: la posta funziona, il login LinkedIn resta spento."
-    return 0
-  fi
   info "Profili di sicurezza del broker assenti o non caricati: la posta funziona, il login LinkedIn resta spento."
   info "Cosa fare: rilancia l'installazione con --broker-profiles (serve root una volta)."
 }

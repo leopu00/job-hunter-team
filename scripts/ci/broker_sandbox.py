@@ -47,7 +47,7 @@ HARDENING = ["--user", "1002:1002", "--read-only", "--tmpfs", "/tmp:size=512m,mo
 
 # Runs inside the container. Prints one JSON line.
 PROBE = r'''
-import ctypes, json, os, subprocess, sys, time
+import ctypes, json, os, socket, subprocess, sys, time
 from broker import view
 
 def unshare_works(flag):
@@ -73,6 +73,15 @@ def chromium_program(cmd):
     first = cmd[0].decode(errors="replace").split(" ", 1)[0] if cmd and cmd[0] else ""
     return os.path.basename(first).startswith("chrom")
 
+def socket_works(family, kind):
+    # AF_ALG (38) and AF_VSOCK (40): what AppArmor's `deny network alg` and
+    # `deny network vsock` refused; the seccomp profile must refuse them too.
+    try:
+        socket.socket(family, kind).close()
+        return True
+    except OSError:
+        return False
+
 def label_of(pid):
     # The AppArmor label the kernel gives the process (stacked labels too).
     for name in ("attr/apparmor/current", "attr/current"):
@@ -96,11 +105,10 @@ out = {"confinement": view.confinement()}
 out["python_unshare_user"] = unshare_works(0x10000000)
 out["python_unshare_mount"] = unshare_works(0x00020000)
 out["python_chroot"] = chroot_works()
+out["python_af_alg"] = socket_works(38, socket.SOCK_SEQPACKET)
+out["python_af_vsock"] = socket_works(40, socket.SOCK_STREAM)
 out["own_label"] = label_of("self")
-# The product never opens a browser the broker does not see confined. The
-# Podman measure (broker_sandbox_podman.py) asks, on top, whether Chromium's
-# sandbox could start at all there, and sets this for that run only.
-if not out["confinement"]["ready"] and os.environ.get("JHT_PROBE_LAUNCH_ANYWAY") != "1":
+if not out["confinement"]["ready"]:
     print(json.dumps(out)); sys.exit(0)
 xvfb = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -276,6 +284,9 @@ def main(argv: list[str]) -> int:
         fail("python-mountns", "the broker's Python created a mount namespace under the profiles")
     if "error" not in good and good.get("python_chroot") is not False:
         fail("python-chroot", "the broker's Python chrooted without a user namespace of its own")
+    for family in ("af_alg", "af_vsock"):
+        if "error" not in good and good.get(f"python_{family}") is not False:
+            fail(f"python-{family.replace('_', '-')}", f"the broker's Python opened an {family.upper()} socket")
     denied = denials(since)
     controls = [line for line in denied if expected_denial(line)]
     unexpected = [line for line in denied if not expected_denial(line)]

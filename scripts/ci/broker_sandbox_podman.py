@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
-"""The broker's login browser under ROOTLESS Podman (T3 part B, a risk of
-stage 1 of the Podman plan), measured on a real Linux in CI.
+"""The broker's login browser under ROOTLESS Podman: the CI gate of
+the security review's decision (a) of 09/10 (stage 1 of the Podman plan).
 
-Stage 1 moves the VPSs to rootless Podman. The question: does rootless
-Podman apply the host's `jht-broker` AppArmor profile (loaded by root), so
-that the broker sees itself confined and Chromium starts with its sandbox?
-If it does not, the login view stays off on every migrated VPS (fail
-closed, `secure_browser_unavailable`): stage 1 must know before migrating.
+Rootless Podman applies no AppArmor profile and refuses a container that
+asks for one (measured: Podman 4.9.3, exit 125). There the broker runs with
+the seccomp profile alone, and `confinement()` accepts it only in a verified
+rootless container (uid 0 inside is not uid 0 outside), with Seccomp 2,
+NoNewPrivs 1 and no effective capability.
 
-Runs IMAGE, as a NON-ROOT user, with the same hardening and the same
-profiles as the Docker gate (broker_sandbox.py). The probe launches
-Chromium even when the broker refuses (`JHT_PROBE_LAUNCH_ANYWAY`, this run
-only: the product never does), to tell "the profile is not applied" apart
-from "the sandbox cannot start at all".
+Runs, as a NON-ROOT user:
+- PODMAN_IMAGE under rootless Podman, as the wrapper starts the broker there
+  (the hardening of broker_sandbox.py, the seccomp profile, no AppArmor
+  option). FAILS unless:
+  - Podman is rootless;
+  - `confinement()` says ready;
+  - Chromium starts with its sandbox: chrome://sandbox read as sandboxed, no
+    `--no-sandbox`, a renderer in a user namespace of its own;
+  - from the broker's Python: no mount namespace, no chroot, no AF_ALG and
+    no AF_VSOCK socket (what AppArmor's `deny network alg/vsock` gave).
+    A socket check counts only where the kernel opens that family without
+    the filter (a control run, seccomp unconfined); elsewhere it is printed
+    as not provable;
+- DOCKER_IMAGE under rootful Docker with the same seccomp profile and no
+  jht-broker label: a container that is NOT rootless. FAILS unless the
+  broker stays off (`secure_browser_unavailable`).
 
-FAILS (the risk is real) unless:
-- Podman runs rootless (otherwise the measure answers another question);
-- the broker's process and Chromium's carry the `jht-broker` label;
-- the broker's `confinement()` says ready;
-- Chromium starts with its sandbox: chrome://sandbox read as sandboxed, no
-  `--no-sandbox`, a renderer in a user namespace of its own.
-
-Usage: broker_sandbox_podman.py IMAGE SECCOMP_JSON
-The caller loads the AppArmor profile as root first, and makes IMAGE known
-to the user's rootless Podman.
+Usage: broker_sandbox_podman.py PODMAN_IMAGE DOCKER_IMAGE SECCOMP_JSON
 """
 
 from __future__ import annotations
@@ -38,16 +40,19 @@ _spec = importlib.util.spec_from_file_location("broker_sandbox", Path(__file__).
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
-PROFILE = "jht-broker"
+OFF = {"ready": False, "reason": "secure_browser_unavailable"}
 
-
-def confined_by_the_profile(label: str | None) -> bool:
-    """`jht-broker (enforce)`, or stacked under Podman's runtime
-    (`jht-broker//&crun (enforce)`)."""
-    if not label:
+# The control: which of the two families this kernel opens with no filter.
+SOCKETS = r'''
+import json, socket
+def works(family, kind):
+    try:
+        socket.socket(family, kind).close()
+        return True
+    except OSError:
         return False
-    name = label.split(" (", 1)[0]
-    return name == PROFILE or name.startswith(PROFILE + "//&")
+print(json.dumps({"af_alg": works(38, socket.SOCK_SEQPACKET), "af_vsock": works(40, socket.SOCK_STREAM)}))
+'''
 
 
 def podman_info() -> dict:
@@ -67,11 +72,22 @@ def podman_info() -> dict:
     }
 
 
+def socket_control(image: str) -> dict:
+    result = subprocess.run(["podman", "run", "--rm", *gate.HARDENING, "--security-opt", "seccomp=unconfined",
+                             "--entrypoint", "python3", image, "-c", SOCKETS],
+                            capture_output=True, text=True, timeout=120)
+    lines = result.stdout.strip().splitlines()
+    try:
+        return json.loads(lines[-1]) if lines else {"error": result.stderr[-400:]}
+    except json.JSONDecodeError:
+        return {"error": (result.stderr or result.stdout)[-400:]}
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
-    image, seccomp = argv
+    podman_image, docker_image, seccomp = argv
     fails = 0
 
     def fail(tag: str, message: str) -> None:
@@ -82,40 +98,16 @@ def main(argv: list[str]) -> int:
     info = podman_info()
     print("MEASURE podman " + json.dumps(info))
     if info.get("rootless") is not True:
-        fail("rootless", f"Podman is not rootless here: the measure would answer another question ({info})")
+        fail("rootless", f"Podman is not rootless here: the gate would check another case ({info})")
 
-    got = gate.run(image, ["--security-opt", f"apparmor={PROFILE}", "--security-opt", f"seccomp={seccomp}",
-                           "-e", "JHT_PROBE_LAUNCH_ANYWAY=1"], engine="podman")
-    print("MEASURE rootless-with-profiles " + json.dumps(got))
+    got = gate.run(podman_image, ["--security-opt", f"seccomp={seccomp}"], engine="podman")
+    print("MEASURE rootless " + json.dumps(got))
+    print(f"MEASURE rootless-label broker={got.get('own_label')!r} chromium={got.get('chromium_labels')}")
     if "error" in got:
-        if "apparmor" in got["error"].lower() and "not enabled" in got["error"].lower():
-            # Measured with Podman 4.9.3: rootless Podman refuses the
-            # container outright. Then: could Chromium's sandbox start there
-            # at all, with the seccomp profile only?
-            fail("apparmor-refused", f"rootless Podman refuses a container with apparmor={PROFILE}: {got['error']}")
-            bare = gate.run(image, ["--security-opt", f"seccomp={seccomp}", "-e", "JHT_PROBE_LAUNCH_ANYWAY=1"],
-                            engine="podman")
-            print("MEASURE rootless-seccomp-only " + json.dumps(bare))
-            print(f"MEASURE rootless-seccomp-only-sandbox launch={bare.get('launch')} sandboxed={bare.get('sandboxed')}"
-                  f" renderer_in_own_userns={bare.get('renderer_in_own_userns')} label={bare.get('own_label')!r}"
-                  f" confinement={bare.get('confinement')}")
-        else:
-            fail("probe", f"the probe gave no answer under rootless Podman: {got['error']}")
-        print("MEASURE rootless-verdict='the risk is real: the view stays off'")
-        print(f"checks done: {fails} failed")
-        return 1
-
-    applied = confined_by_the_profile(got.get("own_label"))
-    print(f"MEASURE rootless-apparmor-label broker={got.get('own_label')!r} chromium={got.get('chromium_labels')}")
-    if not applied:
-        fail("apparmor-label", f"rootless Podman did not apply {PROFILE} to the broker: {got.get('own_label')!r}")
-    elif got.get("launch") == "ok" and not got.get("chromium_labels"):
-        fail("apparmor-label", "Chromium started but no label of its processes was read")
-    elif got.get("chromium_labels") and not all(confined_by_the_profile(label) for label in got["chromium_labels"]):
-        fail("apparmor-label", f"a Chromium process is not under {PROFILE}: {got['chromium_labels']}")
-    if got.get("confinement", {}).get("ready") is not True:
-        fail("confinement", f"the broker does not see itself confined: {got.get('confinement')}")
-    if got.get("launch") != "ok":
+        fail("probe", f"the probe gave no answer under rootless Podman: {got['error']}")
+    elif got.get("confinement", {}).get("ready") is not True:
+        fail("confinement", f"the broker does not see itself confined under rootless Podman: {got.get('confinement')}")
+    elif got.get("launch") != "ok":
         fail("launch", f"Chromium did not start with its sandbox: {got.get('launch_error')}")
         for line in got.get("browser_log") or []:
             print("  browser: " + line)
@@ -132,9 +124,25 @@ def main(argv: list[str]) -> int:
             fail("renderer-userns", "no renderer process was found: the probe could not compare namespaces")
         elif got.get("renderer_in_own_userns") is not True:
             fail("renderer-userns", f"renderers {got.get('renderer_userns')} vs own {got.get('own_userns')}")
+    if "error" not in got:
+        if got.get("python_unshare_mount") is not False:
+            fail("python-mountns", "the broker's Python created a mount namespace")
+        if got.get("python_chroot") is not False:
+            fail("python-chroot", "the broker's Python chrooted without a user namespace of its own")
+        control = socket_control(podman_image)
+        print("MEASURE socket-control-unfiltered " + json.dumps(control))
+        for family in ("af_alg", "af_vsock"):
+            name = family.replace("_", "-")
+            if got.get(f"python_{family}") is not False:
+                fail(f"python-{name}", f"the broker's Python opened an {family.upper()} socket")
+            elif control.get(family) is not True:
+                print(f"MEASURE python-{name}=refused, not provable here: the kernel does not open it unfiltered either")
 
-    verdict = "the view works under rootless Podman" if fails == 0 else "the risk is real: the view stays off"
-    print(f"MEASURE rootless-verdict={verdict!r}")
+    rootful = gate.run(docker_image, ["--security-opt", f"seccomp={seccomp}"], engine="docker")
+    print("MEASURE rootful-without-label " + json.dumps(rootful))
+    if rootful.get("confinement") != OFF:
+        fail("rootful", f"a rootful container without the jht-broker label is not off: {rootful.get('confinement') or rootful.get('error')}")
+
     print(f"checks done: {fails} failed")
     return 0 if fails == 0 else 1
 

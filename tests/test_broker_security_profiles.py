@@ -130,3 +130,28 @@ def test_the_profiles_never_open_more_than_they_name():
     assert "unconfined" not in _rules(text)[0]
     for loosening in ("ptrace,", "signal,", "mount,", "pivot_root", "change_profile", "capability sys_admin"):
         assert loosening not in [r for r in _rules(text) if not r.startswith("deny")], loosening
+
+
+def test_no_rule_lets_an_af_alg_or_af_vsock_socket_through():
+    # Condition 3 of the security review (09/10): under rootless Podman AppArmor's
+    # `deny network alg` and `deny network vsock` are gone, so seccomp must
+    # refuse socket(38, ...) and socket(40, ...). Upstream's profile already
+    # does (socket allowed below 38, and for 39 and 41-45 only); this pins it.
+    profile = json.loads(SECCOMP.read_text())
+    assert profile["defaultAction"] == "SCMP_ACT_ERRNO"
+
+    def allowed(family):
+        for rule in profile["syscalls"]:
+            if "socket" not in rule["names"] or rule["action"] != "SCMP_ACT_ALLOW":
+                continue
+            args = rule.get("args") or []
+            if not args:
+                return True
+            if all(arg["index"] == 0 and (
+                    (arg["op"] == "SCMP_CMP_EQ" and family == arg["value"])
+                    or (arg["op"] == "SCMP_CMP_LT" and family < arg["value"])) for arg in args):
+                return True
+        return False
+
+    assert allowed(2) and allowed(1) and allowed(16)    # inet, unix, netlink: the broker's own
+    assert not allowed(38) and not allowed(40)          # AF_ALG, AF_VSOCK

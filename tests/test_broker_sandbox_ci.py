@@ -31,6 +31,8 @@ GOOD = {
     "python_unshare_user": True,
     "python_unshare_mount": False,
     "python_chroot": False,
+    "python_af_alg": False,
+    "python_af_vsock": False,
 }
 BARE = {"confinement": {"ready": False, "reason": "secure_browser_unavailable"}, "python_unshare_mount": False}
 CONTROL = 'audit: apparmor="DENIED" operation="userns_create" class="namespace" profile="jht-journal-control" pid=7 comm="python3"'
@@ -66,6 +68,8 @@ def test_a_good_run_passes(monkeypatch, capsys):
     ({"renderer_in_own_userns": False}, "renderer-userns"),
     ({"python_unshare_mount": True}, "python-mountns"),
     ({"python_chroot": True}, "python-chroot"),
+    ({"python_af_alg": True}, "python-af-alg"),
+    ({"python_af_vsock": True}, "python-af-vsock"),
 ])
 def test_each_broken_fact_with_the_profiles_fails(monkeypatch, capsys, change, tag):
     code, out = _verdict(monkeypatch, capsys, good={**GOOD, **change})

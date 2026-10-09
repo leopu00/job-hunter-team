@@ -142,27 +142,67 @@ def _apparmor_label(proc: Path) -> str | None:
     return None
 
 
-def _seccomp_mode(proc: Path) -> str:
+def _status(proc: Path) -> dict:
+    fields = {}
     try:
         for line in (proc / "status").read_text(encoding="utf-8").splitlines():
-            if line.startswith("Seccomp:"):
-                return line.split(":", 1)[1].strip()
+            name, _, value = line.partition(":")
+            fields[name] = value.strip()
     except OSError:
         pass
-    return ""
+    return fields
+
+
+def _seccomp_mode(proc: Path) -> str:
+    return _status(proc).get("Seccomp", "")
+
+
+def _hardened(proc: Path) -> bool:
+    """seccomp in filter mode, no new privileges, no effective capability."""
+    status = _status(proc)
+    cap_eff = status.get("CapEff", "")
+    return (
+        status.get("Seccomp") == "2"
+        and status.get("NoNewPrivs") == "1"
+        and bool(cap_eff)
+        and set(cap_eff) == {"0"}
+    )
+
+
+def _rootless(proc: Path) -> bool:
+    """The container's root is not the host's root: the uid map is not the
+    identity map, and uid 0 inside maps to a uid other than 0 outside (or to
+    none). Read from the process's own uid_map; unreadable means no."""
+    try:
+        rows = [line.split() for line in (proc / "uid_map").read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = [(int(inside), int(outside), int(count)) for inside, outside, count in rows]
+    except (OSError, ValueError):
+        return False
+    if not rows or rows == [(0, 0, 4294967295)]:
+        return False
+    for inside, outside, count in rows:
+        if inside <= 0 < inside + count:
+            return outside - inside != 0
+    return True
 
 
 def confinement(proc: Path | None = None) -> dict:
-    """Whether the broker runs under the host's `jht-broker` profiles (R3):
-    seccomp in filter mode always, and, where the kernel runs AppArmor, the
-    `jht-broker` profile (alone or stacked: `jht-broker//&crun (enforce)`)."""
+    """Whether the broker runs confined enough for Chromium's sandbox (R3).
+
+    Always: seccomp in filter mode, no new privileges, no effective
+    capability. Then, where the kernel runs AppArmor, the `jht-broker`
+    profile (alone or stacked: `jht-broker//&crun (enforce)`), or a rootless
+    container: rootless Podman applies no AppArmor profile and refuses a
+    container that asks for one (CI, Podman 4.9.3), and Chromium's sandbox
+    was measured to start there under the seccomp profile alone. Rootful
+    Docker without the label stays off (the security review's decision, 09/10)."""
     proc = proc or PROC_SELF
-    if _seccomp_mode(proc) != "2":
+    if not _hardened(proc):
         return {"ready": False, "reason": "secure_browser_unavailable"}
     label = _apparmor_label(proc)
     if label is not None:
         names = {part.split(" (", 1)[0].strip() for part in label.split("//&")}
-        if APPARMOR_PROFILE not in names:
+        if APPARMOR_PROFILE not in names and not _rootless(proc):
             return {"ready": False, "reason": "secure_browser_unavailable"}
     return {"ready": True, "reason": None}
 

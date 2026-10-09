@@ -286,14 +286,15 @@ def test_a_profile_list_the_kernel_refuses_to_open_falls_back_to_policy(box):
     assert _mode(box) == ""
 
 
-def test_under_podman_the_apparmor_override_is_never_added(box):
+def test_under_podman_only_the_seccomp_override_is_added(box):
     # Rootless Podman refuses a container with apparmor= (exit 125, CI with
-    # Podman 4.9.3): the broker would not start, and mail would stop.
-    assert _mode(box, runtime="podman") == ""
-    out = _wrapper(box, "broker_security_notice", runtime="podman").stdout
-    assert "Podman senza root" in out and "la posta funziona" in out
+    # Podman 4.9.3): the broker would not start, and mail would stop. The
+    # seccomp profile alone goes there (the security review's decision (a)).
+    assert _mode(box, runtime="podman") == "seccomp"
     box["enabled"].write_text("N\n")
     assert _mode(box, runtime="podman") == "seccomp"
+    (box["security"] / "jht-broker.seccomp.json").unlink()
+    assert _mode(box, runtime="podman") == ""
 
 
 def test_apparmor_on_but_the_profile_not_loaded_adds_nothing(box):

@@ -70,6 +70,24 @@ depends on what the kernel lets a user read: the broker-sandbox CI job
 measures it (`scripts/ci/broker_security_host.sh`), and checks that as root
 the installer's step and `jht up` agree.
 
+**Linux with rootless Podman (stage 1 of the Podman plan).** Rootless Podman
+applies no AppArmor profile, and refuses a container that asks for one
+(measured with Podman 4.9.3: exit 125). There `jht up` passes the seccomp
+profile only, and the broker accepts it, by the security review's decision (a) of
+09/10, only when all of these hold, read from its own `/proc/self`:
+- the container is rootless: `uid_map` is not the identity map, and uid 0
+  inside maps to a uid other than 0 outside;
+- `Seccomp: 2`, `NoNewPrivs: 1`, and no effective capability (`CapEff`);
+  these hold everywhere, Docker included.
+What AppArmor's `deny network alg` and `deny network vsock` gave, seccomp
+gives here: upstream's profile allows `socket` for families below 38 and
+39, 41-45 only, so AF_ALG (38) and AF_VSOCK (40) are refused (pinned by a
+test). Rootful Docker without the `jht-broker` label stays off. The
+`broker-sandbox-podman` CI job is the gate: under rootless Podman the broker
+ready and Chromium sandboxed, no mount namespace, chroot, AF_ALG or AF_VSOCK
+from the broker's Python, and a rootful container without the label off.
+Chromium under its own uid (P2-3) stays a requirement of phase 2.
+
 **Mac (Colima, Podman machine, Docker Desktop).** The containers run in a
 Linux VM; the wrapper adds no override on macOS, so the broker runs with the
 VM engine's default profiles and the login view stays off
