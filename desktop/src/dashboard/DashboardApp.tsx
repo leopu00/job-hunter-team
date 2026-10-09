@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { appLocale } from "../lib/app-locale";
+import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   connectDirectChat,
@@ -74,10 +75,6 @@ import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorResetsAt } from "../lib/error-catalog";
 
-const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
-const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
-const PROVIDER_ACTION_INVALID = "La richiesta del provider non è valida. Riavvia l’accesso.";
-const MIGRATION_ERROR = "Non riesco a collegare il profilo locale. Il runtime resta intestato all’identità locale.";
 
 type LocalMigrationGate = {
   identityKey: string;
@@ -124,7 +121,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     return {
       status: "failed",
       stage: "runtime",
-      title: "Macchina Podman da ricreare",
+      title: stateText().podmanRecreateTitle,
       message: described.text,
       action: described.action,
       code: value.code,
@@ -135,8 +132,8 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     return {
       status: "failed",
       stage: "container",
-      title: "Versione del container non compatibile",
-      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      title: stateText().versionIncompatibleTitle,
+      message: stateText().versionIncompatibleMessage,
       action: describeError(value.code, { locale: appLocale() }).action,
       code: value.code,
       retryable: false,
@@ -146,8 +143,8 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     return {
       status: "failed",
       stage,
-      title: "Avvio del container non riuscito",
-      message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+      title: stateText().containerStartTitle,
+      message: stateText().containerStartMessage,
       action: describeError(value.code, { locale: appLocale() }).action,
       code: value.code,
       retryable: value.retryable,
@@ -197,7 +194,7 @@ function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
     return {
       status: "failed",
       stage: "ssh-host-key",
-      title: "Chiave del server cambiata",
+      title: stateText().hostKeyChangedTitle,
       code,
       retryable: false,
       message: described.text,
@@ -215,13 +212,7 @@ function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
 }
 
 function failureMessage(stage: OnboardingRuntimeStage): string {
-  if (stage === "provider-login") return "L’accesso al provider non è stato verificato. Riprova.";
-  if (stage === "ssh-host-key") return "L’identità SSH del server non è stata verificata. Controlla il fingerprint e riprova.";
-  if (stage === "team-start") return "Il team non risulta ancora operativo. Riprova.";
-  if (stage === "assistant") return "Assistente o chat diretta non risultano ancora pronti. Riprova.";
-  if (stage === "container") return "Il container non risulta attivo. Verifica il runtime e riprova.";
-  if (stage === "provider") return "Il provider non è stato preparato. Riprova.";
-  return "La preparazione del runtime non è stata verificata. Riprova.";
+  return failureText(stage);
 }
 
 function pairingToken(session: Session | null, submission: OnboardingSubmission): string | null {
@@ -240,19 +231,19 @@ function resumedPrerequisiteFailure(
 ): OnboardingRuntimeState | null {
   if (!snapshot.runtimeInstalled) return {
     status: "failed", stage: "runtime", retryable: false,
-    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+    message: stateText().resumedRuntimeNotReady,
   };
   if (!snapshot.containerRunning) return {
     status: "failed", stage: "container", retryable: false,
-    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+    message: stateText().resumedContainerNotActive,
   };
   if (!snapshot.providerConfigured) return {
     status: "failed", stage: "provider", retryable: false,
-    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderNotConfigured,
   };
   if (!snapshot.providerAuthenticated) return {
     status: "failed", stage: "provider-login", retryable: false,
-    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderLoginInvalid,
   };
   return null;
 }
@@ -262,23 +253,23 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
   if (code === "resume_runtime_not_ready") return {
     status: "failed", stage: "runtime", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
-    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+    message: stateText().resumedRuntimeNotReady,
   };
   if (code === "resume_container_not_ready") return {
     status: "failed", stage: "container", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
-    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+    message: stateText().resumedContainerNotActive,
   };
   if (code === "resume_provider_not_configured") return {
     status: "failed", stage: "provider", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
-    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderNotConfigured,
   };
   if (code === "resume_provider_not_authenticated") return {
     status: "failed", stage: "provider-login", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
-    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderLoginInvalid,
   };
   if (code === "team_start_failed" || code === "team_verify_failed") return {
     status: "failed", stage: "team-start", code, action: describeError(code, { locale: appLocale() }).action, retryable: true,
-    message: "Le sessioni del team non risultano ancora operative. Riprova.",
+    message: stateText().resumedTeamNotReady,
   };
   return null;
 }
@@ -370,7 +361,7 @@ export default function DashboardApp() {
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
-      setGate({ phase: "error", message: GATE_ERROR });
+      setGate({ phase: "error", message: stateText().gateError });
     }
   }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady, session]);
 
@@ -565,7 +556,7 @@ export default function DashboardApp() {
 
   const startTeam = useCallback(async (submission: OnboardingSubmission) => {
     try {
-      setRuntime({ status: "working", stage: "team-start", message: "Avvio container e agenti." });
+      setRuntime({ status: "working", stage: "team-start", message: stateText().startingContainerAndAgents });
       beginActivityInvocation();
       const snapshot = await startOnboardingTeam(submission.host, recordActivityProgress);
       setRuntime(withLimitsNotice(runtimeStateFromSnapshot(snapshot), snapshot));
@@ -576,7 +567,7 @@ export default function DashboardApp() {
 
   const prepareTechnicalSetup = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey) throw new Error("identity-missing");
-    setRuntime({ status: "working", stage: "runtime", message: "Preparo il runtime production." });
+    setRuntime({ status: "working", stage: "runtime", message: stateText().preparingProductionRuntime });
     beginActivityInvocation();
     const snapshot = await prepareOnboardingRuntime(
       submission,
@@ -600,12 +591,12 @@ export default function DashboardApp() {
       fail("runtime", error);
     }
     if (submission.host.kind === "vps") {
-      setRuntime({ status: "working", stage: "ssh-host-key", message: "Verifico l’identità SSH del server." });
+      setRuntime({ status: "working", stage: "ssh-host-key", message: stateText().verifyingSshIdentity });
       try {
         const probe = await probeOnboardingSshHostKey(submission.host);
         if (probe.status === "confirmation_required") {
           setSshHostKey({ algorithm: probe.algorithm, fingerprint: probe.fingerprint });
-          setRuntime({ status: "action-required", stage: "ssh-host-key", message: "Confronta e conferma il fingerprint del server." });
+          setRuntime({ status: "action-required", stage: "ssh-host-key", message: stateText().compareFingerprint });
           return;
         }
       } catch (error) {
@@ -622,7 +613,7 @@ export default function DashboardApp() {
       return fail("ssh-host-key", new Error("host-key-confirmation-missing"));
     }
     try {
-      setRuntime({ status: "working", stage: "ssh-host-key", message: "Confermo il fingerprint SSH verificato." });
+      setRuntime({ status: "working", stage: "ssh-host-key", message: stateText().confirmingFingerprint });
       await confirmOnboardingSshHostKey(
         submission.host,
         sshHostKey,
@@ -669,7 +660,7 @@ export default function DashboardApp() {
         connectionState: "connecting",
         startedAt: Date.now(),
       });
-      setRuntime({ status: "working", stage: "provider-login", message: "Attendo il login ufficiale del provider." });
+      setRuntime({ status: "working", stage: "provider-login", message: stateText().waitingProviderLogin });
       beginActivityInvocation();
       let resolveExit!: () => void;
       let rejectExit!: (error: Error) => void;
@@ -689,7 +680,7 @@ export default function DashboardApp() {
             status: "error",
             connectionState: "disconnected",
             actions: [],
-            safeErrorMessage: PROVIDER_ACTION_INVALID,
+            safeErrorMessage: stateText().providerActionInvalid,
             exitCode: null,
           } : current);
           rejectExit(new Error(event.code));
@@ -823,7 +814,7 @@ export default function DashboardApp() {
     setRuntime({
       status: "action-required",
       stage: "provider-login",
-      message: "L’accesso è stato annullato. Riavvialo quando vuoi continuare.",
+      message: stateText().loginCancelled,
     });
   }, [setRuntime]);
 
@@ -875,7 +866,7 @@ export default function DashboardApp() {
     const submission = submissionRef.current;
     if (!submission || !identityKey) return fail("assistant", new Error("submission-missing"));
     try {
-      setRuntime({ status: "working", stage: "assistant", message: "Apro la chat diretta con l’Assistente." });
+      setRuntime({ status: "working", stage: "assistant", message: stateText().openingAssistantChat });
       beginActivityInvocation();
       const nativeSnapshot = await openOnboardingAssistant(submission.host, recordActivityProgress);
       const chat = await connectDirectChat(submission.host);
@@ -894,7 +885,7 @@ export default function DashboardApp() {
     if (!identityKey) throw new Error("identity-missing");
     try {
       setActivity(createOnboardingActivity());
-      setRuntime({ status: "working", stage: "runtime", message: "Verifico lo stato reale della configurazione." });
+      setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
@@ -906,14 +897,14 @@ export default function DashboardApp() {
         setRuntime({
           status: "action-required",
           stage: "team-start",
-          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+          message: stateText().teamStopped,
         });
         return;
       }
       setRuntime({
         status: "action-required",
         stage: "assistant",
-        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+        message: stateText().teamActive,
       });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
@@ -933,7 +924,7 @@ export default function DashboardApp() {
   const resumeTeam = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
     try {
-      setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
+      setRuntime({ status: "working", stage: "team-start", message: stateText().restoringSessions });
       beginActivityInvocation();
       const snapshot = await resumeOnboardingTeamStart(recordActivityProgress);
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
@@ -943,7 +934,7 @@ export default function DashboardApp() {
       setRuntime(withLimitsNotice({
         status: "action-required",
         stage: "assistant",
-        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+        message: stateText().teamActive,
       }, snapshot));
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
@@ -974,11 +965,11 @@ export default function DashboardApp() {
         setRuntime({
           status: "action-required",
           stage: "team-start",
-          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+          message: stateText().teamStopped,
         });
         return;
       }
-      setRuntime({ status: "working", stage: "assistant", message: "Ricollego la chat verificata con l’Assistente." });
+      setRuntime({ status: "working", stage: "assistant", message: stateText().reconnectingChat });
       const chat = await reconnectDirectChat();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -1026,7 +1017,7 @@ export default function DashboardApp() {
   // Only from the confirmation on the podman_machine_mounts_home error: the
   // machine is deleted and created again, then the setup starts over.
   const recreatePodmanMachine = useCallback(async () => {
-    setRuntime({ status: "working", stage: "runtime", message: "Ricreo la macchina Podman con le sole cartelle di Job Hunter Team." });
+    setRuntime({ status: "working", stage: "runtime", message: stateText().recreatingMachine });
     try {
       await recreateOnboardingPodmanMachine();
     } catch (error) {
@@ -1055,29 +1046,26 @@ export default function DashboardApp() {
 
   if (migrationProfile && localMigration?.identityKey === identityKey) {
     if (localMigration.phase === "checking") {
-      return <DashboardSkeleton label="Verifica profilo locale" />;
+      return <DashboardSkeleton label={stateText().verifyingLocalProfile} />;
     }
     if (localMigration.phase === "required" || localMigration.phase === "migrating") {
       return (
         <main aria-labelledby="local-migration-title">
-          <h1 id="local-migration-title">Collega il profilo locale al tuo account Google?</h1>
-          <p>
-            Il profilo e il runtime restano su questo Mac. Job Hunter Team trasferirà solo
-            l’intestazione locale all’account con cui hai appena effettuato l’accesso.
-          </p>
+          <h1 id="local-migration-title">{stateText().migrationTitle}</h1>
+          <p>{stateText().migrationText}</p>
           <button
             type="button"
             onClick={() => void confirmLocalMigration()}
             disabled={localMigration.phase === "migrating"}
           >
-            {localMigration.phase === "migrating" ? "Collegamento…" : "Collega e continua"}
+            {localMigration.phase === "migrating" ? stateText().linking : stateText().linkAndContinue}
           </button>
           <button
             type="button"
             onClick={() => void cancelLocalMigration()}
             disabled={localMigration.phase === "migrating"}
           >
-            Annulla e resta in locale
+            {stateText().cancelStayLocal}
           </button>
         </main>
       );
@@ -1085,7 +1073,7 @@ export default function DashboardApp() {
     if (localMigration.phase === "error") {
       return (
         <main role="alert">
-          <p>{MIGRATION_ERROR}</p>
+          <p>{stateText().migrationError}</p>
           {localMigration.retryable && (
             <button
               type="button"
@@ -1095,42 +1083,42 @@ export default function DashboardApp() {
                 phase: "required",
               })}
             >
-              Riprova
+              {stateText().retry}
             </button>
           )}
           <button type="button" onClick={() => void cancelLocalMigration()}>
-            Annulla e resta in locale
+            {stateText().cancelStayLocal}
           </button>
         </main>
       );
     }
   }
   if (!identityKey || accountScope?.identityKey !== identityKey || accountScope.phase === "pending") {
-    return <DashboardSkeleton label="Caricamento dashboard" />;
+    return <DashboardSkeleton label={stateText().loadingDashboard} />;
   }
   if (accountScope.phase === "error") {
     return (
       <main role="alert">
-        <p>{ACCOUNT_SCOPE_ERROR}</p>
-        <button type="button" onClick={() => void initializeAccount()}>Riprova</button>
+        <p>{stateText().accountScopeError}</p>
+        <button type="button" onClick={() => void initializeAccount()}>{stateText().retry}</button>
       </main>
     );
   }
   if (gate.phase === "loading" || (gate.phase === "required" && platform === null)) {
-    return <DashboardSkeleton label="Caricamento dashboard" />;
+    return <DashboardSkeleton label={stateText().loadingDashboard} />;
   }
   if (gate.phase === "error") {
     return (
       <main role="alert">
         <p>{gate.message}</p>
-        <button type="button" onClick={() => void initializeAccount()}>Riprova</button>
+        <button type="button" onClick={() => void initializeAccount()}>{stateText().retry}</button>
       </main>
     );
   }
   if (gate.phase === "required") {
     if (assistantChatIdentityKey === identityKey) {
       return (
-        <main data-testid="onboarding-assistant-chat" aria-label="Onboarding con l’Assistente">
+        <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
           <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
         </main>
       );

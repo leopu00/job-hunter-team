@@ -730,180 +730,38 @@ pub(crate) enum InteractiveInputMode {
     Text,
 }
 
+/// An onboarding error: its code, and whether trying again can help. The
+/// sentence is never written here: the app tells every code in the person's
+/// language (desktop/src/lib/error-catalog.ts, 7 languages), and `message`
+/// carries the code itself for the callers that read one.
 fn failure(code: &'static str) -> OnboardingError {
-    let (message, retryable) = match code {
-        "podman_missing" => (
-            "Podman non è stato installato. Verifica Homebrew e riprova.",
-            true,
-        ),
-        "podman_start_failed" => (
-            "La macchina Podman di JHT non si è avviata. Avviala e riprova.",
-            true,
-        ),
-        "podman_not_ready" => (
-            "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
-            true,
-        ),
-        "wsl_not_ready" => (
-            "WSL non risponde: su Windows fa girare la macchina Podman del team.",
-            true,
-        ),
-        // Retrying cannot help: the machine has to be recreated, and only after
-        // the person confirms it (onboarding_podman_machine_recreate).
-        PODMAN_MACHINE_MOUNTS_HOME => (
-            "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono. Ricreala per continuare.",
-            false,
-        ),
-        "podman_machine_recreate_failed" => (
-            "La macchina Podman di JHT non è stata ricreata. Riprova.",
-            true,
-        ),
-        "runtime_download_failed" => (
-            "Non riesco a scaricare il runtime verificato. Controlla la connessione e riprova.",
-            true,
-        ),
-        "runtime_install_failed" => (
-            "Il runtime locale non è stato installato correttamente. Riprova.",
-            true,
-        ),
-        "runtime_missing" => (
-            "Il runtime locale verificato non è disponibile. Configuralo di nuovo.",
-            true,
-        ),
-        "runtime_wrapper_install_failed" => (
-            "Il comando locale verificato non è stato aggiornato. Premi Riprova per completare la preparazione.",
-            true,
-        ),
-        "runtime_wrapper_publish_failed" => (
-            "Il comando locale verificato non è stato pubblicato correttamente. Premi Riprova.",
-            true,
-        ),
-        "runtime_wrapper_probe_failed" => (
-            "Il comando locale installato non supera la verifica di sola lettura. Premi Riprova.",
-            true,
-        ),
-        "runtime_install_unsupported" => (
-            "Il runtime locale non è supportato su questo sistema.",
-            false,
-        ),
-        "local_account_owner_missing" => (
-            "La cartella runtime locale contiene dati che non risultano creati da Job Hunter Team. Seleziona il profilo locale originale e riprova.",
-            false,
-        ),
-        "local_account_owner_mismatch" => (
-            "Il runtime locale appartiene a un altro profilo. Torna al profilo che lo ha configurato.",
-            false,
-        ),
-        "local_account_owner_invalid" => (
-            "La verifica del proprietario del runtime locale è danneggiata. Non è stato usato alcun dato locale.",
-            false,
-        ),
-        "local_account_owner_unavailable" => (
-            "Non riesco a verificare o registrare il proprietario del runtime locale. Controlla i permessi e riprova.",
-            true,
-        ),
-        "installer_digest_missing"
-        | "installer_digest_invalid"
-        | "installer_digest_mismatch"
-        | "installer_payload_invalid" => (
-            "Il pacchetto runtime non supera la verifica di integrità.",
-            false,
-        ),
-        "container_start_failed" => (
-            "Il container JHT non si è avviato. Controlla il runtime e riprova.",
-            true,
-        ),
-        "container_not_ready" => (
-            "Il container JHT è stato avviato ma non risponde ancora. Riprova.",
-            true,
-        ),
-        "timeout" | "command_timeout" => (
-            "L’operazione ha superato il tempo massimo. Controlla il runtime e riprova.",
-            true,
-        ),
-        "container_timeout" => (
-            "La verifica del container ha superato il tempo massimo. Riprova.",
-            true,
-        ),
-        "resume_runtime_not_ready" => (
-            "Il runtime salvato non risulta più disponibile. Riparti dal primo passaggio.",
-            false,
-        ),
-        "resume_container_not_ready" => (
-            "Il container salvato non risulta più attivo. Riparti dal passaggio container.",
-            false,
-        ),
-        "resume_provider_not_configured" => (
-            "Il provider salvato non risulta più configurato. Riparti dal passaggio provider.",
-            false,
-        ),
-        "resume_provider_not_authenticated" => (
-            "L’accesso al provider non risulta più disponibile. Accedi di nuovo al provider.",
-            false,
-        ),
-        "host_not_configured" | "host_config_invalid" => (
-            "La destinazione salvata non è più disponibile. Seleziona di nuovo l’ambiente.",
-            false,
-        ),
-        "team_start_failed" => (
-            "La sequenza di avvio della squadra non è riuscita. Riprova.",
-            true,
-        ),
-        "team_verify_failed" => (
-            "Assistente e Capitano non risultano entrambi attivi. Riprova.",
-            true,
-        ),
-        "provider_timeout" => (
-            "La configurazione del provider ha superato il tempo massimo. Riprova.",
-            true,
-        ),
-        "provider_config_failed" | "provider_install_failed" => (
-            "La configurazione del provider non è riuscita. Riprova.",
-            true,
-        ),
-        "provider_login_start_failed" | "provider_login_pipe_failed" => (
-            "Non riesco ad avviare l’accesso al provider. Riprova.",
-            true,
-        ),
-        "provider_login_failed" => (
-            "L’accesso al provider non è stato completato. Riprova.",
-            true,
-        ),
-        "provider_input_not_requested" => (
-            "Il provider non sta attendendo questa risposta.",
-            false,
-        ),
-        "assistant_start_failed" => ("L’assistente non si è avviato. Riprova.", true),
-        "assistant_verify_timeout" => (
-            "L’assistente è stato avviato ma non risulta ancora pronto. Riprova.",
-            true,
-        ),
-        "existing_team_vps_required" => (
-            "Seleziona una configurazione VPS valida per collegare il team esistente.",
-            false,
-        ),
-        "existing_team_identity_mismatch" => {
-            ("La VPS appartiene a un altro team o account.", false)
-        }
-        "existing_team_not_active" => (
-            "Il team sulla VPS non risulta attivo. Verificalo e riprova.",
-            true,
-        ),
-        "existing_team_unavailable" => (
-            "La VPS o il runtime JHT non sono raggiungibili. Verifica la connessione e riprova.",
-            true,
-        ),
-        "operation_in_progress" => ("Un’altra operazione è già in corso.", true),
-        "provider_limits_exhausted" => (
-            "I limiti del provider sono esauriti: la squadra partirà quando si liberano.",
-            true,
-        ),
-        code if code.starts_with("invalid_") => ("I dati ricevuti non sono validi.", false),
-        _ => ("L’operazione non è riuscita. Riprova.", true),
-    };
+    // Retrying cannot help: the data, the host or the machine must change
+    // first (PODMAN_MACHINE_MOUNTS_HOME: recreated, after the person confirms
+    // it with onboarding_podman_machine_recreate).
+    let retryable = !matches!(
+        code,
+        PODMAN_MACHINE_MOUNTS_HOME
+            | "runtime_install_unsupported"
+            | "local_account_owner_missing"
+            | "local_account_owner_mismatch"
+            | "local_account_owner_invalid"
+            | "installer_digest_missing"
+            | "installer_digest_invalid"
+            | "installer_digest_mismatch"
+            | "installer_payload_invalid"
+            | "resume_runtime_not_ready"
+            | "resume_container_not_ready"
+            | "resume_provider_not_configured"
+            | "resume_provider_not_authenticated"
+            | "host_not_configured"
+            | "host_config_invalid"
+            | "provider_input_not_requested"
+            | "existing_team_vps_required"
+            | "existing_team_identity_mismatch"
+    ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
-        message,
+        message: code,
         retryable,
         resets_at: None,
     }
@@ -2220,9 +2078,9 @@ fn prepare_impl(
     let mut pairing = pairing_token.map(Zeroizing::new);
     let (validated, wrapper) = reporter.run(
         OnboardingProgressStage::Engine,
-        "Verifico il motore container",
-        "Preparazione del motore container in corso",
-        "Motore container verificato",
+        "ui_engine_start",
+        "ui_engine_progress",
+        "ui_engine_done",
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
@@ -2263,9 +2121,9 @@ fn prepare_impl(
 
     reporter.run(
         OnboardingProgressStage::Runtime,
-        "Avvio il runtime Job Hunter Team",
-        "Avvio del runtime in corso",
-        "Runtime Job Hunter Team avviato",
+        "ui_runtime_start",
+        "ui_runtime_progress",
+        "ui_runtime_done",
         || match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
@@ -2306,9 +2164,9 @@ fn prepare_impl(
 
     reporter.run(
         OnboardingProgressStage::Container,
-        "Verifico il container Job Hunter Team",
-        "Verifica del container in corso",
-        "Container Job Hunter Team verificato",
+        "ui_container_start",
+        "ui_container_progress",
+        "ui_container_done",
         || {
             let started = Instant::now();
             let snapshot_result = snapshot_impl(&app, &scope, &validated);
@@ -2326,9 +2184,9 @@ fn prepare_impl(
 
     let snapshot = reporter.run(
         OnboardingProgressStage::Provider,
-        "Configuro il provider in abbonamento",
-        "Configurazione del provider in corso",
-        "Provider configurato",
+        "ui_provider_start",
+        "ui_provider_progress",
+        "ui_provider_done",
         || {
             match &validated {
                 ValidatedHost::Local => {
@@ -2637,16 +2495,16 @@ pub(crate) async fn onboarding_existing_team_connect(
         let reporter = ProgressReporter::new(on_progress);
         let validated = reporter.run(
             OnboardingProgressStage::Runtime,
-            "Verifico il runtime già configurato",
-            "Verifica del runtime in corso",
-            "Runtime già configurato verificato",
+            "ui_existing_runtime_start",
+            "ui_existing_runtime_progress",
+            "ui_existing_runtime_done",
             || validate_host(&app, &request.host).map_err(failure),
         )?;
         let snapshot = reporter.run(
             OnboardingProgressStage::Container,
-            "Verifico il container esistente",
-            "Verifica del container esistente in corso",
-            "Container esistente verificato",
+            "ui_existing_container_start",
+            "ui_existing_container_progress",
+            "ui_existing_container_done",
             || {
                 existing_team_probe_with(&request.team_id, |input| {
                     run_ssh(
@@ -2661,9 +2519,9 @@ pub(crate) async fn onboarding_existing_team_connect(
         )?;
         reporter.run(
             OnboardingProgressStage::Team,
-            "Confermo il team esistente",
-            "Conferma del team esistente in corso",
-            "Team esistente attivo e verificato",
+            "ui_existing_team_start",
+            "ui_existing_team_progress",
+            "ui_existing_team_done",
             || {
                 crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
                     .map_err(failure)?;
@@ -2985,7 +2843,7 @@ impl InteractiveStateDetector {
                     events.push(InteractiveEvent::State {
                         status: InteractiveStateStatus::NeedsUserAction,
                         action: InteractiveAction::Device {
-                            instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+                            instruction: "ui_login_device",
                             request_id: format!("codex-device-{}", self.request_sequence),
                             safe_url,
                             user_code,
@@ -3006,7 +2864,7 @@ impl InteractiveStateDetector {
                 events.push(InteractiveEvent::State {
                     status: InteractiveStateStatus::NeedsUserAction,
                     action: InteractiveAction::Url {
-                        instruction: "Completa l’accesso nel browser.",
+                        instruction: "ui_login_url",
                         safe_url,
                     },
                 });
@@ -3018,7 +2876,7 @@ impl InteractiveStateDetector {
                 events.push(InteractiveEvent::State {
                     status: InteractiveStateStatus::NeedsUserAction,
                     action: InteractiveAction::Code {
-                        instruction: "Inserisci nel browser il codice mostrato.",
+                        instruction: "ui_login_code",
                         user_code,
                     },
                 });
@@ -3031,16 +2889,16 @@ impl InteractiveStateDetector {
                 status: InteractiveStateStatus::NeedsUserAction,
                 action: InteractiveAction::Input {
                     instruction:
-                        "Completa l’accesso nel browser e inserisci la risposta richiesta.",
+                        "ui_login_input",
                     input_request: InteractiveInputRequest {
                         id: format!(
                             "{}-response-{}",
                             self.provider.cli_id(),
                             self.request_sequence
                         ),
-                        label: "Risposta richiesta dal provider",
-                        description: "Inserisci la risposta mostrata dal provider nel browser.",
-                        submit_label: "Invia risposta",
+                        label: "ui_login_input_label",
+                        description: "ui_login_input_description",
+                        submit_label: "ui_login_input_submit",
                         secret: false,
                         input_mode: InteractiveInputMode::Text,
                     },
@@ -3312,7 +3170,7 @@ pub(crate) fn onboarding_provider_login(
     reporter.send(
         OnboardingProgressStage::Login,
         OnboardingProgressStatus::Start,
-        "Avvio l’accesso al provider",
+        "ui_login_start",
         login_started,
         None,
     );
@@ -3447,7 +3305,7 @@ pub(crate) fn onboarding_provider_login(
                         reporter.send(
                             OnboardingProgressStage::Login,
                             OnboardingProgressStatus::Done,
-                            "Accesso al provider completato",
+                            "ui_login_done",
                             login_started,
                             None,
                         );
@@ -3483,7 +3341,7 @@ pub(crate) fn onboarding_provider_login(
                 reporter.send(
                     OnboardingProgressStage::Login,
                     OnboardingProgressStatus::Progress,
-                    "Accesso al provider in corso",
+                    "ui_login_progress",
                     login_started,
                     None,
                 );
@@ -3756,9 +3614,9 @@ pub(crate) async fn onboarding_team_start(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Team,
-            "Avvio la squadra",
-            "Avvio della squadra in corso",
-            "Squadra avviata e verificata",
+            "ui_team_start",
+            "ui_team_progress",
+            "ui_team_done",
             || {
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let limits =
@@ -3848,9 +3706,9 @@ pub(crate) async fn onboarding_resume_team_start(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Team,
-            "Riprendo l’avvio della squadra",
-            "Ripristino della squadra in corso",
-            "Squadra ripristinata e verificata",
+            "ui_team_resume_start",
+            "ui_team_resume_progress",
+            "ui_team_resume_done",
             || {
                 let host = crate::direct_chat::load_persisted_host(&app, &worker_expected)
                     .map_err(failure)?;
@@ -3897,9 +3755,9 @@ pub(crate) async fn onboarding_assistant_open(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Assistant,
-            "Avvio l’assistente",
-            "Avvio dell’assistente in corso",
-            "Assistente avviato e verificato",
+            "ui_assistant_start",
+            "ui_assistant_progress",
+            "ui_assistant_done",
             || {
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 match &validated {
@@ -4213,9 +4071,9 @@ mod tests {
             assert_eq!(error.code, code);
             assert_eq!(serialized["code"], code);
             assert_eq!(serialized["retryable"], true);
-            assert!(serialized["message"].as_str().is_some_and(|value| {
-                !value.is_empty() && value != "L’operazione non è riuscita. Riprova."
-            }));
+            // The sentence is the app's, in the person's language: natively
+            // only the code travels.
+            assert_eq!(serialized["message"], code);
             let serialized = serialized.to_string();
             assert!(!serialized.contains("stderr"));
             assert!(!serialized.contains("path"));
@@ -5492,7 +5350,7 @@ exit 0
         ] {
             let error = failure(code);
             assert!(!error.retryable);
-            assert_ne!(error.message, "L’operazione non è riuscita. Riprova.");
+            assert_eq!(error.message, code);
         }
         assert!(failure("team_start_failed").retryable);
         assert!(failure("team_verify_failed").retryable);

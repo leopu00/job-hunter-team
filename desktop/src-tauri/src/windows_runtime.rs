@@ -240,19 +240,20 @@ pub(crate) fn installer_outcome(result: Result<i32, &'static str>) -> Result<(),
     }
 }
 
-/// install.ps1's phases, in the order they run, with what the onboarding
-/// shows while each one lasts.
+/// install.ps1's phases, in the order they run, with the key of what the
+/// onboarding shows while each one lasts (desktop/src/lib/onboarding-progress.i18n.ts,
+/// 7 languages).
 pub(crate) const INSTALL_PHASES: [(&str, &str); 6] = [
-    ("wsl_check", "Controllo WSL"),
-    ("podman_install", "Installo Podman"),
-    ("podman_machine_init", "Creo la macchina Podman di Job Hunter Team in WSL"),
-    ("podman_machine_start", "Avvio la macchina Podman"),
-    ("runtime_download", "Scarico il runtime Job Hunter Team"),
-    ("image_pull", "Scarico l’immagine del team: è la parte più lunga"),
+    ("wsl_check", "ui_phase_wsl_check"),
+    ("podman_install", "ui_phase_podman_install"),
+    ("podman_machine_init", "ui_phase_podman_machine_init"),
+    ("podman_machine_start", "ui_phase_podman_machine_start"),
+    ("runtime_download", "ui_phase_runtime_download"),
+    ("image_pull", "ui_phase_image_pull"),
 ];
 
-/// A `JHT_PHASE <id>` line of install.ps1's stdout, exactly, with a known id.
-/// Anything else on stdout is not shown.
+/// The key of a `JHT_PHASE <id>` line of install.ps1's stdout, exactly, with a
+/// known id. Anything else on stdout is not shown.
 pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
     let id = line.trim_end_matches(['\r', '\n']).strip_prefix("JHT_PHASE ")?;
     INSTALL_PHASES
@@ -514,7 +515,7 @@ mod tests {
                 "image_pull"
             ]
         );
-        assert_eq!(phase_message("JHT_PHASE wsl_check"), Some("Controllo WSL"));
+        assert_eq!(phase_message("JHT_PHASE wsl_check"), Some("ui_phase_wsl_check"));
         assert_eq!(phase_message("JHT_PHASE image_pull\r\n"), INSTALL_PHASES.last().map(|(_, m)| *m));
         for other in [
             "",

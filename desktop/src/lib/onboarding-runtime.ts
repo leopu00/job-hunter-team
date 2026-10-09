@@ -7,6 +7,8 @@ import {
   type OnboardingRuntimeSnapshot,
   type OnboardingSubmission,
 } from "./onboarding";
+import { appLocale } from "./app-locale";
+import { RUNTIME_TEXT, runtimeText, type RuntimeTextKey } from "./onboarding-runtime.i18n";
 
 export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
 export type OnboardingNativeProgressStatus = "start" | "progress" | "done" | "error";
@@ -52,14 +54,14 @@ const SAFE_INTERACTIVE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const UNSAFE_ACTIVITY_TEXT = /[\r\n\0/\\]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b|@/i;
 const UNSAFE_INTERACTIVE_TEXT = /[\r\n\0]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|@/i;
 const UNSAFE_USER_CODE = /[\u0000-\u001f\u007f-\u009f]/;
-const FALLBACK_PROGRESS_MESSAGE: Record<OnboardingNativeProgressStage, string> = {
-  engine: "Verifico l’ambiente di esecuzione.",
-  runtime: "Preparo il runtime verificato.",
-  container: "Preparo il container del team.",
-  provider: "Configuro il provider selezionato.",
-  login: "Verifico l’accesso al provider.",
-  team: "Avvio e verifico le sessioni del team.",
-  assistant: "Apro e verifico l’Assistente.",
+const FALLBACK_PROGRESS_MESSAGE: Record<OnboardingNativeProgressStage, RuntimeTextKey> = {
+  engine: "ui_fallback_engine",
+  runtime: "ui_fallback_runtime",
+  container: "ui_fallback_container",
+  provider: "ui_fallback_provider",
+  login: "ui_fallback_login",
+  team: "ui_fallback_team",
+  assistant: "ui_fallback_assistant",
 };
 
 export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeProgress | null {
@@ -71,10 +73,14 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
       !Number.isSafeInteger(row.elapsedMs) || (row.elapsedMs as number) < 0) return null;
   const stage = row.stage as OnboardingNativeProgressStage;
   const status = row.status as OnboardingNativeProgressStatus;
+  // The native side sends a `ui_*` key, told here in the app's language;
+  // anything else is shown only when it is short and safe.
+  const locale = appLocale();
   const rawMessage = typeof row.message === "string" ? row.message.trim() : "";
-  const message = rawMessage && rawMessage.length <= 180 && !UNSAFE_ACTIVITY_TEXT.test(rawMessage)
-    ? rawMessage
-    : FALLBACK_PROGRESS_MESSAGE[stage];
+  const message = runtimeText(rawMessage, locale) ??
+    (rawMessage && rawMessage.length <= 180 && !UNSAFE_ACTIVITY_TEXT.test(rawMessage)
+      ? rawMessage
+      : RUNTIME_TEXT[locale][FALLBACK_PROGRESS_MESSAGE[stage]]);
   const code = row.code === null ? null : typeof row.code === "string" && SAFE_CODE.test(row.code) ? row.code : undefined;
   const retryable = row.retryable === null || typeof row.retryable === "boolean" ? row.retryable : undefined;
   if (code === undefined || retryable === undefined) return null;
@@ -84,7 +90,7 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
 
 function safeInteractiveText(value: unknown, maximum: number): string | null {
   if (typeof value !== "string") return null;
-  const text = value.trim();
+  const text = runtimeText(value.trim(), appLocale()) ?? value.trim();
   return text && text.length <= maximum && !UNSAFE_INTERACTIVE_TEXT.test(text) ? text : null;
 }
 

@@ -1,5 +1,7 @@
 import { homeDir } from "@tauri-apps/api/path";
 import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
+import { ONBOARDING_TEXT } from "../onboarding/onboarding.i18n";
+import { appLocale } from "./app-locale";
 
 export type SshKeySelector = () => Promise<string | null>;
 
@@ -8,7 +10,6 @@ type OpenDialog = (
 ) => Promise<string | string[] | null>;
 
 const SSH_KEY_DIALOG_OPTIONS = {
-  title: "Scegli chiave SSH",
   multiple: false,
   directory: false,
   canCreateDirectories: false,
@@ -24,9 +25,10 @@ export async function pickSshKey(
   home: () => Promise<string> = homeDir,
 ): Promise<string | null> {
   const defaultPath = await home().catch(() => "");
+  const title = ONBOARDING_TEXT[appLocale()].sshKeyPicker.dialogTitle;
   const selected = await openDialog(defaultPath
-    ? { ...SSH_KEY_DIALOG_OPTIONS, defaultPath }
-    : SSH_KEY_DIALOG_OPTIONS);
+    ? { title, ...SSH_KEY_DIALOG_OPTIONS, defaultPath }
+    : { title, ...SSH_KEY_DIALOG_OPTIONS });
   if (selected === null || selected === "") return null;
   if (typeof selected !== "string") throw new Error("ssh-key-dialog-invalid-selection");
   return selected;
@@ -35,5 +37,5 @@ export async function pickSshKey(
 /** Handles POSIX and Windows paths while never exposing their directory portion. */
 export function sshKeyBasename(path: string): string {
   const parts = path.split(/[\\/]/u).filter(Boolean);
-  return parts.at(-1) ?? "Nome file non disponibile";
+  return parts.at(-1) ?? ONBOARDING_TEXT[appLocale()].sshKeyPicker.noFileName;
 }

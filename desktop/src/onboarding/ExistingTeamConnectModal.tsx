@@ -1,6 +1,8 @@
 import { KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import SshKeyPicker from "../components/SshKeyPicker";
+import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
+import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import {
   existingTeamBridge,
   existingTeamErrorCode,
@@ -26,7 +28,7 @@ export interface ExistingTeamConnectModalProps {
 
 /** The failure, told by the error catalog: what happened and what to do. */
 function errorCopy(code: string): { text: string; action: string } {
-  return describeError(code, { fallback: "existing_team_connect_failed" });
+  return describeError(code, { fallback: "existing_team_connect_failed", locale: appLocale() });
 }
 
 function cleanHost(host: ExistingTeamVpsHost): ExistingTeamVpsHost {
@@ -55,6 +57,7 @@ export default function ExistingTeamConnectModal({
   onConnected,
   bridge = existingTeamBridge,
 }: ExistingTeamConnectModalProps) {
+  const t = ONBOARDING_TEXT[appLocale()];
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -166,13 +169,7 @@ export default function ExistingTeamConnectModal({
 
   const busy = stage === "probing" || stage === "attaching";
   const activeStep = stage === "fields" || stage === "probing" ? 0 : stage === "confirm" ? 1 : 2;
-  const progressCopy: Record<ExistingTeamProgress["stage"], string> = {
-    preparing: "Preparo la verifica attach-only.",
-    runtime: "Verifico la VPS già configurata.",
-    container: "Controllo runtime e container senza modificarli.",
-    provider: "Controllo il provider già configurato.",
-    team: "Verifico che Capitano e Assistente siano attivi.",
-  };
+  const progressCopy: Record<ExistingTeamProgress["stage"], string> = t.existingTeam.progress;
 
   return (
     <div className="existing-team-modal__backdrop">
@@ -187,15 +184,15 @@ export default function ExistingTeamConnectModal({
         onKeyDown={keyDown}
       >
         <header className="existing-team-modal__header">
-          <p className="existing-team-modal__eyebrow">Team registrato</p>
-          <h2 id={titleId} ref={headingRef} tabIndex={-1}>Hai già un team attivo su VPS?</h2>
-          <p id={descriptionId}>Collega questa app senza reinstallare o riavviare il team. Host e chiave restano soltanto su questo computer.</p>
+          <p className="existing-team-modal__eyebrow">{t.existingTeam.eyebrow}</p>
+          <h2 id={titleId} ref={headingRef} tabIndex={-1}>{t.existingTeam.title}</h2>
+          <p id={descriptionId}>{t.existingTeam.description}</p>
         </header>
 
         <OnboardingArtwork name="environmentVps" className="existing-team-modal__artwork" />
 
-        <ol className="existing-team-modal__steps" aria-label="Avanzamento collegamento VPS">
-          {["Dati VPS", "Identità SSH", "Verifica team"].map((label, index) => (
+        <ol className="existing-team-modal__steps" aria-label={t.existingTeam.stepsAria}>
+          {t.existingTeam.steps.map((label, index) => (
             <li key={label} className={index < activeStep ? "is-complete" : index === activeStep ? "is-active" : undefined} aria-current={index === activeStep ? "step" : undefined}>
               <span aria-hidden="true">{index < activeStep ? "✓" : index + 1}</span>{label}
             </li>
@@ -204,46 +201,46 @@ export default function ExistingTeamConnectModal({
 
         {(stage === "fields" || stage === "probing") && (
           <form className="existing-team-modal__form" onSubmit={(event) => { event.preventDefault(); void runProbe(); }}>
-            <label><span>Host o indirizzo IP</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
+            <label><span>{t.existingTeam.host}</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
             <div className="existing-team-modal__row">
-              <label><span>Utente SSH</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
-              <label><span>Porta SSH</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
+              <label><span>{t.sshUser}</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
+              <label><span>{t.sshPort}</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
             </div>
             <SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={busy} />
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={onCancel} disabled={busy}>Configura un nuovo team</button>
-              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || busy}>{stage === "probing" ? "Verifico l’identità…" : "Verifica VPS"}</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={onCancel} disabled={busy}>{t.existingTeam.newTeam}</button>
+              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || busy}>{stage === "probing" ? t.existingTeam.verifyingIdentity : t.existingTeam.verifyVps}</button>
             </div>
           </form>
         )}
 
         {stage === "confirm" && probe && (
           <section className="existing-team-modal__confirm" aria-live="polite">
-            <p className="existing-team-modal__eyebrow">Conferma identità SSH</p>
-            <p>Confronta questa impronta con quella mostrata dal tuo provider VPS prima di collegare il team.</p>
-            <dl><div><dt>Algoritmo</dt><dd>{probe.algorithm}</dd></div><div><dt>Fingerprint</dt><dd>{probe.fingerprint}</dd></div></dl>
-            <p className="existing-team-modal__warning">Conferma soltanto se l’impronta coincide. Il collegamento non installerà né riavvierà nulla.</p>
+            <p className="existing-team-modal__eyebrow">{t.existingTeam.confirmEyebrow}</p>
+            <p>{t.existingTeam.compareText}</p>
+            <dl><div><dt>{t.algorithm}</dt><dd>{probe.algorithm}</dd></div><div><dt>{t.fingerprint}</dt><dd>{probe.fingerprint}</dd></div></dl>
+            <p className="existing-team-modal__warning">{t.existingTeam.warning}</p>
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>Indietro</button>
-              <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>Conferma e collega</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{t.back}</button>
+              <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>{t.existingTeam.confirmAndLink}</button>
             </div>
           </section>
         )}
 
         {stage === "attaching" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">
-            <span aria-hidden="true">••</span><div><strong>Verifica attach-only in corso</strong><p>{progressCopy[attachProgress]}</p></div>
+            <span aria-hidden="true">••</span><div><strong>{t.existingTeam.attachInProgress}</strong><p>{progressCopy[attachProgress]}</p></div>
           </section>
         )}
 
         {stage === "failed" && errorCode && (
           <section className={`existing-team-modal__failure${terminal ? " is-terminal" : ""}`} role="alert">
-            <strong>{terminal ? "Collegamento bloccato" : "Verifica non riuscita"}</strong>
+            <strong>{terminal ? t.existingTeam.blocked : t.existingTeam.failed}</strong>
             <p>{errorCopy(errorCode).text}</p>
             <p>{errorCopy(errorCode).action}</p>
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={terminal ? onCancel : backToFields}>{terminal ? "Torna al setup" : "Modifica dati"}</button>
-              {!terminal && <button type="button" className="existing-team-modal__primary" onClick={() => void retry()}>Riprova</button>}
+              <button type="button" className="existing-team-modal__secondary" onClick={terminal ? onCancel : backToFields}>{terminal ? t.existingTeam.backToSetup : t.existingTeam.editData}</button>
+              {!terminal && <button type="button" className="existing-team-modal__primary" onClick={() => void retry()}>{t.retry}</button>}
             </div>
           </section>
         )}

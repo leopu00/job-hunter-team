@@ -1,5 +1,7 @@
 import { useId, useState } from "react";
 import { pickSshKey, sshKeyBasename, type SshKeySelector } from "../lib/ssh-key-picker";
+import { appLocale } from "../lib/app-locale";
+import { ONBOARDING_TEXT } from "../onboarding/onboarding.i18n";
 import "./ssh-key-picker.css";
 
 export interface SshKeyPickerProps {
@@ -15,6 +17,7 @@ export default function SshKeyPicker({
   disabled = false,
   pickKey = pickSshKey,
 }: SshKeyPickerProps) {
+  const t = ONBOARDING_TEXT[appLocale()].sshKeyPicker;
   const id = useId();
   const [busy, setBusy] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -41,11 +44,11 @@ export default function SshKeyPicker({
 
   return (
     <div className="ssh-key-picker" role="group" aria-labelledby={`${id}-label`}>
-      <span className="ssh-key-picker__label" id={`${id}-label`}>File chiave SSH</span>
+      <span className="ssh-key-picker__label" id={`${id}-label`}>{t.label}</span>
       <p className="ssh-key-picker__status" id={`${id}-status`} role="status">
         {hasSelection
-          ? <>Chiave selezionata: <strong>{sshKeyBasename(value)}</strong></>
-          : "Nessuna chiave selezionata."}
+          ? <>{t.selected} <strong>{sshKeyBasename(value)}</strong></>
+          : t.none}
       </p>
       <div className="ssh-key-picker__actions">
         <button
@@ -54,7 +57,7 @@ export default function SshKeyPicker({
           disabled={disabled || busy}
           aria-describedby={`${id}-status`}
         >
-          {busy ? "Apro selettore…" : hasSelection ? "Cambia chiave…" : "Scegli chiave…"}
+          {busy ? t.opening : hasSelection ? t.change : t.choose}
         </button>
         {hasSelection && (
           <button
@@ -64,13 +67,13 @@ export default function SshKeyPicker({
             disabled={disabled || busy}
             aria-describedby={`${id}-status`}
           >
-            Rimuovi chiave
+            {t.remove}
           </button>
         )}
       </div>
       {unavailable && (
         <p className="ssh-key-picker__error" role="alert">
-          Non riesco ad aprire il selettore file. Riprova.
+          {t.unavailable}
         </p>
       )}
     </div>

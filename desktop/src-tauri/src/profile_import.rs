@@ -89,35 +89,22 @@ pub(crate) struct ProfileImportError {
     retryable: bool,
 }
 
+/// A VPS profile import error: its code, and whether trying again can help.
+/// The sentence is the app's, in the person's language (error-catalog.ts);
+/// `message` carries the code itself.
 fn failure(code: &'static str) -> ProfileImportError {
-    let (message, retryable) = match code {
-        "local_profile_required" => (
-            "L’importazione è disponibile solo per un profilo locale.",
-            false,
-        ),
-        "target_profile_exists" => (
-            "Questo runtime locale contiene già un profilo. Non è stato sovrascritto.",
-            false,
-        ),
-        "source_profile_missing" => ("La VPS non contiene un profilo da importare.", false),
-        "source_profile_invalid" => (
-            "Il profilo sulla VPS non supera la validazione richiesta.",
-            false,
-        ),
-        "source_review_pending" => (
-            "Sulla VPS c’è una revisione del profilo ancora da confermare.",
-            false,
-        ),
-        "profile_import_recovery_required" => (
-            "L’importazione precedente richiede un controllo prima di riprovare.",
-            false,
-        ),
-        "operation_in_progress" => ("Un’importazione è già in corso.", true),
-        "host_key_missing" | "host_key_mismatch" => {
-            ("Verifica prima l’identità SSH della VPS.", false)
-        }
-        _ => ("Non è stato possibile importare il profilo. Riprova.", true),
-    };
+    let retryable = !matches!(
+        code,
+        "local_profile_required"
+            | "target_profile_exists"
+            | "source_profile_missing"
+            | "source_profile_invalid"
+            | "source_review_pending"
+            | "profile_import_recovery_required"
+            | "host_key_missing"
+            | "host_key_mismatch"
+    );
+    let message = code;
     ProfileImportError {
         code,
         message,

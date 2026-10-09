@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import { stateText } from "./onboarding-state.i18n";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { DesktopPlatform } from "./desktop-platform";
 
@@ -227,7 +228,6 @@ const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
 const MARKER_STARTED = "subscription-v1-started";
 const MARKER_RESTARTED = "subscription-v1-restarted";
-const STATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 
 function markerKey(userId: string): string { return `${MARKER_PREFIX}${userId}`; }
 function clean(value: string): string { return value.trim().replace(/\s+/g, " "); }
@@ -306,7 +306,7 @@ export async function loadOnboardingGate(
       .limit(1)
       .maybeSingle(),
   ]);
-  if (milestonesResult.error || profileResult.error || teamResult.error) return { phase: "error", message: STATE_ERROR };
+  if (milestonesResult.error || profileResult.error || teamResult.error) return { phase: "error", message: stateText().gateError };
   const milestones = milestonesResult.data as OnboardingMilestones | null;
   const profile = profileResult.data as ProfileRow | null;
   const team = teamResult.data as ExistingTeamRow | null;
@@ -357,25 +357,25 @@ export function isOnboardingRuntimeReady(snapshot: OnboardingRuntimeSnapshot): b
 export function runtimeStateFromSnapshot(snapshot: OnboardingRuntimeSnapshot): OnboardingRuntimeState {
   if (isOnboardingRuntimeReady(snapshot)) return { status: "ready" };
   if (!snapshot.runtimeInstalled) {
-    return { status: "failed", stage: "runtime", message: "Il runtime non ha completato la preparazione." };
+    return { status: "failed", stage: "runtime", message: stateText().snapshotRuntimeIncomplete };
   }
   if (!snapshot.containerRunning) {
-    return { status: "failed", stage: "container", message: "Il container non risulta attivo." };
+    return { status: "failed", stage: "container", message: stateText().snapshotContainerNotRunning };
   }
   if (!snapshot.providerConfigured) {
-    return { status: "failed", stage: "provider", message: "Il provider non ha completato la preparazione." };
+    return { status: "failed", stage: "provider", message: stateText().snapshotProviderIncomplete };
   }
   if (!snapshot.providerAuthenticated) {
-    return { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." };
+    return { status: "action-required", stage: "provider-login", message: stateText().snapshotSignIn };
   }
   if (!snapshot.assistantRunning || !snapshot.captainRunning) {
-    return { status: "failed", stage: "team-start", message: "Il team non è ancora operativo." };
+    return { status: "failed", stage: "team-start", message: stateText().snapshotTeamNotOperational };
   }
   if (snapshot.profileReady && !snapshot.directChatReady) {
-    return { status: "failed", stage: "assistant", message: "La chat diretta non è ancora raggiungibile." };
+    return { status: "failed", stage: "assistant", message: stateText().snapshotChatUnreachable };
   }
   return { status: "action-required", stage: "assistant",
-    message: snapshot.profileReady ? "Completa la presentazione con l’Assistente." : "Completa il profilo con l’Assistente." };
+    message: snapshot.profileReady ? stateText().snapshotCompletePresentation : stateText().snapshotCompleteProfile };
 }
 
 export function markOnboardingReady(

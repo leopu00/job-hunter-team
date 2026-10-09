@@ -10,12 +10,14 @@ import {
 } from "../lib/profile-import";
 import type { SshHostKeyProbe } from "../lib/onboarding-runtime";
 import "./vps-profile-import.css";
+import { appLocale } from "../lib/app-locale";
+import { ONBOARDING_TEXT } from "./onboarding.i18n";
 
 type Stage = "closed" | "fields" | "probing" | "confirm" | "importing" | "done" | "failed";
 
 /** The failure, told by the error catalog: what happened and what to do. */
 function errorCopy(code: string): { text: string; action: string } {
-  return describeError(code, { fallback: "profile_import_failed" });
+  return describeError(code, { fallback: "profile_import_failed", locale: appLocale() });
 }
 
 const TERMINAL_ERRORS = new Set([
@@ -47,6 +49,7 @@ export interface VpsProfileImportProps {
 }
 
 export default function VpsProfileImport({ bridge = profileImportBridge }: VpsProfileImportProps) {
+  const t = ONBOARDING_TEXT[appLocale()];
   const [stage, setStage] = useState<Stage>("closed");
   const [host, setHost] = useState<VpsProfileImportHost>(initialHost);
   const [probe, setProbe] = useState<SshHostKeyProbe | null>(null);
@@ -135,8 +138,8 @@ export default function VpsProfileImport({ bridge = profileImportBridge }: VpsPr
   if (stage === "closed") {
     return (
       <section className="vps-profile-import vps-profile-import--closed">
-        <div><strong>Hai già un profilo su una VPS?</strong><p>Puoi copiarlo qui senza collegare Google.</p></div>
-        <button type="button" onClick={() => setStage("fields")}>Importa profilo</button>
+        <div><strong>{t.vpsImport.ctaTitle}</strong><p>{t.vpsImport.ctaText}</p></div>
+        <button type="button" onClick={() => setStage("fields")}>{t.vpsImport.ctaButton}</button>
       </section>
     );
   }
@@ -144,41 +147,41 @@ export default function VpsProfileImport({ bridge = profileImportBridge }: VpsPr
   if (stage === "done") {
     return (
       <section className="vps-profile-import vps-profile-import--done" role="status" aria-live="polite">
-        <span aria-hidden="true">✓</span><div><h3 ref={headingRef} tabIndex={-1}>Profilo importato.</h3><p>La copia locale è stata verificata ed è pronta per questo team.</p></div>
+        <span aria-hidden="true">✓</span><div><h3 ref={headingRef} tabIndex={-1}>{t.vpsImport.doneTitle}</h3><p>{t.vpsImport.doneText}</p></div>
       </section>
     );
   }
 
   return (
     <section className="vps-profile-import" aria-busy={busy}>
-      <header><p className="onboarding-eyebrow">Importazione protetta</p><h3 ref={stage === "confirm" ? headingRef : undefined} tabIndex={stage === "confirm" ? -1 : undefined}>Riusa il profilo della tua VPS.</h3><p>Leggiamo soltanto il profilo confermato. Chiavi, database e configurazioni restano dove sono.</p></header>
+      <header><p className="onboarding-eyebrow">{t.vpsImport.eyebrow}</p><h3 ref={stage === "confirm" ? headingRef : undefined} tabIndex={stage === "confirm" ? -1 : undefined}>{t.vpsImport.title}</h3><p>{t.vpsImport.intro}</p></header>
 
       {(stage === "fields" || stage === "probing") && (
         <form onSubmit={(event) => void probeHost(event)}>
-          <label><span>Host o indirizzo IP</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
+          <label><span>{t.vpsImport.host}</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
           <div className="vps-profile-import__row">
-            <label><span>Utente SSH</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
-            <label><span>Porta SSH</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
+            <label><span>{t.sshUser}</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
+            <label><span>{t.sshPort}</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
           </div>
           <SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={busy} />
-          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={close} disabled={busy}>Annulla</button><button type="submit" className="onboarding-primary" disabled={!validHost(host) || busy}>{busy ? "Verifica in corso…" : "Verifica e importa"}</button></div>
+          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={close} disabled={busy}>{t.cancel}</button><button type="submit" className="onboarding-primary" disabled={!validHost(host) || busy}>{busy ? t.verifying : t.vpsImport.verifyAndImport}</button></div>
         </form>
       )}
 
       {stage === "confirm" && probe && (
         <section className="vps-profile-import__confirm" aria-live="polite">
-          <p>Confronta il fingerprint con quello mostrato dal provider della VPS.</p>
-          <dl><div><dt>Algoritmo</dt><dd>{probe.algorithm}</dd></div><div><dt>Fingerprint</dt><dd>{probe.fingerprint}</dd></div></dl>
-          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={edit}>Indietro</button><button type="button" className="onboarding-primary" onClick={() => void confirmAndImport()}>Conferma e importa</button></div>
+          <p>{t.vpsImport.compareFingerprint}</p>
+          <dl><div><dt>{t.algorithm}</dt><dd>{probe.algorithm}</dd></div><div><dt>{t.fingerprint}</dt><dd>{probe.fingerprint}</dd></div></dl>
+          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={edit}>{t.back}</button><button type="button" className="onboarding-primary" onClick={() => void confirmAndImport()}>{t.vpsImport.confirmAndImport}</button></div>
         </section>
       )}
 
-      {stage === "importing" && <p className="vps-profile-import__status" role="status" aria-live="polite">Importazione e verifica della copia locale in corso…</p>}
+      {stage === "importing" && <p className="vps-profile-import__status" role="status" aria-live="polite">{t.vpsImport.importing}</p>}
 
       {stage === "failed" && errorCode && (
         <section className="vps-profile-import__failure" role="alert">
-          <h3 ref={headingRef} tabIndex={-1}>Importazione non completata</h3><p>{errorCopy(errorCode).text}</p><p>{errorCopy(errorCode).action}</p>
-          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={close}>Chiudi</button>{!TERMINAL_ERRORS.has(errorCode) && <button type="button" className="onboarding-primary" onClick={edit}>Modifica e riprova</button>}</div>
+          <h3 ref={headingRef} tabIndex={-1}>{t.vpsImport.failedTitle}</h3><p>{errorCopy(errorCode).text}</p><p>{errorCopy(errorCode).action}</p>
+          <div className="vps-profile-import__actions"><button type="button" className="onboarding-secondary" onClick={close}>{t.vpsImport.close}</button>{!TERMINAL_ERRORS.has(errorCode) && <button type="button" className="onboarding-primary" onClick={edit}>{t.vpsImport.editRetry}</button>}</div>
         </section>
       )}
     </section>

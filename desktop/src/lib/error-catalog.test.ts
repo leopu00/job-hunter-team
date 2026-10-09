@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ERROR_CATALOG, NOT_EMITTED, describeError, errorCodeOf, errorResetsAt } from "./error-catalog";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
+import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
 
@@ -173,7 +174,12 @@ describe("error catalog", () => {
   });
 
   it("has a sentence and an action for every Rust code that can reach the person", () => {
-    const missing = [...rust].filter((code) => !(code in ERROR_CATALOG) && !(code in NOT_ERRORS)).sort();
+    // `ui_*` keys are texts, not errors: the onboarding's progress, phases
+    // and login instructions, told by onboarding-runtime.i18n.ts. A `ui_*`
+    // key that table lacks is still reported here.
+    const missing = [...rust]
+      .filter((code) => !(code in ERROR_CATALOG) && !(code in NOT_ERRORS) && !isRuntimeTextKey(code))
+      .sort();
     expect(missing, "codes with no sentence: add them to ERROR_CATALOG or to NOT_ERRORS with a reason").toEqual([]);
   });
 
