@@ -404,6 +404,12 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True, timeout=30, check=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
+    phases = [
+        line.removeprefix("JHT_PHASE ")
+        for line in result.stdout.splitlines()
+        if line.startswith("JHT_PHASE ")
+    ]
+    assert phases == ["homebrew_check", "machine_create", "machine_start", "image_pull"]
     init = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("podman machine init")]
     jht_home, jht_docs = jht_mount_sources(home)
     assert init == [

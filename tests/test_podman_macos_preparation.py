@@ -63,6 +63,34 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
     assert "the Podman machine and Colima are both kept" in source
 
 
+def test_macos_podman_install_reports_the_desktop_phase_contract():
+    source = _source(INSTALLER)
+    helper = source[source.index("jht_phase()") : source.index("run()")]
+    setup = source[
+        source.index("install_podman_macos()") : source.index(
+            "install_docker_linux()"
+        )
+    ]
+    phases = {
+        "homebrew_check",
+        "podman_install",
+        "compose_install",
+        "machine_create",
+        "image_pull",
+        "machine_start",
+    }
+
+    assert "printf 'JHT_PHASE %s\\n' \"$1\"" in helper
+    for phase in phases:
+        assert phase in helper
+        assert f"jht_phase {phase}" in setup
+    assert setup.index("jht_phase podman_install") < setup.index("run brew install podman")
+    assert setup.index("jht_phase compose_install") < setup.index(
+        "run brew install podman-compose"
+    )
+    assert setup.rindex("jht_phase image_pull") < setup.index('pull "$IMAGE"')
+
+
 def test_macos_podman_setup_reports_another_running_machine_without_stopping_it():
     installer = _source(INSTALLER)
     wrapper = _source(WRAPPER)

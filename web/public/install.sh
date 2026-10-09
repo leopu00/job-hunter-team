@@ -269,6 +269,14 @@ info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
 
+jht_phase() {
+  case "$1" in
+    homebrew_check|podman_install|compose_install|machine_create|image_pull|machine_start) ;;
+    *) fail "Unknown installer phase: $1" ;;
+  esac
+  printf 'JHT_PHASE %s\n' "$1"
+}
+
 # Wrap commands with system side effects. In dry-run, print instead of executing.
 run() {
   if [ "${DRY_RUN:-0}" = "1" ]; then
@@ -455,21 +463,28 @@ install_podman_macos() {
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
   # sempre quella connessione senza cambiare il default Podman dell'utente.
   unset CONTAINER_CONNECTION
+  jht_phase homebrew_check
   install_brew_if_missing
   if ! command -v podman &>/dev/null; then
+    jht_phase podman_install
     info "Installing Podman CLI (macOS preview)..."
     run brew install podman || fail "Podman installation failed"
   else
     ok "podman already installed"
   fi
   if ! command -v podman-compose &>/dev/null; then
+    jht_phase compose_install
     info "Installing the Podman Compose provider..."
     run brew install podman-compose || fail "podman-compose installation failed"
   else
     ok "podman-compose already installed"
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
+    jht_phase machine_create
+    jht_phase machine_start
     printf "  ${DIM}[dry-run]${RESET} would initialize/start Podman machine: %s\n" "$PODMAN_MACHINE_NAME"
+    jht_phase image_pull
+    printf "  ${DIM}[dry-run]${RESET} would pull image: %s\n" "$IMAGE"
     printf "  ${DIM}[dry-run]${RESET} would leave Colima installed and untouched\n"
     return 0
   fi
@@ -502,6 +517,7 @@ install_podman_macos() {
   mkdir -p "$jht_docs_dir" || fail "Cannot create $jht_docs_dir for the Podman machine."
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
+      jht_phase machine_start
       info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
       local start_error start_status
       start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
@@ -514,6 +530,8 @@ install_podman_macos() {
       ok "Podman machine '$PODMAN_MACHINE_NAME' already running"
     fi
   else
+    jht_phase machine_create
+    jht_phase machine_start
     info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
     local init_error init_status
     init_error="$("$podman_bin" machine init --now --update-connection=false \
@@ -527,6 +545,9 @@ install_podman_macos() {
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
+  jht_phase image_pull
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" pull "$IMAGE" >/dev/null \
+    || fail "JHT image download failed: $IMAGE"
   # Fedora CoreOS ships this weekly timer. Enabling the stock unit is
   # idempotent and lets applehv reclaim unused blocks from its sparse .raw;
   # do not start or stop a machine solely for trimming.
