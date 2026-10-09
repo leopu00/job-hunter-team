@@ -4,6 +4,9 @@ import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { signOut } from "../lib/supabase";
+import { appLocale } from "../lib/app-locale";
+import { localUninstallAvailable } from "../lib/local-uninstall";
+import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -13,9 +16,19 @@ import ThemePicker from "./ThemePicker";
 /** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
 function DesktopLinks() {
   const { path } = useLocation();
+  // «This computer» (removing JHT) only where the removal can run.
+  const [computer, setComputer] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void localUninstallAvailable().then((yes) => { if (active) setComputer(yes); });
+    return () => { active = false; };
+  }, []);
+  const links = computer
+    ? [...DESKTOP_LINKS, { href: "/computer", label: COMPUTER_TEXT[appLocale()].navLabel }]
+    : DESKTOP_LINKS;
   return (
     <div className="flex items-center gap-1">
-      {DESKTOP_LINKS.map(({ href, label }) => {
+      {links.map(({ href, label }) => {
         const active = path === href || path.startsWith(href + "/");
         return (
           <Link

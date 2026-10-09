@@ -327,6 +327,25 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "WSL is not ready: on Windows it runs the team’s Podman machine.",
     "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
   ),
+  // ── «Remove JHT from this computer» (Windows) ─────────────────────────────
+  uninstall_unavailable: copy(
+    "La rimozione da questo computer non è disponibile con il runtime installato.",
+    "Aggiorna l’app all’ultima versione, riapri questa pagina e riprova.",
+    "Removing JHT from this computer is not available with the installed runtime.",
+    "Update the app to the latest version, open this page again and try again.",
+  ),
+  uninstall_unsupported: copy(
+    "Per ora la rimozione dall’app c’è solo su Windows.",
+    "Su questo sistema il pulsante non è ancora disponibile.",
+    "For now, removing JHT from the app is only available on Windows.",
+    "On this system the button is not available yet.",
+  ),
+  uninstall_failed: copy(
+    "La rimozione da questo computer non è riuscita.",
+    "Riprova. Se si ripete, riavvia il computer e riprova: i tuoi dati in ~/.jht e nei documenti non sono stati toccati.",
+    "Removing JHT from this computer did not succeed.",
+    "Try again. If it happens again, restart the computer and try again: your data in ~/.jht and in the documents was not touched.",
+  ),
   podman_not_ready: copy(
     "Il motore dei container è installato ma non risponde.",
     "Riprova. Se si ripete, riavvia il computer.",

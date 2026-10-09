@@ -111,6 +111,10 @@ const NOT_ERRORS: Record<string, string> = {
   podman_machine_start: "install.ps1 phase id",
   runtime_download: "install.ps1 phase id",
   image_pull: "install.ps1 phase id",
+  // jht.ps1 uninstall's phases (windows_runtime::UNINSTALL_PHASES): shown as progress, never an error.
+  uninstall_machine: "jht.ps1 uninstall phase id",
+  uninstall_runtime: "jht.ps1 uninstall phase id",
+  uninstall_commands: "jht.ps1 uninstall phase id",
 };
 
 function compiledRustModules(): string[] {

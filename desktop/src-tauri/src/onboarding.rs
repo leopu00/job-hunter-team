@@ -758,6 +758,8 @@ fn failure(code: &'static str) -> OnboardingError {
             | "provider_input_not_requested"
             | "existing_team_vps_required"
             | "existing_team_identity_mismatch"
+            | "uninstall_unavailable"
+            | "uninstall_unsupported"
     ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
@@ -3680,6 +3682,123 @@ pub(crate) async fn onboarding_podman_machine_recreate(
     state.preparing.store(false, Ordering::Release);
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
+}
+
+/// How long «Remove JHT from this computer» may take: the Podman machine's
+/// deletion is the slow part.
+#[cfg_attr(not(windows), allow(dead_code))]
+const UNINSTALL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// A phase of the removal, as a key the app tells in its language.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UninstallPhase {
+    key: &'static str,
+}
+
+/// The removal's end: complete, or what is still on this computer
+/// (`machine`, `runtime`, `commands`) so that the person can try again.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UninstallOutcome {
+    complete: bool,
+    left: Vec<&'static str>,
+}
+
+/// Whether «Remove JHT from this computer» can run here: Windows, with the
+/// verified jht.ps1 of this account carrying $JHT_UNINSTALL_PROTOCOL.
+#[tauri::command]
+pub(crate) fn onboarding_local_uninstall_available(app: tauri::AppHandle) -> bool {
+    #[cfg(windows)]
+    {
+        return wrapper_path(&app)
+            .and_then(|wrapper| fs::read_to_string(wrapper).ok())
+            .is_some_and(|source| crate::windows_runtime::wrapper_supports_uninstall(&source));
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        false
+    }
+}
+
+/// «Remove JHT from this computer», after the person confirmed it in the app:
+/// `jht.ps1 uninstall --confirm`, which removes the JHT Podman machine, the
+/// host runtime and the JHT commands, and keeps ~/.jht, the documents,
+/// Podman and Compose. Its phases go to the screen as keys; its end says
+/// what is left, if anything.
+#[tauri::command]
+pub(crate) async fn onboarding_local_uninstall(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    on_phase: Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        crate::account_scope::validate_local_runtime(&app, &worker_expected).map_err(failure)?;
+        uninstall_local(&app, &on_phase)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("uninstall_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+#[cfg(windows)]
+fn uninstall_local(
+    app: &tauri::AppHandle,
+    on_phase: &Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    use crate::windows_runtime::{
+        powershell_path, script_invocation, uninstall_line, uninstall_outcome,
+        wrapper_supports_uninstall, UninstallLine,
+    };
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("uninstall_unavailable"))?;
+    let source = fs::read_to_string(&wrapper).map_err(|_| failure("uninstall_unavailable"))?;
+    if !wrapper_supports_uninstall(&source) {
+        return Err(failure("uninstall_unavailable"));
+    }
+    let shell = powershell_path(std::env::var_os("SystemRoot"));
+    let mut left = Vec::new();
+    let result = crate::runtime_host::run_program_lines(
+        shell.to_str().ok_or_else(|| failure("uninstall_failed"))?,
+        script_invocation(&wrapper, &["uninstall", "--confirm"]),
+        UNINSTALL_TIMEOUT,
+        |line| match uninstall_line(line) {
+            Some(UninstallLine::Phase(key)) => {
+                let _ = on_phase.send(UninstallPhase { key });
+            }
+            Some(UninstallLine::Left(id)) => left.push(id),
+            None => {}
+        },
+    );
+    let (complete, left) = uninstall_outcome(result, left).map_err(failure)?;
+    trace_local_runtime("uninstall", if complete { "complete" } else { "incomplete" });
+    Ok(UninstallOutcome { complete, left })
+}
+
+#[cfg(not(windows))]
+fn uninstall_local(
+    _app: &tauri::AppHandle,
+    _on_phase: &Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    Err(failure("uninstall_unsupported"))
 }
 
 #[tauri::command]

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { appLocale } from "../lib/app-locale";
+import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
 import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
@@ -443,6 +444,19 @@ export default function DashboardApp() {
     });
     return () => { active = false; };
   }, []);
+
+  // «Remove JHT from this computer» done: back to the first start. The gate
+  // only admits Shell again after a new setup (the marker says "restarted").
+  useEffect(() => {
+    if (!markerId) return;
+    const onRemoved = () => {
+      try { resetOnboardingMarker(markerId); } catch { /* the reload still asks the gate */ }
+      window.location.hash = "#/dashboard";
+      window.location.reload();
+    };
+    window.addEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
+    return () => window.removeEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
+  }, [markerId]);
 
   useEffect(() => {
     const staleProviderSession = providerSessionRef.current;

@@ -262,6 +262,79 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
         .map(|(_, message)| *message)
 }
 
+/// The line a jht.ps1 that can remove JHT from this computer carries
+/// (`jht.ps1 uninstall --confirm`, the contract with the PowerShell side).
+pub(crate) const UNINSTALL_PROTOCOL: &str = "$JHT_UNINSTALL_PROTOCOL = 1";
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn wrapper_supports_uninstall(source: &str) -> bool {
+    source
+        .lines()
+        .map(|line| line.trim_end_matches('\r').trim())
+        .any(|line| line == UNINSTALL_PROTOCOL)
+}
+
+/// The removal's phases, with the key of what the screen shows while each
+/// one lasts (desktop/src/lib/onboarding-runtime.i18n.ts).
+#[cfg_attr(not(windows), allow(dead_code))]
+const UNINSTALL_PHASES: [(&str, &str); 3] = [
+    ("uninstall_machine", "ui_uninstall_machine"),
+    ("uninstall_runtime", "ui_uninstall_runtime"),
+    ("uninstall_commands", "ui_uninstall_commands"),
+];
+/// What a removal can leave behind, as `JHT_LEFT <id>` names it.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) const UNINSTALL_ITEMS: [&str; 3] = ["machine", "runtime", "commands"];
+
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum UninstallLine {
+    Phase(&'static str),
+    Left(&'static str),
+}
+
+/// A `JHT_PHASE <id>` or `JHT_LEFT <id>` line of `jht.ps1 uninstall`, exactly,
+/// with a known id. Anything else on stdout is not shown.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn uninstall_line(line: &str) -> Option<UninstallLine> {
+    let line = line.trim_end_matches(['\r', '\n']);
+    if let Some(id) = line.strip_prefix("JHT_PHASE ") {
+        return UNINSTALL_PHASES
+            .iter()
+            .find(|(known, _)| *known == id)
+            .map(|(_, key)| UninstallLine::Phase(*key));
+    }
+    let id = line.strip_prefix("JHT_LEFT ")?;
+    UNINSTALL_ITEMS
+        .iter()
+        .find(|known| **known == id)
+        .map(|known| UninstallLine::Left(*known))
+}
+
+/// The end of `jht.ps1 uninstall --confirm`: 0 removed (or nothing was
+/// there), 24 incomplete with what is left, anything else a failure. An
+/// incomplete removal that names nothing left is told as all of it left: the
+/// app must not claim a removal it cannot see.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn uninstall_outcome(
+    result: Result<i32, &'static str>,
+    mut left: Vec<&'static str>,
+) -> Result<(bool, Vec<&'static str>), &'static str> {
+    match result {
+        Ok(0) => Ok((true, Vec::new())),
+        Ok(24) => {
+            if left.is_empty() {
+                left = UNINSTALL_ITEMS.to_vec();
+            }
+            left.sort_unstable_by_key(|id| UNINSTALL_ITEMS.iter().position(|known| known == id));
+            left.dedup();
+            Ok((false, left))
+        }
+        Err("process_timeout") => Err("timeout"),
+        _ => Err("uninstall_failed"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,5 +633,37 @@ mod tests {
         assert_eq!(INSTALL_PS1_SHA256.trim(), format!("{:x}", Sha256::digest(&source)));
         let public = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/public/install.ps1")).unwrap();
         assert_eq!(public, source, "web/public/install.ps1 is what jobhunterteam.ai serves");
+    }
+
+    #[test]
+    fn a_wrapper_can_remove_jht_only_with_its_protocol_line() {
+        assert!(wrapper_supports_uninstall("param()\r\n$JHT_UNINSTALL_PROTOCOL = 1\r\n"));
+        assert!(!wrapper_supports_uninstall("# $JHT_UNINSTALL_PROTOCOL = 1\n"));
+        assert!(!wrapper_supports_uninstall("$JHT_HOST_RUNTIME_PROTOCOL = 1\n"));
+    }
+
+    #[test]
+    fn only_the_removal_s_own_lines_are_read() {
+        assert_eq!(uninstall_line("JHT_PHASE uninstall_machine\r\n"), Some(UninstallLine::Phase("ui_uninstall_machine")));
+        assert_eq!(uninstall_line("JHT_PHASE uninstall_commands"), Some(UninstallLine::Phase("ui_uninstall_commands")));
+        assert_eq!(uninstall_line("JHT_LEFT runtime"), Some(UninstallLine::Left("runtime")));
+        for other in ["", "JHT_PHASE image_pull", "JHT_LEFT data", "JHT_LEFT", " JHT_LEFT machine", "Removing..."] {
+            assert_eq!(uninstall_line(other), None, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn the_removal_s_end_is_told_by_its_exit_code() {
+        assert_eq!(uninstall_outcome(Ok(0), vec!["machine"]), Ok((true, vec![])));
+        assert_eq!(
+            uninstall_outcome(Ok(24), vec!["commands", "machine", "machine"]),
+            Ok((false, vec!["machine", "commands"]))
+        );
+        // Incomplete, and it does not say what is left: all of it, never "done".
+        assert_eq!(uninstall_outcome(Ok(24), vec![]), Ok((false, UNINSTALL_ITEMS.to_vec())));
+        assert_eq!(uninstall_outcome(Ok(2), vec![]), Err("uninstall_failed"));
+        assert_eq!(uninstall_outcome(Ok(1), vec![]), Err("uninstall_failed"));
+        assert_eq!(uninstall_outcome(Err("process_timeout"), vec![]), Err("timeout"));
+        assert_eq!(uninstall_outcome(Err("process_start_failed"), vec![]), Err("uninstall_failed"));
     }
 }

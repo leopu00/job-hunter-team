@@ -73,6 +73,8 @@ pub fn run() {
             onboarding::onboarding_assistant_open,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_podman_machine_recreate,
+            onboarding::onboarding_local_uninstall_available,
+            onboarding::onboarding_local_uninstall,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

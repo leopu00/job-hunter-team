@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import AgentsPage from "../pages/agents";
 import DashboardPage from "../pages/dashboard";
 import MailPage from "../pages/mail";
+import ComputerPage from "../pages/computer";
 import MapPage from "../pages/map";
 import MessagesPage from "../pages/messages";
 import OfficePage from "../pages/office";
@@ -53,4 +54,6 @@ export const ROUTES: Route[] = [
   { path: "/agents", page: AgentsPage },
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
+  // «Remove JHT from this computer» (Windows): linked only where it can run.
+  { path: "/computer", page: ComputerPage },
 ];

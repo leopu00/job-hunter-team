@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { locales } from "@/i18n/config";
+import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { MAIL_TEXT } from "../pages/mail/mail.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { ONBOARDING_TEXT } from "./onboarding.i18n";
@@ -36,6 +37,7 @@ function leaves(value: unknown, path = ""): Leaf[] {
 describe.each([
   ["onboarding", ONBOARDING_TEXT],
   ["mail", MAIL_TEXT],
+  ["computer", COMPUTER_TEXT],
 ] as const)("%s dictionary", (_name, dictionary) => {
   const source = leaves(dictionary.it);
 
@@ -68,6 +70,8 @@ const SCREENS = [
   "src/lib/onboarding-runtime.ts",
   "src/lib/onboarding.ts",
   "src/dashboard/DashboardApp.tsx",
+  "src/pages/computer/index.tsx",
+  "src/lib/local-uninstall.ts",
 ];
 // Text that is the same in every language: product names, marks, symbols.
 const SAME_IN_EVERY_LANGUAGE = new Set([
