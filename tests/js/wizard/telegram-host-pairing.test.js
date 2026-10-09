@@ -35,6 +35,9 @@ describe("host-owned Telegram pairing", () => {
     expect(note).toContain("jht telegram pair capitano");
     expect(note).toContain("jht telegram pair mentor");
     expect(note).toContain("rotation_required");
+    // Asked even when nothing legacy is found: an earlier release's agent may
+    // have removed an exposed token from the config before the inventory.
+    expect(note).toContain("Always pair a freshly generated token");
     expect(ui.text).not.toHaveBeenCalled();
   });
 

@@ -1036,8 +1036,11 @@ telegram_pair() {
   fi
 
   was_enabled="$(telegram_admin cutover status 2>/dev/null || true)"
+  # Anche quando l'inventario non trova niente: un agente di una versione
+  # precedente può aver tolto il token dalla config prima dell'aggiornamento,
+  # e allora un token esposto risulterebbe «fresh».
+  info "Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token già esistente può essere stato letto dagli agenti anche se oggi non compare in ~/.jht."
   if [ -t 0 ]; then
-    info "Se esisteva già un bot, revoca il token precedente in BotFather e usa quello nuovo."
     if ! token="$(read_hidden_tty 'Token del bot (input nascosto): ')"; then
       err "input_interrotto: token non letto."
       return 1
@@ -1073,7 +1076,7 @@ telegram_pair() {
     fi
   fi
   if [ "$pair_rc" -ne 0 ]; then
-    err "Abbinamento rifiutato. Se esisteva già un bot, revoca il token da BotFather e usa quello nuovo."
+    err "Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova."
     return "$pair_rc"
   fi
   telegram_legacy remove "$role" || {

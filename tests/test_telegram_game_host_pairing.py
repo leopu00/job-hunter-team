@@ -50,3 +50,7 @@ def test_game_catalog_documents_safe_host_pairing(locale, catalog):
     assert "JSON" in guide, locale
     assert "stdin" in guide, locale
     assert "~/.jht" in guide, locale
+    # A freshly generated token is asked for every pairing, not only when a
+    # bot already existed: an earlier release's agent may have removed an
+    # exposed token from the config before the inventory could record it.
+    assert "/revoke" in guide, locale

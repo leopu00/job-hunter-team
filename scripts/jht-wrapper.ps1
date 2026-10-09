@@ -645,10 +645,12 @@ function Invoke-TelegramPair {
   foreach ($digest in $digests) { $adminArgs += @('--legacy-digest', $digest) }
   $token = $null
   $chatId = $null
+  # Anche quando l'inventario non trova niente: un agente di una versione
+  # precedente puo' aver tolto il token dalla config prima dell'aggiornamento.
+  Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
   if ([Console]::IsInputRedirected) {
     $payload = [Console]::In.ReadToEnd()
   } else {
-    Write-Info 'Se esisteva gia'' un bot, revoca il token precedente in BotFather e usa quello nuovo.'
     $secureToken = Read-Host 'Token del bot (input nascosto)' -AsSecureString
     $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
     try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer) }
@@ -672,7 +674,7 @@ function Invoke-TelegramPair {
   $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
   $payload = $null
   if ($code -ne 0) {
-    Write-Err 'Abbinamento rifiutato. Revoca il token precedente da BotFather e usa quello nuovo.'
+    Write-Err 'Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova.'
     return $code
   }
   Invoke-TelegramLegacy remove $Role | Out-Null

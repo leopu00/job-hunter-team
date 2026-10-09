@@ -23,6 +23,9 @@ POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 SECRET = "987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
 DIGEST = "a" * 64
+# Asked on every pairing, fresh or not: an agent of an earlier release may have
+# removed an exposed token from the config before the inventory could see it.
+NEW_TOKEN_REMINDER = "Usa sempre un token appena generato in BotFather"
 LEGACY_CONFIG_TEXT = '{"channels": {"telegram": {"bots": {"assistente": {"bot_token": "x"}}}}}'
 # json.load in legacy.py reads UTF-8, UTF-16 and UTF-32 (with or without BOM),
 # so a byte-level check must not take any of them for a config without Telegram.
@@ -302,6 +305,8 @@ def test_pairing_with_empty_inventory_works_under_bash_3_2_and_nounset(tmp_path:
     assert done.returncode == 0, done.stderr
     pair = next(line for line in log.read_text(encoding="utf-8").splitlines() if "bots pair" in line)
     assert "--legacy-digest" not in pair
+    # An empty inventory pairs as «fresh», and the new-token request still shows.
+    assert NEW_TOKEN_REMINDER in done.stderr
 
 
 def _read_pty_until(fd: int, wanted: bytes, timeout: float = 5) -> bytes:
@@ -362,6 +367,7 @@ def test_interactive_pairing_never_echoes_or_persists_the_token(tmp_path: Path) 
     os.close(slave)
     try:
         output = _read_pty_until(master, b"Token del bot (input nascosto): ")
+        assert NEW_TOKEN_REMINDER.encode() in output
         _wait_pty_no_echo(master)
         os.write(master, (SECRET + "\n").encode())
         output += _read_pty_until(master, b"Chat ID dell'utente: ")
@@ -467,7 +473,7 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
     script.write_text(
         "$ErrorActionPreference = 'Stop'\n"
         "function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
-        "function Write-Info { param([string]$Message) }\n"
+        "function Write-Info { param([string]$Message) [Console]::Error.WriteLine($Message) }\n"
         "function Write-Warn { param([string]$Message) }\n"
         "function Get-RunningComposeServiceId { param([string]$Service) if ($Service -eq 'jht-telegram') { 'telegram-id' } }\n"
         "function Test-ContainerUp { return $false }\n"
@@ -502,6 +508,8 @@ def test_powershell_status_query_cannot_drain_automation_json(tmp_path: Path) ->
     assert "TELEGRAM_STDIN_OK" in calls
     status = next(line for line in calls.splitlines() if "cutover status" in line)
     assert " -i " not in f" {status} "
+    # Automation on redirected stdin gets the new-token request too.
+    assert NEW_TOKEN_REMINDER in done.stderr
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")

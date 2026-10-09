@@ -35,11 +35,11 @@ export async function promptTelegramOptional(prompter) {
     return;
   }
   await prompter.note(
-    'Create or rotate each bot in BotFather, then run these commands in a host terminal:\n\n' +
+    'Always pair a freshly generated token: create a new bot in BotFather, or /revoke the token of an existing one. Then run these commands in a host terminal:\n\n' +
     '  jht telegram pair assistente\n' +
     '  jht telegram pair capitano\n' +
     '  jht telegram pair mentor\n\n' +
-    'Each command reads bot_token and chat_id from JSON on stdin. If this machine had a legacy token, generate a new token first: reusing it is refused with rotation_required.\n\n' +
+    'Each command reads bot_token and chat_id from JSON on stdin. An older token may already have been read by the agents, even if it no longer appears in ~/.jht; a token the service has already seen is refused with rotation_required.\n\n' +
     'Check the result with: jht telegram status',
     'Telegram pairing runs on the host',
   );
