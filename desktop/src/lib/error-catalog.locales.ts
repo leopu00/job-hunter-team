@@ -232,12 +232,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A konténermotor nem indult el.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet."],
     pt: ["O motor de contentores não iniciou.", "Tenta novamente. Se voltar a acontecer, reinicia o computador."],
   },
-  "Another Podman machine is already running.": {
-    de: ["Eine andere Podman-Maschine läuft bereits.", "Öffne Terminal, führe `podman machine list` aus, dann `podman machine stop <Name>` für die angezeigte Maschine, und versuche es erneut. Job Hunter Team stoppt sie niemals automatisch."],
-    es: ["Ya hay otra máquina Podman en ejecución.", "Abre Terminal, ejecuta `podman machine list`, luego `podman machine stop <nombre>` para la máquina indicada y vuelve a intentarlo. Job Hunter Team nunca la detiene automáticamente."],
-    fr: ["Une autre machine Podman est déjà en cours d’exécution.", "Ouvre Terminal, exécute `podman machine list`, puis `podman machine stop <nom>` pour la machine indiquée et réessaie. Job Hunter Team ne l’arrête jamais automatiquement."],
-    hu: ["Már fut egy másik Podman-gép.", "Nyisd meg a Terminált, futtasd a `podman machine list`, majd a megjelölt géphez a `podman machine stop <név>` parancsot, és próbáld újra. A Job Hunter Team soha nem állítja le automatikusan."],
-    pt: ["Já está em execução outra máquina Podman.", "Abre o Terminal, executa `podman machine list`, depois `podman machine stop <nome>` para a máquina indicada e tenta novamente. O Job Hunter Team nunca a para automaticamente."],
+  "Another Podman machine is already running: on a Mac only one can run at a time.": {
+    de: ["Eine andere Podman-Maschine läuft bereits: Auf dem Mac kann immer nur eine laufen.", "Stoppe die andere Maschine in der App, mit der du sie verwendest (zum Beispiel Podman Desktop), und klicke dann auf Erneut versuchen. Job Hunter Team stoppt sie nie für dich, und du kannst sie danach wieder starten."],
+    es: ["Ya hay otra máquina Podman en marcha: en el Mac solo puede funcionar una a la vez.", "Detén la otra máquina desde la aplicación con la que la usas (por ejemplo Podman Desktop) y pulsa Reintentar. Job Hunter Team nunca la detiene por ti, y después podrás volver a encenderla."],
+    fr: ["Une autre machine Podman est déjà en marche : sur un Mac, une seule peut tourner à la fois.", "Arrête l’autre machine depuis l’application avec laquelle tu l’utilises (par exemple Podman Desktop), puis clique sur Réessayer. Job Hunter Team ne l’arrête jamais à ta place, et tu pourras la rallumer ensuite."],
+    hu: ["Már fut egy másik Podman-gép: Macen egyszerre csak egy futhat.", "Állítsd le a másik gépet abból az alkalmazásból, amellyel használod (például a Podman Desktopból), majd kattints az Újra gombra. A Job Hunter Team soha nem állítja le helyetted, és utána újra elindíthatod."],
+    pt: ["Já está ligada outra máquina Podman: no Mac só pode funcionar uma de cada vez.", "Desliga a outra máquina a partir da aplicação com que a usas (por exemplo o Podman Desktop) e carrega em Tentar novamente. O Job Hunter Team nunca a desliga por ti, e depois poderás voltar a ligá-la."],
   },
   "The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs.": {
     de: ["Die Podman-Maschine von JHT sieht mehr Ordner des Mac, als Job Hunter Team braucht.", "Erstelle die Podman-Maschine neu: Deine Daten in ~/.jht und in Dokumente › Job Hunter Team bleiben, wo sie sind."],
@@ -620,7 +620,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_missing: translated("The container engine (Podman) was not installed."),
   podman_not_ready: translated("The container engine is installed but does not answer."),
   podman_start_failed: translated("The container engine did not start."),
-  podman_other_machine_running: translated("Another Podman machine is already running."),
+  podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
   podman_machine_recreate_failed: translated("The JHT Podman machine was not recreated."),
   podman_machine_recreate_confirm: translated("Recreating the JHT Podman machine deletes what lives only inside it and is not kept: the installed provider CLIs (the jht-deps volume) and the broker's secrets, that is the mail password and the portal logins (LinkedIn included)."),

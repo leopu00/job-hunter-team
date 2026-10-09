@@ -296,3 +296,16 @@ describe("describeError", () => {
     expect(errorResetsAt(null)).toBeNull();
   });
 });
+
+describe("podman_other_machine_running", () => {
+  // The Retry button, as each language labels it.
+  const RETRY = { it: "Riprova", en: "Try again", de: "Erneut versuchen", es: "Reintentar", fr: "Réessayer", hu: "Újra", pt: "Tentar novamente" };
+  it.each(Object.entries(RETRY))("%s: says only one machine runs on a Mac, asks to stop the other one without a terminal, then Retry", (locale, retry) => {
+    const described = describeError("podman_other_machine_running", { locale });
+    expect(described.text).toContain("Podman");
+    expect(described.action).toContain("Podman Desktop");
+    expect(described.action).toContain(retry);
+    expect(described.action).toContain("Job Hunter Team");
+    expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|podman machine (stop|list)|`/i);
+  });
+});

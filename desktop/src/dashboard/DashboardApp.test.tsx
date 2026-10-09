@@ -793,6 +793,27 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
+  it("another Podman machine running on the Mac is told with the catalog's instruction, retryable, and the app touches nothing", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("podman-other-machine-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "podman_other_machine_running",
+      message: "raw native message",
+      retryable: true,
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    const described = describeError("podman_other_machine_running");
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(described.text)).toBeInTheDocument();
+    expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
+    expect(screen.queryByText("raw native message")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "recreate-podman-machine" })).not.toBeInTheDocument();
+    expect(recreateOnboardingPodmanMachine).not.toHaveBeenCalled();
+  });
+
   it("a Podman machine that sees more of the Mac is recreated only from its own action, then setup starts over", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("podman-mounts-account"));
     requireOnboarding();
