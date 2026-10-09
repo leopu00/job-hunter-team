@@ -34,9 +34,14 @@ trap 'rm -f "$check"' EXIT
 
 as_user="$(bash "$check" "$repo/docker-compose.yml")"
 as_root="$(sudo bash "$check" "$repo/docker-compose.yml")"
-readable=no
-[ -r /sys/kernel/security/apparmor/profiles ] && readable=yes
-echo "MEASURE apparmor-profile-list-readable-by-user=$readable"
+# What a non-root jht up can read, step by step: the mode bits are not the
+# answer (the profile list says readable, and the kernel refuses the open).
+step() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
+echo "MEASURE user-reads apparmor-enabled=$(step cat /sys/module/apparmor/parameters/enabled)" \
+  "profile-list-mode-readable=$(step test -r /sys/kernel/security/apparmor/profiles)" \
+  "profile-list-opens=$(step cat /sys/kernel/security/apparmor/profiles)" \
+  "policy-dir-lists=$(step ls /sys/kernel/security/apparmor/policy/profiles)" \
+  "policy-name-reads=$(step sh -c 'cat /sys/kernel/security/apparmor/policy/profiles/*/name')"
 echo "MEASURE jht-up-broker-security user=${as_user:-none} root=${as_root:-none}"
 ls -l /etc/jht/security /etc/apparmor.d/jht-broker
 

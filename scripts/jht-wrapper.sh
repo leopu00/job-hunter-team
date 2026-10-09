@@ -909,15 +909,18 @@ host_apparmor_enabled() {
   [ "$(cat "$APPARMOR_ENABLED_FILE" 2>/dev/null)" = "Y" ]
 }
 
-# Caricato e in enforce. La lista dei profili la legge root; da utente si
-# guarda la cartella del profilo in policy/ (name e mode), se il kernel la
-# rende leggibile. Se nessuna delle due si legge, il profilo conta come non
-# caricato: meglio la vista spenta che un broker che non parte.
+# Caricato e in enforce. La lista dei profili la legge root: da utente i
+# permessi del file dicono «leggibile» ma il kernel rifiuta l'apertura
+# (misurato in CI, run 37893287627), e grep esce 2. Allora si guarda la
+# cartella del profilo in policy/ (name e mode). Se nessuna delle due si
+# legge, il profilo conta come non caricato: meglio la vista spenta che un
+# broker che non parte.
 broker_apparmor_loaded() {
-  local dir
+  local dir status
   if [ -r "$APPARMOR_FS/profiles" ]; then
-    grep -Fqx "$BROKER_APPARMOR_PROFILE (enforce)" "$APPARMOR_FS/profiles"
-    return $?
+    grep -Fqx "$BROKER_APPARMOR_PROFILE (enforce)" "$APPARMOR_FS/profiles" 2>/dev/null
+    status=$?
+    [ "$status" -eq 2 ] || return "$status"
   fi
   for dir in "$APPARMOR_FS"/policy/profiles/*/; do
     [ "$(cat "$dir/name" 2>/dev/null)" = "$BROKER_APPARMOR_PROFILE" ] || continue
@@ -936,6 +939,11 @@ broker_security_mode() {
   broker_security_node_safe "$dir/jht-broker.seccomp.json" file || return 0
   broker_security_node_safe "$dir/compose-seccomp.yml" file || return 0
   if host_apparmor_enabled; then
+    # Podman rootless non applica AppArmor, e con apparmor= nelle opzioni
+    # rifiuta il container (exit 125: misurato in CI con Podman 4.9.3): il
+    # broker non partirebbe e la posta si fermerebbe. Niente override:
+    # vista spenta, posta accesa.
+    [ "${CONTAINER_RUNTIME:-docker}" != "podman" ] || return 0
     broker_security_node_safe "$dir/compose-apparmor.yml" file || return 0
     broker_apparmor_loaded || return 0
     printf 'apparmor\n'
@@ -948,6 +956,10 @@ broker_security_notice() {
   [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
   grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" 2>/dev/null || return 0
   [ -z "$(broker_security_mode "$COMPOSE_FILE")" ] || return 0
+  if [ "${CONTAINER_RUNTIME:-docker}" = "podman" ] && host_apparmor_enabled; then
+    info "Con Podman senza root il profilo AppArmor del broker non si applica: la posta funziona, il login LinkedIn resta spento."
+    return 0
+  fi
   info "Profili di sicurezza del broker assenti o non caricati: la posta funziona, il login LinkedIn resta spento."
   info "Cosa fare: rilancia l'installazione con --broker-profiles (serve root una volta)."
 }

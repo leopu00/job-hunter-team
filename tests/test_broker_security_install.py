@@ -236,9 +236,10 @@ def _root_owned(box, path, mode, owner="0"):
         owners.write(f"{path}={owner} {mode}\n")
 
 
-def _wrapper(box, call, uname="Linux"):
+def _wrapper(box, call, uname="Linux", runtime="docker"):
     script = "\n".join([
         f"HOST_KERNEL={uname}",
+        f"CONTAINER_RUNTIME={runtime}",
         "BROKER_SERVICE=jht-broker",
         f"BROKER_SECURITY_DIR={shlex.quote(str(box['security']))}",
         f"APPARMOR_ENABLED_FILE={shlex.quote(str(box['enabled']))}",
@@ -273,6 +274,26 @@ def test_the_root_profile_list_is_read_when_it_can_be(box):
     assert _mode(box) == "apparmor"
     (box["fs"] / "profiles").write_text("docker-default (enforce)\njht-broker-old (enforce)\n")
     assert _mode(box) == ""
+
+
+def test_a_profile_list_the_kernel_refuses_to_open_falls_back_to_policy(box):
+    # As a user, the list's mode bits say readable but the kernel refuses the
+    # open (CI, run 37893287627): grep exits 2. A directory makes grep exit 2
+    # here; the policy/ entry must still be read.
+    (box["fs"] / "profiles").mkdir()
+    assert _mode(box) == "apparmor"
+    shutil.rmtree(box["fs"] / "policy")
+    assert _mode(box) == ""
+
+
+def test_under_podman_the_apparmor_override_is_never_added(box):
+    # Rootless Podman refuses a container with apparmor= (exit 125, CI with
+    # Podman 4.9.3): the broker would not start, and mail would stop.
+    assert _mode(box, runtime="podman") == ""
+    out = _wrapper(box, "broker_security_notice", runtime="podman").stdout
+    assert "Podman senza root" in out and "la posta funziona" in out
+    box["enabled"].write_text("N\n")
+    assert _mode(box, runtime="podman") == "seccomp"
 
 
 def test_apparmor_on_but_the_profile_not_loaded_adds_nothing(box):

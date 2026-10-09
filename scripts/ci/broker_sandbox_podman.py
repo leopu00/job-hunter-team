@@ -88,7 +88,20 @@ def main(argv: list[str]) -> int:
                            "-e", "JHT_PROBE_LAUNCH_ANYWAY=1"], engine="podman")
     print("MEASURE rootless-with-profiles " + json.dumps(got))
     if "error" in got:
-        fail("probe", f"the probe gave no answer under rootless Podman: {got['error']}")
+        if "apparmor" in got["error"].lower() and "not enabled" in got["error"].lower():
+            # Measured with Podman 4.9.3: rootless Podman refuses the
+            # container outright. Then: could Chromium's sandbox start there
+            # at all, with the seccomp profile only?
+            fail("apparmor-refused", f"rootless Podman refuses a container with apparmor={PROFILE}: {got['error']}")
+            bare = gate.run(image, ["--security-opt", f"seccomp={seccomp}", "-e", "JHT_PROBE_LAUNCH_ANYWAY=1"],
+                            engine="podman")
+            print("MEASURE rootless-seccomp-only " + json.dumps(bare))
+            print(f"MEASURE rootless-seccomp-only-sandbox launch={bare.get('launch')} sandboxed={bare.get('sandboxed')}"
+                  f" renderer_in_own_userns={bare.get('renderer_in_own_userns')} label={bare.get('own_label')!r}"
+                  f" confinement={bare.get('confinement')}")
+        else:
+            fail("probe", f"the probe gave no answer under rootless Podman: {got['error']}")
+        print("MEASURE rootless-verdict='the risk is real: the view stays off'")
         print(f"checks done: {fails} failed")
         return 1
 

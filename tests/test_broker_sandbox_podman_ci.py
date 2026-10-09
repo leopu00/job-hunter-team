@@ -81,6 +81,27 @@ def test_a_rootful_podman_answers_another_question(monkeypatch, capsys):
     assert code == 1 and "FAIL [rootless]" in out
 
 
+def test_a_refused_apparmor_option_is_the_risk_and_seccomp_only_is_measured(monkeypatch, capsys):
+    # CI, Podman 4.9.3 rootless: exit 125, the container never starts.
+    refused = {"error": 'the probe printed nothing (exit 125): Error: apparmor profile "jht-broker" specified, '
+                        "but Apparmor is not enabled on this system"}
+    answers = [refused, {**GOOD, "own_label": "unconfined", "confinement": {"ready": False}}]
+    calls = []
+
+    def fake_run(image, extra, engine="docker"):
+        calls.append(extra)
+        return dict(answers[len(calls) - 1])
+
+    monkeypatch.setattr(measure.gate, "run", fake_run)
+    monkeypatch.setattr(measure, "podman_info", lambda: dict(ROOTLESS))
+    code = measure.main(["localhost/jht:x", "seccomp.json"])
+    out = capsys.readouterr().out
+    assert code == 1 and "FAIL [apparmor-refused]" in out and "the risk is real" in out
+    assert len(calls) == 2 and not any(a.startswith("apparmor=") for a in calls[1])
+    assert "seccomp=seccomp.json" in calls[1] and "JHT_PROBE_LAUNCH_ANYWAY=1" in calls[1]
+    assert "MEASURE rootless-seccomp-only-sandbox launch=ok sandboxed=True" in out
+
+
 def test_no_answer_from_the_probe_is_said_as_such(monkeypatch, capsys):
     code, out, _ = _verdict(monkeypatch, capsys, got={"error": "the probe printed nothing (exit 125): apparmor"})
     assert code == 1 and "FAIL [probe]" in out and "FAIL [apparmor-label]" not in out
