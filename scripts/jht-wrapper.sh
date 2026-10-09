@@ -2980,8 +2980,22 @@ uninstall_docker_project() {
   done
 }
 
+# L'endpoint a cui parla questo docker: DOCKER_HOST, altrimenti il context
+# attivo. Si cancella solo su un Docker di questo computer (socket unix o pipe
+# Windows): un context sulla VPS dell'utente farebbe sparire la' i segreti.
+uninstall_docker_endpoint() {
+  local endpoint
+  if [ -n "${DOCKER_HOST:-}" ]; then
+    endpoint="$DOCKER_HOST"
+  else
+    endpoint="$("$1" context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)" || return 1
+  fi
+  [ -n "$endpoint" ] || return 1
+  printf '%s\n' "$endpoint"
+}
+
 uninstall_machine() {
-  local selection="$1" podman_bin docker_bin state
+  local selection="$1" podman_bin docker_bin state endpoint
   # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
   # scelto oggi e' Docker: una prova Podman precedente la lascia inerte, con
   # i suoi volumi.
@@ -3001,6 +3015,19 @@ uninstall_machine() {
   # nel Docker dell'utente. Con Podman scelto, un vecchio progetto Docker si
   # toglie solo se Docker risponde.
   if docker_bin="$(uninstall_tool docker)"; then
+    if ! endpoint="$(uninstall_docker_endpoint "$docker_bin")"; then
+      [ "$selection" = "podman" ] && return 0
+      err "Non riesco a sapere a quale Docker parla questo computer: i container e i volumi jht non si toccano."
+      return 1
+    fi
+    case "$endpoint" in
+      unix://*|npipe://*) ;;
+      *)
+        [ "$selection" = "podman" ] && return 0
+        err "Docker punta a $endpoint, che non e' questo computer: i container e i volumi jht li' non si toccano. Riporta Docker su quello locale (DOCKER_HOST o docker context) e rilancia."
+        return 1
+        ;;
+    esac
     if "$docker_bin" info >/dev/null 2>&1; then
       uninstall_docker_project "$docker_bin" || return 1
     elif [ "$selection" != "podman" ]; then

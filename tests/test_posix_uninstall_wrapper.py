@@ -78,6 +78,11 @@ drop() {
   mv "$objects.new" "$objects"
 }
 case "$1" in
+  context)
+    [ "$2:$3:$4" = "inspect:--format:{{.Endpoints.docker.Host}}" ] || exit 98
+    [ ! -f "$FAKE_STATE/context-fails" ] || exit 1
+    if [ -f "$FAKE_STATE/endpoint" ]; then cat "$FAKE_STATE/endpoint"; else echo unix:///var/run/docker.sock; fi
+    exit 0 ;;
   info) [ ! -f "$FAKE_STATE/docker-down" ] || exit 1; exit 0 ;;
   ps) [ "$2" = -aq ] || exit 94; shift 2; list container "" "$@" ;;
   rm) [ "$2" = -f ] || exit 95; drop container "$3" ;;
@@ -151,8 +156,9 @@ class Box:
     def objects(self, *rows: str) -> None:
         (self.state / "objects").write_text("".join(f"{row}\n" for row in rows), encoding="utf-8")
 
-    def run(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run(self, *args: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
         env = {
+            **extra_env,
             "HOME": str(self.home),
             "PATH": f"{self.tools}:{self.system}",
             "FAKE_UNAME": self.kernel,
@@ -260,6 +266,60 @@ def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path,
     assert not any(call.startswith("podman machine rm") for call in box.calls())
     assert not box.runtime.exists() and not box.wrapper.exists()
     assert_user_data_kept(box)
+
+
+@pytest.mark.parametrize(
+    ("context", "docker_host", "named"),
+    [
+        ("ssh://me@my-vps.invalid", None, "ssh://me@my-vps.invalid"),
+        (None, "tcp://my-vps.invalid:2376", "tcp://my-vps.invalid:2376"),
+        ("unix:///var/run/docker.sock", "ssh://me@my-vps.invalid", "ssh://me@my-vps.invalid"),
+    ],
+    ids=["remote-context", "remote-docker-host", "docker-host-wins-over-context"],
+)
+def test_a_docker_that_is_not_this_computer_is_never_cleaned(
+    tmp_path: Path, context: str | None, docker_host: str | None, named: str
+) -> None:
+    box = Box(tmp_path, "Linux")
+    box.objects("container c1 jht", "volume jht_jht-broker-secrets jht")
+    if context:
+        (box.state / "endpoint").write_text(context + "\n", encoding="utf-8")
+    extra = {"DOCKER_HOST": docker_host} if docker_host else {}
+
+    result = box.run("uninstall", "--confirm", **extra)
+
+    assert result.returncode == 24
+    assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_LEFT machine", "JHT_LEFT runtime", "JHT_LEFT commands"]
+    assert named in result.stderr
+    assert box.remaining("objects").splitlines() == ["container c1 jht", "volume jht_jht-broker-secrets jht"]
+    assert not any(call.split()[1:2] in (["rm"], ["volume"], ["network"], ["ps"]) for call in box.calls())
+    assert box.runtime.is_dir() and box.wrapper.is_file()
+
+
+def test_an_unknown_docker_endpoint_is_never_cleaned(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.objects("volume jht_jht-broker-secrets jht")
+    (box.state / "context-fails").write_text("", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 24
+    assert "JHT_LEFT machine" in result.stdout
+    assert box.remaining("objects") == "volume jht_jht-broker-secrets jht\n"
+
+
+def test_mac_podman_skips_a_remote_docker_and_still_removes_the_machine(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    box.machines("jht-podman*")
+    box.objects("volume jht_jht-broker-secrets jht")
+    (box.state / "endpoint").write_text("ssh://me@my-vps.invalid\n", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stderr
+    assert box.remaining("machines") == ""
+    assert box.remaining("objects") == "volume jht_jht-broker-secrets jht\n"
 
 
 def test_a_docker_daemon_that_does_not_answer_keeps_everything_for_retry(tmp_path: Path) -> None:
