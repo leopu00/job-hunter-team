@@ -2,10 +2,28 @@
 ---
 name: apply-flow
 description: Come il CLOSER esegue una candidatura autorizzata con `apply_flow.py` — la macchina a stati con checkpoint (detect, fill, upload_cv, screening, review, submit), la ricevuta obbligatoria senza la quale `applied` non si scrive mai, e cosa fare per ogni esito, `blocked_human` prima di tutto. Usala per ogni posizione presa dalla coda. Del CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/apply_assisted.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — una candidatura, una ricevuta, nessun tentativo cieco
+
+## Modalità assistita esplicita
+
+Solo per un'esecuzione assistita richiesta esplicitamente, aggiungi `--assisted`
+(facoltativo `--assisted-ttl 1800`) al comando sotto. La pagina reale rimane viva
+al blocco umano. `assisted_started` conferma il processo proprietario, mai un invio.
+Usa `apply_assisted.py status|resume|handoff|finish|abandon --position-id "$PID"`.
+Restano consenso, autorizzazione posizione, hold e cap ufficiali: un nuovo captcha
+richiede nuova autorizzazione ufficiale prima di handoff. Non resettarlo tu.
+Le risposte salvate ufficialmente permettono ripresa sulla stessa pagina.
+
+La sola visione non dà mouse. Il controller locale privato accetta `input` JSON
+su stdin con click/type/press dopo handoff autorizzato; è accesso tecnico, non
+identità umana verificata né soluzione a #279. Prima del controllo si registra
+un possibile invio: dopo l'input resume osserva solo ricevuta oppure esito ignoto,
+senza secondo submit. Nessuna automazione durante handoff. Finish/abandon, TTL
+fisso e disconnessione chiudono le risorse senza azzerare checkpoint o cap incerti.
+Procedura e limiti: `docs/internal/closer-assisted.md`.
 
 ```bash
 python3 /app/shared/skills/apply_flow.py \
