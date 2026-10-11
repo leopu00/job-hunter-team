@@ -126,6 +126,11 @@ class InstrumentedRuntime:
         self.events = []
         self.browsers = []
         self.chromium = self
+        # Assisted ownership now records its own Playwright driver handle.
+        # This inert runtime owns no live process; termination is an error.
+        self._impl_obj = SimpleNamespace(_connection=SimpleNamespace(
+            _transport=SimpleNamespace(_proc=SimpleNamespace(
+                pid=None, returncode=0, terminate=lambda: pytest.fail("no live fixture driver")))))
 
     def __enter__(self):
         self.alive = True
