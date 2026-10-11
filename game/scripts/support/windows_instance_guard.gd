@@ -3,7 +3,7 @@ extends Node
 ## sidecar attestato nel PCK non possiede la lease kernel per questa sessione.
 
 const SOURCE_PATH := "res://scripts/support/windows_instance_guard.ps1"
-const SOURCE_SHA256 := "bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b"
+const SOURCE_SHA256 := "ba3277e92433e1320517a0fb81542589bd7196d2ed84dae90520cb14da549243"
 const SOURCE_MAX_BYTES := 10_000
 const ARGV_MAX_UTF16 := 30_000
 const REQUEST_MAX_BYTES := 2_048
