@@ -30,6 +30,11 @@
       "sha256": "4031421864527642d078ec2115ad4389b85139d6b97d803c3eeaf20c5d163be0",
       "bytes": 21419,
       "owner": "0:0"
+    },
+    "docs/internal/closer-assisted.md": {
+      "sha256": "27cbe1620cf19c605fad9d86f12a3c3b49ee5f02362e85e84b72242b5c588830",
+      "bytes": 5575,
+      "owner": "0:0"
     }
   }
 }

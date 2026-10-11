@@ -5,6 +5,7 @@ FROM ghcr.io/leopu00/jht@sha256:65c201c127bd2e7ed316b49392f40a56b9686165263da4be
 # Base default USER and launcher remain unchanged. Build gates run as jht.
 COPY --chown=0:0 shared/skills/apply_flow.py shared/skills/apply_assisted.py shared/skills/apply_session_lock.py /app/shared/skills/
 COPY --chown=0:0 agents/_skills/apply-flow/SKILL.md agents/_skills/apply-flow/SKILL.it.md /app/agents/_skills/apply-flow/
+COPY --chown=0:0 docs/internal/closer-assisted.md /app/docs/internal/closer-assisted.md
 COPY --chown=0:0 ops/closer-assisted-280/runtime-source.json ops/closer-assisted-280/lifecycle-contract.json /app/ops/closer-assisted-280/
 
 # Build-time GATE (redesign tool-health 2026-06-13). The libatk regression

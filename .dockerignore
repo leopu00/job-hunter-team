@@ -66,3 +66,10 @@ candidate_profile.hr.yml
 !shared/release/
 !web/app/docs/
 !web/public/tutorials/game/
+
+# Only the operational procedure referenced by the assisted-flow skill.
+!docs/
+docs/*
+!docs/internal/
+docs/internal/*
+!docs/internal/closer-assisted.md
