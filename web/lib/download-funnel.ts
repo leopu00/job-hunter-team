@@ -1,14 +1,66 @@
-const RELEASE_BASE =
-  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
+const RELEASE_039 =
+  "https://github.com/leopu00/job-hunter-team/releases/download/v0.3.9";
 
-export const DOWNLOAD_TARGETS = {
-  "win-setup": `${RELEASE_BASE}/job-hunter-team-windows-x64-setup.exe`,
-  "win-portable": `${RELEASE_BASE}/job-hunter-team-windows-x64-portable.exe`,
-  mac: `${RELEASE_BASE}/job-hunter-team.zip`,
-  linux: `${RELEASE_BASE}/job-hunter-team-linux-x64.tar.gz`,
-} as const;
+export type DownloadArtifact = {
+  url: string;
+  version: string;
+  filename: string;
+  sha256: string;
+  sizeBytes: number;
+  sourceCommit: string;
+  engine: "Godot";
+  runtimeVersion: string;
+};
 
-export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;
+// The active bytes, shared by /go, /download and the setup guide.
+// Keep 0.3.9 until the exact Windows candidate passes retest and its hosted
+// copy is verified. Activation replaces the complete installer entry; there
+// is no latest fallback, environment switch or untested portable promotion.
+// To withdraw the installer, set its whole entry to null: no active bytes.
+export const DOWNLOAD_ARTIFACTS = {
+  "win-setup": {
+    url: `${RELEASE_039}/job-hunter-team-windows-x64-setup.exe`,
+    version: "0.3.9",
+    filename: "job-hunter-team-windows-x64-setup.exe",
+    sha256: "13c70048aabbcaa5c6551da656e1c4ab7a23d8708e79fc9929d47577367d9290",
+    sizeBytes: 296542703,
+    sourceCommit: "8227b1cb0158e631d78542c8c75f09ac2b7b9ea9",
+    engine: "Godot",
+    runtimeVersion: "0.3.9",
+  } as DownloadArtifact | null,
+  "win-portable": {
+    url: `${RELEASE_039}/job-hunter-team-windows-x64-portable.exe`,
+    version: "0.3.9",
+    filename: "job-hunter-team-windows-x64-portable.exe",
+    sha256: "b29e76f3884966ff18e5db6d3caabd592af22a56d1bd7ab1e358783f648d91c1",
+    sizeBytes: 569442624,
+    sourceCommit: "8227b1cb0158e631d78542c8c75f09ac2b7b9ea9",
+    engine: "Godot",
+    runtimeVersion: "0.3.9",
+  },
+  mac: {
+    url: `${RELEASE_039}/job-hunter-team.zip`,
+    version: "0.3.9",
+    filename: "job-hunter-team.zip",
+    sha256: "91abb540657f4e7c41e3eeaebaba657844e42484ec01ca662cb7865b8c6e35ce",
+    sizeBytes: 319176247,
+    sourceCommit: "8227b1cb0158e631d78542c8c75f09ac2b7b9ea9",
+    engine: "Godot",
+    runtimeVersion: "0.3.9",
+  },
+  linux: {
+    url: `${RELEASE_039}/job-hunter-team-linux-x64.tar.gz`,
+    version: "0.3.9",
+    filename: "job-hunter-team-linux-x64.tar.gz",
+    sha256: "d94aed64adc9c8783c91b19c1bd1a4e11ea672513435efaa32f316349fe766dd",
+    sizeBytes: 289755849,
+    sourceCommit: "8227b1cb0158e631d78542c8c75f09ac2b7b9ea9",
+    engine: "Godot",
+    runtimeVersion: "0.3.9",
+  },
+} satisfies Record<string, DownloadArtifact | null>;
+
+export type DownloadSlug = keyof typeof DOWNLOAD_ARTIFACTS;
 export type DownloadAttribution = {
   utm_source: string;
   utm_medium: string;
@@ -36,7 +88,7 @@ export const DOWNLOAD_ATTRIBUTION_ALLOWLIST: Record<
 };
 
 export function isDownloadSlug(value: string): value is DownloadSlug {
-  return Object.hasOwn(DOWNLOAD_TARGETS, value);
+  return Object.hasOwn(DOWNLOAD_ARTIFACTS, value);
 }
 
 export function sanitizeUtmValue(
@@ -100,7 +152,11 @@ export function createDownloadClick(
 
 export function downloadHref(
   slug: DownloadSlug,
-  attribution: DownloadAttribution,
+  attribution: DownloadAttribution = {
+    utm_source: "none",
+    utm_medium: "none",
+    utm_campaign: "none",
+  },
 ): string {
   const query = new URLSearchParams();
   for (const key of ATTRIBUTION_KEYS) {

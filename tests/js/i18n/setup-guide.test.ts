@@ -13,9 +13,19 @@
  */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import { createRequire } from "node:module";
+import { JSDOM } from "jsdom";
+import GuideLinks from "@/app/setup-guide/GuideLinks";
+import DownloadArtifactDetails from "@/app/download/DownloadArtifactDetails";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  ALT_ASSET,
+  downloadSlugFor,
+  downloadUrlFor,
+} from "@/app/setup-guide/guide-config";
+import { DOWNLOAD_ARTIFACTS, downloadHref } from "@/lib/download-funnel";
 import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
 import {
   REQUIREMENTS_CARD_EVIDENCE,
@@ -36,6 +46,11 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(HERE, "../../../web/public");
+const webRequire = createRequire(
+  path.resolve(HERE, "../../../web/package.json"),
+);
+const { createElement } = webRequire("react");
+const { renderToStaticMarkup } = webRequire("react-dom/server");
 
 const LOCALES = ["it", "en", "es", "fr", "de", "pt", "hu"] as const;
 
@@ -626,4 +641,179 @@ describe("guida di setup — contratto di HQ-DOCS", () => {
     );
     expect(hrefs).toContain("/docs/guides/run-on-a-vps");
   });
+});
+
+describe("guida di setup — download ufficiali", () => {
+  it("resolves every guide download through the page's allowlisted slug", () => {
+    const seen = new Set<string>();
+    for (const chapter of GUIDE_CHAPTERS) {
+      for (const phase of chapter.phases) {
+        for (const link of phase.links ?? []) {
+          if (link.kind !== "download") continue;
+          for (const os of link.os ?? OS_IDS) {
+            const slug = downloadSlugFor(os, link.asset);
+            expect(slug).toBeDefined();
+            if (!slug) continue;
+            seen.add(slug);
+            expect(downloadUrlFor(os, link.asset)).toBe(downloadHref(slug));
+            expect(DOWNLOAD_ARTIFACTS[slug]!.url).not.toContain("/latest/");
+          }
+        }
+      }
+    }
+    expect([...seen].sort()).toEqual(Object.keys(DOWNLOAD_ARTIFACTS).sort());
+  });
+
+  it("rejects arbitrary filenames, URLs and portable on other systems", () => {
+    for (const os of OS_IDS) {
+      for (const asset of [
+        "",
+        "../../evil.exe",
+        "https://evil.example/a.exe",
+        "job-hunter-team.exe",
+      ]) {
+        expect(downloadUrlFor(os, asset)).toBeUndefined();
+      }
+    }
+    expect(downloadUrlFor("windows", ALT_ASSET.windowsPortable)).toBe(
+      "/go/win-portable",
+    );
+    expect(downloadUrlFor("macos", ALT_ASSET.windowsPortable)).toBeUndefined();
+    expect(downloadUrlFor("linux", ALT_ASSET.windowsPortable)).toBeUndefined();
+  });
+
+  it("describes official site downloads and the installer path in all seven languages", () => {
+    const phases = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases);
+    const download = phases.find(
+      (phase) => phase.id === "download-desktop-app",
+    )!;
+    const install = phases.find((phase) => phase.id === "install-windows")!;
+    const officialDownloads = {
+      en: "official downloads",
+      it: "download ufficiali",
+      es: "descargas oficiales",
+      fr: "téléchargements officiels",
+      de: "offiziellen Downloads",
+      pt: "transferências oficiais",
+      hu: "hivatalos letöltés",
+    } as const;
+    for (const locale of LOCALES) {
+      expect(download.body[locale]).toContain(officialDownloads[locale]);
+      expect(install.body[locale]).toContain(officialDownloads[locale]);
+      expect(install.body[locale]).toContain(
+        "job-hunter-team-windows-x64-setup.exe",
+      );
+      expect(`${download.body[locale]} ${install.body[locale]}`).not.toMatch(
+        /GitHub Release|Tauri|0\.3\.10|G4/,
+      );
+    }
+  });
+});
+
+describe("guida di setup — metadata visibili", () => {
+  it.each(LOCALES)(
+    "renders Windows installer and portable as distinct artifacts in %s",
+    (lang) => {
+      const phase = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).find(
+        (candidate) => candidate.id === "download-desktop-app",
+      )!;
+      const document = new JSDOM(
+        renderToStaticMarkup(
+          createElement(GuideLinks, {
+            links: phase.links!,
+            os: "windows",
+            lang,
+          }),
+        ),
+      ).window.document;
+      const links = [...document.querySelectorAll("a")];
+      expect(links.map((a) => a.getAttribute("href"))).toEqual([
+        "/go/win-setup",
+        "/go/win-portable",
+      ]);
+      const expected = [
+        DOWNLOAD_ARTIFACTS["win-setup"],
+        DOWNLOAD_ARTIFACTS["win-portable"],
+      ];
+      for (const [index, artifact] of expected.entries()) {
+        expect(artifact).not.toBeNull();
+        if (!artifact) continue;
+        const group = links[index].parentElement!;
+        expect(group.textContent).toContain(`v${artifact.version}`);
+        expect(group.textContent).toContain(artifact.filename);
+        expect(group.textContent).toContain(artifact.sha256);
+        expect(group.textContent).toContain(`${artifact.sizeBytes} B`);
+        expect(links[index].textContent).not.toBe("");
+      }
+    },
+  );
+
+  it("can show desktop installer 0.3.10 alongside portable 0.3.9 without a global version", () => {
+    // View-only fixture: no proposed or fake hosted URL enters the active mapping.
+    const installer = {
+      version: "0.3.10",
+      filename: "job-hunter-team-windows-x64-setup.exe",
+      sizeBytes: 295179599,
+      sha256:
+        "abd5a07362e09bd22c4c4995bb55147bf362e3b3252ca35ab2f987f8cd01146a",
+    };
+    const portable = DOWNLOAD_ARTIFACTS["win-portable"];
+    const render = (artifact: typeof installer) =>
+      new JSDOM(
+        renderToStaticMarkup(
+          createElement(DownloadArtifactDetails, { artifact }),
+        ),
+      ).window.document;
+    const installed = render(installer);
+    const portableView = render(portable);
+    expect(installed.querySelector("summary")!.textContent).toContain(
+      "v0.3.10",
+    );
+    expect(installed.querySelector("code")!.textContent).toContain(
+      installer.sha256,
+    );
+    expect(portableView.querySelector("summary")!.textContent).toContain(
+      "v0.3.9",
+    );
+    expect(portableView.body.textContent).not.toContain("0.3.10");
+    expect(portableView.querySelector("code")!.textContent).toContain(
+      portable.sha256,
+    );
+  });
+});
+
+describe("guida di setup — ritiro installer", () => {
+  it.each(LOCALES)(
+    "shows an unavailable message in %s and preserves only the separate portable link",
+    (lang) => {
+      const active = DOWNLOAD_ARTIFACTS["win-setup"];
+      try {
+        DOWNLOAD_ARTIFACTS["win-setup"] = null;
+        expect(downloadUrlFor("windows")).toBeUndefined();
+        const phase = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).find(
+          (candidate) => candidate.id === "download-desktop-app",
+        )!;
+        const document = new JSDOM(
+          renderToStaticMarkup(
+            createElement(GuideLinks, {
+              links: phase.links!,
+              os: "windows",
+              lang,
+            }),
+          ),
+        ).window.document;
+        expect(
+          [...document.querySelectorAll("a")].map((a) =>
+            a.getAttribute("href"),
+          ),
+        ).toEqual(["/go/win-portable"]);
+        const message = document.querySelector('[role="status"]')!.textContent!;
+        expect(message.length).toBeGreaterThan(20);
+        expect(message).not.toMatch(/0\.3\.9|0\.3\.10|https?:/);
+        expect(document.body.textContent).not.toContain(active!.sha256);
+      } finally {
+        DOWNLOAD_ARTIFACTS["win-setup"] = active;
+      }
+    },
+  );
 });

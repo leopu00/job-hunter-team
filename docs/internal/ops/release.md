@@ -218,6 +218,96 @@ release red and investigate; the digest remains runnable and is the authority.
 
 ---
 
+## Windows desktop-only 0.3.10 distribution
+
+This explicit exception distributes the already tested Windows installer,
+not a full-product release or a newly built runtime. Its tag is
+`desktop-windows-v0.3.10`, pointing **exactly** to
+`450945129f025a25d18adfd72c1da65b7ec4d319`: base public `v0.3.9`
+(`8227b1cb…`), protected-directory ACL fix `c03add105…`, then desktop metadata
+0.3.10. Root package manifests and runtime remain 0.3.9. The separate Mac
+shutdown experiments do not belong to this source or distribution.
+
+The normal `vX.Y.Z` tag workflow is inappropriate: it checks all package
+versions and builds/publishes the complete product. The desktop tag does not
+match `release.yml`; it does not trigger Docker or deployment workflows.
+Existing `game.yml` and `windows-config-acl.yml` **do** run on its tag push:
+they have only push path filters, which GitHub ignores for tag pushes. Leave
+these checks enabled and observe their outcomes. Their newly built Actions
+artifacts never replace the approved installer bytes. No skip, cancellation,
+workflow modification or implicit full-product version alignment is part of
+this procedure. Recheck actual workflows before performing any push.
+
+Use title **Desktop Windows 0.3.10 — correzione avvio**, initially a draft,
+with `prerelease=true` and `make_latest=false`. GitHub excludes prereleases
+from its latest full-release API; CLI, Godot and the web latest-release
+consumer also reject prereleases and non-semver desktop tags. This keeps
+runtime and other operating systems on their truthful baseline identities.
+The site later selects the Windows installer through its explicit artifact
+entry, independently of the latest full-product release.
+
+The draft must contain **exactly three regular downloaded files**:
+
+- `job-hunter-team-windows-x64-setup-0.3.10.exe`: 295179599 bytes,
+  SHA-256 `abd5a07362e09bd22c4c4995bb55147bf362e3b3252ca35ab2f987f8cd01146a`.
+- `DESKTOP-RELEASE-PROVENANCE.json`: canonical `jht.desktop-release.v1`
+  identity, source/base/fix, local Godot/NSIS build, desktop version, unchanged
+  runtime identity and validation limits.
+- `SHA256SUMS`: checksums of that installer and its desktop provenance.
+
+`scripts/desktop_release_audit.py` pins the independent tester-approved
+identity. It rejects missing/unknown files, links/directories, different
+installer bytes and altered or self-consistently forged metadata. It never
+derives approval from downloaded checksums. `release_artifacts.py` and the
+original 0.3.9 audit are unchanged; neither desktop metadata nor binaries are
+attached to that older release.
+
+Execution gates, in order:
+
+1. Obtain the written pre-push verdict on exact source `450945129…` and the
+   separately reviewed audit/runbook commit. Review `8227b1cb…450945129` and
+   native ACL/G3 evidence. Push only explicitly approved refs; verify the
+   public tag resolves to the exact source and that source is inspectable.
+   Do not let `gh release create` silently create a tag from default HEAD:
+   use `--verify-tag`. Observe existing Game/ACL CI and resolve or report
+   pertinent failures before publication.
+2. Under scoped authorization create the draft, `--prerelease --latest=false`,
+   with prepared notes, then upload only the three frozen files. No rebuild,
+   `--clobber`, old-release edit, deletion, runtime publication or new platform
+   artifact. Stop on a collision, partial upload or unexpected state.
+3. Independently download **all** assets from the draft into a fresh directory;
+   store the API response outside it. Run:
+
+   ```bash
+   python scripts/desktop_release_audit.py --directory "$AUDIT_DIR" \
+     --release-api "$RELEASE_API_FILE"
+   ```
+
+   Verify public source/tag resolution separately. Check actual release ID,
+   draft/prerelease state, all asset names, sizes and available API digests.
+   The draft readback and independent review must pass before publication.
+4. Only after the publication gate, publish with prerelease preserved and
+   `--latest=false`. Repeat public full-byte readback and the same audit with
+   `--published`; verify immutable URL, filename, GET/HEAD and delivery size.
+   Read back `/releases/latest` and the original 0.3.9 metadata/inventory to
+   confirm they are unchanged. No automatic recovery mutates published assets.
+5. Activate only the complete `win-setup` entry on the production-derived web
+   integration, using the real verified tag URL, filename, version, size,
+   checksum and source. Other artifacts remain 0.3.9. Run relevant funnel,
+   guide and installer contracts, cloud build and HTTP smoke through the shared
+   turn. Obtain the exact web commit's written pre-push verdict and deployment
+   gate. Withdrawal uses the existing null/503 contract, never an automatic
+   fallback to the known failing 0.3.9 installer.
+
+Only Windows native ACL causality and G3 installer **RESUME** passed for these
+bytes. Clean installation, portable execution, runtime/team/G4, Internet
+SmartScreen and other platforms are not covered. The new Mac candidate has
+its own unresolved crash investigation and is excluded.
+
+Primary references: [GitHub release CLI flags](https://cli.github.com/manual/gh_release_create),
+[latest release API semantics](https://docs.github.com/en/rest/releases/releases#get-the-latest-release),
+and [push tag/path filters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
 ## 📚 Related
 
 - 📋 [`CHANGELOG.md`](../../../CHANGELOG.md) — release-by-release history (and the source of the release notes)

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   attributionFromPage,
   DOWNLOAD_ATTRIBUTION_ALLOWLIST,
-  DOWNLOAD_TARGETS,
+  DOWNLOAD_ARTIFACTS,
   downloadHref,
   type DownloadClick,
 } from "../../../web/lib/download-funnel";
@@ -67,8 +67,8 @@ function testDependencies(record = vi.fn(async (_event: DownloadClick) => {})) {
 }
 
 describe("B8 download funnel", () => {
-  it("T1 redirects every allowlisted slug to its exact GitHub asset", async () => {
-    for (const [slug, destination] of Object.entries(DOWNLOAD_TARGETS)) {
+  it("T1 redirects every allowlisted slug to its exact active artifact", async () => {
+    for (const [slug, destination] of Object.entries(DOWNLOAD_ARTIFACTS)) {
       const state = testDependencies();
       const response = handleDownloadRedirect(
         new Request(`https://jobhunterteam.ai/go/${slug}`),
@@ -77,7 +77,7 @@ describe("B8 download funnel", () => {
       );
 
       expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe(destination);
+      expect(response.headers.get("location")).toBe(destination!.url);
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(response.headers.has("set-cookie")).toBe(false);
       expect(state.tasks).toHaveLength(1);
@@ -89,6 +89,78 @@ describe("B8 download funnel", () => {
         utm_medium: "none",
         utm_campaign: "none",
       });
+    }
+  });
+
+  it("pins every active artifact to verified Godot 0.3.9 bytes until activation", () => {
+    const expected = {
+      "win-setup": [
+        296542703,
+        "13c70048aabbcaa5c6551da656e1c4ab7a23d8708e79fc9929d47577367d9290",
+      ],
+      "win-portable": [
+        569442624,
+        "b29e76f3884966ff18e5db6d3caabd592af22a56d1bd7ab1e358783f648d91c1",
+      ],
+      mac: [
+        319176247,
+        "91abb540657f4e7c41e3eeaebaba657844e42484ec01ca662cb7865b8c6e35ce",
+      ],
+      linux: [
+        289755849,
+        "d94aed64adc9c8783c91b19c1bd1a4e11ea672513435efaa32f316349fe766dd",
+      ],
+    } as const;
+    for (const slug of Object.keys(expected) as (keyof typeof expected)[]) {
+      const artifact = DOWNLOAD_ARTIFACTS[slug];
+      expect(artifact).not.toBeNull();
+      if (!artifact) continue;
+      expect([artifact.sizeBytes, artifact.sha256]).toEqual(expected[slug]);
+      expect(artifact.version).toBe("0.3.9");
+      expect(artifact.engine).toBe("Godot");
+      expect(artifact.runtimeVersion).toBe("0.3.9");
+      expect(artifact.sourceCommit).toBe(
+        "8227b1cb0158e631d78542c8c75f09ac2b7b9ea9",
+      );
+      expect(artifact.url).toBe(
+        `https://github.com/leopu00/job-hunter-team/releases/download/v0.3.9/${artifact.filename}`,
+      );
+      expect(new URL(artifact.url).search).toBe("");
+    }
+  });
+
+  it("withdraws the installer explicitly for GET and HEAD without redirect or measurement", () => {
+    const active = DOWNLOAD_ARTIFACTS["win-setup"];
+    try {
+      DOWNLOAD_ARTIFACTS["win-setup"] = null;
+      for (const method of ["GET", "HEAD"]) {
+        const state = testDependencies();
+        const response = handleDownloadRedirect(
+          new Request(
+            "https://jobhunterteam.ai/go/win-setup?url=https://evil.example",
+            { method },
+          ),
+          "win-setup",
+          state.dependencies,
+        );
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.has("location")).toBe(false);
+        if (method === "HEAD") expect(response.body).toBeNull();
+        expect(state.tasks).toHaveLength(0);
+        expect(state.record).not.toHaveBeenCalled();
+      }
+      const portable = handleDownloadRedirect(
+        new Request("https://jobhunterteam.ai/go/win-portable"),
+        "win-portable",
+        testDependencies().dependencies,
+      );
+      expect(portable.status).toBe(302);
+      expect(portable.headers.get("location")).toBe(
+        DOWNLOAD_ARTIFACTS["win-portable"].url,
+      );
+    } finally {
+      DOWNLOAD_ARTIFACTS["win-setup"] = active;
     }
   });
 
@@ -120,7 +192,7 @@ describe("B8 download funnel", () => {
     );
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      DOWNLOAD_TARGETS["win-setup"],
+      DOWNLOAD_ARTIFACTS["win-setup"]!.url,
     );
   });
 
@@ -191,7 +263,7 @@ describe("B8 download funnel", () => {
       state.dependencies,
     );
     expect(head.status).toBe(302);
-    expect(head.headers.get("location")).toBe(DOWNLOAD_TARGETS.linux);
+    expect(head.headers.get("location")).toBe(DOWNLOAD_ARTIFACTS.linux.url);
     expect(await head.text()).toBe("");
 
     for (const handler of [POST, PUT, PATCH, DELETE, OPTIONS]) {
@@ -281,7 +353,7 @@ describe("B8 download funnel", () => {
       state.dependencies,
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(DOWNLOAD_TARGETS.mac);
+    expect(response.headers.get("location")).toBe(DOWNLOAD_ARTIFACTS.mac.url);
     await state.tasks[0]();
     expect(state.logFailure).toHaveBeenCalledOnce();
     expect(state.logFailure).toHaveBeenCalledWith();
@@ -302,7 +374,7 @@ describe("B8 download funnel", () => {
       },
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(DOWNLOAD_TARGETS.linux);
+    expect(response.headers.get("location")).toBe(DOWNLOAD_ARTIFACTS.linux.url);
     expect(logFailure).toHaveBeenCalledOnce();
     expect(logFailure).toHaveBeenCalledWith();
   });
@@ -331,9 +403,9 @@ describe("B8 download funnel", () => {
       url: "https://evil.example",
       extra: "not-propagated",
     });
-    for (const slug of Object.keys(DOWNLOAD_TARGETS)) {
+    for (const slug of Object.keys(DOWNLOAD_ARTIFACTS)) {
       expect(
-        downloadHref(slug as keyof typeof DOWNLOAD_TARGETS, attribution),
+        downloadHref(slug as keyof typeof DOWNLOAD_ARTIFACTS, attribution),
       ).toBe(
         `/go/${slug}?utm_source=reddit&utm_medium=paid&utm_campaign=lancio-2026-08`,
       );
@@ -427,15 +499,18 @@ describe("B8 download funnel", () => {
 
     let checks = 0;
     const increment = vi.fn(async (_event: DownloadClick) => {});
-    const events = Array.from({ length: 100 }, (_, i): DownloadClick => ({
-      ts_hour: "2026-08-09T14",
-      slug: "mac",
-      // Even if diverse values reached this boundary, no event dimension is
-      // used as rate-limit identity and all callers consume the same budget.
-      utm_source: `attacker_${i}`,
-      utm_medium: `medium_${i}`,
-      utm_campaign: `campaign_${i}`,
-    }));
+    const events = Array.from(
+      { length: 100 },
+      (_, i): DownloadClick => ({
+        ts_hour: "2026-08-09T14",
+        slug: "mac",
+        // Even if diverse values reached this boundary, no event dimension is
+        // used as rate-limit identity and all callers consume the same budget.
+        utm_source: `attacker_${i}`,
+        utm_medium: `medium_${i}`,
+        utm_campaign: `campaign_${i}`,
+      }),
+    );
 
     await Promise.all(
       events.map((event) =>

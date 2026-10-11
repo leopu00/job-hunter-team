@@ -12,7 +12,15 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { GUIDE_UI } from "./guide-ui.i18n";
-import { downloadUrlFor, resolveExternalHref } from "./guide-config";
+import {
+  downloadSlugFor,
+  downloadUrlFor,
+  resolveExternalHref,
+} from "./guide-config";
+import DownloadArtifactDetails, {
+  InstallerUnavailable,
+} from "../download/DownloadArtifactDetails";
+import { DOWNLOAD_ARTIFACTS } from "@/lib/download-funnel";
 import { linkAppliesTo, type GuideLink, type OsId } from "./guide-types";
 import type { Lang } from "../components/landing/LandingI18n";
 
@@ -126,7 +134,26 @@ export default function GuideLinks({
     // Un link esterno senza indirizzo per questo sistema non si mostra
     // spento: si omette. Un bottone che non porta da nessuna parte è peggio
     // di un bottone che non c'è.
-    if (!href) return null;
+    if (!href) {
+      return link.kind === "download" &&
+        downloadSlugFor(os, link.asset) === "win-setup" ? (
+        <InstallerUnavailable key="installer-unavailable" lang={lang} />
+      ) : null;
+    }
+
+    if (link.kind === "download") {
+      const slug = downloadSlugFor(os, link.asset);
+      const artifact = slug ? DOWNLOAD_ARTIFACTS[slug] : null;
+      if (!artifact) return null;
+      return (
+        <div key={`download-${slug}`} className="min-w-0 space-y-2">
+          <a href={href} className={ACTION_CLS}>
+            {label}
+          </a>
+          <DownloadArtifactDetails artifact={artifact} />
+        </div>
+      );
+    }
 
     return (
       <a

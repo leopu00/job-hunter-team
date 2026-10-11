@@ -53,18 +53,20 @@ def test_download_page_prefers_installer_and_labels_portable_alternative() -> No
     client = DOWNLOAD_CLIENT.read_text()
     funnel = DOWNLOAD_FUNNEL.read_text()
 
-    # The client owns stable local slugs; only the server-side allowlist owns
-    # release destinations, so a query parameter can never choose an asset.
+    # The client owns stable local slugs; the shared artifact allowlist owns
+    # destinations and identities, so a query parameter cannot choose an asset.
     assert 'windows: "win-setup"' in client
     assert 'downloadHref("win-portable", attribution)' in client
-    assert (
-        '"win-setup": `${RELEASE_BASE}/job-hunter-team-windows-x64-setup.exe`'
-        in funnel
-    )
-    assert (
-        '"win-portable": `${RELEASE_BASE}/job-hunter-team-windows-x64-portable.exe`'
-        in funnel
-    )
+    assert "export const DOWNLOAD_ARTIFACTS = {" in funnel
+    for slug, filename in (
+        ("win-setup", "job-hunter-team-windows-x64-setup.exe"),
+        ("win-portable", "job-hunter-team-windows-x64-portable.exe"),
+    ):
+        artifact = funnel.split(f'"{slug}": {{', 1)[1].split("\n  }", 1)[0]
+        assert f'url: `${{RELEASE_039}}/{filename}`' in artifact
+        assert f'filename: "{filename}"' in artifact
+    assert "export type DownloadSlug = keyof typeof DOWNLOAD_ARTIFACTS;" in funnel
+    assert "return Object.hasOwn(DOWNLOAD_ARTIFACTS, value);" in funnel
     assert 't("dl_windows_portable_label")' in client
     assert 't("dl_windows_portable_link")' in client
 

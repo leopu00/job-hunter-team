@@ -6,10 +6,12 @@
 // della scelta di naming (HQ-DOCS). Tenerli qui significa che entrambe le
 // decisioni si applicano in un punto solo, senza rileggere le fasi.
 //
-// ⚠️ La guida NON è ancora pubblica: la route non è linkata dal menu e la
-// pagina è `noindex`. Vedi `page.tsx`.
-
 import type { OsId } from "./guide-types";
+import {
+  DOWNLOAD_ARTIFACTS,
+  downloadHref,
+  type DownloadSlug,
+} from "@/lib/download-funnel";
 
 /** Slug della pagina. PROVVISORIO: la scelta di naming è di HQ-DOCS —
  *  vincoli noti: non «tutorial» per la pagina, non «videogioco» per
@@ -17,31 +19,31 @@ import type { OsId } from "./guide-types";
  *  route, tutti i riferimenti interni seguono. */
 export const GUIDE_PATH = "/setup-guide";
 
-/** Base delle release GitHub: risolve sempre l'ultima pubblicata, così il
- *  link non va aggiornato a ogni versione (stesso meccanismo di /download,
- *  W04 — qualunque modifica qui si verifica contro una release reale). */
-const RELEASE_BASE =
-  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
-
-/** Nome dell'asset di release per sistema operativo. Allineato a
- *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
-const DESKTOP_ASSET: Record<OsId, string> = {
-  macos: "job-hunter-team.zip",
-  windows: "job-hunter-team-windows-x64-setup.exe",
-  linux: "job-hunter-team-linux-x64.tar.gz",
+const DESKTOP_SLUG: Record<OsId, DownloadSlug> = {
+  macos: "mac",
+  windows: "win-setup",
+  linux: "linux",
 };
 
-/** Asset alternativi, che esistono solo su certi sistemi. Su Windows i
- *  percorsi ufficiali sono due — l'installer (principale) e il portable —
- *  e il contratto vuole che la guida li presenti entrambi. */
+// A stable slug, independent of the hosted portable filename.
 export const ALT_ASSET = {
-  windowsPortable: "job-hunter-team-windows-x64-portable.exe",
+  windowsPortable: "win-portable",
 } as const;
 
-/** URL di download diretto. Senza `asset` prende quello predefinito del
- *  sistema; con `asset` scarica quel file preciso dalla stessa release. */
-export function downloadUrlFor(os: OsId, asset?: string): string {
-  return `${RELEASE_BASE}/${asset ?? DESKTOP_ASSET[os]}`;
+export function downloadSlugFor(
+  os: OsId,
+  asset?: string,
+): DownloadSlug | undefined {
+  if (asset === undefined) return DESKTOP_SLUG[os];
+  return os === "windows" && asset === ALT_ASSET.windowsPortable
+    ? "win-portable"
+    : undefined;
+}
+
+/** The guide uses the same allowlisted redirects as the download page. */
+export function downloadUrlFor(os: OsId, asset?: string): string | undefined {
+  const slug = downloadSlugFor(os, asset);
+  return slug && DOWNLOAD_ARTIFACTS[slug] ? downloadHref(slug) : undefined;
 }
 
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */

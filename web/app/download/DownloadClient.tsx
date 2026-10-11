@@ -12,8 +12,12 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
+import DownloadArtifactDetails, {
+  InstallerUnavailable,
+} from "./DownloadArtifactDetails";
 import {
   downloadHref,
+  DOWNLOAD_ARTIFACTS,
   type DownloadAttribution,
   type DownloadSlug,
 } from "@/lib/download-funnel";
@@ -37,8 +41,8 @@ function BackLink() {
 }
 
 // 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. I quattro CTA
-// passano dagli slug locali `/go/*`: il server risolve la release GitHub più
-// recente da un'allowlist statica e misura solo bucket anonimi aggregati.
+// passano dagli slug locali `/go/*`: il server usa artifact immutabili
+// allowlistati e misura solo bucket anonimi aggregati.
 // macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
 // va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
@@ -393,36 +397,49 @@ function DownloadContent({
                 {t("dl_desktop_beta_desc")}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PLATFORMS.map((os) => (
-                  <a
-                    key={os.id}
-                    href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}
-                    className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
-                    style={{
-                      borderColor: "var(--color-border)",
-                      background: "var(--color-panel)",
-                    }}
-                  >
-                    <div
-                      className="w-10 h-10 flex items-center justify-center"
+                {PLATFORMS.map((os) => {
+                  const artifact = DOWNLOAD_ARTIFACTS[DOWNLOAD_SLUG[os.id]];
+                  if (!artifact)
+                    return (
+                      <div
+                        key={os.id}
+                        className="border border-[var(--color-border)] p-4"
+                      >
+                        <InstallerUnavailable lang={lang} />
+                      </div>
+                    );
+                  return (
+                    <a
+                      key={os.id}
+                      href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}
+                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
                       style={{
-                        background: "var(--color-card)",
-                        border: "1px solid var(--color-border)",
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-panel)",
                       }}
                     >
-                      <PlatformIcon id={os.id} />
-                    </div>
-                    <div className="text-[12px] font-bold text-[var(--color-white)]">
-                      {os.label}
-                    </div>
-                    <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                      {t("dl_desktop_beta_badge")}
-                    </span>
-                  </a>
-                ))}
+                      <div
+                        className="w-10 h-10 flex items-center justify-center"
+                        style={{
+                          background: "var(--color-card)",
+                          border: "1px solid var(--color-border)",
+                        }}
+                      >
+                        <PlatformIcon id={os.id} />
+                      </div>
+                      <div className="text-[12px] font-bold text-[var(--color-white)]">
+                        {os.label}
+                      </div>
+                      <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
+                        {t("dl_desktop_beta_badge")} · v{artifact.version}
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4 text-center">
-                {t("dl_windows_portable_label")}{" "}
+                {DOWNLOAD_ARTIFACTS["win-setup"] &&
+                  `${t("dl_windows_portable_label")} `}
                 <a
                   href={downloadHref("win-portable", attribution)}
                   className="font-semibold text-[var(--color-green)] underline underline-offset-2"
@@ -430,6 +447,16 @@ function DownloadContent({
                   {t("dl_windows_portable_link")}
                 </a>
               </p>
+              <div className="mb-4 grid min-w-0 gap-3 sm:grid-cols-2">
+                {DOWNLOAD_ARTIFACTS["win-setup"] && (
+                  <DownloadArtifactDetails
+                    artifact={DOWNLOAD_ARTIFACTS["win-setup"]}
+                  />
+                )}
+                <DownloadArtifactDetails
+                  artifact={DOWNLOAD_ARTIFACTS["win-portable"]}
+                />
+              </div>
               {/* Windows e Linux non sono firmati: l'avviso del sistema va
                   detto prima, così non sembra che il file sia guasto. */}
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">

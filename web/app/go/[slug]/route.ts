@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import {
   createDownloadClick,
-  DOWNLOAD_TARGETS,
+  DOWNLOAD_ARTIFACTS,
   isDownloadSlug,
   type DownloadClick,
 } from "@/lib/download-funnel";
@@ -40,6 +40,17 @@ export function handleDownloadRedirect(
     });
   }
 
+  const artifact = DOWNLOAD_ARTIFACTS[slug];
+  if (!artifact) {
+    return new Response(
+      request.method === "HEAD" ? null : "Download unavailable",
+      {
+        status: 503,
+        headers: RESPONSE_HEADERS,
+      },
+    );
+  }
+
   const event = createDownloadClick(
     slug,
     new URL(request.url).searchParams,
@@ -49,7 +60,7 @@ export function handleDownloadRedirect(
     status: 302,
     headers: {
       ...RESPONSE_HEADERS,
-      Location: DOWNLOAD_TARGETS[slug],
+      Location: artifact.url,
     },
   });
 
