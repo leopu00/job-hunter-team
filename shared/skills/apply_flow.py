@@ -3354,6 +3354,10 @@ class ApplicationFlow:
             raise FlowError("playwright is not installed") from exc
         profile = getattr(self, "_linkedin_profile", None)
         with sync_playwright() as runtime:
+            # Assisted expiry interrupts the transport, never the synchronous
+            # Playwright greenlet with an asynchronous Python exception.
+            if getattr(self, "_assisted_owner", False):
+                self._playwright_driver = runtime._impl_obj._connection._transport._proc
             if profile is not None:
                 # The profile the user signed in to by hand (linkedin_apply.py
                 # login --interactive): one browser at a time on it.
@@ -3367,8 +3371,10 @@ class ApplicationFlow:
                         viewport={"width": 1280, "height": 900},
                     )
                     try:
+                        self._profile_page_owner = profile
                         yield context.pages[0] if context.pages else context.new_page()
                     finally:
+                        self._profile_page_owner = None
                         context.close()
                 return
             browser = runtime.chromium.launch(
@@ -4555,6 +4561,11 @@ class ApplicationFlow:
         the user has one, is still the fallback.  A profile another browser
         holds is a denial the queue retries.
         """
+        # The assisted caller keeps this context and its profile lock alive
+        # between runs.  Its own lock is not another browser's busy profile.
+        if getattr(self, "_profile_page_owner", None) is not None:
+            self._linkedin_profile = self._profile_page_owner
+            return None
         self._linkedin_profile = None
         if not is_linkedin_job(getattr(self, "_queue_url", "") or self.url):
             return None
@@ -4874,6 +4885,18 @@ class ApplicationFlow:
         return None
 
     def run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
+        try:
+            from apply_session_lock import SessionBusy, position_lock
+        except ImportError:
+            from shared.skills.apply_session_lock import SessionBusy, position_lock
+
+        try:
+            with position_lock(self._jht_home(), self.position_id, owner=self):
+                return self._run(page=page, navigate=navigate)
+        except SessionBusy:
+            return FlowResult("denied", "", "application_session_busy")
+
+    def _run(self, *, page: Any | None = None, navigate: bool = True) -> FlowResult:
         # The queue's address names the checkpoint.  self.url is where the
         # browser goes (www for a LinkedIn country page, the company site after
         # a handoff): a second run of this same flow must not compare that.
@@ -5359,12 +5382,22 @@ def main(argv: list[str] | None = None) -> int:
         "--headless", dest="headless", action="store_true", help="Force a hidden browser."
     )
     parser.set_defaults(headless=None)
+    parser.add_argument("--assisted", action="store_true", help="Keep the actual browser in an explicitly controlled assisted session.")
+    parser.add_argument("--assisted-ttl", type=int, default=1800, help="Assisted owner lifetime in seconds (1-3600).")
     parser.add_argument(
         "--ask",
         action="store_true",
         help="Send the form question this position stopped on to the user (the CLOSER found no basis).",
     )
     args = parser.parse_args(argv)
+
+    if args.assisted:
+        if args.ask or args.headless is True:
+            parser.error("--assisted requires a visible browser and cannot be combined with --ask")
+        from apply_assisted import start
+        result = start(args)
+        print(json.dumps(result, sort_keys=True))
+        return 0 if result.get("status") == "assisted_started" else 2
 
     if args.ask:
         try:

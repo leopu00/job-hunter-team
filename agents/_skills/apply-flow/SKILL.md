@@ -1,10 +1,29 @@
 ---
 name: apply-flow
 description: How the CLOSER runs one authorised application with `apply_flow.py` — the checkpointed state machine (detect, fill, upload_cv, screening, review, submit), the mandatory receipt without which `applied` is never written, and what to do on each result, `blocked_human` first of all. Use it for every position taken from the queue. Owned by the CLOSER.
-allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
+allowed-tools: Bash(python3 /app/shared/skills/apply_flow.py *), Bash(python3 /app/shared/skills/apply_assisted.py *), Bash(python3 /app/shared/skills/application_answers.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/closer_notices.py *)
 ---
 
 # apply-flow — one application, one receipt, no blind retry
+
+## Explicit assisted mode
+
+Only for an explicitly requested assisted run, add `--assisted` (optional
+`--assisted-ttl 1800`) to the command below. The actual page stays alive at a
+human block. `assisted_started` confirms the owner, never an application receipt.
+Use `apply_assisted.py status|resume|handoff|finish|abandon --position-id "$PID"`.
+The existing consent, position, hold and cap gates still apply; a new captcha
+hold requires official reauthorisation before handoff. Never reset it yourself.
+Official saved answers can be resumed on the same page without human input.
+
+Viewing alone gives no mouse. The private local controller's `input` command
+accepts click/type/press JSON on stdin after authorised handoff. It is technical
+access, not authenticated human identity and not a solution to #279. Handoff
+durably marks a possible submit before input: after any such input, resume only
+observes a receipt or stops unknown, never clicks submit again. No automation
+runs during handoff. Finish/abandon, fixed TTL and disconnect close the owner;
+they never clear checkpoints or uncertain cap slots. See
+`docs/internal/closer-assisted.md` for the exact lifecycle and control limits.
 
 ```bash
 python3 /app/shared/skills/apply_flow.py \
