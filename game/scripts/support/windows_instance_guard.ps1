@@ -46,7 +46,7 @@ function Sddl($Security){$Security.GetSecurityDescriptorSddlForm([Security.Acces
 function Assert-Dir([string]$Path,[Security.AccessControl.DirectorySecurity]$Expected){
   $item=Get-Item -LiteralPath $Path -Force
   if(-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'root_identity'}
-  if((Sddl ($item.GetAccessControl([Security.AccessControl.AccessControlSections]'Access,Owner'))) -cne (Sddl $Expected)){throw 'root_acl'}
+  if((Sddl ($item.GetAccessControl([Security.AccessControl.AccessControlSections]'Access,Owner'))).Replace('D:PAI(','D:P(') -cne (Sddl $Expected)){throw 'root_acl'}
 }
 function Assert-File([string]$Path,[Security.AccessControl.FileSecurity]$Expected){
   $item=Get-Item -LiteralPath $Path -Force

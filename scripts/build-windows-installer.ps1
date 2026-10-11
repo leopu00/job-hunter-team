@@ -123,7 +123,7 @@ if ($Smoke) {
       $sourceProbe = Start-Process -FilePath $installedExe `
         -ArgumentList '--headless', '--quit-after', '10' -Wait -PassThru `
         -RedirectStandardOutput $guardStdout -RedirectStandardError $guardStderr
-      $expectedCensus = 'WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9965 argv_utf16=26696 sha256=bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
+      $expectedCensus = 'WINDOWS-INSTANCE-GUARD-PCK source=exported-pck bytes=9990 argv_utf16=26760 sha256=ba3277e92433e1320517a0fb81542589bd7196d2ed84dae90520cb14da549243'
       $sourceOutput = if (Test-Path -LiteralPath $guardStdout) {
         Get-Content -LiteralPath $guardStdout -Raw
       } else { '' }
@@ -169,7 +169,7 @@ if ($Smoke) {
             catch { continue }
             if ($guardAck.schema -eq 1 -and $guardAck.type -ceq 'ready' -and
                 $guardAck.desktop_pid -eq $first.Id -and
-                $guardAck.source_sha256 -ceq 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b') {
+                $guardAck.source_sha256 -ceq 'ba3277e92433e1320517a0fb81542589bd7196d2ed84dae90520cb14da549243') {
               $guardAcks += @($guardAck)
             }
           }
