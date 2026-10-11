@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "baseline_revision": "789fa882f150062471f0462a07e06516cf552454",
+  "baseline_index": "sha256:65c201c127bd2e7ed316b49392f40a56b9686165263da4be27395bc1a15f0a9b",
+  "platform": "linux/amd64",
+  "user": "1001:1001",
+  "maintenance_entrypoint": [
+    "/usr/bin/tini",
+    "-g",
+    "--",
+    "/bin/sleep"
+  ],
+  "maintenance_command": [
+    "infinity"
+  ],
+  "restart_policy": "no",
+  "lifecycle_selection": "exact Docker container IDs only; never Compose selection or orphan cleanup",
+  "original_preservation": "retain original object and rollback image; rename does not remove Compose labels",
+  "fixture": {
+    "network": "none",
+    "mounts": "fresh private synthetic data only; no original home, config, auth or Docker socket",
+    "activation": "explicit docker exec of synthetic assisted-flow tests using image product code; idle uptime is not acceptance"
+  },
+  "promotion": {
+    "required": [
+      "exact-SHA independent verdict",
+      "immutable image digest and OCI source readback",
+      "native amd64 synthetic Page/session and process lifecycle PASS",
+      "original ID revalidation and coordinated admission stop",
+      "graceful original stop and consistent state backup after quiescence",
+      "one writer to actual mounts",
+      "exact effective mount/env/port config reconstruction from private inventory"
+    ],
+    "entrypoint": "maintenance override above; never legacy pid1, entrypoint repair, auto-update, cleanup, bridges or watchdogs",
+    "operation": "explicit controlled assisted owner only; no automatic queue selection or agent startup"
+  },
+  "rollback": {
+    "required": [
+      "stop candidate by exact ID before original mounts are writable elsewhere",
+      "preserve all checkpoints and uncertain outcomes",
+      "original object and immutable baseline digest retained"
+    ],
+    "warning": "starting original legacy pid1 runs cleanup: rollback requires the same maintenance override or a separately reviewed boot path, never blind docker start",
+    "operation": "Create a distinct baseline-digest maintenance container from verified private config; preserve original stopped object. Never restart its legacy pid1 implicitly."
+  },
+  "continuity": "browser Page is retained only within one live assisted owner; stop loses RAM, regardless of original container retention"
+}

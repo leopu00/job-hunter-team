@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "scope": "assisted Closer lifecycle only; no operator identity grant",
+  "baseline_revision": "789fa882f150062471f0462a07e06516cf552454",
+  "baseline_image": "ghcr.io/leopu00/jht@sha256:65c201c127bd2e7ed316b49392f40a56b9686165263da4be27395bc1a15f0a9b",
+  "implementation_revision": "c10850a569ac588ab5c6c3f6b9182ff5254a8d5a",
+  "image_source_revision": "Read org.opencontainers.image.revision and compare with the independently reviewed integration commit; it includes this manifest and packaging.",
+  "files": {
+    "shared/skills/apply_flow.py": {
+      "sha256": "dd142583565c45749bc777d2c1ee1e5b0743ac0a8a0cd766fb00b85aa01b74d0",
+      "bytes": 248762,
+      "owner": "0:0"
+    },
+    "shared/skills/apply_assisted.py": {
+      "sha256": "4f9dc8f3051f4866ce8aca639701bad7670ae9230e0c8e499264ef2d70cfec80",
+      "bytes": 18821,
+      "owner": "0:0"
+    },
+    "shared/skills/apply_session_lock.py": {
+      "sha256": "b2a4f41888be9a805a303e7cf151f73e9ec2b9e3e4d747872dc6449cbc77029f",
+      "bytes": 1844,
+      "owner": "0:0"
+    },
+    "agents/_skills/apply-flow/SKILL.md": {
+      "sha256": "c542bb0806c95d83954a149d1151ac800e826a77961b8d4ba38e8e7349d4fb10",
+      "bytes": 20368,
+      "owner": "0:0"
+    },
+    "agents/_skills/apply-flow/SKILL.it.md": {
+      "sha256": "4031421864527642d078ec2115ad4389b85139d6b97d803c3eeaf20c5d163be0",
+      "bytes": 21419,
+      "owner": "0:0"
+    }
+  }
+}
