@@ -18,15 +18,18 @@ class BridgeTests(unittest.TestCase):
         self.pin = dict(container_id='c'*64, image_id='sha256:'+'d'*64,
                         oci_revision=bridge.REVISION, digest=bridge.DIGEST)
         self.container = dict(Id=self.pin['container_id'], Image=self.pin['image_id'],
-                              Revision=bridge.REVISION, Running=True)
-        self.image = dict(Id=self.pin['image_id'], Revision=bridge.REVISION, OS='linux', Arch='amd64',
-                          Digests=['example.invalid/synthetic@'+bridge.DIGEST])
+                              Rev=bridge.REVISION, Run=True, Manifest="sha256:"+"f"*64)
+        self.image = dict(Id=self.pin['image_id'], Rev=bridge.REVISION, OS='linux', Arch='amd64',
+                          Repos=['example.invalid/synthetic@'+bridge.DIGEST])
     def invoke(self, values):
         with patch.object(bridge, 'run', side_effect=values) as run:
             result = bridge.bridge(dict(runtime=self.pin, request={'op':'descriptor'}))
             return result, run.call_args_list
     def test_exact_cid_platform_and_uid_then_fixed_entry_stdin(self):
-        result, calls = self.invoke([self.container, self.image, self.image, {'ok':True,'phase':'absent'}])
+        platform = {**self.image, 'Id':self.container['Manifest']}
+        result, calls = self.invoke([self.container, self.image, platform, {'ok':True,'phase':'absent'}])
+        self.assertNotEqual(self.image['Id'], platform['Id'])
+        self.assertIn('.ImageManifestDescriptor.Digest',calls[0].args[0][-2])
         self.assertEqual(result, {'ok':True,'phase':'absent'})
         self.assertEqual(len(calls), 4)
         self.assertIn('--platform', calls[2].args[0])
@@ -37,14 +40,14 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(json.loads(payload), {'op':'descriptor'})
         self.assertEqual(cap, 12*1024*1024)
     def test_mismatch_never_executes(self):
-        for key, value in [('Id','jht'), ('Image','sha256:'+'0'*64), ('Revision','0'*40), ('Running',False)]:
+        for key, value in [('Id','jht'), ('Image','sha256:'+'0'*64), ('Rev','0'*40), ('Run',False), ('Manifest',None), ('Manifest','registry-config-not-image')]:
             with self.subTest(key=key), patch.object(bridge,'run',return_value={**self.container,key:value}) as run:
                 with self.assertRaises(ValueError): bridge.bridge(dict(runtime=self.pin,request={'op':'descriptor'}))
                 self.assertEqual(run.call_count,1)
         for index in [1,2]:
-            for key,value in [('Id','registry-config-not-image'), ('OS','windows'), ('Arch','arm64'),
-                              ('Revision','0'*40), ('Digests',['example.invalid/other@sha256:'+'0'*64])]:
-                values=[self.container,self.image,self.image];values[index]={**self.image,key:value}
+            for key,value in [('Id','registry-config-not-image'), ('Id','sha256:'+'0'*64), ('OS','windows'), ('Arch','arm64'),
+                              ('Rev','0'*40), ('Repos',['example.invalid/other@sha256:'+'0'*64])]:
+                values=[self.container,self.image,{**self.image,'Id':self.container['Manifest']}];values[index]={**values[index],key:value}
                 with self.subTest(index=index,key=key), patch.object(bridge,'run',side_effect=values) as run:
                     with self.assertRaises(ValueError):bridge.bridge(dict(runtime=self.pin,request={'op':'descriptor'}))
                     self.assertEqual(run.call_count,index+1)
