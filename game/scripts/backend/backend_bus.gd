@@ -48,6 +48,7 @@ signal positions_updated(positions: Array)
 ## adapter parta, così chi ascolta si risemina nello stesso frame del
 ## cambio e non esiste un fotogramma coi conteggi del box precedente.
 signal backend_reset()
+signal browser_desktop_result(token: int, response: Dictionary)
 
 ## Conversazione utente ↔ agente (chat bidirezionale). messages = tail
 ## di chat.jsonl dell'agente: [{role: "user"|"assistant", text, ts,
@@ -199,11 +200,14 @@ func _ready() -> void:
 		return
 	var cfg := load_vps_config()
 	if OS.get_environment("JHT_VPS_IP") != "":
-		cfg = {
+		cfg = vps_config_override(cfg, {
 			"ip": OS.get_environment("JHT_VPS_IP"),
 			"key_path": OS.get_environment("JHT_VPS_KEY"),
 			"user": OS.get_environment("JHT_VPS_USER"),
-		}
+		})
+	if cfg.has("browser_runtime") and (str(cfg.get("ip", "")) == "" or str(cfg.get("key_path", "")) == ""):
+		publish_state(ERROR, "Browser runtime binding requires its configured SSH connection")
+		return
 	if str(cfg.get("ip", "")) != "" and str(cfg.get("key_path", "")) != "":
 		set_backend(VpsBackend.new(), cfg)
 	elif _local_container_running():
@@ -948,16 +952,48 @@ func load_vps_config() -> Dictionary:
 	var cfg := ConfigFile.new()
 	if cfg.load(CONFIG_PATH) != OK:
 		return {}
-	return {
+	var result := {
 		"ip": cfg.get_value("vps", "ip", ""),
 		"key_path": cfg.get_value("vps", "key_path", ""),
 		# Le config salvate prima che il campo esistesse non hanno "user":
 		# vuoto vale root, l'unico utente che il gioco sapesse usare.
 		"user": cfg.get_value("vps", "user", ""),
 	}
+	if cfg.has_section("browser_runtime"):
+		var binding := {}
+		for key in cfg.get_section_keys("browser_runtime"):
+			binding[key] = cfg.get_value("browser_runtime", key)
+		result["browser_runtime"] = binding
+	return result
+
+static func same_vps_connection(left: Dictionary, right: Dictionary) -> bool:
+	for key in ["ip", "key_path", "user"]:
+		var a := str(left.get(key, "")).strip_edges()
+		var b := str(right.get(key, "")).strip_edges()
+		if key == "user":
+			a = "root" if a == "" else a
+			b = "root" if b == "" else b
+		elif key == "key_path":
+			a = VpsBackend.expand_user_path(a)
+			b = VpsBackend.expand_user_path(b)
+		if a != b:
+			return false
+	return true
+
+static func vps_config_override(saved: Dictionary, override: Dictionary) -> Dictionary:
+	var result := override.duplicate(true)
+	if saved.has("browser_runtime"):
+		# Changed transport requires fresh trusted delivery, never legacy fallback.
+		result["browser_runtime"] = saved["browser_runtime"].duplicate(true) if same_vps_connection(saved, override) else {}
+	return result
 
 func save_vps_config(ip: String, key_path: String, user := "") -> void:
+	var previous := load_vps_config()
 	var cfg := ConfigFile.new()
+	cfg.load(CONFIG_PATH)
+	if previous.has("browser_runtime") and not same_vps_connection(previous, {"ip": ip, "key_path": key_path, "user": user}):
+		cfg.erase_section("browser_runtime")
+		cfg.set_value("browser_runtime", "invalidated", true)
 	cfg.set_value("vps", "ip", ip)
 	cfg.set_value("vps", "key_path", key_path)
 	cfg.set_value("vps", "user", user)
@@ -1058,3 +1094,10 @@ func publish_settings(settings: Dictionary) -> void:
 	live_settings = settings
 	Log.debug("backend", "config live: %s" % ", ".join(settings.keys()))
 	live_settings_updated.emit(settings)
+
+
+func request_browser_desktop(request: Dictionary, token: int) -> void:
+	if _backend and state == CONNECTED:
+		_backend.browser_desktop(request, token)
+	else:
+		browser_desktop_result.emit(token, {"ok": false, "error": "backend_not_connected"})

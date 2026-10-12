@@ -222,3 +222,10 @@ func fetch_artifact(path: String, _kind: String) -> void:
 	var msg := _unsupported("fetch_artifact")
 	if bus:
 		bus.artifact_fetched.emit(path, false, PackedByteArray(), msg)
+
+
+## Official single-mission browser operations; adapters must fail closed.
+func browser_desktop(_request: Dictionary, token: int) -> void:
+	if bus:
+		bus.call_deferred("emit_signal", "browser_desktop_result", token,
+				{"ok": false, "error": "browser_desktop_unavailable"})

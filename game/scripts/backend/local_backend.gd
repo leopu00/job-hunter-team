@@ -249,3 +249,9 @@ static func _docker_argv(command: String) -> PackedStringArray:
 	if pending or current != "":
 		args.append(current)
 	return args
+
+
+func browser_desktop(_request: Dictionary, token: int) -> void:
+	# The desktop bridge currently targets the configured VPS over SSH.
+	bus.call_deferred("emit_signal", "browser_desktop_result", token,
+			{"ok": false, "error": "browser_desktop_requires_vps_backend"})

@@ -49,6 +49,7 @@ const GROUPS := [
 			{"id": "team", "icon": "users", "label": "Team"},
 			{"id": "agents", "icon": "robot", "label": "Agents"},
 			{"id": "chat", "icon": "chat", "label": "Chat"},
+			{"id": "browser_desktop", "icon": "display", "label": "Assisted browser"},
 			{"id": "notifs", "icon": "bell", "label": "Notifications"},
 		],
 	},

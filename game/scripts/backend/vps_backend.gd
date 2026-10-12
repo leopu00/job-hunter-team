@@ -237,6 +237,14 @@ var _terminal_history_tick := 0
 
 
 func start(config: Dictionary) -> void:
+	_desktop_runtime = {}
+	_desktop_bound = config.has("browser_runtime")
+	_desktop_busy = false
+	if _desktop_bound:
+		if not valid_browser_runtime(config["browser_runtime"]):
+			bus.publish_state(BackendBus.ERROR, "Invalid browser runtime binding — trusted delivery required")
+			return
+		_desktop_runtime = config["browser_runtime"].duplicate(true)
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_runtime_labels = UIStrings.vps_presentation_snapshot()
 	_ip = str(config.get("ip", "")).strip_edges()
@@ -324,6 +332,9 @@ func _queue_worker(callable: Callable) -> void:
 ## ── Thread di I/O ─────────────────────────────────────────────────────
 
 func _run() -> void:
+	if _desktop_bound:
+		_run_browser_runtime()
+		return
 	# handshake: la VPS risponde e il container jht esiste?
 	# Apici singoli attorno al template Go: senza, su Windows PowerShell
 	# (_ssh → powershell -Command) interpreta {{.State.Status}} come
@@ -1401,6 +1412,8 @@ func _ssh_host_python(script: String) -> Dictionary:
 ## Lo stdout remoto viene rediretto sul pipe stderr separato, cosi possiamo
 ## chiudere stdin (EOF per `python3 -`) e continuare a raccogliere l'output.
 func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
+	if _desktop_bound:
+		return {"code": -1, "out": "Ordinary team operations unavailable in bound browser mode"}
 	var payload := FileAccess.get_file_as_bytes(local_file)
 	if payload.is_empty() and FileAccess.get_open_error() != OK:
 		return {"code": -1, "out": "file temporaneo non leggibile"}
@@ -1446,6 +1459,8 @@ func _ssh_stdin_file(local_file: String, remote_cmd: String) -> Dictionary:
 ## Un giro di ssh non interattivo. Ritorna {code, out} (stdout+stderr).
 ## Il remote_cmd deve rispettare la ricetta anti-quoting (vedi sopra).
 func _ssh(remote_cmd: String) -> Dictionary:
+	if _desktop_bound:
+		return {"code": -1, "out": "Ordinary team operations unavailable in bound browser mode"}
 	var out: Array = []
 	var code := OS.execute("ssh", [
 		"-i", _key,
@@ -1641,3 +1656,114 @@ func _sleep(secs: float) -> void:
 	while waited < secs and not _stop:
 		OS.delay_msec(200)
 		waited += 0.2
+
+
+## Browser-only private bridge. One request at a time; exact CID pinned by
+## trusted delivery before handshake. Ordinary team commands are unavailable
+## in this mode; they must never fall back to the preserved legacy container.
+var _desktop_runtime: Dictionary = {}
+var _desktop_bound := false
+var _desktop_busy := false
+var _desktop_mutex := Mutex.new()
+static var BROWSER_DESKTOP_PY := payload("browser_desktop.py")
+
+static func valid_browser_runtime(value: Variant) -> bool:
+	if not value is Dictionary or value.size() != 4:
+		return false
+	var hex := RegEx.new()
+	hex.compile("^[0-9a-f]+$")
+	for key in ["container_id", "oci_revision", "image_id", "digest"]:
+		if not value.get(key) is String:
+			return false
+		var part: String = value[key]
+		var length := 40 if key == "oci_revision" else 64
+		if key in ["image_id", "digest"]:
+			if not part.begins_with("sha256:"):
+				return false
+			part = part.substr(7)
+		if part.length() != length or hex.search(part) == null:
+			return false
+	return true
+
+func _browser_source(request: Dictionary, handshake: bool = false) -> String:
+	return BROWSER_DESKTOP_PY % [Marshalls.utf8_to_base64(JSON.stringify(request)),
+		Marshalls.utf8_to_base64(JSON.stringify(_desktop_runtime)), "True" if handshake else "False"]
+
+func _run_browser_runtime() -> void:
+	while not _stop:
+		var probe := _desktop_transport(_browser_source({"op": "descriptor"}, true))
+		if _stop:
+			return
+		var result: Variant = JSON.parse_string(str(probe.get("out", "")))
+		if probe.get("code") != 0 or not result is Dictionary or result.get("cid") != _desktop_runtime.container_id or not result.get("reply") is Dictionary or result.reply.get("ok") != true:
+			_deferred_state(BackendBus.ERROR, "Browser runtime unavailable or binding mismatch")
+			return
+		_deferred_state(BackendBus.CONNECTED, "Bound browser runtime — ordinary team operations unavailable")
+		_sleep(POLL_SECS)
+
+func browser_desktop(request: Dictionary, token: int) -> void:
+	if not valid_browser_runtime(_desktop_runtime):
+		bus.call_deferred("emit_signal", "browser_desktop_result", token,
+			{"ok": false, "error": "browser_runtime_binding_required"})
+		return
+	_desktop_mutex.lock()
+	var busy := _desktop_busy
+	if not busy:
+		_desktop_busy = true
+	_desktop_mutex.unlock()
+	if busy or _stop:
+		bus.call_deferred("emit_signal", "browser_desktop_result", token,
+				{"ok": false, "error": "browser_transport_busy"})
+		return
+	_queue_worker(_do_browser_desktop.bind(request.duplicate(true), token))
+
+func _do_browser_desktop(request: Dictionary, token: int) -> void:
+	var source := _browser_source(request)
+	var result := _desktop_transport(source)
+	var response := {"ok": false, "error": "browser_transport_unavailable"}
+	if result["code"] == 0 and str(result["out"]).length() <= 12582912:
+		var parsed: Variant = JSON.parse_string(str(result["out"]))
+		if parsed is Dictionary and parsed.get("reply") is Dictionary:
+			response = parsed["reply"]
+	_desktop_mutex.lock()
+	_desktop_busy = false
+	_desktop_mutex.unlock()
+	if not _stop:
+		bus.call_deferred("emit_signal", "browser_desktop_result", token, response)
+
+
+## Request bytes (including keyboard events) never touch files or logs.
+## A timeout gives UNKNOWN to the view; it does not undo a remote operation.
+func _desktop_transport(source: String) -> Dictionary:
+	var args := PackedStringArray(["-T", "-i", _key, "-o", "RequestTTY=no",
+		"-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=yes",
+		"-o", "UserKnownHostsFile=" + known_hosts_path(_ip),
+		"%s@%s" % [_user, _ip], "python3 - 1>&2"])
+	var process := OS.execute_with_pipe("ssh", args, false)
+	if process.is_empty():
+		return {"code": -1, "out": ""}
+	var pipe: FileAccess = process["stdio"]
+	var errors: FileAccess = process["stderr"]
+	pipe.store_buffer(source.to_utf8_buffer())
+	var write_ok := pipe.get_error() == OK
+	pipe.close()
+	var pid := int(process["pid"])
+	var output := PackedByteArray()
+	var deadline := Time.get_ticks_msec() + 20000
+	var failed := not write_ok
+	while not failed:
+		var part := errors.get_buffer(65536)
+		output.append_array(part)
+		if output.size() > 12582912 or _stop or Time.get_ticks_msec() >= deadline:
+			failed = true
+			break
+		if part.is_empty() and not OS.is_process_running(pid):
+			break
+		OS.delay_msec(5)
+	errors.close()
+	if failed and OS.is_process_running(pid):
+		OS.kill(pid)  # only this component's local SSH child
+	if failed:
+		return {"code": -1, "out": ""}
+	return {"code": OS.get_process_exit_code(pid), "out": output.get_string_from_utf8()}
