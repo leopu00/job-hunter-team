@@ -6,7 +6,8 @@ schema: `kind`, `address`, `user`, `port`, `keyPath`. Local and extra fields fai
 The renderer does not select an account, container, binding, command or file.
 
 The native command holds the expected account scope and the bridge in-flight
-barrier. Existing `validate_host` checks the address/user/port, actual key file
+barrier. Existing `validate_host_for_scope` uses the held scope directly, without
+reacquiring the account lock. It checks the address/user/port, actual key file
 and account-scoped pinned known-host record before any connection write. Missing
 host key returns `host_key_missing`; the existing probe/confirm commands may be
 used and registration retried explicitly. This command never opens SSH or

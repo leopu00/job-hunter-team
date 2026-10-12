@@ -109,7 +109,7 @@ pub(crate) fn validate_host(
     validate_host_for_scope(app, host, &scope)
 }
 
-fn validate_host_for_scope(
+pub(crate) fn validate_host_for_scope(
     app: &tauri::AppHandle,
     host: &ExecutionHost,
     scope: &AccountScope,
