@@ -645,6 +645,7 @@ const S := {
 	"side.team": "Equipe",
 	"side.agents": "Agentes",
 	"side.chat": "Chat",
+	"side.browser_desktop": "Navegador assistido",
 	"side.notifs": "Notificações",
 	"side.dashboard": "Dashboard",
 	"side.positions": "Posições",
