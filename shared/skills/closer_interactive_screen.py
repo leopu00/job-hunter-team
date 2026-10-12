@@ -290,18 +290,38 @@ def _supervise():
         print(json.dumps(value), flush=True)
     def ready_vnc(process, port, on_wait=None):
         until = time.monotonic() + 5
-        while time.monotonic() < until and not stop:
-            if on_wait is not None:
-                on_wait()
-            if process.poll() is not None:
-                raise ScreenDenied("screen_vnc_failed")
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1) as client:
-                    if client.recv(12).startswith(b"RFB "):
-                        return
-            except OSError:
-                time.sleep(0.05)
-        raise ScreenDenied("screen_vnc_timeout")
+        probe = None
+        banner = bytearray()
+        try:
+            while time.monotonic() < until and not stop:
+                if on_wait is not None:
+                    on_wait()
+                if process.poll() is not None:
+                    raise ScreenDenied("screen_vnc_failed")
+                if probe is None:
+                    try:
+                        probe = socket.create_connection(("127.0.0.1", port), timeout=0.1)
+                    except OSError:
+                        time.sleep(0.05)
+                        continue
+                # Retain this connection until the whole banner arrives or the
+                # existing global deadline expires. Reconnecting every 100 ms
+                # can repeatedly abort a server's pending protocol greeting.
+                if not select.select([probe], [], [], min(0.05, max(0, until - time.monotonic())))[0]:
+                    continue
+                chunk = probe.recv(12 - len(banner))
+                if not chunk:
+                    probe.close(); probe = None; banner.clear()
+                    continue
+                banner.extend(chunk)
+                if len(banner) == 12:
+                    if bytes(banner) not in {b"RFB 003.008\n", b"RFB 003.007\n"}:
+                        raise ScreenDenied("screen_vnc_banner_invalid")
+                    return
+            raise ScreenDenied("screen_vnc_timeout")
+        finally:
+            if probe is not None:
+                probe.close()
     def allowed_actions(state):
         from types import SimpleNamespace
         from apply_flow import FlowCheckpoint
