@@ -4908,10 +4908,14 @@ class ApplicationFlow:
 
         try:
             try:
-                from closer_interactive import work_lock
+                from closer_interactive import guard, work_lock
             except ImportError:
-                from shared.skills.closer_interactive import work_lock
+                from shared.skills.closer_interactive import guard, work_lock
             with work_lock(self._jht_home(), owner=self), position_lock(self._jht_home(), self.position_id, owner=self):
+                reason = guard(self._jht_home(), self.position_id, getattr(self, "_interactive_owner", None))
+                if reason:
+                    # A rejected position must not load/rewrite its checkpoint.
+                    return FlowResult("denied", "", reason)
                 return self._run(page=page, navigate=navigate)
         except SessionBusy:
             return FlowResult("denied", "", "application_session_busy")

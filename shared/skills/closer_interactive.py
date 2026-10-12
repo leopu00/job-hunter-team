@@ -17,6 +17,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import sys
+import time
 
 try:
     from apply_session_lock import position_lock
@@ -100,7 +101,17 @@ def _write(value, home=None):
 def state_lock(home=None):
     # Separate from the work lock: the official host CLI can confirm while
     # the browser owner retains the global work/position/profile locks.
-    with position_lock(home_path(home), -1, owner=None):
+    from apply_session_lock import SessionBusy
+    deadline = time.monotonic() + 2
+    with contextlib.ExitStack() as stack:
+        while True:
+            try:
+                stack.enter_context(position_lock(home_path(home), -1, owner=None))
+                break
+            except SessionBusy:
+                if time.monotonic() >= deadline:
+                    raise InteractiveDenied("interactive_state_busy")
+                time.sleep(0.01)
         yield
 
 
@@ -214,7 +225,9 @@ def claim(flow):
 def update(flow, **changes):
     with state_lock(flow._jht_home()):
         value = read(flow._jht_home())
-        if not value or (value.get("mission_id"), value.get("owner_id")) != flow._interactive_owner:
+        if (not value or value["position_id"] != flow.position_id or
+                value.get("owner_pid") != os.getpid() or
+                (value.get("mission_id"), value.get("owner_id")) != flow._interactive_owner):
             raise InteractiveDenied("interactive_owner_changed")
         value.update(changes)
         _write(value, flow._jht_home())
@@ -225,8 +238,8 @@ def take_command(flow):
     """Consume a command durably on the Page owner's thread, before effects."""
     with state_lock(flow._jht_home()):
         value = read(flow._jht_home())
-        if (not value or (value.get("mission_id"), value.get("owner_id")) !=
-                flow._interactive_owner or value.get("owner_pid") != os.getpid()):
+        if (not value or value["position_id"] != flow.position_id or
+                (value.get("mission_id"), value.get("owner_id")) != flow._interactive_owner or value.get("owner_pid") != os.getpid()):
             raise InteractiveDenied("interactive_owner_changed")
         operation = value.get("command")
         if operation:

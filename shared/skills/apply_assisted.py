@@ -95,6 +95,8 @@ class AssistedSession:
         self.interactive = interactive
         self.screen = None
         self._observe_pending = False
+        self._running_flow = False
+        self._deferred_close = None
 
     def _publish_interactive(self, **changes):
         if self.interactive:
@@ -148,6 +150,14 @@ class AssistedSession:
         self.close("owner_exit")
 
     def close(self, reason="finished"):
+        if self._running_flow:
+            # Flow owns nested work/position locks. Revoke input now, but retain
+            # the outer locks/Page until the inner run has unwound in LIFO order.
+            self._deferred_close = reason
+            if self.screen:
+                self.screen.revoke()
+            self._publish_interactive(phase="closed", reason=reason, command=None, input_ready=False)
+            return self.status()
         if self.phase == "closed":
             return self.status()
         self.phase = "closed"
@@ -194,11 +204,20 @@ class AssistedSession:
         # The same Page, context, cookies and browser are owned outside run.
         # With submit_started (including handoff), run observes only receipts.
         self.phase = "running"
-        self.result = self.flow.run(page=self.page, navigate=navigate)
-        if self.interactive and self._observe_pending:
-            self._observe_pending = False
-            self.flow._observe_only = True
-            self.result = self.flow.run(page=self.page, navigate=False)
+        self._running_flow = True
+        try:
+            self.result = self.flow.run(page=self.page, navigate=navigate)
+            if self.interactive and self._observe_pending:
+                self._observe_pending = False
+                self.flow._observe_only = True
+                self.result = self.flow.run(page=self.page, navigate=False)
+        finally:
+            self._running_flow = False
+            if self._deferred_close is not None:
+                reason, self._deferred_close = self._deferred_close, None
+                self.close(reason)
+        if self.phase == "closed":
+            return self.status()
         self.phase = "completed" if self.result.status in {"applied", "dry_run"} else "blocked"
         if self.interactive:
             if self.screen:
@@ -221,7 +240,9 @@ class AssistedSession:
                     self.screen.revoke()
                 return FlowResult("blocked_human", checkpoint.state, "interactive_" + operation)
             try:
-                self._eligible(recovery=bool(checkpoint.submit_started))
+                # Handoff saves a different checkpoint instance. Its durable
+                # marker owns the already reserved slot, including the last one.
+                self._eligible(recovery=bool(self._checkpoint().submit_started))
             except AssistedDenied as exc:
                 if self.screen:
                     self.screen.revoke()

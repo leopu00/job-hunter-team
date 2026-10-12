@@ -78,3 +78,13 @@ websockify and a cached test image are prerequisites for the latter. No mock
 viewer, Python input refusal or command-line inspection is an effective RFB
 proof. This source is not ready for packaging/dispatch until those tests and
 exact review succeed.
+
+Review follow-up: the launcher holds the same position-zero flock from its
+ordinary-allowed check through spawn/delivery. Tmux clients and detached helpers
+close fd 8 as well as fd 9, preventing a server/helper from retaining that lease.
+Mission update/consume require position and current owner PID in addition to IDs;
+a rejected ordinary flow returns before loading or rewriting any checkpoint.
+State CLI/owner contention waits at most two seconds, then fails closed. Expiry
+revokes input immediately but releases the outer Page/locks only after nested
+flow locks unwind. Handoff recovery reads the durable submit marker, preserving
+its existing cap reservation even when it consumed the last daily slot.

@@ -712,6 +712,27 @@ if [ "$ROLE" = "closer" ]; then
     echo "  application gate that cannot answer answers no." >&2
     exit 1
   fi
+  # Same flock as closer_interactive.work_lock: hold from the check through
+  # session creation/provider delivery, so admission cannot fit between them.
+  # fd 8 is closed on tmux clients and detached helpers below (and spawn-lib).
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "Refusing Closer spawn: admission lock unavailable." >&2
+    exit 1
+  fi
+  _interactive_lock_dir="$JHT_HOME/.cache/apply-flow/locks"
+  mkdir -p "$_interactive_lock_dir"
+  if [ -L "$_interactive_lock_dir/0.lock" ]; then
+    echo "Refusing Closer spawn: unsafe admission lock." >&2
+    exit 1
+  fi
+  _lock_umask=$(umask)
+  umask 077
+  exec 8>"$_interactive_lock_dir/0.lock"
+  umask "$_lock_umask"
+  if ! flock -n 8; then
+    echo "Refusing Closer spawn: application/admission already owns the barrier." >&2
+    exit 1
+  fi
   INTERACTIVE_GATE="$(dirname "$APPLY_GATE")/closer_interactive.py"
   if [ ! -f "$INTERACTIVE_GATE" ] || ! python3 "$INTERACTIVE_GATE" ordinary-allowed; then
     echo "Refusing ordinary Closer spawn/respawn: interactive mission reserved or unreadable." >&2
@@ -776,7 +797,7 @@ if command -v flock >/dev/null 2>&1; then
   exec 9>"${JHT_HOME:-/jht_home}/locks/start-${SESSION}.lock"
   if ! flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9; then
     _spawn_stage="lock_timeout"
-    _holder="$(_spawn_lock_holder "$_spawn_lock" 9>&-)"
+    _holder="$(_spawn_lock_holder "$_spawn_lock" 8>&- 9>&-)"
     echo "Error: timed out after ${JHT_SPAWN_LOCK_WAIT_SEC}s waiting for the concurrent spawn of '$SESSION' (lock holder: ${_holder:-unknown})." >&2
     exit 1
   fi
@@ -797,10 +818,10 @@ _spawn_stage="idempotence_probe"
 # e' incantato — l'ipotesi di root cause dell'incidente da 756 respawn falliti
 # — si appende QUI, col fd 9 in mano, e la guardia irrobustita 600 righe sotto
 # non viene mai raggiunta. Sarebbe lo stesso lockout permanente, spostato di
-# un client. `9>&-` per la stessa ragione degli altri: se il client sopravvive
+# un client. `8>&- 9>&-` per la stessa ragione degli altri: se il client sopravvive
 # al proprio tetto, non deve portarsi via il lock.
 _hs_rc=0
-jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- || _hs_rc=$?
+jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 8>&- 9>&- || _hs_rc=$?
 if [ "$_hs_rc" -eq 0 ]; then
   _spawn_stage="already_active"
   echo "Session '$SESSION' is already active."
@@ -1339,7 +1360,7 @@ _spawn_abort_cleanup() {
   local rc="${1:-$?}"
   if [ "$rc" -ne 0 ] && [ "$_SPAWN_SESSION_CREATED" = 1 ]; then
     echo "Error: spawn of '$SESSION' aborted after its tmux session was created (rc=$rc) — removing the half-made session so the next attempt does not find it already active." >&2
-    jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+    jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 8>&- 9>&- || true
   fi
   return 0
 }
@@ -1403,13 +1424,13 @@ send_env_vars() {
 # Claude è un binario Windows e va lanciata via PowerShell.
 if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/null; then
   WIN_AGENT_DIR=$(wslpath -w "$AGENT_DIR")
-  # `9>&-` come nel ramo container qui sotto: anche questa new-session può
+  # `8>&- 9>&-` come nel ramo container qui sotto: anche questa new-session può
   # forkare il server tmux, che sopravvive a start-agent.sh col fd 9 aperto.
   #
   # Tetto di tempo come nel ramo container: questa new-session gira col lock
   # in mano, e un client appeso qui lo terrebbe per sempre.
   _ns_rc=0
-  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 9>&- || _ns_rc=$?
+  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" powershell.exe 8>&- 9>&- || _ns_rc=$?
   if [ "$_ns_rc" -ne 0 ]; then
     echo "Error: 'tmux new-session' for '$SESSION' (PowerShell) failed (rc=$_ns_rc; 124 = did not return within ${JHT_SPAWN_TMUX_TIMEOUT_SEC}s)." >&2
     exit 1
@@ -1461,7 +1482,7 @@ else
   # protezione, non per un guasto. L'helper degrada al comando senza tetto,
   # come fa `.launcher/` con ogni altro binario opzionale.
   #
-  # `9>&-`: stessa classe di difetto del ramo tg-bridge (vedi il commento
+  # `8>&- 9>&-`: stessa classe di difetto del ramo tg-bridge (vedi il commento
   # esteso più sopra), ma qui è peggio. Quando il server tmux non è ancora
   # vivo, è questa PRIMA `new-session` a forkarlo: il server eredita il fd 9
   # del flock, si stacca (PPid 1) e resta su quanto il container. Il lock di
@@ -1493,7 +1514,7 @@ else
   _spawn_stage="tmux_new_session"
   _ns_err="${TMPDIR:-/tmp}/jht-new-session-$$.err"
   _ns_rc=0
-  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 2>"$_ns_err" 9>&- || _ns_rc=$?
+  jht_timeout "$JHT_SPAWN_TMUX_TIMEOUT_SEC" tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$AGENT_DIR" 2>"$_ns_err" 8>&- 9>&- || _ns_rc=$?
   _ns_msg=""
   if [ -s "$_ns_err" ]; then
     _ns_msg="$(tr '\n' ' ' <"$_ns_err" | sed 's/  */ /g; s/ *$//')" || _ns_msg=""
@@ -1518,13 +1539,13 @@ else
         # significherebbe ammazzare l'agente di qualcun altro (team-rules T01).
         # Il cleanup incondizionato faceva esattamente questo.
         #
-        # `9>&-` anche qui: sono altri due client tmux nati mentre il lock e'
+        # `8>&- 9>&-` anche qui: sono altri due client tmux nati mentre il lock e'
         # nostro. Se uno resta appeso oltre il proprio tetto, il tetto lo
         # abbandona ma il figlio sopravvive col fd 9 aperto, e il lock non si
         # rilascia piu'.
         _i=0
         while [ "$_i" -lt 5 ]; do
-          jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 9>&- && break
+          jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux has-session -t "=$SESSION" 2>/dev/null 8>&- 9>&- && break
           sleep 1
           _i=$((_i + 1))
         done
@@ -1537,7 +1558,7 @@ else
         # sospetto di essere appeso, ed e' l'ultimo punto del ramo che potrebbe
         # ancora bloccarsi per sempre col fd 9 in mano — cioe' ricreare da
         # solo il lockout che tutta questa guardia esiste per impedire.
-        jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 9>&- || true
+        jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux kill-session -t "=$SESSION" 2>/dev/null 8>&- 9>&- || true
         ;;
       125|126|127)
         echo "Error: could not run the time-bounded 'tmux new-session' for '$SESSION' (rc=$_ns_rc: command missing or not executable). No session was created." >&2
@@ -1600,7 +1621,7 @@ else
       _i=$((_i + 1))
     done
     tmux send-keys -t "$_sess" Enter
-    ' >/dev/null 2>&1 < /dev/null 9>&- &
+    ' >/dev/null 2>&1 < /dev/null 8>&- 9>&- &
   fi
   # Il REPL e' partito DAVVERO? Questo ramo — l'unico che spawna gli agenti
   # del team — era il solo dei tre percorsi di spawn a non farsi la domanda:
@@ -1732,7 +1753,7 @@ _kickoff() {
     else
       echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
     fi
-  ' </dev/null 9>&- &
+  ' </dev/null 8>&- 9>&- &
 }
 
 # ── Welcome kickoff helper ──────────────────────────────────────────────
@@ -1790,7 +1811,7 @@ _welcome_kickoff() {
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
       echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
     fi
-  ' </dev/null 9>&- &
+  ' </dev/null 8>&- 9>&- &
 }
 
 if [ "$ROLE" = "assistente" ]; then
