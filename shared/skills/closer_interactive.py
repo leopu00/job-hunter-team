@@ -20,9 +20,9 @@ import sys
 import time
 
 try:
-    from apply_session_lock import position_lock
+    from apply_session_lock import SessionBusy, position_lock
 except ImportError:
-    from shared.skills.apply_session_lock import position_lock
+    from shared.skills.apply_session_lock import SessionBusy, position_lock
 
 
 class InteractiveDenied(Exception):
@@ -101,7 +101,6 @@ def _write(value, home=None):
 def state_lock(home=None):
     # Separate from the work lock: the official host CLI can confirm while
     # the browser owner retains the global work/position/profile locks.
-    from apply_session_lock import SessionBusy
     deadline = time.monotonic() + 2
     with contextlib.ExitStack() as stack:
         while True:
@@ -143,7 +142,6 @@ def ordinary_wake(function):
     """Keep admission and an ordinary wake mutually exclusive through delivery."""
     @functools.wraps(function)
     def wrapped(*args, **kwargs):
-        from apply_session_lock import SessionBusy
         try:
             with work_lock(None):
                 if guard():
