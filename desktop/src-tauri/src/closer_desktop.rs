@@ -551,12 +551,12 @@ pub(crate) async fn closer_desktop_register_host(app: tauri::AppHandle, host: Va
         Err(code) => return failure(code),
     };
     match tauri::async_runtime::spawn_blocking(move || {
-        let _scope = scopes.lock_expected(&expected)?;
+        let scope = scopes.lock_expected(&expected)?;
         let _flight = IN_FLIGHT.try_lock().map_err(|_| "browser_busy")?;
         register_assistance_with(
             &host,
-            |host| runtime_host::validate_host(&app, host).map(|_| ()),
-            |host| direct_chat::register_assistance_host(&app, &expected, host),
+            |host| runtime_host::validate_host_for_scope(&app, host, scope.scope()).map(|_| ()),
+            |host| direct_chat::register_assistance_host(&app, scope.scope(), host),
         )
     })
     .await
