@@ -516,20 +516,19 @@ fn execute(
 }
 
 #[tauri::command]
-pub(crate) async fn closer_desktop_request(
-    app: tauri::AppHandle,
-    scopes: tauri::State<'_, AccountScopeState>,
-    request: Value,
-) -> Value {
+pub(crate) async fn closer_desktop_request(app: tauri::AppHandle, request: Value) -> Value {
     let request = match parse_request(request) {
         Ok(value) => value,
         Err(code) => return failure(code),
+    };
+    let scopes = match app.try_state::<AccountScopeState>() {
+        Some(value) => value.inner().clone(),
+        None => return failure("account_scope_required"),
     };
     let expected = match scopes.active() {
         Ok(value) => value,
         Err(code) => return failure(code),
     };
-    let scopes = scopes.inner().clone();
     match tauri::async_runtime::spawn_blocking(move || execute(&app, &scopes, &expected, request))
         .await
     {
