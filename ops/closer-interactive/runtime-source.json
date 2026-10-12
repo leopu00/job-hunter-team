@@ -3,8 +3,8 @@
   "scope": "one-position interactive assisted browser and private desktop; no operator identity grant",
   "baseline_revision": "459f6fadbebbb94fcd2e17528145a85c554cfd02",
   "baseline_image": "ghcr.io/leopu00/jht@sha256:265f5bd491ea06802ba6979d49c77e05721db9c80b9092f7ca73a4e4fafe64ae",
-  "implementation_revision": "9365754ff53cd0943443cb08f841d4be26494220",
-  "implementation_manifest_sha256": "122980be04bbea5d8e7522e92b7778bd1460585c838e1890005d141ce96978cf",
+  "implementation_revision": "d3e952cf73fb2e4b41dc922c5a685e760f30ccd7",
+  "implementation_manifest_sha256": "18e306a512241f58d325693311c886d5dff66bd22a81479651311809309dbec7",
   "app_implementation_revision": "4f5a52641835fea686578ca19be8f58daeb30593",
   "image_source_revision": "Compare OCI revision with the complete independently reviewed integration SHA including packaging; no earlier revision default.",
   "files": {
@@ -63,8 +63,8 @@
       "mode": "no group/world write"
     },
     "docs/internal/closer-interactive.md": {
-      "sha256": "b759812a2daabcdb8ff0fc74b648aab14de6046d85c7887fab455b59632b972e",
-      "bytes": 10718,
+      "sha256": "af9180678915cb67625b901fbea725f687008a7ce922d602bf6dbbd0bf15d3ce",
+      "bytes": 11403,
       "owner": "0:0",
       "mode": "no group/world write"
     },
@@ -75,8 +75,8 @@
       "mode": "no group/world write"
     },
     "shared/skills/apply_assisted.py": {
-      "sha256": "1e0ae6c6f6ef16a7c9c96ba4bc9fc4415ad43f64a052d6ae754702a7c4ec8eda",
-      "bytes": 26641,
+      "sha256": "b8f90ab7617bf2f0a4bdc7a9dc3008d0a469862be7154da5011514bd534428ef",
+      "bytes": 27608,
       "owner": "0:0",
       "mode": "no group/world write"
     },
@@ -105,8 +105,8 @@
       "mode": "no group/world write"
     },
     "shared/skills/closer_interactive_screen.py": {
-      "sha256": "b676f77baeff6a131775757317fe370d58e4ac8fb53fafcde6f2a1ddaf553b97",
-      "bytes": 28718,
+      "sha256": "e5e2d39c2bf6bd0a69e5292a019e1867493e19f5268bc63447a5364d712ed17f",
+      "bytes": 30277,
       "owner": "0:0",
       "mode": "no group/world write"
     },
@@ -123,8 +123,8 @@
       "mode": "no group/world write"
     },
     "docs/internal/closer-interactive-package.md": {
-      "sha256": "80cdede6c9fbfc3ed3016093abacffe5a607c41041befd511ea68e6242e36822",
-      "bytes": 4548,
+      "sha256": "8588d01446cc0fd64a0f0d62961de2c19ab74a6c58bc92ba9b8e793c810fb0c9",
+      "bytes": 5185,
       "owner": "0:0",
       "mode": "no group/world write"
     }
@@ -148,5 +148,30 @@
     ],
     "unsupported": "fail closed",
     "native_candidate_attestation": "required before promotion; not established by source pins"
+  },
+  "source_evidence": {
+    "scope": "EOF unwind and opposite live-controller error only; previous source proofs retain their own revision bindings",
+    "runtime_revision": "d3e952cf73fb2e4b41dc922c5a685e760f30ccd7",
+    "tests_revision": "b75b424c3ec2940e7d9302f37a1ab85f249f0eb9",
+    "flow_test_sha256": "c6d55eb99466d243da5ebf0205d721cda6b8a47fe6d83066b3720a1352122bf8",
+    "report_sha256": "76461163b5099eef94ea62d855fcdb4e899aa2abccc6c37af3eab86d785d5b79",
+    "native_eof": {
+      "architecture": "ARM64",
+      "model": "local cached image, TEST-ONLY source overlay, private DISPLAY/RFB",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "af3af5da89e6c695d207cd205e62812e4b0def1d4ee4065cf89808e64b757c0f"
+    },
+    "live_controller_negative": {
+      "model": "actual run with inert live child/pipes and injected public browser error",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "xml_sha256": "185176a2f586423adf9b8c7a913812bb0553c0005c93de8bbf56228388cffdd9"
+    },
+    "limitations": "Not final AMD64 image, full runtime regression, app export, network isolation, cutover or operator identity grant; historical failures and diagnostic noise preserved."
   }
 }

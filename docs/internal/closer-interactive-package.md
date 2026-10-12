@@ -65,3 +65,12 @@ presence must reach the visual tester before a ready flag. Native input,
 rendered pixels and operator-path E2E are distinct from headless UI/model tests.
 Pending or failed evidence remains visible; no release, provider, ATS submission
 or general sandbox certification follows from this candidate.
+
+The source EOF acceptance is recorded separately from image acceptance. The
+final source freeze retains the native local ARM64 test using a test-only source
+overlay: the preopened RFB route closes after owned EOF, the three observed child
+identities cease, pipes/socket/auth files close and both locks can be reacquired.
+A separate live inert-controller case propagates the original browser error.
+These scoped tests preserve the durable unknown marker without a second submit
+or cap reservation; diagnostic EOF/Future messages remain in the evidence. They
+do not attest the final AMD64 image, app export, network isolation or cutover.

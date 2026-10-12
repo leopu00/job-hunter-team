@@ -2,7 +2,7 @@
   "schema": 1,
   "app_implementation_revision": "4f5a52641835fea686578ca19be8f58daeb30593",
   "app_manifest_sha256": "8a3ea6ecb09530accfa412983e422e42ad6611965af4f77a0f95b7c67d747a2c",
-  "runtime_implementation_revision": "9365754ff53cd0943443cb08f841d4be26494220",
+  "runtime_implementation_revision": "d3e952cf73fb2e4b41dc922c5a685e760f30ccd7",
   "candidate_source_revision": "Complete integration SHA from delivery and OCI; not either implementation revision by default.",
   "app_version_inherited": "0.3.9",
   "engine_source_fixture": "4.7.stable.official.5b4e0cb0f",
