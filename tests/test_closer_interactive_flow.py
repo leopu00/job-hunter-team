@@ -669,6 +669,7 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
     clients, frame_threads, frame_results = [], [], []
     observed = {"route_closed":False}
     owned = None
+    result = None
     with admitted_session(flow, ttl=35) as session:
         owned = session.screen.process
         screen_root = session.screen.root
@@ -709,6 +710,14 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
                     frame_threads.append(frame); frame.start()
                     wait_for(marker.exists, bool)
                     if fault == "frame_eof":
+                        # Kernel identities of the supervisor's own direct children,
+                        # captured before EOF, independently of its cleanup claims.
+                        child_ids = Path(f"/proc/{owned.pid}/task/{owned.pid}/children").read_text().split()
+                        observed["children"] = []
+                        for pid in child_ids:
+                            fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+                            observed["children"].append((pid, fields[19]))
+                        assert len(observed["children"]) >= 3  # owned Xvfb, enabled VNC, web route
                         session.screen.process.stdin.close()
                     else:
                         monkeypatch.setattr(session.screen, "tick", lambda: None)
@@ -748,7 +757,7 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
         try:
             with operator_thread(operator, join_timeout=30):
                 try:
-                    session.run(navigate=False)
+                    result = session.run(navigate=False)
                 except ValueError as exc:
                     # Only this fixture deliberately closes the owner's writer.
                     # A subsequent owner write raises locally; it is not a normal
@@ -770,6 +779,28 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
     assert owned is not None and owned.poll() is not None
     assert owned.stdin.closed and owned.stdout.closed
     assert all(not (screen_root / name).exists() for name in ("desktop.sock", "viewer-password", "rfbauth"))
+    if fault == "frame_eof":
+        assert result["phase"] == "closed" and result["reason"] == "owner_lost"
+        assert result["result"]["status"] == "blocked_human"
+        assert result["result"]["reason"] == "interactive_owner_lost"
+        assert result["result"]["receipt"] is False
+        assert checkpoint(flow)["submit_started"] is True and not checkpoint(flow).get("receipt")
+        assert mission.read()["phase"] == "unknown" and mission.read()["input_ready"] is False
+        assert page.is_closed()
+        for pid, starttime in observed["children"]:
+            path = Path(f"/proc/{pid}/stat")
+            try:
+                current = path.read_text().rsplit(")", 1)[1].split()
+            except FileNotFoundError:
+                continue
+            assert current[19] != starttime, f"owned child {pid} survived or was not reaped"
+        print("OWNED_EOF_CLEANUP", json.dumps({"children": observed["children"],
+              "route_closed": observed["route_closed"], "supervisor_reaped": owned.poll() is not None,
+              "stdin_closed": owned.stdin.closed, "stdout_closed": owned.stdout.closed}))
+        from apply_session_lock import position_lock
+        with mission.work_lock(flow._jht_home(), owner=object()):
+            with position_lock(flow._jht_home(), flow.position_id, owner=object()):
+                pass  # both actual locks were released after the nested flow unwound
 
 
 @pytest.mark.parametrize("bad", [None, [], {"op":"descriptor", "path":"/tmp/private"},
@@ -1053,3 +1084,38 @@ def test_281_control_enable_emits_only_bound_heartbeat_while_waiting():
             peer_replies.close()
             worker.join(2)
         assert not worker.is_alive() and not errors
+
+
+def test_281_page_error_with_live_owned_transport_propagates(interactive_flow, monkeypatch):
+    """Actual run/transport_lost with an inert live child, not a display supervisor proof."""
+    from types import SimpleNamespace
+    from playwright.sync_api import Error as PlaywrightError
+    flow, recorded = interactive_flow
+    session = AssistedSession(flow, interactive=True)
+    session.page = SimpleNamespace(is_closed=lambda: False)
+    screen = closer_interactive_screen.OwnedScreen(flow, session.deadline)
+    controller = subprocess.Popen([sys.executable, "-I", "-S", "-c", "import sys; sys.stdin.buffer.read()"],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    screen.process = controller
+    session.screen = screen
+    original = PlaywrightError("synthetic_page_failure_with_live_transport")
+    def fail(*args, **kwargs):
+        raise original
+    monkeypatch.setattr(flow, "run", fail)
+    before = flow.checkpoint_path.read_bytes() if flow.checkpoint_path.exists() else None
+    try:
+        assert screen.transport_lost() is False
+        with pytest.raises(PlaywrightError) as caught:
+            session.run(navigate=False)
+        assert caught.value is original
+        assert controller.poll() is None and not controller.stdin.closed
+        assert screen.transport_lost() is False
+        assert session.result is None and session._deferred_close is None
+        assert session._running_flow is False and session.phase != "closed"
+        assert not recorded
+        after = flow.checkpoint_path.read_bytes() if flow.checkpoint_path.exists() else None
+        assert after == before
+    finally:
+        controller.stdin.close()
+        controller.wait(timeout=3)
+        controller.stdout.close()
