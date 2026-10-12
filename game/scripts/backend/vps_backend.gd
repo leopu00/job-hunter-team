@@ -237,6 +237,8 @@ var _terminal_history_tick := 0
 
 
 func start(config: Dictionary) -> void:
+	_desktop_cid = ""
+	_desktop_busy = false
 	live = true  # dati veri: spegne il badge SIMULAZIONE quando connesso
 	_runtime_labels = UIStrings.vps_presentation_snapshot()
 	_ip = str(config.get("ip", "")).strip_edges()
@@ -1641,3 +1643,77 @@ func _sleep(secs: float) -> void:
 	while waited < secs and not _stop:
 		OS.delay_msec(200)
 		waited += 0.2
+
+
+## Browser-only private bridge. One request at a time; exact CID pinned by
+## the first descriptor and discarded with this backend instance.
+var _desktop_cid := ""
+var _desktop_busy := false
+var _desktop_mutex := Mutex.new()
+static var BROWSER_DESKTOP_PY := payload("browser_desktop.py")
+
+func browser_desktop(request: Dictionary, token: int) -> void:
+	_desktop_mutex.lock()
+	var busy := _desktop_busy
+	if not busy:
+		_desktop_busy = true
+	_desktop_mutex.unlock()
+	if busy or _stop:
+		bus.call_deferred("emit_signal", "browser_desktop_result", token,
+				{"ok": false, "error": "browser_transport_busy"})
+		return
+	_queue_worker(_do_browser_desktop.bind(request.duplicate(true), token))
+
+func _do_browser_desktop(request: Dictionary, token: int) -> void:
+	var source := BROWSER_DESKTOP_PY % [Marshalls.utf8_to_base64(JSON.stringify(request)),
+			Marshalls.utf8_to_base64(_desktop_cid)]
+	var result := _desktop_transport(source)
+	var response := {"ok": false, "error": "browser_transport_unavailable"}
+	if result["code"] == 0 and str(result["out"]).length() <= 12582912:
+		var parsed: Variant = JSON.parse_string(str(result["out"]))
+		if parsed is Dictionary and parsed.get("reply") is Dictionary:
+			response = parsed["reply"]
+			if str(parsed.get("cid", "")).length() == 64:
+				_desktop_cid = str(parsed["cid"])
+	_desktop_mutex.lock()
+	_desktop_busy = false
+	_desktop_mutex.unlock()
+	if not _stop:
+		bus.call_deferred("emit_signal", "browser_desktop_result", token, response)
+
+
+## Request bytes (including keyboard events) never touch files or logs.
+## A timeout gives UNKNOWN to the view; it does not undo a remote operation.
+func _desktop_transport(source: String) -> Dictionary:
+	var args := PackedStringArray(["-T", "-i", _key, "-o", "RequestTTY=no",
+		"-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+		"-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=yes",
+		"-o", "UserKnownHostsFile=" + known_hosts_path(_ip),
+		"%s@%s" % [_user, _ip], "python3 - 1>&2"])
+	var process := OS.execute_with_pipe("ssh", args, false)
+	if process.is_empty():
+		return {"code": -1, "out": ""}
+	var pipe: FileAccess = process["stdio"]
+	var errors: FileAccess = process["stderr"]
+	pipe.store_buffer(source.to_utf8_buffer())
+	var write_ok := pipe.get_error() == OK
+	pipe.close()
+	var pid := int(process["pid"])
+	var output := PackedByteArray()
+	var deadline := Time.get_ticks_msec() + 20000
+	var failed := not write_ok
+	while not failed:
+		var part := errors.get_buffer(65536)
+		output.append_array(part)
+		if output.size() > 12582912 or _stop or Time.get_ticks_msec() >= deadline:
+			failed = true
+			break
+		if part.is_empty() and not OS.is_process_running(pid):
+			break
+		OS.delay_msec(5)
+	errors.close()
+	if failed and OS.is_process_running(pid):
+		OS.kill(pid)  # only this component's local SSH child
+	if failed:
+		return {"code": -1, "out": ""}
+	return {"code": OS.get_process_exit_code(pid), "out": output.get_string_from_utf8()}

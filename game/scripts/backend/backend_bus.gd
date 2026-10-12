@@ -48,6 +48,7 @@ signal positions_updated(positions: Array)
 ## adapter parta, così chi ascolta si risemina nello stesso frame del
 ## cambio e non esiste un fotogramma coi conteggi del box precedente.
 signal backend_reset()
+signal browser_desktop_result(token: int, response: Dictionary)
 
 ## Conversazione utente ↔ agente (chat bidirezionale). messages = tail
 ## di chat.jsonl dell'agente: [{role: "user"|"assistant", text, ts,
@@ -1058,3 +1059,10 @@ func publish_settings(settings: Dictionary) -> void:
 	live_settings = settings
 	Log.debug("backend", "config live: %s" % ", ".join(settings.keys()))
 	live_settings_updated.emit(settings)
+
+
+func request_browser_desktop(request: Dictionary, token: int) -> void:
+	if _backend and state == CONNECTED:
+		_backend.browser_desktop(request, token)
+	else:
+		browser_desktop_result.emit(token, {"ok": false, "error": "backend_not_connected"})

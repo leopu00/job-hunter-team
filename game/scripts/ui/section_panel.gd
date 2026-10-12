@@ -249,6 +249,18 @@ func _build(page := "") -> void:
 			_content.add_child(wm)
 		"team":
 			_build_team()
+		"browser_desktop":
+			var scroll := ScrollContainer.new()
+			scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			_content.add_child(scroll)
+			var view := AssistedBrowserPanel.new()
+			view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			scroll.add_child(view)
+			view.request.connect(BackendBus.request_browser_desktop)
+			BackendBus.browser_desktop_result.connect(view.accept_result)
+			BackendBus.backend_reset.connect(view.reset_session)
+			view.refresh()
 		"agents":
 			if page == "agent" and _agent_detail != "":
 				_build_agent_page()
@@ -4416,6 +4428,10 @@ const DEPT_ROLE := {"scout": "scout", "analisti": "analista", "scorer": "scorer"
 		"scrittori": "scrittore", "critici": "critico"}
 
 func _build_team() -> void:
+	var browser_link := Button.new()
+	browser_link.text = "Assisted browser · private desktop view"
+	browser_link.pressed.connect(func() -> void: navigate.emit("browser_desktop"))
+	_content.add_child(browser_link)
 	if not BackendBus.agents_updated.is_connected(_on_team_refresh):
 		BackendBus.agents_updated.connect(_on_team_refresh)
 	_listen_setup()
