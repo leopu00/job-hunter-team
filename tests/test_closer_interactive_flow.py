@@ -19,6 +19,8 @@ import ctypes
 import ctypes.util
 import socket
 import struct
+import tempfile
+import shutil
 
 import pytest
 
@@ -102,7 +104,7 @@ def install_page(session, *, captcha=False, receipt=True):
 
 
 @contextlib.contextmanager
-def operator_thread(action):
+def operator_thread(action, *, join_timeout=10):
     """Keep every Page call on its owner thread; relay test failures back."""
     errors = []
 
@@ -117,7 +119,7 @@ def operator_thread(action):
     try:
         yield
     finally:
-        worker.join(timeout=10)
+        worker.join(timeout=join_timeout)
         assert not worker.is_alive(), "fixture controller did not terminate"
         if errors:
             raise errors[0]
@@ -526,3 +528,528 @@ def test_real_rfb_input_gate_and_preexisting_connection_revocation(interactive_f
         finally:
             for client in connections:
                 client.close()
+
+
+# #281 additions exercise the frozen API; no product injection flags are added.
+def _claimed_fixture(flow):
+    assert official_cli("admit")[0] == 0
+    mission.claim(flow)
+    return mission.read()
+
+
+def test_281_metadata_failure_removes_only_new_event(interactive_flow, monkeypatch):
+    """Actual private file writes; screenshot bytes and metadata I/O failure injected."""
+    flow, _ = interactive_flow
+    state = _claimed_fixture(flow)
+    monkeypatch.setattr(apply_flow, "_secrets_hidden", lambda *a, **k: contextlib.nullcontext())
+
+    class Page:
+        def is_closed(self):
+            return False
+        def screenshot(self, **kwargs):
+            return b"\x89PNG\r\n\x1a\nsynthetic-private-pixels"
+
+    mission.record_block(flow, Page(), "fixture_block")
+    directory = mission._event_dir(state, flow._jht_home())
+    before = {p.name: p.read_bytes() for p in directory.iterdir()}
+    assert len(before) == 2
+    actual_write = mission._private_write
+    failed = []
+
+    def fail_metadata(path, data):
+        if path.suffix == ".json":
+            actual_write(path, b'{"partial":')
+            failed.append(path.stem)
+            raise OSError("injected_metadata_fsync_failure")
+        return actual_write(path, data)
+
+    monkeypatch.setattr(mission, "_private_write", fail_metadata)
+    with pytest.raises(OSError, match="injected_metadata_fsync_failure"):
+        mission.record_block(flow, Page(), "fixture_second_block")
+    assert len(failed) == 1
+    assert all((directory / name).read_bytes() == data for name, data in before.items())
+    assert all(p.stat().st_mode & 0o077 == 0 for p in directory.iterdir())
+    mission._prune_events(directory, int(time.time()) + mission.EVENT_TTL + 1)
+    assert not list(directory.glob(failed[0] + ".*")), "failed event survived cleanup and 24h pruning"
+
+
+def _hold_email(flow):
+    path = apply_gate.email_state_path(flow.position_id, flow._jht_home())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"state": "blocked_human",
+                               "updated_at": datetime.now(timezone.utc).isoformat()}))
+
+
+@pytest.fixture
+def short_display_home(interactive_flow, monkeypatch):
+    # AF_UNIX paths have a kernel length limit; keep the real fixture home short.
+    # Baseline helpers may keep their DB/CV paths under pytest's longer TEMP.
+    flow, recorded = interactive_flow
+    original = flow._jht_home()
+    with tempfile.TemporaryDirectory(prefix="j28-", dir="/tmp") as directory:
+        home = Path(directory)
+        shutil.copy2(original / "jht.config.json", home / "jht.config.json")
+        shutil.copytree(original / "profile", home / "profile")
+        monkeypatch.setenv("JHT_HOME", str(home))
+        flow.jht_home = home
+        yield flow, recorded
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="actual owned Linux DISPLAY/RFB required")
+@pytest.mark.parametrize("fault", ["hold", "frame_eof", "frame_stale"])
+def test_281_real_server_revokes_preopened_input_route(short_display_home, monkeypatch, tmp_path, fault):
+    """Real Xvfb/x11vnc/Chromium; only frame latency is injected for the lease cases.
+
+    A separate connected RFB client has already changed the DOM before revocation.
+    No Python Page input is used after handoff. All network stays local/offline.
+    """
+    flow, recorded = short_display_home
+    flow.headless = False
+    marker, release = tmp_path / "frame-entered", tmp_path / "frame-release"
+    # The actual supervisor runs unchanged; a test-only bootstrap delays its
+    # real RFB client's frame operation. It neither replaces the server nor
+    # edits the product module or the lease clock.
+    bootstrap = tmp_path / "supervisor_fixture.py"
+    bootstrap.write_text(
+        "import sys,time,json\nfrom pathlib import Path\n"
+        + "sys.path.insert(0," + repr(str(ROOT / "shared" / "skills")) + ")\n"
+        + "import closer_desktop_rfb as rfb, closer_interactive_screen as screen\n"
+        + "original=rfb.DisplayClient.frame\n"
+        + "def stalled(self):\n"
+        + " Path(" + repr(str(marker)) + ").touch()\n"
+        + " until=time.monotonic()+8\n"
+        + " while not Path(" + repr(str(release)) + ").exists() and time.monotonic()<until: time.sleep(.01)\n"
+        + " return original(self)\n"
+        + ("rfb.DisplayClient.frame=stalled\n" if fault != "hold" else "")
+        + "owned=[]; popen=screen.subprocess.Popen; expire=screen._InputLease._expire\n"
+        + "diagnostic_enabled=False; connect=screen.socket.create_connection\n"
+        + "def diag(value):\n"
+        + " value['monotonic']=time.monotonic(); print(json.dumps(value),file=sys.stderr,flush=True)\n"
+        + "class BannerSocket:\n"
+        + " def __init__(self,client): self.client=client; self.seen=0\n"
+        + " def __getattr__(self,name): return getattr(self.client,name)\n"
+        + " def __enter__(self): self.client.__enter__(); return self\n"
+        + " def __exit__(self,*args): return self.client.__exit__(*args)\n"
+        + " def recv(self,size,*args):\n"
+        + "  try: data=self.client.recv(size,*args)\n"
+        + "  except OSError as exc: diag({'diagnostic':'ready_recv_error','type':type(exc).__name__,'errno':exc.errno}); raise\n"
+        + "  if self.seen<12: diag({'diagnostic':'ready_banner','hex':data[:12-self.seen].hex(),'length':len(data)}); self.seen+=len(data)\n"
+        + "  return data\n"
+        + "def trace_connect(*args,**kwargs):\n"
+        + " if not diagnostic_enabled: return connect(*args,**kwargs)\n"
+        + " diag({'diagnostic':'ready_connect_begin'})\n"
+        + " try: client=connect(*args,**kwargs)\n"
+        + " except OSError as exc: diag({'diagnostic':'ready_connect_error','type':type(exc).__name__,'errno':exc.errno}); raise\n"
+        + " diag({'diagnostic':'ready_connected'}); return BannerSocket(client)\n"
+        + "screen.socket.create_connection=trace_connect\n"
+        + "def trace_spawn(argv,*args,**kwargs):\n"
+        + " global diagnostic_enabled\n"
+        + " enabled=argv[0]=='/usr/bin/x11vnc' and '-storepasswd' not in argv and '-viewonly' not in argv\n"
+        + " if enabled: kwargs['stderr']=sys.stderr\n"
+        + " p=popen(argv,*args,**kwargs)\n"
+        + " if enabled:\n"
+        + "  diagnostic_enabled=True; stat=Path('/proc/'+str(p.pid)+'/stat').read_text().rsplit(')',1)[1].split()\n"
+        + "  diag({'diagnostic':'enabled_vnc_spawn','pid':p.pid,'starttime':stat[19],'phase':'handoff_pending'})\n"
+        + " if argv[0]=='/usr/bin/x11vnc' and '-storepasswd' not in argv: owned.append((p,'-viewonly' in argv))\n"
+        + " return p\n"
+        + "def trace_expire(self,*args):\n"
+        + " print(json.dumps({'diagnostic':'lease_expire','monotonic':time.monotonic(),'expired_before':self.expired}),file=sys.stderr,flush=True)\n"
+        + " return expire(self,*args)\n"
+        + "screen.subprocess.Popen=trace_spawn; screen._InputLease._expire=trace_expire\n"
+        + "try: screen._supervise()\n"
+        + "finally: print(json.dumps({'diagnostic':'owned_vnc_exit','monotonic':time.monotonic(),'children':[{'pid':p.pid,'view_only':v,'returncode':p.returncode} for p,v in owned]}),file=sys.stderr,flush=True)\n")
+    actual_popen = subprocess.Popen
+    def spawn(argv, *args, **kwargs):
+        if isinstance(argv, list) and len(argv) == 3 and argv[-1] == "_supervise":
+            argv = [argv[0], str(bootstrap)]
+            kwargs["stderr"] = None  # pytest captures exact fixture startup diagnostics
+        return actual_popen(argv, *args, **kwargs)
+    monkeypatch.setattr(subprocess, "Popen", spawn)
+    heartbeat = {"count": 0, "value": "", "submits": 0}
+    clients, frame_threads, frame_results = [], [], []
+    observed = {"route_closed":False}
+    owned = None
+    with admitted_session(flow, ttl=35) as session:
+        owned = session.screen.process
+        screen_root = session.screen.root
+        page, network = install_page(session, captcha=True)
+        page.evaluate("""() => {
+            const el=document.createElement('input'); el.id='rfb-probe';
+            el.style='position:fixed;left:20px;top:20px;width:240px;height:40px;z-index:9999';
+            document.body.append(el); el.focus();
+        }""")
+        page.bring_to_front()
+        coordinates = page.locator("#rfb-probe").evaluate("el=>({x:Math.round(window.screenX+el.getBoundingClientRect().left+20),y:Math.round(window.screenY+window.outerHeight-window.innerHeight+el.getBoundingClientRect().top+20)})")
+        def pulse(value, submits):
+            heartbeat.update(count=heartbeat["count"] + 1, value=value, submits=submits)
+        page.expose_function("fixturePulse", pulse)
+        page.evaluate("setInterval(()=>window.fixturePulse(document.querySelector('#rfb-probe').value,window.submitCount),50)")
+
+        def exercise():
+            state = wait_for(mission.read, lambda s: s and s["phase"] == "review_wait" and s.get("handoff_allowed"), 15)
+            assert state["can_confirm"] is False, "fixture must enter intermediate block, not presubmit"
+            assert official_cli("handoff", state, review=state["review_id"])[0] == 0
+            state = wait_for(mission.read, lambda s: s["phase"] == "handoff" and s["input_ready"], 15)
+            active = RFBClient(session.screen.route["vnc_port"], session.screen.root / "viewer-password")
+            clients.append(active)
+            active.click(**coordinates)
+            active.key("z")
+            wait_for(lambda: heartbeat.copy(), lambda h: h["value"] == "z")
+            marked = checkpoint(flow)
+            assert marked["submit_started"] and not marked.get("receipt")
+            try:
+                if fault == "hold":
+                    _hold_email(flow)
+                    wait_for(mission.read, lambda s: (s.get("block") or {}).get("reason") == "email_blocked_human")
+                else:
+                    request = {"op":"frame", "mission_id":state["mission_id"], "position_id":41,
+                               "owner_id":state["owner_id"], "generation":1,
+                               "display_id":session.screen.route["display_id"], "frame_sequence":0}
+                    frame = threading.Thread(target=lambda: frame_results.append(mission.desktop_request(request)), daemon=True)
+                    frame_threads.append(frame); frame.start()
+                    wait_for(marker.exists, bool)
+                    if fault == "frame_eof":
+                        session.screen.process.stdin.close()
+                    else:
+                        monkeypatch.setattr(session.screen, "tick", lambda: None)
+                    time.sleep(2.3)  # real wall time exceeds the advertised lease
+                active.socket.settimeout(.2)
+                closed = active.closed()
+                if not closed:
+                    active.key("q")  # real RFB input, never Page/keyboard bypass
+                release.touch()
+                # Record the server-route verdict independently of API denial.
+                assert closed, f"{fault}: preopened enabled RFB route survived revocation deadline"
+                observed["route_closed"] = True
+                assert heartbeat["submits"] == 0
+                if fault == "hold":
+                    assert mission.read()["input_ready"] is False
+                    apply_gate.email_state_path(flow.position_id, flow._jht_home()).unlink()
+                    wait_for(mission.read, lambda value: value.get("handoff_allowed") is True)
+                    assert official_cli("observe", mission.read())[0] == 0
+                    wait_for(mission.read, lambda value: value["phase"] in {"observing", "unknown", "completed"})
+            finally:
+                release.touch()
+                for worker in frame_threads:
+                    worker.join(10)
+                    assert not worker.is_alive()
+                current = mission.read()
+                if current["phase"] in {"review_wait", "handoff_pending", "handoff"} and not current.get("command"):
+                    official_cli("finish", current)
+        def operator():
+            try:
+                exercise()
+            finally:
+                release.touch()
+                current = mission.read()
+                if current and current["phase"] in {"review_wait", "handoff_pending", "handoff"} and not current.get("command"):
+                    official_cli("finish", current)
+
+        try:
+            with operator_thread(operator, join_timeout=30):
+                try:
+                    session.run(navigate=False)
+                except ValueError as exc:
+                    # Only this fixture deliberately closes the owner's writer.
+                    # A subsequent owner write raises locally; it is not a normal
+                    # terminal acknowledgement and cannot excuse a live route.
+                    if fault != "frame_eof" or not owned.stdin.closed or "closed" not in str(exc):
+                        raise
+                    print("EXPECTED_INJECTED_OWNER_PIPE_CLOSED", type(exc).__name__)
+        finally:
+            release.touch()
+            for client in clients:
+                client.close()
+        assert not network and not recorded
+        assert checkpoint(flow)["submit_started"]
+        # Finish/EOF can close the display asynchronously; the pre-finish
+        # heartbeat above asserts zero DOM submits while the Page is retained.
+
+
+    assert observed["route_closed"] is True
+    assert owned is not None and owned.poll() is not None
+    assert owned.stdin.closed and owned.stdout.closed
+    assert all(not (screen_root / name).exists() for name in ("desktop.sock", "viewer-password", "rfbauth"))
+
+
+@pytest.mark.parametrize("bad", [None, [], {"op":"descriptor", "path":"/tmp/private"},
+    {"op":"input", "body":"handoff"}, {"op":"arbitrary"}, {"op":[]},
+    {"op":"descriptor", "port":5900}])
+def test_281_fixed_resource_schema_rejects_extra_authority(interactive_flow, bad):
+    flow, _ = interactive_flow
+    assert mission.desktop_request(bad, home=flow._jht_home())["ok"] is False
+
+
+@pytest.mark.parametrize("tamper", ["owner_id", "mission_id", "position_id", "generation", "event_id"])
+def test_281_snapshot_binding_and_private_delete(interactive_flow, monkeypatch, tamper):
+    """Private artifact I/O with synthetic PNG bytes; not a screenshot-content proof."""
+    flow, _ = interactive_flow
+    state = _claimed_fixture(flow)
+    monkeypatch.setattr(apply_flow, "_secrets_hidden", lambda *a, **k: contextlib.nullcontext())
+    class Page:
+        def is_closed(self): return False
+        def screenshot(self, **kwargs): return b"\x89PNG\r\n\x1a\nsynthetic-private-pixels"
+    mission.record_block(flow, Page(), "fixture_block")
+    event = mission.read()["block"]["event_id"]
+    request = {"op":"snapshot", "mission_id":state["mission_id"], "position_id":41,
+               "owner_id":state["owner_id"], "generation":1, "event_id":event}
+    result = mission.desktop_request(request)
+    assert result["ok"] and result["event_id"] == event and result["png_base64"]
+    assert not any(k in result for k in ("path", "password", "ws_port", "vnc_port"))
+    wrong = dict(request)
+    wrong[tamper] = {"position_id":42, "generation":True, "event_id":"../outside"}.get(tamper,"0"*32)
+    assert mission.desktop_request(wrong)["ok"] is False
+    directory = mission._event_dir(state)
+    assert all(p.stat().st_mode & 0o077 == 0 for p in directory.iterdir())
+    assert mission.desktop_request(dict(request, op="delete_snapshot")) == {"ok":True,"deleted":True}
+    assert not list(directory.iterdir())
+    assert mission.desktop_request(request)["ok"] is False
+
+
+def test_281_retention_bounds_and_expired_snapshot(interactive_flow, monkeypatch):
+    flow, _ = interactive_flow
+    state = _claimed_fixture(flow)
+    monkeypatch.setattr(apply_flow, "_secrets_hidden", lambda *a, **k: contextlib.nullcontext())
+    class Page:
+        def is_closed(self): return False
+        def screenshot(self, **kwargs): return b"\x89PNG\r\n\x1a\nsynthetic-private-pixels"
+    for _ in range(10):
+        mission.record_block(flow, Page(), "fixture_block")
+    directory = mission._event_dir(state)
+    assert len(list(directory.glob("*.json"))) == 8
+    assert len(list(directory.glob("*.png"))) == 8
+    event = mission.read()["block"]["event_id"]
+    request = {"op":"snapshot", "mission_id":state["mission_id"], "position_id":41,
+               "owner_id":state["owner_id"], "generation":1, "event_id":event}
+    now = time.time()
+    monkeypatch.setattr(mission.time, "time", lambda: now + mission.EVENT_TTL + 1)
+    assert mission.desktop_request(request)["ok"] is False
+    mission._prune_events(directory, int(time.time()))
+    assert not list(directory.iterdir())
+
+
+@pytest.mark.parametrize("mode", ["valid", "wrong_owner", "wrong_display", "error"])
+def test_281_actual_unix_client_rejects_mismatched_reply(short_display_home, mode):
+    """Actual local socket client, controlled server reply; not a supervisor/kernel grant."""
+    flow, _ = short_display_home
+    state = _claimed_fixture(flow)
+    display = "d" * 32
+    mission.update(flow, screen={"display_id":display})
+    root = mission._private_dir(mission._path().parent / state["owner_id"])
+    path = root / "desktop.sock"
+    request = {"op":"frame", "mission_id":state["mission_id"], "position_id":41,
+               "owner_id":state["owner_id"], "generation":1, "display_id":display, "frame_sequence":0}
+    captured = []
+    response = {**request, "ok":True,"frame_sequence":1,"png_base64":"controlled-frame"}
+    if mode == "wrong_owner": response["owner_id"] = "0" * 32
+    if mode == "wrong_display": response["display_id"] = "0" * 32
+    if mode == "error": response = {"ok":False,"error":"controlled_failure"}
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+        listener.bind(str(path)); path.chmod(0o600); listener.listen(1); listener.settimeout(3)
+        def serve():
+            with listener.accept()[0] as connection:
+                raw = b""
+                while not raw.endswith(b"\n"): raw += connection.recv(4096)
+                captured.append(json.loads(raw))
+                connection.sendall((json.dumps(response)+"\n").encode())
+        with operator_thread(serve):
+            result = mission.desktop_request(request)
+        assert captured == [request]
+        assert result["ok"] is (mode == "valid")
+        if mode != "valid": assert set(result) == {"ok", "error"}
+    path.unlink()
+
+
+
+def test_281_real_page_snapshot_masks_secret_and_retains_page(short_display_home, flow_screen, monkeypatch):
+    """Real Chromium Page + screenshot, screen lifecycle seam; no real DISPLAY claim."""
+    import base64
+    flow, _ = short_display_home
+    with admitted_session(flow, ttl=15) as session:
+        page = session.page
+        page.context.route("**/*", lambda route: route.abort())
+        page.set_content('<label>synthetic block</label><input id="secret" type="password" value="SYNTHETIC_ONLY">')
+        original = page.screenshot
+        hidden = []
+        def screenshot(**kwargs):
+            hidden.append(page.locator("#secret").evaluate("el=>getComputedStyle(el).visibility"))
+            return original(**kwargs)
+        monkeypatch.setattr(page, "screenshot", screenshot)
+        path = Path(mission.record_block(flow, page, "fixture_block"))
+        assert hidden == ["hidden"]
+        assert page.locator("#secret").evaluate("el=>getComputedStyle(el).visibility") == "visible"
+        assert path.stat().st_mode & 0o077 == 0
+        state = mission.read()
+        request = {"op":"snapshot", "mission_id":state["mission_id"], "position_id":41,
+                   "owner_id":state["owner_id"], "generation":1, "event_id":state["block"]["event_id"]}
+        result = mission.desktop_request(request)
+        assert result["ok"]
+        png = base64.b64decode(result["png_base64"], validate=True)
+        assert png == path.read_bytes() and png.startswith(b"\x89PNG\r\n\x1a\n")
+        assert struct.unpack(">II", png[16:24]) == (1280, 900)
+        assert session.page is page and not page.is_closed()
+        assert mission.desktop_request(dict(request, op="delete_snapshot"))["deleted"]
+        assert not path.exists() and mission.desktop_request(request)["ok"] is False
+
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="actual owned Linux DISPLAY/RFB required")
+def test_281_real_frame_event_binding_and_automation_gate(short_display_home):
+    """Actual desktop socket -> raw RFB -> same X11 Chromium Page; no screen seam."""
+    import base64
+    flow, recorded = short_display_home
+    flow.headless = False
+    pulse = {"value":"", "count":0}
+    with admitted_session(flow, ttl=35) as session:
+        page, network = install_page(session, captcha=True)
+        page.evaluate("""() => {
+          const el=document.createElement('input'); el.id='backend-probe';
+          el.style='position:fixed;left:20px;top:20px;width:240px;height:40px;z-index:9999';
+          document.body.append(el);
+        }""")
+        page.bring_to_front()
+        xy = page.locator("#backend-probe").evaluate("el=>({x:Math.round(window.screenX+el.getBoundingClientRect().left+20),y:Math.round(window.screenY+window.outerHeight-window.innerHeight+el.getBoundingClientRect().top+20)})")
+        def heartbeat(value): pulse.update(value=value, count=pulse["count"]+1)
+        page.expose_function("fixturePulse", heartbeat)
+        page.evaluate("setInterval(()=>window.fixturePulse(document.querySelector('#backend-probe').value),50)")
+        def operator():
+            state = wait_for(mission.read, lambda s: s and s["phase"] == "review_wait" and s.get("handoff_allowed"), 15)
+            binding = {"mission_id":state["mission_id"], "position_id":41, "owner_id":state["owner_id"], "generation":1}
+            def descriptor(): return mission.desktop_request({"op":"descriptor"})
+            d = descriptor()
+            assert d["stream_available"] and not d["input_ready"]
+            display = {**binding, "display_id":d["display_id"]}
+            def frame(sequence):
+                result = mission.desktop_request({**display, "op":"frame", "frame_sequence":sequence})
+                assert result["ok"], result
+                data = base64.b64decode(result["png_base64"], validate=True)
+                assert data.startswith(b"\x89PNG\r\n\x1a\n") and struct.unpack(">II", data[16:24]) == (1440, 1000)
+                return result["frame_sequence"]
+            seq = frame(0)
+            assert descriptor()["frame_sequence"] == seq
+            auto = mission.desktop_request({**display, "op":"input", "frame_sequence":seq,
+                                            "kind":"key", "key":"x", "pressed":True})
+            assert auto["ok"] is False
+            try:
+                assert official_cli("handoff", state, review=state["review_id"])[0] == 0
+                wait_for(mission.read, lambda s: s["phase"] == "handoff" and s["input_ready"], 15)
+                seq = frame(seq)
+                assert "input" in descriptor()["allowed_actions"]
+                for pressed in (True, False):
+                    result = mission.desktop_request({**display, "op":"input", "frame_sequence":seq,
+                                                      "kind":"pointer", **xy, "button":1,"pressed":pressed})
+                    assert result.get("accepted") is True, result
+                for pressed in (True, False):
+                    result = mission.desktop_request({**display, "op":"input", "frame_sequence":seq,
+                                                      "kind":"key", "key":"z", "pressed":pressed})
+                    assert result.get("accepted") is True, result
+                wait_for(lambda:pulse.copy(), lambda h:h["value"]=="z")
+                newer = frame(seq)
+                assert newer > seq
+                stale = mission.desktop_request({**display, "op":"input", "frame_sequence":seq,
+                                                  "kind":"key", "key":"q", "pressed":True})
+                assert stale["ok"] is False
+                seq = frame(newer)
+                wrong = mission.desktop_request({**display, "display_id":"0"*32,"op":"input", "frame_sequence":seq,
+                                                  "kind":"key", "key":"q", "pressed":True})
+                assert wrong["ok"] is False
+                seq = frame(seq)
+                time.sleep(2.3)  # owner continues authorised ticks, only frame is old
+                expired = mission.desktop_request({**display, "op":"input", "frame_sequence":seq,
+                                                    "kind":"key", "key":"q", "pressed":True})
+                assert expired["ok"] is False
+                assert pulse["value"] == "z"
+                assert official_cli("observe", mission.read())[0] == 0
+            finally:
+                current = mission.read()
+                if current["phase"] in {"review_wait", "handoff_pending"}:
+                    official_cli("finish", current)
+        with operator_thread(operator, join_timeout=30):
+            result = session.run(navigate=False)
+        assert session.page is page and not page.is_closed() and not network and not recorded
+        assert page.locator("#backend-probe").input_value() == "z"
+        assert page.evaluate("window.submitCount") == 0
+        assert checkpoint(flow)["submit_started"]
+        assert result["result"]["reason"] == "submit_outcome_unknown"
+
+
+@pytest.mark.parametrize("op", ["enable", "revoke"])
+@pytest.mark.parametrize("reply_kind", ["own_ack", "eof", "wrong_op", "failed_ack"])
+def test_281_control_tick_ack_never_completes_operation(op, reply_kind):
+    """Actual command/frame code over OS pipes; controlled peer, no supervisor grant."""
+    import os
+    from types import SimpleNamespace
+    command_read, command_write = os.pipe()
+    reply_read, reply_write = os.pipe()
+    with os.fdopen(command_read, "rb", buffering=0) as peer_commands, \
+            os.fdopen(command_write, "wb", buffering=0) as owner_commands, \
+            os.fdopen(reply_read, "rb", buffering=0) as owner_replies, \
+            os.fdopen(reply_write, "wb", buffering=0) as peer_replies:
+        screen = closer_interactive_screen.OwnedScreen(None, 0)
+        screen.binding = {"mission": "a" * 32, "owner": "b" * 32}
+        screen.process = SimpleNamespace(stdin=owner_commands, stdout=owner_replies, poll=lambda: None)
+        finished = threading.Event()
+        errors = []
+        def call():
+            try:
+                screen._command(op)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                finished.set()
+        worker = threading.Thread(target=call)
+        worker.start()
+        try:
+            initial = closer_interactive_screen._frame(peer_commands.fileno(), 1)
+            assert initial == {**screen.binding, "op": op}
+            peer_replies.write(b'{"ok":true,"op":"tick"}\n')
+            assert not finished.wait(.05), "tick acknowledgement completed a different operation"
+            if reply_kind == "eof":
+                peer_replies.close()
+            else:
+                reply = {"ok": reply_kind != "failed_ack",
+                         "op": "unrelated" if reply_kind == "wrong_op" else op}
+                peer_replies.write((json.dumps(reply) + "\n").encode())
+            assert finished.wait(1)
+        finally:
+            peer_replies.close()
+            worker.join(2)
+        assert not worker.is_alive()
+        if reply_kind == "own_ack":
+            assert not errors
+        else:
+            assert len(errors) == 1 and isinstance(errors[0], closer_interactive_screen.ScreenDenied)
+            assert str(errors[0]) == ("screen_lease_eof" if reply_kind == "eof" else "screen_control_failed")
+
+
+def test_281_control_enable_emits_only_bound_heartbeat_while_waiting():
+    """Real wall clock and pipe bytes from official _command, not injected ticks."""
+    import os
+    from types import SimpleNamespace
+    command_read, command_write = os.pipe()
+    reply_read, reply_write = os.pipe()
+    with os.fdopen(command_read, "rb", buffering=0) as peer_commands, \
+            os.fdopen(command_write, "wb", buffering=0) as owner_commands, \
+            os.fdopen(reply_read, "rb", buffering=0) as owner_replies, \
+            os.fdopen(reply_write, "wb", buffering=0) as peer_replies:
+        screen = closer_interactive_screen.OwnedScreen(None, 0)
+        screen.binding = {"mission": "c" * 32, "owner": "d" * 32}
+        screen.process = SimpleNamespace(stdin=owner_commands, stdout=owner_replies, poll=lambda: None)
+        errors = []
+        def call():
+            try:
+                screen._command("enable")
+            except BaseException as exc:
+                errors.append(exc)
+        worker = threading.Thread(target=call)
+        worker.start()
+        try:
+            assert closer_interactive_screen._frame(peer_commands.fileno(), 1) == {**screen.binding, "op": "enable"}
+            assert closer_interactive_screen._frame(peer_commands.fileno(), 1) == {**screen.binding, "op": "tick"}
+            peer_replies.write(b'{"ok":true,"op":"tick"}\n')
+            assert worker.is_alive()
+            peer_replies.write(b'{"ok":true,"op":"enable"}\n')
+        finally:
+            peer_replies.close()
+            worker.join(2)
+        assert not worker.is_alive() and not errors
