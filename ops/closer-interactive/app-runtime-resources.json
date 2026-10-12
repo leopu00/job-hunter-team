@@ -62,6 +62,30 @@
     "tests/test_browser_desktop_bridge.py": {
       "sha256": "918eb1401940e93232bc9f4c038da994e846353c8f525828e0a0fedcad4d3d4a",
       "bytes": 6137
+    },
+    "game/scripts/i18n/ui_de.gd": {
+      "sha256": "4edcae255dc1bef89642e363c1f7b0573537018e5dc245bf202e7328d1e633a4",
+      "bytes": 113969
+    },
+    "game/scripts/i18n/ui_en.gd": {
+      "sha256": "70d992bba3acd7ffac4b3289b1df57e1dc4de374a0d115fcfb13b49dd1bcdb26",
+      "bytes": 105156
+    },
+    "game/scripts/i18n/ui_es.gd": {
+      "sha256": "f9c8ec57befb72482b26e25ad8963d158fbaa7f2d9d55db5e2fb2dd0c3625229",
+      "bytes": 111870
+    },
+    "game/scripts/i18n/ui_fr.gd": {
+      "sha256": "dc1c45ff185c7ff40fa76e8a79fb4a0c56dc1904afffda18012a80e0b402ece3",
+      "bytes": 116003
+    },
+    "game/scripts/i18n/ui_hu.gd": {
+      "sha256": "d5e206a6d2041a838e0a573a741ae707eae4d5f31adf56989b04c9e5ce84363e",
+      "bytes": 115696
+    },
+    "game/scripts/i18n/ui_pt.gd": {
+      "sha256": "4169f66025c6563b8e090ece5362d91f198553c665daced27b3002108e02ad25",
+      "bytes": 111197
     }
   },
   "required_actual_resources": [
@@ -81,5 +105,14 @@
     "producer": "Approved candidate readbacks/private JSON0600, authorized ConfigFile delivery preserving [vps]. No real values committed.",
     "bound_mode": "desktop bridge and exact candidate health only; ordinary team SSH unavailable"
   },
-  "visual_acceptance": "Distinct actual app/runtime/owner DISPLAY E2E; headless tests do not establish pixels or native input."
+  "visual_acceptance": "Distinct actual app/runtime/owner DISPLAY E2E; headless tests do not establish pixels or native input.",
+  "app_correction_revision": "131ae8f6b83c4c8c112f5e2bc553394bd4187f7a",
+  "app_correction_manifest_sha256": "fa537097ddb1db6ccbf1b933bce6fd7050ef4cbebe7b5d8d5e694e9a9b8906f5",
+  "runtime_distribution": {
+    "oci_revision": "a0936ded520cc7c21cc3c1e136ca95b1080274f5",
+    "index_digest": "sha256:003557e92e857b3219471d210d582a02d4bdb7cbe65cc34b94cf966986f6a8a4",
+    "amd64_manifest_digest": "sha256:bf91129ed47040be3d0d009849ea7a96a42ea8e172512f8a28e1373065d1c5d4",
+    "registry_config_digest": "sha256:ad3c93c3445a8ea972aaf7d3012f94237cbe3ed5ed935a8e48d99fc911e56490",
+    "binding": "Runtime image OCI remains a093. Final app source is the separately delivered complete integration revision, not the runtime OCI. The 20 runtime source pins and runtime-source manifest are byte-identical to a093; effective Docker image_id is obtained from target inspect, not assumed from registry config digest."
+  }
 }
