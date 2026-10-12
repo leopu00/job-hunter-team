@@ -67,6 +67,72 @@ def _dies_with_parent(parent):
         raise ScreenDenied("screen_parent_death_binding_failed")
 
 
+class _InputLease:
+    """Single-threaded supervisor's wall-clock input cutoff, including slow I/O.
+
+    The handler does no wait/reap or Popen locking: it signals pinned handles
+    for this route without waiting for frame/recv/sendall to return. Kernel
+    scheduling still applies; a desktop request never renews this deadline.
+    """
+    def __init__(self):
+        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise ScreenDenied("screen_requires_pidfd_signal")
+        if signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0):
+            raise ScreenDenied("screen_timer_in_use")
+        self.handles = []
+        self.active = self.expired = False
+        self.previous = signal.signal(signal.SIGALRM, self._expire)
+
+    def arm(self, processes):
+        try:
+            for process in processes:
+                # Still-owned, unreaped children cannot be replaced by PID reuse.
+                fd = os.pidfd_open(process.pid)
+                os.set_inheritable(fd, False)
+                self.handles.append(fd)
+                if select.select([fd], [], [], 0)[0]:
+                    raise ScreenDenied("screen_route_exited")
+            self.active = True
+            self.renew()
+        except BaseException:
+            self.cutoff()
+            raise
+
+    def renew(self):
+        if self.expired:
+            raise ScreenDenied("screen_input_lease_stale")
+        if self.active:
+            signal.setitimer(signal.ITIMER_REAL, 2)
+
+    def cutoff(self):
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        self.active = False
+        failed = False
+        for fd in self.handles:
+            try:
+                signal.pidfd_send_signal(fd, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                failed = True
+        if failed:
+            raise ScreenDenied("screen_route_cutoff_failed")
+
+    def _expire(self, *_):
+        self.expired = True
+        self.cutoff()
+
+    def close(self):
+        try:
+            self.cutoff()
+        finally:
+            signal.signal(signal.SIGALRM, self.previous)
+            for fd in self.handles:
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+            self.handles.clear()
+
+
 class OwnedScreen:
     def __init__(self, flow, deadline, clock=time.monotonic):
         self.flow, self.deadline, self.clock = flow, deadline, clock
@@ -172,7 +238,7 @@ def _supervise():
     supervisor_pid = os.getpid()
     children = []
     vnc = web = xvfb = None
-    listener = client = None
+    listener = client = lease = None
     frame_sequence = 0
     frame_at = 0
     display_id = secrets.token_hex(16)
@@ -207,7 +273,9 @@ def _supervise():
         from apply_flow import FlowCheckpoint
         from apply_assisted import check_holds
         import apply_gate as gate
-        actions = ["frame", "finish", "abandon"]
+        actions = ["finish", "abandon"]
+        if not revoked:
+            actions.insert(0, "frame")
         checkpoint = FlowCheckpoint.load(Path(state["checkpoint_path"]), state["position_id"], state["queue_url"])
         consent = gate.consent_verdict()
         verdict = gate.position_verdict(state["position_id"], db_path=state.get("db_path"))
@@ -229,10 +297,12 @@ def _supervise():
                 if state.get("can_confirm") is True:
                     actions.append("confirm")
                 actions.append("handoff")
-        if (state["phase"] == "handoff" and checkpoint.submit_started and input_enabled
-                and state.get("input_ready") is True and time.monotonic() - last_tick <= 2):
+        if state["phase"] == "handoff" and checkpoint.submit_started:
+            # Observation of an existing reservation survives input revocation.
             actions.append("observe")
-            if client is not None and time.monotonic() - frame_at <= 2:
+            if (input_enabled and not lease.expired and state.get("input_ready") is True
+                    and time.monotonic() - last_tick <= 2
+                    and client is not None and time.monotonic() - frame_at <= 2):
                 actions.append("input")
         return actions, ""
 
@@ -295,13 +365,29 @@ def _supervise():
         reply({"phase": "view_only", "display": display, "display_id": display_id,
                "ws_port": ws_port, "vnc_port": vnc_port})
         input_enabled = revoked = False
+        lease = _InputLease()
         last_tick = time.monotonic()
+        def revoke_route():
+            nonlocal client, revoked, input_enabled
+            # Cut off both endpoints BEFORE any potentially slow cleanup/reap.
+            lease.cutoff()
+            revoked, input_enabled = True, False
+            if client is not None:
+                client.close(); client = None
+            _stop(web); _stop(vnc)
         while not stop and time.monotonic() < deadline:
             state = owner_state()
+            if lease.expired:
+                revoke_route()
             if xvfb.poll() is not None or (not revoked and any(p.poll() is not None for p in (vnc, web))):
                 raise ScreenDenied("screen_child_exited")
             if input_enabled and time.monotonic() - last_tick > 2:
-                raise ScreenDenied("screen_input_lease_stale")
+                lease.expired = True
+                revoke_route()
+            if input_enabled:
+                _, reason = allowed_actions(state)
+                if reason or state["phase"] not in {"handoff_pending", "handoff"}:
+                    revoke_route()
             readable = select.select([sys.stdin.fileno(), listener], [], [], 0.1)[0]
             if not readable:
                 continue
@@ -335,7 +421,7 @@ def _supervise():
                                   "allowed_actions": actions, "gate_reason": gate_reason}
                         if operation != "describe" and request.get("display_id") != display_id:
                             raise ScreenDenied("screen_display_mismatch")
-                        if revoked:
+                        if revoked and operation != "describe":
                             raise ScreenDenied("screen_revoked")
                         if operation == "frame":
                             if type(request.get("frame_sequence")) is not int or request["frame_sequence"] < 0:
@@ -378,6 +464,7 @@ def _supervise():
             if any(command.get(k) != config[k] for k in ("mission", "owner")):
                 raise ScreenDenied("screen_binding_mismatch")
             operation = command.get("op")
+            state = owner_state()  # the mission can change while select waits
             if operation == "enable" and not revoked and not input_enabled:
                 from apply_flow import FlowCheckpoint
                 checkpoint = FlowCheckpoint.load(Path(state["checkpoint_path"]), state["position_id"], state["queue_url"])
@@ -388,31 +475,35 @@ def _supervise():
                         not consent.allowed or consent.context.get("mode") != "authorised" or
                         not position.allowed):
                     raise ScreenDenied("screen_input_not_authorised")
+                _, gate_reason = allowed_actions(state)
+                if gate_reason:
+                    raise ScreenDenied("screen_input_not_authorised")
                 # Closing the view-only server also drops every old RFB connection.
                 if client is not None:
                     client.close(); client = None
                 frame_at = 0
                 _stop(vnc)
                 vnc = spawn(base)
+                lease.arm((vnc, web))
                 ready_vnc(vnc, vnc_port)
                 input_enabled = True
-            elif operation == "revoke" and not revoked:
-                if client is not None:
-                    client.close(); client = None
-                _stop(web); _stop(vnc)
-                revoked = True
-                input_enabled = False
+            elif operation == "revoke":
+                if not revoked:
+                    revoke_route()
             elif operation != "tick":
                 raise ScreenDenied("screen_command_invalid")
             if input_enabled:
-                import apply_gate as gate
-                consent = gate.consent_verdict()
-                if (not consent.allowed or consent.context.get("mode") != "authorised" or
-                        not gate.position_verdict(state["position_id"], db_path=state.get("db_path")).allowed):
-                    raise ScreenDenied("screen_input_revoked")
+                _, reason = allowed_actions(owner_state())
+                if reason:
+                    revoke_route()
             last_tick = time.monotonic()
+            if input_enabled:
+                lease.renew()
             reply({"ok": True, "op": operation})
     finally:
+        if lease is not None:
+            with contextlib.suppress(Exception):
+                lease.close()
         if client is not None:
             with contextlib.suppress(Exception):
                 client.close()

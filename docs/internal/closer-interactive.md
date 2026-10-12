@@ -61,6 +61,17 @@ before exec and rejects a changed parent; cleanup uses only owned subprocess
 handles with bounded terminate/kill/wait. No name-based signals or shared
 display changes are used. Revocation may end streaming.
 
+The single-threaded supervisor arms ITIMER_REAL for two seconds when enabling
+input and renews it only after an authorised owner tick. The signal handler
+sends SIGKILL through non-inheritable pidfds pinned to its own VNC/WebSocket
+children before any wait/reap. A slow handshake, frame or client output does
+not postpone that cutoff or renew the lease. Unsupported pidfd signalling
+fails closed; normal kernel scheduling still applies. Handler cleanup disarms
+the timer before closing handles. Hold/revocation checks use the durable submit
+marker for recovery, so consuming the last cap slot does not revoke recovery.
+After route cutoff the Page/display can remain alive for observation; streaming
+and further input are unavailable. An explicit later observe never resubmits.
+
 After handoff, observe first revokes the input route and then only reads a
 receipt or preserves an unknown outcome on the retained Page. It cannot run
 another submit or the verification-code click path. No checkpoint, cap or
@@ -115,6 +126,9 @@ issues, or normal logs. The last eight events are retained; access expires after
 opportunistic deletion, not a background hard expiry when no process accesses
 that home. The explicit delete_snapshot operation removes just that bound event.
 Capture failure is reported as unavailable, never fabricated as a screenshot.
+Metadata/publication failure removes only the newly allocated PNG/JSON event,
+including a partial metadata file, preserving the primary error. Filesystem
+cleanup errors cannot be claimed as successful deletion.
 
 `frame`/`input` additionally require opaque display_id and frame_sequence. Frame
 is the actual 1440x1000 private X display, including browser windows/dialogs; it is

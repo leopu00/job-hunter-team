@@ -280,7 +280,11 @@ class AssistedSession:
                 if exc.reason != last_denial:
                     mission.record_block(self.flow, page, exc.reason, "finish")
                     last_denial = exc.reason
-                self._publish_interactive(phase="review_wait", command=None, can_confirm=False)
+                possible_submit = bool(self._checkpoint().submit_started)
+                if possible_submit and self.screen:
+                    self.screen.revoke()
+                self._publish_interactive(phase="handoff" if possible_submit else "review_wait",
+                                          command=None, can_confirm=False, input_ready=False)
                 if self.screen:
                     self.screen.tick()
                 page.wait_for_timeout(100)

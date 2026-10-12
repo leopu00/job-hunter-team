@@ -378,8 +378,17 @@ def record_block(flow, page, reason, action="request_handoff"):
     except Exception:
         target.unlink(missing_ok=True)
         record["screenshot_error"] = "capture_failed"
-    _private_write(directory / (event + ".json"), json.dumps(record).encode())
-    update(flow, block=record)
+    try:
+        _private_write(directory / (event + ".json"), json.dumps(record).encode())
+        update(flow, block=record)
+    except BaseException:
+        # An incomplete event has no readable metadata for retention. Remove
+        # only this allocation, including a partial metadata write, and keep
+        # the primary error even if the filesystem also rejects cleanup.
+        for suffix in (".png", ".json"):
+            with contextlib.suppress(OSError):
+                (directory / (event + suffix)).unlink(missing_ok=True)
+        raise
     _prune_events(directory, record["created_at"])
     return str(target) if record["screenshot_available"] else ""
 
@@ -435,6 +444,8 @@ def descriptor(home=None):
             result.update(stream_available=True, display_id=display["display_id"],
                           frame_sequence=display["frame_sequence"], width=display["width"], height=display["height"],
                           allowed_actions=display["allowed_actions"], gate_reason=display["gate_reason"])
+            result["stream_available"] = "frame" in display["allowed_actions"]
+            result["input_ready"] = result["input_ready"] and "input" in display["allowed_actions"]
         except (InteractiveDenied, OSError, ValueError):
             result["input_ready"] = False
     block = value.get("block")
