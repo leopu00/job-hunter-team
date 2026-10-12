@@ -15,6 +15,9 @@ import { OAuthLoginTakeover } from "../oauth-login-takeover";
 import { describeError } from "../lib/error-catalog";
 import { appLocale } from "../lib/app-locale";
 import VpsProfileImport from "./VpsProfileImport";
+import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
+import FirstSetupAssistance from "./FirstSetupAssistance";
+import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import "./onboarding.css";
@@ -353,8 +356,10 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
   const [provider, setProvider] = useState<SubscriptionProvider | null>(PROPOSED_PROVIDER);
   const [submitting, setSubmitting] = useState(false);
+  const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!localRuntimeSupported) {
@@ -363,10 +368,23 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   }, [localRuntimeSupported]);
 
   useLayoutEffect(() => {
-    headingRef.current?.focus();
-  }, [step]);
+    // Focus must not scroll the heading into the bottom of the old viewport.
+    // Reset the real scroll owners, including the document on the short window.
+    headingRef.current?.focus({ preventScroll: true });
+    for (let node: HTMLElement | null = shellRef.current; node; node = node.parentElement) {
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [step, assistanceOpen]);
 
   if (runtime.status !== "collecting") return <RuntimeView host={host} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
+
+  if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
+    <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>
+    <button className="onboarding-secondary" type="button" onClick={() => setAssistanceOpen(false)}>{ASSISTANCE_TEXT[locale].back}</button>
+    <CloserDesktopPanel onClose={() => setAssistanceOpen(false)} />
+  </main>;
 
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
@@ -393,7 +411,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   }
 
   return (
-    <main className="onboarding-shell">
+    <main className="onboarding-shell" ref={shellRef} lang={locale}>
       <header className="onboarding-header">
         <div className="onboarding-brand" aria-label="Job Hunter Team"><span className="onboarding-brand__mark" aria-hidden="true">J</span><span>Job Hunter Team</span></div>
         <span className="onboarding-session">
@@ -438,6 +456,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
+          <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />
           {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
           </>}
 
