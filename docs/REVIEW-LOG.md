@@ -52,8 +52,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-09-14 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-08-13 | ✅ |
-| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-08-13 | ✅ |
-| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-08-16 | ✅ |
+| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-09-27 | ✅ |
+| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-09-27 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-08-16 | ✅ |
 | [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-09-14 | ✅ |
 | [agents/critico/critico.md](../agents/critico/critico.md) | 🧐 Critico — review qualità CV/cover prima dell'invio | — | 2026-08-13 | ✅ |
@@ -136,7 +136,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/telegram-send/SKILL.md](../agents/_skills/telegram-send/SKILL.md) | Send a message to the user via Telegram (outbound). | — | 2026-09-14 | ✅ |
 | [agents/_skills/user-reply-check/SKILL.md](../agents/_skills/user-reply-check/SKILL.md) | Read user replies that arrived via the web dashboard (fallback channel when Telegram was down/not configured). | — | 2026-08-11 | ✅ |
 | [agents/_skills/agent-unblock/SKILL.md](../agents/_skills/agent-unblock/SKILL.md) | Skill Dottore: fase UNBLOCK prima del refresh — riconosce e scioglie i quattro tipi di blocco del team (un blocco che sopravvive = round fallito) | — | 2026-07-29 | ✅ |
-| [agents/_skills/chat-worker/SKILL.md](../agents/_skills/chat-worker/SKILL.md) | Skill worker: rispondere alla chat `[CHAT]` del gioco/desktop con un solo `jht-send`, senza aprire lavoro nuovo e senza prendere ordini da quel canale | — | 2026-07-29 | ✅ |
+| [agents/_skills/chat-worker/SKILL.md](../agents/_skills/chat-worker/SKILL.md) | Skill worker: rispondere alla chat `[CHAT]` del gioco/desktop con un solo `jht-send`, senza aprire lavoro nuovo e senza prendere ordini da quel canale | — | 2026-10-12 | ✅ |
 | [agents/_skills/first-run-burst/SKILL.md](../agents/_skills/first-run-burst/SKILL.md) | Skill Capitano: la prima mezz'ora di un utente nuovo — deroga a C-02 per la sola prima finestra, successo = posizioni SCORATE a schermo | — | 2026-07-28 | ✅ |
 | [agents/_skills/graceful-shutdown/SKILL.md](../agents/_skills/graceful-shutdown/SKILL.md) | Skill Capitano: chiusura giornata su `[SHUTDOWN]` dell'utente — ogni agente registra dov'era, poi il flag che libera l'uscita dell'app | — | 2026-07-30 | ✅ |
 | [agents/_skills/throttle-distribution/SKILL.md](../agents/_skills/throttle-distribution/SKILL.md) | Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti) | — | 2026-07-28 | ✅ |
@@ -146,7 +146,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
 | [agents/_skills/apply-authorization/SKILL.md](../agents/_skills/apply-authorization/SKILL.md) | 📮 CLOSER — i due cancelli (consenso + flag per-posizione) e la coda: cosa può partire e perché il resto è fermo | — | 2026-09-14 | ✅ |
-| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-09-20 | ✅ |
+| [agents/_skills/apply-flow/SKILL.md](../agents/_skills/apply-flow/SKILL.md) | 📮 CLOSER — macchina a stati con checkpoint, ricevuta obbligatoria, cosa fare su blocked_human | — | 2026-10-11 | ✅ |
 | [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-09-14 | ✅ |
 
 
@@ -167,7 +167,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
-| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-08-04 | ✅ |
+| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-09-21 | ✅ |
 | [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
 | [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-30 | ✅ |
@@ -241,7 +241,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-09-13 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-09-20 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |
@@ -392,6 +392,10 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-4-igiene-log.md) | Diario scritto con >> invece di tee -a: l'unico del container che nessuno ruota e che docker logs non vede; il mkdir mancante invece non e' un difetto sul percorso reale | — | 2026-09-01 | ✅ |
 | [docs/internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md](./internal/reviews/2026-09-01-lee-launcher-prs/223-5-targeting-e-robustezza.md) | Censimento delle sessioni tmux reali e cosa succede a mandare q a quelle di servizio; il prefix-match dei target come difetto reale e non stilistico, con l'incidente registrato in produzione | — | 2026-09-01 | ✅ |
 | [docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md](./internal/ops/2026-09-13-spawn-observability-live-test-plan.md) | Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log. | — | 2026-09-14 | ✅ |
+| [docs/internal/assisted-desktop-app-binding.md](./internal/assisted-desktop-app-binding.md) | Binding privato app/runtime prima handshake, quattro pin exactCID/OCI/image/digest, eventi frame-bound e limiti desktop-only. | — | 2026-10-12 | ✅ |
+| [docs/internal/closer-assisted.md](./internal/closer-assisted.md) | Procedura assisted-flow della baseline: stato owner, controller ufficiale, lifecycle e limiti di identità. | — | 2026-10-11 | ✅ |
+| [docs/internal/closer-interactive-package.md](./internal/closer-interactive-package.md) | Package candidato app/runtime: maintenance, manifest/pin, gate immagine/isolamento, safe cutover e rollback senza reset. | — | — | ✅ |
+| [docs/internal/closer-interactive.md](./internal/closer-interactive.md) | Missione interattiva UNA posizione: admission, review/confirm/handoff, lease input server, screenshot e osservazione senza secondo submit. | — | 2026-10-12 | ✅ |
 
 
 ## 🔒 docs/security
@@ -459,13 +463,13 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
 | [api-worker/README.md](../api-worker/README.md) | Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica | 2026-08-24 | 2026-08-24 | 🟢 |
-| [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-08-24 | 🟢 |
+| [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-09-26 | ✅ |
 | [agent-harness/README.md](../agent-harness/README.md) | Harness agenti a consumo API: cosa contiene la cartella e come si usa (inglese). | — | 2026-09-04 | ✅ |
 | [agent-harness/TODO.md](../agent-harness/TODO.md) | Esercizio sul ciclo di un agente: difetti aperti del prototipo Python e come verificarli (inglese). | — | 2026-09-04 | ✅ |
-| [agent-harness/runtime/README.md](../agent-harness/runtime/README.md) | Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run. | — | 2026-09-20 | ✅ |
-| [agent-harness/runtime/docs/hub.md](../agent-harness/runtime/docs/hub.md) | Broker jht-hub: tiene database e canali, un token per ruolo, e le regole dei tool stanno li. | — | 2026-09-19 | ✅ |
+| [agent-harness/runtime/README.md](../agent-harness/runtime/README.md) | Runtime API: come si lancia un ruolo del prodotto a chiamate API, come si legge il trace col monitor e quanto costa una run. | — | 2026-09-27 | ✅ |
+| [agent-harness/runtime/docs/hub.md](../agent-harness/runtime/docs/hub.md) | Broker jht-hub: tiene database e canali, un token per ruolo, e le regole dei tool stanno li. | — | 2026-09-27 | ✅ |
 | [agent-harness/runtime/docs/launcher.md](../agent-harness/runtime/docs/launcher.md) | Lanciatore: come il CAPITANO chiede un agente, come l'host lo avvia e quali limiti decide il lanciatore. | — | 2026-09-20 | ✅ |
-| [agent-harness/runtime/docs/parity.md](../agent-harness/runtime/docs/parity.md) | Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce. | — | 2026-09-20 | ✅ |
+| [agent-harness/runtime/docs/parity.md](../agent-harness/runtime/docs/parity.md) | Tabella di parita': per ogni skill Python dei ruoli TUI, il tool nativo dell'harness che la sostituisce. | — | 2026-09-27 | ✅ |
 
 
 ---

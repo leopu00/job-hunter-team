@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "scope": "test candidate requirements; actual configuration and native fixtures remain mandatory",
+  "platform": "linux/amd64",
+  "user": "1001:1001",
+  "maintenance_entrypoint": [
+    "/usr/bin/tini",
+    "-g",
+    "--",
+    "/bin/sleep"
+  ],
+  "maintenance_command": [
+    "infinity"
+  ],
+  "restart_policy": "no",
+  "required_effective_security": {
+    "Privileged": false,
+    "CapDrop": [
+      "ALL"
+    ],
+    "CapAdd": [],
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "PidMode": "",
+    "IpcMode": "private",
+    "effective_worker": "UID/GID1001, NoNewPrivs1, CapInh/Prm/Eff/Bnd/Amb all zero"
+  },
+  "mounts": "Exact independently reviewed home/user and existing runtime/dependency mount allowlist only. Reject unexpected nested/ancestor binds, source overlays, host paths, keys, agent or Docker sockets.",
+  "network": "Exact dedicated candidate policy and rollback after target binding; deny host/peer/DNAT/IPv6 with real scoped proofs while preserving approved DNS/public egress and host-initiated app replies. No bridge-only isolation claim.",
+  "fixture": {
+    "data": "fresh TEMP synthetic stores only; no real auth/profile/home mounts",
+    "source": "actual immutable candidate image modules, no product overlay",
+    "required": [
+      "native architecture/OCI/digest/source pins/root owner readbacks",
+      "official admission and same Page/context recovery without second cap/submit",
+      "real DISPLAY frames and frame-bound events",
+      "preopened route denial before handoff and on hold/EOF/stale/terminal",
+      "owned processes/routes/FD/sockets cleanup, original unchanged",
+      "private screenshot publication failure, access expiry and deletion",
+      "actual USER/NNP/Cap*/mount configuration and wrong-mount fail-closed behavior"
+    ]
+  },
+  "promotion": {
+    "required": [
+      "exact-SHA independent package verdict and CI gates",
+      "native candidate image and effective isolation fixtures",
+      "operator safe point and consistent verified backup",
+      "exact config/readback, one writer and rollback plan",
+      "actual app artifact/resource/binding and authorized visual E2E"
+    ],
+    "no_implicit_activation": [
+      "legacy PID1",
+      "watchdog",
+      "ordinary team startup",
+      "queue retry",
+      "new candidatures",
+      "hold or checkpoint reset"
+    ]
+  },
+  "rollback": "Stop exact candidate, preserve state/unknown outcomes, create explicit distinct baseline maintenance clone from reviewed config. Preserve original stopped object and backup; no blind original start.",
+  "continuity": "Live Page RAM is lost on stop; container retention does not retain the Page."
+}

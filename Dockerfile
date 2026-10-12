@@ -1,12 +1,28 @@
-# Scoped assisted-flow hotfix. The immutable multiarch parent preserves all
-# operating-system packages, browser builds and installed dependencies.
-FROM ghcr.io/leopu00/jht@sha256:65c201c127bd2e7ed316b49392f40a56b9686165263da4be27395bc1a15f0a9b
+# Scoped interactive assisted-browser test candidate.
+# Packages/browsers are inherited unchanged; runtime is maintenance by default.
+FROM ghcr.io/leopu00/jht@sha256:265f5bd491ea06802ba6979d49c77e05721db9c80b9092f7ca73a4e4fafe64ae
 
-# Base default USER and launcher remain unchanged. Build gates run as jht.
-COPY --chown=0:0 shared/skills/apply_flow.py shared/skills/apply_assisted.py shared/skills/apply_session_lock.py /app/shared/skills/
-COPY --chown=0:0 agents/_skills/apply-flow/SKILL.md agents/_skills/apply-flow/SKILL.it.md /app/agents/_skills/apply-flow/
-COPY --chown=0:0 docs/internal/closer-assisted.md /app/docs/internal/closer-assisted.md
-COPY --chown=0:0 ops/closer-assisted-280/runtime-source.json ops/closer-assisted-280/lifecycle-contract.json /app/ops/closer-assisted-280/
+COPY --chown=0:0 .launcher/spawn-lib.sh /app/.launcher/spawn-lib.sh
+COPY --chown=0:0 .launcher/start-agent.sh /app/.launcher/start-agent.sh
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.de.md /app/agents/_skills/chat-worker/SKILL.de.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.es.md /app/agents/_skills/chat-worker/SKILL.es.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.fr.md /app/agents/_skills/chat-worker/SKILL.fr.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.hu.md /app/agents/_skills/chat-worker/SKILL.hu.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.it.md /app/agents/_skills/chat-worker/SKILL.it.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.md /app/agents/_skills/chat-worker/SKILL.md
+COPY --chown=0:0 agents/_skills/chat-worker/SKILL.pt.md /app/agents/_skills/chat-worker/SKILL.pt.md
+COPY --chown=0:0 docs/internal/closer-interactive.md /app/docs/internal/closer-interactive.md
+COPY --chown=0:0 shared/skills/application_answers.py /app/shared/skills/application_answers.py
+COPY --chown=0:0 shared/skills/apply_assisted.py /app/shared/skills/apply_assisted.py
+COPY --chown=0:0 shared/skills/apply_flow.py /app/shared/skills/apply_flow.py
+COPY --chown=0:0 shared/skills/apply_gate.py /app/shared/skills/apply_gate.py
+COPY --chown=0:0 shared/skills/closer_desktop_rfb.py /app/shared/skills/closer_desktop_rfb.py
+COPY --chown=0:0 shared/skills/closer_interactive.py /app/shared/skills/closer_interactive.py
+COPY --chown=0:0 shared/skills/closer_interactive_screen.py /app/shared/skills/closer_interactive_screen.py
+COPY --chown=0:0 .launcher/entrypoint.sh /app/.launcher/entrypoint.sh
+COPY --chown=0:0 docs/internal/assisted-desktop-app-binding.md /app/docs/internal/assisted-desktop-app-binding.md
+COPY --chown=0:0 docs/internal/closer-interactive-package.md /app/docs/internal/closer-interactive-package.md
+COPY --chown=0:0 ops/closer-interactive/runtime-source.json ops/closer-interactive/lifecycle-contract.json ops/closer-interactive/app-runtime-resources.json /app/ops/closer-interactive/
 
 # Build-time GATE (redesign tool-health 2026-06-13). The libatk regression
 # shipped a browser that exists but exits 127 on launch, and stayed invisible
@@ -58,3 +74,8 @@ RUN if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILD
       python3 shared/skills/tool_health.py --only manual_login_browser \
       || { echo "BUILD GATE FAILED: no system Chromium or window manager for the manual LinkedIn sign-in — see shared/skills/linkedin_apply.py" >&2; exit 1; }; \
     fi
+
+# Explicit inert default; controlled owners use reviewed exec only.
+USER 1001:1001
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/bin/sleep"]
+CMD ["infinity"]

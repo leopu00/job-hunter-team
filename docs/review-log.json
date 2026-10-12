@@ -1769,6 +1769,26 @@
       "path": "docs/internal/ops/2026-09-13-spawn-observability-live-test-plan.md",
       "description": "Piano della prova dal vivo sull'osservabilita' dello spawn: cosa si guarda su una squadra viva prima di fidarsi dei log.",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/assisted-desktop-app-binding.md",
+      "description": "Binding privato app/runtime prima handshake, quattro pin exactCID/OCI/image/digest, eventi frame-bound e limiti desktop-only.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/closer-assisted.md",
+      "description": "Procedura assisted-flow della baseline: stato owner, controller ufficiale, lifecycle e limiti di identità.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/closer-interactive-package.md",
+      "description": "Package candidato app/runtime: maintenance, manifest/pin, gate immagine/isolamento, safe cutover e rollback senza reset.",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/closer-interactive.md",
+      "description": "Missione interattiva UNA posizione: admission, review/confirm/handoff, lease input server, screenshot e osservazione senza secondo submit.",
+      "last_review": null
     }
   ]
 }

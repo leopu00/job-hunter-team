@@ -73,3 +73,10 @@ docs/*
 !docs/internal/
 docs/internal/*
 !docs/internal/closer-assisted.md
+
+# One-position interactive operational procedure.
+!docs/internal/closer-interactive.md
+
+# Exact app binding and candidate operating procedures; no game payload.
+!docs/internal/assisted-desktop-app-binding.md
+!docs/internal/closer-interactive-package.md

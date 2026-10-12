@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "scope": "one-position interactive assisted browser and private desktop; no operator identity grant",
+  "baseline_revision": "459f6fadbebbb94fcd2e17528145a85c554cfd02",
+  "baseline_image": "ghcr.io/leopu00/jht@sha256:265f5bd491ea06802ba6979d49c77e05721db9c80b9092f7ca73a4e4fafe64ae",
+  "implementation_revision": "9365754ff53cd0943443cb08f841d4be26494220",
+  "implementation_manifest_sha256": "122980be04bbea5d8e7522e92b7778bd1460585c838e1890005d141ce96978cf",
+  "app_implementation_revision": "4f5a52641835fea686578ca19be8f58daeb30593",
+  "image_source_revision": "Compare OCI revision with the complete independently reviewed integration SHA including packaging; no earlier revision default.",
+  "files": {
+    ".launcher/spawn-lib.sh": {
+      "sha256": "fe744ffc8740a9b88a5a0e755702343b6222240c0a6ceddb26961daa556fcb8c",
+      "bytes": 25577,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    ".launcher/start-agent.sh": {
+      "sha256": "e54037424060c912f2081fdaaf953a0c5ec88583bce42d01d6399751a5a863ba",
+      "bytes": 96373,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.de.md": {
+      "sha256": "481c92ff25a2993c5cf627a2b5e5558633e368bdee34f932f8577d75e02a382c",
+      "bytes": 8963,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.es.md": {
+      "sha256": "ed5215a5fd2ab72880d1591d3f69b41156b06fcbc5536c6beab1d9e7891ae31a",
+      "bytes": 8156,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.fr.md": {
+      "sha256": "851a48b90ee615d4089eddf11581aaf57125443f0a6a3a59fe1baf16162355c1",
+      "bytes": 8700,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.hu.md": {
+      "sha256": "8af8959d177ae8178845f1f3322b94594f53b2378fc5fdbe7edb8bf485818a24",
+      "bytes": 8859,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.it.md": {
+      "sha256": "afda0688778e0d85822073ccd6051fc27b5fb3c03d7b5d6c3db93537836e43c7",
+      "bytes": 7958,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.md": {
+      "sha256": "edbebaba124be2ef9c5b7f22152f71032f2c1eff5927cd3ac56f936dea159024",
+      "bytes": 7582,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "agents/_skills/chat-worker/SKILL.pt.md": {
+      "sha256": "dde5e288df15c00218d0e17cc6b919a8f3690a9d363c9104c8f58cacd02e9ff4",
+      "bytes": 8216,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "docs/internal/closer-interactive.md": {
+      "sha256": "b759812a2daabcdb8ff0fc74b648aab14de6046d85c7887fab455b59632b972e",
+      "bytes": 10718,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/application_answers.py": {
+      "sha256": "352dfe8f27fc80a9c4aacec418709fa16d1792b57a7cc9fcf3967f1edf663ff5",
+      "bytes": 70224,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/apply_assisted.py": {
+      "sha256": "1e0ae6c6f6ef16a7c9c96ba4bc9fc4415ad43f64a052d6ae754702a7c4ec8eda",
+      "bytes": 26641,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/apply_flow.py": {
+      "sha256": "932233da84282b4c894a306aa8843f063caede92e870c7670e5b62cd6f591fc8",
+      "bytes": 251953,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/apply_gate.py": {
+      "sha256": "ba7b884a150a923f86a2b7f8b6a438332d6285e5cf499deb7f3563b4f3c8f238",
+      "bytes": 56494,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/closer_desktop_rfb.py": {
+      "sha256": "030a371007d0d4c6d8aa82422bc8d1d0b510309be4df92db7b951f860b445a00",
+      "bytes": 7545,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/closer_interactive.py": {
+      "sha256": "939fad699f3126de73a773d8d5ec7d8042209dfdea99a8f237f48d329e97c384",
+      "bytes": 28428,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "shared/skills/closer_interactive_screen.py": {
+      "sha256": "b676f77baeff6a131775757317fe370d58e4ac8fb53fafcde6f2a1ddaf553b97",
+      "bytes": 28718,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    ".launcher/entrypoint.sh": {
+      "sha256": "5f55155beb07c9fd341c53c3d44664d4df64ae073ea87d8ffd88d32346df9142",
+      "bytes": 1751,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "docs/internal/assisted-desktop-app-binding.md": {
+      "sha256": "fad73f869112d566e9f838786ef34fe3f01ae25092e44413c7910d882f376e1c",
+      "bytes": 3254,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    },
+    "docs/internal/closer-interactive-package.md": {
+      "sha256": "80cdede6c9fbfc3ed3016093abacffe5a607c41041befd511ea68e6242e36822",
+      "bytes": 4548,
+      "owner": "0:0",
+      "mode": "no group/world write"
+    }
+  },
+  "dependencies": {
+    "inherit_parent": true,
+    "executables": [
+      "/usr/bin/Xvfb",
+      "/usr/bin/x11vnc",
+      "/usr/bin/websockify"
+    ],
+    "shared_library": "libcrypto.so.3",
+    "symbols": [
+      "DES_set_key_unchecked",
+      "DES_ecb_encrypt"
+    ],
+    "linux_interfaces": [
+      "pidfd_open",
+      "pidfd_send_signal",
+      "ITIMER_REAL"
+    ],
+    "unsupported": "fail closed",
+    "native_candidate_attestation": "required before promotion; not established by source pins"
+  }
+}

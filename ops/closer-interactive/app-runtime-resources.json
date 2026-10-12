@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "app_implementation_revision": "4f5a52641835fea686578ca19be8f58daeb30593",
+  "app_manifest_sha256": "8a3ea6ecb09530accfa412983e422e42ad6611965af4f77a0f95b7c67d747a2c",
+  "runtime_implementation_revision": "9365754ff53cd0943443cb08f841d4be26494220",
+  "candidate_source_revision": "Complete integration SHA from delivery and OCI; not either implementation revision by default.",
+  "app_version_inherited": "0.3.9",
+  "engine_source_fixture": "4.7.stable.official.5b4e0cb0f",
+  "app_files": {
+    "docs/internal/assisted-desktop-app-binding.md": {
+      "sha256": "fad73f869112d566e9f838786ef34fe3f01ae25092e44413c7910d882f376e1c",
+      "bytes": 3254
+    },
+    "game/scripts/backend/backend_adapter.gd": {
+      "sha256": "9afb43d18a35ef33b01332a9280ee69d9916a0bf745b301ff472fdd4810f7448",
+      "bytes": 9347
+    },
+    "game/scripts/backend/backend_bus.gd": {
+      "sha256": "bf4a252f27bcf8253b3f1557a6e95b9cc9fa3623b2675293704c9f2e50043537",
+      "bytes": 48881
+    },
+    "game/scripts/backend/local_backend.gd": {
+      "sha256": "0bf9ac05be8999a6a672559c08929ef89bf9077c3888c51687dea640576e27e6",
+      "bytes": 11098
+    },
+    "game/scripts/backend/payloads/browser_desktop.py": {
+      "sha256": "4b03fe2b8829235bf4aff5f24e1ad012442bac73e5865b71131638d0d3078278",
+      "bytes": 5240
+    },
+    "game/scripts/backend/vps_backend.gd": {
+      "sha256": "efb82c16b47e759277875a6627b337cde3f00e4ec4b624b20ea63a7b00109c0c",
+      "bytes": 75652
+    },
+    "game/scripts/ui/assisted_browser_panel.gd": {
+      "sha256": "fda46109dbd7dd825d071c931a78d5c29fe38cfd24217b10f47f081767ac0f8d",
+      "bytes": 13950
+    },
+    "game/scripts/ui/section_panel.gd": {
+      "sha256": "f5beef0d874da2d59c24a43a224437e9357d44c11866a6ca4b9a542625e99a6c",
+      "bytes": 226822
+    },
+    "game/scripts/ui/sidebar_defs.gd": {
+      "sha256": "75ee7c207c4c5f53947ae70aa41700b6be985c05a63ef71eba6c705807ef19ee",
+      "bytes": 8118
+    },
+    "game/scripts/ui_strings.gd": {
+      "sha256": "9ff0e26a244261ac2dbbe06ef38b5876ad7d3d4fda21c8fdf0792f8083c0ef49",
+      "bytes": 125279
+    },
+    "game/tools/assisted_browser_review_selftest.gd": {
+      "sha256": "fad59ba9b7d052a628b0ef4a728fde2765e8c09203f3d52761fd2d1e153ecdd1",
+      "bytes": 4475
+    },
+    "game/tools/assisted_browser_selftest.gd": {
+      "sha256": "5f69a93285f99d478cb0beea753f633445a589f644d082903b068c5683e347df",
+      "bytes": 5021
+    },
+    "game/tools/browser_runtime_binding_fixture.py": {
+      "sha256": "e0ba3f2ea1ba6d56a642a33fba4ebe4b65801836fd44695ae139b3331293602d",
+      "bytes": 6572
+    },
+    "tests/test_browser_desktop_bridge.py": {
+      "sha256": "918eb1401940e93232bc9f4c038da994e846353c8f525828e0a0fedcad4d3d4a",
+      "bytes": 6137
+    }
+  },
+  "required_actual_resources": [
+    "res://scripts/backend/payloads/browser_desktop.py",
+    "res://scripts/ui/assisted_browser_panel.gd"
+  ],
+  "resource_presence": "Verify in actual active app/export; source include_filter alone is not proof.",
+  "browser_runtime": {
+    "config_path": "user://vps.cfg",
+    "section": "browser_runtime",
+    "required_fields": [
+      "container_id",
+      "oci_revision",
+      "image_id",
+      "digest"
+    ],
+    "producer": "Approved candidate readbacks/private JSON0600, authorized ConfigFile delivery preserving [vps]. No real values committed.",
+    "bound_mode": "desktop bridge and exact candidate health only; ordinary team SSH unavailable"
+  },
+  "visual_acceptance": "Distinct actual app/runtime/owner DISPLAY E2E; headless tests do not establish pixels or native input."
+}

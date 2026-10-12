@@ -21,13 +21,16 @@ for d in /jht_home /jht_user; do
     continue
   fi
   echo "[entrypoint] $d not writable by $(whoami) — repairing ownership (Windows bind mount)" >&2
-  sudo /bin/mkdir -p "$d"
-  sudo /bin/chown -R jht:jht "$d"
+  if ! sudo /bin/mkdir -p "$d" || ! sudo /bin/chown -R jht:jht "$d"; then
+    echo "[entrypoint] ERROR: cannot repair $d; prepare writable mount ownership on the host before starting the container" >&2
+    exit 1
+  fi
   if mkdir -p "$probe" 2>/dev/null; then
     rmdir "$probe" 2>/dev/null || true
     echo "[entrypoint] $d writable now" >&2
   else
-    echo "[entrypoint] WARNING: $d still not writable after chown — check the Docker Desktop file-sharing settings for this path" >&2
+    echo "[entrypoint] ERROR: $d still not writable after chown — check the Docker Desktop file-sharing settings for this path" >&2
+    exit 1
   fi
 done
 
