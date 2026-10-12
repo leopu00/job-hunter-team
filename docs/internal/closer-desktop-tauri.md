@@ -1,4 +1,4 @@
-# Assisted browser inside the Tauri Team page (#281)
+# Assisted browser inside Tauri (#281)
 
 This React frontend targets the existing Tauri 2 desktop **0.4.0**,
 `ai.jobhunterteam.desktop`, from `fc38ebb623ff5853089624d00693e560c5ecf9bd`.
@@ -7,9 +7,28 @@ The Godot desktop and its exports are separate artifacts.
 Team → Open assisted browser mounts the frame view inside the app WebView.
 It calls only `invoke("closer_desktop_request", {request})`. The Rust backend
 owns the account-scoped trusted binding, host comparison, exact container/image
-attestation, SSH without a PTY, bounded output and request deadline. React has
-no target, host, path, port, password, runtime-pin setter or fallback to `jht`.
+attestation, SSH without a PTY, bounded output and request deadline. Desktop
+requests have no target, host, path, port, password or runtime-pin setter and no fallback to `jht`.
 Missing/invalid binding makes the browser unavailable; it does not start a runtime.
+
+Before team preparation, FIRSTSETUP → environment also provides an explicit
+browser-assistance connection. Select VPS and use the existing SSH fields/key
+picker, then choose **Connect for browser assistance**. This calls only
+`invoke("closer_desktop_register_host", {host:ExecutionHostVPS})`.
+The accepted reply is `{ok:true,registered:true,assistance_ready:false}`;
+registration is not runtime readiness. A missing SSH host key uses the existing
+probe/explicit fingerprint confirmation, then returns to registration, never
+to team preparation. Denied, malformed or stale-host results do not open the view.
+The actual assisted-browser component then displays the trusted runtime's state,
+including unavailable when the producer's receipt/binding is absent. No team-ready
+marker, provider login, team startup or runtime provisioning is triggered.
+**Return to setup** preserves the wizard's host, provider and current step; closing
+the view does not finish or abandon a browser mission.
+
+Login and FIRSTSETUP use the same existing locale policy: explicit cookie,
+legacy preference, supported system language, then English. No preference is
+written just to align them. New steps reset scrolling and focus their heading;
+same-step field changes leave focus and scrolling alone.
 
 The producer supplies a private regular non-symlink file, at most 8 KiB, in
 `app_local_data/accounts/<existing AccountScope.digest64>/closer-desktop-binding.json`:
