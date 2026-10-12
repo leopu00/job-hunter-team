@@ -161,7 +161,9 @@ export default defineConfig(({ mode }) => ({
     port: 1420,
     // Vite serves nothing outside desktop/ by default: the reused web files
     // would answer 403 in `tauri dev`.
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), fromHere("../web")] },
+    // The web imports this shared baseline rule. Permit that file before the
+    // import graph is warmed, without exposing the rest of shared/ or the repo.
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), fromHere("../web"), fromHere("../shared/cloud/apply-request-rule.json")] },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
