@@ -622,8 +622,34 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
         + " return original(self)\n"
         + ("rfb.DisplayClient.frame=stalled\n" if fault != "hold" else "")
         + "owned=[]; popen=screen.subprocess.Popen; expire=screen._InputLease._expire\n"
+        + "diagnostic_enabled=False; connect=screen.socket.create_connection\n"
+        + "def diag(value):\n"
+        + " value['monotonic']=time.monotonic(); print(json.dumps(value),file=sys.stderr,flush=True)\n"
+        + "class BannerSocket:\n"
+        + " def __init__(self,client): self.client=client; self.seen=0\n"
+        + " def __getattr__(self,name): return getattr(self.client,name)\n"
+        + " def __enter__(self): self.client.__enter__(); return self\n"
+        + " def __exit__(self,*args): return self.client.__exit__(*args)\n"
+        + " def recv(self,size,*args):\n"
+        + "  try: data=self.client.recv(size,*args)\n"
+        + "  except OSError as exc: diag({'diagnostic':'ready_recv_error','type':type(exc).__name__,'errno':exc.errno}); raise\n"
+        + "  if self.seen<12: diag({'diagnostic':'ready_banner','hex':data[:12-self.seen].hex(),'length':len(data)}); self.seen+=len(data)\n"
+        + "  return data\n"
+        + "def trace_connect(*args,**kwargs):\n"
+        + " if not diagnostic_enabled: return connect(*args,**kwargs)\n"
+        + " diag({'diagnostic':'ready_connect_begin'})\n"
+        + " try: client=connect(*args,**kwargs)\n"
+        + " except OSError as exc: diag({'diagnostic':'ready_connect_error','type':type(exc).__name__,'errno':exc.errno}); raise\n"
+        + " diag({'diagnostic':'ready_connected'}); return BannerSocket(client)\n"
+        + "screen.socket.create_connection=trace_connect\n"
         + "def trace_spawn(argv,*args,**kwargs):\n"
+        + " global diagnostic_enabled\n"
+        + " enabled=argv[0]=='/usr/bin/x11vnc' and '-storepasswd' not in argv and '-viewonly' not in argv\n"
+        + " if enabled: kwargs['stderr']=sys.stderr\n"
         + " p=popen(argv,*args,**kwargs)\n"
+        + " if enabled:\n"
+        + "  diagnostic_enabled=True; stat=Path('/proc/'+str(p.pid)+'/stat').read_text().rsplit(')',1)[1].split()\n"
+        + "  diag({'diagnostic':'enabled_vnc_spawn','pid':p.pid,'starttime':stat[19],'phase':'handoff_pending'})\n"
         + " if argv[0]=='/usr/bin/x11vnc' and '-storepasswd' not in argv: owned.append((p,'-viewonly' in argv))\n"
         + " return p\n"
         + "def trace_expire(self,*args):\n"
@@ -945,3 +971,85 @@ def test_281_real_frame_event_binding_and_automation_gate(short_display_home):
         assert page.evaluate("window.submitCount") == 0
         assert checkpoint(flow)["submit_started"]
         assert result["result"]["reason"] == "submit_outcome_unknown"
+
+
+@pytest.mark.parametrize("op", ["enable", "revoke"])
+@pytest.mark.parametrize("reply_kind", ["own_ack", "eof", "wrong_op", "failed_ack"])
+def test_281_control_tick_ack_never_completes_operation(op, reply_kind):
+    """Actual command/frame code over OS pipes; controlled peer, no supervisor grant."""
+    import os
+    from types import SimpleNamespace
+    command_read, command_write = os.pipe()
+    reply_read, reply_write = os.pipe()
+    with os.fdopen(command_read, "rb", buffering=0) as peer_commands, \
+            os.fdopen(command_write, "wb", buffering=0) as owner_commands, \
+            os.fdopen(reply_read, "rb", buffering=0) as owner_replies, \
+            os.fdopen(reply_write, "wb", buffering=0) as peer_replies:
+        screen = closer_interactive_screen.OwnedScreen(None, 0)
+        screen.binding = {"mission": "a" * 32, "owner": "b" * 32}
+        screen.process = SimpleNamespace(stdin=owner_commands, stdout=owner_replies, poll=lambda: None)
+        finished = threading.Event()
+        errors = []
+        def call():
+            try:
+                screen._command(op)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                finished.set()
+        worker = threading.Thread(target=call)
+        worker.start()
+        try:
+            initial = closer_interactive_screen._frame(peer_commands.fileno(), 1)
+            assert initial == {**screen.binding, "op": op}
+            peer_replies.write(b'{"ok":true,"op":"tick"}\n')
+            assert not finished.wait(.05), "tick acknowledgement completed a different operation"
+            if reply_kind == "eof":
+                peer_replies.close()
+            else:
+                reply = {"ok": reply_kind != "failed_ack",
+                         "op": "unrelated" if reply_kind == "wrong_op" else op}
+                peer_replies.write((json.dumps(reply) + "\n").encode())
+            assert finished.wait(1)
+        finally:
+            peer_replies.close()
+            worker.join(2)
+        assert not worker.is_alive()
+        if reply_kind == "own_ack":
+            assert not errors
+        else:
+            assert len(errors) == 1 and isinstance(errors[0], closer_interactive_screen.ScreenDenied)
+            assert str(errors[0]) == ("screen_lease_eof" if reply_kind == "eof" else "screen_control_failed")
+
+
+def test_281_control_enable_emits_only_bound_heartbeat_while_waiting():
+    """Real wall clock and pipe bytes from official _command, not injected ticks."""
+    import os
+    from types import SimpleNamespace
+    command_read, command_write = os.pipe()
+    reply_read, reply_write = os.pipe()
+    with os.fdopen(command_read, "rb", buffering=0) as peer_commands, \
+            os.fdopen(command_write, "wb", buffering=0) as owner_commands, \
+            os.fdopen(reply_read, "rb", buffering=0) as owner_replies, \
+            os.fdopen(reply_write, "wb", buffering=0) as peer_replies:
+        screen = closer_interactive_screen.OwnedScreen(None, 0)
+        screen.binding = {"mission": "c" * 32, "owner": "d" * 32}
+        screen.process = SimpleNamespace(stdin=owner_commands, stdout=owner_replies, poll=lambda: None)
+        errors = []
+        def call():
+            try:
+                screen._command("enable")
+            except BaseException as exc:
+                errors.append(exc)
+        worker = threading.Thread(target=call)
+        worker.start()
+        try:
+            assert closer_interactive_screen._frame(peer_commands.fileno(), 1) == {**screen.binding, "op": "enable"}
+            assert closer_interactive_screen._frame(peer_commands.fileno(), 1) == {**screen.binding, "op": "tick"}
+            peer_replies.write(b'{"ok":true,"op":"tick"}\n')
+            assert worker.is_alive()
+            peer_replies.write(b'{"ok":true,"op":"enable"}\n')
+        finally:
+            peer_replies.close()
+            worker.join(2)
+        assert not worker.is_alive() and not errors
