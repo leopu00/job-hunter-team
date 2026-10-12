@@ -71,6 +71,12 @@ the timer before closing handles. Hold/revocation checks use the durable submit
 marker for recovery, so consuming the last cap slot does not revoke recovery.
 After route cutoff the Page/display can remain alive for observation; streaming
 and further input are unavailable. An explicit later observe never resubmits.
+While awaiting the bounded enable acknowledgement, the owner sends heartbeat
+ticks every 200 ms. Server startup accepts only those bound ticks, revalidates
+the pending handoff and current holds before each renewal, and never extends
+the two-second lease or its five-second readiness deadline. Heartbeat replies
+cannot substitute for an enable/revoke acknowledgement. EOF, invalid heartbeat
+or gate failure still closes the route; no frame request renews the deadline.
 
 After handoff, observe first revokes the input route and then only reads a
 receipt or preserves an unknown outcome on the retained Page. It cannot run
