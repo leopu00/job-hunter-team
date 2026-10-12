@@ -177,9 +177,27 @@ class OwnedScreen:
         self.check()
         self.process.stdin.write((json.dumps({**self.binding, "op": op}) + "\n").encode())
         self.process.stdin.flush()
-        reply = _frame(self.process.stdout.fileno(), 6)
-        if reply.get("op") != op or reply.get("ok") is not True:
-            raise ScreenDenied("screen_control_failed")
+        deadline = time.monotonic() + 6
+        last_tick = time.monotonic()
+        while time.monotonic() < deadline:
+            # Starting the input server can itself take more than a lease.
+            # The live owner keeps its pipe alive while awaiting enable; the
+            # supervisor must still validate every tick before renewing 2s.
+            if op == "enable" and time.monotonic() - last_tick >= 0.2:
+                self.process.stdin.write((json.dumps({**self.binding, "op": "tick"}) + "\n").encode())
+                self.process.stdin.flush()
+                last_tick = time.monotonic()
+            remaining = deadline - time.monotonic()
+            if not select.select([self.process.stdout.fileno()], [], [], min(0.2, max(0, remaining)))[0]:
+                continue
+            reply = _frame(self.process.stdout.fileno(), max(0, deadline - time.monotonic()))
+            if reply.get("ok") is not True or reply.get("op") not in {op, "tick"}:
+                raise ScreenDenied("screen_control_failed")
+            if reply["op"] == op:
+                return
+            # A startup heartbeat acknowledgement can precede enable/revoke.
+            # It never substitutes for the requested operation's own reply.
+        raise ScreenDenied("screen_reply_timeout")
 
     def check(self):
         if self.process is None or self.process.poll() is not None:
@@ -270,9 +288,11 @@ def _supervise():
         return p
     def reply(value):
         print(json.dumps(value), flush=True)
-    def ready_vnc(process, port):
+    def ready_vnc(process, port, on_wait=None):
         until = time.monotonic() + 5
         while time.monotonic() < until and not stop:
+            if on_wait is not None:
+                on_wait()
             if process.poll() is not None:
                 raise ScreenDenied("screen_vnc_failed")
             try:
@@ -499,7 +519,28 @@ def _supervise():
                 _stop(vnc)
                 vnc = spawn(base)
                 lease.arm((vnc, web))
-                ready_vnc(vnc, vnc_port)
+                def startup_tick():
+                    nonlocal last_tick
+                    fresh = owner_state()
+                    if lease.expired or time.monotonic() >= deadline:
+                        raise ScreenDenied("screen_input_lease_stale")
+                    if not select.select([sys.stdin.fileno()], [], [], 0)[0]:
+                        return
+                    heartbeat = _frame(sys.stdin.fileno(), 1)
+                    if (set(heartbeat) != {"mission", "owner", "op"} or
+                            heartbeat.get("op") != "tick" or
+                            any(heartbeat.get(k) != config[k] for k in ("mission", "owner")) or
+                            fresh["phase"] != "handoff_pending"):
+                        raise ScreenDenied("screen_startup_lease_invalid")
+                    _, reason = allowed_actions(owner_state())
+                    if reason:
+                        raise ScreenDenied("screen_input_revoked")
+                    last_tick = time.monotonic()
+                    lease.renew()
+                    reply({"ok": True, "op": "tick"})
+                ready_vnc(vnc, vnc_port, startup_tick)
+                if lease.expired:
+                    raise ScreenDenied("screen_input_lease_stale")
                 input_enabled = True
             elif operation == "revoke":
                 if not revoked:
