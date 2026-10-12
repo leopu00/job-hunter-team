@@ -88,6 +88,12 @@ another submit or the verification-code click path. No checkpoint, cap or
 authorisation is reset. Finish/abandon/owner exit preserves possible-submit
 uncertainty and closes the resources.
 
+If owned lease EOF closes the display during a Page wait, only a closed owned
+pipe or an exited owned supervisor permits classifying the typed browser/screen
+error as owner loss. The durable checkpoint is read unchanged; the result stays
+blocked/unknown and cleanup is deferred until nested locks unwind. Browser
+errors with a live controller, expiry and eligibility denials are not suppressed.
+
 ## Validation boundary
 
 The initial freeze has AST/import/bash syntax/diff checks and five lightweight

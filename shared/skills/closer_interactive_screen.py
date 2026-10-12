@@ -203,6 +203,11 @@ class OwnedScreen:
         if self.process is None or self.process.poll() is not None:
             raise ScreenDenied("screen_owner_unavailable")
 
+    def transport_lost(self):
+        """Actual owned handle/pipe state, never mission text or a browser error."""
+        return (self.process is None or self.process.poll() is not None or
+                self.process.stdin is None or self.process.stdin.closed)
+
     def tick(self):
         if not self.revoked and self.clock() - self.last_tick >= 0.2:
             self._command("tick")
@@ -225,6 +230,11 @@ class OwnedScreen:
     def revoke(self):
         if not self.revoked:
             self.revoked = True
+            if self.process is not None and self.process.stdin is not None and self.process.stdin.closed:
+                # A closed owned writer cannot carry another revoke. EOF is
+                # already the revoke request; confirm bounded cleanup/reap.
+                self.__exit__(None, None, None)
+                return
             if self.process is not None and self.process.poll() is None:
                 try:
                     self._command("revoke")
