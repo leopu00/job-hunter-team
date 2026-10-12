@@ -210,9 +210,23 @@ class OwnedScreen:
             if self.process is not None and self.process.poll() is None:
                 try:
                     self._command("revoke")
-                except BaseException:
-                    self.__exit__(None, None, None)
-                    raise
+                except (ScreenDenied, OSError):
+                    import closer_interactive as mission
+                    # The terminal mission may close the supervisor before its
+                    # revoke acknowledgement. Confirm owned cleanup/reap; this
+                    # is not an acknowledgement or suppression of a gate error.
+                    try:
+                        value = mission.read(self.flow._jht_home())
+                        terminal = (value and (value["mission_id"], value["owner_id"]) ==
+                                    self.flow._interactive_owner and
+                                    value["position_id"] == self.flow.position_id and
+                                    value.get("owner_pid") == os.getpid() and
+                                    (value["phase"] in {"closed", "completed", "unknown"} or
+                                     value.get("command") in {"finish", "abandon"}))
+                    finally:
+                        self.__exit__(None, None, None)
+                    if not terminal:
+                        raise
 
     def __exit__(self, *_exc):
         process, self.process = self.process, None
