@@ -143,7 +143,10 @@ fn parse_request(value: Value) -> Result<Request, &'static str> {
         return Err("browser_request_invalid");
     }
     let object = value.as_object().ok_or("browser_request_invalid")?;
-    if object.values().any(Value::is_null) {
+    if object
+        .iter()
+        .any(|(key, value)| value.is_null() && key != "review_id")
+    {
         return Err("browser_request_invalid");
     }
     let request: Request =
@@ -164,7 +167,7 @@ fn parse_request(value: Value) -> Result<Request, &'static str> {
     match request.op {
         Operation::Confirm | Operation::Handoff => {
             keys.push("review_id");
-            if !id(request.review_id.as_ref()) {
+            if request.review_id.as_ref().is_some_and(|v| !hex(v, 32)) {
                 return Err("browser_request_invalid");
             }
         }
@@ -212,6 +215,16 @@ fn parse_request(value: Value) -> Result<Request, &'static str> {
         return Err("browser_request_invalid");
     }
     Ok(request)
+}
+
+impl Request {
+    fn wire_value(&self) -> Result<Value, &'static str> {
+        let mut value = serde_json::to_value(self).map_err(|_| "browser_request_invalid")?;
+        if matches!(self.op, Operation::Confirm | Operation::Handoff) && self.review_id.is_none() {
+            value["review_id"] = Value::Null;
+        }
+        Ok(value)
+    }
 }
 
 impl Binding {
@@ -478,8 +491,10 @@ fn execute(
         .join(expected.digest())
         .join("closer-desktop-binding.json");
     let binding = read_binding(&path, &host)?;
-    let input = serde_json::to_vec(&json!({"runtime":binding.browser_runtime,"request":request}))
-        .map_err(|_| "browser_request_invalid")?;
+    let input = serde_json::to_vec(
+        &json!({"runtime":binding.browser_runtime,"request":request.wire_value()?}),
+    )
+    .map_err(|_| "browser_request_invalid")?;
     if direct_chat::load_persisted_host(app, expected)? != host {
         return Err("browser_connection_changed");
     }

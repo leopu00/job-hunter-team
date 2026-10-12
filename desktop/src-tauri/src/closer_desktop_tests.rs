@@ -49,6 +49,15 @@ fn strict_requests_have_no_transport_selectors_or_implicit_fields() {
     ] {
         assert!(parse_request(v).is_err());
     }
+    for op in ["confirm", "handoff"] {
+        let mut v = base(op);
+        v["review_id"] = Value::Null;
+        assert_eq!(parse_request(v.clone()).unwrap().wire_value().unwrap(), v);
+        v["review_id"] = json!("c".repeat(32));
+        assert_eq!(parse_request(v.clone()).unwrap().wire_value().unwrap(), v);
+        v["review_id"] = json!(false);
+        assert!(parse_request(v).is_err());
+    }
     for op in ["observe", "finish", "abandon"] {
         assert!(parse_request(base(op)).is_ok());
     }
