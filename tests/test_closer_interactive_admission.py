@@ -454,7 +454,7 @@ def test_direct_ordinary_flow_does_not_rewrite_unselected_unknown_checkpoint(box
     assert (other.checkpoint_path.read_bytes(), box.rows()) == before
 
 
-def launcher_fixture(box, tmp_path, race=False):
+def launcher_fixture(box, tmp_path, race=False, spawn_probe=False):
     """Actual complete launcher; only interpreter scheduling and transports inert.
 
     A rejected fake new-session records a spawn request, never creates tmux or
@@ -465,6 +465,15 @@ def launcher_fixture(box, tmp_path, race=False):
         pytest.skip("Real flock required by this launcher; host has none (Linux fixture required)")
     binary = tmp_path / "bin"
     binary.mkdir()
+    # In the isolated Linux runner /app is an owned empty tmpfs. The launcher
+    # prepends /app/agents/_tools, so place ONLY inert fixture transports there.
+    # This is not an installed/root-immutable product tool or loader proof.
+    fixture_prefix = os.environ.get("JHT_CLOSER_FIXTURE_TOOL_PREFIX")
+    if fixture_prefix:
+        assert Path(fixture_prefix) == Path("/app/agents/_tools")
+        assert Path("/app/shared/skills").resolve() == SKILLS
+        binary = Path(fixture_prefix)
+        binary.mkdir(parents=True, exist_ok=True)
     trace = tmp_path / "transport.jsonl"
     python = binary / "python3"
     python.write_text(f"#!{sys.executable}\n" + '''
@@ -481,7 +490,7 @@ raise SystemExit(result.returncode)
 ''')
     tmux = binary / "tmux"
     tmux.write_text(f"#!{sys.executable}\n" + '''
-import json, os, sys
+import json, os, subprocess, sys
 with open(os.environ["FIXTURE_TRANSPORT_TRACE"], "a") as stream:
     stream.write(json.dumps(sys.argv[1:]) + "\\n")
 def opened(fd):
@@ -489,6 +498,10 @@ def opened(fd):
     except OSError: return False
 with open(os.environ["FIXTURE_FD_TRACE"],"a") as stream:
     stream.write(json.dumps({"argv":sys.argv[1:],"fd8":opened(8),"fd9":opened(9)})+"\\n")
+if sys.argv[1:2]==["new-session"] and os.environ.get("FIXTURE_ADMIT_AT_SPAWN")=="1":
+    attempt=subprocess.run([sys.executable,os.environ["FIXTURE_MISSION_MODULE"],"admit","1"],capture_output=True,text=True)
+    with open(os.environ["FIXTURE_SPAWN_ADMISSION_TRACE"],"w") as stream:
+        json.dump({"rc":attempt.returncode,"stdout":attempt.stdout,"stderr":attempt.stderr},stream)
 raise SystemExit(1 if sys.argv[1:2] == ["has-session"] else 97)
 ''')
     provider = binary / "codex"
@@ -507,6 +520,9 @@ raise SystemExit(1 if sys.argv[1:2] == ["has-session"] else 97)
                FIXTURE_TRANSPORT_TRACE=str(trace),
                FIXTURE_ADMISSION_TRACE=str(tmp_path / "admit-at-check.json"),
                FIXTURE_FD_TRACE=str(tmp_path / "transport-fds.jsonl"),
+               FIXTURE_ADMIT_AT_SPAWN="1" if spawn_probe and "admission lock unavailable" in launcher.read_text() else "0",
+               FIXTURE_MISSION_MODULE=str(SKILLS / "closer_interactive.py"),
+               FIXTURE_SPAWN_ADMISSION_TRACE=str(tmp_path / "admit-at-spawn.json"),
                FIXTURE_ADMIT_AFTER_CHECK="1" if race else "0", JHT_LANG="en")
     return launcher, env, trace
 
@@ -542,7 +558,7 @@ def test_launcher_check_then_admission_cannot_request_ordinary_spawn(box, tmp_pa
 
 
 def test_launcher_fixture_can_reach_inert_spawn_without_slot(box, tmp_path):
-    launcher, env, trace = launcher_fixture(box, tmp_path)
+    launcher, env, trace = launcher_fixture(box, tmp_path, spawn_probe=True)
     result = subprocess.run(["bash", str(launcher), "closer", "1"],
                             env=env, capture_output=True, text=True, timeout=10)
     calls = [json.loads(line) for line in trace.read_text().splitlines()] if trace.exists() else []
@@ -550,9 +566,14 @@ def test_launcher_fixture_can_reach_inert_spawn_without_slot(box, tmp_path):
     assert result.returncode != 0
     fds = [json.loads(line) for line in Path(env["FIXTURE_FD_TRACE"]).read_text().splitlines()]
     assert all(not item["fd8"] and not item["fd9"] for item in fds), fds
+    if env["FIXTURE_ADMIT_AT_SPAWN"] == "1":
+        attempt = json.loads(Path(env["FIXTURE_SPAWN_ADMISSION_TRACE"]).read_text())
+        assert attempt["rc"] != 0 and "SessionBusy" in attempt["stderr"], attempt
+        assert box.api.closer_interactive.read(box.home) is None
     # Process exit must release the real admission barrier, even on failed spawn.
     with box.api.closer_interactive.work_lock(box.home):
         pass
+    assert box.api.closer_interactive.admit(1, home=box.home)["phase"] == "admitted"
 
 
 def test_actual_watchdog_respawn_uses_rejecting_launcher_and_never_kicks_off(box, tmp_path):
