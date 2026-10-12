@@ -429,7 +429,7 @@ jht_spawn_new_session() {
 }
 
 # jht_spawn_tmux <argomenti tmux...>
-#   Un client tmux con un tetto di tempo e SENZA il fd 9 del flock di spawn.
+#   Un client tmux con un tetto di tempo e SENZA i fd 8/9 dei lock admission/spawn.
 #   Per ogni chiamata eseguita mentre start-agent.sh tiene il lock
 #   (`locks/start-<SESSIONE>.lock`, fd 9): un send-keys verso un server
 #   incantato non ritorna, e finche' non ritorna il lock resta preso — ogni
@@ -448,9 +448,9 @@ jht_spawn_tmux() {
   local secs="${JHT_SPAWN_TMUX_PROBE_SEC:-5}" rc=0
   case "$secs" in ''|*[!0-9]*) secs=5 ;; esac
   if command -v jht_timeout >/dev/null 2>&1; then
-    jht_timeout "$secs" tmux "$@" 9>&- || rc=$?
+    jht_timeout "$secs" tmux "$@" 8>&- 9>&- || rc=$?
   else
-    tmux "$@" 9>&- || rc=$?
+    tmux "$@" 8>&- 9>&- || rc=$?
   fi
   if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
     echo "[spawn-lib] ERROR: 'tmux $1' did not return within ${secs}s (tmux server not answering) — giving up instead of holding the spawn lock" >&2

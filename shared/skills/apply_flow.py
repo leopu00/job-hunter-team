@@ -3336,7 +3336,18 @@ class ApplicationFlow:
 
     def _gate(self):
         try:
-            verdict = self.gate_checker(position_id=self.position_id, db_path=self.db_path)
+            try:
+                from closer_interactive import guard
+            except ImportError:
+                from shared.skills.closer_interactive import guard
+            binding = getattr(self, "_interactive_owner", None)
+            reason = guard(self._jht_home(), self.position_id, binding)
+            if reason:
+                return _DeniedVerdict(reason, "An interactive mission reserves the Closer.")
+            kwargs = {"position_id": self.position_id, "db_path": self.db_path}
+            if binding is not None:
+                kwargs["interactive_owner"] = binding
+            verdict = self.gate_checker(**kwargs)
         except Exception as exc:
             verdict = _DeniedVerdict(
                 "gate_error",
@@ -3365,6 +3376,7 @@ class ApplicationFlow:
                 with module.profile_lock(self._jht_home(), wait_s=module.PROFILE_WAIT_S):
                     context = runtime.chromium.launch_persistent_context(
                         str(profile),
+                        env={**os.environ, "DISPLAY": self._interactive_display} if hasattr(self, "_interactive_display") else None,
                         headless=self.headless,
                         args=["--no-sandbox", "--disable-dev-shm-usage"],
                         locale="en-US",
@@ -3378,6 +3390,7 @@ class ApplicationFlow:
                         context.close()
                 return
             browser = runtime.chromium.launch(
+                env={**os.environ, "DISPLAY": self._interactive_display} if hasattr(self, "_interactive_display") else None,
                 headless=self.headless,
                 args=["--no-sandbox", "--disable-dev-shm-usage"],
             )
@@ -3782,6 +3795,9 @@ class ApplicationFlow:
                 LOG.info("[apply-flow] email channel from the page's application instructions")
         if href is None:
             return None
+        if getattr(self, "_interactive_owner", None):
+            return self._block(checkpoint, BlockedHuman(
+                "interactive_email_excluded", "Email is excluded from this single browser mission", "detect"), page=page)
         checkpoint.channel = "email"
         checkpoint.mailto_href = href
         checkpoint.state = EMAIL_CHANNEL_STATE
@@ -3895,6 +3911,13 @@ class ApplicationFlow:
         """
         previous = checkpoint.stop_screenshot
         checkpoint.stop_screenshot = ""
+        callback = getattr(self, "on_interactive_stop", None)
+        if callback is not None:
+            try:
+                checkpoint.stop_screenshot = callback(checkpoint, reason, page)
+            except Exception as exc:
+                LOG.error("interactive stop screenshot failed: %s", type(exc).__name__)
+            return previous
         if page is None:
             return previous
         temporary: Path | None = None
@@ -4891,7 +4914,15 @@ class ApplicationFlow:
             from shared.skills.apply_session_lock import SessionBusy, position_lock
 
         try:
-            with position_lock(self._jht_home(), self.position_id, owner=self):
+            try:
+                from closer_interactive import guard, work_lock
+            except ImportError:
+                from shared.skills.closer_interactive import guard, work_lock
+            with work_lock(self._jht_home(), owner=self), position_lock(self._jht_home(), self.position_id, owner=self):
+                reason = guard(self._jht_home(), self.position_id, getattr(self, "_interactive_owner", None))
+                if reason:
+                    # A rejected position must not load/rewrite its checkpoint.
+                    return FlowResult("denied", "", reason)
                 return self._run(page=page, navigate=navigate)
         except SessionBusy:
             return FlowResult("denied", "", "application_session_busy")
@@ -4935,6 +4966,8 @@ class ApplicationFlow:
         self._mode = mode
 
         if checkpoint.state == EMAIL_CHANNEL_STATE:
+            if getattr(self, "_interactive_owner", None):
+                return FlowResult("blocked_human", checkpoint.state, "interactive_email_excluded")
             # Detection already handed this position to the email channel; a
             # rerun must not reopen the page and "find" a form again.
             return FlowResult(EMAIL_CHANNEL_STATE, EMAIL_CHANNEL_STATE, "mailto_application")
@@ -4984,7 +5017,8 @@ class ApplicationFlow:
             self._supersede_request_rows(self._request_schema(checkpoint.answer_request)[0])
             self._close_answer_request(checkpoint)
 
-        self._retire_lost_verification(checkpoint, first_gate, new_page=page is None or navigate)
+        if not getattr(self, "_observe_only", False):
+            self._retire_lost_verification(checkpoint, first_gate, new_page=page is None or navigate)
 
         fresh = (
             checkpoint.state == "detect"
@@ -5022,7 +5056,8 @@ class ApplicationFlow:
         manager = contextlib.nullcontext(page) if page is not None else self._managed_page()
         headed_retry = False
         with manager as active_page:
-            if checkpoint.submit_started and checkpoint.verification == "code_required":
+            if (checkpoint.submit_started and checkpoint.verification == "code_required"
+                    and not getattr(self, "_observe_only", False)):
                 # The code screen of this submit: finish it on the same page, or
                 # stop.  Opening the vacancy again would be a new application.
                 try:
@@ -5193,6 +5228,19 @@ class ApplicationFlow:
                 )
                 checkpoint.complete_step("review", "submit")
                 checkpoint.save(self.checkpoint_path)
+
+                # Interactive mode retains this exact recipe/checkpoint/Page
+                # while the host-authorised CLI confirms this single review.
+                review_pause = getattr(self, "before_submit", None)
+                if review_pause is not None:
+                    paused = review_pause(checkpoint, active_page)
+                    if paused is not None:
+                        return paused
+                    # Review again after the wait, then the ordinary URL,
+                    # confirmation, gate, cap and durable-submit checks below.
+                    recipe.review(active_page)
+                    self._assert_recipe_page(active_page, detection.platform, "review",
+                                             allow_injected_blank=injected_blank, application_url=self.url)
 
                 # Confirmation words already visible before the click cannot
                 # prove that this click succeeded.  Stop instead of reusing a
@@ -5382,6 +5430,7 @@ def main(argv: list[str] | None = None) -> int:
         "--headless", dest="headless", action="store_true", help="Force a hidden browser."
     )
     parser.set_defaults(headless=None)
+    parser.add_argument("--interactive", action="store_true", help="One admitted mission; wait for an official review confirmation before submit.")
     parser.add_argument("--assisted", action="store_true", help="Keep the actual browser in an explicitly controlled assisted session.")
     parser.add_argument("--assisted-ttl", type=int, default=1800, help="Assisted owner lifetime in seconds (1-3600).")
     parser.add_argument(
@@ -5391,6 +5440,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.interactive:
+        args.assisted = True
     if args.assisted:
         if args.ask or args.headless is True:
             parser.error("--assisted requires a visible browser and cannot be combined with --ask")
