@@ -384,7 +384,7 @@ pub(crate) fn onboarding_ssh_host_key_confirm(
     )?)
 }
 
-fn decode_base64(value: &str) -> Option<Vec<u8>> {
+pub(crate) fn decode_base64(value: &str) -> Option<Vec<u8>> {
     let unpadded = value.trim_end_matches('=');
     if value.len() - unpadded.len() > 2 || unpadded.contains('=') || unpadded.len() % 4 == 1 {
         return None;

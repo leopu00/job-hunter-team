@@ -3,6 +3,7 @@ mod auth_login;
 mod auth_store;
 mod broker_view;
 mod browsers;
+mod closer_desktop;
 mod desktop_platform;
 mod direct_chat;
 mod live_screen;
@@ -59,6 +60,7 @@ pub fn run() {
             broker_view::broker_login_view_open,
             broker_view::broker_login_view_session,
             browsers::auth_browsers,
+            closer_desktop::closer_desktop_request,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,
