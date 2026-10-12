@@ -645,6 +645,7 @@ const S := {
 	"side.team": "Csapat",
 	"side.agents": "Ügynökök",
 	"side.chat": "Chat",
+	"side.browser_desktop": "Böngésző asszisztenssel",
 	"side.notifs": "Értesítések",
 	"side.dashboard": "Dashboard",
 	"side.positions": "Pozíciók",
