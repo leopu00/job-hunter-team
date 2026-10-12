@@ -7,6 +7,8 @@ expiry, stale input lease or explicit revoke, including existing clients.
 from __future__ import annotations
 
 import contextlib
+import base64
+import stat
 import ctypes
 import json
 import os
@@ -83,10 +85,11 @@ class OwnedScreen:
         self.root = root
         self.binding = {"mission": value["mission_id"], "owner": value["owner_id"]}
         try:
+            parent_pid = os.getpid()
             self.process = subprocess.Popen(
                 [sys.executable, str(Path(__file__).resolve()), "_supervise"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                close_fds=True)
+                close_fds=True, preexec_fn=lambda: _dies_with_parent(parent_pid))
             self.process.stdin.write((json.dumps({**self.binding, "root": str(root),
                 "home": str(self.flow._jht_home()), "position_id": self.flow.position_id,
                 "ttl": min(3600, max(1, self.deadline - self.clock()))}) + "\n").encode())
@@ -96,7 +99,7 @@ class OwnedScreen:
                 raise ScreenDenied("screen_start_failed")
             self.display = ready["display"]
             self.route = ready
-            mission.update(self.flow, screen={"display": self.display,
+            mission.update(self.flow, screen={"display": self.display, "display_id": ready["display_id"],
                 "ws_port": ready["ws_port"], "password_file": str(root / "viewer-password")},
                 input_ready=False)
             return self
@@ -169,6 +172,10 @@ def _supervise():
     supervisor_pid = os.getpid()
     children = []
     vnc = web = xvfb = None
+    listener = client = None
+    frame_sequence = 0
+    frame_at = 0
+    display_id = secrets.token_hex(16)
     stop = False
     read_fd = write_fd = None
     def stopped(*_):
@@ -195,6 +202,40 @@ def _supervise():
             except OSError:
                 time.sleep(0.05)
         raise ScreenDenied("screen_vnc_timeout")
+    def allowed_actions(state):
+        from types import SimpleNamespace
+        from apply_flow import FlowCheckpoint
+        from apply_assisted import check_holds
+        import apply_gate as gate
+        actions = ["frame", "finish", "abandon"]
+        checkpoint = FlowCheckpoint.load(Path(state["checkpoint_path"]), state["position_id"], state["queue_url"])
+        consent = gate.consent_verdict()
+        verdict = gate.position_verdict(state["position_id"], db_path=state.get("db_path"))
+        if not consent.allowed or consent.context.get("mode") != "authorised":
+            return actions, consent.reason
+        if not verdict.allowed:
+            return actions, verdict.reason
+        flow = SimpleNamespace(position_id=state["position_id"], db_path=state.get("db_path"),
+                               _jht_home=lambda: Path(config["home"]))
+        reason = check_holds(flow, verdict, recovery=bool(checkpoint.submit_started))
+        if reason:
+            return actions, reason
+        if state.get("command") or checkpoint.receipt:
+            return actions, "interactive_operation_pending"
+        if checkpoint.blocked_reason == "vacancy_closed":
+            return actions, "vacancy_closed"
+        if state["phase"] == "review_wait" and not checkpoint.submit_started:
+            if mission.identifier(state.get("review_id")) and state.get("consumed_review") != state["review_id"]:
+                if state.get("can_confirm") is True:
+                    actions.append("confirm")
+                actions.append("handoff")
+        if (state["phase"] == "handoff" and checkpoint.submit_started and input_enabled
+                and state.get("input_ready") is True and time.monotonic() - last_tick <= 2):
+            actions.append("observe")
+            if client is not None and time.monotonic() - frame_at <= 2:
+                actions.append("input")
+        return actions, ""
+
     try:
         signal.signal(signal.SIGTERM, stopped)
         signal.signal(signal.SIGINT, stopped)
@@ -247,7 +288,12 @@ def _supervise():
         vnc = spawn(base + ["-viewonly"])
         ready_vnc(vnc, vnc_port)
         web = spawn(["/usr/bin/websockify", "127.0.0.1:" + str(ws_port), "127.0.0.1:" + str(vnc_port)])
-        reply({"phase": "view_only", "display": display, "ws_port": ws_port, "vnc_port": vnc_port})
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(str(root / "desktop.sock"))
+        os.chmod(root / "desktop.sock", 0o600)
+        listener.listen(2)
+        reply({"phase": "view_only", "display": display, "display_id": display_id,
+               "ws_port": ws_port, "vnc_port": vnc_port})
         input_enabled = revoked = False
         last_tick = time.monotonic()
         while not stop and time.monotonic() < deadline:
@@ -256,7 +302,77 @@ def _supervise():
                 raise ScreenDenied("screen_child_exited")
             if input_enabled and time.monotonic() - last_tick > 2:
                 raise ScreenDenied("screen_input_lease_stale")
-            if not select.select([sys.stdin.fileno()], [], [], 0.1)[0]:
+            readable = select.select([sys.stdin.fileno(), listener], [], [], 0.1)[0]
+            if not readable:
+                continue
+            if listener in readable and sys.stdin.fileno() not in readable:
+                connection, _ = listener.accept()
+                with connection:
+                    connection.settimeout(5)
+                    try:
+                        request = _frame(connection.fileno(), 1)
+                        state = owner_state()  # fresh, never the preceding loop snapshot
+                        if (request.get("mission_id"), request.get("position_id"), request.get("owner_id"), request.get("generation")) != (config["mission"], config["position_id"], config["owner"], 1):
+                            raise ScreenDenied("screen_binding_mismatch")
+                        operation = request.get("op")
+                        expected = {"op", "mission_id", "position_id", "owner_id", "generation"}
+                        if operation in {"frame", "input"}:
+                            expected.update({"display_id", "frame_sequence"})
+                            if operation == "input":
+                                if request.get("kind") == "pointer":
+                                    expected.update({"kind", "x", "y", "button", "pressed"})
+                                elif request.get("kind") == "key":
+                                    expected.update({"kind", "key", "pressed"})
+                                else:
+                                    raise ScreenDenied("screen_input_invalid")
+                        if (set(request) != expected or type(request.get("position_id")) is not int
+                                or type(request.get("generation")) is not int or request["generation"] != 1):
+                            raise ScreenDenied("screen_request_invalid")
+                        actions, gate_reason = allowed_actions(state)
+                        result = {"ok": True, "mission_id": config["mission"], "position_id": config["position_id"],
+                                  "owner_id": config["owner"], "generation": 1, "display_id": display_id,
+                                  "frame_sequence": frame_sequence, "width": 1440, "height": 1000,
+                                  "allowed_actions": actions, "gate_reason": gate_reason}
+                        if operation != "describe" and request.get("display_id") != display_id:
+                            raise ScreenDenied("screen_display_mismatch")
+                        if revoked:
+                            raise ScreenDenied("screen_revoked")
+                        if operation == "frame":
+                            if type(request.get("frame_sequence")) is not int or request["frame_sequence"] < 0:
+                                raise ScreenDenied("screen_frame_invalid")
+                            from closer_desktop_rfb import DisplayClient
+                            if client is None:
+                                client = DisplayClient(vnc_port, (root / "viewer-password").read_bytes().strip())
+                            png = client.frame()
+                            if len(png) > 8 * 1024 * 1024:
+                                raise ScreenDenied("screen_frame_oversize")
+                            frame_sequence += 1
+                            frame_at = time.monotonic()
+                            actions, gate_reason = allowed_actions(owner_state())
+                            result.update(frame_sequence=frame_sequence, png_base64=base64.b64encode(png).decode("ascii"),
+                                          allowed_actions=actions, gate_reason=gate_reason)
+                        elif operation == "input":
+                            import apply_gate as gate
+                            consent = gate.consent_verdict()
+                            if ("observe" not in actions or not input_enabled or state["phase"] != "handoff" or state.get("input_ready") is not True
+                                    or time.monotonic() - last_tick > 2 or time.monotonic() - frame_at > 2
+                                    or type(request.get("frame_sequence")) is not int
+                                    or request["frame_sequence"] != frame_sequence or client is None
+                                    or not consent.allowed or consent.context.get("mode") != "authorised"
+                                    or not gate.position_verdict(state["position_id"], db_path=state.get("db_path")).allowed):
+                                raise ScreenDenied("screen_input_denied")
+                            # Input goes through the SAME view-only/enabled RFB
+                            # server. No XTest/Page API path bypasses that barrier.
+                            client.input(request)
+                            result["accepted"] = True
+                        elif operation != "describe":
+                            raise ScreenDenied("screen_command_invalid")
+                        connection.sendall((json.dumps(result) + "\n").encode())
+                    except Exception:
+                        if client is not None:
+                            client.close(); client = None
+                        with contextlib.suppress(OSError):
+                            connection.sendall(b'{"ok":false,"error":"screen_request_denied"}\n')
                 continue
             command = _frame(sys.stdin.fileno(), 1)
             if any(command.get(k) != config[k] for k in ("mission", "owner")):
@@ -273,11 +389,16 @@ def _supervise():
                         not position.allowed):
                     raise ScreenDenied("screen_input_not_authorised")
                 # Closing the view-only server also drops every old RFB connection.
+                if client is not None:
+                    client.close(); client = None
+                frame_at = 0
                 _stop(vnc)
                 vnc = spawn(base)
                 ready_vnc(vnc, vnc_port)
                 input_enabled = True
             elif operation == "revoke" and not revoked:
+                if client is not None:
+                    client.close(); client = None
                 _stop(web); _stop(vnc)
                 revoked = True
                 input_enabled = False
@@ -292,6 +413,15 @@ def _supervise():
             last_tick = time.monotonic()
             reply({"ok": True, "op": operation})
     finally:
+        if client is not None:
+            with contextlib.suppress(Exception):
+                client.close()
+        if listener is not None:
+            with contextlib.suppress(OSError):
+                listener.close()
+        if 'root' in locals():
+            with contextlib.suppress(OSError):
+                (root / "desktop.sock").unlink()
         for fd in (read_fd, write_fd):
             if fd is not None:
                 with contextlib.suppress(OSError):

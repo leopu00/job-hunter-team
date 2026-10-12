@@ -88,3 +88,56 @@ State CLI/owner contention waits at most two seconds, then fails closed. Expiry
 revokes input immediately but releases the outer Page/locks only after nested
 flow locks unwind. Handoff recovery reads the durable submit marker, preserving
 its existing cap reservation even when it consumed the last daily slot.
+
+# Desktop block and frame contract (#281)
+
+`closer_interactive.desktop_request(request)` is the fixed entrypoint for the
+existing authenticated own-user host transport, executed in the exact selected
+container as its configured user. No request accepts a path, host, port, shell
+command, clipboard, or file transfer. IDs correlate an already admitted mission;
+this does not authenticate CHAT or solve #279. Descriptor/queued controls are not
+application outcomes. Errors are flat `{ok:false,error:code}` without input logs.
+
+Descriptor reports mission_id, position_id, owner_id, generation (1: no rebind),
+review_id, phase, input_ready, advisory allowed_actions, display_id and latest
+frame_sequence. `snapshot`/`delete_snapshot` additionally require event_id.
+Controls require the complete mission binding; confirm/handoff require review_id.
+Intermediate blockers explicitly disallow confirm and retain their actual Page;
+only handoff with current gates, finish/abandon or expiry can leave that wait.
+There is no automatic retry or next position. After possible human submission,
+observe reads a receipt/unknown and never returns to filling or a second submit.
+
+Every interactive stop captures the retained Page with secret fields hidden.
+Review itself is also a stop. PNGs and metadata are private mode 0600 in the fixed
+owner events directory, named only by random event IDs. No image enters Git,
+issues, or normal logs. The last eight events are retained; access expires after
+24 hours and expired files are purged on new events/descriptor reads. This is
+opportunistic deletion, not a background hard expiry when no process accesses
+that home. The explicit delete_snapshot operation removes just that bound event.
+Capture failure is reported as unavailable, never fabricated as a screenshot.
+
+`frame`/`input` additionally require opaque display_id and frame_sequence. Frame
+is the actual 1440x1000 private X display, including browser windows/dialogs; it is
+not the block Page screenshot. PNG responses are bounded at 8 MiB. The specific
+OwnedScreen supervisor serves a private mode 0600 Unix endpoint and uses a small
+loopback RFB raw client against its own x11vnc. Frame encoding uses stdlib PNG;
+VNC compatibility authentication uses installed libcrypto.so.3 DES functions.
+The wire formats follow RFC 6143 (https://www.rfc-editor.org/rfc/rfc6143.html);
+OpenSSL DES API: https://docs.openssl.org/3.0/man3/DES_random_key/ . These are not
+new operator authentication or an external network listener.
+
+Input requires handoff phase, durable marker/reserved cap before enable, current
+consent/position gates, current owner lease, exact display and latest frame no
+older than two seconds. Pointer coordinates/buttons and key names or single
+printable Unicode characters are bounded. No arbitrary command/clipboard exists.
+Both backend input and any existing route use the SAME RFB server: view-only
+before handoff, restarted on enable (old clients dropped), closed on revoke.
+Display helpers and supervisor have Linux parent-death signals. No XFCE, terminal,
+file manager, desktop shell, or generic runner is introduced by this source.
+Private endpoint/socket checks are within the existing shared-user technical
+boundary; this does not claim worker segregation or #279 operator authentication.
+
+New source requires independent real display/RFB input/revoke and app/backend
+integration tests, plus package dependency/mount review. AST and inert protocol
+fixtures alone are not those proofs. Runtime confinement belongs to the reviewed
+package, not to this TOML/source description. Personal display/login567 is unused.

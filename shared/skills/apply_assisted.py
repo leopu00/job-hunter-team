@@ -126,6 +126,7 @@ class AssistedSession:
             if self.interactive:
                 mission.claim(self.flow)
                 self.flow.before_submit = self._review_pause
+                self.flow.on_interactive_stop = self._capture_block
             self._eligible(recovery=bool(self._checkpoint().submit_started))
             profile_stop = self.flow._linkedin_profile_stop(self._checkpoint())
             if profile_stop is not None:
@@ -207,6 +208,13 @@ class AssistedSession:
         self._running_flow = True
         try:
             self.result = self.flow.run(page=self.page, navigate=navigate)
+            if (self.interactive and not self._deferred_close and not self._observe_pending
+                    and self.result.status not in {"applied", "dry_run"}
+                    and not self._checkpoint().submit_started):
+                # Preserve the actual blocked Page. This wait never retries form
+                # filling; only an official handoff or finish can leave it.
+                self.result = self._review_pause(self._checkpoint(), self.page,
+                                                blocked=True, reason=self.result.reason)
             if self.interactive and self._observe_pending:
                 self._observe_pending = False
                 self.flow._observe_only = True
@@ -227,11 +235,21 @@ class AssistedSession:
                                       command=None, input_ready=False, reason=self.result.reason)
         return self.status()
 
-    def _review_pause(self, checkpoint, page):
+    def _capture_block(self, checkpoint, reason, page):
+        import closer_interactive as mission
+        return mission.record_block(self.flow, page or self.page, reason,
+                                    "observe_outcome" if checkpoint.submit_started else "request_handoff")
+
+    def _review_pause(self, checkpoint, page, *, blocked=False, reason="review_required"):
         """Wait on this Page thread; only the official CLI writes mission commands."""
         import closer_interactive as mission
         self.phase = "review_wait"
-        self._publish_interactive(phase="review_wait", review_id=secrets.token_hex(16), command=None)
+        self._publish_interactive(phase="review_wait", review_id=secrets.token_hex(16),
+                                  command=None, can_confirm=not blocked, handoff_allowed=False)
+        mission.record_block(self.flow, page, reason,
+                             "request_handoff" if blocked else "review_and_confirm")
+        last_denial = None
+        handoff_allowed = False
         while True:
             self._check_live()
             operation = mission.take_command(self.flow)
@@ -243,10 +261,27 @@ class AssistedSession:
                 # Handoff saves a different checkpoint instance. Its durable
                 # marker owns the already reserved slot, including the last one.
                 self._eligible(recovery=bool(self._checkpoint().submit_started))
+                if not handoff_allowed:
+                    self._publish_interactive(handoff_allowed=True)
+                    handoff_allowed = True
             except AssistedDenied as exc:
+                if handoff_allowed:
+                    self._publish_interactive(handoff_allowed=False)
+                    handoff_allowed = False
+                if not blocked:
+                    if self.screen:
+                        self.screen.revoke()
+                    return FlowResult("denied", checkpoint.state, exc.reason)
+                # A blocked page remains visible while gates deny control.
+                # No submit marker/cap/input permission is acquired here.
+                if exc.reason != last_denial:
+                    mission.record_block(self.flow, page, exc.reason, "finish")
+                    last_denial = exc.reason
+                self._publish_interactive(phase="review_wait", command=None, can_confirm=False)
                 if self.screen:
-                    self.screen.revoke()
-                return FlowResult("denied", checkpoint.state, exc.reason)
+                    self.screen.tick()
+                page.wait_for_timeout(100)
+                continue
             if operation == "confirm":
                 self.phase = "running"
                 return None  # ordinary recipe review/final gate/cap/marker run again

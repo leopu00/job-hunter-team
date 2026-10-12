@@ -3911,6 +3911,13 @@ class ApplicationFlow:
         """
         previous = checkpoint.stop_screenshot
         checkpoint.stop_screenshot = ""
+        callback = getattr(self, "on_interactive_stop", None)
+        if callback is not None:
+            try:
+                checkpoint.stop_screenshot = callback(checkpoint, reason, page)
+            except Exception as exc:
+                LOG.error("interactive stop screenshot failed: %s", type(exc).__name__)
+            return previous
         if page is None:
             return previous
         temporary: Path | None = None
