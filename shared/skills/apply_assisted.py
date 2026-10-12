@@ -194,6 +194,7 @@ class AssistedSession:
             self.screen.check()
 
     def run(self, *, navigate=True):
+        import closer_interactive as mission
         self._check_live()
         checkpoint = self._checkpoint()
         try:
@@ -210,6 +211,8 @@ class AssistedSession:
             self.result = self.flow.run(page=self.page, navigate=navigate)
             if (self.interactive and not self._deferred_close and not self._observe_pending
                     and self.result.status not in {"applied", "dry_run"}
+                    and not mission.guard(self.flow._jht_home(), self.flow.position_id,
+                                          getattr(self.flow, "_interactive_owner", None))
                     and not self._checkpoint().submit_started):
                 # Preserve the actual blocked Page. This wait never retries form
                 # filling; only an official handoff or finish can leave it.
