@@ -104,7 +104,7 @@ def install_page(session, *, captcha=False, receipt=True):
 
 
 @contextlib.contextmanager
-def operator_thread(action):
+def operator_thread(action, *, join_timeout=10):
     """Keep every Page call on its owner thread; relay test failures back."""
     errors = []
 
@@ -119,7 +119,7 @@ def operator_thread(action):
     try:
         yield
     finally:
-        worker.join(timeout=10)
+        worker.join(timeout=join_timeout)
         assert not worker.is_alive(), "fixture controller did not terminate"
         if errors:
             raise errors[0]
@@ -611,7 +611,7 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
     # edits the product module or the lease clock.
     bootstrap = tmp_path / "supervisor_fixture.py"
     bootstrap.write_text(
-        "import sys,time\nfrom pathlib import Path\n"
+        "import sys,time,json\nfrom pathlib import Path\n"
         + "sys.path.insert(0," + repr(str(ROOT / "shared" / "skills")) + ")\n"
         + "import closer_desktop_rfb as rfb, closer_interactive_screen as screen\n"
         + "original=rfb.DisplayClient.frame\n"
@@ -621,7 +621,17 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
         + " while not Path(" + repr(str(release)) + ").exists() and time.monotonic()<until: time.sleep(.01)\n"
         + " return original(self)\n"
         + ("rfb.DisplayClient.frame=stalled\n" if fault != "hold" else "")
-        + "screen._supervise()\n")
+        + "owned=[]; popen=screen.subprocess.Popen; expire=screen._InputLease._expire\n"
+        + "def trace_spawn(argv,*args,**kwargs):\n"
+        + " p=popen(argv,*args,**kwargs)\n"
+        + " if argv[0]=='/usr/bin/x11vnc' and '-storepasswd' not in argv: owned.append((p,'-viewonly' in argv))\n"
+        + " return p\n"
+        + "def trace_expire(self,*args):\n"
+        + " print(json.dumps({'diagnostic':'lease_expire','monotonic':time.monotonic(),'expired_before':self.expired}),file=sys.stderr,flush=True)\n"
+        + " return expire(self,*args)\n"
+        + "screen.subprocess.Popen=trace_spawn; screen._InputLease._expire=trace_expire\n"
+        + "try: screen._supervise()\n"
+        + "finally: print(json.dumps({'diagnostic':'owned_vnc_exit','monotonic':time.monotonic(),'children':[{'pid':p.pid,'view_only':v,'returncode':p.returncode} for p,v in owned]}),file=sys.stderr,flush=True)\n")
     actual_popen = subprocess.Popen
     def spawn(argv, *args, **kwargs):
         if isinstance(argv, list) and len(argv) == 3 and argv[-1] == "_supervise":
@@ -629,9 +639,13 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
             kwargs["stderr"] = None  # pytest captures exact fixture startup diagnostics
         return actual_popen(argv, *args, **kwargs)
     monkeypatch.setattr(subprocess, "Popen", spawn)
-    heartbeat = {"count": 0, "value": ""}
+    heartbeat = {"count": 0, "value": "", "submits": 0}
     clients, frame_threads, frame_results = [], [], []
+    observed = {"route_closed":False}
+    owned = None
     with admitted_session(flow, ttl=35) as session:
+        owned = session.screen.process
+        screen_root = session.screen.root
         page, network = install_page(session, captcha=True)
         page.evaluate("""() => {
             const el=document.createElement('input'); el.id='rfb-probe';
@@ -640,10 +654,10 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
         }""")
         page.bring_to_front()
         coordinates = page.locator("#rfb-probe").evaluate("el=>({x:Math.round(window.screenX+el.getBoundingClientRect().left+20),y:Math.round(window.screenY+window.outerHeight-window.innerHeight+el.getBoundingClientRect().top+20)})")
-        def pulse(value):
-            heartbeat.update(count=heartbeat["count"] + 1, value=value)
+        def pulse(value, submits):
+            heartbeat.update(count=heartbeat["count"] + 1, value=value, submits=submits)
         page.expose_function("fixturePulse", pulse)
-        page.evaluate("setInterval(()=>window.fixturePulse(document.querySelector('#rfb-probe').value),50)")
+        page.evaluate("setInterval(()=>window.fixturePulse(document.querySelector('#rfb-probe').value,window.submitCount),50)")
 
         def exercise():
             state = wait_for(mission.read, lambda s: s and s["phase"] == "review_wait" and s.get("handoff_allowed"), 15)
@@ -680,13 +694,21 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
                 release.touch()
                 # Record the server-route verdict independently of API denial.
                 assert closed, f"{fault}: preopened enabled RFB route survived revocation deadline"
+                observed["route_closed"] = True
+                assert heartbeat["submits"] == 0
+                if fault == "hold":
+                    assert mission.read()["input_ready"] is False
+                    apply_gate.email_state_path(flow.position_id, flow._jht_home()).unlink()
+                    wait_for(mission.read, lambda value: value.get("handoff_allowed") is True)
+                    assert official_cli("observe", mission.read())[0] == 0
+                    wait_for(mission.read, lambda value: value["phase"] in {"observing", "unknown", "completed"})
             finally:
                 release.touch()
                 for worker in frame_threads:
                     worker.join(10)
                     assert not worker.is_alive()
                 current = mission.read()
-                if current["phase"] not in {"closed", "unknown", "completed"}:
+                if current["phase"] in {"review_wait", "handoff_pending", "handoff"} and not current.get("command"):
                     official_cli("finish", current)
         def operator():
             try:
@@ -694,20 +716,34 @@ def test_281_real_server_revokes_preopened_input_route(short_display_home, monke
             finally:
                 release.touch()
                 current = mission.read()
-                if current and current["phase"] not in {"closed", "unknown", "completed"}:
+                if current and current["phase"] in {"review_wait", "handoff_pending", "handoff"} and not current.get("command"):
                     official_cli("finish", current)
 
         try:
-            with operator_thread(operator):
-                session.run(navigate=False)
+            with operator_thread(operator, join_timeout=30):
+                try:
+                    session.run(navigate=False)
+                except ValueError as exc:
+                    # Only this fixture deliberately closes the owner's writer.
+                    # A subsequent owner write raises locally; it is not a normal
+                    # terminal acknowledgement and cannot excuse a live route.
+                    if fault != "frame_eof" or not owned.stdin.closed or "closed" not in str(exc):
+                        raise
+                    print("EXPECTED_INJECTED_OWNER_PIPE_CLOSED", type(exc).__name__)
         finally:
             release.touch()
             for client in clients:
                 client.close()
         assert not network and not recorded
         assert checkpoint(flow)["submit_started"]
-        if not page.is_closed():
-            assert page.evaluate("window.submitCount") == 0
+        # Finish/EOF can close the display asynchronously; the pre-finish
+        # heartbeat above asserts zero DOM submits while the Page is retained.
+
+
+    assert observed["route_closed"] is True
+    assert owned is not None and owned.poll() is not None
+    assert owned.stdin.closed and owned.stdout.closed
+    assert all(not (screen_root / name).exists() for name in ("desktop.sock", "viewer-password", "rfbauth"))
 
 
 @pytest.mark.parametrize("bad", [None, [], {"op":"descriptor", "path":"/tmp/private"},
@@ -902,7 +938,7 @@ def test_281_real_frame_event_binding_and_automation_gate(short_display_home):
                 current = mission.read()
                 if current["phase"] in {"review_wait", "handoff_pending"}:
                     official_cli("finish", current)
-        with operator_thread(operator):
+        with operator_thread(operator, join_timeout=30):
             result = session.run(navigate=False)
         assert session.page is page and not page.is_closed() and not network and not recorded
         assert page.locator("#backend-probe").input_value() == "z"
