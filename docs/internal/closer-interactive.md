@@ -77,12 +77,22 @@ the pending handoff and current holds before each renewal, and never extends
 the two-second lease or its five-second readiness deadline. Heartbeat replies
 cannot substitute for an enable/revoke acknowledgement. EOF, invalid heartbeat
 or gate failure still closes the route; no frame request renews the deadline.
+Readiness retains one TCP connection while collecting the complete 12-byte
+RFB banner, with short select intervals for those lease checks. It does not
+equate TCP accept with readiness or repeatedly abort a delayed greeting after
+100 ms. The global readiness deadline remains five seconds.
 
 After handoff, observe first revokes the input route and then only reads a
 receipt or preserves an unknown outcome on the retained Page. It cannot run
 another submit or the verification-code click path. No checkpoint, cap or
 authorisation is reset. Finish/abandon/owner exit preserves possible-submit
 uncertainty and closes the resources.
+
+If owned lease EOF closes the display during a Page wait, only a closed owned
+pipe or an exited owned supervisor permits classifying the typed browser/screen
+error as owner loss. The durable checkpoint is read unchanged; the result stays
+blocked/unknown and cleanup is deferred until nested locks unwind. Browser
+errors with a live controller, expiry and eligibility denials are not suppressed.
 
 ## Validation boundary
 

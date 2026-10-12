@@ -195,6 +195,8 @@ class AssistedSession:
 
     def run(self, *, navigate=True):
         import closer_interactive as mission
+        from closer_interactive_screen import ScreenDenied
+        from playwright.sync_api import Error as PlaywrightError
         self._check_live()
         checkpoint = self._checkpoint()
         try:
@@ -222,6 +224,18 @@ class AssistedSession:
                 self._observe_pending = False
                 self.flow._observe_only = True
                 self.result = self.flow.run(page=self.page, navigate=False)
+        except (PlaywrightError, ScreenDenied, AssistedDenied) as exc:
+            # EOF of the owned supervisor lease can close Xvfb while a Page
+            # wait is in flight. Only an independently lost owned handle/pipe
+            # permits this classification. A browser error with a live screen,
+            # an expiry or an eligibility denial still propagates unchanged.
+            lost = getattr(self.screen, "transport_lost", lambda: False)
+            if (not self.interactive or not lost() or
+                    (isinstance(exc, AssistedDenied) and exc.reason != "assisted_disconnected")):
+                raise
+            durable = self._checkpoint()
+            self.result = FlowResult("blocked_human", durable.state, "interactive_owner_lost")
+            self.close("owner_lost")  # deferred until the nested locks unwind
         finally:
             self._running_flow = False
             if self._deferred_close is not None:
