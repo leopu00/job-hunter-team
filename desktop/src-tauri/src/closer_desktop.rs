@@ -515,6 +515,58 @@ fn execute(
     public_reply(&output, &request)
 }
 
+fn parse_assistance_host(value: Value) -> Result<ExecutionHost, &'static str> {
+    let host: ExecutionHost = serde_json::from_value(value.clone()).map_err(|_| "invalid_host")?;
+    if !matches!(host, ExecutionHost::Vps { .. })
+        || serde_json::to_value(&host).map_err(|_| "invalid_host")? != value
+    {
+        return Err("invalid_host");
+    }
+    Ok(host)
+}
+
+fn register_assistance_with(
+    host: &ExecutionHost,
+    validate: impl FnOnce(&ExecutionHost) -> Result<(), &'static str>,
+    persist: impl FnOnce(&ExecutionHost) -> Result<(), &'static str>,
+) -> Result<Value, &'static str> {
+    validate(host)?;
+    persist(host)?;
+    // This records configuration only: neither remote nor team readiness.
+    Ok(json!({"ok":true,"registered":true,"assistance_ready":false}))
+}
+
+#[tauri::command]
+pub(crate) async fn closer_desktop_register_host(app: tauri::AppHandle, host: Value) -> Value {
+    let host = match parse_assistance_host(host) {
+        Ok(host) => host,
+        Err(code) => return failure(code),
+    };
+    let scopes = match app.try_state::<AccountScopeState>() {
+        Some(value) => value.inner().clone(),
+        None => return failure("account_scope_required"),
+    };
+    let expected = match scopes.active() {
+        Ok(scope) => scope,
+        Err(code) => return failure(code),
+    };
+    match tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scopes.lock_expected(&expected)?;
+        let _flight = IN_FLIGHT.try_lock().map_err(|_| "browser_busy")?;
+        register_assistance_with(
+            &host,
+            |host| runtime_host::validate_host(&app, host).map(|_| ()),
+            |host| direct_chat::register_assistance_host(&app, &expected, host),
+        )
+    })
+    .await
+    {
+        Ok(Ok(reply)) => reply,
+        Ok(Err(code)) => failure(code),
+        Err(_) => failure("storage_unavailable"),
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn closer_desktop_request(app: tauri::AppHandle, request: Value) -> Value {
     let request = match parse_request(request) {

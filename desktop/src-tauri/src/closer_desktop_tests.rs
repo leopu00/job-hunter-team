@@ -256,3 +256,80 @@ fn process_reply_overflow_and_deadline_never_return_partial_json() {
         Err("browser_response_too_large")
     );
 }
+
+#[test]
+fn assistance_registration_rejects_local_unknown_and_transport_fields() {
+    let valid = serde_json::to_value(host()).unwrap();
+    assert_eq!(parse_assistance_host(valid.clone()).unwrap(), host());
+    for value in [
+        json!(null),
+        json!([]),
+        json!({"kind":"local"}),
+        json!({"kind":"vps"}),
+    ] {
+        assert!(parse_assistance_host(value).is_err());
+    }
+    for field in [
+        "container_id",
+        "path",
+        "runtime",
+        "scope",
+        "argv",
+        "registered",
+    ] {
+        let mut value = valid.clone();
+        value[field] = json!("spoof");
+        assert!(parse_assistance_host(value).is_err());
+    }
+    for (key, value) in [
+        ("port", json!(true)),
+        ("port", json!(65536)),
+        ("keyPath", json!(null)),
+    ] {
+        let mut invalid = valid.clone();
+        invalid[key] = value;
+        assert!(parse_assistance_host(invalid).is_err());
+    }
+}
+
+#[test]
+fn assistance_registration_validates_before_any_write_and_never_claims_ready() {
+    use std::cell::Cell;
+    for code in ["host_key_missing", "host_key_mismatch", "invalid_key_path"] {
+        let writes = Cell::new(0);
+        let result = register_assistance_with(
+            &host(),
+            |_| Err(code),
+            |_| {
+                writes.set(1);
+                Ok(())
+            },
+        );
+        assert_eq!(result, Err(code));
+        assert_eq!(writes.get(), 0);
+    }
+    assert_eq!(
+        register_assistance_with(&host(), |_| Ok(()), |_| Err("browser_connection_changed")),
+        Err("browser_connection_changed")
+    );
+    let validations = Cell::new(0);
+    let writes = Cell::new(0);
+    let result = register_assistance_with(
+        &host(),
+        |_| {
+            validations.set(1);
+            Ok(())
+        },
+        |_| {
+            assert_eq!(validations.get(), 1);
+            writes.set(writes.get() + 1);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(writes.get(), 1);
+    assert_eq!(
+        result,
+        json!({"ok":true,"registered":true,"assistance_ready":false})
+    );
+}
