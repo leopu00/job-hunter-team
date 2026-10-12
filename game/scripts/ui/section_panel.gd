@@ -4368,8 +4368,8 @@ func _connect_vps() -> void:
 		return
 	var user := _vps_user.text.strip_edges()
 	BackendBus.save_vps_config(ip, key, user)
-	BackendBus.set_backend(VpsBackend.new(),
-			{"ip": ip, "key_path": key, "user": user})
+	BackendBus.set_backend(VpsBackend.new(), BackendBus.vps_config_override(
+			BackendBus.load_vps_config(), {"ip": ip, "key_path": key, "user": user}))
 
 func _on_vps_state(state: int, detail: String) -> void:
 	if not is_instance_valid(_vps_state_lbl):

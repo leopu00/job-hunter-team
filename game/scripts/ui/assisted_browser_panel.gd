@@ -64,7 +64,7 @@ func _ready() -> void:
 		row.add_child(button)
 		_buttons[operation] = button
 	move_child(row, 3)
-	_notice = _label("Private image • retained by your team for at most 24 hours / 8 events.\nHuman control requires an official handoff; chat is not a confirmation.", 14)
+	_notice = _label("Private images expire after 24 hours • up to 8 events • delete anytime.\nExpired files are purged opportunistically.\nHuman control requires an official handoff; chat is not a confirmation.", 14)
 	_timer = Timer.new()
 	_timer.wait_time = 0.5
 	_timer.timeout.connect(_poll)
@@ -213,16 +213,18 @@ func _apply_descriptor(value: Dictionary) -> void:
 	var block: Dictionary = value.get("block", {})
 	_reason.text = "Reason: " + str(block.get("reason", "—")).left(300)
 	_action.text = "Next action: " + str(block.get("action", "—")).left(500)
+	if not _allowed("frame"):
+		_clear_desktop()
 	var event_id := str(block.get("event_id", ""))
-	if _allowed("snapshot") and bool(block.get("screenshot_available", false)) and event_id != "" and event_id != _event:
+	var snapshot_available := _allowed("snapshot") and bool(block.get("screenshot_available", false)) and event_id != ""
+	if not snapshot_available or event_id != _event:
+		_image.texture = null
+		_event = ""
+	if snapshot_available and event_id != _event:
 		_event = event_id
 		var body := _bound("snapshot")
 		body["event_id"] = event_id
 		_send(body)
-	elif not _allowed("frame"):
-		_clear_desktop()
-		_image.texture = null
-		_event = ""
 
 static func _decode_png(encoded: String) -> Image:
 	if encoded.length() % 4 != 0 or encoded.length() > MAX_PNG * 4 / 3 + 8:
@@ -279,11 +281,15 @@ func _poll() -> void:
 		return
 	if not _input_queue.is_empty():
 		if _human_ready():
-			var body := _bound("input")
-			body.merge(_input_queue.pop_front())
-			body["frame_sequence"] = _frame_sequence
-			_send(body)
-			return
+			var body: Dictionary = _input_queue.pop_front()
+			if _identity(body) != _identity(_mission) or body.get("display_id") != _mission.get("display_id") or body.get("frame_sequence") != _frame_sequence:
+				# Never replay an event against pixels it was not created on.
+				_input_queue.clear()
+				_held_keys.clear()
+				_next_frame = true
+			else:
+				_send(body)
+				return
 		if _mission.get("phase") != "handoff" or not bool(_mission.get("input_ready", false)):
 			_input_queue.clear()
 	if (_next_frame or not _input_queue.is_empty()) and not str(_mission.get("display_id", "")).is_empty() and _allowed("frame"):
@@ -338,6 +344,9 @@ func _desktop_input(event: InputEvent) -> void:
 
 func _enqueue_input(body: Dictionary) -> void:
 	if _input_queue.size() < 64:
-		_input_queue.append(body)
+		var observed := _bound("input")
+		observed.merge(body)
+		observed["frame_sequence"] = _frame_sequence
+		_input_queue.append(observed)
 		if _pending == 0:
 			_poll()

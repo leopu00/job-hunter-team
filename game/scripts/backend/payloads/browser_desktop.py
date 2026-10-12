@@ -5,7 +5,8 @@ import re
 import subprocess
 
 REQUEST = json.loads(base64.b64decode('%s', validate=True))
-PINNED_CID = base64.b64decode('%s', validate=True).decode('ascii')
+RUNTIME = json.loads(base64.b64decode('%s', validate=True))
+HANDSHAKE = %s
 OPERATIONS = {'descriptor', 'snapshot', 'delete_snapshot', 'confirm', 'handoff',
               'observe', 'finish', 'abandon', 'frame', 'input'}
 KEYS = {'op', 'mission_id', 'position_id', 'owner_id', 'generation', 'review_id', 'event_id', 'display_id', 'frame_sequence',
@@ -27,20 +28,33 @@ def bridge():
                 raise ValueError('browser_binding_invalid')
         if type(REQUEST.get('position_id')) is not int or REQUEST['position_id'] <= 0 or type(REQUEST.get('generation')) is not int or REQUEST['generation'] != 1:
             raise ValueError('browser_binding_invalid')
-    if PINNED_CID and not re.fullmatch(r'[0-9a-f]{64}', PINNED_CID):
-        raise ValueError('browser_container_invalid')
-    if not PINNED_CID and REQUEST['op'] != 'descriptor':
-        raise ValueError('browser_descriptor_required')
-    target = PINNED_CID or 'jht'  # selector is read-only and resolved once
+    if not isinstance(RUNTIME, dict) or set(RUNTIME) != {'container_id', 'oci_revision', 'image_id', 'digest'}:
+        raise ValueError('browser_runtime_binding_required')
+    patterns = {'container_id': r'[0-9a-f]{64}', 'oci_revision': r'[0-9a-f]{40}',
+                'image_id': r'sha256:[0-9a-f]{64}', 'digest': r'sha256:[0-9a-f]{64}'}
+    if any(not isinstance(RUNTIME[k], str) or not re.fullmatch(patterns[k], RUNTIME[k]) for k in patterns):
+        raise ValueError('browser_runtime_binding_invalid')
+    cid = RUNTIME['container_id']
     probe = subprocess.run(['docker', 'inspect', '--type', 'container', '--format',
-                            '{"Id":{{json .Id}},"Running":{{json .State.Running}}}', target],
+                            '{"Id":{{json .Id}},"Running":{{json .State.Running}},"Image":{{json .Image}},'
+                            '"Revision":{{json (index .Config.Labels "org.opencontainers.image.revision")}}}', cid],
                            capture_output=True, timeout=8, check=True)
     info = json.loads(probe.stdout)
-    cid = info['Id']
-    if not re.fullmatch(r'[0-9a-f]{64}', cid) or (PINNED_CID and cid != PINNED_CID):
+    if info.get('Id') != cid or info.get('Image') != RUNTIME['image_id'] or info.get('Revision') != RUNTIME['oci_revision']:
         raise ValueError('browser_container_mismatch')
     if info.get('Running') is not True:
         raise ValueError('browser_container_stopped')
+    image = subprocess.run(['docker', 'image', 'inspect', '--format',
+                            '{"Id":{{json .Id}},"Digests":{{json .RepoDigests}},'
+                            '"Revision":{{json (index .Config.Labels "org.opencontainers.image.revision")}}}', RUNTIME['image_id']],
+                           capture_output=True, timeout=8, check=True)
+    metadata = json.loads(image.stdout)
+    digests = metadata.get('Digests')
+    if (metadata.get('Id') != RUNTIME['image_id'] or metadata.get('Revision') != RUNTIME['oci_revision']
+            or not isinstance(digests, list) or not any(isinstance(d, str) and d.endswith('@' + RUNTIME['digest']) for d in digests)):
+        raise ValueError('browser_image_mismatch')
+    if HANDSHAKE:
+        return {'cid': cid, 'reply': {'ok': True}}
     result = subprocess.run(['docker', 'exec', '--user', '1001', '-i', cid,
                              '/usr/bin/python3', '-I', '-B', '-c', ENTRY],
                             input=json.dumps(REQUEST).encode(), capture_output=True,
