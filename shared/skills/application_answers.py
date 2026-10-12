@@ -60,6 +60,7 @@ from typing import Any, Callable, Mapping, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import apply_gate  # noqa: E402
+from closer_interactive import ordinary_wake  # noqa: E402
 
 SOURCE_ACTION = "closer_application_answer"
 TELEGRAM_ORIGIN = "user_telegram"
@@ -1327,6 +1328,7 @@ class IdleWatch:
         return idle
 
 
+@ordinary_wake
 def wake_idle_closer(
     conn: sqlite3.Connection,
     *,
@@ -1343,6 +1345,9 @@ def wake_idle_closer(
     message no CLOSER took gives the claim back.
     """
     import _db
+    from closer_interactive import guard
+    if guard():
+        return []
 
     now = now or datetime.now(timezone.utc)
     sessions = idle_sessions()
@@ -1393,6 +1398,7 @@ def wake_message(wake: Wake) -> str:
     )
 
 
+@ordinary_wake
 def wake_closer(
     conn: sqlite3.Connection,
     profile: Mapping[str, Any],
@@ -1410,6 +1416,9 @@ def wake_closer(
     message: two bridges, or a replay, cannot both send it.
     """
     import _db
+    from closer_interactive import guard
+    if guard():
+        return []
 
     _db._migrate_closer_wakes(conn)
     sent: list[Wake] = []

@@ -79,7 +79,8 @@ def check_holds(flow, verdict, *, recovery=False):
 
 
 class AssistedSession:
-    def __init__(self, flow, ttl=1800, eligibility_checker=check_holds, clock=time.monotonic):
+    def __init__(self, flow, ttl=1800, eligibility_checker=check_holds, clock=time.monotonic,
+                 interactive=False):
         if isinstance(ttl, bool) or not 1 <= ttl <= 3600:
             raise ValueError("assisted_ttl_invalid")
         self.flow = flow
@@ -91,6 +92,14 @@ class AssistedSession:
         self.page = None
         self.closed_reason = ""
         self._stack = contextlib.ExitStack()
+        self.interactive = interactive
+        self.screen = None
+        self._observe_pending = False
+
+    def _publish_interactive(self, **changes):
+        if self.interactive:
+            import closer_interactive as mission
+            return mission.update(self.flow, **changes)
 
     def _checkpoint(self):
         return FlowCheckpoint.load(self.flow.checkpoint_path, self.flow.position_id,
@@ -109,7 +118,12 @@ class AssistedSession:
 
     def __enter__(self):
         try:
+            import closer_interactive as mission
+            self._stack.enter_context(mission.work_lock(self.flow._jht_home(), owner=self.flow))
             self._stack.enter_context(position_lock(self.flow._jht_home(), self.flow.position_id, owner=self.flow))
+            if self.interactive:
+                mission.claim(self.flow)
+                self.flow.before_submit = self._review_pause
             self._eligible(recovery=bool(self._checkpoint().submit_started))
             profile_stop = self.flow._linkedin_profile_stop(self._checkpoint())
             if profile_stop is not None:
@@ -118,10 +132,16 @@ class AssistedSession:
             self.flow._playwright_driver = None
             self._stack.callback(setattr, self.flow, "_assisted_owner", False)
             self._stack.callback(setattr, self.flow, "_playwright_driver", None)
+            if self.interactive:
+                from closer_interactive_screen import OwnedScreen
+                self.screen = self._stack.enter_context(OwnedScreen(self.flow, self.deadline, self.clock))
+                self.flow._interactive_display = self.screen.display
             self.page = self._stack.enter_context(self.flow._managed_page())
             return self
         except BaseException:
             self._stack.close()
+            if self.interactive and getattr(self.flow, '_interactive_owner', None):
+                self._publish_interactive(phase="closed", reason="owner_start_failed")
             raise
 
     def __exit__(self, *_exc):
@@ -132,7 +152,14 @@ class AssistedSession:
             return self.status()
         self.phase = "closed"
         self.closed_reason = reason
-        self._stack.close()
+        try:
+            if self.interactive:
+                checkpoint = self._checkpoint()
+                self._publish_interactive(phase="completed" if checkpoint.receipt else
+                                          "unknown" if checkpoint.submit_started else "closed",
+                                          reason=reason, command=None, input_ready=False)
+        finally:
+            self._stack.close()
         return self.status()
 
     def status(self):
@@ -152,6 +179,8 @@ class AssistedSession:
         if self.page is None or self.page.is_closed():
             self.close("disconnected")
             raise AssistedDenied("assisted_disconnected")
+        if self.screen:
+            self.screen.check()
 
     def run(self, *, navigate=True):
         self._check_live()
@@ -166,8 +195,55 @@ class AssistedSession:
         # With submit_started (including handoff), run observes only receipts.
         self.phase = "running"
         self.result = self.flow.run(page=self.page, navigate=navigate)
+        if self.interactive and self._observe_pending:
+            self._observe_pending = False
+            self.flow._observe_only = True
+            self.result = self.flow.run(page=self.page, navigate=False)
         self.phase = "completed" if self.result.status in {"applied", "dry_run"} else "blocked"
+        if self.interactive:
+            if self.screen:
+                self.screen.revoke()
+            self._publish_interactive(phase="completed" if self.result.status == "applied" else
+                                      "unknown" if self._checkpoint().submit_started else "closed",
+                                      command=None, input_ready=False, reason=self.result.reason)
         return self.status()
+
+    def _review_pause(self, checkpoint, page):
+        """Wait on this Page thread; only the official CLI writes mission commands."""
+        import closer_interactive as mission
+        self.phase = "review_wait"
+        self._publish_interactive(phase="review_wait", review_id=secrets.token_hex(16), command=None)
+        while True:
+            self._check_live()
+            operation = mission.take_command(self.flow)
+            if operation in {"finish", "abandon"}:
+                if self.screen:
+                    self.screen.revoke()
+                return FlowResult("blocked_human", checkpoint.state, "interactive_" + operation)
+            try:
+                self._eligible(recovery=bool(checkpoint.submit_started))
+            except AssistedDenied as exc:
+                if self.screen:
+                    self.screen.revoke()
+                return FlowResult("denied", checkpoint.state, exc.reason)
+            if operation == "confirm":
+                self.phase = "running"
+                return None  # ordinary recipe review/final gate/cap/marker run again
+            if operation == "handoff":
+                self.phase = "blocked"
+                self._handoff()
+                if self.screen:
+                    self.screen.enable()
+                self._publish_interactive(phase="handoff", input_ready=True)
+            elif operation == "observe":
+                if self.screen:
+                    self.screen.revoke()
+                self._publish_interactive(phase="observing", input_ready=False)
+                self._observe_pending = True
+                return FlowResult("blocked_human", "submit", "interactive_observe_pending")
+            if self.screen:
+                self.screen.tick()
+            page.wait_for_timeout(100)
 
     def _handoff(self):
         self._check_live()
@@ -229,6 +305,8 @@ class AssistedSession:
             if not isinstance(payload, dict):
                 raise AssistedDenied("assisted_command_invalid")
             op = payload.get("op")
+            if self.interactive and op != "status":
+                raise AssistedDenied("interactive_official_cli_required")
             if op in {"finish", "abandon"}:
                 return self.close("finished" if op == "finish" else "abandoned")
             self._check_live()
@@ -365,7 +443,8 @@ def _serve(config_path):
         signal.signal(signal.SIGINT, stopped)
         signal.signal(signal.SIGALRM, stopped)
         signal.setitimer(signal.ITIMER_REAL, config["assisted_ttl"])
-        with AssistedSession(flow, ttl=config["assisted_ttl"]) as session:
+        with AssistedSession(flow, ttl=config["assisted_ttl"],
+                             interactive=config.get("interactive", False)) as session:
             if stop_requested:
                 raise OwnerStopped()
             sock_path = root / "control.sock"
@@ -380,6 +459,9 @@ def _serve(config_path):
             publish()
             state = session.run(navigate=True)
             publish()
+            if session.interactive:
+                session.close("mission_finished")
+                return
             if session.phase == "blocked":
                 # A live assisted stop must be visible now, not only deferred
                 # to the next worker round.  Never include page contents/URLs.

@@ -511,6 +511,7 @@ def apply_verdict(
     config_path: Path | None = None,
     conn: sqlite3.Connection | None = None,
     db_path: str | None = None,
+    interactive_owner: tuple[str, str] | None = None,
 ) -> Verdict:
     """Il verdetto completo: consenso E autorizzazione, in quest'ordine.
 
@@ -520,6 +521,14 @@ def apply_verdict(
     `position_id` accanto dice a chi legge il log che qualcosa lo ha spawnato
     lo stesso — che è un'informazione diversa da «posizione non flaggata».
     """
+    try:
+        from closer_interactive import guard
+    except ImportError:
+        from shared.skills.closer_interactive import guard
+    reason = guard(position_id=position_id, interactive_owner=interactive_owner)
+    if reason:
+        return Verdict(False, reason, "The single interactive mission owns the Closer.")
+
     c = consent_verdict(config, config_path)
     if not c.allowed:
         ctx = dict(c.context)
@@ -561,6 +570,14 @@ def toggle_verdict(position_id: int, requested: bool, conn: sqlite3.Connection) 
     Il chiamante tiene la transazione: il verdetto e la UPDATE devono vedere
     la stessa riga.
     """
+    if requested:
+        try:
+            from closer_interactive import guard
+        except ImportError:
+            from shared.skills.closer_interactive import guard
+        reason = guard()
+        if reason:
+            return Verdict(False, reason, "Use the already admitted single mission; no ordinary flag or wake.")
     try:
         pid = int(position_id)
     except (TypeError, ValueError):
@@ -1188,6 +1205,15 @@ def application_queue(
         "positions": [],
         "held": [],
     }
+
+    try:
+        from closer_interactive import guard
+    except ImportError:
+        from shared.skills.closer_interactive import guard
+    reason = guard(jht_home)
+    if reason:
+        out.update(reason=reason, detail="The ordinary queue is reserved by a single interactive mission.")
+        return out
 
     consent = consent_verdict(config, config_path)
     if not consent.allowed:

@@ -712,6 +712,11 @@ if [ "$ROLE" = "closer" ]; then
     echo "  application gate that cannot answer answers no." >&2
     exit 1
   fi
+  INTERACTIVE_GATE="$(dirname "$APPLY_GATE")/closer_interactive.py"
+  if [ ! -f "$INTERACTIVE_GATE" ] || ! python3 "$INTERACTIVE_GATE" ordinary-allowed; then
+    echo "Refusing ordinary Closer spawn/respawn: interactive mission reserved or unreadable." >&2
+    exit 1
+  fi
   if ! python3 "$APPLY_GATE" consent; then
     echo "Refusing to start closer: the user has not consented to auto-apply." >&2
     echo "  Set applications.auto_apply.enabled = true in jht.config.json." >&2
