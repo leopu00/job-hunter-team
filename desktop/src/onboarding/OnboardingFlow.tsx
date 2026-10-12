@@ -355,6 +355,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!localRuntimeSupported) {
@@ -363,7 +364,14 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   }, [localRuntimeSupported]);
 
   useLayoutEffect(() => {
-    headingRef.current?.focus();
+    // Focus must not scroll the heading into the bottom of the old viewport.
+    // Reset the real scroll owners, including the document on the short window.
+    headingRef.current?.focus({ preventScroll: true });
+    for (let node: HTMLElement | null = shellRef.current; node; node = node.parentElement) {
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step]);
 
   if (runtime.status !== "collecting") return <RuntimeView host={host} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
@@ -393,7 +401,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   }
 
   return (
-    <main className="onboarding-shell">
+    <main className="onboarding-shell" ref={shellRef} lang={locale}>
       <header className="onboarding-header">
         <div className="onboarding-brand" aria-label="Job Hunter Team"><span className="onboarding-brand__mark" aria-hidden="true">J</span><span>Job Hunter Team</span></div>
         <span className="onboarding-session">
