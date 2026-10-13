@@ -343,7 +343,7 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -460,6 +460,11 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
+          {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-panel" aria-label={t.existingTeam.title}>
+            <h3>{t.existingTeam.title}</h3>
+            <p>{t.existingTeam.description}</p>
+            <button type="button" className="onboarding-secondary" onClick={() => onConnectExistingTeam(host)}>{t.existingTeam.verifyVps}</button>
+          </section>}
           <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />
           {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
           </>}

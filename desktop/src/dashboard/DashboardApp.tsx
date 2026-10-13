@@ -25,7 +25,7 @@ import {
   readLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
-import type { ExistingTeamConnectionResult } from "../lib/existing-team";
+import type { ExistingTeamConnectionResult, ExistingTeamVpsHost } from "../lib/existing-team";
 import {
   isOnboardingAssistantReachable,
   isOnboardingRuntimeReady,
@@ -346,6 +346,7 @@ export default function DashboardApp() {
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
+  const [manualExistingTeam, setManualExistingTeam] = useState<{ identityKey: string; host: ExistingTeamVpsHost } | null>(null);
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
@@ -1031,6 +1032,7 @@ export default function DashboardApp() {
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
+    if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const chat = await reconnectDirectChat();
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -1179,11 +1181,18 @@ export default function DashboardApp() {
         </main>
       );
     }
-    if (gate.existingTeam && existingTeamDismissedIdentityKey !== identityKey) {
+    const manualExistingHost = gate.account.identity === "local" && manualExistingTeam?.identityKey === identityKey
+      ? manualExistingTeam.host : undefined;
+    if ((gate.existingTeam && existingTeamDismissedIdentityKey !== identityKey) || manualExistingHost) {
       return (
         <ExistingTeamConnectModal
-          teamId={gate.existingTeam.teamId}
-          onCancel={() => setExistingTeamDismissedIdentityKey(identityKey)}
+          key={identityKey}
+          teamId={gate.existingTeam?.teamId}
+          initialHost={manualExistingHost}
+          onCancel={() => {
+            setExistingTeamDismissedIdentityKey(identityKey);
+            setManualExistingTeam(null);
+          }}
           onConnected={connectExistingTeam}
         />
       );
@@ -1192,6 +1201,9 @@ export default function DashboardApp() {
       <OnboardingFlow
         key={`${identityKey}:${onboardingUiVersion}`}
         account={gate.account}
+        onConnectExistingTeam={gate.account.identity === "local" ? (host) => {
+          if (activeIdentityKeyRef.current === identityKey) setManualExistingTeam({ identityKey, host });
+        } : undefined}
         platform={platform ?? "other"}
         runtime={gate.runtime}
         activity={activity}

@@ -13,6 +13,7 @@ import {
   type ExistingTeamVpsHost,
   type SshHostKeyProbe,
 } from "../lib/existing-team";
+import { EXISTING_TEAM_ID_TEXT } from "./existing-team-id.i18n";
 import { OnboardingArtwork } from "./OnboardingArtwork";
 import "./existing-team-connect.css";
 
@@ -20,7 +21,8 @@ type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "failed";
 type FailedOperation = "probe" | "attach" | "notify";
 
 export interface ExistingTeamConnectModalProps {
-  teamId: string;
+  teamId?: string;
+  initialHost?: ExistingTeamVpsHost;
   onCancel: () => void;
   onConnected: (result: ExistingTeamConnectionResult) => Promise<void>;
   bridge?: ExistingTeamBridge;
@@ -53,6 +55,7 @@ function focusable(dialog: HTMLElement): HTMLElement[] {
 
 export default function ExistingTeamConnectModal({
   teamId,
+  initialHost,
   onCancel,
   onConnected,
   bridge = existingTeamBridge,
@@ -63,13 +66,16 @@ export default function ExistingTeamConnectModal({
   const dialogRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const resultRef = useRef<ExistingTeamConnectionResult | null>(null);
-  const [host, setHost] = useState<ExistingTeamVpsHost>({
+  const [host, setHost] = useState<ExistingTeamVpsHost>(initialHost ?? {
     kind: "vps",
     address: "",
     user: "root",
     port: 22,
     keyPath: "",
   });
+  const [enteredTeamId, setEnteredTeamId] = useState("");
+  const expectedTeamId = teamId ?? enteredTeamId.trim();
+  const teamIdValid = /^[A-Za-z0-9_-]{16,128}$/.test(expectedTeamId);
   const [stage, setStage] = useState<ModalStage>("fields");
   const [probe, setProbe] = useState<SshHostKeyProbe | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -111,7 +117,7 @@ export default function ExistingTeamConnectModal({
   }
 
   async function runProbe() {
-    if (!validHost(host) || stage === "probing") return;
+    if (!validHost(host) || !teamIdValid || stage === "probing") return;
     setStage("probing");
     setErrorCode(null);
     setFailedOperation(null);
@@ -137,8 +143,8 @@ export default function ExistingTeamConnectModal({
   }
 
   async function attach() {
-    if (!probe || stage === "attaching") return;
-    const request = { teamId, host: cleanHost(host) };
+    if (!probe || !teamIdValid || stage === "attaching") return;
+    const request = { teamId: expectedTeamId, host: cleanHost(host) };
     setStage("attaching");
     setErrorCode(null);
     setFailedOperation(null);
@@ -201,6 +207,7 @@ export default function ExistingTeamConnectModal({
 
         {(stage === "fields" || stage === "probing") && (
           <form className="existing-team-modal__form" onSubmit={(event) => { event.preventDefault(); void runProbe(); }}>
+            {!teamId && <label><span>{EXISTING_TEAM_ID_TEXT[appLocale()].label}</span><input autoComplete="off" value={enteredTeamId} onChange={(event) => setEnteredTeamId(event.target.value)} disabled={busy} required /><small>{EXISTING_TEAM_ID_TEXT[appLocale()].hint}</small></label>}
             <label><span>{t.existingTeam.host}</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
             <div className="existing-team-modal__row">
               <label><span>{t.sshUser}</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
@@ -209,7 +216,7 @@ export default function ExistingTeamConnectModal({
             <SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={busy} />
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={onCancel} disabled={busy}>{t.existingTeam.newTeam}</button>
-              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || busy}>{stage === "probing" ? t.existingTeam.verifyingIdentity : t.existingTeam.verifyVps}</button>
+              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || !teamIdValid || busy}>{stage === "probing" ? t.existingTeam.verifyingIdentity : t.existingTeam.verifyVps}</button>
             </div>
           </form>
         )}

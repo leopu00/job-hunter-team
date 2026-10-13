@@ -158,6 +158,8 @@ export interface OnboardingFlowProps {
   runtime: OnboardingRuntimeState;
   activity?: OnboardingActivityState | null;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
+  /** Explicit existing VPS connection; never prepares a new team. */
+  onConnectExistingTeam?: (host: Extract<ExecutionHost, { kind: "vps" }>) => void;
   onRuntimeAction: (stage: "provider-login" | "team-start" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;
   sshHostKey: OnboardingSshHostKeyConfirmation | null;
