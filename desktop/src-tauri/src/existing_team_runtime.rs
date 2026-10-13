@@ -176,7 +176,7 @@ pub(crate) struct RuntimeTarget {
     pub(crate) architecture: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 enum PositionsRequest {
     List { filters: Option<PositionFilters> },
@@ -285,6 +285,52 @@ impl PositionsRequest {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
             Self::Facets => true,
+        }
+    }
+}
+
+fn object_or_null(value: Option<&Value>) -> bool {
+    value.is_some_and(|value| value.is_null() || value.is_object())
+}
+
+fn array(value: Option<&Value>) -> bool {
+    value.is_some_and(Value::is_array)
+}
+
+fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
+    let Some(object) = reply.as_object() else {
+        return false;
+    };
+    if object.get("ok").and_then(Value::as_bool) != Some(true) || object.len() != 2 {
+        return false;
+    }
+    let Some(data) = object.get("data") else {
+        return false;
+    };
+    match request {
+        PositionsRequest::List { .. } | PositionsRequest::Facets => data
+            .as_object()
+            .and_then(|data| data.get("items"))
+            .is_some_and(|items| {
+                items
+                    .as_array()
+                    .is_some_and(|items| items.iter().all(|item| item.is_object()))
+            }),
+        PositionsRequest::Detail { .. } => {
+            data.is_null()
+                || data.as_object().is_some_and(|data| {
+                    data.len() == 8
+                        && data.get("position").is_some_and(Value::is_object)
+                        && object_or_null(data.get("score"))
+                        && array(data.get("highlights"))
+                        && object_or_null(data.get("company"))
+                        && object_or_null(data.get("application"))
+                        && array(data.get("tickets"))
+                        && object_or_null(data.get("userNote"))
+                        && data
+                            .get("exclusionEventAt")
+                            .is_some_and(|value| value.is_null() || value.is_string())
+                })
         }
     }
 }
@@ -716,10 +762,7 @@ pub(crate) async fn existing_team_positions_read(
         let reply: Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "positions_unavailable")?;
         let object = reply.as_object().ok_or("positions_unavailable")?;
-        if object.get("ok").and_then(Value::as_bool) == Some(true)
-            && object.len() == 2
-            && object.contains_key("data")
-        {
+        if valid_positions_reply(&request, &reply) {
             return Ok(reply);
         }
         let error = object
@@ -828,5 +871,25 @@ mod tests {
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
         assert!(POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
         assert!(!POSITIONS_READ_PY.contains("req.get('sql')"));
+    }
+
+    #[test]
+    fn positions_reply_requires_composite_data_envelope() {
+        let detail = PositionsRequest::Detail { id: "42".into() };
+        assert!(valid_positions_reply(
+            &detail,
+            &json!({"ok":true,"data":{"position":{},"score":null,"highlights":[],"company":null,"application":null,"tickets":[],"userNote":null,"exclusionEventAt":null}})
+        ));
+        assert!(!valid_positions_reply(
+            &detail,
+            &json!({"ok":true,"data":{"position":{}}})
+        ));
+
+        let list = PositionsRequest::List { filters: None };
+        assert!(valid_positions_reply(
+            &list,
+            &json!({"ok":true,"data":{"items":[{}]}})
+        ));
+        assert!(!valid_positions_reply(&list, &json!({"ok":true,"data":[]})));
     }
 }
