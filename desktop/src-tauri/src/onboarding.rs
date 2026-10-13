@@ -2637,7 +2637,8 @@ pub(crate) async fn onboarding_existing_team_connect(
             || {
                 crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected)
                     .map_err(failure)?;
-                crate::existing_team_runtime::activate(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
+                crate::existing_team_runtime::activate(&app, &worker_expected, &request.host, &target)
+                    .map_err(failure)?;
                 crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
                     .map_err(failure)?;
                 Ok(snapshot)

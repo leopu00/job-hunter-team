@@ -2,7 +2,7 @@
 //!
 //! The candidate is written outside the renderer from a custodial receipt.
 //! The app only activates it after the existing-team identity probe succeeds.
-//! A legacy container name is never a fallback once activation exists.
+//! A legacy container name is never a fallback for a selected VPS target.
 
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
@@ -146,7 +146,7 @@ if op=='facets':
  emit({'ok':True,'data':{'items':rows}})
 filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','q','limit','offset','sort','dir'}
 if set(filters)-allowed: fail('positions_request_invalid')
-if not isinstance(filters,dict): fail('positions_request_invalid')
+if not isinstance(filters,dict) or any(value is None for value in filters.values()): fail('positions_request_invalid')
 if matching({},filters) is None: fail('positions_request_invalid')
 try:
  rows=[]
@@ -184,7 +184,7 @@ enum PositionsRequest {
     Facets,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PositionFilters {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -223,7 +223,7 @@ struct PositionFilters {
     dir: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ScoreBand {
     lo: f64,
@@ -374,6 +374,7 @@ struct Selection {
 pub(crate) struct ActivatedTarget {
     pub(crate) team_id: String,
     pub(crate) runtime: RuntimeTarget,
+    candidate_sha256: String,
 }
 
 fn hex(value: &str, length: usize) -> bool {
@@ -523,14 +524,38 @@ pub(crate) fn candidate_for_request(
     host: &ExecutionHost,
     team: &str,
 ) -> Result<ActivatedTarget, &'static str> {
-    let (candidate, _) = read_candidate_at(&root(app)?, scope)?;
+    let (candidate, candidate_sha256) = read_candidate_at(&root(app)?, scope)?;
     if candidate.host != *host || candidate.team_id != team {
         return Err("existing_team_runtime_candidate_mismatch");
     }
     Ok(ActivatedTarget {
         team_id: candidate.team_id,
         runtime: candidate.runtime,
+        candidate_sha256,
     })
+}
+
+fn candidate_matches_probed(
+    candidate: &Candidate,
+    candidate_sha256: &str,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> bool {
+    candidate.host == *host
+        && candidate.team_id == probed.team_id
+        && candidate.runtime == probed.runtime
+        && candidate_sha256 == probed.candidate_sha256
+}
+
+fn selection_may_be_absent(
+    host: &ExecutionHost,
+    candidate_exists: bool,
+) -> Result<(), &'static str> {
+    if candidate_exists || matches!(host, ExecutionHost::Vps { .. }) {
+        Err("existing_team_runtime_selection_required")
+    } else {
+        Ok(())
+    }
 }
 
 fn write_selection_at(
@@ -590,18 +615,19 @@ pub(crate) fn activate(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     host: &ExecutionHost,
-    team: &str,
+    probed: &ActivatedTarget,
 ) -> Result<(), &'static str> {
     let root = root(app)?;
     let (candidate, hash) = read_candidate_at(&root, scope)?;
-    if candidate.host != *host || candidate.team_id != team {
+    if !candidate_matches_probed(&candidate, &hash, host, probed) {
         return Err("existing_team_runtime_candidate_mismatch");
     }
     write_selection_at(&root, scope, &candidate, &hash)
 }
 
-/// Returns none for an ordinary connection. Once a selection exists, every
-/// operation must see the same candidate bytes, host and team or fail closed.
+/// A local connection without a selection preserves the existing local path.
+/// Every VPS operation requires a selection; once present, it must see the
+/// same candidate bytes, host and team or fail closed.
 pub(crate) fn selected(
     app: &tauri::AppHandle,
     scope: &AccountScope,
@@ -611,6 +637,14 @@ pub(crate) fn selected(
     let selection_path = path(&root, scope, SELECTION_FILE);
     if let Err(error) = fs::symlink_metadata(&selection_path) {
         return if error.kind() == std::io::ErrorKind::NotFound {
+            let candidate_exists = match fs::symlink_metadata(path(&root, scope, CANDIDATE_FILE)) {
+                Ok(_) => true,
+                Err(candidate_error) if candidate_error.kind() == std::io::ErrorKind::NotFound => {
+                    false
+                }
+                Err(_) => return Err("existing_team_runtime_candidate_invalid"),
+            };
+            selection_may_be_absent(host, candidate_exists)?;
             Ok(None)
         } else {
             Err("existing_team_runtime_selection_invalid")
@@ -645,6 +679,7 @@ pub(crate) fn selected(
     Ok(Some(ActivatedTarget {
         team_id: candidate.team_id,
         runtime: candidate.runtime,
+        candidate_sha256: hash,
     }))
 }
 
@@ -876,9 +911,71 @@ mod tests {
             "op": "list", "filters": {"q": "engineer"}
         }))
         .expect("query-only request parses");
+        let cloned = request.clone();
         assert_eq!(
-            serde_json::to_value(request).expect("request serializes"),
+            serde_json::to_value(cloned).expect("request serializes"),
             json!({"op": "list", "filters": {"q": "engineer"}})
+        );
+    }
+
+    #[test]
+    fn activation_requires_the_candidate_bytes_and_runtime_that_were_probed() {
+        let host = ExecutionHost::Local;
+        let candidate = Candidate {
+            schema: 1,
+            host: host.clone(),
+            team_id: "team_existing_0123".into(),
+            runtime: target(),
+        };
+        let probed = ActivatedTarget {
+            team_id: candidate.team_id.clone(),
+            runtime: candidate.runtime.clone(),
+            candidate_sha256: "f".repeat(64),
+        };
+        assert!(candidate_matches_probed(
+            &candidate,
+            &"f".repeat(64),
+            &host,
+            &probed
+        ));
+
+        let mut changed = candidate.clone();
+        changed.runtime.oci_revision = "a".repeat(40);
+        assert!(!candidate_matches_probed(
+            &changed,
+            &"f".repeat(64),
+            &host,
+            &probed
+        ));
+        assert!(!candidate_matches_probed(
+            &candidate,
+            &"e".repeat(64),
+            &host,
+            &probed
+        ));
+    }
+
+    #[test]
+    fn vps_selection_is_required_while_local_connections_remain_separate() {
+        assert_eq!(
+            selection_may_be_absent(&ExecutionHost::Local, false),
+            Ok(())
+        );
+        assert_eq!(
+            selection_may_be_absent(&ExecutionHost::Local, true),
+            Err("existing_team_runtime_selection_required")
+        );
+        assert_eq!(
+            selection_may_be_absent(
+                &ExecutionHost::Vps {
+                    address: "example.invalid".into(),
+                    user: "worker".into(),
+                    port: 22,
+                    key_path: "/private/key".into(),
+                },
+                false,
+            ),
+            Err("existing_team_runtime_selection_required")
         );
     }
 
