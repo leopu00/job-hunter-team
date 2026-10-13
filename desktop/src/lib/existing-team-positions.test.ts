@@ -63,7 +63,7 @@ describe("existing-team positions bridge", () => {
     native.invoke
       .mockResolvedValueOnce({ ok: false, error: "runtime_target_mismatch" })
       .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, data: { items: { not: "a list" } });
+      .mockResolvedValueOnce({ ok: true, data: { items: { not: "a list" } } });
     await expect(readDesktopVpsPositions()).resolves.toEqual({
       source: "unavailable",
       code: "runtime_target_mismatch",
