@@ -25,8 +25,106 @@ const SELECTION_FILE: &str = "existing-team-runtime-selection.json";
 const MAX_BYTES: usize = 8192;
 const READ_TIMEOUT: Duration = Duration::from_secs(15);
 
-const POSITIONS_READ_PY: &str = r#"import json,sqlite3,sys
-def fail(code): print(json.dumps({'ok':False,'error':code},separators=(',',':'))); raise SystemExit(0)
+const POSITIONS_READ_PY: &str = r#"import json,sqlite3,sys,re
+def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
+def fail(code): emit({'ok':False,'error':code})
+def as_dict(row): return dict(row) if row is not None else None
+def sid(value): return str(value) if value is not None else ''
+def nullable(row,key): return row.get(key) if key in row else None
+def truthy(row,key): return bool(row.get(key)) if key in row else False
+def one(sql,args=()):
+ try: return as_dict(db.execute(sql,args).fetchone())
+ except sqlite3.Error: return None
+def many(sql,args=()):
+ try: return [as_dict(row) for row in db.execute(sql,args).fetchall()]
+ except sqlite3.Error: return []
+def columns(table):
+ try: return {row[1] for row in db.execute('PRAGMA table_info('+table+')')}
+ except sqlite3.Error: return set()
+def map_position(row,score=None,application=None,full=False):
+ out={'id':sid(row.get('id')),'legacy_id':nullable(row,'legacy_id'),'title':nullable(row,'title'),'company':nullable(row,'company'),'company_id':sid(row.get('company_id')) if row.get('company_id') else None,'location':nullable(row,'location'),'remote_type':nullable(row,'remote_type'),'salary_declared_min':nullable(row,'salary_declared_min'),'salary_declared_max':nullable(row,'salary_declared_max'),'salary_declared_currency':nullable(row,'salary_declared_currency'),'salary_estimated_min':nullable(row,'salary_estimated_min'),'salary_estimated_max':nullable(row,'salary_estimated_max'),'salary_estimated_currency':nullable(row,'salary_estimated_currency'),'salary_estimated_source':nullable(row,'salary_estimated_source'),'url':nullable(row,'url'),'source':nullable(row,'source'),'jd_text':nullable(row,'jd_text'),'jd_summary':nullable(row,'jd_summary'),'requirements':nullable(row,'requirements'),'found_by':nullable(row,'found_by'),'found_at':nullable(row,'found_at') or '','deadline':nullable(row,'deadline'),'status':nullable(row,'status'),'notes':nullable(row,'notes'),'last_checked':nullable(row,'last_checked'),'role_family':nullable(row,'role_family'),'loc_country':nullable(row,'loc_country'),'loc_city':nullable(row,'loc_city')}
+ if full:
+  out.update({'write_requested':truthy(row,'write_requested'),'write_requested_at':nullable(row,'write_requested_at'),'write_request_kind':nullable(row,'write_request_kind'),'geocode_requested':truthy(row,'geocode_requested'),'geocode_requested_at':nullable(row,'geocode_requested_at'),'office_geocoded':truthy(row,'office_geocoded'),'user_excluded_reason':nullable(row,'user_excluded_reason'),'user_excluded_note':nullable(row,'user_excluded_note'),'user_excluded_at':nullable(row,'user_excluded_at'),'user_excluded_prev_status':nullable(row,'user_excluded_prev_status'),'recheck_requested':truthy(row,'recheck_requested'),'recheck_requested_at':nullable(row,'recheck_requested_at'),'apply_requested':truthy(row,'apply_requested'),'apply_requested_at':nullable(row,'apply_requested_at'),'apply_requested_by':nullable(row,'apply_requested_by'),'last_open_check':nullable(row,'last_open_check')})
+ else:
+  out.update({'score':nullable(score,'total_score') if score else None,'critic_score':nullable(application,'critic_score') if application else None,'critic_verdict':nullable(application,'critic_verdict') if application else None})
+  if score and score.get('stack_match') is not None: out['scores']=map_score(score)
+ return out
+def map_score(row): return {'id':sid(row.get('id')),'position_id':sid(row.get('position_id')),'total_score':row.get('total_score'),'stack_match':nullable(row,'stack_match'),'remote_fit':nullable(row,'remote_fit'),'salary_fit':nullable(row,'salary_fit'),'experience_fit':nullable(row,'experience_fit'),'strategic_fit':nullable(row,'strategic_fit'),'breakdown':nullable(row,'breakdown'),'notes':nullable(row,'notes'),'scored_by':nullable(row,'scored_by'),'scored_at':nullable(row,'scored_at') or ''}
+def map_company(row): return {'id':sid(row.get('id')),'name':row.get('name'),'website':nullable(row,'website'),'hq':nullable(row,'hq_country'),'sector':nullable(row,'sector'),'size':nullable(row,'size'),'glassdoor_rating':nullable(row,'glassdoor_rating'),'red_flags':nullable(row,'red_flags'),'culture_notes':nullable(row,'culture_notes'),'analyzed_by':nullable(row,'analyzed_by'),'analyzed_at':nullable(row,'analyzed_at'),'verdict':nullable(row,'verdict'),'logo':nullable(row,'logo')}
+def map_application(row): return {'id':sid(row.get('id')),'position_id':sid(row.get('position_id')),'cv_path':nullable(row,'cv_path'),'cl_path':nullable(row,'cl_path'),'cv_pdf_path':nullable(row,'cv_pdf_path'),'cl_pdf_path':nullable(row,'cl_pdf_path'),'cv_drive_id':nullable(row,'cv_drive_id'),'cl_drive_id':nullable(row,'cl_drive_id'),'critic_verdict':nullable(row,'critic_verdict'),'critic_score':nullable(row,'critic_score'),'critic_notes':nullable(row,'critic_notes'),'status':nullable(row,'status'),'written_at':nullable(row,'written_at'),'applied_at':nullable(row,'applied_at'),'applied_via':nullable(row,'applied_via'),'response':nullable(row,'response'),'response_at':nullable(row,'response_at'),'written_by':nullable(row,'written_by'),'reviewed_by':nullable(row,'reviewed_by'),'applied':truthy(row,'applied'),'interview_round':nullable(row,'interview_round')}
+def map_ticket(row): return {'id':sid(row.get('id')),'position_id':sid(row.get('position_id')),'request_text':row.get('request_text'),'kind':nullable(row,'kind') or 'custom','status':row.get('status'),'assigned_agent':nullable(row,'assigned_agent'),'response_text':nullable(row,'response_text'),'created_at':nullable(row,'created_at'),'resolved_at':nullable(row,'resolved_at')}
+def state(status): return {'writing':'preparing','review':'preparing'}.get(status,status if status in ('new','checked','scored','ready','applied','response','excluded') else 'needs_attention')
+def salary(row):
+ declared=row.get('salary_declared_min') is not None or row.get('salary_declared_max') is not None
+ return ((row.get('salary_declared_min'),row.get('salary_declared_max'),row.get('salary_declared_currency')) if declared else (row.get('salary_estimated_min'),row.get('salary_estimated_max'),row.get('salary_estimated_currency')))
+def ticket_count(pid):
+ row=one("SELECT COUNT(*) AS n FROM position_tickets WHERE position_id=? AND status IN ('open','assigned')",(pid,))
+ return int(row.get('n',0)) if row else 0
+def position_detail(pid):
+ raw=one('SELECT * FROM positions WHERE id=?',(pid,))
+ if raw is None: return None
+ score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,))
+ highlights=[]
+ for row in many('SELECT * FROM position_highlights WHERE position_id=? ORDER BY type',(pid,)): highlights.append({'id':sid(row.get('id')),'position_id':sid(row.get('position_id')),'type':row.get('type'),'text':row.get('text')})
+ company=one('SELECT * FROM companies WHERE id=?',(raw.get('company_id'),)) if raw.get('company_id') else None
+ tickets=[map_ticket(row) for row in many('SELECT * FROM position_tickets WHERE position_id=? ORDER BY created_at DESC,id DESC',(pid,))]
+ note=one("SELECT body,updated_at FROM position_user_notes WHERE position_id=? AND origin='box'",(pid,)) if 'origin' in columns('position_user_notes') else one('SELECT body,updated_at FROM position_user_notes WHERE position_id=?',(pid,))
+ excluded=one("SELECT ts FROM position_state_transitions WHERE position_id=? AND to_state='excluded' ORDER BY ts DESC,id DESC LIMIT 1",(pid,))
+ return {'position':map_position(raw,full=True),'score':map_score(score) if score else None,'highlights':highlights,'company':map_company(company) if company else None,'application':map_application(application) if application else None,'tickets':tickets,'userNote':note,'exclusionEventAt':excluded.get('ts') if excluded else None}
+def validate_strings(value): return isinstance(value,list) and 0<len(value)<=32 and all(isinstance(item,str) and 0<len(item)<=80 for item in value)
+def validate_bands(value): return isinstance(value,list) and len(value)<=32 and all(isinstance(item,dict) and set(item)=={'lo','hi'} and type(item['lo']) in (int,float) and type(item['hi']) in (int,float) and item['lo']<=item['hi'] for item in value)
+def city_key(row): return '%s|%s'%((row.get('loc_country') or '').strip() or '(unknown)',(row.get('loc_city') or '').strip() or '(country-only)')
+def search_id(value):
+ match=re.match(r'^(?:jht[\\s\\-_#]*|#\\s*)?0*(\\d{1,9})$',value,re.I)
+ return int(match.group(1)) if match and int(match.group(1))>0 else None
+def matching(item,filters):
+ for key in ('statuses','remoteTypes','sources','verdicts','families','countries','cities'):
+  if key in filters and not validate_strings(filters[key]): return None
+ if 'scoreBands' in filters and not validate_bands(filters['scoreBands']): return None
+ if 'criticBands' in filters and not validate_bands(filters['criticBands']): return None
+ for key in ('unscored','criticUnscored','writeRequested'):
+  if key in filters and type(filters[key]) is not bool: return None
+ if filters.get('statuses') and item.get('status') not in filters['statuses']: return False
+ if filters.get('remoteTypes') and item.get('remote_type') not in filters['remoteTypes']: return False
+ if filters.get('sources') and item.get('source') not in filters['sources']: return False
+ if filters.get('verdicts') and item.get('critic_verdict') not in filters['verdicts']: return False
+ if filters.get('families') and ((item.get('role_family') or '').strip() or 'Da categorizzare') not in filters['families']: return False
+ if filters.get('countries') and ((item.get('loc_country') or '').strip() or '(unknown)') not in filters['countries']: return False
+ if filters.get('cities') and city_key(item) not in filters['cities']: return False
+ score=item.get('score'); bands=filters.get('scoreBands',[])
+ if bands or filters.get('unscored') is not None:
+  if score is None or score==0:
+   if not filters.get('unscored',False): return False
+  elif not any(b['lo']<=score<=b['hi'] for b in bands): return False
+ critic=item.get('critic_score'); bands=filters.get('criticBands',[])
+ if bands or filters.get('criticUnscored') is not None:
+  if critic is None:
+   if not filters.get('criticUnscored',False): return False
+  elif not any(b['lo']<=critic<=b['hi'] for b in bands): return False
+ if 'writeRequested' in filters and bool(item.get('write_requested')) != filters['writeRequested']: return False
+ query=filters.get('q')
+ if query is not None:
+  if not isinstance(query,str) or len(query)>120: return None
+  q=query.strip().lower(); legacy=search_id(q)
+  hay=' '.join(str(item.get(key) or '') for key in ('title','company','loc_city','loc_country','role_family','source')).lower()
+  if q and q not in hay and item.get('legacy_id') != legacy: return False
+ return True
+def sort_items(items,filters):
+ key=filters.get('sort')
+ if key is not None and (not isinstance(key,str) or key not in {'id','score','salary','monthly','last_action_by','critic','found_at','last_action_at','status','written_at','applied_at','title','company','role_family','source','location','remote','loc_country','loc_city'}): fail('positions_request_invalid')
+ direction=filters.get('dir','desc')
+ if direction not in ('asc','desc'): fail('positions_request_invalid')
+ def value(item):
+  if key=='id': return item.get('legacy_id')
+  if key in ('salary','monthly'): return item.get('salary_min')
+  if key=='remote': return item.get('remote_type')
+  if key=='critic': return item.get('critic_score')
+  if key=='last_action_by': return item.get('last_action_actor')
+  return item.get(key or 'found_at')
+ if key:
+  present=[item for item in items if value(item) is not None]; missing=[item for item in items if value(item) is None]
+  present.sort(key=value,reverse=direction=='desc'); items[:]=present+missing
+ return items
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
@@ -36,67 +134,34 @@ if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or n
 if op=='facets' and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 try:
- db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
- cols={r[1] for r in db.execute('PRAGMA table_info(positions)')}
+ db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON'); db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
-fields=[c for c in ('id','legacy_id','title','company','location','remote_type','url','source','found_at','status','role_family','loc_country','loc_city','write_requested') if c in cols]
-if not fields: fail('positions_unavailable')
-def rowdict(rows): return [dict(zip(fields,row)) for row in rows]
-if op=='detail':
- try: rows=db.execute('SELECT '+','.join(fields)+' FROM positions WHERE id=? LIMIT 1',(int(req['id']),)).fetchall()
- except Exception: fail('positions_unavailable')
- position=rowdict(rows)[0] if rows else None
- if position is None: print(json.dumps({'ok':True,'data':None},separators=(',',':'))); raise SystemExit(0)
- pid=position.get('id'); score=None; highlights=[]; company=None; application=None; tickets=[]
- try: score=dict(db.execute('SELECT * FROM scores WHERE position_id=? AND (deleted_at IS NULL OR 1=1) LIMIT 1',(pid,)).fetchone() or [])
- except Exception: score=None
- try: highlights=[dict(r) for r in db.execute('SELECT * FROM position_highlights WHERE position_id=? ORDER BY type',(pid,)).fetchall()]
- except Exception: highlights=[]
- try: application=dict(db.execute('SELECT * FROM applications WHERE position_id=? LIMIT 1',(pid,)).fetchone() or [])
- except Exception: application=None
- try:
-  cid=position.get('company_id'); company=dict(db.execute('SELECT * FROM companies WHERE id=? LIMIT 1',(cid,)).fetchone() or []) if cid is not None else None
- except Exception: company=None
- try:
-  legacy=position.get('legacy_id'); tickets=[dict(r) for r in db.execute('SELECT id,position_legacy_id,request_text,kind,status,assigned_agent,response_text,created_at,resolved_at FROM position_tickets WHERE position_legacy_id=? ORDER BY created_at DESC,id DESC',(legacy,))] if legacy is not None else []
- except Exception: tickets=[]
- print(json.dumps({'ok':True,'data':{'position':position,'score':score,'highlights':highlights,'company':company,'application':application,'tickets':tickets,'userNote':None,'exclusionEventAt':None}},separators=(',',':'))); raise SystemExit(0)
+if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
 if op=='facets':
+ rows=[]
  try:
-  rows=db.execute('SELECT p.id,p.status,p.title,p.company,p.role_family,p.loc_country,p.loc_city,(SELECT total_score FROM scores s WHERE s.position_id=p.id LIMIT 1),(SELECT critic_score FROM applications a WHERE a.position_id=p.id LIMIT 1) FROM positions p ORDER BY p.id LIMIT 600').fetchall()
- except Exception: fail('positions_unavailable')
- items=[{'id':str(r[0]),'status':r[1],'title':r[2],'company':r[3],'role_family':r[4],'loc_country':r[5],'loc_city':r[6],'score':r[7],'critic_score':r[8]} for r in rows]
- print(json.dumps({'ok':True,'data':{'items':items}},separators=(',',':'))); raise SystemExit(0)
-f=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','q','limit','offset'}
-if set(f)-allowed: fail('positions_request_invalid')
-where=[]; args=[]
-for key,column in (('statuses','status'),('remoteTypes','remote_type'),('sources','source')):
- values=f.get(key)
- if values is not None:
-  if column not in cols or not isinstance(values,list) or not values or len(values)>32 or any(not isinstance(v,str) or len(v)>80 for v in values): fail('positions_request_invalid')
-  where.append(column+' IN ('+','.join('?' for _ in values)+')'); args.extend(values)
-q=f.get('q')
-if q is not None:
- if not isinstance(q,str) or len(q)>60: fail('positions_request_invalid')
- searchable=[c for c in ('title','company','loc_city','loc_country','role_family','source') if c in cols]
- if q and searchable:
-  where.append('('+' OR '.join('LOWER('+c+') LIKE ? ESCAPE "\\"' for c in searchable)+')'); args.extend(['%'+q.lower().replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%']*len(searchable))
-limit=f.get('limit',100); offset=f.get('offset',0)
-if not isinstance(limit,int) or not 1<=limit<=600 or not isinstance(offset,int) or not 0<=offset<=100000: fail('positions_request_invalid')
+  for row in db.execute('SELECT p.id,p.status,p.title,p.company,p.role_family,p.loc_country,p.loc_city,s.total_score,a.critic_score FROM positions p LEFT JOIN scores s ON s.position_id=p.id LEFT JOIN applications a ON a.position_id=p.id ORDER BY p.id'):
+   rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8]})
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'items':rows}})
+filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','q','limit','offset','sort','dir'}
+if set(filters)-allowed: fail('positions_request_invalid')
+if not isinstance(filters,dict): fail('positions_request_invalid')
+if matching({},filters) is None: fail('positions_request_invalid')
 try:
- sql='SELECT '+','.join(fields)+' FROM positions'+((' WHERE '+' AND '.join(where)) if where else '')+' ORDER BY found_at DESC, id ASC LIMIT ? OFFSET ?'
- rows=db.execute(sql,args+[limit,offset]).fetchall()
-except Exception: fail('positions_unavailable')
-items=[]
-for row in rowdict(rows):
- try: row['score']=db.execute('SELECT total_score FROM scores WHERE position_id=? LIMIT 1',(row.get('id'),)).fetchone()[0]
- except Exception: row['score']=None
- try:
-  a=db.execute('SELECT critic_score,critic_verdict,written_at,applied_at FROM applications WHERE position_id=? LIMIT 1',(row.get('id'),)).fetchone()
-  row['critic_score']=a[0] if a else None; row['critic_verdict']=a[1] if a else None; row['written_at']=a[2] if a else None; row['applied_at']=a[3] if a else None
- except Exception: row['critic_score']=row['critic_verdict']=row['written_at']=row['applied_at']=None
- items.append(row)
-print(json.dumps({'ok':True,'data':{'items':items}},separators=(',',':')))
+ rows=[]
+ for raw in db.execute('SELECT p.* FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
+  position=as_dict(raw); pid=position.get('id'); score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,)); item=map_position(position,score,application)
+  declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status'))})
+  matched=matching(item,filters)
+  if matched is None: fail('positions_request_invalid')
+  if matched: rows.append(item)
+except sqlite3.Error: fail('positions_unavailable')
+rows=sort_items(rows,filters)
+limit=filters.get('limit'); offset=filters.get('offset',0)
+if limit is not None and (type(limit) is not int or not 1<=limit<=600): fail('positions_request_invalid')
+if type(offset) is not int or not 0<=offset<=100000: fail('positions_request_invalid')
+emit({'ok':True,'data':{'items':rows[offset:offset+limit] if limit is not None else rows[offset:]}})
 "#;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -109,6 +174,119 @@ pub(crate) struct RuntimeTarget {
     pub(crate) digest: String,
     pub(crate) os: String,
     pub(crate) architecture: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
+enum PositionsRequest {
+    List { filters: Option<PositionFilters> },
+    Detail { id: String },
+    Facets,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PositionFilters {
+    statuses: Option<Vec<String>>,
+    remote_types: Option<Vec<String>>,
+    sources: Option<Vec<String>>,
+    verdicts: Option<Vec<String>>,
+    families: Option<Vec<String>>,
+    countries: Option<Vec<String>>,
+    cities: Option<Vec<String>>,
+    score_bands: Option<Vec<ScoreBand>>,
+    unscored: Option<bool>,
+    critic_bands: Option<Vec<ScoreBand>>,
+    critic_unscored: Option<bool>,
+    write_requested: Option<bool>,
+    q: Option<String>,
+    limit: Option<u16>,
+    offset: Option<u32>,
+    sort: Option<String>,
+    dir: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ScoreBand {
+    lo: f64,
+    hi: f64,
+}
+
+impl PositionFilters {
+    fn valid_strings(values: &Option<Vec<String>>) -> bool {
+        values.as_ref().map_or(true, |values| {
+            (1..=32).contains(&values.len())
+                && values.iter().all(|value| (1..=80).contains(&value.len()))
+        })
+    }
+
+    fn valid_bands(values: &Option<Vec<ScoreBand>>) -> bool {
+        values.as_ref().map_or(true, |values| {
+            values.len() <= 32
+                && values
+                    .iter()
+                    .all(|band| band.lo.is_finite() && band.hi.is_finite() && band.lo <= band.hi)
+        })
+    }
+
+    fn valid(&self) -> bool {
+        [
+            &self.statuses,
+            &self.remote_types,
+            &self.sources,
+            &self.verdicts,
+            &self.families,
+            &self.countries,
+            &self.cities,
+        ]
+        .into_iter()
+        .all(Self::valid_strings)
+            && Self::valid_bands(&self.score_bands)
+            && Self::valid_bands(&self.critic_bands)
+            && self.q.as_ref().map_or(true, |value| value.len() <= 120)
+            && self.limit.map_or(true, |value| (1..=600).contains(&value))
+            && self.offset.map_or(true, |value| value <= 100_000)
+            && self.sort.as_ref().map_or(true, |value| {
+                matches!(
+                    value.as_str(),
+                    "id" | "score"
+                        | "salary"
+                        | "monthly"
+                        | "last_action_by"
+                        | "critic"
+                        | "found_at"
+                        | "last_action_at"
+                        | "status"
+                        | "written_at"
+                        | "applied_at"
+                        | "title"
+                        | "company"
+                        | "role_family"
+                        | "source"
+                        | "location"
+                        | "remote"
+                        | "loc_country"
+                        | "loc_city"
+                )
+            })
+            && self
+                .dir
+                .as_ref()
+                .map_or(true, |value| matches!(value.as_str(), "asc" | "desc"))
+    }
+}
+
+impl PositionsRequest {
+    fn valid(&self) -> bool {
+        match self {
+            Self::List { filters } => filters.as_ref().map_or(true, PositionFilters::valid),
+            Self::Detail { id } => {
+                (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
+            }
+            Self::Facets => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -502,6 +680,10 @@ pub(crate) async fn existing_team_positions_read(
     scopes: State<'_, AccountScopeState>,
     request: Value,
 ) -> Value {
+    let request: PositionsRequest = match serde_json::from_value(request) {
+        Ok(request) if request.valid() => request,
+        _ => return positions_failure("positions_request_invalid"),
+    };
     let request_bytes = match serde_json::to_vec(&request) {
         Ok(bytes) if bytes.len() <= 8192 => bytes,
         _ => return positions_failure("positions_request_invalid"),
@@ -590,5 +772,61 @@ mod tests {
             command(&invalid, "true"),
             Err("existing_team_runtime_candidate_invalid")
         );
+    }
+
+    #[test]
+    fn positions_request_is_closed_and_supports_complete_filter_shape() {
+        let request: PositionsRequest = serde_json::from_value(json!({
+            "op": "list",
+            "filters": {
+                "statuses": ["scored"],
+                "remoteTypes": ["full_remote"],
+                "verdicts": ["PASS"],
+                "families": ["Data"],
+                "countries": ["IT"],
+                "cities": ["IT|Rome"],
+                "scoreBands": [{"lo": 80, "hi": 100}],
+                "unscored": false,
+                "criticBands": [{"lo": 7, "hi": 10}],
+                "criticUnscored": false,
+                "writeRequested": true,
+                "q": "JHT-42",
+                "limit": 50,
+                "offset": 0,
+                "sort": "score",
+                "dir": "desc"
+            }
+        }))
+        .expect("complete filter request parses");
+        assert!(request.valid());
+
+        let unknown = serde_json::from_value::<PositionsRequest>(json!({
+            "op": "list", "filters": null, "sql": "SELECT 1"
+        }));
+        assert!(unknown.is_err());
+        let malformed = serde_json::from_value::<PositionsRequest>(json!({
+            "op": "detail", "id": 42
+        }));
+        assert!(malformed.is_err());
+    }
+
+    #[test]
+    fn embedded_reader_has_fixed_composite_position_projections() {
+        for field in [
+            "'position':map_position(raw,full=True)",
+            "'score':map_score(score) if score else None",
+            "'highlights':highlights",
+            "'company':map_company(company) if company else None",
+            "'application':map_application(application) if application else None",
+            "'tickets':tickets",
+            "'userNote':note",
+            "'exclusionEventAt':excluded.get('ts') if excluded else None",
+            "'data':{'items':rows}",
+        ] {
+            assert!(POSITIONS_READ_PY.contains(field), "missing {field}");
+        }
+        assert!(POSITIONS_READ_PY.contains("mode=ro"));
+        assert!(POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
+        assert!(!POSITIONS_READ_PY.contains("req.get('sql')"));
     }
 }
