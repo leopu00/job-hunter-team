@@ -55,33 +55,40 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   }
 }
 
-function arrayRead<T>(value: DesktopVpsRead<T[]>): DesktopVpsRead<T[]> {
-  return value.source === "vps" && !Array.isArray(value.data)
-    ? { source: "unavailable", code: "desktop_bad_reply" }
-    : value;
+function arrayRead<T>(value: DesktopVpsRead<unknown>): DesktopVpsRead<T[]> {
+  if (value.source !== "vps") return value;
+  if (!value.data || typeof value.data !== "object" || Array.isArray(value.data)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  const items = (value.data as Record<string, unknown>).items;
+  return Array.isArray(items)
+    ? { source: "vps", data: items as T[] }
+    : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
-function detailRead<T extends object>(value: DesktopVpsRead<T | null>): DesktopVpsRead<T | null> {
-  return value.source === "vps" && value.data !== null &&
-    (typeof value.data !== "object" || Array.isArray(value.data))
-    ? { source: "unavailable", code: "desktop_bad_reply" }
-    : value;
+function detailRead(value: DesktopVpsRead<unknown>): DesktopVpsRead<PositionDetail | null> {
+  if (value.source !== "vps") return value;
+  if (value.data === null) return { source: "vps", data: null };
+  return typeof value.data === "object" && !Array.isArray(value.data) &&
+    "position" in value.data
+    ? { source: "vps", data: value.data as PositionDetail }
+    : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
 export function readDesktopVpsPositions(
   opts?: PositionFilterOpts,
 ): Promise<DesktopVpsRead<PositionWithScore[]>> {
-  return read<PositionWithScore[]>({ op: "list", filters: opts ?? null }).then(arrayRead);
+  return read<unknown>({ op: "list", filters: opts ?? null }).then(arrayRead<PositionWithScore>);
 }
 
 export function readDesktopVpsPosition(
   id: string,
 ): Promise<DesktopVpsRead<PositionDetail | null>> {
-  return read<PositionDetail | null>({ op: "detail", id }).then(detailRead);
+  return read<unknown>({ op: "detail", id }).then(detailRead);
 }
 
 export function readDesktopVpsPositionFacets(): Promise<
   DesktopVpsRead<PositionFacet[]>
 > {
-  return read<PositionFacet[]>({ op: "facets" }).then(arrayRead);
+  return read<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
 }
