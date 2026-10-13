@@ -35,6 +35,24 @@ describe("existing-team positions bridge", () => {
     expect(request).not.toHaveProperty("containerId");
   });
 
+  it("omits filters only when no filter object was supplied", async () => {
+    native.invoke
+      .mockResolvedValueOnce({ ok: true, data: { items: [] } })
+      .mockResolvedValueOnce({ ok: true, data: { items: [] } });
+
+    await expect(readDesktopVpsPositions()).resolves.toEqual({ source: "vps", data: [] });
+    await expect(readDesktopVpsPositions({ q: "synthetic" })).resolves.toEqual({
+      source: "vps",
+      data: [],
+    });
+    expect(native.invoke).toHaveBeenNthCalledWith(1, "existing_team_positions_read", {
+      request: { op: "list" },
+    });
+    expect(native.invoke).toHaveBeenNthCalledWith(2, "existing_team_positions_read", {
+      request: { op: "list", filters: { q: "synthetic" } },
+    });
+  });
+
   it("preserves related detail and correlated facets from fixed operations", async () => {
     native.invoke
       .mockResolvedValueOnce({ ok: true, data: detail })

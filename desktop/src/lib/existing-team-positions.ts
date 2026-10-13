@@ -20,9 +20,13 @@ export type { DesktopVpsRead } from "../../../web/lib/desktop-vps-positions";
 const COMMAND = "existing_team_positions_read";
 
 type Request =
-  | { op: "list"; filters: PositionFilterOpts | null }
+  | { op: "list"; filters?: PositionFilterOpts }
   | { op: "detail"; id: string }
   | { op: "facets" };
+
+function listRequest(opts?: PositionFilterOpts): Request {
+  return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
+}
 
 function safeCode(value: unknown): string {
   return typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value)
@@ -78,7 +82,7 @@ function detailRead(value: DesktopVpsRead<unknown>): DesktopVpsRead<PositionDeta
 export function readDesktopVpsPositions(
   opts?: PositionFilterOpts,
 ): Promise<DesktopVpsRead<PositionWithScore[]>> {
-  return read<unknown>({ op: "list", filters: opts ?? null }).then(arrayRead<PositionWithScore>);
+  return read<unknown>(listRequest(opts)).then(arrayRead<PositionWithScore>);
 }
 
 export function readDesktopVpsPosition(
