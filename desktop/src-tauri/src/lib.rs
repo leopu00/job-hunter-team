@@ -6,6 +6,7 @@ mod browsers;
 mod closer_desktop;
 mod desktop_platform;
 mod direct_chat;
+mod existing_team_runtime;
 mod live_screen;
 mod mail;
 mod onboarding;
@@ -62,6 +63,7 @@ pub fn run() {
             browsers::auth_browsers,
             closer_desktop::closer_desktop_register_host,
             closer_desktop::closer_desktop_request,
+            existing_team_runtime::existing_team_positions_read,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,

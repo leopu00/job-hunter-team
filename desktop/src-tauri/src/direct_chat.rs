@@ -1,4 +1,5 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
+use crate::existing_team_runtime::{self, ActivatedTarget};
 use crate::runtime_host::{
     run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -100,14 +101,18 @@ struct DirectChatInner {
 }
 
 struct Connection {
+    app: Option<tauri::AppHandle>,
     scope: AccountScope,
     host: ExecutionHost,
     validated: ValidatedHost,
+    runtime: Option<ActivatedTarget>,
     local_wrapper: Option<PathBuf>,
     local_owner_marker: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
 }
+
+enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str) }
 
 impl Drop for Connection {
     fn drop(&mut self) {
@@ -531,7 +536,7 @@ fn close_connection(connection: &mut Connection) {
 fn run_connection(
     connection: &Connection,
     local_args: &[&str],
-    remote_command: &'static str,
+    remote_operation: RemoteOperation<'_>,
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
@@ -558,14 +563,22 @@ fn run_connection(
                 .map_err(failure)
             }
         }
-        ValidatedHost::Vps { .. } => run_ssh(
-            &connection.validated,
-            remote_command,
-            input,
-            timeout,
-            connection.control_path.as_deref(),
-        )
-        .map_err(failure),
+        ValidatedHost::Vps { .. } => {
+            let selected = connection.app.as_ref().ok_or_else(|| failure("existing_team_runtime_target_changed"))
+                .and_then(|app| existing_team_runtime::selected(app, &connection.scope, &connection.host).map_err(failure))?;
+            if selected.as_ref().map(|target| (&target.team_id, &target.runtime)) != connection.runtime.as_ref().map(|target| (&target.team_id, &target.runtime)) {
+                return Err(failure("existing_team_runtime_target_changed"));
+            }
+            let command = match (selected.as_ref(), remote_operation) {
+                (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "docker inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
+                (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
+                (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
+                (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
+                (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
+                (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
+            };
+            run_ssh(&connection.validated, &command, input, timeout, connection.control_path.as_deref()).map_err(failure)
+        }
     }
 }
 
@@ -580,7 +593,7 @@ fn probe(connection: &Connection) -> DirectChatStatus {
     let result = run_connection(
         connection,
         &["desktop-chat", "probe"],
-        REMOTE_CONTAINER_PROBE,
+        RemoteOperation::Probe,
         None,
         CONNECT_TIMEOUT,
     );
@@ -597,7 +610,10 @@ fn connect_impl(
     scope: AccountScope,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
-    let validated = validate_host(app, &host).map_err(failure)?;
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
+    let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
+        existing_team_runtime::selected(app, &scope, &host).map_err(failure)?
+    } else { None };
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
         ValidatedHost::Local => (
                 Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
@@ -611,9 +627,11 @@ fn connect_impl(
         }
     };
     let mut connection = Connection {
+        app: Some(app.clone()),
         scope: scope.clone(),
         host,
         validated,
+        runtime,
         local_wrapper,
         local_owner_marker,
         control_path,
@@ -785,7 +803,7 @@ fn run_python(
     let result = run_connection(
         connection,
         &["desktop-chat", "python"],
-        REMOTE_PYTHON_STDIN,
+        RemoteOperation::Python,
         Some(&input),
         timeout,
     );
@@ -940,7 +958,7 @@ fn send_impl(
     let mut delivered = run_connection(
         connection,
         &local_delivery_args(session),
-        delivery_command(&agent).ok_or_else(|| failure("invalid_agent"))?,
+        RemoteOperation::Delivery(session),
         Some(envelope.as_bytes()),
         SEND_TIMEOUT,
     )?;
@@ -951,7 +969,7 @@ fn send_impl(
         delivered = run_connection(
             connection,
             &local_delivery_args(session),
-            delivery_command(&agent).ok_or_else(|| failure("invalid_agent"))?,
+            RemoteOperation::Delivery(session),
             Some(envelope.as_bytes()),
             SEND_TIMEOUT,
         )?;
@@ -1234,9 +1252,11 @@ mod tests {
         let owner = dir.join(".desktop-account-scope");
         fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
         let connection = Connection {
+            app: None,
             scope,
             host: ExecutionHost::Local,
             validated: ValidatedHost::Local,
+            runtime: None,
             local_wrapper: Some(wrapper.clone()),
             local_owner_marker: Some(owner),
             control_path: None,
