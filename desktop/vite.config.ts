@@ -138,6 +138,7 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/auth$/, replacement: fromHere("./src/web-shims/server/auth.ts") },
       { find: /^@\/lib\/workspace$/, replacement: fromHere("./src/web-shims/server/workspace.ts") },
       { find: /^@\/lib\/local-queries$/, replacement: fromHere("./src/web-shims/server/local-queries.ts") },
+      { find: /^@\/lib\/desktop-vps-positions$/, replacement: fromHere("./src/web-shims/server/desktop-vps-positions.ts") },
       { find: /^@\/lib\/demo\/mode$/, replacement: fromHere("./src/web-shims/server/demo-mode.ts") },
       { find: /^@\/lib\/server-locale$/, replacement: fromHere("./src/web-shims/server/server-locale.ts") },
       { find: /^@\/lib\/use-locale$/, replacement: fromHere("./src/web-shims/use-locale.ts") },
