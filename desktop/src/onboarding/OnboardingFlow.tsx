@@ -389,6 +389,10 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
 
+  function selectHost(kind: ExecutionHost["kind"]) {
+    setHost((current) => current.kind === kind ? current : kind === "local" ? { kind } : emptyVpsHost());
+  }
+
   function next(event: FormEvent) {
     event.preventDefault(); setSubmitError(false); setStep((current) => Math.min(current + 1, COLLECTION_STEP_COUNT - 1));
   }
@@ -445,8 +449,8 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               ? <p className="onboarding-lede">{t.hostLedeLocal}</p>
               : <p className="onboarding-lede">{t.hostLedeVpsOnly}</p>}
             <div className="onboarding-choice-grid" role="radiogroup" aria-label={t.hostGroupAria}>
-              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost({ kind: "local" })}><span className="onboarding-choice__icon">PC</span><strong>{t.thisComputer}</strong><small>{platform === "windows" ? t.thisComputerWindows : t.thisComputerOther}</small><span className="onboarding-choice__check">✓</span></button>}
-              <button data-radio-value="vps" tabIndex={host.kind === "vps" || !localRuntimeSupported ? 0 : -1} className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onKeyDown={(event) => moveRadio(event, localRuntimeSupported ? ["local", "vps"] as const : ["vps"] as const, host.kind, (kind) => setHost(kind === "local" ? { kind } : emptyVpsHost()))} onClick={() => setHost(emptyVpsHost())}><span className="onboarding-choice__icon">VPS</span><strong>{t.vpsServer}</strong><small>{t.vpsDetail}</small><span className="onboarding-choice__check">✓</span></button>
+              {localRuntimeSupported && <button data-radio-value="local" tabIndex={host.kind === "local" ? 0 : -1} className={`onboarding-choice${host.kind === "local" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "local"} onKeyDown={(event) => moveRadio(event, ["local", "vps"] as const, host.kind, selectHost)} onClick={() => selectHost("local")}><span className="onboarding-choice__icon">PC</span><strong>{t.thisComputer}</strong><small>{platform === "windows" ? t.thisComputerWindows : t.thisComputerOther}</small><span className="onboarding-choice__check">✓</span></button>}
+              <button data-radio-value="vps" tabIndex={host.kind === "vps" || !localRuntimeSupported ? 0 : -1} className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onKeyDown={(event) => moveRadio(event, localRuntimeSupported ? ["local", "vps"] as const : ["vps"] as const, host.kind, selectHost)} onClick={() => selectHost("vps")}><span className="onboarding-choice__icon">VPS</span><strong>{t.vpsServer}</strong><small>{t.vpsDetail}</small><span className="onboarding-choice__check">✓</span></button>
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
