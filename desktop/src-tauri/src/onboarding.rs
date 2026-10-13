@@ -1827,32 +1827,6 @@ pub(crate) fn remote_install_input(
     Ok(input)
 }
 const REMOTE_JHT_UP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" up"#;
-const REMOTE_EXISTING_TEAM_PROBE: &str = r#"set -eu
-IFS= read -r JHT_EXPECTED_TEAM
-[ "${#JHT_EXPECTED_TEAM}" -ge 16 ] && [ "${#JHT_EXPECTED_TEAM}" -le 128 ] || exit 64
-case "$JHT_EXPECTED_TEAM" in *[!A-Za-z0-9_-]*) exit 64 ;; esac
-JHT_BIN="$(command -v jht 2>/dev/null || true)"
-[ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"
-[ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70
-grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$JHT_BIN" || exit 70
-"$JHT_BIN" status >/dev/null 2>&1 || exit 71
-docker exec jht node -e '
-const fs=require("fs"); const path="/jht_home/cloud.json"; const expected=process.argv[1];
-let cloud; try { cloud=JSON.parse(fs.readFileSync(path,"utf8")); } catch { process.exit(72); }
-if (typeof cloud.user_id!=="string" || cloud.user_id!==expected) process.exit(72);
-let cfg={}; try { cfg=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
-const provider=String(cfg.active_provider||"").toLowerCase();
-const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider);
-const marker={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"}[provider];
-console.log("runtimeInstalled=1"); console.log("containerRunning=1");
-console.log("providerConfigured="+(configured?"1":"0"));
-console.log("providerAuthenticated="+(marker&&fs.existsSync(marker)?"1":"0"));
-console.log("profileReady="+(fs.existsSync("/jht_home/profile/ready.flag")?"1":"0"));
-console.log("assistantWelcomed="+(fs.existsSync("/jht_home/profile/welcomed.flag")?"1":"0"));
-' "$JHT_EXPECTED_TEAM" || exit $?
-docker exec jht tmux has-session -t CAPITANO 2>/dev/null || exit 73
-docker exec jht tmux has-session -t ASSISTENTE 2>/dev/null || exit 73
-printf 'captainRunning=1\nassistantRunning=1\n'"#;
 const REMOTE_USE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use claude"#;
 const REMOTE_USE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use codex"#;
 const REMOTE_USE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use kimi"#;
@@ -2521,8 +2495,16 @@ pub(crate) async fn onboarding_snapshot(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &worker_expected, &validated)
+        let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+            Some(target) => {
+                let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
+                let result = run_ssh(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                if !result.success() { return Err(failure("snapshot_failed")); }
+                Ok(parse_snapshot(&result.stdout_text()))
+            }
+            None => snapshot_impl(&app, &worker_expected, &validated),
+        }
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")));
@@ -2544,8 +2526,16 @@ pub(crate) async fn onboarding_resume_snapshot(
             .map_err(failure)?;
         let host =
             crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &worker_expected, &validated)
+        let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+            Some(target) => {
+                let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
+                let result = run_ssh(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                if !result.success() { return Err(failure("snapshot_failed")); }
+                Ok(parse_snapshot(&result.stdout_text()))
+            }
+            None => snapshot_impl(&app, &worker_expected, &validated),
+        }
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")));
@@ -2618,8 +2608,10 @@ pub(crate) async fn onboarding_existing_team_connect(
             "ui_existing_runtime_start",
             "ui_existing_runtime_progress",
             "ui_existing_runtime_done",
-            || validate_host(&app, &request.host).map_err(failure),
+            || crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected).map_err(failure),
         )?;
+        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
+        let probe_command = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
         let snapshot = reporter.run(
             OnboardingProgressStage::Container,
             "ui_existing_container_start",
@@ -2629,7 +2621,7 @@ pub(crate) async fn onboarding_existing_team_connect(
                 existing_team_probe_with(&request.team_id, |input| {
                     run_ssh(
                         &validated,
-                        REMOTE_EXISTING_TEAM_PROBE,
+                        &probe_command,
                         Some(input),
                         SNAPSHOT_TIMEOUT,
                         None,
@@ -2643,6 +2635,9 @@ pub(crate) async fn onboarding_existing_team_connect(
             "ui_existing_team_progress",
             "ui_existing_team_done",
             || {
+                crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected)
+                    .map_err(failure)?;
+                crate::existing_team_runtime::activate(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
                 crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
                     .map_err(failure)?;
                 Ok(snapshot)
@@ -4058,7 +4053,7 @@ mod tests {
         OnboardingDiagnosticSink, OnboardingProgress, OnboardingProgressStage,
         OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StartLimits,
         StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
-        INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
+        INSTALL_SHA256, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
@@ -5400,29 +5395,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_team_probe_is_read_only_and_requires_identity_and_live_sessions() {
-        for forbidden in [
-            "jht up",
-            "team start",
-            "docker start",
-            "docker restart",
-            "docker compose",
-            "install",
-            "update",
-            "oauth-login",
-            "pairing",
-            "curl ",
-        ] {
-            assert!(
-                !REMOTE_EXISTING_TEAM_PROBE.contains(forbidden),
-                "mutating command in attach probe: {forbidden}"
-            );
-        }
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("\"$JHT_BIN\" status"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("docker exec jht node"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t CAPITANO"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("tmux has-session -t ASSISTENTE"));
-
+    fn existing_team_probe_result_requires_identity_and_live_sessions() {
         let team_id = "00000000-0000-4000-8000-000000000001";
         let active = existing_team_probe_with(team_id, |input| {
             assert_eq!(input, format!("{team_id}\n").as_bytes());
