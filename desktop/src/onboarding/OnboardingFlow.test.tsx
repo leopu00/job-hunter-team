@@ -772,6 +772,68 @@ describe("OnboardingFlow technical setup", () => {
     expect(onRestart).not.toHaveBeenCalled();
   });
 
+  it("returns a retryable failure to the host form without retrying and preserves its draft", async () => {
+    const user = userEvent.setup();
+    let result!: ReturnType<typeof renderFlow>;
+    const onRetry = vi.fn();
+    const onExitFailure = vi.fn(() => {
+      result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "collecting", stage: "host" }} />);
+    });
+    result = renderFlow({ onRetry, onExitFailure });
+
+    await begin(user);
+    await user.click(screen.getByRole("radio", { name: /vps/i }));
+    await user.type(screen.getByLabelText(/host o indirizzo ip/i), "draft.example.invalid");
+    await user.clear(screen.getByLabelText(/utente ssh/i));
+    await user.type(screen.getByLabelText(/utente ssh/i), "draft-user");
+    await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    await user.click(screen.getByRole("radio", { name: /claude code/i }));
+
+    result.rerender(<OnboardingFlow {...result.props} runtime={{
+      status: "failed", stage: "runtime", message: "Errore terminale.", retryable: true,
+    }} />);
+    await user.click(screen.getByRole("button", { name: "Torna alla scelta ambiente" }));
+
+    expect(onExitFailure).toHaveBeenCalledOnce();
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/host o indirizzo ip/i)).toHaveValue("draft.example.invalid");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("draft-user");
+    expect(screen.getByText("id_ed25519")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    expect(screen.getByRole("radio", { name: /claude code/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("does not offer a return to configuration while an operation is still working", () => {
+    const onExitFailure = vi.fn();
+    renderFlow({
+      runtime: { status: "working", stage: "runtime", message: "Operazione in corso." },
+      onExitFailure,
+    });
+
+    expect(screen.queryByRole("button", { name: "Torna alla scelta ambiente" })).not.toBeInTheDocument();
+    expect(onExitFailure).not.toHaveBeenCalled();
+  });
+
+  it("keeps an active provider-login takeover in control when its outer state has failed", () => {
+    const onExitFailure = vi.fn();
+    renderFlow({
+      runtime: { status: "failed", stage: "provider-login", message: "Accesso non completato.", retryable: true },
+      providerLogin: {
+        provider: "codex",
+        status: "needs_user_action",
+        actions: [{ kind: "code", instruction: "Conferma il codice.", userCode: "synthetic-code" }],
+        connectionState: "connected",
+        startedAt: Date.now(),
+      },
+      onExitFailure,
+    });
+
+    expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Torna alla scelta ambiente" })).not.toBeInTheDocument();
+    expect(onExitFailure).not.toHaveBeenCalled();
+  });
+
   it("shows provider progress and invokes only the required interactive action", async () => {
     const onRuntimeAction = vi.fn().mockResolvedValue(undefined);
     renderFlow({
