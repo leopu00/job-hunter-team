@@ -179,8 +179,13 @@ pub(crate) struct RuntimeTarget {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 enum PositionsRequest {
-    List { filters: Option<PositionFilters> },
-    Detail { id: String },
+    List {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        filters: Option<PositionFilters>,
+    },
+    Detail {
+        id: String,
+    },
     Facets,
 }
 
@@ -770,6 +775,28 @@ fn positions_failure(code: &'static str) -> Value {
     json!({"ok":false,"error":code})
 }
 
+fn request_has_explicit_null_filter(request: &Value) -> bool {
+    let Some(object) = request.as_object() else {
+        return false;
+    };
+    match object.get("filters") {
+        None => false,
+        Some(Value::Null) => true,
+        Some(Value::Object(filters)) => filters.values().any(Value::is_null),
+        Some(_) => false,
+    }
+}
+
+fn parse_positions_request(request: Value) -> Result<PositionsRequest, ()> {
+    if request_has_explicit_null_filter(&request) {
+        return Err(());
+    }
+    match serde_json::from_value(request) {
+        Ok(request) if request.valid() => Ok(request),
+        _ => Err(()),
+    }
+}
+
 /// Fixed read-only jobs-db bridge for the desktop adapter. The renderer sends
 /// typed operation data only; it never supplies a host, container or SQL.
 #[tauri::command]
@@ -778,9 +805,9 @@ pub(crate) async fn existing_team_positions_read(
     scopes: State<'_, AccountScopeState>,
     request: Value,
 ) -> Value {
-    let request: PositionsRequest = match serde_json::from_value(request) {
-        Ok(request) if request.valid() => request,
-        _ => return positions_failure("positions_request_invalid"),
+    let request = match parse_positions_request(request) {
+        Ok(request) => request,
+        Err(()) => return positions_failure("positions_request_invalid"),
     };
     let request_bytes = match serde_json::to_vec(&request) {
         Ok(bytes) if bytes.len() <= 8192 => bytes,
@@ -907,7 +934,7 @@ mod tests {
 
     #[test]
     fn positions_request_omits_absent_filter_options() {
-        let request: PositionsRequest = serde_json::from_value(json!({
+        let request = parse_positions_request(json!({
             "op": "list", "filters": {"q": "engineer"}
         }))
         .expect("query-only request parses");
@@ -916,6 +943,18 @@ mod tests {
             serde_json::to_value(cloned).expect("request serializes"),
             json!({"op": "list", "filters": {"q": "engineer"}})
         );
+    }
+
+    #[test]
+    fn positions_request_rejects_explicit_null_before_serde_normalizes_it() {
+        let absent =
+            parse_positions_request(json!({"op": "list"})).expect("absent filters remain allowed");
+        assert_eq!(
+            serde_json::to_value(absent).expect("absent filters serialize"),
+            json!({"op": "list"})
+        );
+        assert!(parse_positions_request(json!({"op": "list", "filters": {"q": null}})).is_err());
+        assert!(parse_positions_request(json!({"op": "list", "filters": null})).is_err());
     }
 
     #[test]
