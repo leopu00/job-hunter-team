@@ -187,22 +187,39 @@ enum PositionsRequest {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PositionFilters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     statuses: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     remote_types: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     sources: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     verdicts: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     families: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     countries: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     cities: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     score_bands: Option<Vec<ScoreBand>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     unscored: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     critic_bands: Option<Vec<ScoreBand>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     critic_unscored: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     write_requested: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     q: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     offset: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     sort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dir: Option<String>,
 }
 
@@ -851,6 +868,18 @@ mod tests {
             "op": "detail", "id": 42
         }));
         assert!(malformed.is_err());
+    }
+
+    #[test]
+    fn positions_request_omits_absent_filter_options() {
+        let request: PositionsRequest = serde_json::from_value(json!({
+            "op": "list", "filters": {"q": "engineer"}
+        }))
+        .expect("query-only request parses");
+        assert_eq!(
+            serde_json::to_value(request).expect("request serializes"),
+            json!({"op": "list", "filters": {"q": "engineer"}})
+        );
     }
 
     #[test]
