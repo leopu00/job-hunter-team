@@ -66,6 +66,11 @@ export default function FirstSetupAssistance({ host, locale, onOpen }: {
       <button type="button" disabled={busy} onClick={() => void connect(true)}>{setup.confirmFingerprint}</button>
       <button type="button" disabled={busy} onClick={() => setProbe(null)}>{setup.cancel}</button>
     </section>}
+    {host.kind === "vps" && <>
+      <p>{t.savedIntro}</p>
+      <button className="onboarding-secondary" type="button" disabled={busy}
+        onClick={onOpen}>{t.saved}</button>
+    </>}
     {!probe && <button className="onboarding-secondary" type="button" disabled={!valid || busy}
       onClick={() => void connect()}>{busy ? t.connecting : t.connect}</button>}
   </section>;

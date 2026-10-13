@@ -36,6 +36,56 @@ describe("official FIRSTSETUP assistance connection", () => {
     expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
     expect(native.invoke).not.toHaveBeenCalled();
   });
+  it("opens saved assistance manually with incomplete VPS fields without registering or mutating storage", async () => {
+    const onOpen = vi.fn();
+    render(<FirstSetupAssistance host={{ ...host, address: "", keyPath: "", port: 0 }} locale="en" onOpen={onOpen} />);
+    const saved = screen.getByRole("button", { name: ASSISTANCE_TEXT.en.saved });
+    expect(saved).toBeEnabled();
+    expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(native.invoke).not.toHaveBeenCalled();
+    await userEvent.click(saved);
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(native.invoke).not.toHaveBeenCalled();
+    expect(Object.keys(localStorage)).toEqual(["jht-lang"]);
+  });
+  it("offers saved connection access only in the VPS context", () => {
+    render(<FirstSetupAssistance host={{ kind: "local" }} locale="en" onOpen={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.saved })).toBeNull();
+    expect(native.invoke).not.toHaveBeenCalled();
+  });
+  it.each(["host_not_configured", "browser_binding_required"])(
+    "opens the actual panel with edited draft fields and keeps %s unavailable without registering or preparing", async (error) => {
+      native.invoke.mockImplementation(async (op: string) => {
+        if (op === "closer_desktop_request") return { ok: false, error };
+        throw new Error("unexpected operation");
+      });
+      const props: OnboardingFlowProps = {
+        account: { identity: "local", displayName: "Synthetic" }, platform: "macos", runtime: { status: "collecting", stage: "host" },
+        onSubmit: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn(), onExitFailure: vi.fn(), onRuntimeAction: vi.fn(),
+        providerLogin: null, sshHostKey: null, onConfirmHostKey: vi.fn(), onCancelHostKey: vi.fn(),
+        onProviderInput: vi.fn(), onProviderClose: vi.fn(), onProviderRestart: vi.fn(),
+      };
+      const user = userEvent.setup(); render(<OnboardingFlow {...props} />); const t = ONBOARDING_TEXT.en;
+      await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
+      await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
+      await user.type(screen.getByLabelText(t.vpsAddress), "draft.example.invalid");
+      expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.saved }));
+      expect(await screen.findByRole("heading", { name: "Assisted browser" })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(error));
+      expect(screen.queryByRole("img")).toBeNull();
+      expect(screen.getByRole("button", { name: "Take control" })).toBeDisabled();
+      expect(native.invoke).toHaveBeenCalledOnce();
+      expect(native.invoke.mock.calls[0][0]).toBe("closer_desktop_request");
+      expect(native.invoke.mock.calls[0][1]).not.toHaveProperty("host");
+      expect(props.onSubmit).not.toHaveBeenCalled(); expect(props.onRuntimeAction).not.toHaveBeenCalled();
+      expect(props.onConfirmHostKey).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.back }));
+      expect(screen.getByLabelText(t.vpsAddress)).toHaveValue("draft.example.invalid");
+      expect(Object.keys(localStorage)).toEqual(["jht-lang"]);
+    },
+  );
   it("registers only the existing VPS fields on an explicit click, without declaring readiness", async () => {
     const onOpen = vi.fn();
     render(<FirstSetupAssistance host={host} locale="en" onOpen={onOpen} />);
