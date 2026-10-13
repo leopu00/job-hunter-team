@@ -310,7 +310,7 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               {t.restart}
             </button>}
-            {failed && runtime.retryable === false && (
+            {failed && (
               <button className="onboarding-secondary" type="button" onClick={onExitFailure} disabled={pending}>
                 {t.backToHost}
               </button>
