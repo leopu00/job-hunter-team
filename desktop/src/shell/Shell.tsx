@@ -122,7 +122,7 @@ function Navbar({
                     className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
                     style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
                   >
-                    {label.startsWith("own:") ? readOnlyText.team : dashboardT(label)}
+                    {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile"] : dashboardT(label)}
                   </Link>
                 );
               })

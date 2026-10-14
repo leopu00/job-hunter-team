@@ -82,7 +82,7 @@ describe("Dashboard on an existing team read only", () => {
     expect(screen.getByText("Candidature inviate")).toBeInTheDocument();
     // the navigation of that view
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni", "Squadra"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni", "Squadra", "Profilo"]);
     // nothing from the cloud, no write
     expect(fake.current!.calls).toEqual([]);
     expect(fake.current!.rpc).toEqual([]);
