@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
 import { splitTicketRequest } from "@/lib/ticket-attachment";
@@ -261,6 +262,7 @@ export function TicketPanel({
   hideTitle?: boolean;
 }) {
   const t = T[useLocale()];
+  const readOnly = useReadOnlyActions();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -327,7 +329,9 @@ export function TicketPanel({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
+          disabled={readOnly.readOnly}
+          title={readOnly.readOnly ? readOnly.reason : undefined}
+          className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             borderColor: "var(--color-purple)",
             color: "var(--color-purple)",
@@ -337,7 +341,7 @@ export function TicketPanel({
         </button>
       </div>
 
-      {open && (
+      {open && !readOnly.readOnly && (
         <div
           className="mb-4 p-3 rounded-lg border flex flex-col gap-2"
           style={{

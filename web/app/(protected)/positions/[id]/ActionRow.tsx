@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 
 // Riga-azione del popup "Feedback e richieste": icona in un riquadro
 // colorato, titolo che dice COSA succede e descrizione che spiega cosa
@@ -30,17 +31,20 @@ export function ActionRow({
   onClick?: () => void;
   error?: string | null;
 }) {
+  const readOnly = useReadOnlyActions();
+  const blocked = disabled || readOnly.readOnly;
   const color = active ? "var(--color-green)" : accent;
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={onClick}
-        disabled={disabled || busy}
+        disabled={blocked || busy}
+        title={readOnly.readOnly ? readOnly.reason : undefined}
         className="flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed"
         style={{
           borderColor: active ? "var(--color-green)" : "var(--color-border)",
-          opacity: disabled ? 0.55 : busy ? 0.7 : undefined,
+          opacity: blocked ? 0.55 : busy ? 0.7 : undefined,
         }}
       >
         <span

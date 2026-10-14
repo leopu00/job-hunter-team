@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import { useRouter } from "next/navigation";
 import { applicationAckAccepted } from "@/lib/positions/application-ack";
 import { useLocale } from "@/lib/use-locale";
@@ -372,6 +373,9 @@ export function FeedbackButtons({
   const locale = useLocale();
   const t = T[locale];
   const pickerT = PICKER_T[locale];
+  const readOnly = useReadOnlyActions();
+  const frozen = readOnly.readOnly;
+  const frozenTitle = frozen ? readOnly.reason : undefined;
   // O-24: candidatura mandata a mano dall'utente. Stato separato dal giudizio
   // — non è un voto sull'offerta, è un fatto sul suo stato.
   const [applied, setApplied] = useState(initialApplied);
@@ -734,7 +738,8 @@ export function FeedbackButtons({
                   void give(v);
                 }
               }}
-              disabled={busy}
+              disabled={busy || frozen}
+              title={frozenTitle}
               aria-pressed={selected}
               className="flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 transition-colors disabled:opacity-60"
               style={{
@@ -774,7 +779,7 @@ export function FeedbackButtons({
             }}
             note={note}
             onNoteChange={setNote}
-            disabled={busy}
+            disabled={busy || frozen}
             placeholder={t.pickPlaceholder}
             className="flex flex-wrap items-center gap-1.5"
           />
@@ -796,7 +801,8 @@ export function FeedbackButtons({
             <button
               type="button"
               onClick={() => void confirmWhy()}
-              disabled={busy}
+              disabled={busy || frozen}
+              title={frozenTitle}
               className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
               style={{
                 color: "var(--color-red)",
@@ -832,7 +838,8 @@ export function FeedbackButtons({
         onClick={() => {
           void (applied ? undoApplied() : markApplied());
         }}
-        disabled={busy || applyPending}
+        disabled={busy || applyPending || frozen}
+        title={frozenTitle}
         aria-pressed={applied}
         className="mt-2 w-full rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
         style={{
@@ -885,7 +892,8 @@ export function FeedbackButtons({
                   key={value}
                   type="button"
                   onClick={() => void declareOutcome(value)}
-                  disabled={outcomePending !== null}
+                  disabled={outcomePending !== null || frozen}
+                  title={frozenTitle}
                   aria-pressed={selected}
                   className="rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
                   style={{
@@ -917,7 +925,7 @@ export function FeedbackButtons({
               onSave={() =>
                 void declareOutcome("rejected", { soloIlMotivo: true })
               }
-              disabled={outcomePending !== null}
+              disabled={outcomePending !== null || frozen}
               dirty={
                 rejectionReason !== salvato.reason ||
                 rejectionNote.trim() !== salvato.note.trim()
