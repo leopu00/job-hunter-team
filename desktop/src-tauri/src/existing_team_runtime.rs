@@ -7,7 +7,9 @@
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
     direct_chat,
-    runtime_host::{run_ssh, set_private_dir_permissions, set_private_permissions, ExecutionHost},
+    runtime_host::{
+        run_ssh_command, set_private_dir_permissions, set_private_permissions, ExecutionHost,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -482,7 +484,7 @@ fn read_bytes(
     }
     let mut file = options.open(path).map_err(|_| invalid)?;
     let mut bytes = Vec::new();
-    file.by_ref()
+    Read::by_ref(&mut file)
         .take((MAX_BYTES + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|_| invalid)?;
@@ -793,7 +795,7 @@ fn parse_positions_request(request: Value) -> Result<PositionsRequest, ()> {
     if request_has_explicit_null_filter(&request) {
         return Err(());
     }
-    match serde_json::from_value(request) {
+    match serde_json::from_value::<PositionsRequest>(request) {
         Ok(request) if request.valid() => Ok(request),
         _ => Err(()),
     }
@@ -806,18 +808,18 @@ pub(crate) async fn existing_team_positions_read(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
     request: Value,
-) -> Value {
+) -> Result<Value, String> {
     let request = match parse_positions_request(request) {
         Ok(request) => request,
-        Err(()) => return positions_failure("positions_request_invalid"),
+        Err(()) => return Ok(positions_failure("positions_request_invalid")),
     };
     let request_bytes = match serde_json::to_vec(&request) {
         Ok(bytes) if bytes.len() <= 8192 => bytes,
-        _ => return positions_failure("positions_request_invalid"),
+        _ => return Ok(positions_failure("positions_request_invalid")),
     };
     let expected = match scopes.active() {
         Ok(scope) => scope,
-        Err(_) => return positions_failure("account_scope_unavailable"),
+        Err(_) => return Ok(positions_failure("account_scope_unavailable")),
     };
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
@@ -835,30 +837,29 @@ pub(crate) async fn existing_team_positions_read(
         input.push(b'\n');
         input.extend_from_slice(&request_bytes);
         input.push(b'\n');
-        let output = run_ssh(&validated, &command, Some(&input), READ_TIMEOUT, None)
+        let output = run_ssh_command(&validated, &command, Some(&input), READ_TIMEOUT, None)
             .map_err(|_| "positions_unavailable")?;
         if !output.success() || output.stdout.len() > 2 * 1024 * 1024 {
             return Err("positions_unavailable");
         }
         let reply: Value =
             serde_json::from_slice(&output.stdout).map_err(|_| "positions_unavailable")?;
-        let object = reply.as_object().ok_or("positions_unavailable")?;
         if valid_positions_reply(&request, &reply) {
             return Ok(reply);
         }
-        let error = object
-            .get("error")
-            .and_then(Value::as_str)
-            .filter(|v| matches!(*v, "positions_request_invalid" | "positions_unavailable"))
-            .ok_or("positions_unavailable")?;
+        let error = match reply.get("error").and_then(Value::as_str) {
+            Some("positions_request_invalid") => "positions_request_invalid",
+            Some("positions_unavailable") => "positions_unavailable",
+            _ => return Err("positions_unavailable"),
+        };
         Ok(positions_failure(error))
     })
     .await
     .unwrap_or_else(|_| Err("positions_unavailable"));
     if scopes.lock_expected(&expected).is_err() {
-        return positions_failure("account_scope_changed");
+        return Ok(positions_failure("account_scope_changed"));
     }
-    result.unwrap_or_else(positions_failure)
+    Ok(result.unwrap_or_else(positions_failure))
 }
 
 #[cfg(test)]
