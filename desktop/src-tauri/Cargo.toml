@@ -4,6 +4,7 @@ version = "0.4.0"
 description = "Job Hunter Team desktop shell"
 authors = ["Leone Emanuel Puglisi"]
 edition = "2021"
+default-run = "jht-desktop"
 
 [lib]
 name = "jht_desktop_lib"
