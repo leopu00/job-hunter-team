@@ -137,6 +137,7 @@
 }
 
 .existing-team-modal__status { display: flex; gap: 12px; align-items: flex-start; }
+.existing-team-modal__status--readonly { flex-direction: column; align-items: stretch; overflow-wrap: anywhere; }
 .existing-team-modal__status p,
 .existing-team-modal__failure p { margin: 4px 0 0; }
 .existing-team-modal__failure.is-terminal { border-color: #a84852; background: rgb(168 72 82 / 0.1); }

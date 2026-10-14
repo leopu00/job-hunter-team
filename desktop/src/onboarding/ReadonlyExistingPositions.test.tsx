@@ -18,19 +18,31 @@ describe("ReadonlyExistingPositions", () => {
 
   it("shows degraded state and uses only fixed list/filter/detail reads", async () => {
     const user = userEvent.setup();
-    queries.list.mockResolvedValueOnce({ source: "vps", data: [syntheticPosition] })
-      .mockResolvedValueOnce({ source: "vps", data: [syntheticPosition] });
-    queries.detail.mockResolvedValue({ source: "vps", data: syntheticDetail });
+    const page = (start: number) => Array.from({ length: 20 }, (_, index) => ({
+      ...syntheticPosition,
+      id: String(start + index),
+      title: `Synthetic role ${start + index}`,
+    }));
+    queries.list.mockResolvedValueOnce({ source: "vps", data: page(101) })
+      .mockResolvedValueOnce({ source: "vps", data: page(121) })
+      .mockResolvedValueOnce({ source: "vps", data: page(201) });
+    queries.detail.mockResolvedValue({
+      source: "vps",
+      data: { ...syntheticDetail, position: { ...syntheticDetail.position, title: "Synthetic role 201" } },
+    });
     const onClose = vi.fn();
     render(<ReadonlyExistingPositions readiness={false} onClose={onClose} />);
     expect(await screen.findByText(/assistente non attivo/i)).toBeInTheDocument();
-    expect(queries.list).toHaveBeenNthCalledWith(1, undefined);
+    expect(queries.list).toHaveBeenNthCalledWith(1, { limit: 20, offset: 0 });
+    await user.click(screen.getByRole("button", { name: /successivo/i }));
+    await waitFor(() => expect(queries.list).toHaveBeenLastCalledWith({ limit: 20, offset: 20 }));
     await user.type(screen.getByLabelText(/filtro annunci/i), "synthetic");
     await user.click(screen.getByRole("button", { name: /filtra/i }));
-    await waitFor(() => expect(queries.list).toHaveBeenLastCalledWith({ q: "synthetic" }));
-    await user.click(screen.getByRole("button", { name: /synthetic role a/i }));
-    expect(await screen.findByRole("heading", { name: "Synthetic role A" })).toBeInTheDocument();
-    expect(queries.detail).toHaveBeenCalledWith("101");
+    await waitFor(() => expect(queries.list).toHaveBeenLastCalledWith({ q: "synthetic", limit: 20, offset: 0 }));
+    await user.click(screen.getByRole("button", { name: /synthetic role 201/i }));
+    expect(await screen.findByRole("heading", { name: "Synthetic role 201" })).toBeInTheDocument();
+    expect(queries.detail).toHaveBeenCalledWith("201");
+    expect(screen.getByRole("button", { name: /precedente/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /apply|write|recheck|ticket/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /torna alla configurazione/i }));
     expect(onClose).toHaveBeenCalledOnce();
